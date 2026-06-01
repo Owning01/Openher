@@ -227,6 +227,27 @@ export const LoadingIcon = ({ className = "", size = 20 }: { className?: string;
   </svg>
 )
 
+export const RefreshIcon = ({ className = "", size = 20 }: { className?: string; size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    role="img"
+    aria-label="Refresh"
+  >
+    <path d="M21 12a9 9 0 0 1-15.36 6.36L3 15"/>
+    <path d="M3 21v-6h6"/>
+    <path d="M3 12a9 9 0 0 1 15.36-6.36L21 9"/>
+    <path d="M21 3v6h-6"/>
+  </svg>
+)
+
 export const WaitingIcon = ({ className = "", size = 20 }: { className?: string; size?: number }) => (
   <svg 
     width={size} 
