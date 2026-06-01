@@ -14,6 +14,7 @@ import {
   SaveIcon,
   TestIcon,
   LoadingIcon,
+  RefreshIcon,
   RocketIcon
 } from "./Icons"
 
@@ -118,6 +119,7 @@ function App() {
   const [loadingSessionID, setLoadingSessionID] = useState<string | null>(null)
   const [testingConnection, setTestingConnection] = useState(false)
   const [creatingSession, setCreatingSession] = useState(false)
+  const [refreshingSessions, setRefreshingSessions] = useState(false)
   const [settingsNotice, setSettingsNotice] = useState<{ type: NoticeType; text: string } | null>(null)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [sessionToDelete, setSessionToDelete] = useState<SessionView | null>(null)
@@ -213,6 +215,16 @@ function App() {
       setSessions(mapped)
     } catch (err) {
       setRuntimeError((err as Error).message)
+    }
+  }
+
+  async function refreshSessionsWithIndicator() {
+    if (refreshingSessions) return
+    setRefreshingSessions(true)
+    try {
+      await refreshSessions()
+    } finally {
+      setRefreshingSessions(false)
     }
   }
 
@@ -522,8 +534,8 @@ function App() {
               </p>
             </div>
             <div className="inline-actions">
-              <button onClick={() => refreshSessions()} className="btn-secondary">
-                <LoadingIcon size={18} />
+              <button onClick={refreshSessionsWithIndicator} className="btn-secondary" disabled={refreshingSessions}>
+                {refreshingSessions ? <LoadingIcon size={18} /> : <RefreshIcon size={18} />}
                 {t('sessions.refresh')}
               </button>
               <button onClick={createSession} className="btn-primary" disabled={creatingSession}>
