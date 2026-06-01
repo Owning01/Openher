@@ -13,9 +13,9 @@ assert.equal(testConnection[0].includes('localStorage.setItem(STORAGE_KEY'), fal
 const saveConfig = app.match(/function saveConfig[\s\S]*?\n  }\n\n  async function testConnection/)
 assert.ok(saveConfig, 'saveConfig function should be present')
 assert.equal(saveConfig[0].includes('setView("sessions")'), false, 'Save must leave success notice visible on settings page')
-assert.ok(app.includes("t('settings.openSessions')"), 'Settings page should offer an explicit Open Sessions action after saving')
+assert.equal(app.includes("t('settings.openSessions')"), false, 'Settings page must not show an unrelated Open Sessions action')
 assert.ok(app.includes("t('settings.draftHint')"), 'Settings page should explain that edits are drafts until Save')
-assert.ok(i18n.includes("'settings.openSessions'"), 'Open Sessions label should be translated')
+assert.equal(i18n.includes("'settings.openSessions'"), false, 'Open Sessions label should not be translated when the action is removed')
 assert.ok(i18n.includes("'settings.testedNotSaved'"), 'Test success should explicitly say it did not save')
 
 console.log('settings regression tests passed')

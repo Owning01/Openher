@@ -499,14 +499,6 @@ function App() {
                 </>
               )}
             </button>
-            <button
-              onClick={() => setView("sessions")}
-              className="btn-secondary"
-              disabled={!hasConfiguredServer}
-            >
-              <FolderIcon size={18} />
-              {t('settings.openSessions')}
-            </button>
           </div>
           
           {settingsNotice && (
