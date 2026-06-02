@@ -716,31 +716,42 @@ function App() {
                 <LoadingIcon size={32} />
                 <p>{t('detail.loading')}</p>
               </div>
-            ) : renderedMessages.length === 0 ? (
+            ) : renderedMessages.length === 0 && !isWorking ? (
               <div className="empty-state compact">
                 <ChatIcon size={40} className="icon-empty-state" />
                 <p>{t('detail.emptyTitle')}</p>
                 <p className="subtle">{t('detail.emptyHint')}</p>
               </div>
             ) : (
-              renderedMessages.map((message) => {
-                const lines = toDisplayLines(message.text)
-                return (
-                  <article key={message.info.id} className={`message ${message.info.role} fade-in`}>
-                    <header>
-                      <strong>
-                        {message.info.role === "user" ? t('detail.you') : t('detail.opencode')}
-                      </strong>
-                      <small>{formatTime(message.info.time.created)}</small>
-                    </header>
-                    <div className="message-content">
-                      {lines.map((line, index) => (
-                        <p key={index}>{renderInline(line)}</p>
-                      ))}
+              <>
+                {renderedMessages.map((message) => {
+                  const lines = toDisplayLines(message.text)
+                  return (
+                    <article key={message.info.id} className={`message ${message.info.role} fade-in`}>
+                      <header>
+                        <strong>
+                          {message.info.role === "user" ? t('detail.you') : t('detail.opencode')}
+                        </strong>
+                        <small>{formatTime(message.info.time.created)}</small>
+                      </header>
+                      <div className="message-content">
+                        {lines.map((line, index) => (
+                          <p key={index}>{renderInline(line)}</p>
+                        ))}
+                      </div>
+                    </article>
+                  )
+                })}
+                {isWorking && selectedSession && (
+                  <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')}>
+                    <div className="typing-dots" aria-hidden="true">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
                     </div>
                   </article>
-                )
-              })
+                )}
+              </>
             )}
             </div>
             {showJumpToLatest && (

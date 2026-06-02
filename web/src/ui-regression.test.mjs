@@ -12,6 +12,8 @@ assert.ok(refreshButton[0].includes('refreshingSessions ? <LoadingIcon'), 'refre
 assert.ok(app.includes('messageScrollSignature'), 'conversation auto-scroll should react to message content changes, not only message count')
 assert.ok(app.includes('onScroll={handleMessagesScroll}'), 'messages pane should track whether the user is already near the bottom')
 assert.ok(app.includes("t('detail.jumpToLatest')"), 'detail view should expose a jump-to-latest button when scrolled away from output')
+assert.ok(app.includes('typing-bubble'), 'detail view should render a temporary typing bubble while waiting for OpenCode output')
+assert.ok(app.includes('typing-dot'), 'typing bubble should show animated dots')
 
 assert.match(icons, /export const RefreshIcon/, 'RefreshIcon should exist for idle refresh UI')
 
