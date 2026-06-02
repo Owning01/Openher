@@ -14,6 +14,8 @@ assert.ok(app.includes('onScroll={handleMessagesScroll}'), 'messages pane should
 assert.ok(app.includes("t('detail.jumpToLatest')"), 'detail view should expose a jump-to-latest button when scrolled away from output')
 assert.ok(app.includes('typing-bubble'), 'detail view should render a temporary typing bubble while waiting for OpenCode output')
 assert.ok(app.includes('typing-dot'), 'typing bubble should show animated dots')
+assert.ok(app.includes('awaitingAssistantReply'), 'typing bubble should stay visible after the send request returns and until a new assistant message arrives')
+assert.ok(app.includes('assistantResponseSignature'), 'typing bubble should be replaced by the next assistant response')
 
 assert.match(icons, /export const RefreshIcon/, 'RefreshIcon should exist for idle refresh UI')
 

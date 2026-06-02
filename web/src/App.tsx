@@ -122,12 +122,14 @@ function App() {
   const [creatingSession, setCreatingSession] = useState(false)
   const [refreshingSessions, setRefreshingSessions] = useState(false)
   const [showJumpToLatest, setShowJumpToLatest] = useState(false)
+  const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
   const [settingsNotice, setSettingsNotice] = useState<{ type: NoticeType; text: string } | null>(null)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [sessionToDelete, setSessionToDelete] = useState<SessionView | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const completionAudioRef = useRef<HTMLAudioElement | null>(null)
   const wasRunningRef = useRef(false)
+  const awaitingAssistantBaselineRef = useRef("")
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedID) ?? null,
@@ -152,9 +154,17 @@ function App() {
     return renderedMessages.map((message) => `${message.info.id}:${message.text.length}`).join("|")
   }, [renderedMessages])
 
+  const assistantResponseSignature = useMemo(() => {
+    return renderedMessages
+      .filter((message) => message.info.role !== "user")
+      .map((message) => `${message.info.id}:${message.text.length}`)
+      .join("|")
+  }, [renderedMessages])
+
   const hasConfiguredServer = Boolean(config.host && config.port > 0)
   const isSessionRunning = Boolean(selectedSession && ["busy", "retry"].includes(selectedSession.status))
   const isWorking = busySending || isSessionRunning
+  const showTypingBubble = Boolean(selectedSession) && (isWorking || awaitingAssistantReply)
   const activeSessions = sessions.filter((session) => ["busy", "retry"].includes(session.status)).length
   const changedSessions = sessions.filter(
     (session) => session.files > 0 || session.additions > 0 || session.deletions > 0
@@ -165,6 +175,7 @@ function App() {
     setMessages([])
     setTodos([])
     setShowJumpToLatest(false)
+    setAwaitingAssistantReply(false)
     setRuntimeError(null)
     setView("detail")
     setLoadingSessionID(sessionID)
@@ -294,6 +305,8 @@ function App() {
     const text = composer.trim()
     if (!text) return
     setComposer("")
+    awaitingAssistantBaselineRef.current = assistantResponseSignature
+    setAwaitingAssistantReply(true)
 
     setBusySending(true)
     setRuntimeError(null)
@@ -373,7 +386,14 @@ function App() {
     if (!showJumpToLatest || isWorking) {
       scrollMessagesToBottom("auto")
     }
-  }, [view, messageScrollSignature, isWorking, showJumpToLatest])
+  }, [view, messageScrollSignature, isWorking, showJumpToLatest, showTypingBubble])
+
+  useEffect(() => {
+    if (!awaitingAssistantReply) return
+    if (assistantResponseSignature && assistantResponseSignature !== awaitingAssistantBaselineRef.current) {
+      setAwaitingAssistantReply(false)
+    }
+  }, [assistantResponseSignature, awaitingAssistantReply])
 
   useEffect(() => {
     completionAudioRef.current = new Audio("/audio/staplebops-01.aac")
@@ -716,7 +736,7 @@ function App() {
                 <LoadingIcon size={32} />
                 <p>{t('detail.loading')}</p>
               </div>
-            ) : renderedMessages.length === 0 && !isWorking ? (
+            ) : renderedMessages.length === 0 && !showTypingBubble ? (
               <div className="empty-state compact">
                 <ChatIcon size={40} className="icon-empty-state" />
                 <p>{t('detail.emptyTitle')}</p>
@@ -742,7 +762,7 @@ function App() {
                     </article>
                   )
                 })}
-                {isWorking && selectedSession && (
+                {showTypingBubble && (
                   <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')}>
                     <div className="typing-dots" aria-hidden="true">
                       <span className="typing-dot" />
