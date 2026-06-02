@@ -453,10 +453,13 @@ p {
   gap: var(--space-3);
   overflow-y: auto;
   padding: var(--space-2) var(--space-1);
+  padding-bottom: var(--chat-bottom-clearance, 140px);
+  scroll-padding-bottom: var(--chat-bottom-clearance, 140px);
 }
 
 .messages-end {
   min-height: 1px;
+  scroll-margin-bottom: var(--chat-bottom-clearance, 140px);
 }
 
 .message {
@@ -535,17 +538,6 @@ p {
   border-radius: var(--radius-sm);
   background: var(--surface-strong);
   padding: 0.1rem 0.35rem;
-}
-
-.jump-to-latest {
-  position: fixed;
-  right: var(--space-4);
-  bottom: calc(210px + env(safe-area-inset-bottom));
-  z-index: var(--z-sticky);
-  min-height: 38px;
-  padding: 0.45rem 0.75rem;
-  box-shadow: var(--shadow-md);
-  background: rgba(255, 255, 255, 0.96);
 }
 
 .composer {

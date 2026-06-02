@@ -15,7 +15,6 @@ import {
   TestIcon,
   LoadingIcon,
   RefreshIcon,
-  ArrowDownIcon,
   RocketIcon
 } from "./Icons"
 
@@ -121,16 +120,17 @@ function App() {
   const [testingConnection, setTestingConnection] = useState(false)
   const [creatingSession, setCreatingSession] = useState(false)
   const [refreshingSessions, setRefreshingSessions] = useState(false)
-  const [showJumpToLatest, setShowJumpToLatest] = useState(false)
   const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
   const [settingsNotice, setSettingsNotice] = useState<{ type: NoticeType; text: string } | null>(null)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [sessionToDelete, setSessionToDelete] = useState<SessionView | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const composerRef = useRef<HTMLDivElement | null>(null)
   const completionAudioRef = useRef<HTMLAudioElement | null>(null)
   const wasRunningRef = useRef(false)
   const awaitingAssistantBaselineRef = useRef("")
+  const sessionsScrollYRef = useRef(0)
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedID) ?? null,
@@ -172,15 +172,19 @@ function App() {
   ).length
 
   async function openSession(sessionID: string, directory: string) {
+    sessionsScrollYRef.current = window.scrollY
     setSelectedID(sessionID)
     setMessages([])
     setTodos([])
-    setShowJumpToLatest(false)
     setAwaitingAssistantReply(false)
     setRuntimeError(null)
     setView("detail")
     setLoadingSessionID(sessionID)
-    await loadSelected(sessionID, directory)
+    try {
+      await loadSelected(sessionID, directory)
+    } catch (err) {
+      setRuntimeError((err as Error).message)
+    }
     setLoadingSessionID((activeID) => (activeID === sessionID ? null : activeID))
   }
 
@@ -252,50 +256,45 @@ function App() {
   }
 
   async function loadSelected(sessionID: string, directory: string) {
-    setRuntimeError(null)
-    try {
-      const [msg, todo] = await Promise.all([
-        api.loadMessages(config, sessionID, directory),
-        api.loadTodo(config, sessionID)
-      ])
-      setMessages(msg)
-      setTodos(todo)
-    } catch (err) {
-      setRuntimeError((err as Error).message)
-    }
+    const [msg, todo] = await Promise.all([
+      api.loadMessages(config, sessionID, directory),
+      api.loadTodo(config, sessionID)
+    ])
+    setMessages(msg)
+    setTodos(todo)
   }
 
-  function isNearPageBottom() {
-    const page = document.documentElement
-    return page.scrollHeight - window.scrollY - window.innerHeight < 96
-  }
+  function syncChatBottomClearance() {
+    const container = messagesRef.current
+    const composer = composerRef.current
+    if (!container || !composer) return
 
-  function isNearMessageBottom(container: HTMLDivElement) {
-    if (container.scrollHeight <= container.clientHeight + 4) {
-      return isNearPageBottom()
-    }
-    return container.scrollHeight - container.scrollTop - container.clientHeight < 96
+    const composerRect = composer.getBoundingClientRect()
+    const composerStyles = window.getComputedStyle(composer)
+    const composerBottom = Number.parseFloat(composerStyles.bottom) || 0
+    const clearance = Math.ceil(composerRect.height + composerBottom + 16)
+    container.style.setProperty("--chat-bottom-clearance", `${clearance}px`)
   }
 
   function scrollMessagesToBottom(behavior: ScrollBehavior = "smooth") {
     requestAnimationFrame(() => {
-      const container = messagesRef.current
-      if (container && container.scrollHeight > container.clientHeight + 4) {
-        container.scrollTo({ top: container.scrollHeight, behavior })
-      }
-      messagesEndRef.current?.scrollIntoView({ block: "end", behavior })
-      setShowJumpToLatest(false)
+      syncChatBottomClearance()
+      requestAnimationFrame(() => {
+        const container = messagesRef.current
+        const end = messagesEndRef.current
+        if (container) {
+          container.scrollTo({ top: container.scrollHeight, behavior })
+        }
+        end?.scrollIntoView({ block: "end", behavior })
+
+        const composerRect = composerRef.current?.getBoundingClientRect()
+        const endRect = end?.getBoundingClientRect()
+        if (composerRect && endRect && endRect.bottom > composerRect.top - 12) {
+          const coveredByComposer = endRect.bottom - composerRect.top + 12
+          window.scrollBy({ top: coveredByComposer, behavior })
+        }
+      })
     })
-  }
-
-  function updateJumpToLatestVisibility() {
-    const container = messagesRef.current
-    if (!container) return
-    setShowJumpToLatest(!isNearMessageBottom(container))
-  }
-
-  function handleMessagesScroll() {
-    updateJumpToLatestVisibility()
   }
 
   async function createSession() {
@@ -396,21 +395,8 @@ function App() {
 
   useEffect(() => {
     if (view !== "detail") return
-    const container = messagesRef.current
-    if (!container) return
     scrollMessagesToBottom("auto")
   }, [view, messageScrollSignature, isWorking, showTypingBubble])
-
-  useEffect(() => {
-    if (view !== "detail") return
-    window.addEventListener("scroll", updateJumpToLatestVisibility, { passive: true })
-    window.addEventListener("resize", updateJumpToLatestVisibility)
-    updateJumpToLatestVisibility()
-    return () => {
-      window.removeEventListener("scroll", updateJumpToLatestVisibility)
-      window.removeEventListener("resize", updateJumpToLatestVisibility)
-    }
-  }, [view, messageScrollSignature, showTypingBubble])
 
   useEffect(() => {
     if (!awaitingAssistantReply) return
@@ -696,7 +682,7 @@ function App() {
       {view === "detail" && (
         <main className="panel detail fade-in">
           <div className="detail-topbar">
-            <button className="btn-secondary" onClick={() => setView("sessions")}>{t('detail.backToSessions')}</button>
+            <button className="btn-secondary" onClick={() => { setView("sessions"); requestAnimationFrame(() => window.scrollTo({ top: sessionsScrollYRef.current })) }}>{t('detail.backToSessions')}</button>
             {selectedSession && (
               <span className={`pill ${selectedSession.status}`}>{selectedSession.status}</span>
             )}
@@ -754,7 +740,7 @@ function App() {
           )}
 
           <div className="messages-wrap">
-            <div className="messages" ref={messagesRef} onScroll={handleMessagesScroll}>
+            <div className="messages" ref={messagesRef}>
             {loadingSessionID === selectedID ? (
               <div className="empty-state compact">
                 <LoadingIcon size={32} />
@@ -799,23 +785,22 @@ function App() {
               </>
             )}
             </div>
-            {showJumpToLatest && (
-              <button
-                type="button"
-                className="jump-to-latest btn-secondary"
-                onClick={() => scrollMessagesToBottom("auto")}
-              >
-                <ArrowDownIcon size={16} />
-                {t('detail.jumpToLatest')}
-              </button>
-            )}
           </div>
 
-          <div className="composer">
+          <div className="composer" ref={composerRef}>
             <textarea
               value={composer}
               onChange={(event) => setComposer(event.target.value)}
               placeholder={t('detail.composerPlaceholder')}
+              onFocus={() => {
+                syncChatBottomClearance()
+                setTimeout(() => scrollMessagesToBottom("smooth"), 400)
+                const onResize = () => {
+                  scrollMessagesToBottom("smooth")
+                  window.removeEventListener("resize", onResize)
+                }
+                window.addEventListener("resize", onResize, { once: true })
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault()
