@@ -437,6 +437,14 @@ p {
   flex: 0 0 auto;
 }
 
+.messages-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+}
+
 .messages {
   min-height: 220px;
   flex: 1 1 auto;
@@ -445,6 +453,13 @@ p {
   gap: var(--space-3);
   overflow-y: auto;
   padding: var(--space-2) var(--space-1);
+  padding-bottom: var(--chat-bottom-clearance, 140px);
+  scroll-padding-bottom: var(--chat-bottom-clearance, 140px);
+}
+
+.messages-end {
+  min-height: 1px;
+  scroll-margin-bottom: var(--chat-bottom-clearance, 140px);
 }
 
 .message {
@@ -464,6 +479,34 @@ p {
 .message.assistant {
   align-self: flex-start;
   background: var(--surface-subtle);
+}
+
+.typing-bubble {
+  width: auto;
+  min-width: 74px;
+  padding: 0.75rem 1rem;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.typing-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: var(--muted);
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 160ms;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 320ms;
 }
 
 .message header {
@@ -733,6 +776,17 @@ p {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
   }
 }
 

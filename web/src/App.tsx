@@ -120,12 +120,17 @@ function App() {
   const [testingConnection, setTestingConnection] = useState(false)
   const [creatingSession, setCreatingSession] = useState(false)
   const [refreshingSessions, setRefreshingSessions] = useState(false)
+  const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
   const [settingsNotice, setSettingsNotice] = useState<{ type: NoticeType; text: string } | null>(null)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [sessionToDelete, setSessionToDelete] = useState<SessionView | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const composerRef = useRef<HTMLDivElement | null>(null)
   const completionAudioRef = useRef<HTMLAudioElement | null>(null)
   const wasRunningRef = useRef(false)
+  const awaitingAssistantBaselineRef = useRef("")
+  const sessionsScrollYRef = useRef(0)
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedID) ?? null,
@@ -146,22 +151,40 @@ function App() {
       .filter((message) => message.text)
   }, [messages])
 
+  const messageScrollSignature = useMemo(() => {
+    return renderedMessages.map((message) => `${message.info.id}:${message.text.length}`).join("|")
+  }, [renderedMessages])
+
+  const assistantResponseSignature = useMemo(() => {
+    return renderedMessages
+      .filter((message) => message.info.role !== "user")
+      .map((message) => `${message.info.id}:${message.text.length}`)
+      .join("|")
+  }, [renderedMessages])
+
   const hasConfiguredServer = Boolean(config.host && config.port > 0)
   const isSessionRunning = Boolean(selectedSession && ["busy", "retry"].includes(selectedSession.status))
   const isWorking = busySending || isSessionRunning
+  const showTypingBubble = Boolean(selectedSession) && (isWorking || awaitingAssistantReply)
   const activeSessions = sessions.filter((session) => ["busy", "retry"].includes(session.status)).length
   const changedSessions = sessions.filter(
     (session) => session.files > 0 || session.additions > 0 || session.deletions > 0
   ).length
 
   async function openSession(sessionID: string, directory: string) {
+    sessionsScrollYRef.current = window.scrollY
     setSelectedID(sessionID)
     setMessages([])
     setTodos([])
+    setAwaitingAssistantReply(false)
     setRuntimeError(null)
     setView("detail")
     setLoadingSessionID(sessionID)
-    await loadSelected(sessionID, directory)
+    try {
+      await loadSelected(sessionID, directory)
+    } catch (err) {
+      setRuntimeError((err as Error).message)
+    }
     setLoadingSessionID((activeID) => (activeID === sessionID ? null : activeID))
   }
 
@@ -233,17 +256,45 @@ function App() {
   }
 
   async function loadSelected(sessionID: string, directory: string) {
-    setRuntimeError(null)
-    try {
-      const [msg, todo] = await Promise.all([
-        api.loadMessages(config, sessionID, directory),
-        api.loadTodo(config, sessionID)
-      ])
-      setMessages(msg)
-      setTodos(todo)
-    } catch (err) {
-      setRuntimeError((err as Error).message)
-    }
+    const [msg, todo] = await Promise.all([
+      api.loadMessages(config, sessionID, directory),
+      api.loadTodo(config, sessionID)
+    ])
+    setMessages(msg)
+    setTodos(todo)
+  }
+
+  function syncChatBottomClearance() {
+    const container = messagesRef.current
+    const composer = composerRef.current
+    if (!container || !composer) return
+
+    const composerRect = composer.getBoundingClientRect()
+    const composerStyles = window.getComputedStyle(composer)
+    const composerBottom = Number.parseFloat(composerStyles.bottom) || 0
+    const clearance = Math.ceil(composerRect.height + composerBottom + 16)
+    container.style.setProperty("--chat-bottom-clearance", `${clearance}px`)
+  }
+
+  function scrollMessagesToBottom(behavior: ScrollBehavior = "smooth") {
+    requestAnimationFrame(() => {
+      syncChatBottomClearance()
+      requestAnimationFrame(() => {
+        const container = messagesRef.current
+        const end = messagesEndRef.current
+        if (container) {
+          container.scrollTo({ top: container.scrollHeight, behavior })
+        }
+        end?.scrollIntoView({ block: "end", behavior })
+
+        const composerRect = composerRef.current?.getBoundingClientRect()
+        const endRect = end?.getBoundingClientRect()
+        if (composerRect && endRect && endRect.bottom > composerRect.top - 12) {
+          const coveredByComposer = endRect.bottom - composerRect.top + 12
+          window.scrollBy({ top: coveredByComposer, behavior })
+        }
+      })
+    })
   }
 
   async function createSession() {
@@ -268,6 +319,8 @@ function App() {
     const text = composer.trim()
     if (!text) return
     setComposer("")
+    awaitingAssistantBaselineRef.current = assistantResponseSignature
+    setAwaitingAssistantReply(true)
 
     setBusySending(true)
     setRuntimeError(null)
@@ -342,10 +395,15 @@ function App() {
 
   useEffect(() => {
     if (view !== "detail") return
-    const container = messagesRef.current
-    if (!container) return
-    container.scrollTop = container.scrollHeight
-  }, [view, renderedMessages.length, busySending])
+    scrollMessagesToBottom("auto")
+  }, [view, messageScrollSignature, isWorking, showTypingBubble])
+
+  useEffect(() => {
+    if (!awaitingAssistantReply) return
+    if (assistantResponseSignature && assistantResponseSignature !== awaitingAssistantBaselineRef.current) {
+      setAwaitingAssistantReply(false)
+    }
+  }, [assistantResponseSignature, awaitingAssistantReply])
 
   useEffect(() => {
     completionAudioRef.current = new Audio("/audio/staplebops-01.aac")
@@ -624,7 +682,7 @@ function App() {
       {view === "detail" && (
         <main className="panel detail fade-in">
           <div className="detail-topbar">
-            <button className="btn-secondary" onClick={() => setView("sessions")}>{t('detail.backToSessions')}</button>
+            <button className="btn-secondary" onClick={() => { setView("sessions"); requestAnimationFrame(() => window.scrollTo({ top: sessionsScrollYRef.current })) }}>{t('detail.backToSessions')}</button>
             {selectedSession && (
               <span className={`pill ${selectedSession.status}`}>{selectedSession.status}</span>
             )}
@@ -681,45 +739,68 @@ function App() {
             </div>
           )}
 
-          <div className="messages" ref={messagesRef}>
+          <div className="messages-wrap">
+            <div className="messages" ref={messagesRef}>
             {loadingSessionID === selectedID ? (
               <div className="empty-state compact">
                 <LoadingIcon size={32} />
                 <p>{t('detail.loading')}</p>
               </div>
-            ) : renderedMessages.length === 0 ? (
+            ) : renderedMessages.length === 0 && !showTypingBubble ? (
               <div className="empty-state compact">
                 <ChatIcon size={40} className="icon-empty-state" />
                 <p>{t('detail.emptyTitle')}</p>
                 <p className="subtle">{t('detail.emptyHint')}</p>
               </div>
             ) : (
-              renderedMessages.map((message) => {
-                const lines = toDisplayLines(message.text)
-                return (
-                  <article key={message.info.id} className={`message ${message.info.role} fade-in`}>
-                    <header>
-                      <strong>
-                        {message.info.role === "user" ? t('detail.you') : t('detail.opencode')}
-                      </strong>
-                      <small>{formatTime(message.info.time.created)}</small>
-                    </header>
-                    <div className="message-content">
-                      {lines.map((line, index) => (
-                        <p key={index}>{renderInline(line)}</p>
-                      ))}
+              <>
+                {renderedMessages.map((message) => {
+                  const lines = toDisplayLines(message.text)
+                  return (
+                    <article key={message.info.id} className={`message ${message.info.role} fade-in`}>
+                      <header>
+                        <strong>
+                          {message.info.role === "user" ? t('detail.you') : t('detail.opencode')}
+                        </strong>
+                        <small>{formatTime(message.info.time.created)}</small>
+                      </header>
+                      <div className="message-content">
+                        {lines.map((line, index) => (
+                          <p key={index}>{renderInline(line)}</p>
+                        ))}
+                      </div>
+                    </article>
+                  )
+                })}
+                {showTypingBubble && (
+                  <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')}>
+                    <div className="typing-dots" aria-hidden="true">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
                     </div>
                   </article>
-                )
-              })
+                )}
+                <div ref={messagesEndRef} className="messages-end" aria-hidden="true" />
+              </>
             )}
+            </div>
           </div>
 
-          <div className="composer">
+          <div className="composer" ref={composerRef}>
             <textarea
               value={composer}
               onChange={(event) => setComposer(event.target.value)}
               placeholder={t('detail.composerPlaceholder')}
+              onFocus={() => {
+                syncChatBottomClearance()
+                setTimeout(() => scrollMessagesToBottom("smooth"), 400)
+                const onResize = () => {
+                  scrollMessagesToBottom("smooth")
+                  window.removeEventListener("resize", onResize)
+                }
+                window.addEventListener("resize", onResize, { once: true })
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault()
