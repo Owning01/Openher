@@ -127,6 +127,7 @@ function App() {
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [sessionToDelete, setSessionToDelete] = useState<SessionView | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const completionAudioRef = useRef<HTMLAudioElement | null>(null)
   const wasRunningRef = useRef(false)
   const awaitingAssistantBaselineRef = useRef("")
@@ -264,23 +265,37 @@ function App() {
     }
   }
 
+  function isNearPageBottom() {
+    const page = document.documentElement
+    return page.scrollHeight - window.scrollY - window.innerHeight < 96
+  }
+
   function isNearMessageBottom(container: HTMLDivElement) {
+    if (container.scrollHeight <= container.clientHeight + 4) {
+      return isNearPageBottom()
+    }
     return container.scrollHeight - container.scrollTop - container.clientHeight < 96
   }
 
   function scrollMessagesToBottom(behavior: ScrollBehavior = "smooth") {
     requestAnimationFrame(() => {
       const container = messagesRef.current
-      if (!container) return
-      container.scrollTo({ top: container.scrollHeight, behavior })
+      if (container && container.scrollHeight > container.clientHeight + 4) {
+        container.scrollTo({ top: container.scrollHeight, behavior })
+      }
+      messagesEndRef.current?.scrollIntoView({ block: "end", behavior })
       setShowJumpToLatest(false)
     })
   }
 
-  function handleMessagesScroll() {
+  function updateJumpToLatestVisibility() {
     const container = messagesRef.current
     if (!container) return
     setShowJumpToLatest(!isNearMessageBottom(container))
+  }
+
+  function handleMessagesScroll() {
+    updateJumpToLatestVisibility()
   }
 
   async function createSession() {
@@ -383,10 +398,19 @@ function App() {
     if (view !== "detail") return
     const container = messagesRef.current
     if (!container) return
-    if (!showJumpToLatest || isWorking) {
-      scrollMessagesToBottom("auto")
+    scrollMessagesToBottom("auto")
+  }, [view, messageScrollSignature, isWorking, showTypingBubble])
+
+  useEffect(() => {
+    if (view !== "detail") return
+    window.addEventListener("scroll", updateJumpToLatestVisibility, { passive: true })
+    window.addEventListener("resize", updateJumpToLatestVisibility)
+    updateJumpToLatestVisibility()
+    return () => {
+      window.removeEventListener("scroll", updateJumpToLatestVisibility)
+      window.removeEventListener("resize", updateJumpToLatestVisibility)
     }
-  }, [view, messageScrollSignature, isWorking, showJumpToLatest, showTypingBubble])
+  }, [view, messageScrollSignature, showTypingBubble])
 
   useEffect(() => {
     if (!awaitingAssistantReply) return
@@ -771,6 +795,7 @@ function App() {
                     </div>
                   </article>
                 )}
+                <div ref={messagesEndRef} className="messages-end" aria-hidden="true" />
               </>
             )}
             </div>
@@ -778,7 +803,7 @@ function App() {
               <button
                 type="button"
                 className="jump-to-latest btn-secondary"
-                onClick={() => scrollMessagesToBottom()}
+                onClick={() => scrollMessagesToBottom("auto")}
               >
                 <ArrowDownIcon size={16} />
                 {t('detail.jumpToLatest')}

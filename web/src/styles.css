@@ -455,6 +455,10 @@ p {
   padding: var(--space-2) var(--space-1);
 }
 
+.messages-end {
+  min-height: 1px;
+}
+
 .message {
   width: min(100%, 760px);
   border: 1px solid var(--border);
@@ -534,9 +538,9 @@ p {
 }
 
 .jump-to-latest {
-  position: absolute;
-  right: var(--space-3);
-  bottom: var(--space-3);
+  position: fixed;
+  right: var(--space-4);
+  bottom: calc(210px + env(safe-area-inset-bottom));
   z-index: var(--z-sticky);
   min-height: 38px;
   padding: 0.45rem 0.75rem;
