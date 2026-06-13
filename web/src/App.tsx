@@ -213,6 +213,8 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLDivElement | null>(null)
   const completionAudioRef = useRef<HTMLAudioElement | null>(null)
+  const completionShouldPlayRef = useRef(false)
+  const wasAwaitingAssistantReplyRef = useRef(false)
   const wasRunningRef = useRef(false)
   const awaitingAssistantBaselineRef = useRef("")
   const sessionsScrollYRef = useRef(0)
@@ -291,8 +293,9 @@ function App() {
           ? t('connection.offline')
           : "")
   const isSessionRunning = Boolean(selectedSession && ["busy", "retry"].includes(selectedSession.status))
-  const isWorking = busySending || isSessionRunning
-  const showTypingBubble = Boolean(selectedSession) && (isWorking || awaitingAssistantReply)
+  const isWaitingForOpenCodeReply = awaitingAssistantReply || busySending || isSessionRunning
+  const isWorking = isWaitingForOpenCodeReply
+  const showTypingBubble = Boolean(selectedSession) && isWaitingForOpenCodeReply
   const activeSessions = sessions.filter((session) => ["busy", "retry"].includes(session.status)).length
   const changedSessions = sessions.filter(
     (session) => session.files > 0 || session.additions > 0 || session.deletions > 0
@@ -543,6 +546,7 @@ function App() {
     const optimisticMessage = createOptimisticUserMessage(selectedSession.id, text)
     setOptimisticUserMessages((current) => [...current, optimisticMessage])
     awaitingAssistantBaselineRef.current = assistantResponseSignature
+    completionShouldPlayRef.current = true
     setAwaitingAssistantReply(true)
     scrollMessagesToBottom("smooth")
 
@@ -562,6 +566,8 @@ function App() {
       setOptimisticUserMessages((current) => current.filter((message) => message.info.id !== optimisticMessage.info.id))
       await refreshSessions()
     } catch (err) {
+      completionShouldPlayRef.current = false
+      setAwaitingAssistantReply(false)
       setOptimisticUserMessages((current) => current.filter((message) => message.info.id !== optimisticMessage.info.id))
       setComposer((current) => current || text)
       setRuntimeError((err as Error).message)
@@ -595,6 +601,8 @@ function App() {
     if (!selectedSession) return
     try {
       await api.abort(config, selectedSession.id)
+      completionShouldPlayRef.current = false
+      setAwaitingAssistantReply(false)
       await refreshSessions()
       await loadSelected(selectedSession.id, selectedSession.directory)
     } catch (err) {
@@ -652,19 +660,23 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!selectedSession) {
-      wasRunningRef.current = false
-      return
-    }
-    const runningNow = ["busy", "retry"].includes(selectedSession.status)
-    if (wasRunningRef.current && !runningNow) {
+    if (wasAwaitingAssistantReplyRef.current && !awaitingAssistantReply && completionShouldPlayRef.current) {
+      completionShouldPlayRef.current = false
       const audio = completionAudioRef.current
       if (audio) {
         audio.currentTime = 0
         audio.play().catch(() => undefined)
       }
     }
-    wasRunningRef.current = runningNow
+    wasAwaitingAssistantReplyRef.current = awaitingAssistantReply
+  }, [awaitingAssistantReply])
+
+  useEffect(() => {
+    if (!selectedSession) {
+      wasRunningRef.current = false
+      return
+    }
+    wasRunningRef.current = ["busy", "retry"].includes(selectedSession.status)
   }, [selectedSession?.id, selectedSession?.status])
 
   const navItems = [
