@@ -10,12 +10,12 @@ import {
   PlusIcon,
   PlayIcon,
   TrashIcon,
-  StopIcon,
+  StopCircleIcon,
+  SendIcon,
   SaveIcon,
   TestIcon,
   LoadingIcon,
-  RefreshIcon,
-  RocketIcon
+  RefreshIcon
 } from "./Icons"
 
 const STORAGE_KEY = "opencode.remote.server"
@@ -1117,12 +1117,12 @@ function App() {
             >
               {isWorking ? (
                 <>
-                  <StopIcon size={18} />
+                  <StopCircleIcon size={18} />
                   {t('detail.waiting')}
                 </>
               ) : (
                 <>
-                  <RocketIcon size={18} />
+                  <SendIcon size={18} />
                   {t('detail.send')}
                 </>
               )}
