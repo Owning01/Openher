@@ -104,6 +104,22 @@ export type FileStatusEntry = Record<string, unknown> & {
   status?: string
 }
 
+export type FileEntry = {
+  name: string
+  path: string
+  absolute: string
+  type: "file" | "directory"
+  ignored?: boolean
+}
+
+export type PathInfo = {
+  home: string
+  state: string
+  config: string
+  worktree: string
+  directory: string
+}
+
 export type ProjectDashboard = {
   project: ProjectCurrent | null
   vcs: VcsStatus | null

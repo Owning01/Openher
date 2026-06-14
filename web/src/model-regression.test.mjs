@@ -16,7 +16,7 @@ assert.ok(app.includes('session-context-strip'), 'detail UX should expose compac
 assert.ok(app.includes('activeDetailSheet === "ai"'), 'model picker should open in the bottom sheet')
 assert.ok(app.includes("t('detail.modelHint')"), 'model picker should explain when the change applies')
 assert.ok(app.includes('disabled={isWorking}'), 'model picker should be disabled while a session is running')
-assert.ok(app.includes('api.createSession(config, "Mobile session", activeModel)'), 'new sessions should inherit the selected model')
+assert.ok(app.includes('api.createSession(config, "Mobile session", activeModel, directory)'), 'new sessions should inherit the selected model')
 assert.ok(app.includes('api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel)'), 'chat prompts should use selected model')
 assert.ok(app.includes('showFilesChip = diffFiles.length > 0'), 'file diff chip should be hidden for dialogue-only sessions')
 assert.ok(i18n.includes("'detail.contextStripLabel'"), 'context chip strings should be translated')
