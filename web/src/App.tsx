@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { api } from "./api"
 import { createTranslator, languageOptions, normalizeLanguage, type LanguageCode } from "./i18n"
-import type { CommandInfo, DiffFile, FileStatusEntry, MessageEnvelope, ModelOption, ModelSelection, ProjectDashboard, ServerConfig, SessionView, TodoItem } from "./types"
+import type { CommandInfo, DiffFile, FileEntry, FileStatusEntry, MessageEnvelope, ModelOption, ModelSelection, ProjectDashboard, ServerConfig, SessionView, TodoItem } from "./types"
 import {
   SettingsIcon,
   FolderIcon,
@@ -21,6 +21,7 @@ import {
 const STORAGE_KEY = "opencode.remote.server"
 const LANGUAGE_STORAGE_KEY = "opencode.remote.language"
 const MODEL_STORAGE_KEY = "opencode.remote.model"
+const NEW_SESSION_DIRECTORY_STORAGE_KEY = "opencode.remote.newSessionDirectory"
 
 const defaultConfig: ServerConfig = {
   host: "",
@@ -131,6 +132,11 @@ function sameModel(a: ModelSelection | null | undefined, b: ModelSelection | nul
   return Boolean(a && b && a.providerID === b.providerID && a.modelID === b.modelID && (a.variant ?? "") === (b.variant ?? ""))
 }
 
+function normalizeDirectory(value: string): string | undefined {
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 function formatLimit(value?: number): string {
   if (!value) return "-"
   if (value >= 1_000_000) return `${Math.round(value / 1_000_000)}M`
@@ -189,6 +195,12 @@ function App() {
 
   const [sessions, setSessions] = useState<SessionView[]>([])
   const [selectedID, setSelectedID] = useState<string | null>(null)
+  const [newSessionDirectory, setNewSessionDirectory] = useState(() => localStorage.getItem(NEW_SESSION_DIRECTORY_STORAGE_KEY) ?? "")
+  const [showNewSessionPicker, setShowNewSessionPicker] = useState(false)
+  const [pickerPath, setPickerPath] = useState("")
+  const [pickerItems, setPickerItems] = useState<FileEntry[]>([])
+  const [pickerLoading, setPickerLoading] = useState(false)
+  const [pickerError, setPickerError] = useState<string | null>(null)
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<MessageEnvelope[]>([])
   const [todos, setTodos] = useState<TodoItem[]>([])
@@ -266,6 +278,7 @@ function App() {
       return session.title.toLowerCase().includes(text) || session.directory.toLowerCase().includes(text)
     })
   }, [sessions, query])
+  const selectedNewSessionDirectory = normalizeDirectory(newSessionDirectory)
 
   const renderedMessages = useMemo(() => {
     return [...messages, ...optimisticUserMessages]
@@ -442,7 +455,7 @@ function App() {
   async function loadModels() {
     if (!config.host || config.port <= 0) return
     try {
-      const list = await api.listModels(config, selectedSession?.directory)
+      const list = await api.listModels(config, selectedSession?.directory ?? selectedNewSessionDirectory)
       setModelOptions(list)
       setModelLoadError(null)
       const saved = modelFromKey(selectedModelKey)
@@ -469,8 +482,8 @@ function App() {
     const requestID = ++loadSelectedRequestRef.current
     const [msg, todo, diff] = await Promise.all([
       api.loadMessages(config, sessionID, directory),
-      api.loadTodo(config, sessionID),
-      api.loadDiff(config, sessionID).catch(() => [])
+      api.loadTodo(config, sessionID, directory),
+      api.loadDiff(config, sessionID, directory).catch(() => [])
     ])
     if (requestID !== loadSelectedRequestRef.current) return
     setMessages((current) => {
@@ -533,12 +546,53 @@ function App() {
     })
   }
 
-  async function createSession() {
+  async function browseNewSessionDirectory(path: string) {
+    setPickerLoading(true)
+    setPickerError(null)
+    try {
+      const items = await api.listFiles(config, path, path)
+      setPickerPath(path)
+      setPickerItems(items.filter((item) => item.type === "directory").sort((a, b) => a.name.localeCompare(b.name)))
+    } catch (err) {
+      setPickerError((err as Error).message)
+      setPickerItems([])
+    } finally {
+      setPickerLoading(false)
+    }
+  }
+
+  async function openNewSessionPicker() {
+    if (creatingSession) return
+    setRuntimeError(null)
+    setShowNewSessionPicker(true)
+    setPickerError(null)
+    try {
+      const pathInfo = await api.loadPath(config, selectedNewSessionDirectory)
+      await browseNewSessionDirectory(selectedNewSessionDirectory ?? pathInfo.directory)
+    } catch (err) {
+      setPickerError((err as Error).message)
+    }
+  }
+
+  function parentDirectory(path: string): string | null {
+    if (!path || path === "/") return null
+    const normalized = path.replace(/[/\\]+$/, "")
+    const separator = normalized.includes("\\") ? "\\" : "/"
+    const index = normalized.lastIndexOf(separator)
+    if (index <= 0) return separator === "/" ? "/" : null
+    return normalized.slice(0, index)
+  }
+
+  async function createSession(directory = selectedNewSessionDirectory) {
     if (creatingSession) return
     setCreatingSession(true)
     setRuntimeError(null)
     try {
-      const created = await api.createSession(config, "Mobile session", activeModel)
+      const created = await api.createSession(config, "Mobile session", activeModel, directory)
+      if (directory) {
+        setNewSessionDirectory(directory)
+      }
+      setShowNewSessionPicker(false)
       await refreshSessions()
       setSelectedID(created.id)
       setView("detail")
@@ -590,7 +644,7 @@ function App() {
 
   async function deleteSession(sessionID: string) {
     try {
-      await api.deleteSession(config, sessionID)
+      await api.deleteSession(config, sessionID, sessionToDelete?.directory)
       if (selectedID === sessionID) {
         setSelectedID(null)
         setMessages([])
@@ -612,7 +666,7 @@ function App() {
   async function abortSession() {
     if (!selectedSession) return
     try {
-      await api.abort(config, selectedSession.id)
+      await api.abort(config, selectedSession.id, selectedSession.directory)
       completionShouldPlayRef.current = false
       setAwaitingAssistantReply(false)
       await refreshSessions()
@@ -625,6 +679,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, language)
   }, [language])
+
+  useEffect(() => {
+    localStorage.setItem(NEW_SESSION_DIRECTORY_STORAGE_KEY, newSessionDirectory)
+  }, [newSessionDirectory])
 
   useEffect(() => {
     if (!config.host || config.port <= 0) {
@@ -646,7 +704,7 @@ function App() {
       }
     }, 3500)
     return () => clearInterval(timer)
-  }, [config.host, config.port, config.username, config.password, selectedSession?.id])
+  }, [config.host, config.port, config.username, config.password, selectedSession?.id, selectedNewSessionDirectory])
 
   useEffect(() => {
     if (!hasConfiguredServer) {
@@ -868,7 +926,7 @@ function App() {
                 {refreshingSessions ? <LoadingIcon size={18} /> : <RefreshIcon size={18} />}
                 {t('sessions.refresh')}
               </button>
-              <button onClick={createSession} className="btn-primary" disabled={creatingSession}>
+              <button onClick={openNewSessionPicker} className="btn-primary" disabled={creatingSession}>
                 {creatingSession ? <LoadingIcon size={18} /> : <PlusIcon size={18} />}
                 {creatingSession ? t('sessions.creating') : t('sessions.new')}
               </button>
@@ -960,6 +1018,62 @@ function App() {
           
           {runtimeError && <div className="error fade-in">✗ {runtimeError}</div>}
         </section>
+      )}
+
+      {showNewSessionPicker && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setShowNewSessionPicker(false)}>
+          <section
+            className="modal-card folder-picker fade-in"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-session-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="new-session-title">{t('sessions.newSessionTitle')}</h2>
+            <p className="subtle">{t('sessions.projectDirectoryDefault')}</p>
+            <div className="folder-picker-current">
+              <span>{t('sessions.projectDirectoryLabel')}</span>
+              <strong>{pickerPath || t('detail.loadingProject')}</strong>
+            </div>
+            <div className="inline-actions">
+              <button type="button" className="btn-secondary" onClick={() => createSession("").catch(() => undefined)} disabled={creatingSession}>
+                {t('sessions.useServerDefault')}
+              </button>
+              <button type="button" className="btn-primary" onClick={() => createSession(pickerPath).catch(() => undefined)} disabled={creatingSession || !pickerPath}>
+                {creatingSession ? <LoadingIcon size={16} /> : <PlusIcon size={16} />}
+                {t('sessions.useThisFolder')}
+              </button>
+            </div>
+            {pickerError && <div className="error fade-in">✗ {pickerError}</div>}
+            <div className="folder-list">
+              {pickerLoading ? (
+                <div className="empty-state compact"><LoadingIcon size={28} /><p>{t('sessions.folderPickerLoading')}</p></div>
+              ) : (
+                <>
+                  {parentDirectory(pickerPath) && (
+                    <button type="button" className="folder-row" onClick={() => browseNewSessionDirectory(parentDirectory(pickerPath) ?? pickerPath).catch(() => undefined)}>
+                      <FolderIcon size={16} />
+                      <span>{t('sessions.parentFolder')}</span>
+                    </button>
+                  )}
+                  {pickerItems.length === 0 ? (
+                    <p className="subtle">{t('sessions.folderPickerEmpty')}</p>
+                  ) : pickerItems.map((item) => (
+                    <button key={item.absolute} type="button" className="folder-row" onClick={() => browseNewSessionDirectory(item.absolute).catch(() => undefined)}>
+                      <FolderIcon size={16} />
+                      <span>{item.name}</span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowNewSessionPicker(false)}>
+                {t('session.cancel')}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       {view === "detail" && (

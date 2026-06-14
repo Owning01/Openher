@@ -51,6 +51,16 @@ type TranslationKey =
   | 'sessions.new'
   | 'sessions.creating'
   | 'sessions.refresh'
+  | 'sessions.projectDirectoryLabel'
+  | 'sessions.projectDirectoryPlaceholder'
+  | 'sessions.projectDirectoryActive'
+  | 'sessions.projectDirectoryDefault'
+  | 'sessions.newSessionTitle'
+  | 'sessions.useServerDefault'
+  | 'sessions.useThisFolder'
+  | 'sessions.parentFolder'
+  | 'sessions.folderPickerLoading'
+  | 'sessions.folderPickerEmpty'
   | 'sessions.searchPlaceholder'
   | 'sessions.emptyTitle'
   | 'sessions.emptyHint'
@@ -166,6 +176,16 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.new': 'New Session',
     'sessions.creating': 'Creating...',
     'sessions.refresh': 'Refresh',
+    'sessions.projectDirectoryLabel': 'Selected folder',
+    'sessions.projectDirectoryPlaceholder': '/home/you/project or C:\\Projects\\App',
+    'sessions.projectDirectoryActive': 'New sessions use {directory}.',
+    'sessions.projectDirectoryDefault': 'Choose the folder for this new session, or use the server default directory.',
+    'sessions.newSessionTitle': 'New session folder',
+    'sessions.useServerDefault': 'Use server default',
+    'sessions.useThisFolder': 'Create here',
+    'sessions.parentFolder': 'Parent folder',
+    'sessions.folderPickerLoading': 'Loading folders...',
+    'sessions.folderPickerEmpty': 'No folders here.',
     'sessions.searchPlaceholder': 'Search sessions by title or directory...',
     'sessions.emptyTitle': 'No sessions found',
     'sessions.emptyHint': 'Create a new session to get started',
@@ -283,6 +303,16 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.new': 'Nuova sessione',
     'sessions.creating': 'Creazione...',
     'sessions.refresh': 'Aggiorna',
+    'sessions.projectDirectoryLabel': 'Cartella selezionata',
+    'sessions.projectDirectoryPlaceholder': '/home/utente/progetto o C:\\Projects\\App',
+    'sessions.projectDirectoryActive': 'La nuova sessione userà {directory}.',
+    'sessions.projectDirectoryDefault': 'Scegli la cartella per questa nuova sessione, oppure usa la directory predefinita del server.',
+    'sessions.newSessionTitle': 'Cartella nuova sessione',
+    'sessions.useServerDefault': 'Usa default server',
+    'sessions.useThisFolder': 'Crea qui',
+    'sessions.parentFolder': 'Cartella superiore',
+    'sessions.folderPickerLoading': 'Caricamento cartelle...',
+    'sessions.folderPickerEmpty': 'Nessuna cartella qui.',
     'sessions.searchPlaceholder': 'Cerca sessioni per titolo o directory...',
     'sessions.emptyTitle': 'Nessuna sessione trovata',
     'sessions.emptyHint': 'Crea una nuova sessione per iniziare',
@@ -400,6 +430,16 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.new': '新增工作階段',
     'sessions.creating': '建立中...',
     'sessions.refresh': '重新整理',
+    'sessions.projectDirectoryLabel': '已選資料夾',
+    'sessions.projectDirectoryPlaceholder': '/home/you/project 或 C:\\Projects\\App',
+    'sessions.projectDirectoryActive': '新工作階段會使用 {directory}。',
+    'sessions.projectDirectoryDefault': '為這個新工作階段選擇資料夾，或使用伺服器預設目錄。',
+    'sessions.newSessionTitle': '新工作階段資料夾',
+    'sessions.useServerDefault': '使用伺服器預設',
+    'sessions.useThisFolder': '在這裡建立',
+    'sessions.parentFolder': '上一層資料夾',
+    'sessions.folderPickerLoading': '正在載入資料夾...',
+    'sessions.folderPickerEmpty': '這裡沒有資料夾。',
     'sessions.searchPlaceholder': '依標題或目錄搜尋工作階段...',
     'sessions.emptyTitle': '找不到工作階段',
     'sessions.emptyHint': '建立新的工作階段以開始',

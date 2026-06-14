@@ -360,6 +360,46 @@ p {
   margin-bottom: var(--space-3);
 }
 
+.folder-picker {
+  max-height: min(80vh, 680px);
+  overflow: hidden;
+}
+
+.folder-picker-current {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  overflow-wrap: anywhere;
+}
+
+.folder-picker-current span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.folder-list {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 42vh;
+  margin-top: var(--space-3);
+  overflow-y: auto;
+}
+
+.folder-row {
+  justify-content: flex-start;
+  width: 100%;
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
 .search {
   margin: 0;
 }

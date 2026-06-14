@@ -3,11 +3,13 @@ import type {
   CommandInfo,
   DiffFile,
   FileStatusEntry,
+  FileEntry,
   HealthResponse,
   MessageEnvelope,
   ModelOption,
   ModelSelection,
   ProjectCurrent,
+  PathInfo,
   ServerConfig,
   Session,
   SessionStatus,
@@ -151,12 +153,20 @@ export const api = {
     return request<HealthResponse>(config, "/global/health")
   },
 
-  listSessions(config: ServerConfig) {
-    return request<Session[]>(config, "/session")
+  listSessions(config: ServerConfig, directory?: string) {
+    return request<Session[]>(config, withDirectory("/session", directory))
   },
 
-  listStatuses(config: ServerConfig) {
-    return request<Record<string, SessionStatus>>(config, "/session/status")
+  listStatuses(config: ServerConfig, directory?: string) {
+    return request<Record<string, SessionStatus>>(config, withDirectory("/session/status", directory))
+  },
+
+  loadPath(config: ServerConfig, directory?: string) {
+    return request<PathInfo>(config, withDirectory("/path", directory))
+  },
+
+  listFiles(config: ServerConfig, path: string, directory?: string) {
+    return request<FileEntry[]>(config, withDirectory(`/file?path=${encodeURIComponent(path)}`, directory))
   },
 
   listCommands(config: ServerConfig) {
@@ -189,28 +199,28 @@ export const api = {
     })
   },
 
-  createSession(config: ServerConfig, title?: string, model?: ModelSelection) {
-    return request<Session>(config, "/session", { method: "POST", body: { title, model: toCreateSessionModel(model) } })
+  createSession(config: ServerConfig, title?: string, model?: ModelSelection, directory?: string) {
+    return request<Session>(config, withDirectory("/session", directory), { method: "POST", body: { title, model: toCreateSessionModel(model) } })
   },
 
-  renameSession(config: ServerConfig, id: string, title: string) {
-    return request<Session>(config, `/session/${id}`, { method: "PATCH", body: { title } })
+  renameSession(config: ServerConfig, id: string, title: string, directory?: string) {
+    return request<Session>(config, withDirectory(`/session/${id}`, directory), { method: "PATCH", body: { title } })
   },
 
-  deleteSession(config: ServerConfig, id: string) {
-    return request<boolean>(config, `/session/${id}`, { method: "DELETE" })
+  deleteSession(config: ServerConfig, id: string, directory?: string) {
+    return request<boolean>(config, withDirectory(`/session/${id}`, directory), { method: "DELETE" })
   },
 
   loadMessages(config: ServerConfig, sessionID: string, directory?: string) {
     return request<MessageEnvelope[]>(config, withDirectory(`/session/${sessionID}/message?limit=100`, directory))
   },
 
-  loadTodo(config: ServerConfig, sessionID: string) {
-    return request<TodoItem[]>(config, `/session/${sessionID}/todo`)
+  loadTodo(config: ServerConfig, sessionID: string, directory?: string) {
+    return request<TodoItem[]>(config, withDirectory(`/session/${sessionID}/todo`, directory))
   },
 
-  loadDiff(config: ServerConfig, sessionID: string) {
-    return request<DiffFile[]>(config, `/session/${sessionID}/diff`)
+  loadDiff(config: ServerConfig, sessionID: string, directory?: string) {
+    return request<DiffFile[]>(config, withDirectory(`/session/${sessionID}/diff`, directory))
   },
 
   loadProjectCurrent(config: ServerConfig, directory?: string) {
@@ -239,8 +249,8 @@ export const api = {
     })
   },
 
-  abort(config: ServerConfig, sessionID: string) {
-    return request<boolean>(config, `/session/${sessionID}/abort`, {
+  abort(config: ServerConfig, sessionID: string, directory?: string) {
+    return request<boolean>(config, withDirectory(`/session/${sessionID}/abort`, directory), {
       method: "POST",
       body: {}
     })

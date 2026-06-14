@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
+const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
 const icons = readFileSync(new URL('./Icons.tsx', import.meta.url), 'utf8')
 const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 
@@ -39,7 +40,7 @@ assert.ok(app.includes('assistantPayloadLength(current) > assistantPayloadLength
 assert.ok(app.includes('SendIcon') && app.includes('<SendIcon size={18} />'), 'composer send button should use the clear paper-plane SendIcon')
 assert.ok(app.includes('StopCircleIcon') && app.includes('<StopCircleIcon size={18} />'), 'composer waiting button should use a clear stop-task icon')
 assert.match(icons, /export const StopCircleIcon/, 'StopCircleIcon should exist in the shared SVG icon set')
-assert.ok(app.includes('api.loadDiff(config, sessionID)'), 'detail view should load /session/:id/diff for changed-file details')
+assert.ok(app.includes('api.loadDiff(config, sessionID, directory)'), 'detail view should load /session/:id/diff for changed-file details')
 assert.ok(app.includes('diffFiles.length > 0'), 'changed-file panel should be hidden when there are no changed files')
 assert.ok(app.includes('className={selectedDiff?.file === file.file ? "diff-file active" : "diff-file"}'), 'changed files should be clickable and show selected state')
 assert.ok(app.includes('mini-diff-card'), 'detail view should render a compact per-file mini diff card')
@@ -54,6 +55,17 @@ assert.ok(app.includes('backgroundFailureCountRef.current >= 3'), 'transient 1-2
 assert.ok(app.includes('connection-pending'), 'initial slow connection should show an explicit loading state instead of an empty sessions list')
 assert.ok(app.includes("t('connection.reconnecting')"), 'slow reconnecting state should be translated and shown quietly')
 assert.ok(styles.includes('.connection-status'), 'connection status should have a dedicated non-error visual treatment')
+assert.ok(app.includes('NEW_SESSION_DIRECTORY_STORAGE_KEY'), 'last new-session folder should persist separately from connection settings')
+assert.ok(app.includes('showNewSessionPicker'), 'New Session should open a per-session folder picker instead of applying one global folder')
+assert.ok(app.includes('api.loadPath(config, selectedNewSessionDirectory)'), 'folder picker should start from OpenCode /path')
+assert.ok(api.includes('listFiles(config: ServerConfig, path: string, directory?: string)'), 'API should expose OpenCode /file for directory browsing')
+assert.ok(app.includes("t('sessions.projectDirectoryLabel')"), 'folder picker should be localized')
+assert.ok(app.includes('api.createSession(config, "Mobile session", activeModel, directory)'), 'new sessions should pass only the picked directory to OpenCode')
+assert.ok(api.includes('createSession(config: ServerConfig, title?: string, model?: ModelSelection, directory?: string)'), 'createSession API should accept a directory')
+assert.ok(api.includes('withDirectory("/session", directory)'), 'new session creation should append ?directory= when set')
+assert.ok(api.includes('loadTodo(config: ServerConfig, sessionID: string, directory?: string)'), 'todo requests should be directory-aware')
+assert.ok(api.includes('loadDiff(config: ServerConfig, sessionID: string, directory?: string)'), 'diff requests should be directory-aware')
+assert.ok(api.includes('abort(config: ServerConfig, sessionID: string, directory?: string)'), 'abort requests should be directory-aware')
 
 assert.match(icons, /export const RefreshIcon/, 'RefreshIcon should exist for idle refresh UI')
 
