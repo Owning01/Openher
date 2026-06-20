@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { api } from "./api"
 import { createTranslator, languageOptions, normalizeLanguage, type LanguageCode } from "./i18n"
-import type { CommandInfo, DiffFile, FileEntry, FileStatusEntry, MessageEnvelope, ModelOption, ModelSelection, ProjectDashboard, ServerConfig, SessionView, TodoItem } from "./types"
+import type { CommandInfo, DiffFile, FileEntry, FileStatusEntry, MessageEnvelope, ModelOption, ModelSelection, PathInfo, ProjectDashboard, ServerConfig, Session, SessionView, TodoItem } from "./types"
 import {
   SettingsIcon,
   FolderIcon,
@@ -106,6 +106,24 @@ function modelSearchText(option: ModelOption): string {
 function normalizeDirectory(value: string): string | undefined {
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : undefined
+}
+
+function isProjectDirectory(pathInfo: PathInfo): boolean {
+  return pathInfo.worktree !== "/"
+}
+
+function toSessionView(session: Session): SessionView {
+  return {
+    id: session.id,
+    title: session.title,
+    directory: session.directory,
+    updated: session.time.updated,
+    status: "idle",
+    files: session.summary?.files ?? 0,
+    additions: session.summary?.additions ?? 0,
+    deletions: session.summary?.deletions ?? 0,
+    model: session.model ? { providerID: session.model.providerID, modelID: session.model.id, variant: session.model.variant } : undefined
+  }
 }
 
 function formatLimit(value?: number): string {
@@ -405,19 +423,13 @@ function App() {
     try {
       const [items, statuses] = await Promise.all([api.listSessions(config), api.listStatuses(config)])
       const mapped = items
-        .map((session) => ({
-          id: session.id,
-          title: session.title,
-          directory: session.directory,
-          updated: session.time.updated,
-          status: statuses[session.id]?.type ?? "idle",
-          files: session.summary?.files ?? 0,
-          additions: session.summary?.additions ?? 0,
-          deletions: session.summary?.deletions ?? 0,
-          model: session.model ? { providerID: session.model.providerID, modelID: session.model.id, variant: session.model.variant } : undefined
-        }))
+        .map((session) => ({ ...toSessionView(session), status: statuses[session.id]?.type ?? "idle" }))
         .sort((a, b) => b.updated - a.updated)
-      setSessions(mapped)
+      setSessions((current) => {
+        const selected = selectedID ? current.find((session) => session.id === selectedID) : null
+        if (!selected || mapped.some((session) => session.id === selected.id)) return mapped
+        return [selected, ...mapped].sort((a, b) => b.updated - a.updated)
+      })
       backgroundFailureCountRef.current = 0
       initialSessionLoadRef.current = false
       setConnectionState("connected")
@@ -603,17 +615,30 @@ function App() {
     if (creatingSession) return
     setCreatingSession(true)
     setRuntimeError(null)
+    setPickerError(null)
     try {
+      if (directory) {
+        const pathInfo = await api.loadPath(config, directory)
+        if (!isProjectDirectory(pathInfo)) {
+          throw new Error(t('sessions.projectDirectoryInvalid', { directory }))
+        }
+      }
       const created = await api.createSession(config, "Mobile session", activeModel, directory)
+      const createdView = toSessionView(created)
       if (directory) {
         setNewSessionDirectory(directory)
       }
       setShowNewSessionPicker(false)
-      await refreshSessions()
+      setSessions((current) => {
+        if (current.some((session) => session.id === created.id)) return current
+        return [createdView, ...current].sort((a, b) => b.updated - a.updated)
+      })
       setSelectedID(created.id)
       setView("detail")
       await loadSelected(created.id, created.directory)
+      await refreshSessions()
     } catch (err) {
+      setPickerError((err as Error).message)
       setRuntimeError((err as Error).message)
     } finally {
       setCreatingSession(false)
