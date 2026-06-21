@@ -99,6 +99,13 @@ type TranslationKey =
   | 'detail.miniDiffAria'
   | 'detail.linesAddedDeleted'
   | 'detail.modelPanelLabel'
+  | 'detail.aiTitle'
+  | 'detail.refreshAi'
+  | 'detail.agentTitle'
+  | 'detail.agentSelectLabel'
+  | 'detail.agentLoading'
+  | 'detail.agentLoadError'
+  | 'detail.agentMode'
   | 'detail.modelTitle'
   | 'detail.modelHint'
   | 'detail.refreshModels'
@@ -234,6 +241,13 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.miniDiffAria': 'Changed files mini diff',
     'detail.linesAddedDeleted': '+{additions} lines · -{deletions} lines',
     'detail.modelPanelLabel': 'AI model picker',
+    'detail.aiTitle': 'AI agent and model',
+    'detail.refreshAi': 'Refresh AI options',
+    'detail.agentTitle': 'Agent',
+    'detail.agentSelectLabel': 'Agent for next prompt',
+    'detail.agentLoading': 'Loading configured agents...',
+    'detail.agentLoadError': 'Cannot load agents: {message}',
+    'detail.agentMode': 'Mode: {mode}',
     'detail.modelTitle': 'AI model',
     'detail.modelHint': 'Applies to the next prompt and to new sessions. Current running replies keep their original model.',
     'detail.refreshModels': 'Refresh models',
@@ -368,6 +382,13 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.miniDiffAria': 'Mini diff dei file modificati',
     'detail.linesAddedDeleted': '+{additions} righe · -{deletions} righe',
     'detail.modelPanelLabel': 'Selettore modello AI',
+    'detail.aiTitle': 'Agente e modello AI',
+    'detail.refreshAi': 'Aggiorna opzioni AI',
+    'detail.agentTitle': 'Agente',
+    'detail.agentSelectLabel': 'Agente per il prossimo prompt',
+    'detail.agentLoading': 'Caricamento agenti configurati...',
+    'detail.agentLoadError': 'Impossibile caricare gli agenti: {message}',
+    'detail.agentMode': 'Modalità: {mode}',
     'detail.modelTitle': 'Modello AI',
     'detail.modelHint': 'Si applica al prossimo prompt e alle nuove sessioni. Le risposte già in corso restano sul modello originale.',
     'detail.refreshModels': 'Aggiorna modelli',
@@ -502,6 +523,13 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.miniDiffAria': '已變更檔案迷你 diff',
     'detail.linesAddedDeleted': '+{additions} 行 · -{deletions} 行',
     'detail.modelPanelLabel': 'AI 模型選擇器',
+    'detail.aiTitle': 'AI 代理與模型',
+    'detail.refreshAi': '重新整理 AI 選項',
+    'detail.agentTitle': '代理',
+    'detail.agentSelectLabel': '下一個提示的代理',
+    'detail.agentLoading': '正在載入已設定代理...',
+    'detail.agentLoadError': '無法載入代理：{message}',
+    'detail.agentMode': '模式：{mode}',
     'detail.modelTitle': 'AI 模型',
     'detail.modelHint': '套用到下一個提示與新工作階段。進行中的回覆仍使用原本模型。',
     'detail.refreshModels': '重新整理模型',

@@ -1,5 +1,6 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core"
 import type {
+  AgentOption,
   CommandInfo,
   DiffFile,
   FileStatusEntry,
@@ -88,6 +89,14 @@ type ConfigProvidersResponse = {
   default?: Record<string, string>
 }
 
+type AgentResponse = Array<{
+  id?: string
+  name?: string
+  description?: string
+  mode: "primary" | "subagent" | "all"
+  hidden?: boolean
+}>
+
 async function requestWithHeaders<T>(config: ServerConfig, path: string, options: RequestOptions = {}): Promise<ResponseWithHeaders<T>> {
   const target = `${baseUrl(config)}${path}`
 
@@ -164,6 +173,17 @@ async function request<T>(config: ServerConfig, path: string, options: RequestOp
   return (await requestWithHeaders<T>(config, path, options)).data
 }
 
+function toAgentOption(agent: AgentResponse[number]): AgentOption {
+  const id = agent.id || agent.name || ""
+  return {
+    id,
+    name: agent.name || id,
+    description: agent.description,
+    mode: agent.mode,
+    hidden: agent.hidden
+  }
+}
+
 function toModelBody(model?: ModelSelection) {
   if (!model) return undefined
   return { providerID: model.providerID, modelID: model.modelID }
@@ -214,6 +234,11 @@ export const api = {
 
   listCommands(config: ServerConfig) {
     return request<CommandInfo[]>(config, "/command")
+  },
+
+  async listAgents(config: ServerConfig, directory?: string) {
+    const agents = await request<AgentResponse>(config, withDirectory("/agent", directory))
+    return agents.map(toAgentOption).filter((agent) => agent.id && !agent.hidden)
   },
 
   async listModels(config: ServerConfig, directory?: string) {
@@ -282,17 +307,17 @@ export const api = {
     return request<FileStatusEntry[] | Record<string, FileStatusEntry>>(config, withDirectory("/file/status", directory))
   },
 
-  sendPrompt(config: ServerConfig, sessionID: string, text: string, directory?: string, model?: ModelSelection) {
+  sendPrompt(config: ServerConfig, sessionID: string, text: string, directory?: string, model?: ModelSelection, agentID?: string) {
     return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt_async`, directory), {
       method: "POST",
-      body: { parts: [{ type: "text", text }], model: toModelBody(model), variant: model?.variant || undefined }
+      body: { parts: [{ type: "text", text }], model: toModelBody(model), agent: agentID, variant: model?.variant || undefined }
     })
   },
 
-  sendCommand(config: ServerConfig, sessionID: string, command: string, argumentsText: string, directory?: string, model?: ModelSelection) {
+  sendCommand(config: ServerConfig, sessionID: string, command: string, argumentsText: string, directory?: string, model?: ModelSelection, agentID?: string) {
     return request<MessageEnvelope>(config, withDirectory(`/session/${sessionID}/command`, directory), {
       method: "POST",
-      body: { command, arguments: argumentsText, model: modelWireName(model), variant: model?.variant || undefined },
+      body: { command, arguments: argumentsText, agent: agentID, model: modelWireName(model), variant: model?.variant || undefined },
       readTimeout: 300_000
     })
   },

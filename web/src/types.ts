@@ -16,6 +16,14 @@ export type ModelSelection = {
   variant?: string
 }
 
+export type AgentOption = {
+  id: string
+  name: string
+  description?: string
+  mode: "primary" | "subagent" | "all"
+  hidden?: boolean
+}
+
 export type ModelOption = ModelSelection & {
   providerName: string
   modelName: string
