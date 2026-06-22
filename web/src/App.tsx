@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { api } from "./api"
 import { createTranslator, languageOptions, normalizeLanguage, type LanguageCode } from "./i18n"
-import type { CommandInfo, DiffFile, FileEntry, FileStatusEntry, MessageEnvelope, ModelOption, ModelSelection, PathInfo, ProjectDashboard, ServerConfig, Session, SessionStatus, SessionView, TodoItem } from "./types"
+import type { AgentOption, CommandInfo, DiffFile, FileEntry, FileStatusEntry, MessageEnvelope, ModelOption, ModelSelection, PathInfo, ProjectDashboard, ServerConfig, Session, SessionStatus, SessionView, TodoItem } from "./types"
 import {
   SettingsIcon,
   FolderIcon,
@@ -23,6 +23,7 @@ import {
 const STORAGE_KEY = "opencode.remote.server"
 const LANGUAGE_STORAGE_KEY = "opencode.remote.language"
 const MODEL_STORAGE_KEY = "opencode.remote.model"
+const AGENT_STORAGE_KEY = "opencode.remote.agent"
 const THEME_STORAGE_KEY = "opencode.remote.theme"
 const NEW_SESSION_DIRECTORY_STORAGE_KEY = "opencode.remote.newSessionDirectory"
 
@@ -101,6 +102,10 @@ function sameModel(a: ModelSelection | null | undefined, b: ModelSelection | nul
 
 function modelSearchText(option: ModelOption): string {
   return [option.modelName, option.modelID, option.providerName, option.providerID, option.variant ?? ""].join(" ").toLowerCase()
+}
+
+function agentLabel(agent: AgentOption): string {
+  return agent.name || agent.id
 }
 
 function normalizeDirectory(value: string): string | undefined {
@@ -210,6 +215,9 @@ function App() {
   const [connectedVersion, setConnectedVersion] = useState<string>("")
   const [commands, setCommands] = useState<CommandInfo[]>([])
   const [commandFilter, setCommandFilter] = useState<"all" | "skill">("all")
+  const [agentOptions, setAgentOptions] = useState<AgentOption[]>([])
+  const [agentLoadError, setAgentLoadError] = useState<string | null>(null)
+  const [selectedAgentID, setSelectedAgentID] = useState<string>(() => localStorage.getItem(AGENT_STORAGE_KEY) || "build")
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
   const [modelLoadError, setModelLoadError] = useState<string | null>(null)
   const [selectedModelKey, setSelectedModelKey] = useState<string | null>(() => localStorage.getItem(MODEL_STORAGE_KEY))
@@ -294,6 +302,14 @@ function App() {
     return modelOptions.find((option) => option.isDefault) ?? modelOptions[0] ?? null
   }, [modelOptions, selectedModel, selectedSession?.model])
   const activeModel = activeModelOption ? { providerID: activeModelOption.providerID, modelID: activeModelOption.modelID, variant: activeModelOption.variant } : selectedModel ?? undefined
+  const primaryAgentOptions = useMemo(() => agentOptions.filter((agent) => agent.mode === "primary" || agent.mode === "all"), [agentOptions])
+  const activeAgent = useMemo(() => {
+    return primaryAgentOptions.find((agent) => agent.id === selectedAgentID)
+      ?? primaryAgentOptions.find((agent) => agent.id === "build")
+      ?? primaryAgentOptions[0]
+      ?? null
+  }, [primaryAgentOptions, selectedAgentID])
+  const activeAgentID = activeAgent?.id ?? "build"
   const filteredModelOptions = useMemo(() => {
     const text = modelQuery.trim().toLowerCase()
     if (!text) return modelOptions
@@ -355,7 +371,7 @@ function App() {
   ).length
   const totalDiffAdditions = diffFiles.reduce((sum, file) => sum + file.additions, 0)
   const totalDiffDeletions = diffFiles.reduce((sum, file) => sum + file.deletions, 0)
-  const showModelChip = modelOptions.length > 1 || Boolean(activeModelOption)
+  const showModelChip = modelOptions.length > 1 || Boolean(activeModelOption) || primaryAgentOptions.length > 0
 
   async function openSession(sessionID: string, directory: string) {
     setSelectedID(sessionID)
@@ -371,7 +387,7 @@ function App() {
     setLoadingSessionID(sessionID)
     try {
       await loadSelected(sessionID, directory)
-      await loadModels()
+      await Promise.all([loadAgents(), loadModels()])
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
@@ -485,6 +501,24 @@ function App() {
     }
   }
 
+  async function loadAgents() {
+    if (!config.host || config.port <= 0) return
+    try {
+      const list = await api.listAgents(config, selectedSession?.directory ?? selectedNewSessionDirectory)
+      setAgentOptions(list)
+      setAgentLoadError(null)
+      const saved = localStorage.getItem(AGENT_STORAGE_KEY) || selectedAgentID
+      const primary = list.filter((agent) => agent.mode === "primary" || agent.mode === "all")
+      const next = primary.find((agent) => agent.id === saved) ?? primary.find((agent) => agent.id === "build") ?? primary[0]
+      if (next) {
+        setSelectedAgentID(next.id)
+        localStorage.setItem(AGENT_STORAGE_KEY, next.id)
+      }
+    } catch (err) {
+      setAgentLoadError((err as Error).message)
+    }
+  }
+
   async function loadModels() {
     if (!config.host || config.port <= 0) return
     try {
@@ -529,6 +563,11 @@ function App() {
   function changeModel(nextKey: string) {
     setSelectedModelKey(nextKey)
     localStorage.setItem(MODEL_STORAGE_KEY, nextKey)
+  }
+
+  function changeAgent(nextAgentID: string) {
+    setSelectedAgentID(nextAgentID)
+    localStorage.setItem(AGENT_STORAGE_KEY, nextAgentID)
   }
 
   async function loadSelected(sessionID: string, directory: string) {
@@ -695,6 +734,7 @@ function App() {
           `Server: ${hasConfiguredServer ? `${config.host}:${config.port}` : "not configured"}`,
           `Session: ${selectedSession.title} (${selectedSession.status})`,
           `Directory: ${selectedSession.directory}`,
+          `Agent: ${activeAgent?.name ?? activeAgentID}`,
           `Model: ${activeModelOption ? `${activeModelOption.providerName} / ${activeModelOption.modelName}` : "default"}`
         ].join("\n")
         setComposer("")
@@ -736,7 +776,7 @@ function App() {
       setBusySending(true)
       setRuntimeError(null)
       try {
-        await api.sendCommand(config, selectedSession.id, command, args, selectedSession.directory, activeModel)
+        await api.sendCommand(config, selectedSession.id, command, args, selectedSession.directory, activeModel, activeAgentID)
         await loadSelected(selectedSession.id, selectedSession.directory)
         setOptimisticUserMessages((current) => current.filter((message) => message.info.id !== optimisticMessage.info.id))
         await refreshSessions()
@@ -763,7 +803,7 @@ function App() {
     setBusySending(true)
     setRuntimeError(null)
     try {
-      await api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel)
+      await api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID)
       await loadSelected(selectedSession.id, selectedSession.directory)
       await refreshSessions()
     } catch (err) {
@@ -845,6 +885,7 @@ function App() {
     initialSessionLoadRef.current = true
     refreshSessions(true).catch(() => undefined)
     loadCommands().catch(() => undefined)
+    loadAgents().catch(() => undefined)
     loadModels().catch(() => undefined)
     const timer = setInterval(() => {
       refreshSessions(true).catch(() => undefined)
@@ -1274,7 +1315,7 @@ function App() {
               {showModelChip && (
                 <button type="button" className="context-chip" onClick={() => setActiveDetailSheet("ai")}>
                   <span>{t('detail.aiChip')}</span>
-                  <strong>{activeModelOption?.modelName ?? t('detail.modelLoading')}</strong>
+                  <strong>{agentLabel(activeAgent ?? { id: activeAgentID, name: activeAgentID, mode: "primary" })} · {activeModelOption?.modelName ?? t('detail.modelLoading')}</strong>
                 </button>
               )}
 
@@ -1422,7 +1463,7 @@ function App() {
             <div className="sheet-header">
               <div>
                 <h3 id="detail-sheet-title">
-                  {activeDetailSheet === "ai" && t('detail.modelTitle')}
+                  {activeDetailSheet === "ai" && t('detail.aiTitle')}
                   {activeDetailSheet === "details" && t('detail.sessionDetailsTitle')}
                 </h3>
                 <p className="subtle">
@@ -1437,10 +1478,32 @@ function App() {
 
             {activeDetailSheet === "ai" && (
               <div className="sheet-content">
-                <button type="button" className="btn-secondary" onClick={() => loadModels().catch(() => undefined)}>
+                <button type="button" className="btn-secondary" onClick={() => Promise.all([loadAgents(), loadModels()]).catch(() => undefined)}>
                   <RefreshIcon size={16} />
-                  {t('detail.refreshModels')}
+                  {t('detail.refreshAi')}
                 </button>
+                {primaryAgentOptions.length > 0 ? (
+                  <div className="agent-controls">
+                    <label htmlFor="agent-select">
+                      {t('detail.agentSelectLabel')}
+                      <select
+                        id="agent-select"
+                        value={activeAgentID}
+                        onChange={(event) => changeAgent(event.target.value)}
+                        disabled={isWorking}
+                      >
+                        {primaryAgentOptions.map((agent) => (
+                          <option key={agent.id} value={agent.id}>{agentLabel(agent)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="subtle">
+                      {activeAgent?.description || t('detail.agentMode', { mode: activeAgent?.mode ?? 'primary' })}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="subtle">{agentLoadError ? t('detail.agentLoadError', { message: agentLoadError }) : t('detail.agentLoading')}</p>
+                )}
                 {modelOptions.length > 0 ? (
                   <div className="model-controls">
                     <label htmlFor="model-search">
@@ -1518,6 +1581,11 @@ function App() {
                   ) : (
                     <small>{dashboardError ? t('detail.dashboardError', { message: dashboardError }) : t('detail.fileStatusSource')}</small>
                   )}
+                </div>
+                <div className="dashboard-card">
+                  <span className="dashboard-label">{t('detail.agentTitle')}</span>
+                  <strong>{agentLabel(activeAgent ?? { id: activeAgentID, name: activeAgentID, mode: "primary" })}</strong>
+                  <small>{t('detail.agentMode', { mode: activeAgent?.mode ?? 'primary' })}</small>
                 </div>
                 <div className="dashboard-card">
                   <span className="dashboard-label">{t('detail.modelTitle')}</span>

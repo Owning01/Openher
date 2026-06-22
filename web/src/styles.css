@@ -671,9 +671,17 @@ p {
   margin-bottom: var(--space-3);
 }
 
+.agent-controls,
 .model-controls {
   display: grid;
   gap: var(--space-3);
+}
+
+.agent-controls {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-subtle);
+  padding: var(--space-3);
 }
 
 .model-option-list {
