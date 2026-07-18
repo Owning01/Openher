@@ -71,6 +71,50 @@ OPENCODE_SERVER_PASSWORD=tu-contraseña \
 npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096
 ```
 
+## Conexión desde cualquier red (Tailscale)
+
+[Tailscale](https://tailscale.com) crea una VPN mesh segura — tu celular y PC se conectan por IP privada aunque estén en redes distintas.
+
+### 1. Instalar Tailscale
+
+- **PC**: [tailscale.com/download](https://tailscale.com/download) — instalar e iniciar sesión
+- **Celular**: Play Store → "Tailscale" — instalar e iniciar sesión (misma cuenta)
+
+### 2. Obtener la IP de Tailscale
+
+```bash
+# En la PC:
+tailscale ip -4
+# → 100.x.x.x
+```
+
+### 3. Iniciar el servidor vinculado a Tailscale
+
+```bash
+OPENCODE_SERVER_USERNAME=opencode \
+OPENCODE_SERVER_PASSWORD=tu-contraseña \
+npx -y opencode-ai serve --hostname 100.x.x.x --port 4096
+```
+
+> Usá la IP de Tailscale del paso 2 (ej. `100.68.42.13`).
+
+### 4. Configurar la app
+
+En el celular:
+- **Host**: `100.x.x.x` (la misma IP de Tailscale)
+- **Port**: `4096`
+- **Username**: `opencode`
+- **Password**: tu contraseña
+
+Listo. La app se conecta por el túnel de Tailscale — no necesitas abrir puertos.
+
+### ¿Por qué Tailscale?
+
+- Funciona en cualquier red (datos móviles, WiFi distinto)
+- Cifrado extremo a extremo (WireGuard)
+- Sin puertos abiertos en el router
+- Gratuito para uso personal
+
 ## Licencia
 
 MIT
