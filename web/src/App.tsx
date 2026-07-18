@@ -95,6 +95,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
   const [readingMode, setReadingMode] = useState(false)
+  const [navBarMode, setNavBarMode] = useState<"header" | "bottom">(() => {
+    const saved = localStorage.getItem("opencode.remote.navbar")
+    return saved === "header" || saved === "bottom" ? saved : "bottom"
+  })
 
   const isSessionRunning = Boolean(selectedSession && isSessionActive(selectedSession))
   const isWorking = awaitingAssistantReply || isSessionRunning
@@ -343,10 +347,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [])
 
   return (
-    <div className="app-shell">
-      <NavBar variant="top" view={view} onNavigate={handleNavigate}
-        hasConfiguredServer={hasConfiguredServer}
-        hasSelectedSession={!!selectedSession} />
+    <div className="app-shell" data-navbar={navBarMode}>
+      {navBarMode === "header" && (
+        <NavBar variant="top" view={view} onNavigate={handleNavigate}
+          hasConfiguredServer={hasConfiguredServer}
+          hasSelectedSession={!!selectedSession} />
+      )}
 
       {view === "settings" && (
         <SettingsPanel
@@ -363,7 +369,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onNavigate={handleNavigate}
           modelOptions={modelOptions} selectedModelKey={selectedModelKey}
           onChangeModel={changeModel} modelKey={modelKey}
-          stats={stats} onResetStats={resetStats} />
+          stats={stats} onResetStats={resetStats}
+          navBarMode={navBarMode} onNavBarModeChange={(m) => { setNavBarMode(m); localStorage.setItem("opencode.remote.navbar", m) }} />
       )}
 
       {view === "sessions" && (
@@ -485,9 +492,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onCancel={() => setSessionToDelete(null)} />
       )}
 
-      <NavBar variant="bottom" view={view} onNavigate={handleNavigate}
-        hasConfiguredServer={hasConfiguredServer}
-        hasSelectedSession={!!selectedSession} />
+      {navBarMode === "bottom" && (
+        <NavBar variant="bottom" view={view} onNavigate={handleNavigate}
+          hasConfiguredServer={hasConfiguredServer}
+          hasSelectedSession={!!selectedSession} />
+      )}
     </div>
   )
 }

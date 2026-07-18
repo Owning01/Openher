@@ -36,6 +36,8 @@ type SettingsPanelProps = {
   modelKey: (model: { providerID: string; modelID: string; variant?: string }) => string
   stats: UsageStats
   onResetStats: () => void
+  navBarMode: "header" | "bottom"
+  onNavBarModeChange: (mode: "header" | "bottom") => void
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
@@ -45,7 +47,8 @@ export const SettingsPanel = memo(function SettingsPanel({
   theme, onThemeChange, languageOptions,
   dataMode, onDataModeChange, onNavigate,
   modelOptions, selectedModelKey, onChangeModel, modelKey: mk,
-  stats, onResetStats
+  stats, onResetStats,
+  navBarMode, onNavBarModeChange
 }: SettingsPanelProps) {
   const t = useT()
 
@@ -187,6 +190,20 @@ export const SettingsPanel = memo(function SettingsPanel({
           style={{ marginTop: 'var(--space-2)' }}>
           {t('settings.resetStats')}
         </button>
+      </div>
+
+      <div className="setting-group">
+        <h4 className="quick-access-label">{t('settings.navBarPosition')}</h4>
+        <div className="toggle-row">
+          <button type="button" className={`toggle-btn${navBarMode === "bottom" ? " active" : ""}`}
+            onClick={() => onNavBarModeChange("bottom")}>
+            {t('settings.navBarBottom')}
+          </button>
+          <button type="button" className={`toggle-btn${navBarMode === "header" ? " active" : ""}`}
+            onClick={() => onNavBarModeChange("header")}>
+            {t('settings.navBarHeader')}
+          </button>
+        </div>
       </div>
 
       <div className="settings-help">

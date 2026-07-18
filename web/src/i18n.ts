@@ -172,6 +172,11 @@ type TranslationKey =
   | 'detail.readingModeOn'
   | 'detail.readingModeOff'
   | 'settings.mode'
+  | 'voice.input'
+  | 'voice.listening'
+  | 'settings.navBarPosition'
+  | 'settings.navBarBottom'
+  | 'settings.navBarHeader'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
@@ -220,6 +225,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.statsTokens': 'Tokens',
     'settings.resetStats': 'Reset stats',
     'settings.mode': 'Mode',
+    'voice.input': 'Voice input',
+    'voice.listening': 'Listening...',
+    'settings.navBarPosition': 'Navigation bar',
+    'settings.navBarBottom': 'Bottom',
+    'settings.navBarHeader': 'Header',
     'connection.connecting': 'Connecting to OpenCode...',
     'connection.loadingSessions': 'Connecting and loading sessions...',
     'connection.refreshing': 'Refreshing sessions...',
@@ -429,6 +439,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.statsTokens': 'Tokens',
     'settings.resetStats': 'Reiniciar estadísticas',
     'settings.mode': 'Modo',
+    'voice.input': 'Entrada por voz',
+    'voice.listening': 'Escuchando...',
+    'settings.navBarPosition': 'Barra de navegación',
+    'settings.navBarBottom': 'Abajo',
+    'settings.navBarHeader': 'Arriba',
     'connection.connecting': 'Conectando a OpenCode...',
     'connection.loadingSessions': 'Conectando y cargando sesiones...',
     'connection.refreshing': 'Actualizando sesiones...',
@@ -638,6 +653,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.statsTokens': 'Token',
     'settings.resetStats': 'Reimposta statistiche',
     'settings.mode': 'Modalità',
+    'voice.input': 'Input vocale',
+    'voice.listening': 'Ascolto...',
+    'settings.navBarPosition': 'Barra di navigazione',
+    'settings.navBarBottom': 'In basso',
+    'settings.navBarHeader': 'In alto',
     'connection.connecting': 'Connessione a OpenCode...',
     'connection.loadingSessions': 'Connessione e caricamento sessioni...',
     'connection.refreshing': 'Aggiornamento sessioni...',
@@ -811,6 +831,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.statsTokens': 'Token 數',
     'settings.resetStats': '重設統計',
     'settings.mode': '模式',
+    'voice.input': '語音輸入',
+    'voice.listening': '聆聽中...',
+    'settings.navBarPosition': '導航欄位置',
+    'settings.navBarBottom': '底部',
+    'settings.navBarHeader': '頂部',
     'connection.connecting': '正在連線到 OpenCode...',
     'connection.loadingSessions': '正在連線並載入工作階段...',
     'connection.refreshing': '正在重新整理工作階段...',

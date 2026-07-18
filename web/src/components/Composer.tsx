@@ -1,6 +1,7 @@
 import { memo, useRef, useCallback } from "react"
-import { SendIcon, StopCircleIcon, SettingsIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon } from "../Icons"
 import { useT } from "../i18n-context"
+import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import type { AgentOption, ModelOption } from "../types"
 
 type ComposerProps = {
@@ -20,6 +21,7 @@ type ComposerProps = {
 
 export const Composer = memo(function Composer({ value, onChange, onSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen }: ComposerProps) {
   const t = useT()
+  const { isListening, supported, start, stop } = useSpeechRecognition()
   const composerRef = useRef<HTMLDivElement | null>(null)
 
   function syncChatBottomClearance() {
@@ -53,6 +55,14 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
     resizeCleanupRef.current = () => window.removeEventListener("resize", onResize)
   }, [])
 
+  const handleMicClick = useCallback(() => {
+    if (isListening) {
+      stop()
+    } else {
+      start((text) => onChange(text))
+    }
+  }, [isListening, start, stop, onChange])
+
   const handleToggleAgent = useCallback(() => {
     if (primaryAgentOptions.length < 2) return
     const next = primaryAgentOptions[0]?.id === activeAgentID ? primaryAgentOptions[1]!.id : primaryAgentOptions[0]!.id
@@ -79,6 +89,13 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
           <button onClick={handleToggleAgent} disabled={disabled}
             className={`agent-toggle ${activeAgentID === "plan" ? "agent-plan" : "agent-build"}`}>
             <span>{activeAgentID === "plan" ? "Plan" : "Build"}</span>
+          </button>
+        )}
+        {supported && (
+          <button onClick={handleMicClick}
+            className={`mic-toggle${isListening ? " recording" : ""}`}
+            title={isListening ? t('voice.listening') : t('voice.input')}>
+            <MicIcon size={16} />
           </button>
         )}
         <button onClick={() => onSheetOpen("ai")} className="model-toggle"

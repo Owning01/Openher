@@ -43,6 +43,8 @@ export const CloseIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Close"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></Svg>)
 export const StarIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Star"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Svg>)
+export const MicIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Voice input"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></Svg>)
 export const ShareIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Share"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></Svg>)
 export const StatsIcon = (p: { className?: string; size?: number }) => (
