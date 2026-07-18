@@ -1,8 +1,15 @@
 import { memo } from "react"
-import { SaveIcon, TestIcon, HelpIcon, LoadingIcon } from "../Icons"
+import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import type { ServerConfig, NoticeType, DataMode, ViewType } from "../types"
+import type { ServerConfig, ModelOption, NoticeType, DataMode, ViewType } from "../types"
 import type { LanguageCode } from "../i18n"
+
+type UsageStats = {
+  promptsSent: number
+  sessionsCreated: number
+  totalTokens: number
+  firstUsed: number
+}
 
 type SettingsPanelProps = {
   draftConfig: ServerConfig
@@ -18,11 +25,17 @@ type SettingsPanelProps = {
   language: LanguageCode
   onLanguageChange: (lang: LanguageCode) => void
   theme: string
-  onThemeChange: (theme: "system" | "light" | "dark") => void
+  onThemeChange: (theme: "system" | "light" | "dark" | "scheduled") => void
   languageOptions: Array<{ code: LanguageCode; label: string }>
   dataMode: DataMode
   onDataModeChange: (mode: DataMode) => void
   onNavigate: (view: ViewType) => void
+  modelOptions: ModelOption[]
+  selectedModelKey: string | null
+  onChangeModel: (key: string) => void
+  modelKey: (model: { providerID: string; modelID: string; variant?: string }) => string
+  stats: UsageStats
+  onResetStats: () => void
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
@@ -30,7 +43,9 @@ export const SettingsPanel = memo(function SettingsPanel({
   testingConnection, hasDraftChanges, canTestDraft, testAlreadyPassedForDraft,
   connectedVersion, settingsNotice, language, onLanguageChange,
   theme, onThemeChange, languageOptions,
-  dataMode, onDataModeChange, onNavigate
+  dataMode, onDataModeChange, onNavigate,
+  modelOptions, selectedModelKey, onChangeModel, modelKey: mk,
+  stats, onResetStats
 }: SettingsPanelProps) {
   const t = useT()
 
@@ -62,10 +77,24 @@ export const SettingsPanel = memo(function SettingsPanel({
 
         <label htmlFor="theme">
           {t('settings.theme')}
-          <select id="theme" value={theme} onChange={(e) => onThemeChange(e.target.value as "system" | "light" | "dark")}>
+          <select id="theme" value={theme} onChange={(e) => onThemeChange(e.target.value as "system" | "light" | "dark" | "scheduled")}>
             <option value="system">{t('settings.themeSystem')}</option>
             <option value="light">{t('settings.themeLight')}</option>
             <option value="dark">{t('settings.themeDark')}</option>
+            <option value="scheduled">{t('settings.themeScheduled')}</option>
+          </select>
+        </label>
+
+        <label htmlFor="model">
+          {t('settings.defaultModel')}
+          <select id="model" value={selectedModelKey ?? ""}
+            onChange={(e) => { const v = e.target.value; if (v) onChangeModel(v) }}>
+            <option value="" disabled>{modelOptions.length === 0 ? t('detail.modelLoading') : t('settings.selectModel')}</option>
+            {modelOptions.map((opt) => (
+              <option key={mk(opt)} value={mk(opt)}>
+                {opt.modelName || opt.modelID}{opt.variant ? ` (${opt.variant})` : ""} — {opt.providerName}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -97,7 +126,8 @@ export const SettingsPanel = memo(function SettingsPanel({
           {([
             { value: "full" as const, label: "Full", desc: "Real-time, high data usage" },
             { value: "saver" as const, label: "Saver", desc: "Balance (default)" },
-            { value: "ultra" as const, label: "ULTRA", desc: "Minimum data, manual refresh only" }
+            { value: "miser" as const, label: "Miser", desc: "60s poll, no background load" },
+            { value: "ultra" as const, label: "ULTRA", desc: "30s, no audio, manual refresh" }
           ]).map((opt) => (
             <label key={opt.value} className={`data-mode-option ${dataMode === opt.value ? "active" : ""}`}>
               <input type="radio" name="dataMode" value={opt.value}
@@ -145,6 +175,19 @@ export const SettingsPanel = memo(function SettingsPanel({
           {t('settings.connectedTo', { version: connectedVersion })}
         </div>
       )}
+
+      <div className="stats-section">
+        <h4 className="quick-access-label"><StatsIcon size={14} /> {t('settings.stats')}</h4>
+        <div className="stats-grid">
+          <span>{t('settings.statsPrompts')}: {stats.promptsSent}</span>
+          <span>{t('settings.statsSessions')}: {stats.sessionsCreated}</span>
+          <span>{t('settings.statsTokens')}: ~{stats.totalTokens.toLocaleString()}</span>
+        </div>
+        <button type="button" className="btn-secondary compact" onClick={onResetStats}
+          style={{ marginTop: 'var(--space-2)' }}>
+          {t('settings.resetStats')}
+        </button>
+      </div>
 
       <div className="settings-help">
         <button type="button" className="btn-secondary" onClick={() => onNavigate("help")}>

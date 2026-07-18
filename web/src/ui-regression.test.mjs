@@ -46,7 +46,7 @@ assert.ok(completionAudio.includes('wasAwaitingRef.current && !awaitingAssistant
 assert.ok(completionAudio.includes('completionShouldPlayRef.current'), 'completion sound armed flag should be checked')
 assert.ok(useMessages.includes('loadSelectedRequestRef'), 'session message refreshes should ignore stale overlapping polling responses')
 assert.ok(useMessages.includes('if (requestID !== loadSelectedRequestRef.current) return'), 'older loadSelected requests must not overwrite newer assistant output')
-assert.ok(useMessages.includes('setMessages(msg)'), 'message refresh should always use server data')
+assert.ok(useMessages.includes('setMessages((prev)'), 'message refresh should merge server data with existing, dedup by id')
 assert.ok(composer.includes('SendIcon'), 'composer send button should use the clear paper-plane SendIcon')
 assert.ok(composer.includes('StopCircleIcon'), 'composer waiting button should use a clear stop-task icon')
 assert.match(icons, /export const StopCircleIcon/, 'StopCircleIcon should exist in the shared SVG icon set')
@@ -64,8 +64,6 @@ assert.ok(app.includes('connectionState'), 'sessions view should track connectio
 assert.ok(useSessions.includes('backgroundFailureCountRef.current += 1'), 'background refresh should count failures before showing persistent offline errors')
 assert.ok(useSessions.includes('backgroundFailureCountRef') && useSessions.includes('current = 0'), 'transient failures should reset counter on success')
 assert.ok(sessionList.includes('connection-pending'), 'initial slow connection should show an explicit loading state instead of an empty sessions list')
-assert.ok(app.includes("t('connection.reconnecting')"), 'slow reconnecting state should be translated and shown quietly')
-assert.ok(styles.includes('.connection-status'), 'connection status should have a dedicated non-error visual treatment')
 
 assert.ok(app.includes('showNewSessionPicker'), 'New Session should open a per-session folder picker instead of applying one global folder')
 assert.ok(api.includes('listFiles(config: ServerConfig, path: string, directory?: string)'), 'API should expose OpenCode /file for directory browsing')

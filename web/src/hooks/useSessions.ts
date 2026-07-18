@@ -2,6 +2,15 @@ import { useState, useCallback, type MutableRefObject } from "react"
 import type { ServerConfig, Session, SessionView, SessionStatus, ModelSelection } from "../types"
 import { api } from "../api"
 
+const FAVORITES_KEY = "opencode.remote.favorites"
+
+function loadFavorites(): Set<string> {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY)
+    return new Set(raw ? JSON.parse(raw) : [])
+  } catch { return new Set() }
+}
+
 export function modelKey(model: { providerID: string; modelID: string; variant?: string }): string {
   const parts = [model.providerID, model.modelID]
   if (model.variant) parts.push(model.variant)
@@ -61,6 +70,8 @@ export type SessionsActions = {
   setSelectedID: (v: string | null) => void
   setSessions: (fn: (prev: SessionView[]) => SessionView[]) => void
   setRenameValue: (v: string) => void
+  favorites: Set<string>
+  toggleFavorite: (id: string) => void
 }
 
 export function useSessions(
@@ -78,48 +89,62 @@ export function useSessions(
   const [sessionToDelete, setSessionToDelete] = useState<SessionView | null>(null)
   const [renamingSessionID, setRenamingSessionID] = useState<string | null>(null)
   const [renameValue, setRenameValueState] = useState("")
+  const [favorites, setFavorites] = useState<Set<string>>(loadFavorites)
 
   const selectedSession = sessions.find((s) => s.id === selectedID) ?? null
 
   const openSession = useCallback(async (id: string, dir: string) => {
     setSelectedID(id)
     setLoadingSessionID(id)
-    try {
-      await onLoadSelected(id, dir)
-    } catch (err) {
-      throw err
-    }
+    await onLoadSelected(id, dir)
     setLoadingSessionID((current) => (current === id ? null : current))
   }, [onLoadSelected])
 
-  const refreshSessions = useCallback(async (_silent = false) => {
+  const refreshSessions = useCallback(async (full = false) => {
     if (!config.host || config.port <= 0) return
     try {
       const items = await api.listGlobalSessions(config).catch(() => api.listSessions(config))
-      const directories = [...new Set(items.map((s) => s.directory).filter(Boolean))]
 
-      const [sessionLists, statuses] = await Promise.all([
-        Promise.all(directories.map((d) => api.listSessions(config, d).catch(() => [] as Session[]))),
-        Promise.all(directories.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>))))
-      ])
-      const scoped = new Map(sessionLists.flat().map((s) => [s.id, s]))
-      const allStatuses = new Map<string, SessionStatus>()
-      for (const sm of statuses) {
-        for (const [id, st] of Object.entries(sm)) {
-          if (!allStatuses.has(id)) allStatuses.set(id, st)
+      if (full) {
+        // Full refresh: hydrate per-directory for accurate statuses
+        const directories = [...new Set(items.map((s) => s.directory).filter(Boolean))]
+        const [sessionLists, statuses] = await Promise.all([
+          Promise.all(directories.map((d) => api.listSessions(config, d).catch(() => [] as Session[]))),
+          Promise.all(directories.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>))))
+        ])
+        const scoped = new Map(sessionLists.flat().map((s) => [s.id, s]))
+        const allStatuses = new Map<string, SessionStatus>()
+        for (const sm of statuses) {
+          for (const [id, st] of Object.entries(sm)) {
+            if (!allStatuses.has(id)) allStatuses.set(id, st)
+          }
         }
+        const hydrated = items.map((s) => ({ ...s, ...scoped.get(s.id), project: s.project }))
+        const mapped = hydrated
+          .map((s) => toSessionView(s as Session, allStatuses.get(s.id)))
+          .sort((a, b) => b.updated - a.updated)
+        setSessions((current) => {
+          const selected = selectedID ? current.find((s) => s.id === selectedID) : null
+          if (!selected || mapped.some((s) => s.id === selected.id)) return mapped
+          return [selected, ...mapped].sort((a, b) => b.updated - a.updated)
+        })
+      } else {
+        // Light refresh: merge from global list, preserve existing statuses
+        const mapped = items.map((s) => toSessionView(s as Session, undefined)).sort((a, b) => b.updated - a.updated)
+        setSessions((current) => {
+          const currentMap = new Map(current.map((s) => [s.id, s]))
+          for (const m of mapped) {
+            const existing = currentMap.get(m.id)
+            currentMap.set(m.id, { ...existing, ...m,
+              status: existing && (existing.status === "busy" || existing.status === "retry") ? existing.status : m.status
+            })
+          }
+          const result = [...currentMap.values()].sort((a, b) => b.updated - a.updated)
+          const selected = selectedID ? result.find((s) => s.id === selectedID) : null
+          if (!selected || result.some((s) => s.id === selected.id)) return result
+          return [selected, ...result].sort((a, b) => b.updated - a.updated)
+        })
       }
-      const hydrated = items.map((s) => ({ ...s, ...scoped.get(s.id), project: s.project }))
-
-      const mapped = hydrated
-        .map((s) => toSessionView(s as Session, allStatuses.get(s.id)))
-        .sort((a, b) => b.updated - a.updated)
-
-      setSessions((current) => {
-        const selected = selectedID ? current.find((s) => s.id === selectedID) : null
-        if (!selected || mapped.some((s) => s.id === selected.id)) return mapped
-        return [selected, ...mapped].sort((a, b) => b.updated - a.updated)
-      })
 
       backgroundFailureCountRef.current = 0
       initialSessionLoadRef.current = false
@@ -132,7 +157,7 @@ export function useSessions(
     if (refreshingSessions) return
     setRefreshingSessions(true)
     try {
-      await refreshSessions()
+      await refreshSessions(true)
     } finally {
       setRefreshingSessions(false)
     }
@@ -162,26 +187,18 @@ export function useSessions(
   }, [config, creatingSession])
 
   const deleteSession = useCallback(async (id: string) => {
-    try {
-      await api.deleteSession(config, id, sessionToDelete?.directory)
-      if (selectedID === id) setSelectedID(null)
-      setSessionToDelete(null)
-      await refreshSessions()
-    } catch (err) {
-      throw err
-    }
+    await api.deleteSession(config, id, sessionToDelete?.directory)
+    if (selectedID === id) setSelectedID(null)
+    setSessionToDelete(null)
+    await refreshSessions(true)
   }, [config, sessionToDelete?.directory, selectedID, refreshSessions])
 
   const renameSession = useCallback(async (id: string, title: string, directory: string) => {
     if (!title.trim()) return
-    try {
-      await api.renameSession(config, id, title.trim(), directory)
-      setRenamingSessionID(null)
-      setRenameValueState("")
-      await refreshSessions()
-    } catch (err) {
-      throw err
-    }
+    await api.renameSession(config, id, title.trim(), directory)
+    setRenamingSessionID(null)
+    setRenameValueState("")
+    await refreshSessions(true)
   }, [config, refreshSessions])
 
   const startRename = useCallback((session: SessionView) => {
@@ -199,11 +216,23 @@ export function useSessions(
     setRenameValueState("")
   }, [])
 
+  const toggleFavorite = useCallback((id: string) => {
+    const faves = loadFavorites()
+    if (faves.has(id)) {
+      faves.delete(id)
+    } else {
+      faves.add(id)
+    }
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify([...faves]))
+    setFavorites(new Set(faves))
+  }, [])
+
   return {
     sessions, selectedID, loadingSessionID, refreshingSessions, creatingSession,
     selectedSession, sessionToDelete, renamingSessionID, renameValue, setRenameValue: setRenameValueState,
     openSession, refreshSessions, refreshSessionsWithIndicator, createSession,
     deleteSession, renameSession, startRename, cancelRename,
-    setSessionToDelete, setSelectedID, setSessions
+    setSessionToDelete, setSelectedID, setSessions,
+    favorites, toggleFavorite
   }
 }

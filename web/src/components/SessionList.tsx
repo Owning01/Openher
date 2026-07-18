@@ -1,8 +1,9 @@
-import { memo, useEffect, useRef } from "react"
+import { memo, useRef, useLayoutEffect } from "react"
 import { RefreshIcon, PlusIcon, LoadingIcon, FolderIcon, ChatIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
-import type { SessionView, ConnectionState } from "../types"
+import { formatTime, isSessionActive, hasFileChanges } from "../utils"
+import type { SessionView, ConnectionState, DataMode } from "../types"
 
 type SessionListProps = {
   projects: Array<[string, SessionView[]]>
@@ -15,11 +16,13 @@ type SessionListProps = {
   renamingSessionID: string | null
   renameValue: string
   connectionState: ConnectionState
-  connectionStatusText: string
   query: string
   activeSessions: SessionView[]
   recentSessions: SessionView[]
   runtimeError: string | null
+  favorites: Set<string>
+  dataMode: DataMode
+  onDataModeChange: (mode: DataMode) => void
   onSelectProject: (dir: string | null) => void
   onQueryChange: (query: string) => void
   onRefresh: () => void
@@ -30,24 +33,28 @@ type SessionListProps = {
   onRenameConfirm: (id: string, title: string, dir: string) => void
   onRenameCancel: () => void
   onDelete: (session: SessionView) => void
+  onToggleFavorite: (id: string) => void
 }
 
 export const SessionList = memo(function SessionList({
   projects, projectSessions, selectedProjectDir,
   sessions, selectedID, refreshingSessions, creatingSession,
   renamingSessionID, renameValue,
-  connectionState, connectionStatusText, query,
-  activeSessions, recentSessions, runtimeError,
+  connectionState, query,
+  activeSessions, recentSessions, runtimeError, favorites,
+  dataMode, onDataModeChange,
   onSelectProject, onQueryChange, onRefresh, onNewSession,
-  onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete
+  onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
+  onToggleFavorite
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = 0
-    }
+  // Force scroll to top — page scroll, not container scroll
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
   }, [selectedProjectDir])
 
   if (selectedProjectDir) {
@@ -74,6 +81,16 @@ export const SessionList = memo(function SessionList({
           </div>
         </div>
 
+        <div className="mode-switcher">
+        <span className="mode-label">{t('settings.mode')}:</span>
+          {(["full", "saver", "ultra"] as const).map((m) => (
+            <button key={m} className={`mode-btn ${dataMode === m ? "active" : ""}`}
+              onClick={() => onDataModeChange(m)}>
+              {m === "full" ? "Full" : m === "saver" ? "Saver" : "ULTRA"}
+            </button>
+          ))}
+        </div>
+
         <div className="toolbar">
           <input placeholder={t('sessions.searchPlaceholder')} value={query}
             onChange={(e) => onQueryChange(e.target.value)} className="search" />
@@ -90,8 +107,10 @@ export const SessionList = memo(function SessionList({
             projectSessions.map((session) => (
               <SessionCard key={session.id} session={session} isSelected={selectedID === session.id}
                 isRenaming={renamingSessionID === session.id} renameValue={renameValue}
+                isFavorite={favorites.has(session.id)}
                 onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
-                onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete} />
+                onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
+                onToggleFavorite={onToggleFavorite} />
             ))
           )}
         </div>
@@ -104,46 +123,46 @@ export const SessionList = memo(function SessionList({
   // Projects list
   return (
     <section ref={containerRef} className="panel sessions fade-in">
-      <div className="section-heading">
-        <div>
-          <h2>{t('sessions.title')}</h2>
-          <p className="subtle">
-            {t('sessions.summary', { total: sessions.length, active: activeSessions.length, changed: sessions.filter((s) => s.files > 0 || s.additions > 0 || s.deletions > 0).length })}
-          </p>
-          {connectionStatusText && (
-            <p className={`connection-status ${connectionState}`}>
-              {['connecting', 'reconnecting'].includes(connectionState) && <LoadingIcon size={14} />}
-              {connectionStatusText}
-            </p>
-          )}
-        </div>
-        <div className="inline-actions">
-          <button onClick={onRefresh} className="btn-secondary" disabled={refreshingSessions}>
-            {refreshingSessions ? <LoadingIcon size={18} /> : <RefreshIcon size={18} />}
-            {t('sessions.refresh')}
+      <div className="inline-actions">
+        <button onClick={onRefresh} className="btn-secondary" disabled={refreshingSessions}>
+          {refreshingSessions ? <LoadingIcon size={18} /> : <RefreshIcon size={18} />}
+          {t('sessions.refresh')}
+        </button>
+        <button onClick={onNewSession} className="btn-primary" disabled={creatingSession}>
+          {creatingSession ? <LoadingIcon size={18} /> : <PlusIcon size={18} />}
+          {creatingSession ? t('sessions.creating') : t('sessions.new')}
+        </button>
+      </div>
+
+      <div className="mode-switcher">
+        <span className="mode-label">{t('settings.mode')}:</span>
+        {(["full", "saver", "ultra"] as const).map((m) => (
+          <button key={m} className={`mode-btn ${dataMode === m ? "active" : ""}`}
+            onClick={() => onDataModeChange(m)}>
+            {m === "full" ? "Full" : m === "saver" ? "Saver" : "ULTRA"}
           </button>
-          <button onClick={onNewSession} className="btn-primary" disabled={creatingSession}>
-            {creatingSession ? <LoadingIcon size={18} /> : <PlusIcon size={18} />}
-            {creatingSession ? t('sessions.creating') : t('sessions.new')}
-          </button>
-        </div>
+        ))}
       </div>
 
       <div className="toolbar">
         <input placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
+      <div className="sessions-summary-bar">
+        {t('sessions.summary', { total: sessions.length, active: activeSessions.length, changed: sessions.filter((s) => hasFileChanges(s)).length })}
+      </div>
 
       {!selectedProjectDir && !query.trim() && (activeSessions.length > 0 || recentSessions.length > 0) && (
         <div className="quick-access">
           {activeSessions.length > 0 && (
             <div className="quick-access-section">
-              <h4 className="quick-access-label">{t('sessions.activeLabel') || "Active"}</h4>
+              <h4 className="quick-access-label">{t('sessions.activeLabel')}</h4>
               <div className="quick-access-list">
                 {activeSessions.map((session) => (
                   <button key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)}>
                     <ChatIcon size={14} />
                     <span className="quick-access-title">{session.title}</span>
+                    <span className="quick-access-time">{formatTime(session.updated)}</span>
                     <span className={`pill ${session.status}`}>{session.status}</span>
                   </button>
                 ))}
@@ -152,11 +171,13 @@ export const SessionList = memo(function SessionList({
           )}
           {recentSessions.length > 0 && (
             <div className="quick-access-section">
-              <h4 className="quick-access-label">{t('sessions.recentLabel') || "Recent"}</h4>
+              <h4 className="quick-access-label">{t('sessions.recentLabel')}</h4>
               <div className="quick-access-list">
-                {recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)).slice(0, 4).map((session) => (
+                {recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)).slice(0, 5).map((session) => (
                   <button key={session.id} className="quick-access-card" onClick={() => onOpen(session.id, session.directory)}>
+                    <ChatIcon size={14} />
                     <span className="quick-access-title">{session.title}</span>
+                    <span className="quick-access-time">{formatTime(session.updated)}</span>
                   </button>
                 ))}
               </div>
@@ -188,11 +209,11 @@ export const SessionList = memo(function SessionList({
                 <span className="project-count">{projectSessionsList.length} {projectSessionsList.length === 1 ? 'session' : 'sessions'}</span>
               </div>
               <div className="project-meta">
-                <span className={`project-status ${projectSessionsList.some((s) => ["busy", "retry"].includes(s.status)) ? "busy" : "idle"}`}>
-                  {projectSessionsList.filter((s) => ["busy", "retry"].includes(s.status)).length} active
+                <span className={`project-status ${projectSessionsList.some((s) => isSessionActive(s)) ? "busy" : "idle"}`}>
+                  {projectSessionsList.filter((s) => isSessionActive(s)).length} active
                 </span>
                 <span className="project-changed">
-                  {projectSessionsList.filter((s) => s.files > 0 || s.additions > 0 || s.deletions > 0).length} changed
+                  {projectSessionsList.filter((s) => hasFileChanges(s)).length} changed
                 </span>
               </div>
             </article>

@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { App as CapacitorApp } from "@capacitor/app"
+import { Dialog } from "@capacitor/dialog"
+import { Network } from "@capacitor/network"
 import { api } from "./api"
 import { I18nProvider, useT, normalizeLanguage } from "./i18n-context"
 import { languageOptions } from "./i18n"
@@ -10,7 +13,9 @@ import { useMessages } from "./hooks/useMessages"
 import { usePolling } from "./hooks/usePolling"
 import { useCompletionAudio } from "./hooks/useCompletionAudio"
 import { useFolderPicker } from "./hooks/useFolderPicker"
+import { useStats } from "./hooks/useStats"
 import { NavBar } from "./components/NavBar"
+import { ErrorBoundary } from "./components/ErrorBoundary"
 import { SettingsPanel } from "./components/SettingsPanel"
 import { SessionList } from "./components/SessionList"
 import { ChatView } from "./components/ChatView"
@@ -18,48 +23,15 @@ import { BottomSheet } from "./components/BottomSheet"
 import { HelpPage } from "./components/HelpPage"
 import { ConfirmModal } from "./components/ConfirmModal"
 import { FolderPicker } from "./components/FolderPicker"
-import type { ViewType, HelpPage as HelpPageType, ProjectDashboard, SessionView } from "./types"
+import type { ViewType, HelpPage as HelpPageType, SessionView } from "./types"
 import type { LanguageCode } from "./i18n"
-
-const LANGUAGE_STORAGE_KEY = "opencode.remote.language"
-
-function formatLimit(value?: number): string {
-  if (!value) return "-"
-  if (value >= 1_000_000) return `${Math.round(value / 1_000_000)}M`
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`
-  return String(value)
-}
-
-function pickString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value : null
-}
-
-function extractPath(dashboard: ProjectDashboard | null): string | null {
-  const project = dashboard?.project
-  if (!project) return null
-  return pickString(project.path) ?? pickString(project.directory) ?? pickString(project.root) ?? null
-}
-
-function extractName(dashboard: ProjectDashboard | null): string | null {
-  const project = dashboard?.project
-  if (!project) return null
-  const name = pickString(project.name)
-  if (name) return name
-  const path = extractPath(dashboard)
-  return path ? path.split("/").filter(Boolean).pop() ?? path : null
-}
-
-function extractBranch(dashboard: ProjectDashboard | null): string | null {
-  const vcs = dashboard?.vcs
-  if (!vcs) return null
-  return pickString(vcs.branch) ?? pickString(vcs.status) ?? null
-}
+import { formatLimit, extractPath, extractName, extractBranch, LANGUAGE_STORAGE_KEY, isSessionActive } from "./utils"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const t = useT()
 
   const { config, draftConfig, setDraftConfig, connectedVersion, testingConnection,
-    connectionState, connectionMessage, settingsNotice,
+    connectionState, settingsNotice,
     hasConfiguredServer, hasDraftChanges, canTestDraft, testAlreadyPassedForDraft,
     dataMode, changeDataMode,
     saveConfig, testConnection, setConnectionState, setConnectionMessage } = useConfig()
@@ -78,7 +50,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const { agentOptions, agentLoadError, modelOptions, modelLoadError,
     modelQuery, setModelQuery, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
-    showModelChip, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
+    selectedModelKey, showModelChip, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
 
   const {
     todos, diffFiles, projectDashboard, dashboardError, composer, setComposer,
@@ -86,26 +58,32 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     runtimeError, setRuntimeError, todosExpanded, setTodosExpanded,
     activeDetailSheet, setActiveDetailSheet,
     renderedMessages, messageScrollSignature, assistantResponseSignature,
-    totalDiffAdditions, totalDiffDeletions,
+    totalDiffAdditions, totalDiffDeletions, toolMessage,
     awaitingAssistantBaselineRef, completionShouldPlayRef,
-    loadSelected, send, abortSession
+    clearSession, loadSelected, loadTodos, loadDiffs, loadDashboard, send, abortSession,
+    setMessages
   } = useMessages(config)
 
   const loadSessionRef = useRef(0)
 
   const onLoadSelected = useCallback(async (id: string, dir: string) => {
     const reqId = ++loadSessionRef.current
-    await loadSelected(id, dir)
+    clearSession()
+    await Promise.all([
+      loadSelected(id, dir),
+      loadAgents(dir).catch(() => undefined),
+      loadModels(dir).catch(() => undefined)
+    ])
     if (reqId !== loadSessionRef.current) return
-    await Promise.all([loadAgents(dir), loadModels(dir)])
-  }, [loadSelected, loadAgents, loadModels])
+    loadTodos(id, dir)
+  }, [loadSelected, loadAgents, loadModels, loadTodos, clearSession])
 
   const {
     sessions, selectedID, loadingSessionID, refreshingSessions, creatingSession,
     selectedSession, sessionToDelete, renamingSessionID, renameValue, setRenameValue,
     openSession, refreshSessions, refreshSessionsWithIndicator, createSession,
     deleteSession, renameSession, startRename, cancelRename,
-    setSessionToDelete
+    setSessionToDelete, setSessions, favorites, toggleFavorite
   } = useSessions(config, onLoadSelected, backgroundFailureCountRef, initialSessionLoadRef)
 
   const {
@@ -115,9 +93,50 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setShowNewSessionPicker
   } = useFolderPicker(config)
 
-  const isSessionRunning = Boolean(selectedSession && ["busy", "retry"].includes(selectedSession.status))
+  const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
+  const [readingMode, setReadingMode] = useState(false)
+
+  const isSessionRunning = Boolean(selectedSession && isSessionActive(selectedSession))
   const isWorking = awaitingAssistantReply || isSessionRunning
   const showTypingBubble = Boolean(selectedSession) && isWorking
+
+  const handleExportChat = useCallback(() => {
+    if (!selectedSession || renderedMessages.length === 0) return
+    const header = `# ${selectedSession.title}\n\n`
+    const body = renderedMessages.map((m) =>
+      `## ${m.info.role === "user" ? "User" : "OpenCode"}\n${m.text}\n`
+    ).join("\n")
+    const full = header + body
+    navigator.clipboard.writeText(full).then(() => {
+      setRuntimeError(null)
+    }).catch(() => {
+      // fallback: create a temporary textarea
+      const ta = document.createElement("textarea")
+      ta.value = full
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand("copy")
+      document.body.removeChild(ta)
+    })
+  }, [selectedSession, renderedMessages])
+
+  const handleSnapshot = useCallback(() => {
+    if (!selectedSession) return
+    const snapshot = {
+      id: selectedSession.id,
+      title: selectedSession.title,
+      directory: selectedSession.directory,
+      time: Date.now(),
+      messages: renderedMessages.length
+    }
+    try {
+      const key = `opencode.snapshot.${selectedSession.id}`
+      localStorage.setItem(key, JSON.stringify(snapshot))
+      setRuntimeError(null)
+    } catch {
+      // silently fail
+    }
+  }, [selectedSession, renderedMessages])
 
   // Group sessions by directory for project-based navigation
   const groupedSessions = useMemo(() => {
@@ -138,7 +157,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const [selectedProjectDir, setSelectedProjectDir] = useState<string | null>(null)
   const projectSessions = selectedProjectDir ? groupedSessions.get(selectedProjectDir) ?? [] : []
 
-  const activeSessions = sessions.filter((s) => ["busy", "retry"].includes(s.status))
+  const activeSessions = sessions.filter((s) => isSessionActive(s))
   const recentSessions = useMemo(() => [...sessions].sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 5), [sessions])
 
   const filteredProjects = useMemo(() => {
@@ -154,27 +173,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const q = query.toLowerCase()
     return projectSessions.filter((s) => s.title.toLowerCase().includes(q) || s.directory.toLowerCase().includes(q))
   }, [projectSessions, query])
-  const connectionStatusText = connectionMessage || (
-    connectionState === "connecting" ? t('connection.connecting') :
-    connectionState === "reconnecting" ? t('connection.reconnecting') :
-    connectionState === "connected" ? t('connection.connected') :
-    connectionState === "offline" ? t('connection.offline') : ""
-  )
 
   const projectPath = extractPath(projectDashboard)
   const projectName = extractName(projectDashboard)
   const vcsBranch = extractBranch(projectDashboard)
 
-  const pollInterval = dataMode === "full" ? 3500 : dataMode === "ultra" ? 30000 : 15000
+  const pollInterval = dataMode === "full" ? 3500 : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
   usePolling(async () => {
-    await refreshSessions(dataMode !== "full")
-    if (selectedSession && (dataMode === "ultra" || selectedSession.status === "busy" || selectedSession.status === "retry")) {
+    await refreshSessions()
+    if (!selectedSession) return
+    if (dataMode === "full" || dataMode === "saver" || isSessionActive(selectedSession)) {
       await loadSelected(selectedSession.id, selectedSession.directory)
     }
   }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, selectedSession?.id, selectedSession?.status])
 
   useCompletionAudio(awaitingAssistantReply, completionShouldPlayRef, dataMode, () => {
-    if (selectedSession && dataMode !== "ultra") {
+    if (selectedSession && dataMode !== "ultra" && dataMode !== "miser") {
       loadSelected(selectedSession.id, selectedSession.directory)
       refreshSessions(true)
     }
@@ -201,6 +215,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [config.host, config.port, config.username, config.password, dataMode])
 
   useEffect(() => {
+    const id = setInterval(() => {
+      const cutoff = Date.now() - 5 * 60 * 1000
+      setMessages((prev) => {
+        const relevant = prev.filter((m) => m.info.sessionID === selectedSession?.id)
+        if (relevant.length === 0) return []
+        const stale = prev.filter((m) => {
+          if (m.info.sessionID === selectedSession?.id) return true
+          return (m.info.time.created || 0) > cutoff
+        })
+        return stale.length === prev.length ? prev : stale
+      })
+    }, 60000)
+    return () => clearInterval(id)
+  }, [selectedSession?.id, setMessages])
+
+  useEffect(() => {
     if (!hasConfiguredServer) setView("settings")
   }, [hasConfiguredServer])
 
@@ -211,18 +241,69 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [assistantResponseSignature, awaitingAssistantReply])
 
+  useEffect(() => {
+    if (activeDetailSheet !== "details" || !selectedSession) return
+    loadDiffs(selectedSession.id, selectedSession.directory)
+    loadDashboard(selectedSession.directory)
+  }, [activeDetailSheet, selectedSession?.id, selectedSession?.directory])
+
+  useEffect(() => {
+    let h: any
+    CapacitorApp.addListener("backButton", async () => {
+      if (view === "detail") {
+        setView("sessions")
+      } else {
+        const result = await Dialog.confirm({
+          title: t('app.exitTitle'),
+          message: t('app.exitMessage'),
+          okButtonTitle: t('app.exitOk'),
+          cancelButtonTitle: t('app.exitCancel')
+        })
+        if (result.value) {
+          CapacitorApp.exitApp()
+        }
+      }
+    }).then((hnd) => { h = hnd })
+    return () => { if (h) h.remove() }
+  }, [view])
+
+  useEffect(() => {
+    let cancelled = false
+    Network.getStatus().then((s) => {
+      if (cancelled) return
+      if (s.connectionType === "cellular") {
+        changeDataMode("ultra")
+      } else if (s.connectionType === "wifi") {
+        changeDataMode("full")
+      }
+    })
+    let netH: any
+    Network.addListener("networkStatusChange", (s) => {
+      if (cancelled) return
+      if (s.connectionType === "cellular") {
+        changeDataMode("ultra")
+      } else if (s.connectionType === "wifi") {
+        changeDataMode("full")
+      }
+    }).then((hnd) => { netH = hnd })
+    return () => { cancelled = true; if (netH) netH.remove() }
+  }, [changeDataMode])
+
   const handleLanguageChange = useCallback((lang: LanguageCode) => {
     setLanguage(lang)
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
   }, [setLanguage])
 
   const handleSend = useCallback(async () => {
     if (!selectedSession) return
+    recordPrompt(composer)
+    setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "busy" } : s))
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
       setCommands, setRuntimeError)
     if (result === "help") { setHelpPage("commands"); setView("help") }
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected])
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions])
 
   const handleAbort = useCallback(async () => {
     if (!selectedSession) return
@@ -236,6 +317,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const handleCreateSession = useCallback(async (directory?: string) => {
     const created = await createSession(directory, activeModel)
     if (created) {
+      recordSessionCreated()
       setShowNewSessionPicker(false)
       setView("detail")
       await onLoadSelected(created.id, created.directory)
@@ -243,9 +325,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [createSession, activeModel, onLoadSelected, refreshSessions])
 
-  const handleOpenSession = useCallback(async (id: string, dir: string) => {
-    await openSession(id, dir)
+  const handleOpenSession = useCallback((id: string, dir: string) => {
     setView("detail")
+    openSession(id, dir).catch(() => undefined)
   }, [openSession])
 
   const handleBackFromDetail = useCallback(() => {
@@ -264,8 +346,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     <div className="app-shell">
       <NavBar variant="top" view={view} onNavigate={handleNavigate}
         hasConfiguredServer={hasConfiguredServer}
-        hasSelectedSession={!!selectedSession}
-        hostLabel={hasConfiguredServer ? `${config.host}:${config.port}` : t('settings.title')} />
+        hasSelectedSession={!!selectedSession} />
 
       {view === "settings" && (
         <SettingsPanel
@@ -279,7 +360,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           theme={theme} onThemeChange={setTheme}
           languageOptions={languageOptions}
           dataMode={dataMode} onDataModeChange={changeDataMode}
-          onNavigate={handleNavigate} />
+          onNavigate={handleNavigate}
+          modelOptions={modelOptions} selectedModelKey={selectedModelKey}
+          onChangeModel={changeModel} modelKey={modelKey}
+          stats={stats} onResetStats={resetStats} />
       )}
 
       {view === "sessions" && (
@@ -291,9 +375,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             selectedID={selectedID}
             refreshingSessions={refreshingSessions} creatingSession={creatingSession}
             renamingSessionID={renamingSessionID} renameValue={renameValue}
-            connectionState={connectionState} connectionStatusText={connectionStatusText}
+            connectionState={connectionState}
             query={query} activeSessions={activeSessions} recentSessions={recentSessions}
             runtimeError={runtimeError}
+            favorites={favorites}
+            dataMode={dataMode} onDataModeChange={changeDataMode}
             onSelectProject={setSelectedProjectDir}
             onQueryChange={setQuery}
             onRefresh={refreshSessionsWithIndicator}
@@ -303,7 +389,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onRenameChange={setRenameValue}
             onRenameConfirm={renameSession}
             onRenameCancel={cancelRename}
-            onDelete={setSessionToDelete} />
+            onDelete={setSessionToDelete}
+            onToggleFavorite={toggleFavorite} />
           {showNewSessionPicker && (
             <FolderPicker
               pickerPath={pickerPath} pickerItems={pickerItems}
@@ -326,6 +413,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             isWorking={isWorking} showTypingBubble={showTypingBubble}
             loadingSessionID={loadingSessionID} selectedID={selectedID}
             messageScrollSignature={messageScrollSignature} view={view}
+            dataMode={dataMode} toolMessage={toolMessage}
             runtimeError={runtimeError}
             renamingSessionID={renamingSessionID} renameValue={renameValue}
             showModelChip={showModelChip}
@@ -345,7 +433,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onBackToSessions={handleBackFromDetail}
             onSheetOpen={setActiveDetailSheet}
             recentSessions={recentSessions} activeSessions={activeSessions}
-            onOpenSession={handleOpenSession} />
+            onOpenSession={handleOpenSession}
+            readingMode={readingMode} onToggleReadingMode={() => setReadingMode((v) => !v)}
+            onExportChat={handleExportChat} onSnapshot={handleSnapshot} />
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={handleCloseSheet}
@@ -391,7 +481,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       {sessionToDelete && (
         <ConfirmModal
           session={sessionToDelete}
-          onConfirm={deleteSession}
+          onConfirm={(id) => { deleteSession(id).catch(() => undefined) }}
           onCancel={() => setSessionToDelete(null)} />
       )}
 
@@ -408,7 +498,9 @@ export default function App() {
   )
   return (
     <I18nProvider language={language}>
-      <AppInner language={language} setLanguage={setLanguage} />
+      <ErrorBoundary>
+        <AppInner language={language} setLanguage={setLanguage} />
+      </ErrorBoundary>
     </I18nProvider>
   )
 }

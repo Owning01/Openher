@@ -79,7 +79,7 @@ function loadInitialConfig(): ServerConfig {
 
 function loadInitialDataMode(): DataMode {
   const saved = localStorage.getItem(DATA_MODE_KEY)
-  return saved === "full" || saved === "saver" || saved === "ultra" ? saved : "saver"
+  return saved === "full" || saved === "saver" || saved === "ultra" || saved === "miser" ? saved : "saver"
 }
 
 export function useConfig() {

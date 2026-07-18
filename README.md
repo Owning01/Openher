@@ -33,7 +33,7 @@ cd web
 npm run build
 npx cap copy
 cd android
-gradlew assembleDebug
+.\gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 

@@ -25,7 +25,7 @@ assert.equal(zh('session.deleteTitle'), '刪除工作階段？')
 
 // Unknown keys should remain visible during development instead of rendering blank UI.
 assert.equal(en('missing.key'), 'missing.key')
-assert.equal(en('detail.opencode'), '🤖 OpenCode')
+assert.equal(en('detail.opencode'), 'OpenCode')
 assert.equal(es('detail.changedFilesTitle'), 'Archivos modificados')
 assert.equal(it('detail.changedFilesTitle'), 'File modificati')
 assert.equal(zh('detail.changedFilesTitle'), '已變更檔案')

@@ -14,6 +14,10 @@ export function agentLabel(agent: AgentOption): string {
   return agent.name || agent.id
 }
 
+function agentStorageKey(directory?: string): string {
+  return directory ? `${AGENT_STORAGE_KEY}.${encodeURIComponent(directory)}` : AGENT_STORAGE_KEY
+}
+
 export function useAI(config: ServerConfig) {
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([])
   const [agentLoadError, setAgentLoadError] = useState<string | null>(null)
@@ -68,12 +72,12 @@ export function useAI(config: ServerConfig) {
       const list = await api.listAgents(config, directory)
       setAgentOptions(list)
       setAgentLoadError(null)
-      const saved = localStorage.getItem(AGENT_STORAGE_KEY) || selectedAgentID
+      const saved = localStorage.getItem(agentStorageKey(directory)) || selectedAgentID
       const primary = list.filter((agent) => agent.mode === "primary" || agent.mode === "all")
       const next = primary.find((agent) => agent.id === saved) ?? primary.find((agent) => agent.id === "build") ?? primary[0]
       if (next) {
         setSelectedAgentID(next.id)
-        localStorage.setItem(AGENT_STORAGE_KEY, next.id)
+        localStorage.setItem(agentStorageKey(directory), next.id)
       }
     } catch (err) {
       setAgentLoadError((err as Error).message)
@@ -104,9 +108,9 @@ export function useAI(config: ServerConfig) {
     localStorage.setItem(MODEL_STORAGE_KEY, nextKey)
   }, [])
 
-  const changeAgent = useCallback((nextAgentID: string) => {
+  const changeAgent = useCallback((nextAgentID: string, directory?: string) => {
     setSelectedAgentID(nextAgentID)
-    localStorage.setItem(AGENT_STORAGE_KEY, nextAgentID)
+    localStorage.setItem(agentStorageKey(directory), nextAgentID)
   }, [])
 
   return {

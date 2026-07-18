@@ -2,6 +2,10 @@ export type LanguageCode = 'en' | 'es' | 'it' | 'zh-TW'
 
 type TranslationKey =
   | 'app.title'
+  | 'app.exitTitle'
+  | 'app.exitMessage'
+  | 'app.exitOk'
+  | 'app.exitCancel'
   | 'nav.settings'
   | 'nav.sessions'
   | 'nav.detail'
@@ -29,6 +33,7 @@ type TranslationKey =
   | 'settings.connectedTo'
   | 'settings.language'
   | 'settings.theme'
+  | 'settings.themeScheduled'
   | 'settings.themeSystem'
   | 'settings.themeLight'
   | 'settings.themeDark'
@@ -41,6 +46,13 @@ type TranslationKey =
   | 'settings.readyToTest'
   | 'settings.unsavedChanges'
   | 'settings.noUnsavedChanges'
+  | 'settings.defaultModel'
+  | 'settings.selectModel'
+  | 'settings.stats'
+  | 'settings.statsPrompts'
+  | 'settings.statsSessions'
+  | 'settings.statsTokens'
+  | 'settings.resetStats'
   | 'connection.connecting'
   | 'connection.loadingSessions'
   | 'connection.refreshing'
@@ -73,6 +85,8 @@ type TranslationKey =
   | 'sessions.updated'
   | 'sessions.open'
   | 'sessions.delete'
+  | 'sessions.activeLabel'
+  | 'sessions.recentLabel'
   | 'detail.backToSessions'
   | 'detail.selectSession'
   | 'detail.loading'
@@ -144,10 +158,28 @@ type TranslationKey =
   | 'help.network'
   | 'help.troubleshooting'
   | 'help.commands'
+  | 'help.overview.content'
+  | 'help.server.content'
+  | 'help.network.content'
+  | 'help.troubleshooting.content'
+  | 'help.commands.content'
+  | 'help.commands.serverTab'
+  | 'help.commands.skillsTab'
+  | 'help.commands.empty'
+  | 'help.commands.emptyConnected'
+  | 'detail.exportChat'
+  | 'detail.snapshot'
+  | 'detail.readingModeOn'
+  | 'detail.readingModeOff'
+  | 'settings.mode'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
     'app.title': 'OpenCode Mobile',
+    'app.exitTitle': 'Close app?',
+    'app.exitMessage': 'Are you sure you want to exit?',
+    'app.exitOk': 'Close',
+    'app.exitCancel': 'Cancel',
     'nav.settings': 'Settings',
     'nav.sessions': 'Sessions',
     'nav.detail': 'Detail',
@@ -180,6 +212,14 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.readyToTest': 'Ready to test these fields.',
     'settings.unsavedChanges': 'Unsaved changes: tap Save to use them in Sessions.',
     'settings.noUnsavedChanges': 'Saved settings are active.',
+    'settings.defaultModel': 'Default model',
+    'settings.selectModel': 'Select a model',
+    'settings.stats': 'Usage stats',
+    'settings.statsPrompts': 'Prompts',
+    'settings.statsSessions': 'Sessions',
+    'settings.statsTokens': 'Tokens',
+    'settings.resetStats': 'Reset stats',
+    'settings.mode': 'Mode',
     'connection.connecting': 'Connecting to OpenCode...',
     'connection.loadingSessions': 'Connecting and loading sessions...',
     'connection.refreshing': 'Refreshing sessions...',
@@ -191,6 +231,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.language': 'Language',
     'settings.theme': 'Theme',
     'settings.themeSystem': 'System',
+    'settings.themeScheduled': 'Scheduled (day/night)',
     'settings.themeLight': 'Light',
     'settings.themeDark': 'Dark',
     'sessions.title': 'Sessions',
@@ -219,6 +260,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.updated': 'Updated {time}',
     'sessions.open': 'Open',
     'sessions.delete': 'Delete',
+    'sessions.activeLabel': 'Active',
+    'sessions.recentLabel': 'Recent',
     'detail.backToSessions': '← Sessions',
     'detail.selectSession': 'Select a session',
     'detail.loading': 'Loading session...',
@@ -230,7 +273,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.abort': 'Abort',
     'detail.jumpToLatest': 'Go to latest',
     'detail.you': '👤 You',
-    'detail.opencode': '🤖 OpenCode',
+    'detail.opencode': 'OpenCode',
     'detail.projectDashboardLabel': 'Project and VCS dashboard',
     'detail.projectLabel': 'Project',
     'detail.vcsLabel': 'VCS',
@@ -274,6 +317,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.sessionDetailsTitle': 'Session details',
     'detail.sessionDetailsHint': 'Advanced project, VCS, file and model information.',
     'detail.closeSheet': 'Close',
+    'detail.exportChat': 'Export chat',
+    'detail.snapshot': 'Snapshot',
+    'detail.readingModeOn': 'Reading',
+    'detail.readingModeOff': 'Chat',
     'todo.title': 'Todo Items',
     'todo.hide': 'Hide',
     'todo.show': 'Show',
@@ -289,10 +336,59 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.server': 'Server',
     'help.network': 'Network',
     'help.troubleshooting': 'Troubleshooting',
-    'help.commands': 'Commands'
+    'help.commands': 'Commands',
+    'help.overview.content': '<b>Configure Server:</b> Use Settings to enter host, port, username and password|'
+      + '<b>Test Connection:</b> Press Test to validate server connectivity|'
+      + '<b>Save Settings:</b> Press Save to apply configuration and start polling|'
+      + '<b>Browse Sessions:</b> View and manage sessions from the Sessions tab|'
+      + '<b>Interact:</b> Open a session and chat in the Detail view|'
+      + '<b>Quick Input:</b> Press Enter to send, Shift+Enter for new lines|'
+      + '<b>Slash Commands:</b> Text starting with / is sent as a command',
+    'help.server.content': '<b>Starting the OpenCode Server</b>|'
+      + 'Start OpenCode server with Basic Authentication enabled:|'
+      + '||<b>macOS / Linux (bash/zsh)</b>|'
+      + '<code>OPENCODE_SERVER_USERNAME=opencode OPENCODE_SERVER_PASSWORD=your-password npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>|'
+      + '||<b>Windows PowerShell</b>|'
+      + '<code>$env:OPENCODE_SERVER_USERNAME="opencode"; $env:OPENCODE_SERVER_PASSWORD="your-password"; npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>|'
+      + '||<b>Windows Command Prompt</b>|'
+      + '<code>set OPENCODE_SERVER_USERNAME=opencode&amp; set OPENCODE_SERVER_PASSWORD=your-password&amp; npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>',
+    'help.network.content': '<b>LAN Mode (Recommended)</b> Use your PC local IP address for devices on the same network|'
+      + 'Example: 192.168.1.61|'
+      + '||<b>WAN Mode (Advanced)</b>|'
+      + 'Configure NAT/port forwarding on your router|'
+      + 'Set up a VPN for secure remote access|'
+      + 'Use a reverse proxy with TLS/HTTPS|'
+      + '||<b>Security Requirements</b>|'
+      + 'Open TCP port 4096 in OS firewall|'
+      + 'Configure router/NAT port forwarding|'
+      + 'Use strong authentication passwords|'
+      + 'Prefer TLS/HTTPS for external access|'
+      + 'Restrict source IPs when possible|'
+      + 'Never expose without authentication',
+    'help.troubleshooting.content': '<b>Connection Diagnostics</b>|'
+      + '1. Verify Server: Check if OpenCode is listening on port 4096|'
+      + '2. Test Locally: Check health endpoint from the same machine|'
+      + '3. Test Network: Check health endpoint from your phone browser|'
+      + '4. Check Firewall: Ensure port 4096 is open in OS firewall|'
+      + '||<b>Health Check Commands</b>|'
+      + '<code>curl -u opencode:your-password http://127.0.0.1:4096/global/health</code>|'
+      + '<code>curl -u opencode:your-password http://YOUR_PC_IP:4096/global/health</code>|'
+      + '||<b>Common Issues</b>|'
+      + 'CORS Errors: Add --cors flags to server|'
+      + 'Connection Timeout: Check firewall settings|'
+      + 'Auth Failures: Verify username/password',
+    'help.commands.content': 'Local mobile commands are handled by the app. Server commands are loaded from OpenCode.',
+    'help.commands.serverTab': 'Server Commands',
+    'help.commands.skillsTab': 'Skills',
+    'help.commands.empty': 'No {type} available',
+    'help.commands.emptyConnected': 'Connect to a server to see available commands and skills'
   },
   es: {
     'app.title': 'OpenCode Remoto',
+    'app.exitTitle': '¿Cerrar app?',
+    'app.exitMessage': '¿Seguro que quieres salir?',
+    'app.exitOk': 'Cerrar',
+    'app.exitCancel': 'Cancelar',
     'nav.settings': 'Configuración',
     'nav.sessions': 'Sesiones',
     'nav.detail': 'Detalle',
@@ -325,6 +421,14 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.readyToTest': 'Listo para probar estos campos.',
     'settings.unsavedChanges': 'Cambios sin guardar: pulsa Guardar para usarlos en Sesiones.',
     'settings.noUnsavedChanges': 'La configuración guardada está activa.',
+    'settings.defaultModel': 'Modelo predeterminado',
+    'settings.selectModel': 'Seleccionar modelo',
+    'settings.stats': 'Estadísticas de uso',
+    'settings.statsPrompts': 'Prompts',
+    'settings.statsSessions': 'Sesiones',
+    'settings.statsTokens': 'Tokens',
+    'settings.resetStats': 'Reiniciar estadísticas',
+    'settings.mode': 'Modo',
     'connection.connecting': 'Conectando a OpenCode...',
     'connection.loadingSessions': 'Conectando y cargando sesiones...',
     'connection.refreshing': 'Actualizando sesiones...',
@@ -336,6 +440,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.language': 'Idioma',
     'settings.theme': 'Tema',
     'settings.themeSystem': 'Sistema',
+    'settings.themeScheduled': 'Programado (día/noche)',
     'settings.themeLight': 'Claro',
     'settings.themeDark': 'Oscuro',
     'sessions.title': 'Sesiones',
@@ -364,6 +469,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.updated': 'Actualizada {time}',
     'sessions.open': 'Abrir',
     'sessions.delete': 'Eliminar',
+    'sessions.activeLabel': 'Activas',
+    'sessions.recentLabel': 'Recientes',
     'detail.backToSessions': '← Sesiones',
     'detail.selectSession': 'Selecciona una sesión',
     'detail.loading': 'Cargando sesión...',
@@ -375,7 +482,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.abort': 'Abortar',
     'detail.jumpToLatest': 'Ir al final',
     'detail.you': '👤 Tú',
-    'detail.opencode': '🤖 OpenCode',
+    'detail.opencode': 'OpenCode',
     'detail.projectDashboardLabel': 'Panel de proyecto y VCS',
     'detail.projectLabel': 'Proyecto',
     'detail.vcsLabel': 'VCS',
@@ -419,6 +526,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.sessionDetailsTitle': 'Detalles de la sesión',
     'detail.sessionDetailsHint': 'Información avanzada del proyecto, VCS, archivos y modelo.',
     'detail.closeSheet': 'Cerrar',
+    'detail.exportChat': 'Exportar chat',
+    'detail.snapshot': 'Instantánea',
+    'detail.readingModeOn': 'Lectura',
+    'detail.readingModeOff': 'Chat',
     'todo.title': 'Tareas pendientes',
     'todo.hide': 'Ocultar',
     'todo.show': 'Mostrar',
@@ -434,10 +545,59 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.server': 'Servidor',
     'help.network': 'Red',
     'help.troubleshooting': 'Solución de problemas',
-    'help.commands': 'Comandos'
+    'help.commands': 'Comandos',
+    'help.overview.content': '<b>Configurar Servidor:</b> Usa Configuración para ingresar host, puerto, usuario y contraseña|'
+      + '<b>Probar Conexión:</b> Presiona Probar para validar la conectividad|'
+      + '<b>Guardar Configuración:</b> Presiona Guardar para aplicar y comenzar|'
+      + '<b>Explorar Sesiones:</b> Ve y gestiona sesiones desde la pestaña Sesiones|'
+      + '<b>Interactuar:</b> Abre una sesión y chatea en la vista Detalle|'
+      + '<b>Entrada Rápida:</b> Enter para enviar, Shift+Enter para nueva línea|'
+      + '<b>Comandos Slash:</b> Texto que empieza con / se envía como comando',
+    'help.server.content': '<b>Iniciar el Servidor OpenCode</b>|'
+      + 'Inicia OpenCode con autenticación Basic Auth:|'
+      + '||<b>macOS / Linux (bash/zsh)</b>|'
+      + '<code>OPENCODE_SERVER_USERNAME=opencode OPENCODE_SERVER_PASSWORD=tu-clave npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>|'
+      + '||<b>Windows PowerShell</b>|'
+      + '<code>$env:OPENCODE_SERVER_USERNAME="opencode"; $env:OPENCODE_SERVER_PASSWORD="tu-clave"; npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>|'
+      + '||<b>Windows CMD</b>|'
+      + '<code>set OPENCODE_SERVER_USERNAME=opencode&amp; set OPENCODE_SERVER_PASSWORD=tu-clave&amp; npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>',
+    'help.network.content': '<b>Modo LAN (Recomendado)</b> Usa la IP local de tu PC para dispositivos en la misma red|'
+      + 'Ejemplo: 192.168.1.61|'
+      + '||<b>Modo WAN (Avanzado)</b>|'
+      + 'Configura NAT/reenvío de puertos en tu router|'
+      + 'Configura una VPN para acceso remoto seguro|'
+      + 'Usa un proxy inverso con TLS/HTTPS|'
+      + '||<b>Requisitos de Seguridad</b>|'
+      + 'Abrir puerto TCP 4096 en el firewall del SO|'
+      + 'Configurar reenvío de puertos en el router|'
+      + 'Usar contraseñas de autenticación fuertes|'
+      + 'Preferir TLS/HTTPS para acceso externo|'
+      + 'Restringir IPs de origen cuando sea posible|'
+      + 'Nunca exponer sin autenticación',
+    'help.troubleshooting.content': '<b>Diagnóstico de Conexión</b>|'
+      + '1. Verificar Servidor: Comprueba que OpenCode escuche en el puerto 4096|'
+      + '2. Probar Local: Verifica el health endpoint desde la misma máquina|'
+      + '3. Probar Red: Verifica el health endpoint desde el navegador del celular|'
+      + '4. Verificar Firewall: Asegura que el puerto 4096 esté abierto|'
+      + '||<b>Comandos de Verificación</b>|'
+      + '<code>curl -u opencode:tu-clave http://127.0.0.1:4096/global/health</code>|'
+      + '<code>curl -u opencode:tu-clave http://IP_DE_TU_PC:4096/global/health</code>|'
+      + '||<b>Problemas Comunes</b>|'
+      + 'Errores CORS: Agrega flags --cors al servidor|'
+      + 'Timeouts: Revisa la configuración del firewall|'
+      + 'Fallos de Auth: Verifica usuario/contraseña',
+    'help.commands.content': 'Los comandos locales son manejados por la app. Los comandos del servidor se cargan desde OpenCode.',
+    'help.commands.serverTab': 'Comandos del Servidor',
+    'help.commands.skillsTab': 'Skills',
+    'help.commands.empty': 'No hay {type} disponibles',
+    'help.commands.emptyConnected': 'Conéctate a un servidor para ver los comandos y skills disponibles'
   },
   it: {
     'app.title': 'OpenCode Mobile',
+    'app.exitTitle': 'Chiudere app?',
+    'app.exitMessage': 'Sei sicuro di voler uscire?',
+    'app.exitOk': 'Chiudi',
+    'app.exitCancel': 'Annulla',
     'nav.settings': 'Impostazioni',
     'nav.sessions': 'Sessioni',
     'nav.detail': 'Dettaglio',
@@ -470,6 +630,14 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.readyToTest': 'Campi pronti per il test.',
     'settings.unsavedChanges': 'Modifiche non salvate: tocca Salva per usarle nelle Sessioni.',
     'settings.noUnsavedChanges': 'Le impostazioni salvate sono attive.',
+    'settings.defaultModel': 'Modello predefinito',
+    'settings.selectModel': 'Seleziona un modello',
+    'settings.stats': 'Statistiche di utilizzo',
+    'settings.statsPrompts': 'Prompt',
+    'settings.statsSessions': 'Sessioni',
+    'settings.statsTokens': 'Token',
+    'settings.resetStats': 'Reimposta statistiche',
+    'settings.mode': 'Modalità',
     'connection.connecting': 'Connessione a OpenCode...',
     'connection.loadingSessions': 'Connessione e caricamento sessioni...',
     'connection.refreshing': 'Aggiornamento sessioni...',
@@ -481,6 +649,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.language': 'Lingua',
     'settings.theme': 'Tema',
     'settings.themeSystem': 'Sistema',
+    'settings.themeScheduled': 'Programmato (giorno/notte)',
     'settings.themeLight': 'Chiaro',
     'settings.themeDark': 'Scuro',
     'sessions.title': 'Sessioni',
@@ -509,6 +678,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.updated': 'Aggiornata {time}',
     'sessions.open': 'Apri',
     'sessions.delete': 'Elimina',
+    'sessions.activeLabel': 'Attive',
+    'sessions.recentLabel': 'Recenti',
     'detail.backToSessions': '← Sessioni',
     'detail.selectSession': 'Seleziona una sessione',
     'detail.loading': 'Caricamento sessione...',
@@ -520,7 +691,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.abort': 'Interrompi',
     'detail.jumpToLatest': 'Vai alla fine',
     'detail.you': '👤 Tu',
-    'detail.opencode': '🤖 OpenCode',
+    'detail.opencode': 'OpenCode',
     'detail.projectDashboardLabel': 'Dashboard progetto e VCS',
     'detail.projectLabel': 'Progetto',
     'detail.vcsLabel': 'VCS',
@@ -564,6 +735,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.sessionDetailsTitle': 'Dettagli sessione',
     'detail.sessionDetailsHint': 'Informazioni avanzate su progetto, VCS, file e modello.',
     'detail.closeSheet': 'Chiudi',
+    'detail.exportChat': 'Esporta chat',
+    'detail.snapshot': 'Istantanea',
+    'detail.readingModeOn': 'Lettura',
+    'detail.readingModeOff': 'Chat',
     'todo.title': 'Todo',
     'todo.hide': 'Nascondi',
     'todo.show': 'Mostra',
@@ -579,10 +754,23 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.server': 'Server',
     'help.network': 'Rete',
     'help.troubleshooting': 'Risoluzione problemi',
-    'help.commands': 'Comandi'
+    'help.commands': 'Comandi',
+    'help.overview.content': '<b>Configura Server:</b> Usa Impostazioni per inserire host, porta, username e password|<b>Test Connessione:</b> Premi Test per verificare la connettività|<b>Salva Impostazioni:</b> Premi Salva per applicare e iniziare|<b>Esplora Sessioni:</b> Visualizza e gestisci le sessioni dalla scheda Sessioni|<b>Interagisci:</b> Apri una sessione e chatta nella vista Dettaglio|<b>Input Rapido:</b> Enter per inviare, Shift+Enter per nuova riga|<b>Comandi Slash:</b> Il testo che inizia con / viene inviato come comando',
+    'help.server.content': '<b>Avviare il Server OpenCode</b>|Avvia OpenCode con autenticazione Basic Auth:||<b>macOS / Linux (bash/zsh)</b>|<code>OPENCODE_SERVER_USERNAME=opencode OPENCODE_SERVER_PASSWORD=tua-password npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>||<b>Windows PowerShell</b>|<code>$env:OPENCODE_SERVER_USERNAME="opencode"; $env:OPENCODE_SERVER_PASSWORD="tua-password"; npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>||<b>Windows CMD</b>|<code>set OPENCODE_SERVER_USERNAME=opencode&amp; set OPENCODE_SERVER_PASSWORD=tua-password&amp; npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>',
+    'help.network.content': '<b>Modalità LAN (Consigliata)</b> Usa l\'IP locale del tuo PC per dispositivi sulla stessa rete|Esempio: 192.168.1.61||<b>Modalità WAN (Avanzata)</b>|Configura NAT/port forwarding sul router|Configura una VPN per accesso remoto sicuro|Usa un proxy inverso con TLS/HTTPS||<b>Requisiti di Sicurezza</b>|Apri porta TCP 4096 nel firewall del SO|Configura il port forwarding del router|Usa password forti per l\'autenticazione|Preferisci TLS/HTTPS per accesso esterno|Limita gli IP sorgente quando possibile|Non esporre mai senza autenticazione',
+    'help.troubleshooting.content': '<b>Diagnostica Connessione</b>|1. Verifica Server: Controlla che OpenCode ascolti sulla porta 4096|2. Test Locale: Verifica l\'endpoint health dalla stessa macchina|3. Test Rete: Verifica l\'endpoint health dal browser del telefono|4. Verifica Firewall: Assicurati che la porta 4096 sia aperta||<b>Comandi di Verifica</b>|<code>curl -u opencode:tua-password http://127.0.0.1:4096/global/health</code>|<code>curl -u opencode:tua-password http://IP_TUO_PC:4096/global/health</code>||<b>Problemi Comuni</b>|Errori CORS: Aggiungi flag --cors al server|Timeout: Controlla le impostazioni del firewall|Errori di Auth: Verifica username/password',
+    'help.commands.content': 'I comandi locali sono gestiti dall\'app. I comandi del server vengono caricati da OpenCode.',
+    'help.commands.serverTab': 'Comandi del Server',
+    'help.commands.skillsTab': 'Skills',
+    'help.commands.empty': 'Nessun {type} disponibile',
+    'help.commands.emptyConnected': 'Connettiti a un server per vedere comandi e skills disponibili'
   },
   'zh-TW': {
     'app.title': 'OpenCode 遠端',
+    'app.exitTitle': '關閉應用程式？',
+    'app.exitMessage': '確定要退出嗎？',
+    'app.exitOk': '關閉',
+    'app.exitCancel': '取消',
     'nav.settings': '設定',
     'nav.sessions': '工作階段',
     'nav.detail': '詳情',
@@ -615,6 +803,14 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.readyToTest': '欄位已可測試。',
     'settings.unsavedChanges': '有未儲存變更：點選儲存後才會用於工作階段。',
     'settings.noUnsavedChanges': '已儲存的設定正在使用中。',
+    'settings.defaultModel': '預設模型',
+    'settings.selectModel': '選擇模型',
+    'settings.stats': '使用統計',
+    'settings.statsPrompts': '提示次數',
+    'settings.statsSessions': '工作階段',
+    'settings.statsTokens': 'Token 數',
+    'settings.resetStats': '重設統計',
+    'settings.mode': '模式',
     'connection.connecting': '正在連線到 OpenCode...',
     'connection.loadingSessions': '正在連線並載入工作階段...',
     'connection.refreshing': '正在重新整理工作階段...',
@@ -626,6 +822,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.language': '語言',
     'settings.theme': '主題',
     'settings.themeSystem': '跟隨系統',
+    'settings.themeScheduled': '定時切換（日/夜）',
     'settings.themeLight': '淺色',
     'settings.themeDark': '深色',
     'sessions.title': '工作階段',
@@ -654,6 +851,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.updated': '更新於 {time}',
     'sessions.open': '開啟',
     'sessions.delete': '刪除',
+    'sessions.activeLabel': '進行中',
+    'sessions.recentLabel': '最近',
     'detail.backToSessions': '← 工作階段',
     'detail.selectSession': '選擇工作階段',
     'detail.loading': '載入工作階段...',
@@ -665,7 +864,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.abort': '中止',
     'detail.jumpToLatest': '前往最新',
     'detail.you': '👤 你',
-    'detail.opencode': '🤖 OpenCode',
+    'detail.opencode': 'OpenCode',
     'detail.projectDashboardLabel': '專案與 VCS 儀表板',
     'detail.projectLabel': '專案',
     'detail.vcsLabel': 'VCS',
@@ -709,6 +908,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.sessionDetailsTitle': '工作階段詳細資訊',
     'detail.sessionDetailsHint': '專案、VCS、檔案與模型的進階資訊。',
     'detail.closeSheet': '關閉',
+    'detail.exportChat': '匯出對話',
+    'detail.snapshot': '快照',
+    'detail.readingModeOn': '閱讀模式',
+    'detail.readingModeOff': '聊天',
     'todo.title': '待辦事項',
     'todo.hide': '隱藏',
     'todo.show': '顯示',
@@ -724,7 +927,16 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.server': '伺服器',
     'help.network': '網路',
     'help.troubleshooting': '疑難排解',
-    'help.commands': '命令'
+    'help.commands': '命令',
+    'help.overview.content': '<b>設定伺服器：</b>使用設定頁面輸入主機、連接埠、使用者名稱與密碼|<b>測試連線：</b>按「測試」驗證伺服器連線|<b>儲存設定：</b>按「儲存」套用設定並開始輪詢|<b>瀏覽工作階段：</b>在工作階段頁籤中檢視與管理工作階段|<b>互動：</b>開啟工作階段，在詳細檢視中聊天|<b>快速輸入：</b>按 Enter 傳送，Shift+Enter 換行|<b>斜線命令：</b>以 / 開頭的文字會作為命令傳送',
+    'help.server.content': '<b>啟動 OpenCode 伺服器</b>|使用 Basic Auth 啟動 OpenCode 伺服器：||<b>macOS / Linux (bash/zsh)</b>|<code>OPENCODE_SERVER_USERNAME=opencode OPENCODE_SERVER_PASSWORD=your-password npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>||<b>Windows PowerShell</b>|<code>$env:OPENCODE_SERVER_USERNAME="opencode"; $env:OPENCODE_SERVER_PASSWORD="your-password"; npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>||<b>Windows 命令提示字元</b>|<code>set OPENCODE_SERVER_USERNAME=opencode&amp; set OPENCODE_SERVER_PASSWORD=your-password&amp; npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096</code>',
+    'help.network.content': '<b>LAN 模式（建議）</b>使用電腦的區域網路 IP 位址，讓同一網路上的裝置連線|範例：192.168.1.61||<b>WAN 模式（進階）</b>|在路由器上設定 NAT/連接埠轉發|設定 VPN 以安全遠端存取|使用帶有 TLS/HTTPS 的反向代理||<b>安全要求</b>|在作業系統防火牆中開啟 TCP 連接埠 4096|設定路由器 NAT/連接埠轉發|使用強密碼進行認證|外部存取建議使用 TLS/HTTPS|盡可能限制來源 IP|切勿在未認證狀態下暴露',
+    'help.troubleshooting.content': '<b>連線診斷</b>|1. 確認伺服器：檢查 OpenCode 是否在連接埠 4096 上監聽|2. 本機測試：從同一台機器確認健康端點|3. 網路測試：從手機瀏覽器確認健康端點|4. 檢查防火牆：確保連接埠 4096 已開啟||<b>健康檢查命令</b>|<code>curl -u opencode:your-password http://127.0.0.1:4096/global/health</code>|<code>curl -u opencode:your-password http://YOUR_PC_IP:4096/global/health</code>||<b>常見問題</b>|CORS 錯誤：為伺服器加入 --cors 旗標|連線逾時：檢查防火牆設定|認證失敗：確認使用者名稱/密碼',
+    'help.commands.content': '本機行動端命令由應用程式處理。伺服器命令從 OpenCode 載入。',
+    'help.commands.serverTab': '伺服器命令',
+    'help.commands.skillsTab': '技能',
+    'help.commands.empty': '沒有可用的 {type}',
+    'help.commands.emptyConnected': '連線至伺服器以查看可用的命令與技能'
   }
 }
 

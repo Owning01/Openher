@@ -1,8 +1,9 @@
-import { memo, useRef, useEffect } from "react"
-import { MessageBubble } from "./MessageBubble"
+import { memo, lazy, Suspense, useRef, useEffect } from "react"
 import { LoadingIcon, ChatIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { RenderedMessage } from "../types"
+
+const MessageBubble = lazy(() => import("./MessageBubble"))
 
 type MessageListProps = {
   messages: RenderedMessage[]
@@ -53,7 +54,9 @@ export const MessageList = memo(function MessageList({
       ) : (
         <>
           {messages.map((message) => (
-            <MessageBubble key={message.info.id} message={message} />
+            <Suspense fallback={null} key={message.info.id}>
+              <MessageBubble message={message} />
+            </Suspense>
           ))}
           {showTypingBubble && (
             <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')}>

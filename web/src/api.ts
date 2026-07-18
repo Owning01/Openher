@@ -29,11 +29,14 @@ function authHeader(config: ServerConfig): string {
 }
 
 function baseUrl(config: ServerConfig): string {
-  const host = config.host.trim()
+  let host = config.host.trim()
   const schemeMatch = host.match(/^(https?):\/\//)
   const scheme = schemeMatch ? schemeMatch[1] : "http"
-  const cleanHost = schemeMatch ? host.slice(schemeMatch[0].length) : host
-  return `${scheme}://${cleanHost}:${config.port}`
+  if (schemeMatch) host = host.slice(schemeMatch[0].length)
+  if (host.includes(":") && !host.startsWith("[")) {
+    host = `[${host}]`
+  }
+  return `${scheme}://${host}:${config.port}`
 }
 
 function normalizeSlashes(path: string): string {
@@ -125,62 +128,77 @@ async function requestWithHeaders<T>(config: ServerConfig, path: string, options
   }
 
   const method = options.method ?? "GET"
+  const timeout = options.readTimeout ?? 30_000
+  const maxRetries = 1
+  let lastError: Error | null = null
 
-  if (Capacitor.isNativePlatform()) {
-    let response
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      response = await CapacitorHttp.request({
-        url: target,
-        method,
-        headers,
-        data: options.body,
-        connectTimeout: 12_000,
-        readTimeout: options.readTimeout ?? 30_000
-      })
-    } catch {
-      throw new Error(`Network error: cannot reach ${target}. Check host, port, and firewall.`)
-    }
+      if (Capacitor.isNativePlatform()) {
+        const response = await CapacitorHttp.request({
+          url: target,
+          method,
+          headers,
+          data: options.body,
+          connectTimeout: 12_000,
+          readTimeout: timeout
+        })
 
-    if (response.status >= 400) {
-      throw new Error(responseDetail(response.data) || `HTTP ${response.status}`)
-    }
+        if (response.status >= 400) {
+          throw new Error(responseDetail(response.data) || `HTTP ${response.status}`)
+        }
 
-    const responseHeaders = normalizeHeaders(response.headers)
-    if (response.status === 204) return { data: true as T, headers: responseHeaders }
-    return { data: response.data as T, headers: responseHeaders }
+        const responseHeaders = normalizeHeaders(response.headers)
+        if (response.status === 204) return { data: true as T, headers: responseHeaders }
+        return { data: response.data as T, headers: responseHeaders }
+      }
+
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeout)
+      let response: Response
+      try {
+        response = await fetch(target, {
+          method,
+          headers,
+          body: options.body === undefined ? undefined : JSON.stringify(options.body),
+          signal: controller.signal
+        })
+      } finally {
+        clearTimeout(timer)
+      }
+
+      if (!response.ok) {
+        let detail = `HTTP ${response.status}`
+        try {
+          const body = await response.json()
+          detail = responseDetail(body) ?? detail
+        } catch {
+          const text = await response.text()
+          if (text) detail = text
+        }
+        throw new Error(detail)
+      }
+
+      const responseHeaders = normalizeHeaders(Object.fromEntries(response.headers.entries()))
+      if (response.status === 204) return { data: true as T, headers: responseHeaders }
+      return { data: (await response.json()) as T, headers: responseHeaders }
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 1000))
+      }
+    }
   }
 
-  let response: Response
-  try {
-    response = await fetch(target, {
-      method,
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body)
-    })
-  } catch {
-    const corsHint = config.username && config.password
-      ? " Browser mode + Basic Auth may be blocked by CORS preflight; use APK/native mode or disable auth temporarily for browser debugging."
-      : ""
-    throw new Error(
-      `Network error: cannot reach ${target}. Check server hostname/port, Windows firewall, and CORS (--cors).${corsHint}`
-    )
-  }
+  const isNetworkError = lastError!.message.startsWith("Network error") || lastError!.name === "AbortError"
+  if (!isNetworkError) throw lastError!
 
-  if (!response.ok) {
-    let detail = `HTTP ${response.status}`
-    try {
-      const body = await response.json()
-      detail = responseDetail(body) ?? detail
-    } catch {
-      const text = await response.text()
-      if (text) detail = text
-    }
-    throw new Error(detail)
-  }
-
-  const responseHeaders = normalizeHeaders(Object.fromEntries(response.headers.entries()))
-  if (response.status === 204) return { data: true as T, headers: responseHeaders }
-  return { data: (await response.json()) as T, headers: responseHeaders }
+  const corsHint = config.username && config.password
+    ? " Browser mode + Basic Auth may be blocked by CORS preflight; use APK/native mode or disable auth temporarily for browser debugging."
+    : ""
+  throw new Error(
+    `Network error: cannot reach ${target}. Check server hostname/port, Windows firewall, and CORS (--cors).${corsHint}`
+  )
 }
 
 async function request<T>(config: ServerConfig, path: string, options: RequestOptions = {}): Promise<T> {
@@ -296,8 +314,10 @@ export const api = {
     return request<boolean>(config, withDirectory(`/session/${id}`, directory), { method: "DELETE" })
   },
 
-  loadMessages(config: ServerConfig, sessionID: string, directory?: string) {
-    return request<MessageEnvelope[]>(config, withDirectory(`/session/${sessionID}/message?limit=100`, directory))
+  loadMessages(config: ServerConfig, sessionID: string, directory?: string, since?: number) {
+    let path = `/session/${sessionID}/message?limit=100`
+    if (since && since > 0) path += `&since=${since}`
+    return request<MessageEnvelope[]>(config, withDirectory(path, directory))
   },
 
   loadLatestMessage(config: ServerConfig, sessionID: string, directory?: string) {

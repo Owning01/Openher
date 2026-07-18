@@ -1,7 +1,7 @@
 import { memo, useRef, useCallback } from "react"
-import { SendIcon, StopCircleIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, SettingsIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import type { AgentOption } from "../types"
+import type { AgentOption, ModelOption } from "../types"
 
 type ComposerProps = {
   value: string
@@ -14,9 +14,11 @@ type ComposerProps = {
   activeAgentID: string
   primaryAgentOptions: AgentOption[]
   onChangeAgent: (id: string) => void
+  activeModelOption: ModelOption | null
+  onSheetOpen: (sheet: "ai" | "details") => void
 }
 
-export const Composer = memo(function Composer({ value, onChange, onSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent }: ComposerProps) {
+export const Composer = memo(function Composer({ value, onChange, onSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen }: ComposerProps) {
   const t = useT()
   const composerRef = useRef<HTMLDivElement | null>(null)
 
@@ -72,22 +74,30 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
         }}
         disabled={disabled}
       />
-      {primaryAgentOptions.length > 1 && (
-        <button onClick={handleToggleAgent} disabled={isWorking}
-          className={`agent-toggle ${activeAgentID === "plan" ? "agent-plan" : "agent-build"}`}>
-          <span>{activeAgentID === "plan" ? "Plan" : "Build"}</span>
+      <div className="composer-tools">
+        {primaryAgentOptions.length > 1 && (
+          <button onClick={handleToggleAgent} disabled={disabled}
+            className={`agent-toggle ${activeAgentID === "plan" ? "agent-plan" : "agent-build"}`}>
+            <span>{activeAgentID === "plan" ? "Plan" : "Build"}</span>
+          </button>
+        )}
+        <button onClick={() => onSheetOpen("ai")} className="model-toggle"
+          title={`${activeModelOption?.modelName ?? t('detail.modelLoading')}${activeModelOption?.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}>
+          <SettingsIcon size={12} />
+          <span className="model-toggle-name">{activeModelOption?.modelName ?? t('detail.modelLoading')}</span>
+          {activeModelOption?.variant && <span className="model-toggle-variant">{activeModelOption.variant}</span>}
         </button>
-      )}
-      {isWorking && (
-        <button onClick={onAbort} className="btn-danger">
-          <StopCircleIcon size={18} />
-          {t('detail.abort')}
+      </div>
+      <div className="composer-actions">
+        {isWorking && (
+          <button onClick={onAbort} className="btn-danger">
+            <StopCircleIcon size={18} />
+          </button>
+        )}
+        <button onClick={onSend} disabled={disabled} className="btn-primary">
+          <SendIcon size={18} />
         </button>
-      )}
-      <button onClick={onSend} disabled={disabled} className="btn-primary">
-        <SendIcon size={18} />
-        {t('detail.send')}
-      </button>
+      </div>
     </div>
   )
 })

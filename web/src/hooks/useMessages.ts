@@ -43,6 +43,7 @@ export function useMessages(config: ServerConfig) {
   const loadSelectedRequestRef = useRef(0)
   const awaitingAssistantBaselineRef = useRef("")
   const completionShouldPlayRef = useRef(false)
+  const lastMessageTsRef = useRef<Map<string, number>>(new Map())
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
     return [...messages, ...optimisticUserMessages]
@@ -64,6 +65,17 @@ export function useMessages(config: ServerConfig) {
   const totalDiffAdditions = diffFiles.reduce((sum, file) => sum + file.additions, 0)
   const totalDiffDeletions = diffFiles.reduce((sum, file) => sum + file.deletions, 0)
 
+  const toolMessage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.info.role === "assistant") {
+        const toolParts = m.parts.filter((p) => p.type !== "text" && p.type !== "thinking" && p.text)
+        if (toolParts.length > 0) return toolParts
+      }
+    }
+    return null
+  }, [messages])
+
   const clearSession = useCallback(() => {
     setMessages([])
     setOptimisticUserMessages([])
@@ -78,28 +90,59 @@ export function useMessages(config: ServerConfig) {
 
   const loadSelected = useCallback(async (sessionID: string, directory: string) => {
     const requestID = ++loadSelectedRequestRef.current
+    const since = lastMessageTsRef.current.get(sessionID) || 0
 
-    // 1. Messages first — render ASAP
-    const msg = await api.loadMessages(config, sessionID, directory)
+    const msg = await api.loadMessages(config, sessionID, directory, since)
     if (requestID !== loadSelectedRequestRef.current) return
-    setMessages(msg)
-    setOptimisticUserMessages([])
 
-    // 2. Todo + diff + dashboard in background
-    api.loadTodo(config, sessionID, directory).then((t) => {
-      if (requestID !== loadSelectedRequestRef.current) return
-      setTodos(t)
-    }).catch(() => undefined)
+    setMessages((prev) => {
+      const other = prev.filter((m) => m.info.sessionID !== sessionID)
+      const msgMap = new Map(msg.map((m) => [m.info.id, m]))
+      const merged = [...other]
+      let changed = false
+      for (const m of prev) {
+        if (m.info.sessionID !== sessionID) continue
+        const updated = msgMap.get(m.info.id)
+        if (updated) {
+          merged.push(updated)
+          msgMap.delete(m.info.id)
+          if (updated !== m) changed = true
+        } else {
+          merged.push(m)
+        }
+      }
+      for (const m of msgMap.values()) {
+        merged.push(m)
+        changed = true
+      }
+      if (!changed) return prev
 
-    api.loadDiff(config, sessionID, directory).then((d) => {
-      if (requestID !== loadSelectedRequestRef.current) return
-      setDiffFiles(d)
-    }).catch(() => undefined)
+      const allTs = msg.map((m) => m.info.time.created || 0)
+      const maxTs = Math.max(...allTs, 0)
+      const hasIncomplete = msg.some((m) => m.info.role !== "user" && !m.info.time.completed)
+      if (maxTs > 0 && !hasIncomplete) lastMessageTsRef.current.set(sessionID, maxTs)
 
-    loadProjectDashboard(directory).catch(() => undefined)
+      return merged.slice(-100)
+    })
+
+    if (since === 0) {
+      setOptimisticUserMessages([])
+    } else {
+      setOptimisticUserMessages((current) => current.filter((m) => !msg.some((n) => n.info.id === m.info.id)))
+    }
   }, [config])
 
-  const loadProjectDashboard = useCallback(async (directory: string) => {
+  const loadTodos = useCallback(async (sessionID: string, directory: string) => {
+    const t = await api.loadTodo(config, sessionID, directory).catch(() => [] as TodoItem[])
+    setTodos(t)
+  }, [config])
+
+  const loadDiffs = useCallback(async (sessionID: string, directory: string) => {
+    const d = await api.loadDiff(config, sessionID, directory).catch(() => [] as DiffFile[])
+    setDiffFiles(d)
+  }, [config])
+
+  const loadDashboard = useCallback(async (directory: string) => {
     setDashboardError(null)
     try {
       const [project, vcs, fileStatus] = await Promise.all([
@@ -191,14 +234,16 @@ export function useMessages(config: ServerConfig) {
           availableCommands = await api.listCommands(config)
           onSetCommands(availableCommands)
         } catch (err) {
-          onSetRuntimeError(`Cannot load server commands: ${(err as Error).message}`)
-          return
+          // commands not available, send as prompt instead
         }
       }
 
       if (!availableCommands.some((item) => item.name === command)) {
-        const available = availableCommands.map((item) => `/${item.name}`).join(", ")
-        onSetRuntimeError(`Command not found: "/${command}". Available commands: ${available}`)
+        // Unknown command — send as normal prompt (strip the /)
+        await doSend(
+          () => api.sendPrompt(config, selectedSession.id, text.slice(1), selectedSession.directory, activeModel, activeAgentID),
+          () => onLoadSelected()
+        )
         return
       }
 
@@ -233,8 +278,8 @@ export function useMessages(config: ServerConfig) {
     runtimeError, setRuntimeError, todosExpanded, setTodosExpanded,
     activeDetailSheet, setActiveDetailSheet,
     renderedMessages, messageScrollSignature, assistantResponseSignature,
-    totalDiffAdditions, totalDiffDeletions,
+    totalDiffAdditions, totalDiffDeletions, toolMessage,
     loadSelectedRequestRef, awaitingAssistantBaselineRef, completionShouldPlayRef,
-    clearSession, loadSelected, loadProjectDashboard, send, abortSession
+    clearSession, loadSelected, loadTodos, loadDiffs, loadDashboard, send, abortSession
   }
 }

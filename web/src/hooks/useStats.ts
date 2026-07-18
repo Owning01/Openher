@@ -1,0 +1,51 @@
+import { useState, useCallback } from "react"
+
+const STATS_KEY = "opencode.mobile.stats"
+
+type UsageStats = {
+  promptsSent: number
+  sessionsCreated: number
+  totalTokens: number
+  firstUsed: number
+}
+
+function loadStats(): UsageStats {
+  try {
+    const raw = localStorage.getItem(STATS_KEY)
+    return raw ? JSON.parse(raw) : { promptsSent: 0, sessionsCreated: 0, totalTokens: 0, firstUsed: Date.now() }
+  } catch {
+    return { promptsSent: 0, sessionsCreated: 0, totalTokens: 0, firstUsed: Date.now() }
+  }
+}
+
+function saveStats(stats: UsageStats) {
+  localStorage.setItem(STATS_KEY, JSON.stringify(stats))
+}
+
+export function useStats() {
+  const [stats, setStats] = useState<UsageStats>(loadStats)
+
+  const recordPrompt = useCallback((text: string) => {
+    setStats((prev) => {
+      const next = { ...prev, promptsSent: prev.promptsSent + 1, totalTokens: prev.totalTokens + Math.round(text.length / 4) }
+      saveStats(next)
+      return next
+    })
+  }, [])
+
+  const recordSessionCreated = useCallback(() => {
+    setStats((prev) => {
+      const next = { ...prev, sessionsCreated: prev.sessionsCreated + 1 }
+      saveStats(next)
+      return next
+    })
+  }, [])
+
+  const resetStats = useCallback(() => {
+    const next = { promptsSent: 0, sessionsCreated: 0, totalTokens: 0, firstUsed: Date.now() }
+    saveStats(next)
+    setStats(next)
+  }, [])
+
+  return { stats, recordPrompt, recordSessionCreated, resetStats }
+}

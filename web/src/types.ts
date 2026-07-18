@@ -168,7 +168,7 @@ export type CommandInfo = {
 
 export type NoticeType = "info" | "success" | "error"
 
-export type ThemePreference = "system" | "light" | "dark"
+export type ThemePreference = "system" | "light" | "dark" | "scheduled"
 
 export type ViewType = "settings" | "sessions" | "detail" | "help"
 
@@ -176,4 +176,4 @@ export type HelpPage = "overview" | "server" | "network" | "troubleshooting" | "
 
 export type ConnectionState = "idle" | "connecting" | "connected" | "reconnecting" | "offline"
 
-export type DataMode = "full" | "saver" | "ultra"
+export type DataMode = "full" | "saver" | "ultra" | "miser"

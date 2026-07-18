@@ -1,29 +1,28 @@
 import { memo, useCallback } from "react"
-import { PlayIcon, PencilIcon, TrashIcon, SaveIcon, CloseIcon } from "../Icons"
+import { PlayIcon, PencilIcon, TrashIcon, SaveIcon, CloseIcon, StarIcon } from "../Icons"
 import { useT } from "../i18n-context"
+import { formatTime } from "../utils"
 import type { SessionView } from "../types"
-
-function formatTime(epoch: number): string {
-  if (epoch == null || epoch <= 0) return "-"
-  return new Date(epoch).toLocaleString()
-}
 
 type SessionCardProps = {
   session: SessionView
   isSelected: boolean
   isRenaming: boolean
   renameValue: string
+  isFavorite: boolean
   onOpen: (id: string, dir: string) => void
   onStartRename: (session: SessionView) => void
   onRenameChange: (value: string) => void
   onRenameConfirm: (id: string, title: string, dir: string) => void
   onRenameCancel: () => void
   onDelete: (session: SessionView) => void
+  onToggleFavorite: (id: string) => void
 }
 
 export const SessionCard = memo(function SessionCard({
-  session, isSelected, isRenaming, renameValue,
-  onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete
+  session, isSelected, isRenaming, renameValue, isFavorite,
+  onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
+  onToggleFavorite
 }: SessionCardProps) {
   const t = useT()
 
@@ -31,6 +30,10 @@ export const SessionCard = memo(function SessionCard({
   const handleDelete = useCallback(() => onDelete(session), [session, onDelete])
   const handleStartRename = useCallback(() => onStartRename(session), [session, onStartRename])
   const handleRenameConfirm = useCallback(() => onRenameConfirm(session.id, renameValue, session.directory), [session.id, renameValue, session.directory, onRenameConfirm])
+  const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    onToggleFavorite(session.id)
+  }, [session.id, onToggleFavorite])
 
   return (
     <article className={`session-card ${isSelected ? "active" : ""} fade-in`}>
@@ -56,7 +59,15 @@ export const SessionCard = memo(function SessionCard({
               </button>
             </div>
           ) : (
-            <h3>{session.title}</h3>
+            <div className="session-card-title-row">
+              <button className="star-btn" onClick={handleToggleFavorite} title={isFavorite ? "Remove from favorites" : "Add to favorites"}>
+                <StarIcon size={14} className={isFavorite ? "star-filled" : "star-empty"} />
+              </button>
+              <h3>{session.title}</h3>
+              <span className={`session-type-badge ${session.model ? "agent" : "user"}`}>
+                {session.model ? "AI" : "ME"}
+              </span>
+            </div>
           )}
           <p>{session.directory}</p>
           <span className={`pill ${session.status}`}>{session.status}</span>
@@ -73,6 +84,9 @@ export const SessionCard = memo(function SessionCard({
           <span className="subtle">{t('sessions.noFileChanges')}</span>
         )}
         <span className="subtle">{t('sessions.updated', { time: formatTime(session.updated) })}</span>
+        {session.model?.modelID && (
+          <span className="session-model-badge">{session.model.modelID}{session.model.variant ? ` · ${session.model.variant}` : ""}</span>
+        )}
       </div>
       <div className="session-actions">
         <button onClick={(e) => { e.stopPropagation(); handleOpen() }} className="btn-primary">
