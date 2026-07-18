@@ -1,4 +1,4 @@
-// Modern SVG icon components for OpenCode Remote
+// Modern SVG icon components for OpenCode Mobile
 
 export const SettingsIcon = ({ className = "", size = 20 }: { className?: string; size?: number }) => (
   <svg 
@@ -382,26 +382,30 @@ export const CloseIcon = ({ className = "", size = 20 }: { className?: string; s
   </svg>
 )
 
-export const LogoIcon = ({ className = "", size = 32 }: { className?: string; size?: number }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 32 32" 
-    fill="none" 
-    className={className}
-    role="img"
-    aria-label="OpenCode Remote Logo"
-  >
-    <defs>
-      <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#0ea5e9"/>
-        <stop offset="100%" stopColor="#0284c7"/>
-      </linearGradient>
-    </defs>
-    <circle cx="16" cy="16" r="15" fill="url(#logoGradient)" opacity="0.1"/>
-    <circle cx="16" cy="16" r="12" fill="none" stroke="url(#logoGradient)" strokeWidth="2"/>
-    <path d="M16 8c-4 0-7 3-7 7s3 7 7 7 7-3 7-7-3-7-7-7z" fill="url(#logoGradient)"/>
-    <circle cx="16" cy="16" r="3" fill="white"/>
-    <path d="M16 3v6m0 8v6M3 16h6m8 0h6" stroke="url(#logoGradient)" strokeWidth="2" strokeLinecap="round"/>
-  </svg>
-)
+let logoId = 0
+export const LogoIcon = ({ className = "", size = 32 }: { className?: string; size?: number }) => {
+  const id = `logoGradient-${++logoId}`
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 32 32" 
+      fill="none" 
+      className={className}
+      role="img"
+      aria-label="OpenCode Mobile Logo"
+    >
+      <defs>
+        <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#0ea5e9"/>
+          <stop offset="100%" stopColor="#0284c7"/>
+        </linearGradient>
+      </defs>
+      <circle cx="16" cy="16" r="15" fill={`url(#${id})`} opacity="0.1"/>
+      <circle cx="16" cy="16" r="12" fill="none" stroke={`url(#${id})`} strokeWidth="2"/>
+      <path d="M16 8c-4 0-7 3-7 7s3 7 7 7 7-3 7-7-3-7-7-7z" fill={`url(#${id})`}/>
+      <circle cx="16" cy="16" r="3" fill="white"/>
+      <path d="M16 3v6m0 8v6M3 16h6m8 0h6" stroke={`url(#${id})`} strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  )
+}

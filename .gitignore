@@ -1,6 +1,31 @@
 .idea/
 build/
+node_modules/
 web/node_modules/
 web/dist/
-web/android/
 web/*.tsbuildinfo
+
+# Android native project has its own .gitignore
+# web/android/ is NOT ignored — the Android .gitignore handles build artifacts
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor backups
+*~
+*.swp
+*.swo
+
+# Personal / legacy files (not tracked)
+BUILD_AND_INSTALL.md
+web/deploy-ngrok.ps1

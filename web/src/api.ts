@@ -18,8 +18,14 @@ import type {
   VcsStatus
 } from "./types"
 
+function toBase64(input: string): string {
+  const bytes = new TextEncoder().encode(input)
+  const binary = Array.from(bytes).map((b) => String.fromCodePoint(b)).join("")
+  return btoa(binary)
+}
+
 function authHeader(config: ServerConfig): string {
-  return `Basic ${btoa(`${config.username}:${config.password}`)}`
+  return `Basic ${toBase64(`${config.username}:${config.password}`)}`
 }
 
 function baseUrl(config: ServerConfig): string {
@@ -30,10 +36,14 @@ function baseUrl(config: ServerConfig): string {
   return `${scheme}://${cleanHost}:${config.port}`
 }
 
+function normalizeSlashes(path: string): string {
+  return path.replace(/\\/g, "/")
+}
+
 function withDirectory(path: string, directory?: string): string {
   if (!directory) return path
-  const joiner = path.includes("?") ? "&" : "?"
-  return `${path}${joiner}directory=${encodeURIComponent(directory)}`
+  const separator = path.includes("?") ? "&" : "?"
+  return `${path}${separator}directory=${encodeURIComponent(normalizeSlashes(directory))}`
 }
 
 type RequestOptions = {
@@ -57,7 +67,7 @@ function responseDetail(body: unknown): string | null {
     }
   }
   if (typeof body === "object") {
-    const value = body as { data?: { message?: string }, message?: string }
+    const value = body as { data?: { message?: string }; message?: string }
     return value.data?.message ?? value.message ?? JSON.stringify(body)
   }
   return String(body)
@@ -215,7 +225,10 @@ export const api = {
   async listGlobalSessions(config: ServerConfig) {
     const sessions: Session[] = []
     let cursor: string | undefined
+    let pages = 0
+    const MAX_PAGES = 100
     do {
+      if (++pages > MAX_PAGES) break
       const path = cursor ? `/experimental/session?cursor=${encodeURIComponent(cursor)}` : "/experimental/session"
       const response = await requestWithHeaders<Session[]>(config, path)
       sessions.push(...response.data)
@@ -233,7 +246,7 @@ export const api = {
   },
 
   listFiles(config: ServerConfig, path: string, directory?: string) {
-    return request<FileEntry[]>(config, withDirectory(`/file?path=${encodeURIComponent(path)}`, directory))
+    return request<FileEntry[]>(config, withDirectory(`/file?path=${encodeURIComponent(normalizeSlashes(path))}`, directory))
   },
 
   listCommands(config: ServerConfig) {

@@ -84,6 +84,12 @@ export type MessageEnvelope = {
   }>
 }
 
+export type RenderedMessage = {
+  info: MessageEnvelope["info"]
+  parts: MessageEnvelope["parts"]
+  text: string
+}
+
 export type TodoItem = {
   content: string
   status: string
@@ -97,24 +103,27 @@ export type DiffFile = {
   deletions: number
 }
 
-export type ProjectCurrent = Record<string, unknown> & {
+export type ProjectCurrent = {
   name?: string
   path?: string
   directory?: string
   root?: string
+  [key: string]: unknown
 }
 
-export type VcsStatus = Record<string, unknown> & {
+export type VcsStatus = {
   branch?: string
   status?: string
   ahead?: number
   behind?: number
+  [key: string]: unknown
 }
 
-export type FileStatusEntry = Record<string, unknown> & {
+export type FileStatusEntry = {
   path?: string
   file?: string
   status?: string
+  [key: string]: unknown
 }
 
 export type FileEntry = {
@@ -156,3 +165,15 @@ export type CommandInfo = {
   description?: string
   source?: "command" | "mcp" | "skill"
 }
+
+export type NoticeType = "info" | "success" | "error"
+
+export type ThemePreference = "system" | "light" | "dark"
+
+export type ViewType = "settings" | "sessions" | "detail" | "help"
+
+export type HelpPage = "overview" | "server" | "network" | "troubleshooting" | "commands"
+
+export type ConnectionState = "idle" | "connecting" | "connected" | "reconnecting" | "offline"
+
+export type DataMode = "full" | "saver" | "ultra"
