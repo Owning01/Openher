@@ -37,10 +37,8 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
     const container = document.querySelector<HTMLElement>(".messages")
     const composer = composerRef.current
     if (!container || !composer) return
-    const composerRect = composer.getBoundingClientRect()
-    const composerStyles = window.getComputedStyle(composer)
-    const composerBottom = Number.parseFloat(composerStyles.bottom) || 0
-    const clearance = Math.ceil(composerRect.height + composerBottom + 16)
+    const r = composer.getBoundingClientRect()
+    const clearance = Math.ceil(window.innerHeight - r.top + 8)
     container.style.setProperty("--chat-bottom-clearance", `${clearance}px`)
   }
 

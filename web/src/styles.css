@@ -2237,7 +2237,7 @@ button.compact {
   }
 
   .detail {
-    min-height: calc(100dvh - 158px);
+    min-height: 0;
   }
 
   .detail-topbar {
@@ -2250,7 +2250,6 @@ button.compact {
   }
 
   .messages {
-    min-height: 240px;
     padding: 0;
   }
 
@@ -2265,7 +2264,7 @@ button.compact {
   }
 
   .composer {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto;
     margin-left: calc(var(--space-2) * -1);
     margin-right: calc(var(--space-2) * -1);
   }
@@ -2280,6 +2279,23 @@ button.compact {
 
   .composer textarea {
     grid-column: 1 / -1;
+  }
+
+  .composer-tools {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .composer-tools > * {
+    min-height: 30px;
+  }
+
+  .composer-actions {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-1);
   }
 
   .help-tabs {
