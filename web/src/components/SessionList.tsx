@@ -50,11 +50,12 @@ export const SessionList = memo(function SessionList({
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Force scroll to top — page scroll, not container scroll
+  const prevProjectDir = useRef(selectedProjectDir)
   useLayoutEffect(() => {
-    window.scrollTo(0, 0)
-    document.documentElement.scrollTop = 0
-    document.body.scrollTop = 0
+    if (selectedProjectDir && prevProjectDir.current !== selectedProjectDir) {
+      window.scrollTo(0, 0)
+    }
+    prevProjectDir.current = selectedProjectDir
   }, [selectedProjectDir])
 
   if (selectedProjectDir) {
@@ -83,10 +84,11 @@ export const SessionList = memo(function SessionList({
 
         <div className="mode-switcher">
         <span className="mode-label">{t('settings.mode')}:</span>
-          {(["full", "saver", "ultra"] as const).map((m) => (
-            <button key={m} className={`mode-btn ${dataMode === m ? "active" : ""}`}
-              onClick={() => onDataModeChange(m)}>
-              {m === "full" ? "Full" : m === "saver" ? "Saver" : "ULTRA"}
+          {(["full", "saver", "ultra", "miser"] as const).map((m) => (
+            <button key={m} className={`mode-btn${dataMode === m ? " active" : ""}`}
+              onClick={() => onDataModeChange(m)}
+              aria-pressed={dataMode === m}>
+              {m === "full" ? "Full" : m === "saver" ? "Saver" : m === "ultra" ? "ULTRA" : "Miser"}
             </button>
           ))}
         </div>
@@ -95,6 +97,17 @@ export const SessionList = memo(function SessionList({
           <input placeholder={t('sessions.searchPlaceholder')} value={query}
             onChange={(e) => onQueryChange(e.target.value)} className="search" />
         </div>
+
+        {connectionState === "offline" && (
+          <div className="notice error fade-in" style={{ marginBottom: 'var(--space-3)' }}>
+            ✗ {t('connection.offline')}
+          </div>
+        )}
+        {connectionState === "reconnecting" && (
+          <div className="notice info fade-in" style={{ marginBottom: 'var(--space-3)' }}>
+            ℹ {t('connection.reconnecting')}
+          </div>
+        )}
 
         <div className="session-list">
           {projectSessions.length === 0 ? (
@@ -136,10 +149,11 @@ export const SessionList = memo(function SessionList({
 
       <div className="mode-switcher">
         <span className="mode-label">{t('settings.mode')}:</span>
-        {(["full", "saver", "ultra"] as const).map((m) => (
-          <button key={m} className={`mode-btn ${dataMode === m ? "active" : ""}`}
-            onClick={() => onDataModeChange(m)}>
-            {m === "full" ? "Full" : m === "saver" ? "Saver" : "ULTRA"}
+        {(["full", "saver", "ultra", "miser"] as const).map((m) => (
+          <button key={m} className={`mode-btn${dataMode === m ? " active" : ""}`}
+            onClick={() => onDataModeChange(m)}
+            aria-pressed={dataMode === m}>
+            {m === "full" ? "Full" : m === "saver" ? "Saver" : m === "ultra" ? "ULTRA" : "Miser"}
           </button>
         ))}
       </div>
@@ -151,6 +165,17 @@ export const SessionList = memo(function SessionList({
       <div className="sessions-summary-bar">
         {t('sessions.summary', { total: sessions.length, active: activeSessions.length, changed: sessions.filter((s) => hasFileChanges(s)).length })}
       </div>
+
+      {connectionState === "offline" && (
+        <div className="notice error fade-in" style={{ marginBottom: 'var(--space-3)' }}>
+          ✗ {t('connection.offline')}
+        </div>
+      )}
+      {connectionState === "reconnecting" && (
+        <div className="notice info fade-in" style={{ marginBottom: 'var(--space-3)' }}>
+          ℹ {t('connection.reconnecting')}
+        </div>
+      )}
 
       {!selectedProjectDir && !query.trim() && (activeSessions.length > 0 || recentSessions.length > 0) && (
         <div className="quick-access">

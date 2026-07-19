@@ -39,7 +39,8 @@ export const NavBar = memo(function NavBar({ variant, view, onNavigate, hasConfi
           {navItems.map((item) => (
             <button key={item.view} className={view === item.view ? "active" : ""}
               onClick={() => onNavigate(item.view)} disabled={disabledMap[item.view]}
-              aria-label={t(item.label)}>
+              aria-label={t(item.label)}
+              aria-current={view === item.view ? "page" : undefined}>
               {item.icon}
             </button>
           ))}
@@ -53,7 +54,8 @@ export const NavBar = memo(function NavBar({ variant, view, onNavigate, hasConfi
       {navItems.map((item) => (
         <button key={item.view} className={view === item.view ? "active" : ""}
           onClick={() => onNavigate(item.view)} disabled={disabledMap[item.view]}
-          aria-label={t(item.label)}>
+          aria-label={t(item.label)}
+          aria-current={view === item.view ? "page" : undefined}>
           {item.icon}
         </button>
       ))}

@@ -33,6 +33,11 @@ export const TodoBox = memo(function TodoBox({ todos, expanded, onToggle }: Todo
               <span>{item.content}</span>
             </div>
           ))}
+          {todos.length > 6 && (
+            <div className="todo-more" style={{ paddingLeft: 'var(--space-5)', marginTop: 'var(--space-2)', fontSize: 'var(--font-sm)', color: 'var(--muted-strong)' }}>
+              {t('todo.more', { count: todos.length - 6 })}
+            </div>
+          )}
         </div>
       )}
     </div>

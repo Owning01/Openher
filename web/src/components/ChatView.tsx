@@ -168,7 +168,8 @@ export const ChatView = memo(function ChatView({
             <span>{t('detail.detailsChip')}</span>
             <strong>{projectName || t('detail.projectLabel')}</strong>
           </button>
-          <button type="button" className={`context-chip ${readingMode ? "active" : "ghost"}`} onClick={onToggleReadingMode}>
+          <button type="button" className={`context-chip ${readingMode ? "active" : "ghost"}`} onClick={onToggleReadingMode}
+            aria-pressed={readingMode}>
             <span>{readingMode ? t('detail.readingModeOn') || "Reading" : t('detail.readingModeOff') || "Chat"}</span>
             <strong>{readingMode ? "📖" : "💬"}</strong>
           </button>

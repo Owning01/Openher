@@ -1,4 +1,4 @@
-import { memo } from "react"
+import { memo, useEffect, useRef } from "react"
 import { RefreshIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { AgentOption, ModelOption } from "../types"
@@ -46,11 +46,59 @@ export const BottomSheet = memo(function BottomSheet({
   totalDiffAdditions, totalDiffDeletions, dashboardError
 }: BottomSheetProps) {
   const t = useT()
+  const sheetRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!activeSheet) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose()
+        return
+      }
+      if (e.key === "Tab") {
+        const sheetEl = sheetRef.current
+        if (!sheetEl) return
+        const focusables = sheetEl.querySelectorAll<HTMLElement>(
+          'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]'
+        )
+        if (focusables.length === 0) return
+        const first = focusables[0]!
+        const last = focusables[focusables.length - 1]!
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            last.focus()
+            e.preventDefault()
+          }
+        } else {
+          if (document.activeElement === last) {
+            first.focus()
+            e.preventDefault()
+          }
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+
+    const sheetEl = sheetRef.current
+    if (sheetEl) {
+      const focusables = sheetEl.querySelectorAll<HTMLElement>(
+        'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]'
+      )
+      if (focusables.length > 0) {
+        setTimeout(() => focusables[0]?.focus(), 50)
+      }
+    }
+
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onClose, activeSheet])
+
   if (!activeSheet) return null
 
   return (
-    <div className="sheet-backdrop" role="presentation" onClick={onClose}>
+    <div className="sheet-backdrop" onClick={onClose}>
       <section
+        ref={sheetRef}
         className="bottom-sheet fade-in"
         role="dialog"
         aria-modal="true"

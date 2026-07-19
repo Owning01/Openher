@@ -1,4 +1,4 @@
-import { memo, useRef, useCallback } from "react"
+import { memo, useRef, useCallback, useEffect } from "react"
 import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
@@ -35,7 +35,22 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
     container.style.setProperty("--chat-bottom-clearance", `${clearance}px`)
   }
 
-  const resizeCleanupRef = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    const composer = composerRef.current
+    if (!composer) return
+    let rafId: number
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(syncChatBottomClearance)
+    })
+    observer.observe(composer)
+    syncChatBottomClearance()
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(rafId)
+    }
+  }, [])
+
   const handleFocus = useCallback(() => {
     syncChatBottomClearance()
     setTimeout(() => {
@@ -44,7 +59,6 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
       if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
       end?.scrollIntoView({ block: "end", behavior: "smooth" })
     }, 400)
-    resizeCleanupRef.current?.()
     const onResize = () => {
       const container = document.querySelector<HTMLElement>(".messages")
       const end = document.querySelector<HTMLElement>(".messages-end")
@@ -52,7 +66,6 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
       end?.scrollIntoView({ block: "end", behavior: "smooth" })
     }
     window.addEventListener("resize", onResize, { once: true })
-    resizeCleanupRef.current = () => window.removeEventListener("resize", onResize)
   }, [])
 
   const handleMicClick = useCallback(() => {
@@ -87,13 +100,16 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
       <div className="composer-tools">
         {primaryAgentOptions.length > 1 && (
           <button onClick={handleToggleAgent} disabled={disabled}
-            className={`agent-toggle ${activeAgentID === "plan" ? "agent-plan" : "agent-build"}`}>
+            className={`agent-toggle ${activeAgentID === "plan" ? "agent-plan" : "agent-build"}`}
+            aria-pressed={activeAgentID === "plan"}>
             <span>{activeAgentID === "plan" ? "Plan" : "Build"}</span>
           </button>
         )}
         {supported && (
           <button onClick={handleMicClick}
             className={`mic-toggle${isListening ? " recording" : ""}`}
+            aria-pressed={isListening}
+            aria-label={isListening ? t('voice.listening') : t('voice.input')}
             title={isListening ? t('voice.listening') : t('voice.input')}>
             <MicIcon size={16} />
           </button>

@@ -196,11 +196,13 @@ export const SettingsPanel = memo(function SettingsPanel({
         <h4 className="quick-access-label">{t('settings.navBarPosition')}</h4>
         <div className="toggle-row">
           <button type="button" className={`toggle-btn${navBarMode === "bottom" ? " active" : ""}`}
-            onClick={() => onNavBarModeChange("bottom")}>
+            onClick={() => onNavBarModeChange("bottom")}
+            aria-pressed={navBarMode === "bottom"}>
             {t('settings.navBarBottom')}
           </button>
           <button type="button" className={`toggle-btn${navBarMode === "header" ? " active" : ""}`}
-            onClick={() => onNavBarModeChange("header")}>
+            onClick={() => onNavBarModeChange("header")}
+            aria-pressed={navBarMode === "header"}>
             {t('settings.navBarHeader')}
           </button>
         </div>

@@ -13,7 +13,7 @@ type ConfirmModalProps = {
 export const ConfirmModal = memo(function ConfirmModal({ session, onConfirm, onCancel }: ConfirmModalProps) {
   const t = useT()
   return (
-    <Modal onClose={onCancel}>
+    <Modal onClose={onCancel} aria-labelledby="delete-session-title">
       <h2 id="delete-session-title">{t('session.deleteTitle')}</h2>
       <p>
         {t('session.deleteBodyPrefix')} <strong>{session.title}</strong>.

@@ -72,7 +72,7 @@ export function useAI(config: ServerConfig) {
       const list = await api.listAgents(config, directory)
       setAgentOptions(list)
       setAgentLoadError(null)
-      const saved = localStorage.getItem(agentStorageKey(directory)) || selectedAgentID
+      const saved = localStorage.getItem(agentStorageKey(directory)) || localStorage.getItem(AGENT_STORAGE_KEY) || "build"
       const primary = list.filter((agent) => agent.mode === "primary" || agent.mode === "all")
       const next = primary.find((agent) => agent.id === saved) ?? primary.find((agent) => agent.id === "build") ?? primary[0]
       if (next) {

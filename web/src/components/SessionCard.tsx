@@ -60,7 +60,10 @@ export const SessionCard = memo(function SessionCard({
             </div>
           ) : (
             <div className="session-card-title-row">
-              <button className="star-btn" onClick={handleToggleFavorite} title={isFavorite ? "Remove from favorites" : "Add to favorites"}>
+              <button className="star-btn" onClick={handleToggleFavorite}
+                aria-pressed={isFavorite}
+                aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                title={isFavorite ? "Remove from favorites" : "Add to favorites"}>
                 <StarIcon size={14} className={isFavorite ? "star-filled" : "star-empty"} />
               </button>
               <h3>{session.title}</h3>

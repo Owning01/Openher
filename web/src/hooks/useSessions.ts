@@ -1,5 +1,5 @@
 import { useState, useCallback, type MutableRefObject } from "react"
-import type { ServerConfig, Session, SessionView, SessionStatus, ModelSelection } from "../types"
+import type { ServerConfig, Session, SessionView, SessionStatus, ModelSelection, ConnectionState } from "../types"
 import { api } from "../api"
 
 const FAVORITES_KEY = "opencode.remote.favorites"
@@ -8,7 +8,10 @@ function loadFavorites(): Set<string> {
   try {
     const raw = localStorage.getItem(FAVORITES_KEY)
     return new Set(raw ? JSON.parse(raw) : [])
-  } catch { return new Set() }
+  } catch {
+    localStorage.removeItem(FAVORITES_KEY)
+    return new Set()
+  }
 }
 
 export function modelKey(model: { providerID: string; modelID: string; variant?: string }): string {
@@ -78,7 +81,9 @@ export function useSessions(
   config: ServerConfig,
   onLoadSelected: (id: string, dir: string) => Promise<void>,
   backgroundFailureCountRef: MutableRefObject<number>,
-  initialSessionLoadRef: MutableRefObject<boolean>
+  initialSessionLoadRef: MutableRefObject<boolean>,
+  setConnectionState: (state: ConnectionState) => void,
+  setConnectionMessage: (msg: string) => void
 ): SessionsActions {
   const [sessions, setSessions] = useState<SessionView[]>([])
   const [selectedID, setSelectedID] = useState<string | null>(null)
@@ -148,8 +153,23 @@ export function useSessions(
 
       backgroundFailureCountRef.current = 0
       initialSessionLoadRef.current = false
-    } catch {
+      setConnectionState("connected")
+      setConnectionMessage("")
+    } catch (e) {
       backgroundFailureCountRef.current += 1
+      const count = backgroundFailureCountRef.current
+      if (initialSessionLoadRef.current) {
+        setConnectionState("offline")
+        setConnectionMessage((e as Error).message)
+      } else {
+        if (count >= 3) {
+          setConnectionState("offline")
+          setConnectionMessage((e as Error).message)
+        } else {
+          setConnectionState("reconnecting")
+          setConnectionMessage("Connection is slow; retrying quietly...")
+        }
+      }
     }
   }, [config, selectedID, backgroundFailureCountRef, initialSessionLoadRef])
 

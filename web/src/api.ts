@@ -190,8 +190,9 @@ async function requestWithHeaders<T>(config: ServerConfig, path: string, options
     }
   }
 
-  const isNetworkError = lastError!.message.startsWith("Network error") || lastError!.name === "AbortError"
-  if (!isNetworkError) throw lastError!
+  const errorObj = lastError ?? new Error("Unknown error")
+  const isNetworkError = errorObj.message.startsWith("Network error") || errorObj.name === "AbortError"
+  if (!isNetworkError) throw errorObj
 
   const corsHint = config.username && config.password
     ? " Browser mode + Basic Auth may be blocked by CORS preflight; use APK/native mode or disable auth temporarily for browser debugging."

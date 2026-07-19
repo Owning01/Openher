@@ -145,6 +145,7 @@ type TranslationKey =
   | 'todo.title'
   | 'todo.hide'
   | 'todo.show'
+  | 'todo.more'
   | 'session.deleteTitle'
   | 'session.deleteBodyPrefix'
   | 'session.cancel'
@@ -334,6 +335,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'todo.title': 'Todo Items',
     'todo.hide': 'Hide',
     'todo.show': 'Show',
+    'todo.more': '... and {count} more',
     'session.deleteTitle': 'Delete session?',
     'session.deleteBodyPrefix': 'This will permanently delete',
     'session.cancel': 'Cancel',
@@ -548,6 +550,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'todo.title': 'Tareas pendientes',
     'todo.hide': 'Ocultar',
     'todo.show': 'Mostrar',
+    'todo.more': '... y {count} más',
     'session.deleteTitle': '¿Eliminar sesión?',
     'session.deleteBodyPrefix': 'Esto eliminará permanentemente',
     'session.cancel': 'Cancelar',
@@ -762,6 +765,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'todo.title': 'Todo',
     'todo.hide': 'Nascondi',
     'todo.show': 'Mostra',
+    'todo.more': '... e altri {count}',
     'session.deleteTitle': 'Eliminare la sessione?',
     'session.deleteBodyPrefix': 'Questo eliminerà definitivamente',
     'session.cancel': 'Annulla',
@@ -940,6 +944,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'todo.title': '待辦事項',
     'todo.hide': '隱藏',
     'todo.show': '顯示',
+    'todo.more': '... 還有 {count} 項',
     'session.deleteTitle': '刪除工作階段？',
     'session.deleteBodyPrefix': '這會永久刪除',
     'session.cancel': '取消',

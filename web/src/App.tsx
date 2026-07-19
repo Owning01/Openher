@@ -84,13 +84,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     openSession, refreshSessions, refreshSessionsWithIndicator, createSession,
     deleteSession, renameSession, startRename, cancelRename,
     setSessionToDelete, setSessions, favorites, toggleFavorite
-  } = useSessions(config, onLoadSelected, backgroundFailureCountRef, initialSessionLoadRef)
+  } = useSessions(config, onLoadSelected, backgroundFailureCountRef, initialSessionLoadRef, setConnectionState, setConnectionMessage)
 
   const {
     showNewSessionPicker, pickerPath,
     pickerItems, pickerLoading, pickerError,
     browseNewSessionDirectory, openNewSessionPicker,
-    setShowNewSessionPicker
+    setShowNewSessionPicker, persistDirectory
   } = useFolderPicker(config)
 
   const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
@@ -323,11 +323,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (created) {
       recordSessionCreated()
       setShowNewSessionPicker(false)
+      if (directory) {
+        persistDirectory(directory)
+      }
       setView("detail")
       await onLoadSelected(created.id, created.directory)
       await refreshSessions()
     }
-  }, [createSession, activeModel, onLoadSelected, refreshSessions])
+  }, [createSession, activeModel, onLoadSelected, refreshSessions, persistDirectory])
 
   const handleOpenSession = useCallback((id: string, dir: string) => {
     setView("detail")

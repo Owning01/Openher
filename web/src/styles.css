@@ -102,6 +102,7 @@
 
 html {
   background: var(--bg);
+  overscroll-behavior: none;
 }
 
 body {
@@ -113,6 +114,8 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button,
@@ -344,7 +347,7 @@ p {
 }
 
 .section-heading {
-  margin-bottom: var(--space-4);
+  margin-bottom: 0;
 }
 
 .inline-actions {
@@ -569,6 +572,8 @@ p {
   max-height: 42vh;
   margin-top: var(--space-3);
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .folder-row {
@@ -592,41 +597,56 @@ p {
 
 .mode-switcher {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--space-1);
+  margin: var(--space-3) 0;
 }
 
 .mode-label {
-  font-size: 0.76rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 700;
   color: var(--muted);
-  margin-right: var(--space-1);
+  display: flex;
+  align-items: center;
+  padding-right: var(--space-1);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .mode-btn {
-  flex: 1;
+  flex: 1 0 auto;
+  min-width: 0;
   text-align: center;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.3rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.3rem;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background: var(--surface);
-  color: var(--text);
+  color: var(--muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.12s;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .mode-btn.active {
   background: var(--primary);
   color: #fff;
   border-color: var(--primary);
+  font-weight: 800;
 }
 
 .mode-btn:not(.active):hover {
-  background: var(--surface-subtle);
-  border-color: var(--primary);
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 .quick-access {
@@ -1161,6 +1181,8 @@ p {
   gap: var(--space-2);
   max-height: 42vh;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .model-option {
@@ -1290,6 +1312,8 @@ p {
   padding: var(--space-2) var(--space-1);
   padding-bottom: var(--chat-bottom-clearance, 140px);
   scroll-padding-bottom: var(--chat-bottom-clearance, 140px);
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .messages-end {
@@ -2012,20 +2036,23 @@ button.compact {
 @media (max-width: 780px) {
   .app-shell[data-navbar="bottom"] {
     padding: var(--space-3);
+    padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(76px + env(safe-area-inset-bottom));
     gap: var(--space-3);
   }
   .app-shell[data-navbar="header"] {
     padding: var(--space-3);
+    padding-top: 0;
     gap: var(--space-3);
   }
 
   .top-nav {
     top: 0;
     border-radius: var(--radius-md);
+    padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
   }
 
-  .desktop-nav {
+  .app-shell[data-navbar="bottom"] .desktop-nav {
     display: none;
   }
 
@@ -2098,10 +2125,17 @@ button.compact {
   }
 
   .composer {
-    bottom: calc(72px + env(safe-area-inset-bottom));
     grid-template-columns: 1fr auto auto;
     margin-left: calc(var(--space-2) * -1);
     margin-right: calc(var(--space-2) * -1);
+  }
+
+  .app-shell[data-navbar="bottom"] .composer {
+    bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .app-shell[data-navbar="header"] .composer {
+    bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
   }
 
   .composer textarea {

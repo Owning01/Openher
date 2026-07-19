@@ -7,7 +7,7 @@ import type { RenderedMessage } from "../types"
 import { useT } from "../i18n-context"
 
 function normalizeMessageMarkdown(text: string): string {
-  return text.includes("\n") ? text : text.replace(/\s-\s(?=\S)/g, "\n- ")
+  return text
 }
 
 function Table({ children }: ComponentProps<"table">) {
