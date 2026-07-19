@@ -345,10 +345,17 @@ export const api = {
     return request<FileStatusEntry[] | Record<string, FileStatusEntry>>(config, withDirectory("/file/status", directory))
   },
 
-  sendPrompt(config: ServerConfig, sessionID: string, text: string, directory?: string, model?: ModelSelection, agentID?: string) {
+  sendPrompt(config: ServerConfig, sessionID: string, text: string, directory?: string, model?: ModelSelection, agentID?: string, images?: Array<{ base64: string; mime: string }>) {
+    const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string }> = []
+    if (text) parts.push({ type: "text", text })
+    if (images) {
+      for (const img of images) {
+        parts.push({ type: "image", data: img.base64, mimeType: img.mime })
+      }
+    }
     return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt_async`, directory), {
       method: "POST",
-      body: { parts: [{ type: "text", text }], model: toModelBody(model), agent: agentID, variant: model?.variant || undefined }
+      body: { parts, model: toModelBody(model), agent: agentID, variant: model?.variant || undefined }
     })
   },
 

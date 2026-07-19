@@ -65,11 +65,13 @@ export function useMessages(config: ServerConfig) {
   const totalDiffAdditions = diffFiles.reduce((sum, file) => sum + file.additions, 0)
   const totalDiffDeletions = diffFiles.reduce((sum, file) => sum + file.deletions, 0)
 
+  const toolTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
+
   const toolMessage = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i]
       if (m.info.role === "assistant") {
-        const toolParts = m.parts.filter((p) => p.type !== "text" && p.type !== "thinking" && p.text)
+        const toolParts = m.parts.filter((p) => toolTypes.has(p.type) && p.text)
         if (toolParts.length > 0) return toolParts
       }
     }
@@ -168,15 +170,22 @@ export function useMessages(config: ServerConfig) {
     onRefreshSessions: () => Promise<void>,
     onLoadSelected: () => Promise<void>,
     onSetCommands: (cmds: { name: string }[]) => void,
-    onSetRuntimeError: (err: string | null) => void
+    onSetRuntimeError: (err: string | null) => void,
+    images?: Array<{ base64: string; mime: string }>
   ) => {
     const text = composer.trim()
-    if (!text || !selectedSession) return
+    if ((!text || !selectedSession) && (!images || images.length === 0)) return
 
     const now = Date.now()
+    const parts: MessageEnvelope["parts"] = text ? [{ id: uniqueId("optimistic-part"), type: "text", text }] : []
+    if (images) {
+      for (const img of images) {
+        parts.push({ id: uniqueId("img-part"), type: "image", data: img.base64, mimeType: img.mime })
+      }
+    }
     const optimisticMessage: MessageEnvelope = {
       info: { id: uniqueId("optimistic"), role: "user", sessionID: selectedSession.id, time: { created: now } },
-      parts: [{ id: uniqueId("optimistic-part"), type: "text", text }]
+      parts
     }
 
     const doSend = async (
@@ -255,7 +264,7 @@ export function useMessages(config: ServerConfig) {
     }
 
     await doSend(
-      () => api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID),
+      () => api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID, images),
       () => onLoadSelected()
     )
   }, [composer, config, assistantResponseSignature])

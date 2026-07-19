@@ -1,13 +1,15 @@
-import { memo, useRef, useCallback, useEffect } from "react"
-import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon } from "../Icons"
+import { memo, useRef, useCallback, useEffect, useState } from "react"
+import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon, CloseIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import type { AgentOption, ModelOption } from "../types"
 
+type ImageAttachment = { id: string; base64: string; mime: string; name: string }
+
 type ComposerProps = {
   value: string
   onChange: (value: string) => void
-  onSend: () => void
+  onSend: (images?: ImageAttachment[]) => void | Promise<void>
   onAbort: () => void
   disabled: boolean
   isWorking: boolean
@@ -19,10 +21,14 @@ type ComposerProps = {
   onSheetOpen: (sheet: "ai" | "details") => void
 }
 
+let imgId = 0
+
 export const Composer = memo(function Composer({ value, onChange, onSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen }: ComposerProps) {
   const t = useT()
   const { isListening, supported, start, stop } = useSpeechRecognition()
   const composerRef = useRef<HTMLDivElement | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const [images, setImages] = useState<ImageAttachment[]>([])
 
   function syncChatBottomClearance() {
     const container = document.querySelector<HTMLElement>(".messages")
@@ -76,6 +82,34 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
     }
   }, [isListening, start, stop, onChange])
 
+  const handleImagePick = useCallback(() => {
+    fileRef.current?.click()
+  }, [])
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    for (const f of files) {
+      if (!f.type.startsWith("image/")) continue
+      const reader = new FileReader()
+      reader.onload = () => {
+        const base64 = reader.result as string
+        setImages((prev) => [...prev, { id: `img-${++imgId}`, base64, mime: f.type, name: f.name }])
+      }
+      reader.readAsDataURL(f)
+    }
+    e.target.value = ""
+  }, [])
+
+  const handleRemoveImage = useCallback((id: string) => {
+    setImages((prev) => prev.filter((img) => img.id !== id))
+  }, [])
+
+  const handleSendWithImages = useCallback(() => {
+    onSend(images.length > 0 ? images : undefined)
+    setImages([])
+  }, [onSend, images])
+
   const handleToggleAgent = useCallback(() => {
     if (primaryAgentOptions.length < 2) return
     const next = primaryAgentOptions[0]?.id === activeAgentID ? primaryAgentOptions[1]!.id : primaryAgentOptions[0]!.id
@@ -92,12 +126,34 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault()
-            onSend()
+            handleSendWithImages()
           }
         }}
         disabled={disabled}
       />
+      {images.length > 0 && (
+        <div className="image-strip">
+          {images.map((img) => (
+            <div key={img.id} className="image-preview">
+              <img src={img.base64} alt={img.name} />
+              <button className="image-preview-remove" onClick={() => handleRemoveImage(img.id)}
+                aria-label="Remove"><CloseIcon size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="composer-tools">
+        <input ref={fileRef} type="file" accept="image/*" multiple
+          onChange={handleFileChange} style={{ display: "none" }} />
+        <button onClick={handleImagePick} disabled={disabled}
+          className="image-pick-btn" title="Attach image">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+        </button>
         {primaryAgentOptions.length > 1 && (
           <button onClick={handleToggleAgent} disabled={disabled}
             className={`agent-toggle ${activeAgentID === "plan" ? "agent-plan" : "agent-build"}`}
@@ -127,7 +183,7 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
             <StopCircleIcon size={18} />
           </button>
         )}
-        <button onClick={onSend} disabled={disabled} className="btn-primary">
+        <button onClick={handleSendWithImages} disabled={disabled} className="btn-primary">
           <SendIcon size={18} />
         </button>
       </div>

@@ -81,6 +81,8 @@ export type MessageEnvelope = {
     id: string
     type: string
     text?: string
+    data?: string
+    mimeType?: string
   }>
 }
 

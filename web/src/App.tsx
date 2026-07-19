@@ -298,14 +298,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
   }, [setLanguage])
 
-  const handleSend = useCallback(async () => {
+  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>) => {
     if (!selectedSession) return
     recordPrompt(composer)
     setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "busy" } : s))
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-      setCommands, setRuntimeError)
+      setCommands, setRuntimeError, images)
     if (result === "help") { setHelpPage("commands"); setView("help") }
   }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions])
 
@@ -437,7 +437,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onRenameConfirm={renameSession}
             onRenameCancel={cancelRename}
             onComposerChange={setComposer}
-            onSend={handleSend}
+            onSend={(imgs) => handleSend(imgs)}
             onAbort={handleAbort}
             onTodosToggle={() => setTodosExpanded((v) => !v)}
             onBackToSessions={handleBackFromDetail}
