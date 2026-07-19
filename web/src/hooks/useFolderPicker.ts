@@ -18,7 +18,7 @@ export function useFolderPicker(config: ServerConfig) {
     setPickerLoading(true)
     setPickerError(null)
     try {
-      const items = await api.listFiles(config, path, path)
+      const items = await api.listFiles(config, path)
       setPickerPath(path)
       setPickerItems(items.filter((item) => item.type === "directory").sort((a, b) => a.name.localeCompare(b.name)))
     } catch (err) {
@@ -34,7 +34,12 @@ export function useFolderPicker(config: ServerConfig) {
     setPickerError(null)
     try {
       const pathInfo = await api.loadPath(config, normalizedDirectory)
-      await browseNewSessionDirectory(normalizedDirectory ?? pathInfo.directory)
+      const dir = normalizedDirectory ?? pathInfo.directory
+      if (dir) {
+        const items = await api.listFiles(config, dir)
+        setPickerPath(dir)
+        setPickerItems(items.filter((item) => item.type === "directory").sort((a, b) => a.name.localeCompare(b.name)))
+      }
     } catch (err) {
       setPickerError((err as Error).message)
     }

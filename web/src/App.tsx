@@ -254,6 +254,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   useEffect(() => {
     let h: any
     CapacitorApp.addListener("backButton", async () => {
+      if (showNewSessionPicker) {
+        setShowNewSessionPicker(false)
+        return
+      }
+      if (activeDetailSheet) {
+        setActiveDetailSheet(null)
+        return
+      }
       if (view === "detail") {
         setView("sessions")
       } else {
@@ -269,7 +277,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       }
     }).then((hnd) => { h = hnd })
     return () => { if (h) h.remove() }
-  }, [view])
+  }, [view, showNewSessionPicker, activeDetailSheet])
 
   useEffect(() => {
     let cancelled = false
