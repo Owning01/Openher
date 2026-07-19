@@ -1,4 +1,7 @@
 import { memo, useRef, useCallback, useEffect, useState } from "react"
+import { Capacitor } from "@capacitor/core"
+import { Camera } from "@capacitor/camera"
+import { Filesystem, Directory } from "@capacitor/filesystem"
 import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon, CloseIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
@@ -82,9 +85,27 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
     }
   }, [isListening, start, stop, onChange])
 
-  const handleImagePick = useCallback(() => {
-    fileRef.current?.click()
+  const addImage = useCallback((base64: string, mime: string, name: string) => {
+    setImages((prev) => [...prev, { id: `img-${++imgId}`, base64, mime, name }])
   }, [])
+
+  const handleImagePick = useCallback(async () => {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const photo = await Camera.pickImages({ limit: 4 })
+        for (const p of photo.photos) {
+          const pp = p.path
+          if (!pp) continue
+          const data = await Filesystem.readFile({ path: pp, directory: Directory.Data })
+          addImage(`data:image/jpeg;base64,${data.data}`, "image/jpeg", pp.split("/").pop() || "photo")
+        }
+      } catch (err: any) {
+        if (err.message?.includes("cancel")) return
+      }
+    } else {
+      fileRef.current?.click()
+    }
+  }, [addImage])
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -92,14 +113,11 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
     for (const f of files) {
       if (!f.type.startsWith("image/")) continue
       const reader = new FileReader()
-      reader.onload = () => {
-        const base64 = reader.result as string
-        setImages((prev) => [...prev, { id: `img-${++imgId}`, base64, mime: f.type, name: f.name }])
-      }
+      reader.onload = () => addImage(reader.result as string, f.type, f.name)
       reader.readAsDataURL(f)
     }
     e.target.value = ""
-  }, [])
+  }, [addImage])
 
   const handleRemoveImage = useCallback((id: string) => {
     setImages((prev) => prev.filter((img) => img.id !== id))
