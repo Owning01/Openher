@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react"
+import { STORAGE_KEYS } from "../constants"
 
-const STATS_KEY = "opencode.mobile.stats"
+const STATS_KEY = STORAGE_KEYS.STATS
 
 type UsageStats = {
   promptsSent: number

@@ -1,7 +1,8 @@
 import { memo, useCallback } from "react"
-import { PlayIcon, PencilIcon, TrashIcon, SaveIcon, CloseIcon, StarIcon } from "../Icons"
+import { PlayIcon, PencilIcon, TrashIcon, StarIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { formatTime } from "../utils"
+import { InlineRename } from "./InlineRename"
 import type { SessionView } from "../types"
 
 type SessionCardProps = {
@@ -29,7 +30,6 @@ export const SessionCard = memo(function SessionCard({
   const handleOpen = useCallback(() => onOpen(session.id, session.directory), [session.id, session.directory, onOpen])
   const handleDelete = useCallback(() => onDelete(session), [session, onDelete])
   const handleStartRename = useCallback(() => onStartRename(session), [session, onStartRename])
-  const handleRenameConfirm = useCallback(() => onRenameConfirm(session.id, renameValue, session.directory), [session.id, renameValue, session.directory, onRenameConfirm])
   const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     onToggleFavorite(session.id)
@@ -40,24 +40,11 @@ export const SessionCard = memo(function SessionCard({
       <div className="session-card-main">
         <div className="session-card-info">
           {isRenaming ? (
-            <div className="rename-inline" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
-              <input value={renameValue}
-                onChange={(e) => onRenameChange(e.target.value)}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === "Enter") { e.preventDefault(); handleRenameConfirm() }
-                  else if (e.key === "Escape") onRenameCancel()
-                }}
-                onBlur={() => { if (renameValue === session.title || !renameValue.trim()) onRenameCancel() }}
-                placeholder={t('session.renamePlaceholder')} className="rename-input" autoComplete="off" />
-              <button className="btn-primary compact" onClick={(e) => { e.stopPropagation(); handleRenameConfirm() }}
-                onMouseDown={(e) => e.preventDefault()} title={t('session.renameConfirm')}>
-                <SaveIcon size={14} />
-              </button>
-              <button className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); onRenameCancel() }} title={t('session.cancel')}>
-                <CloseIcon size={14} />
-              </button>
-            </div>
+            <InlineRename value={renameValue} original={session.title}
+              onChange={onRenameChange}
+              onConfirm={() => onRenameConfirm(session.id, renameValue, session.directory)}
+              onCancel={onRenameCancel}
+              placeholder={t('session.renamePlaceholder')} />
           ) : (
             <div className="session-card-title-row">
               <button className="star-btn" onClick={handleToggleFavorite}

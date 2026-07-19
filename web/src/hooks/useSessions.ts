@@ -1,8 +1,9 @@
 import { useState, useCallback, type MutableRefObject } from "react"
 import type { ServerConfig, Session, SessionView, SessionStatus, ModelSelection, ConnectionState } from "../types"
 import { api } from "../api"
+import { STORAGE_KEYS } from "../constants"
 
-const FAVORITES_KEY = "opencode.remote.favorites"
+const FAVORITES_KEY = STORAGE_KEYS.FAVORITES
 
 function loadFavorites(): Set<string> {
   try {

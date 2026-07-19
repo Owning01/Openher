@@ -1,6 +1,7 @@
-import { memo, useEffect, useRef } from "react"
+import { memo, useRef } from "react"
 import { RefreshIcon } from "../Icons"
 import { useT } from "../i18n-context"
+import { useFocusTrap } from "../hooks/useFocusTrap"
 import type { AgentOption, ModelOption } from "../types"
 
 type BottomSheetProps = {
@@ -47,51 +48,7 @@ export const BottomSheet = memo(function BottomSheet({
 }: BottomSheetProps) {
   const t = useT()
   const sheetRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    if (!activeSheet) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose()
-        return
-      }
-      if (e.key === "Tab") {
-        const sheetEl = sheetRef.current
-        if (!sheetEl) return
-        const focusables = sheetEl.querySelectorAll<HTMLElement>(
-          'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]'
-        )
-        if (focusables.length === 0) return
-        const first = focusables[0]!
-        const last = focusables[focusables.length - 1]!
-        if (e.shiftKey) {
-          if (document.activeElement === first) {
-            last.focus()
-            e.preventDefault()
-          }
-        } else {
-          if (document.activeElement === last) {
-            first.focus()
-            e.preventDefault()
-          }
-        }
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown)
-
-    const sheetEl = sheetRef.current
-    if (sheetEl) {
-      const focusables = sheetEl.querySelectorAll<HTMLElement>(
-        'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]'
-      )
-      if (focusables.length > 0) {
-        setTimeout(() => focusables[0]?.focus(), 50)
-      }
-    }
-
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [onClose, activeSheet])
+  useFocusTrap(sheetRef, onClose, !!activeSheet)
 
   if (!activeSheet) return null
 

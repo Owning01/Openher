@@ -1,7 +1,4 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
-import { App as CapacitorApp } from "@capacitor/app"
-import { Dialog } from "@capacitor/dialog"
-import { Network } from "@capacitor/network"
 import { api } from "./api"
 import { I18nProvider, useT, normalizeLanguage } from "./i18n-context"
 import { languageOptions } from "./i18n"
@@ -10,6 +7,7 @@ import { useTheme } from "./hooks/useTheme"
 import { useSessions, modelKey, sameModel } from "./hooks/useSessions"
 import { useAI, agentLabel } from "./hooks/useAI"
 import { useMessages } from "./hooks/useMessages"
+import { useSessionSidecar } from "./hooks/useSessionSidecar"
 import { usePolling } from "./hooks/usePolling"
 import { useCompletionAudio } from "./hooks/useCompletionAudio"
 import { useFolderPicker } from "./hooks/useFolderPicker"
@@ -25,7 +23,11 @@ import { ConfirmModal } from "./components/ConfirmModal"
 import { FolderPicker } from "./components/FolderPicker"
 import type { ViewType, HelpPage as HelpPageType, SessionView } from "./types"
 import type { LanguageCode } from "./i18n"
-import { formatLimit, extractPath, extractName, extractBranch, LANGUAGE_STORAGE_KEY, isSessionActive } from "./utils"
+import { formatLimit, extractPath, extractName, extractBranch, isSessionActive, filterByQuery } from "./utils"
+import { STORAGE_KEYS } from "./constants"
+import { useBackButton } from "./hooks/useBackButton"
+import { useNetworkMode } from "./hooks/useNetworkMode"
+import { useMemoryCleanup } from "./hooks/useMemoryCleanup"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const t = useT()
@@ -53,22 +55,29 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     selectedModelKey, showModelChip, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
 
   const {
-    todos, diffFiles, projectDashboard, dashboardError, composer, setComposer,
-    awaitingAssistantReply, setAwaitingAssistantReply,
-    runtimeError, setRuntimeError, todosExpanded, setTodosExpanded,
-    activeDetailSheet, setActiveDetailSheet,
-    renderedMessages, messageScrollSignature, assistantResponseSignature,
-    totalDiffAdditions, totalDiffDeletions, toolMessage,
-    awaitingAssistantBaselineRef, completionShouldPlayRef,
-    clearSession, loadSelected, loadTodos, loadDiffs, loadDashboard, send, abortSession,
+    composer, setComposer,
+    awaitingAssistantReply,
+    runtimeError, setRuntimeError,
+    renderedMessages, messageScrollSignature,
+    toolMessage, completionShouldPlayRef,
+    clearSession, loadSelected, send, abortSession,
     setMessages
   } = useMessages(config)
+
+  const {
+    todos, diffFiles, projectDashboard, dashboardError,
+    todosExpanded, setTodosExpanded,
+    activeDetailSheet, setActiveDetailSheet,
+    totalDiffAdditions, totalDiffDeletions,
+    loadTodos, loadDiffs, loadDashboard, clearSidecar
+  } = useSessionSidecar(config)
 
   const loadSessionRef = useRef(0)
 
   const onLoadSelected = useCallback(async (id: string, dir: string) => {
     const reqId = ++loadSessionRef.current
     clearSession()
+    clearSidecar()
     await Promise.all([
       loadSelected(id, dir),
       loadAgents(dir).catch(() => undefined),
@@ -76,7 +85,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     ])
     if (reqId !== loadSessionRef.current) return
     loadTodos(id, dir)
-  }, [loadSelected, loadAgents, loadModels, loadTodos, clearSession])
+  }, [loadSelected, loadAgents, loadModels, loadTodos, clearSession, clearSidecar])
 
   const {
     sessions, selectedID, loadingSessionID, refreshingSessions, creatingSession,
@@ -96,7 +105,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
   const [readingMode, setReadingMode] = useState(false)
   const [navBarMode, setNavBarMode] = useState<"header" | "bottom">(() => {
-    const saved = localStorage.getItem("opencode.remote.navbar")
+    const saved = localStorage.getItem(STORAGE_KEYS.NAVBAR)
     return saved === "header" || saved === "bottom" ? saved : "bottom"
   })
 
@@ -165,17 +174,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const recentSessions = useMemo(() => [...sessions].sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 5), [sessions])
 
   const filteredProjects = useMemo(() => {
-    if (!query.trim()) return projects
-    const q = query.toLowerCase()
-    return projects.filter(([dir, sessionsList]) =>
-      dir.toLowerCase().includes(q) || sessionsList.some((s) => s.title.toLowerCase().includes(q))
-    )
+    return filterByQuery(projects, query, ([dir, sessionsList]) => [dir, ...sessionsList.map((s) => s.title)])
   }, [projects, query])
 
   const filteredProjectSessions = useMemo(() => {
-    if (!query.trim()) return projectSessions
-    const q = query.toLowerCase()
-    return projectSessions.filter((s) => s.title.toLowerCase().includes(q) || s.directory.toLowerCase().includes(q))
+    return filterByQuery(projectSessions, query, (s) => [s.title, s.directory])
   }, [projectSessions, query])
 
   const projectPath = extractPath(projectDashboard)
@@ -218,32 +221,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     return () => { cancelled = true }
   }, [config.host, config.port, config.username, config.password, dataMode])
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      const cutoff = Date.now() - 5 * 60 * 1000
-      setMessages((prev) => {
-        const relevant = prev.filter((m) => m.info.sessionID === selectedSession?.id)
-        if (relevant.length === 0) return []
-        const stale = prev.filter((m) => {
-          if (m.info.sessionID === selectedSession?.id) return true
-          return (m.info.time.created || 0) > cutoff
-        })
-        return stale.length === prev.length ? prev : stale
-      })
-    }, 60000)
-    return () => clearInterval(id)
-  }, [selectedSession?.id, setMessages])
+  useMemoryCleanup(selectedSession?.id ?? null, setMessages)
 
   useEffect(() => {
     if (!hasConfiguredServer) setView("settings")
   }, [hasConfiguredServer])
-
-  useEffect(() => {
-    if (!awaitingAssistantReply) return
-    if (assistantResponseSignature && assistantResponseSignature !== awaitingAssistantBaselineRef.current) {
-      setAwaitingAssistantReply(false)
-    }
-  }, [assistantResponseSignature, awaitingAssistantReply])
 
   useEffect(() => {
     if (activeDetailSheet !== "details" || !selectedSession) return
@@ -251,59 +233,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     loadDashboard(selectedSession.directory)
   }, [activeDetailSheet, selectedSession?.id, selectedSession?.directory])
 
-  useEffect(() => {
-    let h: any
-    CapacitorApp.addListener("backButton", async () => {
-      if (showNewSessionPicker) {
-        setShowNewSessionPicker(false)
-        return
-      }
-      if (activeDetailSheet) {
-        setActiveDetailSheet(null)
-        return
-      }
-      if (view === "detail") {
-        setView("sessions")
-      } else {
-        const result = await Dialog.confirm({
-          title: t('app.exitTitle'),
-          message: t('app.exitMessage'),
-          okButtonTitle: t('app.exitOk'),
-          cancelButtonTitle: t('app.exitCancel')
-        })
-        if (result.value) {
-          CapacitorApp.exitApp()
-        }
-      }
-    }).then((hnd) => { h = hnd })
-    return () => { if (h) h.remove() }
-  }, [view, showNewSessionPicker, activeDetailSheet])
+  useBackButton({
+    view, showNewSessionPicker, activeDetailSheet,
+    onClosePicker: () => setShowNewSessionPicker(false),
+    onCloseSheet: () => setActiveDetailSheet(null),
+    onBackToSessions: () => setView("sessions")
+  })
 
-  useEffect(() => {
-    let cancelled = false
-    Network.getStatus().then((s) => {
-      if (cancelled) return
-      if (s.connectionType === "cellular") {
-        changeDataMode("ultra")
-      } else if (s.connectionType === "wifi") {
-        changeDataMode("full")
-      }
-    })
-    let netH: any
-    Network.addListener("networkStatusChange", (s) => {
-      if (cancelled) return
-      if (s.connectionType === "cellular") {
-        changeDataMode("ultra")
-      } else if (s.connectionType === "wifi") {
-        changeDataMode("full")
-      }
-    }).then((hnd) => { netH = hnd })
-    return () => { cancelled = true; if (netH) netH.remove() }
-  }, [changeDataMode])
+  useNetworkMode(changeDataMode)
 
   const handleLanguageChange = useCallback((lang: LanguageCode) => {
     setLanguage(lang)
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
+    localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang)
   }, [setLanguage])
 
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>) => {
@@ -345,12 +286,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     openSession(id, dir).catch(() => undefined)
   }, [openSession])
 
-  const handleBackFromDetail = useCallback(() => {
-    setView("sessions")
-  }, [])
-
   const handleTest = useCallback(() => testConnection(t), [testConnection, t])
-  const handleCloseSheet = useCallback(() => setActiveDetailSheet(null), [])
 
   const handleNavigate = useCallback((target: ViewType) => {
     if (target === "sessions") setSelectedProjectDir(null)
@@ -381,7 +317,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           modelOptions={modelOptions} selectedModelKey={selectedModelKey}
           onChangeModel={changeModel} modelKey={modelKey}
           stats={stats} onResetStats={resetStats}
-          navBarMode={navBarMode} onNavBarModeChange={(m) => { setNavBarMode(m); localStorage.setItem("opencode.remote.navbar", m) }} />
+          navBarMode={navBarMode} onNavBarModeChange={(m) => { setNavBarMode(m); localStorage.setItem(STORAGE_KEYS.NAVBAR, m) }} />
       )}
 
       {view === "sessions" && (
@@ -448,7 +384,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onSend={(imgs) => handleSend(imgs)}
             onAbort={handleAbort}
             onTodosToggle={() => setTodosExpanded((v) => !v)}
-            onBackToSessions={handleBackFromDetail}
+            onBackToSessions={() => setView("sessions")}
             onSheetOpen={setActiveDetailSheet}
             recentSessions={recentSessions} activeSessions={activeSessions}
             onOpenSession={handleOpenSession}
@@ -456,7 +392,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onExportChat={handleExportChat} onSnapshot={handleSnapshot} />
           <BottomSheet
             activeSheet={activeDetailSheet}
-            onClose={handleCloseSheet}
+            onClose={() => setActiveDetailSheet(null)}
             agentOptions={agentOptions}
             agentLoadError={agentLoadError}
             activeAgentID={activeAgentID}
@@ -514,7 +450,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
 export default function App() {
   const [language, setLanguage] = useState<LanguageCode>(() =>
-    normalizeLanguage(localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'es')
+    normalizeLanguage(localStorage.getItem(STORAGE_KEYS.LANGUAGE) || 'es')
   )
   return (
     <I18nProvider language={language}>

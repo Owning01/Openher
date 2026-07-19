@@ -3,6 +3,7 @@ import { PlusIcon, FolderIcon, LoadingIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FileEntry } from "../types"
 import { Modal } from "./Modal"
+import { ErrorNotice } from "./ErrorNotice"
 
 type FolderPickerProps = {
   pickerPath: string
@@ -46,7 +47,7 @@ export const FolderPicker = memo(function FolderPicker({
             {t('sessions.useThisFolder')}
           </button>
         </div>
-        {pickerError && <div className="error fade-in">✗ {pickerError}</div>}
+        <ErrorNotice message={pickerError} />
         <div className="folder-list">
           {pickerLoading ? (
             <div className="empty-state compact"><LoadingIcon size={28} /><p>{t('sessions.folderPickerLoading')}</p></div>

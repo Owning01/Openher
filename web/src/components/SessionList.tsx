@@ -1,7 +1,11 @@
 import { memo, useRef, useLayoutEffect } from "react"
-import { RefreshIcon, PlusIcon, LoadingIcon, FolderIcon, ChatIcon } from "../Icons"
+import { LoadingIcon, FolderIcon, ChatIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
+import { ConnectionNotices } from "./ConnectionNotices"
+import { SessionToolbar } from "./SessionToolbar"
+import { DataModeSwitcher } from "./DataModeSwitcher"
+import { ErrorNotice } from "./ErrorNotice"
 import { formatTime, isSessionActive, hasFileChanges } from "../utils"
 import type { SessionView, ConnectionState, DataMode } from "../types"
 
@@ -58,8 +62,26 @@ export const SessionList = memo(function SessionList({
     prevProjectDir.current = selectedProjectDir
   }, [selectedProjectDir])
 
+  const notices = <ConnectionNotices connectionState={connectionState} />
+
+  const sessionCards = projectSessions.length === 0 ? (
+    <div className="empty-state">
+      <FolderIcon size={48} className="icon-empty-state" />
+      <p>{t('sessions.emptyTitle')}</p>
+      <p className="subtle">{t('sessions.emptyHint')}</p>
+    </div>
+  ) : (
+    projectSessions.map((session) => (
+      <SessionCard key={session.id} session={session} isSelected={selectedID === session.id}
+        isRenaming={renamingSessionID === session.id} renameValue={renameValue}
+        isFavorite={favorites.has(session.id)}
+        onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
+        onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
+        onToggleFavorite={onToggleFavorite} />
+    ))
+  )
+
   if (selectedProjectDir) {
-    // Sessions for selected project
     return (
       <section ref={containerRef} className="panel sessions fade-in">
         <div className="section-heading">
@@ -70,94 +92,26 @@ export const SessionList = memo(function SessionList({
               <span style={{ marginLeft: 'var(--space-3)' }}>{projectSessions.length} sessions</span>
             </p>
           </div>
-          <div className="inline-actions">
-            <button onClick={onRefresh} className="btn-secondary" disabled={refreshingSessions}>
-              {refreshingSessions ? <LoadingIcon size={18} /> : <RefreshIcon size={18} />}
-              {t('sessions.refresh')}
-            </button>
-            <button onClick={onNewSession} className="btn-primary" disabled={creatingSession}>
-              {creatingSession ? <LoadingIcon size={18} /> : <PlusIcon size={18} />}
-              {creatingSession ? t('sessions.creating') : t('sessions.new')}
-            </button>
-          </div>
+          <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
+            onRefresh={onRefresh} onNewSession={onNewSession} />
         </div>
-
-        <div className="mode-switcher">
-        <span className="mode-label">{t('settings.mode')}:</span>
-          {(["full", "saver", "ultra", "miser"] as const).map((m) => (
-            <button key={m} className={`mode-btn${dataMode === m ? " active" : ""}`}
-              onClick={() => onDataModeChange(m)}
-              aria-pressed={dataMode === m}>
-              {m === "full" ? "Full" : m === "saver" ? "Saver" : m === "ultra" ? "ULTRA" : "Miser"}
-            </button>
-          ))}
-        </div>
-
+        <DataModeSwitcher mode={dataMode} onChange={onDataModeChange} />
         <div className="toolbar">
           <input placeholder={t('sessions.searchPlaceholder')} value={query}
             onChange={(e) => onQueryChange(e.target.value)} className="search" />
         </div>
-
-        {connectionState === "offline" && (
-          <div className="notice error fade-in" style={{ marginBottom: 'var(--space-3)' }}>
-            ✗ {t('connection.offline')}
-          </div>
-        )}
-        {connectionState === "reconnecting" && (
-          <div className="notice info fade-in" style={{ marginBottom: 'var(--space-3)' }}>
-            ℹ {t('connection.reconnecting')}
-          </div>
-        )}
-
-        <div className="session-list">
-          {projectSessions.length === 0 ? (
-            <div className="empty-state">
-              <FolderIcon size={48} className="icon-empty-state" />
-              <p>{t('sessions.emptyTitle')}</p>
-              <p className="subtle">{t('sessions.emptyHint')}</p>
-            </div>
-          ) : (
-            projectSessions.map((session) => (
-              <SessionCard key={session.id} session={session} isSelected={selectedID === session.id}
-                isRenaming={renamingSessionID === session.id} renameValue={renameValue}
-                isFavorite={favorites.has(session.id)}
-                onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
-                onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
-                onToggleFavorite={onToggleFavorite} />
-            ))
-          )}
-        </div>
-
-        {runtimeError && <div className="error fade-in">✗ {runtimeError}</div>}
+        {notices}
+        <div className="session-list">{sessionCards}</div>
+        <ErrorNotice message={runtimeError} />
       </section>
     )
   }
 
-  // Projects list
   return (
     <section ref={containerRef} className="panel sessions fade-in">
-      <div className="inline-actions">
-        <button onClick={onRefresh} className="btn-secondary" disabled={refreshingSessions}>
-          {refreshingSessions ? <LoadingIcon size={18} /> : <RefreshIcon size={18} />}
-          {t('sessions.refresh')}
-        </button>
-        <button onClick={onNewSession} className="btn-primary" disabled={creatingSession}>
-          {creatingSession ? <LoadingIcon size={18} /> : <PlusIcon size={18} />}
-          {creatingSession ? t('sessions.creating') : t('sessions.new')}
-        </button>
-      </div>
-
-      <div className="mode-switcher">
-        <span className="mode-label">{t('settings.mode')}:</span>
-        {(["full", "saver", "ultra", "miser"] as const).map((m) => (
-          <button key={m} className={`mode-btn${dataMode === m ? " active" : ""}`}
-            onClick={() => onDataModeChange(m)}
-            aria-pressed={dataMode === m}>
-            {m === "full" ? "Full" : m === "saver" ? "Saver" : m === "ultra" ? "ULTRA" : "Miser"}
-          </button>
-        ))}
-      </div>
-
+      <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
+        onRefresh={onRefresh} onNewSession={onNewSession} />
+      <DataModeSwitcher mode={dataMode} onChange={onDataModeChange} />
       <div className="toolbar">
         <input placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />
@@ -165,17 +119,7 @@ export const SessionList = memo(function SessionList({
       <div className="sessions-summary-bar">
         {t('sessions.summary', { total: sessions.length, active: activeSessions.length, changed: sessions.filter((s) => hasFileChanges(s)).length })}
       </div>
-
-      {connectionState === "offline" && (
-        <div className="notice error fade-in" style={{ marginBottom: 'var(--space-3)' }}>
-          ✗ {t('connection.offline')}
-        </div>
-      )}
-      {connectionState === "reconnecting" && (
-        <div className="notice info fade-in" style={{ marginBottom: 'var(--space-3)' }}>
-          ℹ {t('connection.reconnecting')}
-        </div>
-      )}
+      {notices}
 
       {!selectedProjectDir && !query.trim() && (activeSessions.length > 0 || recentSessions.length > 0) && (
         <div className="quick-access">
@@ -246,7 +190,7 @@ export const SessionList = memo(function SessionList({
         )}
       </div>
 
-      {runtimeError && <div className="error fade-in">✗ {runtimeError}</div>}
+      <ErrorNotice message={runtimeError} />
     </section>
   )
 })

@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react"
 import type { ServerConfig, FileEntry } from "../types"
 import { api } from "../api"
+import { STORAGE_KEYS } from "../constants"
 
-const CURSOR_STORAGE_KEY = "opencode.remote.cursor"
+const CURSOR_STORAGE_KEY = STORAGE_KEYS.CURSOR
 
 export function useFolderPicker(config: ServerConfig) {
   const [newSessionDirectory, setNewSessionDirectory] = useState(() => localStorage.getItem(CURSOR_STORAGE_KEY) ?? "")

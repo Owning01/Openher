@@ -2194,11 +2194,19 @@ button.compact {
     border-radius: var(--radius-md);
   }
 
-  .panel:not(.settings) {
+  .panel:not(.settings):not(.detail) {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .panel.detail {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .section-heading,
@@ -2267,14 +2275,7 @@ button.compact {
     grid-template-columns: 1fr auto;
     margin-left: calc(var(--space-2) * -1);
     margin-right: calc(var(--space-2) * -1);
-  }
-
-  .app-shell[data-navbar="bottom"] .composer {
-    bottom: calc(72px + env(safe-area-inset-bottom));
-  }
-
-  .app-shell[data-navbar="header"] .composer {
-    bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+    position: static;
   }
 
   .composer textarea {

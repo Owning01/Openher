@@ -1,17 +1,14 @@
 import { memo, useCallback, useMemo } from "react"
-import { ChatIcon, PencilIcon, SaveIcon, CloseIcon, FolderIcon, ShareIcon } from "../Icons"
+import { ChatIcon, PencilIcon, SaveIcon, FolderIcon, ShareIcon } from "../Icons"
 import { useT } from "../i18n-context"
+import { formatLimit } from "../utils"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
 import { TodoBox } from "./TodoBox"
+import { InlineRename } from "./InlineRename"
+import { ErrorNotice } from "./ErrorNotice"
 
 import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode } from "../types"
-
-function formatK(n: number): string {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
-}
 
 type ChatViewProps = {
   selectedSession: SessionView | null
@@ -106,25 +103,11 @@ export const ChatView = memo(function ChatView({
               <div className="detail-title-row">
                 <ChatIcon size={24} className="icon-inline-heading" />
                 {renamingSessionID === selectedSession.id ? (
-                  <div className="rename-inline">
-                    <input value={renameValue}
-                      onChange={(e) => onRenameChange(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") { e.preventDefault(); onRenameConfirm(selectedSession.id, renameValue, selectedSession.directory) }
-                        else if (e.key === "Escape") onRenameCancel()
-                      }}
-                      onBlur={() => {
-                        if (renameValue === selectedSession.title || !renameValue.trim()) onRenameCancel()
-                      }}
-                      placeholder={t('session.renamePlaceholder')} className="rename-input" autoComplete="off" />
-                    <button className="btn-primary compact" onClick={() => onRenameConfirm(selectedSession.id, renameValue, selectedSession.directory)}
-                      onMouseDown={(e) => e.preventDefault()} title={t('session.renameConfirm')}>
-                      <SaveIcon size={14} />
-                    </button>
-                    <button className="btn-secondary compact" onClick={onRenameCancel} title={t('session.cancel')}>
-                      <CloseIcon size={14} />
-                    </button>
-                  </div>
+                  <InlineRename value={renameValue} original={selectedSession.title}
+                    onChange={onRenameChange}
+                    onConfirm={() => onRenameConfirm(selectedSession.id, renameValue, selectedSession.directory)}
+                    onCancel={onRenameCancel}
+                    placeholder={t('session.renamePlaceholder')} />
                 ) : (
                   <>
                     {selectedSession.title}
@@ -186,7 +169,7 @@ export const ChatView = memo(function ChatView({
             <div className={`context-bar-fill ${contextInfo.pct > 85 ? "high" : contextInfo.pct > 60 ? "mid" : ""}`}
               style={{ width: `${contextInfo.pct}%` }} />
           </div>
-          <span className="context-bar-label">{formatK(contextInfo.used)} / {formatK(contextInfo.limit)} tokens</span>
+          <span className="context-bar-label">{formatLimit(contextInfo.used, 1)} / {formatLimit(contextInfo.limit, 1)} tokens</span>
         </div>
       )}
 
@@ -238,7 +221,7 @@ export const ChatView = memo(function ChatView({
         />
       )}
 
-      {runtimeError && <div className="error fade-in">✗ {runtimeError}</div>}
+      <ErrorNotice message={runtimeError} />
     </main>
   )
 })

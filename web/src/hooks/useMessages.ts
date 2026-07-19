@@ -1,11 +1,7 @@
-import { useState, useCallback, useMemo, useRef } from "react"
-import type { ServerConfig, MessageEnvelope, ModelSelection, TodoItem, DiffFile, ProjectDashboard, RenderedMessage, SessionView } from "../types"
+import { useState, useCallback, useMemo, useRef, useEffect } from "react"
+import type { ServerConfig, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
 import { api } from "../api"
-
-let idCounter = 0
-function uniqueId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${++idCounter}`
-}
+import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "../utils/parseCommand"
 
 function extractText(msg: MessageEnvelope): string {
   return msg.parts
@@ -22,23 +18,12 @@ export function assistantPayloadLength(items: MessageEnvelope[]): number {
     .reduce((sum, message) => sum + extractText(message).length, 0)
 }
 
-function toFileStatusList(input: unknown[] | Record<string, unknown>): Array<{ path: string; [key: string]: unknown }> {
-  if (Array.isArray(input)) return input as Array<{ path: string; [key: string]: unknown }>
-  return Object.entries(input).map(([path, value]) => ({ path, ...(value as object) }))
-}
-
 export function useMessages(config: ServerConfig) {
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<MessageEnvelope[]>([])
-  const [todos, setTodos] = useState<TodoItem[]>([])
-  const [diffFiles, setDiffFiles] = useState<DiffFile[]>([])
-  const [projectDashboard, setProjectDashboard] = useState<ProjectDashboard | null>(null)
-  const [dashboardError, setDashboardError] = useState<string | null>(null)
   const [composer, setComposer] = useState("")
   const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
-  const [todosExpanded, setTodosExpanded] = useState(false)
-  const [activeDetailSheet, setActiveDetailSheet] = useState<null | "ai" | "details">(null)
 
   const loadSelectedRequestRef = useRef(0)
   const awaitingAssistantBaselineRef = useRef("")
@@ -62,9 +47,6 @@ export function useMessages(config: ServerConfig) {
       .join("|")
   }, [renderedMessages])
 
-  const totalDiffAdditions = diffFiles.reduce((sum, file) => sum + file.additions, 0)
-  const totalDiffDeletions = diffFiles.reduce((sum, file) => sum + file.deletions, 0)
-
   const toolTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
   const toolMessage = useMemo(() => {
@@ -78,16 +60,18 @@ export function useMessages(config: ServerConfig) {
     return null
   }, [messages])
 
+  useEffect(() => {
+    if (!awaitingAssistantReply) return
+    if (assistantResponseSignature && assistantResponseSignature !== awaitingAssistantBaselineRef.current) {
+      setAwaitingAssistantReply(false)
+    }
+  }, [assistantResponseSignature, awaitingAssistantReply])
+
   const clearSession = useCallback(() => {
     setMessages([])
     setOptimisticUserMessages([])
-    setTodos([])
-    setDiffFiles([])
-    setProjectDashboard(null)
-    setDashboardError(null)
     setAwaitingAssistantReply(false)
     setRuntimeError(null)
-    setActiveDetailSheet(null)
   }, [])
 
   const loadSelected = useCallback(async (sessionID: string, directory: string) => {
@@ -134,33 +118,9 @@ export function useMessages(config: ServerConfig) {
     }
   }, [config])
 
-  const loadTodos = useCallback(async (sessionID: string, directory: string) => {
-    const t = await api.loadTodo(config, sessionID, directory).catch(() => [] as TodoItem[])
-    setTodos(t)
-  }, [config])
-
-  const loadDiffs = useCallback(async (sessionID: string, directory: string) => {
-    const d = await api.loadDiff(config, sessionID, directory).catch(() => [] as DiffFile[])
-    setDiffFiles(d)
-  }, [config])
-
-  const loadDashboard = useCallback(async (directory: string) => {
-    setDashboardError(null)
-    try {
-      const [project, vcs, fileStatus] = await Promise.all([
-        api.loadProjectCurrent(config, directory).catch(() => null),
-        api.loadVcs(config, directory).catch(() => null),
-        api.loadFileStatus(config, directory).catch(() => [] as unknown[])
-      ])
-      setProjectDashboard({
-        project: project as ProjectDashboard["project"],
-        vcs: vcs as ProjectDashboard["vcs"],
-        files: toFileStatusList(fileStatus as unknown[] | Record<string, unknown>)
-      })
-    } catch (err) {
-      setDashboardError((err as Error).message)
-    }
-  }, [config])
+  const removeOptimistic = useCallback((id: string) => {
+    setOptimisticUserMessages((current) => current.filter((m) => m.info.id !== id))
+  }, [])
 
   const send = useCallback(async (
     selectedSession: SessionView,
@@ -176,17 +136,7 @@ export function useMessages(config: ServerConfig) {
     const text = composer.trim()
     if ((!text || !selectedSession) && (!images || images.length === 0)) return
 
-    const now = Date.now()
-    const parts: MessageEnvelope["parts"] = text ? [{ id: uniqueId("optimistic-part"), type: "text", text }] : []
-    if (images) {
-      for (const img of images) {
-        parts.push({ id: uniqueId("img-part"), type: "image", data: img.base64, mimeType: img.mime })
-      }
-    }
-    const optimisticMessage: MessageEnvelope = {
-      info: { id: uniqueId("optimistic"), role: "user", sessionID: selectedSession.id, time: { created: now } },
-      parts
-    }
+    const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
 
     const doSend = async (
       sendFn: () => Promise<unknown>,
@@ -201,63 +151,38 @@ export function useMessages(config: ServerConfig) {
       try {
         await sendFn()
         await then()
-        setOptimisticUserMessages((current) => current.filter((m) => m.info.id !== optimisticMessage.info.id))
+        removeOptimistic(optimisticMessage.info.id)
         await onRefreshSessions()
       } catch (err) {
         completionShouldPlayRef.current = false
         setAwaitingAssistantReply(false)
-        setOptimisticUserMessages((current) => current.filter((m) => m.info.id !== optimisticMessage.info.id))
+        removeOptimistic(optimisticMessage.info.id)
         setComposer((current) => current || text)
         onSetRuntimeError((err as Error).message)
       }
     }
 
-    if (text.startsWith("/")) {
-      const normalized = text.slice(1)
-      const command = normalized.split(" ")[0]?.trim() ?? ""
-      const args = normalized.slice(command.length).trim()
-      const localCommand = command.toLowerCase()
-
-      if (["help", "commands", "skills"].includes(localCommand)) {
-        setComposer("")
-        return "help"
-      }
-
-      if (localCommand === "status") {
-        setComposer("")
-        const status = [
-          `Session: ${selectedSession.title} (${selectedSession.status})`,
-          `Directory: ${selectedSession.directory}`,
-        ].join("\n")
-        const assistantMsg: MessageEnvelope = {
-          info: { id: uniqueId("local-assistant"), role: "assistant", sessionID: selectedSession.id, time: { created: now, completed: now } },
-          parts: [{ id: uniqueId("local-assistant-part"), type: "text", text: status }]
-        }
-        setOptimisticUserMessages((current) => [...current, optimisticMessage, assistantMsg])
-        return
-      }
-
-      let availableCommands = commands
-      if (availableCommands.length === 0) {
-        try {
-          availableCommands = await api.listCommands(config)
-          onSetCommands(availableCommands)
-        } catch (err) {
-          // commands not available, send as prompt instead
-        }
-      }
-
-      if (!availableCommands.some((item) => item.name === command)) {
-        // Unknown command — send as normal prompt (strip the /)
+    const parsed = parseCommand(text)
+    if (parsed?.type === "help") {
+      setComposer("")
+      return "help"
+    }
+    if (parsed?.type === "status") {
+      setComposer("")
+      setOptimisticUserMessages((current) => [...current, optimisticMessage, buildStatusMessage(selectedSession)])
+      return
+    }
+    if (parsed?.type === "command") {
+      const { isKnown } = await resolveCommand(config, parsed.command, commands, onSetCommands)
+      if (!isKnown) {
         await doSend(
           () => api.sendPrompt(config, selectedSession.id, text.slice(1), selectedSession.directory, activeModel, activeAgentID),
           () => onLoadSelected()
         )
         return
       }
-
       await doSend(
-        () => api.sendCommand(config, selectedSession.id, command, args, selectedSession.directory, activeModel, activeAgentID),
+        () => api.sendCommand(config, selectedSession.id, parsed.command, parsed.args, selectedSession.directory, activeModel, activeAgentID),
         () => onLoadSelected()
       )
       return
@@ -267,7 +192,7 @@ export function useMessages(config: ServerConfig) {
       () => api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID, images),
       () => onLoadSelected()
     )
-  }, [composer, config, assistantResponseSignature])
+  }, [composer, config, assistantResponseSignature, removeOptimistic])
 
   const abortSession = useCallback(async (sessionID: string, directory: string) => {
     try {
@@ -281,14 +206,11 @@ export function useMessages(config: ServerConfig) {
 
   return {
     messages, setMessages, optimisticUserMessages,
-    todos, setTodos, diffFiles, setDiffFiles, projectDashboard, setProjectDashboard,
-    dashboardError, setDashboardError, composer, setComposer,
+    composer, setComposer,
     awaitingAssistantReply, setAwaitingAssistantReply,
-    runtimeError, setRuntimeError, todosExpanded, setTodosExpanded,
-    activeDetailSheet, setActiveDetailSheet,
+    runtimeError, setRuntimeError,
     renderedMessages, messageScrollSignature, assistantResponseSignature,
-    totalDiffAdditions, totalDiffDeletions, toolMessage,
-    loadSelectedRequestRef, awaitingAssistantBaselineRef, completionShouldPlayRef,
-    clearSession, loadSelected, loadTodos, loadDiffs, loadDashboard, send, abortSession
+    toolMessage, completionShouldPlayRef,
+    clearSession, loadSelected, send, abortSession
   }
 }

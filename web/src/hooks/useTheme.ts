@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import type { ThemePreference } from "../types"
-
-const THEME_STORAGE_KEY = "opencode.remote.theme"
+import { STORAGE_KEYS } from "../constants"
 
 function scheduledTheme(): "light" | "dark" {
   const hour = new Date().getHours()
@@ -10,7 +9,7 @@ function scheduledTheme(): "light" | "dark" {
 
 export function useTheme() {
   const [theme, setTheme] = useState<ThemePreference>(() => {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY)
+    const saved = localStorage.getItem(STORAGE_KEYS.THEME)
     return saved === "light" || saved === "dark" || saved === "system" || saved === "scheduled" ? saved : "system"
   })
   const [scheduledTick, setScheduledTick] = useState(0)
@@ -30,7 +29,7 @@ export function useTheme() {
   }, [resolvedTheme])
 
   useEffect(() => {
-    localStorage.setItem(THEME_STORAGE_KEY, theme)
+    localStorage.setItem(STORAGE_KEYS.THEME, theme)
     applyTheme()
     if (theme === "system") {
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")

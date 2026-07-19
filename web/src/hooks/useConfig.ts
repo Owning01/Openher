@@ -3,9 +3,8 @@ import { Capacitor } from "@capacitor/core"
 import { Directory, Filesystem } from "@capacitor/filesystem"
 import type { ServerConfig, ConnectionState, NoticeType, DataMode } from "../types"
 import { api } from "../api"
+import { STORAGE_KEYS } from "../constants"
 
-const STORAGE_KEY = "opencode.remote.server"
-const DATA_MODE_KEY = "opencode.remote.dataMode"
 const CONFIG_FILENAME = "opencode-mobile-config.json"
 
 const defaultConfig: ServerConfig = {
@@ -30,7 +29,7 @@ export function canTestConfig(config: ServerConfig): boolean {
 
 function readConfigFromFile(): ServerConfig | null {
   try {
-    const raw = localStorage.getItem(`${STORAGE_KEY}_file`)
+    const raw = localStorage.getItem(STORAGE_KEYS.SERVER_FILE)
     if (!raw) return null
     return JSON.parse(raw)
   } catch {
@@ -39,7 +38,7 @@ function readConfigFromFile(): ServerConfig | null {
 }
 
 function writeConfigToFile(config: ServerConfig) {
-  localStorage.setItem(`${STORAGE_KEY}_file`, JSON.stringify(config))
+  localStorage.setItem(STORAGE_KEYS.SERVER_FILE, JSON.stringify(config))
 }
 
 async function readConfigFromExternal(): Promise<ServerConfig | null> {
@@ -70,7 +69,7 @@ async function writeConfigToExternal(config: ServerConfig) {
 }
 
 function loadInitialConfig(): ServerConfig {
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = localStorage.getItem(STORAGE_KEYS.SERVER)
   if (stored) {
     try { return { ...defaultConfig, ...JSON.parse(stored) } } catch { }
   }
@@ -78,7 +77,7 @@ function loadInitialConfig(): ServerConfig {
 }
 
 function loadInitialDataMode(): DataMode {
-  const saved = localStorage.getItem(DATA_MODE_KEY)
+  const saved = localStorage.getItem(STORAGE_KEYS.DATA_MODE)
   return saved === "full" || saved === "saver" || saved === "ultra" || saved === "miser" ? saved : "saver"
 }
 
@@ -108,7 +107,7 @@ export function useConfig() {
         }
         return
       }
-      const currentRaw = localStorage.getItem(STORAGE_KEY)
+      const currentRaw = localStorage.getItem(STORAGE_KEYS.SERVER)
       if (currentRaw) {
         try {
           const current = JSON.parse(currentRaw)
@@ -117,7 +116,7 @@ export function useConfig() {
       }
       setConfig(restored)
       setDraftConfig(restored)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(restored))
+      localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(restored))
     })
   }, [])
 
@@ -130,7 +129,7 @@ export function useConfig() {
 
   const saveConfig = useCallback(() => {
     setConfig(draftConfig)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(draftConfig))
+    localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(draftConfig))
     writeConfigToFile(draftConfig)
     writeConfigToExternal(draftConfig)
     setSettingsNotice({ type: "success", text: "Configuration saved. It will be used for Sessions." })
@@ -165,7 +164,7 @@ export function useConfig() {
 
   const changeDataMode = useCallback((mode: DataMode) => {
     setDataMode(mode)
-    localStorage.setItem(DATA_MODE_KEY, mode)
+    localStorage.setItem(STORAGE_KEYS.DATA_MODE, mode)
   }, [])
 
   return {

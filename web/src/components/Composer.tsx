@@ -199,6 +199,7 @@ export const Composer = memo(function Composer({ value, onChange, onSend, onAbor
             <StopCircleIcon size={18} />
           </button>
         )}
+        {/* onClick={onSend} */}
         <button onClick={handleSendWithImages} disabled={disabled} className="btn-primary">
           <SendIcon size={18} />
         </button>

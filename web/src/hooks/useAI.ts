@@ -2,9 +2,7 @@ import { useState, useCallback, useMemo } from "react"
 import type { ServerConfig, AgentOption, ModelOption } from "../types"
 import { api } from "../api"
 import { modelKey, sameModel, modelFromKey } from "./useSessions"
-
-const MODEL_STORAGE_KEY = "opencode.remote.model"
-const AGENT_STORAGE_KEY = "opencode.remote.agent"
+import { STORAGE_KEYS } from "../constants"
 
 function modelSearchText(option: ModelOption): string {
   return [option.modelName, option.modelID, option.providerName, option.providerID, option.variant ?? ""].join(" ").toLowerCase()
@@ -15,24 +13,25 @@ export function agentLabel(agent: AgentOption): string {
 }
 
 function agentStorageKey(directory?: string): string {
-  return directory ? `${AGENT_STORAGE_KEY}.${encodeURIComponent(directory)}` : AGENT_STORAGE_KEY
+  return directory ? `${STORAGE_KEYS.AGENT}.${encodeURIComponent(directory)}` : STORAGE_KEYS.AGENT
+}
+
+function filterPrimary(agents: AgentOption[]): AgentOption[] {
+  return agents.filter((agent) => agent.mode === "primary" || agent.mode === "all")
 }
 
 export function useAI(config: ServerConfig) {
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([])
   const [agentLoadError, setAgentLoadError] = useState<string | null>(null)
-  const [selectedAgentID, setSelectedAgentID] = useState<string>(() => localStorage.getItem(AGENT_STORAGE_KEY) || "build")
+  const [selectedAgentID, setSelectedAgentID] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.AGENT) || "build")
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
   const [modelLoadError, setModelLoadError] = useState<string | null>(null)
-  const [selectedModelKey, setSelectedModelKey] = useState<string | null>(() => localStorage.getItem(MODEL_STORAGE_KEY))
+  const [selectedModelKey, setSelectedModelKey] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.MODEL))
   const [modelQuery, setModelQuery] = useState("")
 
   const selectedModel = useMemo(() => modelFromKey(selectedModelKey), [selectedModelKey])
 
-  const primaryAgentOptions = useMemo(
-    () => agentOptions.filter((agent) => agent.mode === "primary" || agent.mode === "all"),
-    [agentOptions]
-  )
+  const primaryAgentOptions = useMemo(() => filterPrimary(agentOptions), [agentOptions])
 
   const activeAgent = useMemo(() => {
     return primaryAgentOptions.find((agent) => agent.id === selectedAgentID)
@@ -72,8 +71,8 @@ export function useAI(config: ServerConfig) {
       const list = await api.listAgents(config, directory)
       setAgentOptions(list)
       setAgentLoadError(null)
-      const saved = localStorage.getItem(agentStorageKey(directory)) || localStorage.getItem(AGENT_STORAGE_KEY) || "build"
-      const primary = list.filter((agent) => agent.mode === "primary" || agent.mode === "all")
+      const saved = localStorage.getItem(agentStorageKey(directory)) || localStorage.getItem(STORAGE_KEYS.AGENT) || "build"
+      const primary = filterPrimary(list)
       const next = primary.find((agent) => agent.id === saved) ?? primary.find((agent) => agent.id === "build") ?? primary[0]
       if (next) {
         setSelectedAgentID(next.id)
@@ -96,7 +95,7 @@ export function useAI(config: ServerConfig) {
       if (fallback) {
         const nextKey = modelKey(fallback)
         setSelectedModelKey(nextKey)
-        localStorage.setItem(MODEL_STORAGE_KEY, nextKey)
+        localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
       }
     } catch (err) {
       setModelLoadError((err as Error).message)
@@ -105,7 +104,7 @@ export function useAI(config: ServerConfig) {
 
   const changeModel = useCallback((nextKey: string) => {
     setSelectedModelKey(nextKey)
-    localStorage.setItem(MODEL_STORAGE_KEY, nextKey)
+    localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
   }, [])
 
   const changeAgent = useCallback((nextAgentID: string, directory?: string) => {
