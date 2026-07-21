@@ -128,6 +128,8 @@ type TranslationKey =
   | 'detail.modelSearchPlaceholder'
   | 'detail.modelSearchEmpty'
   | 'detail.modelDefault'
+  | 'detail.modelRecent'
+  | 'detail.modelAll'
   | 'detail.modelProvider'
   | 'detail.modelContext'
   | 'detail.modelToolsYes'
@@ -172,12 +174,22 @@ type TranslationKey =
   | 'detail.snapshot'
   | 'detail.readingModeOn'
   | 'detail.readingModeOff'
+  | 'detail.undo'
+  | 'detail.redo'
+  | 'detail.redoShort'
+  | 'detail.compact'
+  | 'detail.reverted'
+  | 'detail.revertToHere'
+  | 'detail.ultraNotice'
   | 'settings.mode'
   | 'voice.input'
   | 'voice.listening'
   | 'settings.navBarPosition'
   | 'settings.navBarBottom'
   | 'settings.navBarHeader'
+  | 'settings.blockedModels'
+  | 'settings.blockedModelsHint'
+  | 'settings.blockedModelsSearch'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
@@ -231,6 +243,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.navBarPosition': 'Navigation bar',
     'settings.navBarBottom': 'Bottom',
     'settings.navBarHeader': 'Header',
+    'settings.blockedModels': 'Blocked models',
+    'settings.blockedModelsHint': 'Blocked models are hidden from the model picker.',
+    'settings.blockedModelsSearch': 'Filter models...',
     'connection.connecting': 'Connecting to OpenCode...',
     'connection.loadingSessions': 'Connecting and loading sessions...',
     'connection.refreshing': 'Refreshing sessions...',
@@ -314,6 +329,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchPlaceholder': 'Search models by name or provider...',
     'detail.modelSearchEmpty': 'No models match your search.',
     'detail.modelDefault': 'default',
+    'detail.modelRecent': 'Recent',
+    'detail.modelAll': 'All models',
     'detail.modelProvider': 'Provider: {provider}',
     'detail.modelContext': 'Context {context} · output {output}',
     'detail.modelToolsYes': 'Tools enabled',
@@ -332,6 +349,13 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.snapshot': 'Snapshot',
     'detail.readingModeOn': 'Reading',
     'detail.readingModeOff': 'Chat',
+    'detail.undo': 'Undo last message',
+    'detail.redo': 'Restore all reverted messages',
+    'detail.redoShort': 'Restore messages',
+    'detail.compact': 'Compact session',
+    'detail.reverted': '⏪ Session reverted.',
+    'detail.revertToHere': 'Revert session to this message',
+    'detail.ultraNotice': 'Process running — switch to Full mode to see output',
     'todo.title': 'Todo Items',
     'todo.hide': 'Hide',
     'todo.show': 'Show',
@@ -446,6 +470,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.navBarPosition': 'Barra de navegación',
     'settings.navBarBottom': 'Abajo',
     'settings.navBarHeader': 'Arriba',
+    'settings.blockedModels': 'Modelos bloqueados',
+    'settings.blockedModelsHint': 'Los modelos bloqueados se ocultan del selector.',
+    'settings.blockedModelsSearch': 'Filtrar modelos...',
     'connection.connecting': 'Conectando a OpenCode...',
     'connection.loadingSessions': 'Conectando y cargando sesiones...',
     'connection.refreshing': 'Actualizando sesiones...',
@@ -529,6 +556,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchPlaceholder': 'Buscar modelos por nombre o proveedor...',
     'detail.modelSearchEmpty': 'Ningún modelo coincide con la búsqueda.',
     'detail.modelDefault': 'defecto',
+    'detail.modelRecent': 'Recientes',
+    'detail.modelAll': 'Todos los modelos',
     'detail.modelProvider': 'Proveedor: {provider}',
     'detail.modelContext': 'Contexto {context} · salida {output}',
     'detail.modelToolsYes': 'Herramientas activadas',
@@ -547,6 +576,13 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.snapshot': 'Instantánea',
     'detail.readingModeOn': 'Lectura',
     'detail.readingModeOff': 'Chat',
+    'detail.undo': 'Deshacer último mensaje',
+    'detail.redo': 'Restaurar todos los mensajes revertidos',
+    'detail.redoShort': 'Restaurar mensajes',
+    'detail.compact': 'Compactar sesión',
+    'detail.reverted': '⏪ Sesión revertida.',
+    'detail.revertToHere': 'Revertir sesión hasta este mensaje',
+    'detail.ultraNotice': 'Proceso en ejecución — cambiá a modo Full para ver la salida',
     'todo.title': 'Tareas pendientes',
     'todo.hide': 'Ocultar',
     'todo.show': 'Mostrar',
@@ -661,6 +697,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.navBarPosition': 'Barra di navigazione',
     'settings.navBarBottom': 'In basso',
     'settings.navBarHeader': 'In alto',
+    'settings.blockedModels': 'Modelli bloccati',
+    'settings.blockedModelsHint': 'I modelli bloccati sono nascosti dal selettore.',
+    'settings.blockedModelsSearch': 'Filtra modelli...',
     'connection.connecting': 'Connessione a OpenCode...',
     'connection.loadingSessions': 'Connessione e caricamento sessioni...',
     'connection.refreshing': 'Aggiornamento sessioni...',
@@ -744,6 +783,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchPlaceholder': 'Cerca modelli per nome o provider...',
     'detail.modelSearchEmpty': 'Nessun modello corrisponde alla ricerca.',
     'detail.modelDefault': 'default',
+    'detail.modelRecent': 'Recenti',
+    'detail.modelAll': 'Tutti i modelli',
     'detail.modelProvider': 'Provider: {provider}',
     'detail.modelContext': 'Contesto {context} · output {output}',
     'detail.modelToolsYes': 'Tool abilitati',
@@ -762,6 +803,13 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.snapshot': 'Istantanea',
     'detail.readingModeOn': 'Lettura',
     'detail.readingModeOff': 'Chat',
+    'detail.undo': 'Annulla ultimo messaggio',
+    'detail.redo': 'Ripristina tutti i messaggi annullati',
+    'detail.redoShort': 'Ripristina messaggi',
+    'detail.compact': 'Compatta sessione',
+    'detail.reverted': '⏪ Sessione annullata.',
+    'detail.revertToHere': 'Annulla sessione fino a questo messaggio',
+    'detail.ultraNotice': 'Processo in esecuzione — passa alla modalità Full per vedere l\'output',
     'todo.title': 'Todo',
     'todo.hide': 'Nascondi',
     'todo.show': 'Mostra',
@@ -840,6 +888,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.navBarPosition': '導航欄位置',
     'settings.navBarBottom': '底部',
     'settings.navBarHeader': '頂部',
+    'settings.blockedModels': '已封鎖的模型',
+    'settings.blockedModelsHint': '已封鎖的模型將從選擇器中隱藏。',
+    'settings.blockedModelsSearch': '篩選模型...',
     'connection.connecting': '正在連線到 OpenCode...',
     'connection.loadingSessions': '正在連線並載入工作階段...',
     'connection.refreshing': '正在重新整理工作階段...',
@@ -923,6 +974,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchPlaceholder': '依名稱或提供者搜尋模型...',
     'detail.modelSearchEmpty': '沒有符合搜尋的模型。',
     'detail.modelDefault': '預設',
+    'detail.modelRecent': '最近使用',
+    'detail.modelAll': '所有模型',
     'detail.modelProvider': '提供者：{provider}',
     'detail.modelContext': '上下文 {context} · 輸出 {output}',
     'detail.modelToolsYes': '已啟用工具',
@@ -941,6 +994,13 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.snapshot': '快照',
     'detail.readingModeOn': '閱讀模式',
     'detail.readingModeOff': '聊天',
+    'detail.undo': '復原上一個訊息',
+    'detail.redo': '恢復所有已復原的訊息',
+    'detail.redoShort': '恢復訊息',
+    'detail.compact': '壓縮會話',
+    'detail.reverted': '⏪ 會話已復原。',
+    'detail.revertToHere': '將會話復原到此訊息',
+    'detail.ultraNotice': '進程正在執行 — 切換到完整模式以查看輸出',
     'todo.title': '待辦事項',
     'todo.hide': '隱藏',
     'todo.show': '顯示',

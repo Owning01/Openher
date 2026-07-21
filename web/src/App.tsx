@@ -28,6 +28,11 @@ import { STORAGE_KEYS } from "./constants"
 import { useBackButton } from "./hooks/useBackButton"
 import { useNetworkMode } from "./hooks/useNetworkMode"
 import { useMemoryCleanup } from "./hooks/useMemoryCleanup"
+import { useBlockedModels } from "./hooks/useBlockedModels"
+import { ThemeVariantProvider } from "./context/themeVariant"
+import { ThemePicker } from "./components/ThemePicker"
+import { SessionTokenUsage } from "./components/SessionTokenUsage"
+import { CloseIcon } from "./Icons"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const t = useT()
@@ -53,6 +58,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     modelQuery, setModelQuery, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
     selectedModelKey, showModelChip, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
+  const blockedModels = useBlockedModels(modelOptions)
 
   const {
     composer, setComposer,
@@ -60,7 +66,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     runtimeError, setRuntimeError,
     renderedMessages, messageScrollSignature,
     toolMessage, completionShouldPlayRef,
-    clearSession, loadSelected, send, abortSession,
+    clearSession, loadSelected, send, abortSession, sendShell,
     setMessages
   } = useMessages(config)
 
@@ -104,6 +110,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
   const [readingMode, setReadingMode] = useState(false)
+  const [showThemePicker, setShowThemePicker] = useState(false)
+  const [tokenStatsOpen, setTokenStatsOpen] = useState(false)
   const [navBarMode, setNavBarMode] = useState<"header" | "bottom">(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.NAVBAR)
     return saved === "header" || saved === "bottom" ? saved : "bottom"
@@ -294,8 +302,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [])
 
   return (
-    <div className="app-shell" data-navbar={navBarMode}>
-      {navBarMode === "header" && (
+    <div className="app-shell" data-navbar="header">
+      {view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={handleNavigate}
           hasConfiguredServer={hasConfiguredServer}
           hasSelectedSession={!!selectedSession} />
@@ -317,7 +325,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           modelOptions={modelOptions} selectedModelKey={selectedModelKey}
           onChangeModel={changeModel} modelKey={modelKey}
           stats={stats} onResetStats={resetStats}
-          navBarMode={navBarMode} onNavBarModeChange={(m) => { setNavBarMode(m); localStorage.setItem(STORAGE_KEYS.NAVBAR, m) }} />
+          navBarMode={navBarMode} onNavBarModeChange={(m) => { setNavBarMode(m); localStorage.setItem(STORAGE_KEYS.NAVBAR, m) }}
+          blockedModels={blockedModels}
+          onOpenThemePicker={() => setShowThemePicker(true)} />
       )}
 
       {view === "sessions" && (
@@ -371,6 +381,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             runtimeError={runtimeError}
             renamingSessionID={renamingSessionID} renameValue={renameValue}
             showModelChip={showModelChip}
+            commands={commands}
             activeAgent={activeAgent} activeAgentID={activeAgentID}
             activeModelOption={activeModelOption}
             primaryAgentOptions={primaryAgentOptions}
@@ -389,7 +400,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             recentSessions={recentSessions} activeSessions={activeSessions}
             onOpenSession={handleOpenSession}
             readingMode={readingMode} onToggleReadingMode={() => setReadingMode((v) => !v)}
-            onExportChat={handleExportChat} onSnapshot={handleSnapshot} />
+            onExportChat={handleExportChat} onSnapshot={handleSnapshot}
+            onOpenSettings={() => setView("settings")}
+            onThemeCommand={() => setShowThemePicker(true)}
+            onToggleTokenStats={() => setTokenStatsOpen((v) => !v)}
+            onShellSend={() => sendShell(selectedSession!.id, selectedSession!.directory)} />
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={() => setActiveDetailSheet(null)}
@@ -401,6 +416,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             modelLoadError={modelLoadError}
             activeModelOption={activeModelOption}
             filteredModelOptions={filteredModelOptions}
+            recentModels={modelOptions.slice(0, 3)}
             modelQuery={modelQuery}
             isWorking={isWorking}
             onRefreshAI={() => { loadAgents(); loadModels() }}
@@ -439,10 +455,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onCancel={() => setSessionToDelete(null)} />
       )}
 
-      {navBarMode === "bottom" && (
-        <NavBar variant="bottom" view={view} onNavigate={handleNavigate}
-          hasConfiguredServer={hasConfiguredServer}
-          hasSelectedSession={!!selectedSession} />
+      {showThemePicker && (
+        <ThemePicker onClose={() => setShowThemePicker(false)} />
+      )}
+
+      {tokenStatsOpen && selectedSession?.tokens && (
+        <div className="modal-overlay" onClick={() => setTokenStatsOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Token Stats</h3>
+              <button className="btn-icon btn-secondary compact" onClick={() => setTokenStatsOpen(false)}>
+                <CloseIcon size={14} />
+              </button>
+            </div>
+            <SessionTokenUsage tokens={selectedSession.tokens} cost={selectedSession.cost} />
+          </div>
+        </div>
       )}
     </div>
   )
@@ -454,9 +482,11 @@ export default function App() {
   )
   return (
     <I18nProvider language={language}>
-      <ErrorBoundary>
-        <AppInner language={language} setLanguage={setLanguage} />
-      </ErrorBoundary>
+      <ThemeVariantProvider>
+        <ErrorBoundary>
+          <AppInner language={language} setLanguage={setLanguage} />
+        </ErrorBoundary>
+      </ThemeVariantProvider>
     </I18nProvider>
   )
 }

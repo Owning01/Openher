@@ -4,6 +4,29 @@ import { api } from "../api"
 import { modelKey, sameModel, modelFromKey } from "./useSessions"
 import { STORAGE_KEYS } from "../constants"
 
+export const MODEL_STORAGE_KEY = "opencode.remote.model"
+export const AGENT_STORAGE_KEY = "opencode.remote.agent"
+export const RECENT_MODELS_KEY = STORAGE_KEYS.RECENT_MODELS
+const MAX_RECENT = 5
+
+function loadRecentModels(): ModelOption[] {
+  try {
+    const raw = localStorage.getItem(RECENT_MODELS_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    localStorage.removeItem(RECENT_MODELS_KEY)
+    return []
+  }
+}
+
+function pushRecentModel(model: ModelOption) {
+  const key = modelKey(model)
+  const recent = loadRecentModels().filter((m) => modelKey(m) !== key)
+  recent.unshift(model)
+  const trimmed = recent.slice(0, MAX_RECENT)
+  localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(trimmed))
+}
+
 function modelSearchText(option: ModelOption): string {
   return [option.modelName, option.modelID, option.providerName, option.providerID, option.variant ?? ""].join(" ").toLowerCase()
 }
@@ -23,7 +46,7 @@ function filterPrimary(agents: AgentOption[]): AgentOption[] {
 export function useAI(config: ServerConfig) {
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([])
   const [agentLoadError, setAgentLoadError] = useState<string | null>(null)
-  const [selectedAgentID, setSelectedAgentID] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.AGENT) || "build")
+  const [selectedAgentID, setSelectedAgentID] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.AGENT) || "")
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
   const [modelLoadError, setModelLoadError] = useState<string | null>(null)
   const [selectedModelKey, setSelectedModelKey] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.MODEL))
@@ -71,9 +94,9 @@ export function useAI(config: ServerConfig) {
       const list = await api.listAgents(config, directory)
       setAgentOptions(list)
       setAgentLoadError(null)
-      const saved = localStorage.getItem(agentStorageKey(directory)) || localStorage.getItem(STORAGE_KEYS.AGENT) || "build"
+      const saved = localStorage.getItem(agentStorageKey(directory)) || localStorage.getItem(STORAGE_KEYS.AGENT) || ""
       const primary = filterPrimary(list)
-      const next = primary.find((agent) => agent.id === saved) ?? primary.find((agent) => agent.id === "build") ?? primary[0]
+      const next = primary.find((agent) => agent.id === saved) ?? primary[0]
       if (next) {
         setSelectedAgentID(next.id)
         localStorage.setItem(agentStorageKey(directory), next.id)
@@ -102,10 +125,17 @@ export function useAI(config: ServerConfig) {
     }
   }, [config, selectedModelKey])
 
+  const recentModels = useMemo(() => {
+    const keys = new Set(modelOptions.map(modelKey))
+    return loadRecentModels().filter((m) => keys.has(modelKey(m)))
+  }, [modelOptions])
+
   const changeModel = useCallback((nextKey: string) => {
     setSelectedModelKey(nextKey)
     localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
-  }, [])
+    const model = modelOptions.find((m) => modelKey(m) === nextKey)
+    if (model) pushRecentModel(model)
+  }, [modelOptions])
 
   const changeAgent = useCallback((nextAgentID: string, directory?: string) => {
     setSelectedAgentID(nextAgentID)
@@ -116,6 +146,7 @@ export function useAI(config: ServerConfig) {
     agentOptions, agentLoadError, selectedAgentID, modelOptions, modelLoadError,
     selectedModelKey, modelQuery, setModelQuery, selectedModel, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
+    recentModels,
     showModelChip, loadAgents, loadModels, changeModel, changeAgent
   }
 }

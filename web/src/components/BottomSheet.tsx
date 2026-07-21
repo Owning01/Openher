@@ -16,6 +16,7 @@ type BottomSheetProps = {
   modelLoadError: string | null
   activeModelOption: ModelOption | null
   filteredModelOptions: ModelOption[]
+  recentModels: ModelOption[]
   modelQuery: string
   isWorking: boolean
   onRefreshAI: () => void
@@ -40,7 +41,7 @@ type BottomSheetProps = {
 export const BottomSheet = memo(function BottomSheet({
   activeSheet, onClose,
   agentOptions, agentLoadError, activeAgentID, activeAgent, modelOptions, modelLoadError,
-  activeModelOption, filteredModelOptions, modelQuery, isWorking,
+  activeModelOption, filteredModelOptions, recentModels, modelQuery, isWorking,
   onRefreshAI, onChangeAgent, onChangeModel, onModelQueryChange,
   modelKey: mk, sameModel, agentLabel, formatLimit,
   projectName, projectPath, vcsBranch, projectDashboard, diffFiles,
@@ -110,26 +111,49 @@ export const BottomSheet = memo(function BottomSheet({
                     placeholder={t('detail.modelSearchPlaceholder')} disabled={isWorking} autoComplete="off" />
                 </label>
                 <div className="model-option-list" role="listbox" aria-label={t('detail.modelSelectLabel')}>
-                  {filteredModelOptions.length > 0 ? (
-                    filteredModelOptions.map((option) => {
-                      const optionKey = mk(option)
-                      const active = activeModelOption ? sameModel(option, activeModelOption) : false
-                      return (
-                        <button type="button" key={optionKey}
-                          className={active ? "model-option active" : "model-option"}
-                          onClick={() => onChangeModel(optionKey)} disabled={isWorking}
-                          role="option" aria-selected={active}>
-                          <span>
-                            <strong>{option.modelName}</strong>
-                            <small>{option.providerName}{option.variant ? ` · ${option.variant}` : ""}</small>
-                          </span>
-                          {option.isDefault && <em>{t('detail.modelDefault')}</em>}
-                        </button>
-                      )
-                    })
-                  ) : (
-                    <p className="subtle model-empty">{t('detail.modelSearchEmpty')}</p>
+                  {!modelQuery && recentModels.length > 0 && (
+                    <>
+                      <div className="model-section-label">{t('detail.modelRecent')}</div>
+                      {recentModels.map((option) => {
+                        const optionKey = mk(option)
+                        const active = activeModelOption ? sameModel(option, activeModelOption) : false
+                        return (
+                          <button type="button" key={optionKey}
+                            className={active ? "model-option active" : "model-option"}
+                            onClick={() => onChangeModel(optionKey)} disabled={isWorking}
+                            role="option" aria-selected={active}>
+                            <span>
+                              <strong>{option.modelName}</strong>
+                              <small>{option.providerName}{option.variant ? ` · ${option.variant}` : ""}</small>
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </>
                   )}
+                  {filteredModelOptions.length > 0 ? (
+                    <>
+                      {!modelQuery && recentModels.length > 0 && <div className="model-section-label">{t('detail.modelAll')}</div>}
+                      {filteredModelOptions.map((option) => {
+                        const optionKey = mk(option)
+                        const active = activeModelOption ? sameModel(option, activeModelOption) : false
+                        return (
+                          <button type="button" key={optionKey}
+                            className={active ? "model-option active" : "model-option"}
+                            onClick={() => onChangeModel(optionKey)} disabled={isWorking}
+                            role="option" aria-selected={active}>
+                            <span>
+                              <strong>{option.modelName}</strong>
+                              <small>{option.providerName}{option.variant ? ` · ${option.variant}` : ""}</small>
+                            </span>
+                            {option.isDefault && <em>{t('detail.modelDefault')}</em>}
+                          </button>
+                        )
+                      })}
+                    </>
+                  ) : modelQuery ? (
+                    <p className="subtle model-empty">{t('detail.modelSearchEmpty')}</p>
+                  ) : null}
                 </div>
                 {activeModelOption && (
                   <div className="model-meta">

@@ -15,6 +15,7 @@
     "test:model": "node src/model-regression.test.mjs"
   },
   "dependencies": {
+    "@capacitor-community/speech-recognition": "^7.0.1",
     "@capacitor/android": "^8.3.4",
     "@capacitor/app": "^8.1.1",
     "@capacitor/camera": "^8.2.1",
@@ -23,6 +24,7 @@
     "@capacitor/dialog": "^8.0.1",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/network": "^8.0.1",
+    "@tanstack/react-virtual": "^3.14.7",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-markdown": "^10.1.0",
@@ -32,6 +34,7 @@
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "@vitejs/plugin-react": "^6.0.2",
+    "sharp": "^0.35.3",
     "typescript": "5.6.3",
     "vite": "^8.0.14"
   }

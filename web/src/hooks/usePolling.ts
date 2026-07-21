@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 
-export function usePolling(callback: () => void | Promise<void>, intervalMs: number, deps: unknown[] = []) {
+export function usePolling(callback: () => void | Promise<void>, intervalMs: number, _deps: unknown[] = []) {
   const savedCallback = useRef(callback)
   savedCallback.current = callback
 
@@ -13,7 +13,7 @@ export function usePolling(callback: () => void | Promise<void>, intervalMs: num
 
     async function tick() {
       if (!mounted || !isPageVisible()) return
-      try { await savedCallback.current() } catch { /* polling error swallowed */ }
+      try { await savedCallback.current() } catch (e) { console.warn("poll error", e) }
     }
 
     tick()
@@ -31,5 +31,5 @@ export function usePolling(callback: () => void | Promise<void>, intervalMs: num
       clearInterval(id)
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [intervalMs, ...deps])
+  }, [intervalMs])
 }

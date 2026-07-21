@@ -6,16 +6,15 @@ const STATS_KEY = STORAGE_KEYS.STATS
 type UsageStats = {
   promptsSent: number
   sessionsCreated: number
-  totalTokens: number
   firstUsed: number
 }
 
 function loadStats(): UsageStats {
   try {
     const raw = localStorage.getItem(STATS_KEY)
-    return raw ? JSON.parse(raw) : { promptsSent: 0, sessionsCreated: 0, totalTokens: 0, firstUsed: Date.now() }
+    return raw ? JSON.parse(raw) : { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }
   } catch {
-    return { promptsSent: 0, sessionsCreated: 0, totalTokens: 0, firstUsed: Date.now() }
+    return { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }
   }
 }
 
@@ -26,9 +25,9 @@ function saveStats(stats: UsageStats) {
 export function useStats() {
   const [stats, setStats] = useState<UsageStats>(loadStats)
 
-  const recordPrompt = useCallback((text: string) => {
+  const recordPrompt = useCallback((_text: string) => {
     setStats((prev) => {
-      const next = { ...prev, promptsSent: prev.promptsSent + 1, totalTokens: prev.totalTokens + Math.round(text.length / 4) }
+      const next = { ...prev, promptsSent: prev.promptsSent + 1 }
       saveStats(next)
       return next
     })
@@ -43,7 +42,7 @@ export function useStats() {
   }, [])
 
   const resetStats = useCallback(() => {
-    const next = { promptsSent: 0, sessionsCreated: 0, totalTokens: 0, firstUsed: Date.now() }
+    const next = { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }
     saveStats(next)
     setStats(next)
   }, [])

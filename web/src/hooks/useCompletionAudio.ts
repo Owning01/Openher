@@ -30,6 +30,7 @@ export function useCompletionAudio(
     }
     const audio = new Audio("/audio/staplebops-01.aac")
     audio.preload = "auto"
+    audio.onerror = () => { completionAudioRef.current = null }
     completionAudioRef.current = audio
     return () => { completionAudioRef.current = null }
   }, [dataMode])

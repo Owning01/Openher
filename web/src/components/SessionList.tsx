@@ -4,7 +4,6 @@ import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
 import { SessionToolbar } from "./SessionToolbar"
-import { DataModeSwitcher } from "./DataModeSwitcher"
 import { ErrorNotice } from "./ErrorNotice"
 import { formatTime, isSessionActive, hasFileChanges } from "../utils"
 import type { SessionView, ConnectionState, DataMode } from "../types"
@@ -38,6 +37,9 @@ type SessionListProps = {
   onRenameCancel: () => void
   onDelete: (session: SessionView) => void
   onToggleFavorite: (id: string) => void
+  onOpenSettings?: () => void
+  onExportChat?: (session: SessionView) => void
+  onSnapshot?: (session: SessionView) => void
 }
 
 export const SessionList = memo(function SessionList({
@@ -49,7 +51,7 @@ export const SessionList = memo(function SessionList({
   dataMode, onDataModeChange,
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
-  onToggleFavorite
+  onToggleFavorite, onOpenSettings, onExportChat, onSnapshot
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -77,7 +79,8 @@ export const SessionList = memo(function SessionList({
         isFavorite={favorites.has(session.id)}
         onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
         onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
-        onToggleFavorite={onToggleFavorite} />
+        onToggleFavorite={onToggleFavorite}
+        onExportChat={onExportChat} onSnapshot={onSnapshot} />
     ))
   )
 
@@ -93,9 +96,9 @@ export const SessionList = memo(function SessionList({
             </p>
           </div>
           <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
-            onRefresh={onRefresh} onNewSession={onNewSession} />
+            onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
+            dataMode={dataMode} onDataModeChange={onDataModeChange} />
         </div>
-        <DataModeSwitcher mode={dataMode} onChange={onDataModeChange} />
         <div className="toolbar">
           <input placeholder={t('sessions.searchPlaceholder')} value={query}
             onChange={(e) => onQueryChange(e.target.value)} className="search" />
@@ -110,8 +113,8 @@ export const SessionList = memo(function SessionList({
   return (
     <section ref={containerRef} className="panel sessions fade-in">
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
-        onRefresh={onRefresh} onNewSession={onNewSession} />
-      <DataModeSwitcher mode={dataMode} onChange={onDataModeChange} />
+        onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
+        dataMode={dataMode} onDataModeChange={onDataModeChange} />
       <div className="toolbar">
         <input placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />
@@ -173,12 +176,18 @@ export const SessionList = memo(function SessionList({
             <article key={dir} className="project-card fade-in" role="button" tabIndex={0}
               onClick={() => onSelectProject(dir)}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectProject(dir) } }}>
-              <div className="project-card-main">
-                <strong className="project-path">{dir}</strong>
+              <div className="project-card-header">
+                <div className="project-title-group">
+                  <div className="project-icon-wrapper">
+                    <FolderIcon size={18} />
+                  </div>
+                  <strong className="project-path">{dir}</strong>
+                </div>
                 <span className="project-count">{projectSessionsList.length} {projectSessionsList.length === 1 ? 'session' : 'sessions'}</span>
               </div>
               <div className="project-meta">
                 <span className={`project-status ${projectSessionsList.some((s) => isSessionActive(s)) ? "busy" : "idle"}`}>
+                  <span className="status-dot"></span>
                   {projectSessionsList.filter((s) => isSessionActive(s)).length} active
                 </span>
                 <span className="project-changed">

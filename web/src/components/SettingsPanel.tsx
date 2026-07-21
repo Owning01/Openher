@@ -7,7 +7,7 @@ import type { LanguageCode } from "../i18n"
 type UsageStats = {
   promptsSent: number
   sessionsCreated: number
-  totalTokens: number
+  totalTokens?: number
   firstUsed: number
 }
 
@@ -38,6 +38,8 @@ type SettingsPanelProps = {
   onResetStats: () => void
   navBarMode: "header" | "bottom"
   onNavBarModeChange: (mode: "header" | "bottom") => void
+  blockedModels: { isBlocked: (key: string) => boolean; toggleBlocked: (key: string) => void; blockedCount: number }
+  onOpenThemePicker?: () => void
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
@@ -48,7 +50,8 @@ export const SettingsPanel = memo(function SettingsPanel({
   dataMode, onDataModeChange, onNavigate,
   modelOptions, selectedModelKey, onChangeModel, modelKey: mk,
   stats, onResetStats,
-  navBarMode, onNavBarModeChange
+  navBarMode, onNavBarModeChange,
+  blockedModels, onOpenThemePicker
 }: SettingsPanelProps) {
   const t = useT()
 
@@ -184,7 +187,6 @@ export const SettingsPanel = memo(function SettingsPanel({
         <div className="stats-grid">
           <span>{t('settings.statsPrompts')}: {stats.promptsSent}</span>
           <span>{t('settings.statsSessions')}: {stats.sessionsCreated}</span>
-          <span>{t('settings.statsTokens')}: ~{stats.totalTokens.toLocaleString()}</span>
         </div>
         <button type="button" className="btn-secondary compact" onClick={onResetStats}
           style={{ marginTop: 'var(--space-2)' }}>
@@ -205,6 +207,52 @@ export const SettingsPanel = memo(function SettingsPanel({
             aria-pressed={navBarMode === "header"}>
             {t('settings.navBarHeader')}
           </button>
+        </div>
+      </div>
+
+      {onOpenThemePicker && (
+        <div className="setting-group">
+          <h4 className="quick-access-label">Theme</h4>
+          <button type="button" className="btn-secondary compact" onClick={onOpenThemePicker}
+            style={{ width: "100%", textAlign: "left" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", justifyContent: "space-between", width: "100%" }}>
+              <span>Switch theme</span>
+              <span style={{ opacity: 0.5, fontSize: "0.75rem" }}>33 themes</span>
+            </span>
+          </button>
+        </div>
+      )}
+
+      <div className="setting-group">
+        <h4 className="quick-access-label">{t('settings.blockedModels')} ({blockedModels.blockedCount})</h4>
+        <p className="subtle">{t('settings.blockedModelsHint')}</p>
+        <div className="blocked-model-list">
+          {modelOptions.length === 0 ? (
+            <p className="subtle">{t('detail.modelLoading')}</p>
+          ) : modelOptions.length > 30 ? (
+            <div className="blocked-model-search">
+              <input placeholder={t('settings.blockedModelsSearch')}
+                onChange={(e) => {
+                  const q = e.target.value.toLowerCase()
+                  const cards = document.querySelectorAll<HTMLElement>(".blocked-model-item")
+                  for (const card of cards) {
+                    const label = card.getAttribute("data-label")?.toLowerCase() ?? ""
+                    card.style.display = label.includes(q) ? "" : "none"
+                  }
+                }} />
+            </div>
+          ) : null}
+          {modelOptions.map((opt) => {
+            const key = mk(opt)
+            const blocked = blockedModels.isBlocked(key)
+            return (
+              <label key={key} className={`blocked-model-item${blocked ? " blocked" : ""}`} data-label={`${opt.modelName} ${opt.providerName}`}>
+                <input type="checkbox" checked={blocked} onChange={() => blockedModels.toggleBlocked(key)} />
+                <span>{opt.modelName}</span>
+                <small>{opt.providerName}{opt.variant ? ` · ${opt.variant}` : ""}</small>
+              </label>
+            )
+          })}
         </div>
       </div>
 

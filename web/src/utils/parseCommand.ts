@@ -11,6 +11,10 @@ export type ParseCommandResult =
   | { type: "status"; session: { title: string; status: string; directory: string } }
   | { type: "send"; text: string }
   | { type: "command"; command: string; args: string }
+  | { type: "undo" }
+  | { type: "redo" }
+  | { type: "compact" }
+  | { type: "themes" }
   | { type: "send_raw"; text: string }
   | null
 
@@ -26,8 +30,13 @@ export function parseCommand(text: string): ParseCommandResult {
   }
 
   if (localCommand === "status") {
-    return { type: "status", session: null as any }
+    return { type: "status", session: { title: "", status: "", directory: "" } }
   }
+
+  if (localCommand === "undo") return { type: "undo" }
+  if (localCommand === "redo") return { type: "redo" }
+  if (localCommand === "compact") return { type: "compact" }
+  if (localCommand === "themes") return { type: "themes" }
 
   return { type: "command", command, args }
 }

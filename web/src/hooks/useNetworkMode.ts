@@ -12,7 +12,7 @@ export function useNetworkMode(changeDataMode: (mode: DataMode) => void) {
       } else if (s.connectionType === "wifi") {
         changeDataMode("full")
       }
-    })
+    }).catch(() => undefined)
     let netH: any
     Network.addListener("networkStatusChange", (s) => {
       if (cancelled) return

@@ -1,3 +1,4 @@
+import { memo } from "react"
 import type { DataMode } from "../types"
 import { useT } from "../i18n-context"
 
@@ -6,12 +7,14 @@ type DataModeSwitcherProps = {
   onChange: (mode: DataMode) => void
 }
 
-export function DataModeSwitcher({ mode, onChange }: DataModeSwitcherProps) {
+const MODE_OPTIONS: DataMode[] = ["full", "saver", "ultra", "miser"]
+
+export const DataModeSwitcher = memo(function DataModeSwitcher({ mode, onChange }: DataModeSwitcherProps) {
   const t = useT()
   return (
     <div className="mode-switcher">
       <span className="mode-label">{t('settings.mode')}:</span>
-      {(["full", "saver", "ultra", "miser"] as const).map((m) => (
+      {MODE_OPTIONS.map((m) => (
         <button key={m} className={`mode-btn${mode === m ? " active" : ""}`}
           onClick={() => onChange(m)}
           aria-pressed={mode === m}>
@@ -20,4 +23,4 @@ export function DataModeSwitcher({ mode, onChange }: DataModeSwitcherProps) {
       ))}
     </div>
   )
-}
+})

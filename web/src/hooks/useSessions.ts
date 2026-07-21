@@ -44,6 +44,11 @@ function toSessionView(session: Session, status?: SessionStatus): SessionView {
     files: session.summary?.files ?? 0,
     additions: session.summary?.additions ?? 0,
     deletions: session.summary?.deletions ?? 0,
+    tokens: session.tokens,
+    cost: session.cost,
+    agent: session.agent,
+    parentID: session.parentID,
+    revert: session.revert ? { messageID: session.revert.messageID, partID: session.revert.partID } : undefined,
     model: session.model ? { providerID: session.model.providerID, modelID: session.model.id, variant: session.model.variant } : undefined
   }
 }
@@ -114,10 +119,24 @@ export function useSessions(
       if (full) {
         // Full refresh: hydrate per-directory for accurate statuses
         const directories = [...new Set(items.map((s) => s.directory).filter(Boolean))]
-        const [sessionLists, statuses] = await Promise.all([
-          Promise.all(directories.map((d) => api.listSessions(config, d).catch(() => [] as Session[]))),
-          Promise.all(directories.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>))))
-        ])
+        const chunk = <T>(arr: T[], size: number) => {
+          const chunks: T[][] = []
+          for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
+          return chunks
+        }
+        const dirChunks = chunk(directories, 10)
+        const allSessionLists: Session[][] = []
+        const allStatusLists: Record<string, SessionStatus>[] = []
+        for (const c of dirChunks) {
+          const [sl, st] = await Promise.all([
+            Promise.all(c.map((d) => api.listSessions(config, d).catch(() => [] as Session[]))),
+            Promise.all(c.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>))))
+          ])
+          allSessionLists.push(...sl)
+          allStatusLists.push(...st)
+        }
+        const sessionLists = allSessionLists
+        const statuses = allStatusLists
         const scoped = new Map(sessionLists.flat().map((s) => [s.id, s]))
         const allStatuses = new Map<string, SessionStatus>()
         for (const sm of statuses) {
@@ -202,6 +221,8 @@ export function useSessions(
       })
       setSelectedID(created.id)
       return createdView
+    } catch (err) {
+      throw err
     } finally {
       setCreatingSession(false)
     }

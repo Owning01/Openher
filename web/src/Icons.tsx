@@ -49,21 +49,20 @@ export const ShareIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Share"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></Svg>)
 export const StatsIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Stats"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></Svg>)
+export const ArrowLeftIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Back"><path d="M19 12H5M12 19l-7-7 7-7"/></Svg>)
 
-let logoId = 0
+export const UndoIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Undo"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></Svg>)
+export const RedoIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Redo"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></Svg>)
+export const CompressIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Compact"><path d="M4 9V5h4"/><path d="M20 15v4h-4"/><path d="M12 4v16"/><path d="M8 8l4-4 4 4"/><path d="M16 16l-4 4-4-4"/></Svg>)
+
 export const LogoIcon = ({ className = "", size = 32 }: { className?: string; size?: number }) => {
-  const id = `logoGradient-${++logoId}`
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className={className}
-      role="img" aria-label="OpenCode Mobile Logo">
-      <defs><linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#0ea5e9"/><stop offset="100%" stopColor="#0284c7"/>
-      </linearGradient></defs>
-      <circle cx="16" cy="16" r="15" fill={`url(#${id})`} opacity="0.1"/>
-      <circle cx="16" cy="16" r="12" fill="none" stroke={`url(#${id})`} strokeWidth="2"/>
-      <path d="M16 8c-4 0-7 3-7 7s3 7 7 7 7-3 7-7-3-7-7-7z" fill={`url(#${id})`}/>
-      <circle cx="16" cy="16" r="3" fill="white"/>
-      <path d="M16 3v6m0 8v6M3 16h6m8 0h6" stroke={`url(#${id})`} strokeWidth="2" strokeLinecap="round"/>
-    </svg>
+    <img src="./img/opencode-logo-dark.jpg" alt="OpenCode"
+      width={size} height={size} className={className}
+      style={{ objectFit: "contain", display: "inline-block", verticalAlign: "middle" }} />
   )
 }

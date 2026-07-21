@@ -1,4 +1,5 @@
 import { useEffect } from "react"
+import { Capacitor } from "@capacitor/core"
 import { App as CapacitorApp } from "@capacitor/app"
 import { Dialog } from "@capacitor/dialog"
 import { useT } from "../i18n-context"
@@ -19,6 +20,7 @@ export function useBackButton({
   const t = useT()
 
   useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
     let h: any
     CapacitorApp.addListener("backButton", async () => {
       if (showNewSessionPicker) {

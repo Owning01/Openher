@@ -33,18 +33,27 @@ export function useFolderPicker(config: ServerConfig) {
   const openNewSessionPicker = useCallback(async () => {
     setShowNewSessionPicker(true)
     setPickerError(null)
-    try {
-      const pathInfo = await api.loadPath(config, normalizedDirectory)
-      const dir = normalizedDirectory ?? pathInfo.directory
-      if (dir) {
+    const tryBrowse = async (dir: string): Promise<boolean> => {
+      try {
         const items = await api.listFiles(config, dir)
         setPickerPath(dir)
         setPickerItems(items.filter((item) => item.type === "directory").sort((a, b) => a.name.localeCompare(b.name)))
-      }
-    } catch (err) {
-      setPickerError((err as Error).message)
+        setPickerError(null)
+        return true
+      } catch { return false }
     }
-  }, [config, normalizedDirectory, browseNewSessionDirectory])
+    const dir = normalizedDirectory
+      ? normalizedDirectory
+      : await api.loadPath(config).then((p) => p.directory).catch(() => undefined)
+    if (dir) {
+      if (await tryBrowse(dir)) return
+    }
+    if (!(await tryBrowse("/"))) {
+      setPickerItems([])
+      setPickerPath("")
+      setPickerError("Could not load directory listing from server")
+    }
+  }, [config, normalizedDirectory])
 
   const persistDirectory = useCallback((dir: string) => {
     setNewSessionDirectory(dir)

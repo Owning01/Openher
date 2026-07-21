@@ -185,7 +185,8 @@ async function requestWithHeaders<T>(config: ServerConfig, path: string, options
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
       if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, 1000))
+        const delay = Math.min(1000 * Math.pow(2, attempt), 10_000)
+        await new Promise((r) => setTimeout(r, delay))
       }
     }
   }
@@ -321,10 +322,6 @@ export const api = {
     return request<MessageEnvelope[]>(config, withDirectory(path, directory))
   },
 
-  loadLatestMessage(config: ServerConfig, sessionID: string, directory?: string) {
-    return request<MessageEnvelope[]>(config, withDirectory(`/session/${sessionID}/message?limit=1`, directory))
-  },
-
   loadTodo(config: ServerConfig, sessionID: string, directory?: string) {
     return request<TodoItem[]>(config, withDirectory(`/session/${sessionID}/todo`, directory))
   },
@@ -367,10 +364,74 @@ export const api = {
     })
   },
 
+  sendShell(config: ServerConfig, sessionID: string, command: string, directory?: string) {
+    return request<boolean>(config, withDirectory(`/session/${sessionID}/shell`, directory), {
+      method: "POST",
+      body: { command },
+    })
+  },
+
   abort(config: ServerConfig, sessionID: string, directory?: string) {
     return request<boolean>(config, withDirectory(`/session/${sessionID}/abort`, directory), {
       method: "POST",
       body: {}
     })
+  },
+
+  revert(config: ServerConfig, sessionID: string, messageID: string, directory?: string) {
+    return request<Session>(config, withDirectory(`/session/${sessionID}/revert`, directory), {
+      method: "POST",
+      body: { messageID }
+    })
+  },
+
+  unrevert(config: ServerConfig, sessionID: string, directory?: string) {
+    return request<Session>(config, withDirectory(`/session/${sessionID}/unrevert`, directory), {
+      method: "POST",
+      body: {}
+    })
+  },
+
+  summarize(config: ServerConfig, sessionID: string, providerID: string, modelID: string, directory?: string, auto = false, readTimeout = 300_000) {
+    return request<boolean>(config, withDirectory(`/session/${sessionID}/summarize`, directory), {
+      method: "POST",
+      body: { providerID, modelID, auto },
+      readTimeout
+    })
+  },
+
+  questionReply(config: ServerConfig, requestID: string, answers: string[][], directory?: string) {
+    return request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reply`, directory), {
+      method: "POST",
+      body: { answers }
+    })
+  },
+
+  questionReject(config: ServerConfig, requestID: string, directory?: string) {
+    return request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reject`, directory), {
+      method: "POST",
+      body: {}
+    })
+  },
+
+  findFiles(config: ServerConfig, query: string, directory?: string, limit = 20) {
+    return request<{ path: string; type: "file" | "directory" }[]>(config,
+      withDirectory(`/find/file?query=${encodeURIComponent(query)}&limit=${limit}`, directory))
+  },
+
+  listMCPResources(config: ServerConfig) {
+    return request<{ id: string; name: string; description?: string }[]>(config, "/experimental/resource")
+  },
+
+  listSkills(config: ServerConfig) {
+    return request<{ id: string; name: string; description?: string }[]>(config, "/skill")
+  },
+
+  listPendingQuestions(config: ServerConfig, directory?: string) {
+    return request<{ id: string; question: string; status: string }[]>(config, withDirectory("/question", directory))
+  },
+
+  listPermissions(config: ServerConfig, directory?: string) {
+    return request<{ requestID: string; permission: string; status: string }[]>(config, withDirectory("/permission", directory))
   }
 }

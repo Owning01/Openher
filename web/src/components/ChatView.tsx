@@ -1,14 +1,16 @@
-import { memo, useCallback, useMemo } from "react"
-import { ChatIcon, PencilIcon, SaveIcon, FolderIcon, ShareIcon } from "../Icons"
+import { memo, useState, useMemo, useRef, useEffect, useCallback } from "react"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, StatsIcon, SettingsIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import { formatLimit } from "../utils"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
-import { TodoBox } from "./TodoBox"
 import { InlineRename } from "./InlineRename"
 import { ErrorNotice } from "./ErrorNotice"
+import { SubagentFooter } from "./SubagentFooter"
+import { ToolStatus } from "./ToolStatus"
+import { SkillBrowser } from "./SkillBrowser"
 
-import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode } from "../types"
+import { api } from "../api"
+import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig } from "../types"
 
 type ChatViewProps = {
   selectedSession: SessionView | null
@@ -28,6 +30,7 @@ type ChatViewProps = {
   renamingSessionID: string | null
   renameValue: string
   showModelChip: boolean
+  commands: CommandInfo[]
   activeAgent: AgentOption | null
   activeAgentID: string
   activeModelOption: ModelOption | null
@@ -41,6 +44,10 @@ type ChatViewProps = {
   onComposerChange: (value: string) => void
   onSend: (images?: any[]) => void | Promise<void>
   onAbort: () => void
+  onUndo?: () => void
+  onRedo?: () => void
+  onCompact?: () => void
+  onRevertToMessage?: (messageID: string) => void
   onTodosToggle: () => void
   onBackToSessions: () => void
   onSheetOpen: (sheet: "ai" | "details") => void
@@ -51,162 +58,275 @@ type ChatViewProps = {
   onToggleReadingMode: () => void
   onExportChat: () => void
   onSnapshot: () => void
+  onOpenFileBrowser?: () => void
+  fileBrowserPath?: string
+  agents?: AgentOption[]
+  config?: ServerConfig
+  onOpenSettings?: () => void
+  onToggleTokenStats?: () => void
+  onShellSend?: (command: string) => void
+  onThemeCommand?: () => void
 }
 
 export const ChatView = memo(function ChatView({
-  selectedSession, messages, todos, todosExpanded, composer, isWorking,
+  selectedSession, messages, composer, isWorking,
   showTypingBubble, loadingSessionID, selectedID, messageScrollSignature, view,
   dataMode, toolMessage,
   runtimeError, renamingSessionID, renameValue,
-  showModelChip, activeModelOption, activeAgentID, primaryAgentOptions, onChangeAgent,
-  projectName,
+  activeModelOption, activeAgentID, primaryAgentOptions, onChangeAgent,
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
-  onComposerChange, onSend, onAbort, onTodosToggle,
-  onBackToSessions, onSheetOpen,
-  recentSessions, activeSessions, onOpenSession,
-  readingMode, onToggleReadingMode, onExportChat, onSnapshot
+  commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onBackToSessions,
+  onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
+  agents, config, activeSessions, onOpenSession, onOpenSettings, onToggleTokenStats, onShellSend, onThemeCommand
 }: ChatViewProps) {
   const t = useT()
+  const [messageQuery, setMessageQuery] = useState("")
+  const [showSearch, setShowSearch] = useState(false)
+  const [showOverflow, setShowOverflow] = useState(false)
+  const [showThinking, setShowThinking] = useState(true)
+  const [showSkills, setShowSkills] = useState(false)
+  const [pendingCount, setPendingCount] = useState(0)
+  const overflowRef = useRef<HTMLDivElement | null>(null)
 
-  const handleBack = useCallback(() => {
-    onBackToSessions()
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(".session-card.active")?.scrollIntoView({ block: "center" }))
-  }, [onBackToSessions])
+  const handleViewSubagents = useCallback(() => {
+    const subagentSession = activeSessions.find((s) => s.parentID === selectedSession?.id)
+    if (subagentSession) onOpenSession(subagentSession.id, subagentSession.directory)
+  }, [activeSessions, selectedSession?.id, onOpenSession])
 
-  const contextInfo = useMemo(() => {
-    if (!activeModelOption?.contextLimit) return null
-    const totalChars = messages.reduce((sum, m) => sum + (m.text?.length || 0), 0)
-    const estimatedTokens = Math.round(totalChars / 4)
-    const limit = activeModelOption.contextLimit
-    return { used: estimatedTokens, limit, pct: Math.min(100, Math.round((estimatedTokens / limit) * 100)) }
-  }, [messages, activeModelOption])
+  useEffect(() => {
+    if (!config) return
+    const id = setInterval(() => {
+      api.listPendingQuestions(config, selectedSession?.directory).then((q) => setPendingCount(q.length)).catch(() => {})
+    }, 15000)
+    return () => clearInterval(id)
+  }, [config, selectedSession?.directory])
+
+  useEffect(() => {
+    if (!showOverflow) return
+    function handleClick(e: MouseEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflow(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [showOverflow])
+
+  const filteredMessages = useMemo(() => {
+    if (!messageQuery.trim()) return messages
+    const q = messageQuery.toLowerCase()
+    return messages.filter((m) => m.text.toLowerCase().includes(q))
+  }, [messages, messageQuery])
+
+  const contextDisplay = useMemo(() => {
+    // Use the LAST assistant message's tokens (per-exchange, like the TUI does)
+    let lastMsgTokens: RenderedMessage["tokens"]
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.info.role === "assistant" && m.tokens) { lastMsgTokens = m.tokens; break }
+    }
+    if (!lastMsgTokens) return null
+    const total = (lastMsgTokens.input ?? 0) + (lastMsgTokens.output ?? 0) +
+      (lastMsgTokens.reasoning ?? 0) + (lastMsgTokens.cache?.read ?? 0) + (lastMsgTokens.cache?.write ?? 0)
+    if (total <= 0) return null
+    const limit = activeModelOption?.contextLimit
+    const pct = limit && limit > 0 ? Math.round((total / limit) * 100) : null
+    const cost = selectedSession?.cost ?? 0
+    const label = formatTuiNum(total) + (pct !== null ? ` (${pct}%)` : "")
+    return { total, pct, limit, cost, label: cost > 0 ? `${label} · ${formatCost(cost)}` : label }
+  }, [messages, activeModelOption?.contextLimit, selectedSession?.cost])
+
+  function formatTuiNum(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+    return String(n)
+  }
+  function formatCost(c: number): string {
+    return c < 0.01 ? `$${c.toFixed(6)}` : `$${c.toFixed(4)}`
+  }
 
   return (
     <main className="panel detail fade-in">
-      <div className="detail-topbar">
-        <button className="btn-secondary" onClick={handleBack}>{t('detail.backToSessions')}</button>
-        <div className="detail-topbar-actions">
-          <button className="btn-secondary compact" onClick={onExportChat} title={t('detail.exportChat') || "Export chat"}>
-            <ShareIcon size={14} />
-          </button>
-          <button className="btn-secondary compact" onClick={onSnapshot} title={t('detail.snapshot') || "Snapshot"}>
-            <SaveIcon size={14} />
-          </button>
-          {selectedSession && <span className={`pill ${selectedSession.status}`}>{selectedSession.status}</span>}
-        </div>
-      </div>
-
       <div className="header-row detail-header">
-        <div>
-          <h2>
-            {selectedSession ? (
-              <div className="detail-title-row">
-                <ChatIcon size={24} className="icon-inline-heading" />
-                {renamingSessionID === selectedSession.id ? (
-                  <InlineRename value={renameValue} original={selectedSession.title}
-                    onChange={onRenameChange}
-                    onConfirm={() => onRenameConfirm(selectedSession.id, renameValue, selectedSession.directory)}
-                    onCancel={onRenameCancel}
-                    placeholder={t('session.renamePlaceholder')} />
-                ) : (
-                  <>
-                    {selectedSession.title}
-                    <button className="btn-icon btn-secondary compact" onClick={() => onStartRename(selectedSession)}
-                      title={t('session.renameTitle')} style={{ marginLeft: 'var(--space-1)' }}>
-                      <PencilIcon size={14} />
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : (
-              t('detail.selectSession')
-            )}
-          </h2>
-          {selectedSession && (
-            <p className="subtle">
-              {selectedSession.directory}
-            </p>
+        <h2>
+          {selectedSession ? (
+            <div className="detail-title-row">
+              <button className="btn-icon btn-ghost back-btn" onClick={onBackToSessions} aria-label="Volver" title="Volver a sesiones">
+                <ArrowLeftIcon size={20} />
+              </button>
+              <img src="./img/opencode-logo-dark.jpg" alt="OpenCode" className="app-icon header-logo" style={{ width: 22, height: 22, borderRadius: 4, objectFit: "cover" }} />
+              {renamingSessionID === selectedSession.id ? (
+                <InlineRename value={renameValue} original={selectedSession.title}
+                  onChange={onRenameChange}
+                  onConfirm={() => onRenameConfirm(selectedSession.id, renameValue, selectedSession.directory)}
+                  onCancel={onRenameCancel}
+                  placeholder={t('session.renamePlaceholder')} />
+              ) : (
+                <span className="detail-title-text">{selectedSession.title}</span>
+              )}
+            </div>
+          ) : (
+            t('detail.selectSession')
           )}
-        </div>
+        </h2>
+        {selectedSession && (
+          <div className="detail-header-actions">
+            {pendingCount > 0 && <span className="pending-badge" title={`${pendingCount} pending`}>{pendingCount}</span>}
+            {onOpenSettings && (
+              <button
+                className="btn-icon btn-secondary compact"
+                onClick={onOpenSettings}
+                title={t('nav.settings') || "Settings"}>
+                <SettingsIcon size={16} />
+              </button>
+            )}
+            <div className="overflow-wrap header-overflow" ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
+              <button className="btn-icon btn-secondary compact"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowOverflow((v) => !v)
+                }}
+                title="More actions"
+                aria-pressed={showOverflow}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
+                </svg>
+              </button>
+              {showOverflow && (
+                <div
+                  className="overflow-dropdown fade-in"
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 6px)",
+                    right: 0,
+                    left: "auto",
+                    zIndex: 99999,
+                    display: "flex",
+                    flexDirection: "column",
+                    width: 170,
+                    background: "var(--surface-strong, #1a1a20)",
+                    border: "1px solid var(--border-strong, #444)",
+                    borderRadius: "var(--radius-md, 8px)",
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
+                    padding: 4,
+                    gap: 2
+                  }}>
+                  {renamingSessionID !== selectedSession.id && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onStartRename(selectedSession) }}>
+                      <PencilIcon size={14} /> Rename
+                    </button>
+                  )}
+                  <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowThinking((v) => !v) }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.5 3 5.7V17h8v-2.3c1.8-1.3 3-3.4 3-5.7a7 7 0 0 0-7-7z"/>
+                      <path d="M9 17h6"/>
+                    </svg>
+                    {showThinking ? "Hide Thinking" : "Show Thinking"}
+                  </button>
+                  <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSearch((v) => !v) }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                    </svg>
+                    Search Messages
+                  </button>
+                  <button className="overflow-item" disabled={isWorking} onClick={() => { setShowOverflow(false); onUndo?.() }}>
+                    <UndoIcon size={14} /> Undo
+                  </button>
+                  {selectedSession?.revert && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onRedo?.() }}>
+                      <RedoIcon size={14} /> Redo
+                    </button>
+                  )}
+                  <button className="overflow-item" disabled={isWorking} onClick={() => { setShowOverflow(false); onCompact?.() }}>
+                    <CompressIcon size={14} /> Compact
+                  </button>
+                  <button className="overflow-item" onClick={() => { setShowOverflow(false); onToggleTokenStats?.() }}>
+                    <StatsIcon size={14} /> Token Stats
+                  </button>
+                  {onOpenFileBrowser && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenFileBrowser() }}>
+                      <FolderIcon size={14} /> Browse Files
+                    </button>
+                  )}
+                  <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSkills(true) }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                    Skills
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {selectedSession && (activeSessions.length > 0 || recentSessions.length > 0) && (
-        <div className="detail-session-switcher">
-          {[...activeSessions, ...recentSessions]
-            .filter((s, i, arr) => s.id !== selectedSession.id && arr.findIndex((x) => x.id === s.id) === i)
-            .slice(0, 5).map((session) => (
-              <button key={session.id} type="button"
-                className={`session-switch-chip ${activeSessions.some((a) => a.id === session.id) ? "active" : ""}`}
-                onClick={() => onOpenSession(session.id, session.directory)}>
-                <FolderIcon size={12} />
-                <span className="session-switch-title">{session.title}</span>
-              </button>
-            ))}
+      {selectedSession?.revert && (
+        <div className="revert-dock">
+          <span className="revert-dock-label">{t('detail.reverted')}</span>
+          <button className="btn-link" onClick={onRedo}>{t('detail.redoShort')}</button>
         </div>
       )}
 
-      {selectedSession && showModelChip && (
-        <section className="session-context-strip" aria-label={t('detail.contextStripLabel')}>
-          <button type="button" className="context-chip ghost" onClick={() => onSheetOpen("details")}>
-            <span>{t('detail.detailsChip')}</span>
-            <strong>{projectName || t('detail.projectLabel')}</strong>
-          </button>
-          <button type="button" className={`context-chip ${readingMode ? "active" : "ghost"}`} onClick={onToggleReadingMode}
-            aria-pressed={readingMode}>
-            <span>{readingMode ? t('detail.readingModeOn') || "Reading" : t('detail.readingModeOff') || "Chat"}</span>
-            <strong>{readingMode ? "📖" : "💬"}</strong>
-          </button>
-        </section>
-      )}
-
-      {selectedSession && (
-        <TodoBox todos={todos} expanded={todosExpanded} onToggle={onTodosToggle} />
-      )}
-
-      {contextInfo && (
-        <div className="context-bar" title={`~${contextInfo.used.toLocaleString()} tokens estimated / ${contextInfo.limit.toLocaleString()} limit`}>
-          <div className="context-bar-track">
-            <div className={`context-bar-fill ${contextInfo.pct > 85 ? "high" : contextInfo.pct > 60 ? "mid" : ""}`}
-              style={{ width: `${contextInfo.pct}%` }} />
-          </div>
-          <span className="context-bar-label">{formatLimit(contextInfo.used, 1)} / {formatLimit(contextInfo.limit, 1)} tokens</span>
+      {showSearch && (
+        <div className="message-search-bar">
+          <input
+            type="search"
+            value={messageQuery}
+            onChange={(e) => setMessageQuery(e.target.value)}
+            placeholder={t('sessions.searchPlaceholder')}
+            autoFocus
+          />
+          {messageQuery && (
+            <span className="message-search-count">
+              {filteredMessages.length}/{messages.length}
+            </span>
+          )}
         </div>
       )}
 
       <div className="messages-wrap">
         <MessageList
-          messages={messages}
+          messages={filteredMessages}
           loadingSessionID={loadingSessionID}
           selectedID={selectedID}
           showTypingBubble={showTypingBubble}
           isWorking={isWorking}
           messageScrollSignature={messageScrollSignature}
           view={view}
+          revert={selectedSession?.revert}
+          onRevertToMessage={onRevertToMessage}
+          agents={agents}
+          config={config}
+          directory={selectedSession?.directory}
+          showThinking={showThinking}
+          onViewSubagents={handleViewSubagents}
         />
       </div>
 
-      {/* Terminal/tool output — Full mode shows inline, Ultra shows blocker notice */}
-      {selectedSession && toolMessage && toolMessage.length > 0 && (
-        <>
-          {dataMode === "full" ? (
-            <div className="terminal-block">
-              <div className="terminal-header">Terminal</div>
-              <pre className="terminal-content">
-                {toolMessage.map((p, i) => <code key={i}>{p.text}</code>)}
-              </pre>
-            </div>
-          ) : dataMode === "ultra" ? (
-            <div className="blocker-notice">
-              <span className="pill busy">blocking</span>
-              Process running — switch to Full mode to see output
-            </div>
-          ) : null}
-        </>
+      {isWorking && toolMessage && (
+        <div className="live-tools">
+          {toolMessage.filter((p) => p.type === "tool_use").map((tp) => (
+            <ToolStatus key={tp.id} part={tp} />
+          ))}
+        </div>
+      )}
+
+      {dataMode === "ultra" && selectedSession && toolMessage && toolMessage.length > 0 && (
+        <div className="blocker-notice">
+          <span className="pill busy">ULTRA</span>
+          {t('detail.ultraNotice')}
+        </div>
+      )}
+
+      {selectedSession?.parentID && (
+        <SubagentFooter session={selectedSession} onGoBack={onBackToSessions} />
       )}
 
       {selectedSession && !readingMode && (
         <Composer
           value={composer}
+          commands={commands}
           onChange={onComposerChange}
           onSend={onSend}
           onAbort={onAbort}
@@ -218,10 +338,23 @@ export const ChatView = memo(function ChatView({
           onChangeAgent={onChangeAgent}
           activeModelOption={activeModelOption}
           onSheetOpen={onSheetOpen}
+          contextLabel={contextDisplay?.label || null}
+          onShellSend={onShellSend}
+          config={config}
+          directory={selectedSession?.directory}
+          onThemeCommand={onThemeCommand}
         />
       )}
 
       <ErrorNotice message={runtimeError} />
+
+      {showSkills && config && (
+        <SkillBrowser
+          config={config}
+          onClose={() => setShowSkills(false)}
+          onSelect={(name) => onComposerChange(`/skill ${name} `)}
+        />
+      )}
     </main>
   )
 })

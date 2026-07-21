@@ -35,6 +35,14 @@ export type ModelOption = ModelSelection & {
   isDefault?: boolean
 }
 
+export type TokenUsage = {
+  total?: number
+  input: number
+  output: number
+  reasoning: number
+  cache: { read: number; write: number }
+}
+
 export type Session = {
   id: string
   title: string
@@ -42,11 +50,24 @@ export type Session = {
   time: {
     created: number
     updated: number
+    compacting?: number
+    archived?: number
   }
   summary?: {
     additions: number
     deletions: number
     files: number
+  }
+  tokens?: TokenUsage
+  cost?: number
+  agent?: string
+  parentID?: string
+  version?: string
+  revert?: {
+    messageID: string
+    partID?: string
+    snapshot?: string
+    diff?: string
   }
   model?: {
     id: string
@@ -76,6 +97,21 @@ export type MessageEnvelope = {
       created: number
       completed?: number
     }
+    agent?: string
+    parentID?: string
+    modelID?: string
+    providerID?: string
+    mode?: string
+    finish?: string
+    error?: { name: string; message?: string }
+    tokens?: {
+      total?: number
+      input: number
+      output: number
+      reasoning: number
+      cache: { read: number; write: number }
+    }
+    cost?: number
   }
   parts: Array<{
     id: string
@@ -86,10 +122,28 @@ export type MessageEnvelope = {
   }>
 }
 
+export type ThinkingPart = {
+  id: string
+  text: string
+}
+
+type MessageTokens = {
+  total?: number
+  input: number
+  output: number
+  reasoning: number
+  cache: { read: number; write: number }
+}
+
 export type RenderedMessage = {
   info: MessageEnvelope["info"]
   parts: MessageEnvelope["parts"]
   text: string
+  hasCompaction: boolean
+  thinkingParts: ThinkingPart[]
+  toolParts: Array<{ id: string; type: string; text?: string }>
+  tokens?: MessageTokens
+  cost?: number
 }
 
 export type TodoItem = {
@@ -159,6 +213,11 @@ export type SessionView = {
   files: number
   additions: number
   deletions: number
+  tokens?: TokenUsage
+  cost?: number
+  agent?: string
+  parentID?: string
+  revert?: { messageID: string; partID?: string }
   model?: ModelSelection
 }
 

@@ -9,5 +9,7 @@ export const STORAGE_KEYS = {
   STATS: "opencode.mobile.stats",
   CURSOR: "opencode.remote.cursor",
   LANGUAGE: "opencode.remote.language",
-  NAVBAR: "opencode.remote.navbar"
+  NAVBAR: "opencode.remote.navbar",
+  RECENT_MODELS: "opencode.mobile.recentModels",
+  BLOCKED_MODELS: "opencode.mobile.blockedModels"
 }
