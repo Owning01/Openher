@@ -182,6 +182,19 @@ export type FileStatusEntry = {
   [key: string]: unknown
 }
 
+export type FeatureFlags = {
+  fileBrowser: boolean
+  inlineDiff: boolean
+  contextMenu: boolean
+  planBreakdown: boolean
+  gitOps: boolean
+  mcpConfig: boolean
+  sessionArchive: boolean
+  autoSummarize: boolean
+  autoSummarizeThreshold: number
+  streamingFull: boolean
+}
+
 export type FileEntry = {
   name: string
   path: string

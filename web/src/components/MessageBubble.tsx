@@ -1,4 +1,4 @@
-import { memo, useCallback, useState, useMemo } from "react"
+import { memo, useCallback, useState, useMemo, useRef } from "react"
 import { UndoIcon } from "../Icons"
 import { formatTime } from "../utils"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
@@ -22,7 +22,7 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number): string {
   return `${Math.floor(dur / 60000)}m ${Math.round((dur % 60000) / 1000)}s`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, agents, prevUserTs, config, directory, onViewSubagents }: {
+export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, agents, prevUserTs, config, directory, onViewSubagents, onContextMenu }: {
   message: RenderedMessage
   revert?: SessionView["revert"]
   onRevertToMessage?: (messageID: string) => void
@@ -31,9 +31,11 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   config?: ServerConfig
   directory?: string
   onViewSubagents?: () => void
+  onContextMenu?: (x: number, y: number, messageID: string) => void
 }) {
   const t = useT()
   const [showConfirm, setShowConfirm] = useState(false)
+  const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const msgParts = message.info.id.split("-")
   const msgTs = msgParts.length >= 2 ? Number(msgParts[msgParts.length - 2]) : 0
@@ -79,6 +81,12 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
     setShowConfirm(false)
   }, [])
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (!onContextMenu) return
+    e.preventDefault()
+    onContextMenu(e.clientX, e.clientY, message.info.id)
+  }, [onContextMenu, message.info.id])
+
   const isUserClickable = message.info.role === "user" && onRevertToMessage && !showConfirm
 
   return (
@@ -96,6 +104,19 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
         tabIndex={isUserClickable ? 0 : undefined}
         onKeyDown={isUserClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick() } } : undefined}
         title={isUserClickable ? t('detail.revertToHere') : undefined}
+        onContextMenu={handleContextMenu}
+        onTouchEnd={() => {
+          if (touchTimerRef.current) {
+            clearTimeout(touchTimerRef.current)
+            touchTimerRef.current = null
+          }
+        }}
+        onTouchStart={(e) => {
+          touchTimerRef.current = setTimeout(() => {
+            const touch = e.changedTouches[0]
+            handleContextMenu({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} } as React.MouseEvent)
+          }, 500)
+        }}
       >
         {message.info.role === "user" && (
           <header>

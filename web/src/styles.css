@@ -4392,3 +4392,241 @@ button.compact {
 .subagent-hint:hover {
   color: var(--accent);
 }
+
+/* ===== Diff Viewer ===== */
+.diff-viewer {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.diff-file {
+  border-bottom: 1px solid var(--border);
+}
+.diff-file:last-child {
+  border-bottom: none;
+}
+.diff-file-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-subtle);
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.1s;
+}
+.diff-file-header:hover {
+  background: var(--surface-strong);
+}
+.diff-file-name {
+  flex: 1;
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.diff-stats {
+  display: flex;
+  gap: var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.diff-chevron {
+  color: var(--muted);
+  font-size: 0.8rem;
+  width: 14px;
+  text-align: center;
+}
+.diff-file-body {
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.diff-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.diff-mini-bar {
+  background: var(--primary-soft);
+  border-radius: var(--radius-sm);
+  width: 100%;
+}
+
+/* ===== Plan Breakdown ===== */
+.plan-breakdown {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+}
+.plan-breakdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-subtle);
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.plan-breakdown-icon {
+  color: var(--accent);
+  font-weight: 700;
+}
+.plan-breakdown-label {
+  font-weight: 600;
+  flex: 1;
+  text-align: left;
+}
+.plan-breakdown-count {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.plan-breakdown-body {
+  padding: var(--space-1) var(--space-3);
+}
+.plan-task {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: 0.82rem;
+}
+.plan-task-status {
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+.plan-task-completed .plan-task-status {
+  color: var(--success);
+}
+.plan-task-in_progress .plan-task-status {
+  color: var(--accent);
+}
+.plan-task-pending .plan-task-status {
+  color: var(--muted);
+}
+.plan-task-title {
+  color: var(--text);
+}
+.plan-task-completed .plan-task-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* ===== Context Menu ===== */
+.context-menu {
+  position: fixed;
+  z-index: 99999;
+  min-width: 160px;
+  background: var(--surface-strong, #1a1a20);
+  border: 1px solid var(--border-strong, #444);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.8rem;
+  text-align: left;
+  transition: background 0.1s;
+}
+.context-menu-item:hover {
+  background: var(--primary-soft);
+}
+.context-menu-icon {
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ===== Git Toolbar ===== */
+.git-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  font-size: 0.78rem;
+  flex-wrap: wrap;
+}
+.git-branch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+.git-ahead {
+  color: var(--success);
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+.git-behind {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+.git-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+.git-commit-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.git-commit-input {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  width: 140px;
+  outline: none;
+}
+.git-commit-input:focus {
+  border-color: var(--primary);
+}
+.btn-sm {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: border-color 0.15s;
+}
+.btn-sm:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.btn-sm.btn-primary {
+  background: var(--primary);
+  color: var(--bg);
+  border-color: var(--primary);
+}

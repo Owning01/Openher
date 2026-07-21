@@ -9,9 +9,12 @@ import { ErrorNotice } from "./ErrorNotice"
 import { SubagentFooter } from "./SubagentFooter"
 import { ToolStatus } from "./ToolStatus"
 import { SkillBrowser } from "./SkillBrowser"
+import { ContextMenu } from "./ContextMenu"
+import { DiffViewer } from "./DiffViewer"
+import { GitToolbar } from "./GitToolbar"
 
 import { api } from "../api"
-import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig } from "../types"
+import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig, FeatureFlags, ProjectDashboard, DiffFile } from "../types"
 
 type ChatViewProps = {
   selectedSession: SessionView | null
@@ -67,6 +70,11 @@ type ChatViewProps = {
   onToggleTokenStats?: () => void
   onShellSend?: (command: string) => void
   onThemeCommand?: () => void
+  flags: FeatureFlags
+  onToggleFlag: (key: keyof FeatureFlags) => void
+  onSetFlag: <K extends keyof FeatureFlags>(key: K, value: FeatureFlags[K]) => void
+  diffFiles: DiffFile[]
+  projectDashboard: ProjectDashboard | null
 }
 
 export const ChatView = memo(function ChatView({
@@ -78,7 +86,8 @@ export const ChatView = memo(function ChatView({
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
-  agents, config, activeSessions, onOpenSession, onOpenSettings, onToggleTokenStats, onShellSend, onThemeCommand
+  agents, config, activeSessions, onOpenSession, onOpenSettings, onToggleTokenStats, onShellSend, onThemeCommand,
+  flags, onToggleFlag: _onToggleFlag, onSetFlag: _onSetFlag, diffFiles, projectDashboard
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -86,6 +95,7 @@ export const ChatView = memo(function ChatView({
   const [showOverflow, setShowOverflow] = useState(false)
   const [showSkills, setShowSkills] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
   const overflowRef = useRef<HTMLDivElement | null>(null)
 
   const handleViewSubagents = useCallback(() => {
@@ -237,7 +247,7 @@ export const ChatView = memo(function ChatView({
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); onToggleTokenStats?.() }}>
                     <StatsIcon size={14} /> Token Stats
                   </button>
-                  {onOpenFileBrowser && (
+                  {flags.fileBrowser && onOpenFileBrowser && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenFileBrowser() }}>
                       <FolderIcon size={14} /> Browse Files
                     </button>
@@ -292,6 +302,7 @@ export const ChatView = memo(function ChatView({
           config={config}
           directory={selectedSession?.directory}
           onViewSubagents={handleViewSubagents}
+          onContextMenu={flags.contextMenu ? (x, y, messageID) => setContextMenu({ x, y, messageID }) : undefined}
         />
       </div>
 
@@ -312,6 +323,32 @@ export const ChatView = memo(function ChatView({
 
       {selectedSession?.parentID && (
         <SubagentFooter session={selectedSession} onGoBack={onBackToSessions} />
+      )}
+
+      {flags.inlineDiff && selectedSession && diffFiles.length > 0 && (
+        <DiffViewer files={diffFiles} />
+      )}
+
+      {flags.gitOps && projectDashboard?.vcs && (
+        <GitToolbar
+          vcs={projectDashboard.vcs}
+          onStage={() => {}}
+          onCommit={(msg) => { onComposerChange(`/git commit -m "${msg}"`) }}
+        />
+      )}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          actions={[
+            { id: "copy", label: t('detail.contextMenu.copy'), onAction: () => navigator.clipboard.writeText(
+              messages.find(m => m.info.id === contextMenu.messageID)?.text ?? ""
+            )},
+            { id: "revert", label: t('detail.contextMenu.revert'), onAction: () => onRevertToMessage?.(contextMenu.messageID) },
+          ]}
+          onClose={() => setContextMenu(null)}
+        />
       )}
 
       {selectedSession && !readingMode && (

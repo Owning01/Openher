@@ -19,6 +19,7 @@ type MessageListProps = {
   config?: ServerConfig
   directory?: string
   onViewSubagents?: () => void
+  onContextMenu?: (x: number, y: number, messageID: string) => void
 }
 
 function reasoningSummary(text: string): { title: string | null; body: string } {
@@ -56,7 +57,7 @@ const ThinkingToggle = memo(function ThinkingToggle({ text }: { text: string }) 
 
 export const MessageList = memo(function MessageList({
   messages, loadingSessionID, selectedID, showTypingBubble, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -149,6 +150,7 @@ export const MessageList = memo(function MessageList({
                   config={config}
                   directory={directory}
                   onViewSubagents={onViewSubagents}
+                  onContextMenu={onContextMenu}
                 />
               </Fragment>
             ))}

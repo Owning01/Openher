@@ -40,6 +40,7 @@ type SessionListProps = {
   onOpenSettings?: () => void
   onExportChat?: (session: SessionView) => void
   onSnapshot?: (session: SessionView) => void
+  onArchive?: (id: string) => void
 }
 
 export const SessionList = memo(function SessionList({
@@ -51,7 +52,7 @@ export const SessionList = memo(function SessionList({
   dataMode, onDataModeChange,
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
-  onToggleFavorite, onOpenSettings, onExportChat, onSnapshot
+  onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -80,7 +81,7 @@ export const SessionList = memo(function SessionList({
         onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
         onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
         onToggleFavorite={onToggleFavorite}
-        onExportChat={onExportChat} onSnapshot={onSnapshot} />
+        onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} />
     ))
   )
 

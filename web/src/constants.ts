@@ -11,5 +11,16 @@ export const STORAGE_KEYS = {
   LANGUAGE: "opencode.remote.language",
   NAVBAR: "opencode.remote.navbar",
   RECENT_MODELS: "opencode.mobile.recentModels",
-  BLOCKED_MODELS: "opencode.mobile.blockedModels"
+  BLOCKED_MODELS: "opencode.mobile.blockedModels",
+  FEATURE_FLAGS: "opencode.mobile.featureFlags"
+}
+
+export const DEFAULT_AUTO_SUMMARIZE_THRESHOLD = 32000
+
+export const STREAMING_POLL_INTERVAL_MS = 1000
+export const DEFAULT_POLL_INTERVALS: Record<string, number> = {
+  full: 3500,
+  saver: 15000,
+  ultra: 30000,
+  miser: 60000,
 }

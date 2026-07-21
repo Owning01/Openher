@@ -1,7 +1,7 @@
 import { memo } from "react"
 import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import type { ServerConfig, ModelOption, NoticeType, DataMode, ViewType } from "../types"
+import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType } from "../types"
 import type { LanguageCode } from "../i18n"
 
 type UsageStats = {
@@ -40,6 +40,9 @@ type SettingsPanelProps = {
   onNavBarModeChange: (mode: "header" | "bottom") => void
   blockedModels: { isBlocked: (key: string) => boolean; toggleBlocked: (key: string) => void; blockedCount: number }
   onOpenThemePicker?: () => void
+  flags: FeatureFlags
+  onToggleFlag: (key: keyof FeatureFlags) => void
+  onSetFlag: <K extends keyof FeatureFlags>(key: K, value: FeatureFlags[K]) => void
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
@@ -51,7 +54,8 @@ export const SettingsPanel = memo(function SettingsPanel({
   modelOptions, selectedModelKey, onChangeModel, modelKey: mk,
   stats, onResetStats,
   navBarMode, onNavBarModeChange,
-  blockedModels, onOpenThemePicker
+  blockedModels, onOpenThemePicker,
+  flags, onToggleFlag, onSetFlag
 }: SettingsPanelProps) {
   const t = useT()
 
@@ -224,7 +228,42 @@ export const SettingsPanel = memo(function SettingsPanel({
       )}
 
       <div className="setting-group">
-        <h4 className="quick-access-label">{t('settings.blockedModels')} ({blockedModels.blockedCount})</h4>
+        <h4 className="quick-access-label">{t('settings.featureFlags')}</h4>
+        <p className="subtle">{t('settings.featureFlagsDesc')}</p>
+        {([
+          { key: "fileBrowser" as const, label: t('settings.fileBrowser'), desc: t('settings.fileBrowserDesc') },
+          { key: "inlineDiff" as const, label: t('settings.inlineDiff'), desc: t('settings.inlineDiffDesc') },
+          { key: "contextMenu" as const, label: t('settings.contextMenu'), desc: t('settings.contextMenuDesc') },
+          { key: "planBreakdown" as const, label: t('settings.planBreakdown'), desc: t('settings.planBreakdownDesc') },
+          { key: "gitOps" as const, label: t('settings.gitOps'), desc: t('settings.gitOpsDesc') },
+          { key: "mcpConfig" as const, label: t('settings.mcpConfig'), desc: t('settings.mcpConfigDesc') },
+          { key: "sessionArchive" as const, label: t('settings.sessionArchive'), desc: t('settings.sessionArchiveDesc') },
+          { key: "autoSummarize" as const, label: t('settings.autoSummarize'), desc: t('settings.autoSummarizeDesc') },
+          { key: "streamingFull" as const, label: t('settings.streamingFull'), desc: t('settings.streamingFullDesc') },
+        ]).map(({ key, label, desc }) => (
+          <label key={key} className="toggle-row">
+            <span>
+              <strong>{label}</strong>
+              <small className="subtle">{desc}</small>
+            </span>
+            <button type="button"
+              className={`toggle-btn${flags[key] ? " active" : ""}`}
+              onClick={() => onToggleFlag(key)}
+              aria-pressed={flags[key]}>
+            </button>
+          </label>
+        ))}
+        {flags.autoSummarize && (
+          <label className="setting-row">
+            <span>{t('settings.autoSummarizeThreshold')}</span>
+            <input type="number" value={flags.autoSummarizeThreshold}
+              onChange={(e) => onSetFlag("autoSummarizeThreshold", Number(e.target.value))}
+              min={1000} step={1000} />
+          </label>
+        )}
+      </div>
+
+      <div className="setting-group">
         <p className="subtle">{t('settings.blockedModelsHint')}</p>
         <div className="blocked-model-list">
           {modelOptions.length === 0 ? (

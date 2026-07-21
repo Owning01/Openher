@@ -1,6 +1,7 @@
 import { memo, type ComponentProps } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import rehypeHighlight from "rehype-highlight"
 
 function Table({ children }: ComponentProps<"table">) {
   return (
@@ -14,7 +15,11 @@ const components = { table: Table }
 
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeHighlight]}
+      components={components}
+    >
       {text}
     </ReactMarkdown>
   )

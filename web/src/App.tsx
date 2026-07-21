@@ -29,6 +29,8 @@ import { useBackButton } from "./hooks/useBackButton"
 import { useNetworkMode } from "./hooks/useNetworkMode"
 import { useMemoryCleanup } from "./hooks/useMemoryCleanup"
 import { useBlockedModels } from "./hooks/useBlockedModels"
+import { useFeatureFlags } from "./hooks/useFeatureFlags"
+import { useAutoSummarize } from "./hooks/useAutoSummarize"
 import { ThemeVariantProvider } from "./context/themeVariant"
 import { ThemePicker } from "./components/ThemePicker"
 import { SessionTokenUsage } from "./components/SessionTokenUsage"
@@ -59,12 +61,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
     selectedModelKey, showModelChip, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
   const blockedModels = useBlockedModels(modelOptions)
+  const { flags, toggleFlag, setFlag } = useFeatureFlags()
 
   const {
     composer, setComposer,
     awaitingAssistantReply,
     runtimeError, setRuntimeError,
-    renderedMessages, messageScrollSignature,
+    renderedMessages, messageScrollSignature, assistantResponseSignature,
     toolMessage, completionShouldPlayRef,
     clearSession, loadSelected, send, abortSession, sendShell,
     setMessages
@@ -109,6 +112,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   } = useFolderPicker(config)
 
   const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
+  useAutoSummarize(
+    config,
+    selectedSession?.id ?? null,
+    selectedSession?.directory ?? "",
+    flags.autoSummarize,
+    flags.autoSummarizeThreshold,
+    assistantResponseSignature,
+    loadSelected ? (() => loadSelected(selectedSession!.id, selectedSession!.directory)) : undefined,
+    activeModel?.providerID,
+    activeModel?.modelID
+  )
   const [readingMode, setReadingMode] = useState(false)
   const [showThemePicker, setShowThemePicker] = useState(false)
   const [tokenStatsOpen, setTokenStatsOpen] = useState(false)
@@ -327,7 +341,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           stats={stats} onResetStats={resetStats}
           navBarMode={navBarMode} onNavBarModeChange={(m) => { setNavBarMode(m); localStorage.setItem(STORAGE_KEYS.NAVBAR, m) }}
           blockedModels={blockedModels}
-          onOpenThemePicker={() => setShowThemePicker(true)} />
+          onOpenThemePicker={() => setShowThemePicker(true)}
+          flags={flags}
+          onToggleFlag={toggleFlag}
+          onSetFlag={setFlag} />
       )}
 
       {view === "sessions" && (
@@ -354,7 +371,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onRenameConfirm={renameSession}
             onRenameCancel={cancelRename}
             onDelete={setSessionToDelete}
-            onToggleFavorite={toggleFavorite} />
+            onToggleFavorite={toggleFavorite}
+            onArchive={flags.sessionArchive ? (id) => {
+              const s = sessions.find(s => s.id === id)
+              if (s) api.sendCommand(config, id, "/archive", "", s.directory).catch(() => {})
+            } : undefined} />
           {showNewSessionPicker && (
             <FolderPicker
               pickerPath={pickerPath} pickerItems={pickerItems}
@@ -406,7 +427,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onToggleTokenStats={() => setTokenStatsOpen((v) => !v)}
             config={config}
             agents={agentOptions}
-            onShellSend={() => sendShell(selectedSession!.id, selectedSession!.directory)} />
+            onShellSend={() => sendShell(selectedSession!.id, selectedSession!.directory)}
+            flags={flags}
+            onToggleFlag={toggleFlag}
+            onSetFlag={setFlag}
+            diffFiles={diffFiles}
+            projectDashboard={projectDashboard} />
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={() => setActiveDetailSheet(null)}

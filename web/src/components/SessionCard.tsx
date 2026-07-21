@@ -20,12 +20,13 @@ type SessionCardProps = {
   onToggleFavorite: (id: string) => void
   onExportChat?: (session: SessionView) => void
   onSnapshot?: (session: SessionView) => void
+  onArchive?: (id: string) => void
 }
 
 export const SessionCard = memo(function SessionCard({
   session, isSelected, isRenaming, renameValue, isFavorite,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
-  onToggleFavorite, onExportChat, onSnapshot
+  onToggleFavorite, onExportChat, onSnapshot, onArchive
 }: SessionCardProps) {
   const t = useT()
 
@@ -103,6 +104,12 @@ export const SessionCard = memo(function SessionCard({
         {onSnapshot && (
           <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); onSnapshot(session) }} title={t('detail.snapshot') || "Snapshot"}>
             <SaveIcon size={15} />
+          </button>
+        )}
+        {onArchive && (
+          <button className="btn-icon compact" onClick={(e) => { e.stopPropagation(); onArchive(session.id) }}
+            title={t('detail.archive')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
           </button>
         )}
         <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); handleStartRename() }} title={t('session.renameTitle')}>

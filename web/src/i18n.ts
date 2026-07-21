@@ -189,6 +189,43 @@ type TranslationKey =
   | 'settings.navBarHeader'
   | 'settings.blockedModels'
   | 'settings.blockedModelsHint'
+  | 'settings.featureFlags'
+  | 'settings.featureFlagsDesc'
+  | 'settings.fileBrowser'
+  | 'settings.fileBrowserDesc'
+  | 'settings.inlineDiff'
+  | 'settings.inlineDiffDesc'
+  | 'settings.contextMenu'
+  | 'settings.contextMenuDesc'
+  | 'settings.planBreakdown'
+  | 'settings.planBreakdownDesc'
+  | 'settings.gitOps'
+  | 'settings.gitOpsDesc'
+  | 'settings.mcpConfig'
+  | 'settings.mcpConfigDesc'
+  | 'settings.sessionArchive'
+  | 'settings.sessionArchiveDesc'
+  | 'settings.autoSummarize'
+  | 'settings.autoSummarizeDesc'
+  | 'settings.autoSummarizeThreshold'
+  | 'settings.streamingFull'
+  | 'settings.streamingFullDesc'
+  | 'detail.contextMenu.copy'
+  | 'detail.contextMenu.revert'
+  | 'detail.contextMenu.fork'
+  | 'detail.git.stage'
+  | 'detail.git.unstage'
+  | 'detail.git.commit'
+  | 'detail.git.commitMessage'
+  | 'detail.git.noChanges'
+  | 'detail.archive'
+  | 'detail.unarchive'
+  | 'detail.showArchived'
+  | 'detail.plan.tasks'
+  | 'detail.plan.pending'
+  | 'detail.plan.completed'
+  | 'detail.diff.viewFile'
+  | 'detail.diff.noChanges'
   | 'settings.blockedModelsSearch'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
@@ -246,6 +283,43 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': 'Blocked models',
     'settings.blockedModelsHint': 'Blocked models are hidden from the model picker.',
     'settings.blockedModelsSearch': 'Filter models...',
+    'settings.featureFlags': 'Experimental features',
+    'settings.featureFlagsDesc': 'Enable or disable additional features',
+    'settings.fileBrowser': 'File browser',
+    'settings.fileBrowserDesc': 'Browse project files from the chat',
+    'settings.inlineDiff': 'Inline diff',
+    'settings.inlineDiffDesc': 'View detailed file changes',
+    'settings.contextMenu': 'Context menu',
+    'settings.contextMenuDesc': 'Menu on long press (copy, revert)',
+    'settings.planBreakdown': 'Plan breakdown',
+    'settings.planBreakdownDesc': 'Show structured Plan agent tasks',
+    'settings.gitOps': 'Git operations',
+    'settings.gitOpsDesc': 'Stage/Commit buttons from the chat',
+    'settings.mcpConfig': 'MCP configuration',
+    'settings.mcpConfigDesc': 'List and configure MCP servers',
+    'settings.sessionArchive': 'Archive sessions',
+    'settings.sessionArchiveDesc': 'Hide archived sessions from the list',
+    'settings.autoSummarize': 'Auto-summarize',
+    'settings.autoSummarizeDesc': 'Compact conversation automatically above threshold',
+    'settings.autoSummarizeThreshold': 'Auto-summarize threshold (tokens)',
+    'settings.streamingFull': 'Fast streaming (Full mode)',
+    'settings.streamingFullDesc': 'Poll every 1s while the assistant replies',
+    'detail.contextMenu.copy': 'Copy message',
+    'detail.contextMenu.revert': 'Revert here',
+    'detail.contextMenu.fork': 'Fork session',
+    'detail.git.stage': 'Stage',
+    'detail.git.unstage': 'Unstage',
+    'detail.git.commit': 'Commit',
+    'detail.git.commitMessage': 'Commit message',
+    'detail.git.noChanges': 'No changes',
+    'detail.archive': 'Archive',
+    'detail.unarchive': 'Unarchive',
+    'detail.showArchived': 'Show archived',
+    'detail.plan.tasks': 'Plan tasks',
+    'detail.plan.pending': 'Pending',
+    'detail.plan.completed': 'Completed',
+    'detail.diff.viewFile': 'View changes',
+    'detail.diff.noChanges': 'No changes in this file',
     'connection.connecting': 'Connecting to OpenCode...',
     'connection.loadingSessions': 'Connecting and loading sessions...',
     'connection.refreshing': 'Refreshing sessions...',
@@ -473,6 +547,43 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': 'Modelos bloqueados',
     'settings.blockedModelsHint': 'Los modelos bloqueados se ocultan del selector.',
     'settings.blockedModelsSearch': 'Filtrar modelos...',
+    'settings.featureFlags': 'Funciones experimentales',
+    'settings.featureFlagsDesc': 'Activa o desactiva funciones adicionales',
+    'settings.fileBrowser': 'Explorador de archivos',
+    'settings.fileBrowserDesc': 'Navegar archivos del proyecto desde el chat',
+    'settings.inlineDiff': 'Diff inline',
+    'settings.inlineDiffDesc': 'Ver cambios de archivo detallados',
+    'settings.contextMenu': 'Menú contextual',
+    'settings.contextMenuDesc': 'Menú al presionar mensajes (copiar, revertir)',
+    'settings.planBreakdown': 'Desglose de plan',
+    'settings.planBreakdownDesc': 'Mostrar tareas estructuradas del agente Plan',
+    'settings.gitOps': 'Operaciones Git',
+    'settings.gitOpsDesc': 'Botones Stage/Commit desde el chat',
+    'settings.mcpConfig': 'Configuración MCP',
+    'settings.mcpConfigDesc': 'Listar y configurar servidores MCP',
+    'settings.sessionArchive': 'Archivar sesiones',
+    'settings.sessionArchiveDesc': 'Ocultar sesiones archivadas de la lista',
+    'settings.autoSummarize': 'Auto-resumen',
+    'settings.autoSummarizeDesc': 'Compactar conversación automáticamente al superar un umbral',
+    'settings.autoSummarizeThreshold': 'Umbral de auto-resumen (tokens)',
+    'settings.streamingFull': 'Streaming rápido (modo Full)',
+    'settings.streamingFullDesc': 'Polling cada 1s mientras el asistente responde',
+    'detail.contextMenu.copy': 'Copiar mensaje',
+    'detail.contextMenu.revert': 'Revertir aquí',
+    'detail.contextMenu.fork': 'Bifurcar sesión',
+    'detail.git.stage': 'Stage',
+    'detail.git.unstage': 'Unstage',
+    'detail.git.commit': 'Commit',
+    'detail.git.commitMessage': 'Mensaje del commit',
+    'detail.git.noChanges': 'Sin cambios',
+    'detail.archive': 'Archivar',
+    'detail.unarchive': 'Desarchivar',
+    'detail.showArchived': 'Mostrar archivados',
+    'detail.plan.tasks': 'Tareas del plan',
+    'detail.plan.pending': 'Pendientes',
+    'detail.plan.completed': 'Completadas',
+    'detail.diff.viewFile': 'Ver cambios',
+    'detail.diff.noChanges': 'Sin cambios en este archivo',
     'connection.connecting': 'Conectando a OpenCode...',
     'connection.loadingSessions': 'Conectando y cargando sesiones...',
     'connection.refreshing': 'Actualizando sesiones...',
@@ -700,6 +811,43 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': 'Modelli bloccati',
     'settings.blockedModelsHint': 'I modelli bloccati sono nascosti dal selettore.',
     'settings.blockedModelsSearch': 'Filtra modelli...',
+    'settings.featureFlags': 'Funzionalità sperimentali',
+    'settings.featureFlagsDesc': 'Attiva o disattiva funzionalità aggiuntive',
+    'settings.fileBrowser': 'Esplora file',
+    'settings.fileBrowserDesc': 'Naviga i file del progetto dalla chat',
+    'settings.inlineDiff': 'Diff inline',
+    'settings.inlineDiffDesc': 'Vedi modifiche dettagliate ai file',
+    'settings.contextMenu': 'Menu contestuale',
+    'settings.contextMenuDesc': 'Menu alla pressione dei messaggi (copia, ripristina)',
+    'settings.planBreakdown': 'Suddivisione piano',
+    'settings.planBreakdownDesc': 'Mostra attività strutturate dell\'agente Plan',
+    'settings.gitOps': 'Operazioni Git',
+    'settings.gitOpsDesc': 'Pulsanti Stage/Commit dalla chat',
+    'settings.mcpConfig': 'Configurazione MCP',
+    'settings.mcpConfigDesc': 'Elenca e configura server MCP',
+    'settings.sessionArchive': 'Archivia sessioni',
+    'settings.sessionArchiveDesc': 'Nascondi sessioni archiviate dall\'elenco',
+    'settings.autoSummarize': 'Auto-riepilogo',
+    'settings.autoSummarizeDesc': 'Compatta automaticamente la conversazione oltre una soglia',
+    'settings.autoSummarizeThreshold': 'Soglia auto-riepilogo (token)',
+    'settings.streamingFull': 'Streaming veloce (modalità Full)',
+    'settings.streamingFullDesc': 'Polling ogni 1s mentre l\'assistente risponde',
+    'detail.contextMenu.copy': 'Copia messaggio',
+    'detail.contextMenu.revert': 'Ripristina qui',
+    'detail.contextMenu.fork': 'Duplica sessione',
+    'detail.git.stage': 'Stage',
+    'detail.git.unstage': 'Unstage',
+    'detail.git.commit': 'Commit',
+    'detail.git.commitMessage': 'Messaggio commit',
+    'detail.git.noChanges': 'Nessuna modifica',
+    'detail.archive': 'Archivia',
+    'detail.unarchive': 'Disarchivia',
+    'detail.showArchived': 'Mostra archiviati',
+    'detail.plan.tasks': 'Attività del piano',
+    'detail.plan.pending': 'In sospeso',
+    'detail.plan.completed': 'Completate',
+    'detail.diff.viewFile': 'Vedi modifiche',
+    'detail.diff.noChanges': 'Nessuna modifica in questo file',
     'connection.connecting': 'Connessione a OpenCode...',
     'connection.loadingSessions': 'Connessione e caricamento sessioni...',
     'connection.refreshing': 'Aggiornamento sessioni...',
@@ -891,6 +1039,43 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': '已封鎖的模型',
     'settings.blockedModelsHint': '已封鎖的模型將從選擇器中隱藏。',
     'settings.blockedModelsSearch': '篩選模型...',
+    'settings.featureFlags': '實驗性功能',
+    'settings.featureFlagsDesc': '啟用或停用附加功能',
+    'settings.fileBrowser': '檔案瀏覽器',
+    'settings.fileBrowserDesc': '從聊天中瀏覽專案檔案',
+    'settings.inlineDiff': '內聯 Diff',
+    'settings.inlineDiffDesc': '檢視詳細的檔案變更',
+    'settings.contextMenu': '上下文選單',
+    'settings.contextMenuDesc': '長按訊息選單（複製、還原）',
+    'settings.planBreakdown': '計畫分解',
+    'settings.planBreakdownDesc': '顯示 Plan 代理的結構化任務',
+    'settings.gitOps': 'Git 操作',
+    'settings.gitOpsDesc': '從聊天中進行 Stage/Commit',
+    'settings.mcpConfig': 'MCP 設定',
+    'settings.mcpConfigDesc': '列出並設定 MCP 伺服器',
+    'settings.sessionArchive': '歸檔工作階段',
+    'settings.sessionArchiveDesc': '從清單中隱藏已歸檔的工作階段',
+    'settings.autoSummarize': '自動摘要',
+    'settings.autoSummarizeDesc': '超過閾值時自動壓縮對話',
+    'settings.autoSummarizeThreshold': '自動摘要閾值（Token）',
+    'settings.streamingFull': '快速串流（Full 模式）',
+    'settings.streamingFullDesc': '助理回覆時每秒輪詢',
+    'detail.contextMenu.copy': '複製訊息',
+    'detail.contextMenu.revert': '還原至此',
+    'detail.contextMenu.fork': '分叉工作階段',
+    'detail.git.stage': 'Stage',
+    'detail.git.unstage': 'Unstage',
+    'detail.git.commit': 'Commit',
+    'detail.git.commitMessage': 'Commit 訊息',
+    'detail.git.noChanges': '無變更',
+    'detail.archive': '歸檔',
+    'detail.unarchive': '取消歸檔',
+    'detail.showArchived': '顯示已歸檔',
+    'detail.plan.tasks': '計畫任務',
+    'detail.plan.pending': '待處理',
+    'detail.plan.completed': '已完成',
+    'detail.diff.viewFile': '檢視變更',
+    'detail.diff.noChanges': '此檔案無變更',
     'connection.connecting': '正在連線到 OpenCode...',
     'connection.loadingSessions': '正在連線並載入工作階段...',
     'connection.refreshing': '正在重新整理工作階段...',
