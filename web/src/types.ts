@@ -234,6 +234,13 @@ export type SessionView = {
   model?: ModelSelection
 }
 
+export type ProviderInfo = {
+  id: string
+  name: string
+  modelsCount: number
+  connected: boolean
+}
+
 export type CommandInfo = {
   name: string
   description?: string

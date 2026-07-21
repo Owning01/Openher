@@ -228,6 +228,21 @@ type TranslationKey =
   | 'detail.diff.viewFile'
   | 'detail.diff.noChanges'
   | 'settings.blockedModelsSearch'
+  | 'settings.providers'
+  | 'settings.providersDesc'
+  | 'settings.connect'
+  | 'settings.disconnect'
+  | 'settings.connected'
+  | 'settings.notConnected'
+  | 'settings.connecting'
+  | 'settings.connectSuccess'
+  | 'settings.connectError'
+  | 'settings.apiKey'
+  | 'settings.apiKeyPlaceholder'
+  | 'settings.noProviders'
+  | 'settings.showEmpty'
+  | 'settings.hideEmpty'
+  | 'settings.cancel'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
@@ -284,6 +299,21 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': 'Blocked models',
     'settings.blockedModelsHint': 'Blocked models are hidden from the model picker.',
     'settings.blockedModelsSearch': 'Filter models...',
+    'settings.providers': 'AI Providers',
+    'settings.providersDesc': 'Connect or disconnect AI providers',
+    'settings.connect': 'Connect',
+    'settings.disconnect': 'Disconnect',
+    'settings.connected': 'Connected',
+    'settings.notConnected': 'Not connected',
+    'settings.connecting': 'Connecting...',
+    'settings.connectSuccess': 'Connected successfully',
+    'settings.connectError': 'Connection failed',
+    'settings.apiKey': 'API Key',
+    'settings.apiKeyPlaceholder': 'Enter your API key',
+    'settings.noProviders': 'No providers available. Connect to a server first.',
+    'settings.showEmpty': 'Show empty providers',
+    'settings.hideEmpty': 'Hide empty providers',
+    'settings.cancel': 'Cancel',
     'settings.featureFlags': 'Experimental features',
     'settings.featureFlagsDesc': 'Enable or disable additional features',
     'settings.fileBrowser': 'File browser',
@@ -549,6 +579,21 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': 'Modelos bloqueados',
     'settings.blockedModelsHint': 'Los modelos bloqueados se ocultan del selector.',
     'settings.blockedModelsSearch': 'Filtrar modelos...',
+    'settings.providers': 'Proveedores de IA',
+    'settings.providersDesc': 'Conecta o desconecta proveedores de IA',
+    'settings.connect': 'Conectar',
+    'settings.disconnect': 'Desconectar',
+    'settings.connected': 'Conectado',
+    'settings.notConnected': 'No conectado',
+    'settings.connecting': 'Conectando...',
+    'settings.connectSuccess': 'Conectado exitosamente',
+    'settings.connectError': 'Error de conexión',
+    'settings.apiKey': 'API Key',
+    'settings.apiKeyPlaceholder': 'Ingresa tu API key',
+    'settings.noProviders': 'No hay proveedores disponibles. Conéctate a un servidor primero.',
+    'settings.showEmpty': 'Mostrar proveedores vacíos',
+    'settings.hideEmpty': 'Ocultar proveedores vacíos',
+    'settings.cancel': 'Cancelar',
     'settings.featureFlags': 'Funciones experimentales',
     'settings.featureFlagsDesc': 'Activa o desactiva funciones adicionales',
     'settings.fileBrowser': 'Explorador de archivos',
@@ -814,6 +859,21 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': 'Modelli bloccati',
     'settings.blockedModelsHint': 'I modelli bloccati sono nascosti dal selettore.',
     'settings.blockedModelsSearch': 'Filtra modelli...',
+    'settings.providers': 'Provider IA',
+    'settings.providersDesc': 'Connetti o disconnetti provider IA',
+    'settings.connect': 'Connetti',
+    'settings.disconnect': 'Disconnetti',
+    'settings.connected': 'Connesso',
+    'settings.notConnected': 'Non connesso',
+    'settings.connecting': 'Connessione...',
+    'settings.connectSuccess': 'Connesso con successo',
+    'settings.connectError': 'Errore di connessione',
+    'settings.apiKey': 'Chiave API',
+    'settings.apiKeyPlaceholder': 'Inserisci la tua chiave API',
+    'settings.noProviders': 'Nessun provider disponibile. Connettiti prima a un server.',
+    'settings.showEmpty': 'Mostra provider vuoti',
+    'settings.hideEmpty': 'Nascondi provider vuoti',
+    'settings.cancel': 'Annulla',
     'settings.featureFlags': 'Funzionalità sperimentali',
     'settings.featureFlagsDesc': 'Attiva o disattiva funzionalità aggiuntive',
     'settings.fileBrowser': 'Esplora file',
@@ -1043,6 +1103,21 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': '已封鎖的模型',
     'settings.blockedModelsHint': '已封鎖的模型將從選擇器中隱藏。',
     'settings.blockedModelsSearch': '篩選模型...',
+    'settings.providers': 'AI 提供商',
+    'settings.providersDesc': '連接或斷開 AI 提供商',
+    'settings.connect': '連接',
+    'settings.disconnect': '斷開',
+    'settings.connected': '已連接',
+    'settings.notConnected': '未連接',
+    'settings.connecting': '連接中...',
+    'settings.connectSuccess': '連接成功',
+    'settings.connectError': '連接失敗',
+    'settings.apiKey': 'API 密鑰',
+    'settings.apiKeyPlaceholder': '輸入您的 API 密鑰',
+    'settings.noProviders': '暫無提供商。請先連接到服務器。',
+    'settings.showEmpty': '顯示空提供商',
+    'settings.hideEmpty': '隱藏空提供商',
+    'settings.cancel': '取消',
     'settings.featureFlags': '實驗性功能',
     'settings.featureFlagsDesc': '啟用或停用附加功能',
     'settings.fileBrowser': '檔案瀏覽器',

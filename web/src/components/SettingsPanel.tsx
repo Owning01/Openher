@@ -1,8 +1,9 @@
 import { memo } from "react"
 import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType } from "../types"
+import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo } from "../types"
 import type { LanguageCode } from "../i18n"
+import { ProviderManager } from "./ProviderManager"
 
 type UsageStats = {
   promptsSent: number
@@ -43,6 +44,11 @@ type SettingsPanelProps = {
   flags: FeatureFlags
   onToggleFlag: (key: keyof FeatureFlags) => void
   onSetFlag: <K extends keyof FeatureFlags>(key: K, value: FeatureFlags[K]) => void
+  providers: ProviderInfo[]
+  connectingProvider: string | null
+  providerError: string | null
+  onConnectProvider: (providerID: string, apiKey: string) => void
+  onDisconnectProvider: (providerID: string) => void
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
@@ -55,7 +61,8 @@ export const SettingsPanel = memo(function SettingsPanel({
   stats, onResetStats,
   navBarMode, onNavBarModeChange,
   blockedModels, onOpenThemePicker,
-  flags, onToggleFlag, onSetFlag
+  flags, onToggleFlag, onSetFlag,
+  providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider
 }: SettingsPanelProps) {
   const t = useT()
 
@@ -261,6 +268,18 @@ export const SettingsPanel = memo(function SettingsPanel({
               min={1000} step={1000} />
           </label>
         )}
+      </div>
+
+      <div className="setting-group">
+        <h4 className="quick-access-label">{t('settings.providers')}</h4>
+        <p className="subtle">{t('settings.providersDesc')}</p>
+        <ProviderManager
+          providers={providers}
+          connecting={connectingProvider}
+          error={providerError}
+          onConnect={onConnectProvider}
+          onDisconnect={onDisconnectProvider}
+        />
       </div>
 
       <div className="setting-group">

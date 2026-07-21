@@ -30,6 +30,7 @@ import { useNetworkMode } from "./hooks/useNetworkMode"
 import { useMemoryCleanup } from "./hooks/useMemoryCleanup"
 import { useBlockedModels } from "./hooks/useBlockedModels"
 import { useFeatureFlags } from "./hooks/useFeatureFlags"
+import { useProviderManager } from "./hooks/useProviderManager"
 import { useAutoSummarize } from "./hooks/useAutoSummarize"
 import { ThemeVariantProvider } from "./context/themeVariant"
 import { ThemePicker } from "./components/ThemePicker"
@@ -112,6 +113,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   } = useFolderPicker(config)
 
   const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
+  const { providers: providerList, connecting: connectingProvider, error: providerError, connectProvider, disconnectProvider } = useProviderManager(modelOptions, config)
   useAutoSummarize(
     config,
     selectedSession?.id ?? null,
@@ -344,7 +346,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onOpenThemePicker={() => setShowThemePicker(true)}
           flags={flags}
           onToggleFlag={toggleFlag}
-          onSetFlag={setFlag} />
+          onSetFlag={setFlag}
+          providers={providerList}
+          connectingProvider={connectingProvider}
+          providerError={providerError}
+          onConnectProvider={(pid, key) => {
+            if (!selectedSession) return
+            connectProvider(pid, key, selectedSession.id, selectedSession.directory)
+          }}
+          onDisconnectProvider={disconnectProvider} />
       )}
 
       {view === "sessions" && (

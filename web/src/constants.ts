@@ -12,7 +12,8 @@ export const STORAGE_KEYS = {
   NAVBAR: "opencode.remote.navbar",
   RECENT_MODELS: "opencode.mobile.recentModels",
   BLOCKED_MODELS: "opencode.mobile.blockedModels",
-  FEATURE_FLAGS: "opencode.mobile.featureFlags"
+  FEATURE_FLAGS: "opencode.mobile.featureFlags",
+  CONNECTED_PROVIDERS: "opencode.mobile.connectedProviders"
 }
 
 export const DEFAULT_AUTO_SUMMARIZE_THRESHOLD = 32000

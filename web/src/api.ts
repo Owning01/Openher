@@ -433,5 +433,6 @@ export const api = {
 
   listPermissions(config: ServerConfig, directory?: string) {
     return request<{ requestID: string; permission: string; status: string }[]>(config, withDirectory("/permission", directory))
-  }
+  },
+
 }
