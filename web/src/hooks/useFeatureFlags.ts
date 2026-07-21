@@ -28,9 +28,15 @@ function saveFlags(flags: FeatureFlags) {
 export function useFeatureFlags() {
   const [flags, setFlags] = useState<FeatureFlags>(loadFlags)
 
+  const BOOL_FLAGS: ReadonlySet<keyof FeatureFlags> = new Set([
+    "fileBrowser", "inlineDiff", "contextMenu", "planBreakdown",
+    "gitOps", "mcpConfig", "sessionArchive", "autoSummarize", "streamingFull"
+  ])
+
   const toggleFlag = useCallback((key: keyof FeatureFlags) => {
+    if (!BOOL_FLAGS.has(key)) return
     setFlags((prev) => {
-      const next = { ...prev, [key]: !prev[key] }
+      const next = { ...prev, [key]: !prev[key as keyof FeatureFlags] as never }
       saveFlags(next)
       return next
     })

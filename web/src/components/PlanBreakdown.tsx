@@ -24,7 +24,7 @@ export const PlanBreakdown = memo(function PlanBreakdown({ tasks }: Props) {
       <button className="plan-breakdown-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         <span className="plan-breakdown-icon">{open ? "−" : "+"}</span>
         <span className="plan-breakdown-label">{t('detail.plan.tasks')}</span>
-        <span className="plan-breakdown-count">{pending} {t('detail.plan.pending')}</span>
+        <span className="plan-breakdown-count">{t('detail.plan.pendingCount', { count: pending })}</span>
       </button>
       {open && (
         <div className="plan-breakdown-body">

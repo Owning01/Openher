@@ -14,19 +14,18 @@ export function useAutoSummarize(
   providerID?: string,
   modelID?: string
 ) {
-  const lastSigRef = useRef("")
   const runningRef = useRef(false)
+  const lastComputedSigRef = useRef("")
 
   useEffect(() => {
     if (!config || !sessionID || !enabled) return
-    if (assistantResponseSignature === lastSigRef.current) return
-    lastSigRef.current = assistantResponseSignature
-
+    if (assistantResponseSignature === lastComputedSigRef.current) return
     if (runningRef.current) return
 
+    runningRef.current = true
+
     const th = threshold > 0 ? threshold : DEFAULT_AUTO_SUMMARIZE_THRESHOLD
-    api.loadMessages(config, sessionID, directory, 0).then((msgs) => {
-      if (runningRef.current) return
+    api.loadMessages(config, sessionID, directory, undefined).then((msgs) => {
       let totalLen = 0
       for (const m of msgs) {
         if (m.info.role !== "user") {
@@ -36,12 +35,17 @@ export function useAutoSummarize(
         }
       }
       if (totalLen > th) {
-        runningRef.current = true
         api.summarize(config, sessionID, providerID ?? "", modelID ?? "", directory).then(() => {
-          runningRef.current = false
           onSummarized?.()
-        }).catch(() => { runningRef.current = false })
+        }).catch((err) => {
+          console.warn("[auto-summarize] summarize failed:", err)
+        })
       }
-    }).catch(() => {})
+      lastComputedSigRef.current = assistantResponseSignature
+      runningRef.current = false
+    }).catch((err) => {
+      console.warn("[auto-summarize] loadMessages failed:", err)
+      runningRef.current = false
+    })
   }, [config, sessionID, directory, enabled, threshold, assistantResponseSignature, onSummarized])
 }

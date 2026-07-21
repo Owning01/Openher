@@ -38,10 +38,10 @@ export const DiffViewer = memo(function DiffViewer({ files }: Props) {
   )
 })
 
-function DiffMini({ lines }: { lines: number }) {
+const DiffMini = memo(function DiffMini({ lines }: { lines: number }) {
   const t = useT()
   if (lines === 0) return <span className="diff-empty">{t('detail.diff.noChanges')}</span>
   return <div className="diff-mini-bar" style={{ height: Math.min(lines * 2, 60) }} />
-}
+})
 
 export default DiffViewer

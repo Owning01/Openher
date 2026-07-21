@@ -223,6 +223,7 @@ type TranslationKey =
   | 'detail.showArchived'
   | 'detail.plan.tasks'
   | 'detail.plan.pending'
+  | 'detail.plan.pendingCount'
   | 'detail.plan.completed'
   | 'detail.diff.viewFile'
   | 'detail.diff.noChanges'
@@ -317,6 +318,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.showArchived': 'Show archived',
     'detail.plan.tasks': 'Plan tasks',
     'detail.plan.pending': 'Pending',
+    'detail.plan.pendingCount': '{count} pending',
     'detail.plan.completed': 'Completed',
     'detail.diff.viewFile': 'View changes',
     'detail.diff.noChanges': 'No changes in this file',
@@ -581,6 +583,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.showArchived': 'Mostrar archivados',
     'detail.plan.tasks': 'Tareas del plan',
     'detail.plan.pending': 'Pendientes',
+    'detail.plan.pendingCount': '{count} pendientes',
     'detail.plan.completed': 'Completadas',
     'detail.diff.viewFile': 'Ver cambios',
     'detail.diff.noChanges': 'Sin cambios en este archivo',
@@ -845,6 +848,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.showArchived': 'Mostra archiviati',
     'detail.plan.tasks': 'Attività del piano',
     'detail.plan.pending': 'In sospeso',
+    'detail.plan.pendingCount': '{count} in sospeso',
     'detail.plan.completed': 'Completate',
     'detail.diff.viewFile': 'Vedi modifiche',
     'detail.diff.noChanges': 'Nessuna modifica in questo file',
@@ -1073,6 +1077,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.showArchived': '顯示已歸檔',
     'detail.plan.tasks': '計畫任務',
     'detail.plan.pending': '待處理',
+    'detail.plan.pendingCount': '{count} 待處理',
     'detail.plan.completed': '已完成',
     'detail.diff.viewFile': '檢視變更',
     'detail.diff.noChanges': '此檔案無變更',

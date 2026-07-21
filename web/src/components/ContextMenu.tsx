@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from "react"
+import { useEffect, useRef } from "react"
 
 type ContextAction = {
   id: string
@@ -14,7 +14,7 @@ type Props = {
   onClose: () => void
 }
 
-export const ContextMenu = memo(function ContextMenu({ x, y, actions, onClose }: Props) {
+export const ContextMenu = function ContextMenu({ x, y, actions, onClose }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export const ContextMenu = memo(function ContextMenu({ x, y, actions, onClose }:
     const vh = window.innerHeight
     if (rect.right > vw) ref.current.style.left = `${vw - rect.width - 8}px`
     if (rect.bottom > vh) ref.current.style.top = `${vh - rect.height - 8}px`
-  }, [])
+  }, [x, y])
 
   return (
     <div className="context-menu" ref={ref} style={{ left: x, top: y }}>
@@ -44,6 +44,4 @@ export const ContextMenu = memo(function ContextMenu({ x, y, actions, onClose }:
       ))}
     </div>
   )
-})
-
-export default ContextMenu
+}
