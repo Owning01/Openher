@@ -1,4 +1,5 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, StatsIcon, SettingsIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
@@ -83,7 +84,6 @@ export const ChatView = memo(function ChatView({
   const [messageQuery, setMessageQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
   const [showOverflow, setShowOverflow] = useState(false)
-  const [showThinking, setShowThinking] = useState(true)
   const [showSkills, setShowSkills] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const overflowRef = useRef<HTMLDivElement | null>(null)
@@ -216,14 +216,6 @@ export const ChatView = memo(function ChatView({
                       <PencilIcon size={14} /> Rename
                     </button>
                   )}
-                  <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowThinking((v) => !v) }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.5 3 5.7V17h8v-2.3c1.8-1.3 3-3.4 3-5.7a7 7 0 0 0-7-7z"/>
-                      <path d="M9 17h6"/>
-                    </svg>
-                    {showThinking ? "Hide Thinking" : "Show Thinking"}
-                  </button>
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSearch((v) => !v) }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -299,7 +291,6 @@ export const ChatView = memo(function ChatView({
           agents={agents}
           config={config}
           directory={selectedSession?.directory}
-          showThinking={showThinking}
           onViewSubagents={handleViewSubagents}
         />
       </div>
@@ -348,12 +339,13 @@ export const ChatView = memo(function ChatView({
 
       <ErrorNotice message={runtimeError} />
 
-      {showSkills && config && (
+      {showSkills && config && createPortal(
         <SkillBrowser
           config={config}
           onClose={() => setShowSkills(false)}
           onSelect={(name) => onComposerChange(`/skill ${name} `)}
-        />
+        />,
+        document.body
       )}
     </main>
   )

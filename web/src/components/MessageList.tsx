@@ -1,10 +1,9 @@
-import { memo, lazy, Suspense, useRef, useEffect, useState, Fragment, useMemo } from "react"
+import { memo, useRef, useEffect, useState, Fragment, useMemo } from "react"
 import { LoadingIcon, ChatIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
 import { Markdown } from "./Markdown"
-
-const MessageBubble = lazy(() => import("./MessageBubble"))
+import { MessageBubble } from "./MessageBubble"
 
 type MessageListProps = {
   messages: RenderedMessage[]
@@ -19,7 +18,6 @@ type MessageListProps = {
   agents?: AgentOption[]
   config?: ServerConfig
   directory?: string
-  showThinking?: boolean
   onViewSubagents?: () => void
 }
 
@@ -34,21 +32,20 @@ function extractThinkingText(text: string): string {
   return text.replace("[REDACTED]", "").trim()
 }
 
-const ThinkingToggle = memo(function ThinkingToggle({ text, forceShow }: { text: string; forceShow?: boolean }) {
+const ThinkingToggle = memo(function ThinkingToggle({ text }: { text: string }) {
   const [open, setOpen] = useState(false)
   const content = extractThinkingText(text)
   const summary = reasoningSummary(content)
-  const expanded = forceShow || open
 
   if (!content) return null
 
   return (
     <div className="thinking-insert">
-      <button className="thinking-insert-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={expanded}>
-        <span className="thinking-insert-icon">{expanded ? "−" : "+"}</span>
+      <button className="thinking-insert-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="thinking-insert-icon">{open ? "−" : "+"}</span>
         <span className="thinking-insert-label">{summary.title || "Thought"}</span>
       </button>
-      {expanded && (
+      {open && (
         <div className="thinking-insert-body">
           <Markdown text={summary.body || content} />
         </div>
@@ -59,7 +56,7 @@ const ThinkingToggle = memo(function ThinkingToggle({ text, forceShow }: { text:
 
 export const MessageList = memo(function MessageList({
   messages, loadingSessionID, selectedID, showTypingBubble, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, showThinking, onViewSubagents
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -139,22 +136,20 @@ export const MessageList = memo(function MessageList({
                 {message.info.role === "assistant" && message.thinkingParts.length > 0 && i > 0 && messages[i - 1].info.role === "user" && (
                   <div className="thinking-insert-group">
                     {message.thinkingParts.map((tp) => (
-                      <ThinkingToggle key={tp.id} text={tp.text} forceShow={showThinking} />
+                      <ThinkingToggle key={tp.id} text={tp.text} />
                     ))}
                   </div>
                 )}
-                <Suspense fallback={null}>
-                  <MessageBubble
-                    message={message}
-                    revert={revert}
-                    onRevertToMessage={onRevertToMessage}
-                    agents={agents}
-                    prevUserTs={prevUserTsMap.get(message.info.id)}
-                    config={config}
-                    directory={directory}
-                    onViewSubagents={onViewSubagents}
-                  />
-                </Suspense>
+                <MessageBubble
+                  message={message}
+                  revert={revert}
+                  onRevertToMessage={onRevertToMessage}
+                  agents={agents}
+                  prevUserTs={prevUserTsMap.get(message.info.id)}
+                  config={config}
+                  directory={directory}
+                  onViewSubagents={onViewSubagents}
+                />
               </Fragment>
             ))}
             {showTypingBubble && (

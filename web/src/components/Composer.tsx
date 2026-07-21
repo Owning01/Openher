@@ -1,5 +1,4 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
-import { createPortal } from "react-dom"
 import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon, CloseIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
@@ -313,25 +312,10 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     }
   }, [value, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, onChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand])
 
-  const [composerRect, setComposerRect] = useState<DOMRect | null>(null)
-  const updateComposerRect = useCallback(() => {
-    if (composerRef.current) setComposerRect(composerRef.current.getBoundingClientRect())
-  }, [])
-  useEffect(() => {
-    if (!showSlashMenu && !showAtMenu) { setComposerRect(null); return }
-    updateComposerRect()
-    const raf = requestAnimationFrame(updateComposerRect)
-    return () => cancelAnimationFrame(raf)
-  }, [showSlashMenu, showAtMenu, updateComposerRect])
-
-  const menuStyle: React.CSSProperties = composerRect
-    ? { position: "fixed", left: composerRect.left, right: window.innerWidth - composerRect.right, bottom: window.innerHeight - composerRect.top + 4, zIndex: 99999 }
-    : {}
-
   return (
     <div className={`composer${isCommandValid ? " composer-command-mode" : ""}${isShellMode ? " composer-shell-mode" : ""}`} ref={composerRef} style={{ borderColor: `var(--agent-${agentColorIdx})` } as React.CSSProperties}>
-      {showSlashMenu && slashFiltered.length > 0 && createPortal(
-        <div className="slash-menu" ref={slashItemsRef} style={menuStyle}>
+      {showSlashMenu && slashFiltered.length > 0 && (
+        <div className="slash-menu" ref={slashItemsRef}>
           {slashFiltered.map((cmd, i) => (
             <div
               key={cmd.name}
@@ -344,11 +328,10 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               {cmd.source && cmd.source !== "command" && <span className="slash-menu-source">{cmd.source}</span>}
             </div>
           ))}
-        </div>,
-        document.body
+        </div>
       )}
-      {showAtMenu && mentionItems.length > 0 && createPortal(
-        <div className="slash-menu at-menu" style={menuStyle}>
+      {showAtMenu && mentionItems.length > 0 && (
+        <div className="slash-menu at-menu">
           {mentionLoading && <div className="slash-menu-item"><span className="slash-menu-desc">Searching...</span></div>}
           {mentionItems.map((item, i) => (
             <div
@@ -362,8 +345,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               <span className={`slash-menu-source source-${item.source}`}>{item.source}</span>
             </div>
           ))}
-        </div>,
-        document.body
+        </div>
       )}
       {images.length > 0 && (
         <div className="image-strip">

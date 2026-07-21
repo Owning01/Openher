@@ -404,6 +404,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onOpenSettings={() => setView("settings")}
             onThemeCommand={() => setShowThemePicker(true)}
             onToggleTokenStats={() => setTokenStatsOpen((v) => !v)}
+            config={config}
+            agents={agentOptions}
             onShellSend={() => sendShell(selectedSession!.id, selectedSession!.directory)} />
           <BottomSheet
             activeSheet={activeDetailSheet}
