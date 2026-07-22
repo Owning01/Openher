@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, StatsIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, StarIcon, MenuDotsIcon, LayersIcon, ArchiveIcon, ForkIcon, PaintIcon, KeyboardIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, StatsIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, StarIcon, MenuDotsIcon, LayersIcon, ArchiveIcon, ForkIcon, PaintIcon, KeyboardIcon, CloseIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -94,6 +94,7 @@ type ChatViewProps = {
   onOpenFavoritesManager?: () => void
   onOpenShortcuts?: () => void
   onOpenChatCustomizer?: () => void
+  showTodoButton?: boolean
 }
 
 export const ChatView = memo(function ChatView({
@@ -109,7 +110,8 @@ export const ChatView = memo(function ChatView({
   flags, onToggleFlag: _onToggleFlag, onSetFlag: _onSetFlag, diffFiles, projectDashboard,
   streamState, pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
-  onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager, onOpenShortcuts, onOpenChatCustomizer
+  onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager, onOpenShortcuts, onOpenChatCustomizer,
+  todos, todosExpanded, onTodosToggle, showTodoButton
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -423,6 +425,26 @@ export const ChatView = memo(function ChatView({
         />
       )}
 
+      {todos.length > 0 && (
+        <div className={`todo-panel${todosExpanded ? " open" : ""}`}>
+          <div className="todo-panel-header">
+            <span className="todo-panel-title">Tareas</span>
+            <button className="btn-icon btn-secondary compact" onClick={onTodosToggle} aria-label="Cerrar">
+              <CloseIcon size={12} />
+            </button>
+          </div>
+          <div className="todo-panel-body">
+            {todos.map((todo) => (
+              <div key={todo.id} className={`todo-item ${todo.status}`}>
+                <span className={`todo-priority priority-${todo.priority}`} />
+                <span className="todo-text">{todo.content}</span>
+                <span className={`todo-status-badge ${todo.status}`}>{todo.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {selectedSession && !readingMode && (
         <Composer
           value={composer}
@@ -443,6 +465,9 @@ export const ChatView = memo(function ChatView({
           config={config}
           directory={selectedSession?.directory}
           onThemeCommand={onThemeCommand}
+          onToggleTodos={onTodosToggle}
+          todosOpen={todosExpanded}
+          showTodoButton={showTodoButton ?? false}
         />
       )}
 

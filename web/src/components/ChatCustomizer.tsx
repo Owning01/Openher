@@ -73,6 +73,14 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
                 {settings.showTimestamps ? "Activado" : "Desactivado"}
               </button>
             </label>
+            <label className="toggle-row" style={{ width: "100%" }}>
+              <span>Botón de tareas</span>
+              <button type="button" className={`toggle-btn${settings.showTodoButton ? " active" : ""}`}
+                onClick={() => onSettingChange("showTodoButton", !settings.showTodoButton)}
+                aria-pressed={settings.showTodoButton}>
+                {settings.showTodoButton ? "Activado" : "Desactivado"}
+              </button>
+            </label>
           </div>
 
           <button type="button" className="btn-secondary compact" onClick={onReset}

@@ -143,7 +143,9 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
         )}
 
         {message.thinkingParts && message.thinkingParts.length > 0 && !showConfirm && (
-          <ThinkingBlock parts={message.thinkingParts} duration={duration} />
+          <div className="thinking-block">
+            <ThinkingBlock parts={message.thinkingParts} duration={duration} />
+          </div>
         )}
         {message.toolParts.length > 0 && !showConfirm && (
           <div className="tool-parts">

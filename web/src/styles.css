@@ -2426,8 +2426,8 @@ p {
 .tool-parts {
   display: var(--chat-tool-vis, block);
 }
-.message footer .msg-footer-duration,
-.message footer .msg-footer-model,
+.message-footer .msg-footer-duration,
+.message-footer .msg-footer-model,
 .message header small {
   display: var(--chat-time-vis, inline);
 }
@@ -3299,6 +3299,90 @@ p {
 }
 
 
+/* ===== Todo Panel ===== */
+.todo-panel {
+  flex-shrink: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.2s ease, opacity 0.2s ease;
+  opacity: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.todo-panel.open {
+  max-height: 240px;
+  opacity: 1;
+  overflow-y: auto;
+}
+
+.todo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.todo-panel-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-strong);
+}
+
+.todo-panel-body {
+  padding: var(--space-1);
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.todo-item:hover {
+  background: var(--surface-subtle);
+}
+
+.todo-item.pending { color: var(--text); }
+.todo-item.done { color: var(--muted); text-decoration: line-through; }
+.todo-item.error { color: var(--danger); }
+
+.todo-priority {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.priority-high { background: var(--danger); }
+.priority-medium { background: var(--warning); }
+.priority-low { background: var(--success); }
+
+.todo-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-status-badge {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.todo-status-badge.pending { background: rgba(250, 178, 131, 0.15); color: #fab283; }
+.todo-status-badge.done { background: rgba(76, 175, 80, 0.15); color: #4caf50; }
+.todo-status-badge.error { background: rgba(244, 67, 54, 0.15); color: #f44336; }
+
 /* ===== Composer (Input Area) ===== */
 .composer {
   position: relative;
@@ -3455,6 +3539,31 @@ p {
 }
 .agent-build[aria-pressed="true"] {
   background: rgba(59, 125, 216, 0.15);
+}
+
+.composer-tasks-btn {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.composer-tasks-btn:hover { border-color: var(--primary); color: var(--primary); }
+.composer-tasks-btn.active,
+.composer-tasks-btn[aria-pressed="true"] {
+  background: rgba(var(--primary-rgb, 100, 150, 255), 0.1);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .mic-toggle {

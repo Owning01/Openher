@@ -792,7 +792,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onOpenThemeCreator={() => setShowThemeCreator(true)}
             onOpenFavoritesManager={() => setShowFavoritesManager(true)}
             onOpenShortcuts={() => setShowShortcuts(true)}
-            onOpenChatCustomizer={() => setShowChatCustomizer(true)} />
+            onOpenChatCustomizer={() => setShowChatCustomizer(true)}
+            showTodoButton={chatSettings.showTodoButton} />
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={() => setActiveDetailSheet(null)}

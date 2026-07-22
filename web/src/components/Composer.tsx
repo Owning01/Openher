@@ -42,6 +42,9 @@ type ComposerProps = {
   config?: ServerConfig
   directory?: string
   onThemeCommand?: () => void
+  onToggleTodos?: () => void
+  todosOpen?: boolean
+  showTodoButton?: boolean
 }
 
 let imgId = 0
@@ -55,7 +58,7 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "theme", description: "Open theme picker", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen, contextLabel, config, directory, onThemeCommand }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen, contextLabel, config, directory, onThemeCommand, onToggleTodos, todosOpen, showTodoButton }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const slashItemsRef = useRef<HTMLDivElement | null>(null)
@@ -405,6 +408,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               className={`agent-toggle ${activeAgentID === "plan" ? "agent-plan" : "agent-build"}`}
               aria-pressed={activeAgentID === "plan"}>
               <span>{activeAgentID === "plan" ? "Plan" : "Build"}</span>
+            </button>
+          )}
+          {showTodoButton && (
+            <button onClick={onToggleTodos}
+              className={`composer-tasks-btn${todosOpen ? " active" : ""}`}
+              aria-pressed={!!todosOpen}
+              title="Tareas del agente">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M2 3h8M2 6h8M2 9h5" />
+              </svg>
+              <span>Tareas</span>
             </button>
           )}
           <button onClick={() => onSheetOpen("ai")} className="model-toggle"

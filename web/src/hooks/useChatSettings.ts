@@ -9,6 +9,7 @@ const DEFAULTS: ChatSettings = {
   showThinking: true,
   showToolCalls: true,
   showTimestamps: true,
+  showTodoButton: true,
 }
 
 const SPACING_MAP: Record<ChatSettings["messageSpacing"], string> = {
@@ -21,9 +22,9 @@ function applyCSSVars(s: ChatSettings) {
   const root = document.documentElement
   root.style.setProperty("--chat-font-size", `${s.fontSize}px`)
   root.style.setProperty("--chat-message-gap", SPACING_MAP[s.messageSpacing])
-  root.style.setProperty("--chat-thinking-vis", s.showThinking ? "visible" : "none")
-  root.style.setProperty("--chat-tool-vis", s.showToolCalls ? "visible" : "none")
-  root.style.setProperty("--chat-time-vis", s.showTimestamps ? "visible" : "none")
+  root.style.setProperty("--chat-thinking-vis", s.showThinking ? "block" : "none")
+  root.style.setProperty("--chat-tool-vis", s.showToolCalls ? "block" : "none")
+  root.style.setProperty("--chat-time-vis", s.showTimestamps ? "inline" : "none")
 }
 
 export function useChatSettings() {

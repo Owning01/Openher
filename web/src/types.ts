@@ -321,4 +321,5 @@ export type ChatSettings = {
   showThinking: boolean
   showToolCalls: boolean
   showTimestamps: boolean
+  showTodoButton: boolean
 }
