@@ -1,7 +1,8 @@
-import { useState, memo, useMemo } from "react"
+import { memo, useMemo } from "react"
 import type { ServerConfig } from "../types"
 import { toolMeta, detectToolName, isTaskTool, isQuestionTool } from "../utils/toolMeta"
 import { QuestionPrompt } from "./QuestionPrompt"
+import { CollapsibleSection } from "./CollapsibleSection"
 
 const toolIcons: Record<string, string> = {
   tool_use: "▶",
@@ -44,16 +45,30 @@ function getResultText(text: string): string {
   return text
 }
 
+function extractFilePath(text: string): string | null {
+  const m = text.match(/filePath="([^"]+)"/)
+  return m ? m[1] : null
+}
+
+function previewLines(text: string, maxLines = 5): string {
+  const lines = text.split("\n")
+  if (lines.length <= maxLines) return text
+  return lines.slice(0, maxLines).join("\n") + "\n..."
+}
+
 export const ToolPart = memo(function ToolPart({ part, config, directory, onViewSubagents }: {
   part: { id: string; type: string; text?: string }
   config?: ServerConfig
   directory?: string
   onViewSubagents?: () => void
 }) {
-  const [open, setOpen] = useState(false)
   const text = part.text?.trim()
 
   const toolName = useMemo(() => detectToolName(text ?? ""), [text])
+  const meta = toolName ? toolMeta[toolName] : null
+  const filePath = useMemo(() => extractFilePath(text ?? ""), [text])
+  const resultText = useMemo(() => getResultText(text ?? ""), [text])
+  const preview = useMemo(() => previewLines(meta ? resultText : (text ?? "")), [meta, resultText, text])
 
   if (!text) return null
 
@@ -63,36 +78,21 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     const sessionID = extractParam(text, "sessionId")
     const isDone = part.type === "tool_result"
     const title = agentType.charAt(0).toUpperCase() + agentType.slice(1)
-    const subtitle = description ? description : ""
-
-    if (isDone) {
-      return (
-        <div className="tool-part tool-result tool-task">
-          <div className="tool-part-toggle" style={{ cursor: "default" }}>
-            <span className="tool-part-icon">{"✓"}</span>
-            <span className="tool-part-label" style={{ textTransform: "none" }}>
-              {title}{subtitle ? <span className="tool-part-arg"> · {subtitle}</span> : null}
-            </span>
-            {sessionID && onViewSubagents && (
-              <button className="tool-part-nav-btn" onClick={(e) => { e.stopPropagation(); onViewSubagents() }}>
-                ↳ view
-              </button>
-            )}
-          </div>
-        </div>
-      )
-    }
+    const subtitle = description || undefined
 
     return (
-      <div className="tool-part tool-task working">
+      <div className={`tool-part tool-task${isDone ? "" : " working"}`}>
         <div className="tool-part-toggle" style={{ cursor: "default" }}>
-          <span className="tool-part-icon">
-            <span className="subagent-spinner" />
-          </span>
+          <span className="tool-part-icon">{isDone ? "✓" : <span className="subagent-spinner" />}</span>
           <span className="tool-part-label" style={{ textTransform: "none" }}>
             {title}{subtitle ? <span className="tool-part-arg"> · {subtitle}</span> : null}
           </span>
-          <span className="tool-status-dot" />
+          {!isDone && <span className="tool-status-dot" />}
+          {sessionID && isDone && onViewSubagents && (
+            <button className="tool-part-nav-btn" onClick={(e) => { e.stopPropagation(); onViewSubagents() }}>
+              ↳ view
+            </button>
+          )}
         </div>
       </div>
     )
@@ -117,103 +117,69 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
           requestID={callID}
           config={config!}
           directory={directory}
-          onDone={() => setOpen(false)}
+          onDone={() => {}}
         />
       )
     }
   }
 
-  const meta = toolName ? toolMeta[toolName] : null
+  const subtitle = meta?.label ?? null
 
-  // Server format: type === "tool"
-  if (part.type === "tool") {
-    if (meta && toolName) {
-      return (
-        <div className={`tool-part tool-${toolName}`}>
-          <button className="tool-part-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-            <span className="tool-part-icon">{meta.icon}</span>
-            <span className="tool-part-label">
-              {meta.label}
-              {extractParam(text, "filePath") && <span className="tool-part-arg"> {extractParam(text, "filePath")}</span>}
-            </span>
-            <span className="tool-part-chevron">{open ? "−" : "+"}</span>
-          </button>
-          {open && (
-            <div className="tool-part-body">
-              <pre className="tool-part-pre">{text}</pre>
-            </div>
-          )}
-        </div>
-      )
-    }
+  if (part.type === "tool_use" && meta) {
     return (
-      <div className="tool-part tool-result">
-        <button className="tool-part-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-          <span className="tool-part-icon">{"◀"}</span>
-          <span className="tool-part-label">Result</span>
-          <span className="tool-part-chevron">{open ? "−" : "+"}</span>
-        </button>
-        {open && (
-          <div className="tool-part-body">
-            <pre className="tool-part-pre">{getResultText(text)}</pre>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  if (meta && part.type === "tool_use") {
-    return (
-      <div className={`tool-part tool-${toolName}`}>
-        <button className="tool-part-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-          <span className="tool-part-icon">{meta.icon}</span>
-          <span className="tool-part-label">{meta.label}</span>
-          <span className="tool-part-chevron">{open ? "−" : "+"}</span>
-        </button>
-        {open && (
-          <div className="tool-part-body">
-            <pre className="tool-part-pre">{text}</pre>
-          </div>
-        )}
-      </div>
+      <CollapsibleSection
+        icon={meta.icon}
+        title={toolName!}
+        subtitle={subtitle ?? undefined}
+        filePath={filePath ?? undefined}
+        defaultOpen={false}
+      >
+        <pre className="tool-part-pre">{text}</pre>
+      </CollapsibleSection>
     )
   }
 
   if (part.type === "tool_result" && toolName && toolName !== "task") {
-    const resultPreview = getResultText(text)
     return (
-      <div className={`tool-part tool-result tool-${toolName}`}>
-        <button className="tool-part-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-          <span className="tool-part-icon">{meta?.icon ?? "◀"}</span>
-          <span className="tool-part-label">{meta ? `${meta.label} result` : "Tool result"}</span>
-          <span className="tool-part-chevron">{open ? "−" : "+"}</span>
-        </button>
-        {open && (
-          <div className="tool-part-body">
-            <pre className="tool-part-pre">{resultPreview}</pre>
-          </div>
-        )}
-      </div>
+      <CollapsibleSection
+        icon={meta?.icon ?? "◀"}
+        title={`${toolName} result`}
+        subtitle={subtitle ?? undefined}
+        filePath={filePath ?? undefined}
+        defaultOpen={false}
+      >
+        <pre className="tool-part-pre">{resultText}</pre>
+      </CollapsibleSection>
     )
   }
 
   const icon = toolIcons[part.type] || "◆"
   const label = toolLabels[part.type] || part.type
-  const isResult = part.type === "tool_result"
+
+  if (part.type === "tool") {
+    return (
+      <CollapsibleSection
+        icon={icon}
+        title={label}
+        subtitle={meta?.label ? `${toolName}` : undefined}
+        filePath={filePath ?? undefined}
+        defaultOpen={false}
+      >
+        <pre className="tool-part-pre">{text}</pre>
+      </CollapsibleSection>
+    )
+  }
 
   return (
-    <div className={`tool-part ${isResult ? "tool-result" : "tool-call"}`}>
-      <button className="tool-part-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span className="tool-part-icon">{icon}</span>
-        <span className="tool-part-label">{label}</span>
-        <span className="tool-part-chevron">{open ? "−" : "+"}</span>
-      </button>
-      {open && (
-        <div className="tool-part-body">
-          <pre className="tool-part-pre">{text}</pre>
-        </div>
-      )}
-    </div>
+    <CollapsibleSection
+      icon={icon}
+      title={label}
+      subtitle={subtitle ?? undefined}
+      filePath={filePath ?? undefined}
+      defaultOpen={false}
+    >
+      <pre className="tool-part-pre">{preview}</pre>
+    </CollapsibleSection>
   )
 })
 

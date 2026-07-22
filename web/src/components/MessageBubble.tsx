@@ -4,6 +4,7 @@ import { formatTime } from "../utils"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
 import { useT } from "../i18n-context"
 import ToolPart from "./ToolPart"
+import { ThinkingBlock } from "./ThinkingBlock"
 import { Markdown } from "./Markdown"
 import { isTaskTool } from "../utils/toolMeta"
 
@@ -141,6 +142,9 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
           </div>
         )}
 
+        {message.thinkingParts && message.thinkingParts.length > 0 && !showConfirm && (
+          <ThinkingBlock parts={message.thinkingParts} />
+        )}
         {message.toolParts.length > 0 && !showConfirm && (
           <div className="tool-parts">
             {message.toolParts.map((tp) => (
