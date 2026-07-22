@@ -141,10 +141,10 @@ export const SettingsPanel = memo(function SettingsPanel({
         <p className="subtle">Controls network polling frequency and automatic data loading.</p>
         <div className="data-mode-options">
           {([
-            { value: "full" as const, label: "Full", desc: "Real-time, high data usage" },
-            { value: "saver" as const, label: "Saver", desc: "Balance (default)" },
-            { value: "miser" as const, label: "Miser", desc: "60s poll, no background load" },
-            { value: "ultra" as const, label: "ULTRA", desc: "30s, no audio, manual refresh" }
+            { value: "full" as const, label: "Full", desc: "Streaming SSE en tiempo real · 3.5s poll · audio · datos completos" },
+            { value: "saver" as const, label: "Balance", desc: "15s poll · datos completos · audio · recomendado para WiFi" },
+            { value: "ultra" as const, label: "Reducido", desc: "30s poll · sin audio · datos esenciales · apto para 4G" },
+            { value: "miser" as const, label: "Mínimo", desc: "60s poll · solo texto · sin notificaciones · para datos móviles limitados" }
           ]).map((opt) => (
             <label key={opt.value} className={`data-mode-option ${dataMode === opt.value ? "active" : ""}`}>
               <input type="radio" name="dataMode" value={opt.value}

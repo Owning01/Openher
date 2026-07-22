@@ -18,7 +18,7 @@ export const DataModeSwitcher = memo(function DataModeSwitcher({ mode, onChange 
         <button key={m} className={`mode-btn${mode === m ? " active" : ""}`}
           onClick={() => onChange(m)}
           aria-pressed={mode === m}>
-          {m === "full" ? "Full" : m === "saver" ? "Saver" : m === "ultra" ? "ULTRA" : "Miser"}
+          {m === "full" ? "Full" : m === "saver" ? "Balance" : m === "ultra" ? "Reducido" : "Mínimo"}
         </button>
       ))}
     </div>

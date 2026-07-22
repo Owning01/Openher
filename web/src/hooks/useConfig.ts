@@ -28,11 +28,28 @@ export function canTestConfig(config: ServerConfig): boolean {
   return Boolean(config.host.trim() && config.port > 0 && config.username.trim())
 }
 
+function loadInitialConfig(): ServerConfig {
+  const stored = localStorage.getItem(STORAGE_KEYS.SERVER)
+  if (stored) {
+    try { return { ...defaultConfig, ...JSON.parse(stored) } } catch { }
+  }
+  return defaultConfig
+}
+
+function loadInitialDataMode(): DataMode {
+  const saved = localStorage.getItem(STORAGE_KEYS.DATA_MODE)
+  return saved === "full" || saved === "saver" || saved === "ultra" || saved === "miser" ? saved : "saver"
+}
+
 async function readConfigFromFile(): Promise<ServerConfig | null> {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SERVER_FILE)
     if (!raw) return null
-    return decryptConfig(raw)
+    const parsed = JSON.parse(raw)
+    if (parsed.password && isCiphertext(parsed.password)) {
+      parsed.password = await decrypt(parsed.password)
+    }
+    return { ...defaultConfig, ...parsed }
   } catch {
     return null
   }
@@ -62,50 +79,19 @@ async function readConfigFromExternal(): Promise<ServerConfig | null> {
 async function writeConfigToExternal(config: ServerConfig) {
   try {
     if (!Capacitor.isNativePlatform()) return
+    const toStore = { ...config }
+    if (toStore.password) {
+      try { toStore.password = await encrypt(toStore.password) } catch { }
+    }
     await Filesystem.writeFile({
       path: CONFIG_FILENAME,
-      data: JSON.stringify(config),
+      data: JSON.stringify(toStore),
       directory: Directory.Documents,
       recursive: true
     })
   } catch {
     // External storage may not be available
   }
-}
-
-async function decryptConfig(raw: string): Promise<ServerConfig> {
-  const parsed = JSON.parse(raw)
-  if (parsed.password && isCiphertext(parsed.password)) {
-    try { parsed.password = await decrypt(parsed.password) } catch { /* keep as-is */ }
-  }
-  return { ...defaultConfig, ...parsed }
-}
-
-function loadInitialConfig(): ServerConfig {
-  const stored = localStorage.getItem(STORAGE_KEYS.SERVER)
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored)
-      if (parsed.password && isCiphertext(parsed.password)) {
-        parsed.password = ""
-      }
-      return { ...defaultConfig, ...parsed }
-    } catch { }
-  }
-  return defaultConfig
-}
-
-async function persistConfigToLS(config: ServerConfig) {
-  const toStore = { ...config }
-  if (toStore.password) {
-    try { toStore.password = await encrypt(toStore.password) } catch { }
-  }
-  localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(toStore))
-}
-
-function loadInitialDataMode(): DataMode {
-  const saved = localStorage.getItem(STORAGE_KEYS.DATA_MODE)
-  return saved === "full" || saved === "saver" || saved === "ultra" || saved === "miser" ? saved : "saver"
 }
 
 export function useConfig() {
@@ -130,7 +116,7 @@ export function useConfig() {
         if (fileBackup) {
           setConfig(fileBackup)
           setDraftConfig(fileBackup)
-          writeConfigToExternal(fileBackup)
+          localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(fileBackup))
         }
         return
       }
@@ -141,7 +127,7 @@ export function useConfig() {
           if (configKey(current) === configKey(restored)) return
         } catch { }
       }
-      persistConfigToLS(restored)
+      localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(restored))
       setConfig(restored)
       setDraftConfig(restored)
       writeConfigToExternal(restored)
@@ -157,7 +143,7 @@ export function useConfig() {
 
   const saveConfig = useCallback(() => {
     setConfig(draftConfig)
-    persistConfigToLS(draftConfig)
+    localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(draftConfig))
     writeConfigToFile(draftConfig)
     writeConfigToExternal(draftConfig)
     setSettingsNotice({ type: "success", text: "Configuration saved. It will be used for Sessions." })

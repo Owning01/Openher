@@ -18,6 +18,7 @@ type SessionToolbarProps = {
 }
 
 const MODES: DataMode[] = ["full", "saver", "ultra", "miser"]
+const MODE_LABELS: Record<DataMode, string> = { full: "Full", saver: "Balance", ultra: "Reducido", miser: "Mínimo" }
 
 export const SessionToolbar = memo(function SessionToolbar({
   refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onDataModeChange,
@@ -84,7 +85,7 @@ export const SessionToolbar = memo(function SessionToolbar({
           }}
           title="Data mode"
           style={{ height: 32, padding: "0 0.55rem", display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 700, fontSize: "0.75rem" }}>
-          <span className="mode-btn-text">{dataMode.toUpperCase()}</span>
+          <span className="mode-btn-text">{MODE_LABELS[dataMode]}</span>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M6 9l6 6 6-6"/>
           </svg>
@@ -132,7 +133,7 @@ export const SessionToolbar = memo(function SessionToolbar({
                   onDataModeChange(m)
                   setOpen(false)
                 }}>
-                {m.toUpperCase()}
+                {MODE_LABELS[m]}
               </button>
             ))}
           </div>
