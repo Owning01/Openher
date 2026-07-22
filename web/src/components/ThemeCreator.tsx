@@ -1,5 +1,5 @@
 import { memo, useState, useCallback } from "react"
-import { CloseIcon } from "../Icons"
+import { ModalHeader } from "./ModalHeader"
 
 const COLOR_SLOTS = [
   ["background", "Background"],
@@ -79,10 +79,7 @@ export const ThemeCreator = memo(function ThemeCreator({ onClose }: Props) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content theme-creator" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Theme Creator">
-        <div className="modal-header">
-          <h3>Theme Creator</h3>
-          <button className="btn-icon btn-secondary compact" onClick={onClose}><CloseIcon size={14} /></button>
-        </div>
+        <ModalHeader title="Theme Creator" onClose={onClose} />
         <div className="modal-body">
           <label className="setting-row">
             <span>Theme name</span>

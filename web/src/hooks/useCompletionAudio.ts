@@ -1,16 +1,6 @@
 import { useRef, useEffect, type MutableRefObject } from "react"
 import type { DataMode } from "../types"
-
-function sendNotification(title: string, body?: string) {
-  if (!("Notification" in window)) return
-  if (Notification.permission === "granted") {
-    new Notification(title, { body, icon: "/icon-192.webp" })
-  } else if (Notification.permission !== "denied") {
-    Notification.requestPermission().then((perm) => {
-      if (perm === "granted") new Notification(title, { body, icon: "/icon-192.webp" })
-    })
-  }
-}
+import { sendNotification } from "../utils/notifications"
 
 export function useCompletionAudio(
   awaitingAssistantReply: boolean,

@@ -1,4 +1,5 @@
 import { memo, useState } from "react"
+import { BranchIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { VcsStatus } from "../types"
 
@@ -18,7 +19,7 @@ export const GitToolbar = memo(function GitToolbar({ vcs, onStage, onCommit }: P
   return (
     <div className="git-toolbar">
       <span className="git-branch">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 3v12"/><path d="M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+        <BranchIcon size={12} />
         {vcs.branch || "—"}
       </span>
       {vcs.ahead !== undefined && vcs.ahead > 0 && (

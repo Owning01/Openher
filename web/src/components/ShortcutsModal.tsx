@@ -1,5 +1,5 @@
-import { memo, useEffect } from "react"
-import { CloseIcon } from "../Icons"
+import { memo } from "react"
+import { ModalHeader } from "./ModalHeader"
 
 type Props = {
   onClose: () => void
@@ -18,19 +18,10 @@ const SHORTCUTS = [
 ]
 
 export const ShortcutsModal = memo(function ShortcutsModal({ onClose }: Props) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
-    window.addEventListener("keydown", handler)
-    return () => window.removeEventListener("keydown", handler)
-  }, [onClose])
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content shortcuts-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Keyboard Shortcuts">
-        <div className="modal-header">
-          <h3>Keyboard Shortcuts</h3>
-          <button className="btn-icon btn-secondary compact" onClick={onClose}><CloseIcon size={14} /></button>
-        </div>
+        <ModalHeader title="Keyboard Shortcuts" onClose={onClose} />
         <div className="modal-body">
           <table className="shortcuts-table">
             <tbody>

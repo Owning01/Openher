@@ -1,4 +1,5 @@
 import { memo, useState, useEffect, useCallback } from "react"
+import { ModalHeader } from "./ModalHeader"
 import { api } from "../api"
 import type { ServerConfig } from "../types"
 
@@ -35,12 +36,7 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
-        <div className="modal-header">
-          <h3>Skills</h3>
-          <button className="btn-icon btn-secondary compact" onClick={onClose}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
+        <ModalHeader title="Skills" onClose={onClose} />
         <input
           type="search"
           placeholder="Search skills..."

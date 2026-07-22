@@ -1,5 +1,5 @@
 import { memo, useState, useCallback } from "react"
-import { CloseIcon } from "../Icons"
+import { ModalHeader } from "./ModalHeader"
 import type { SessionView } from "../types"
 
 type Props = {
@@ -52,10 +52,7 @@ export const FavoritesManager = memo(function FavoritesManager({ favorites, onRe
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content favorites-manager" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Manage Favorites">
-        <div className="modal-header">
-          <h3>Manage Favorites</h3>
-          <button className="btn-icon btn-secondary compact" onClick={onClose}><CloseIcon size={14} /></button>
-        </div>
+        <ModalHeader title="Manage Favorites" onClose={onClose} />
         <div className="modal-body">
           {items.length === 0 ? (
             <p className="subtle">No favorites yet</p>

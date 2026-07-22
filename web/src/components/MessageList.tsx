@@ -1,5 +1,5 @@
 import { memo, useRef, useEffect, useState, Fragment, useMemo } from "react"
-import { LoadingIcon, ChatIcon } from "../Icons"
+import { LoadingIcon, ChatIcon, ScrollDownIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
 import { Markdown } from "./Markdown"
@@ -170,11 +170,7 @@ export const MessageList = memo(function MessageList({
       {!isAtBottom && messages.length > 0 && (
         <button className="scroll-to-bottom" onClick={() => scrollToBottom("smooth")}
           aria-label="Scroll to bottom" title="Scroll to bottom">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <polyline points="19 12 12 19 5 12"/>
-          </svg>
+          <ScrollDownIcon size={16} />
         </button>
       )}
     </div>

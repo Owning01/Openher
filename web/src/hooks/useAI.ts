@@ -1,31 +1,14 @@
 import { useState, useCallback, useMemo } from "react"
 import type { ServerConfig, AgentOption, ModelOption } from "../types"
 import { api } from "../api"
-import { modelKey, sameModel, modelFromKey } from "./useSessions"
+import { modelKey, sameModel, modelFromKey } from "../utils/model-utils"
 import { STORAGE_KEYS } from "../constants"
+import { useLocalStorage } from "./useLocalStorage"
 
 export const MODEL_STORAGE_KEY = "opencode.remote.model"
 export const AGENT_STORAGE_KEY = "opencode.remote.agent"
 export const RECENT_MODELS_KEY = STORAGE_KEYS.RECENT_MODELS
 const MAX_RECENT = 5
-
-function loadRecentModels(): ModelOption[] {
-  try {
-    const raw = localStorage.getItem(RECENT_MODELS_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    localStorage.removeItem(RECENT_MODELS_KEY)
-    return []
-  }
-}
-
-function pushRecentModel(model: ModelOption) {
-  const key = modelKey(model)
-  const recent = loadRecentModels().filter((m) => modelKey(m) !== key)
-  recent.unshift(model)
-  const trimmed = recent.slice(0, MAX_RECENT)
-  localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(trimmed))
-}
 
 function modelSearchText(option: ModelOption): string {
   return [option.modelName, option.modelID, option.providerName, option.providerID, option.variant ?? ""].join(" ").toLowerCase()
@@ -51,8 +34,9 @@ export function useAI(config: ServerConfig) {
   const [modelLoadError, setModelLoadError] = useState<string | null>(null)
   const [selectedModelKey, setSelectedModelKey] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.MODEL))
   const [modelQuery, setModelQuery] = useState("")
+  const [recentModelsArr, setRecentModelsArr] = useLocalStorage<ModelOption[]>(RECENT_MODELS_KEY, [])
 
-  const selectedModel = useMemo(() => modelFromKey(selectedModelKey), [selectedModelKey])
+  const selectedModel = useMemo(() => selectedModelKey ? modelFromKey(selectedModelKey) : null, [selectedModelKey])
 
   const primaryAgentOptions = useMemo(() => filterPrimary(agentOptions), [agentOptions])
 
@@ -112,7 +96,7 @@ export function useAI(config: ServerConfig) {
       const list = await api.listModels(config, directory)
       setModelOptions(list)
       setModelLoadError(null)
-      const saved = modelFromKey(selectedModelKey)
+      const saved = selectedModelKey ? modelFromKey(selectedModelKey) : null
       if (saved && list.some((option) => sameModel(option, saved))) return
       const fallback = list.find((option) => option.isDefault) ?? list[0]
       if (fallback) {
@@ -127,15 +111,21 @@ export function useAI(config: ServerConfig) {
 
   const recentModels = useMemo(() => {
     const keys = new Set(modelOptions.map(modelKey))
-    return loadRecentModels().filter((m) => keys.has(modelKey(m)))
-  }, [modelOptions])
+    return recentModelsArr.filter((m) => keys.has(modelKey(m)))
+  }, [modelOptions, recentModelsArr])
 
   const changeModel = useCallback((nextKey: string) => {
     setSelectedModelKey(nextKey)
     localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
     const model = modelOptions.find((m) => modelKey(m) === nextKey)
-    if (model) pushRecentModel(model)
-  }, [modelOptions])
+    if (model) {
+      setRecentModelsArr((prev) => {
+        const filtered = prev.filter((m) => modelKey(m) !== nextKey)
+        filtered.unshift(model)
+        return filtered.slice(0, MAX_RECENT)
+      })
+    }
+  }, [modelOptions, setRecentModelsArr])
 
   const changeAgent = useCallback((nextAgentID: string, directory?: string) => {
     setSelectedAgentID(nextAgentID)

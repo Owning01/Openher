@@ -1,5 +1,5 @@
 import { memo } from "react"
-import { CloseIcon } from "../Icons"
+import { ModalHeader } from "./ModalHeader"
 import type { ChatSettings } from "../types"
 
 type Props = {
@@ -20,10 +20,7 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Personalizar chat"
         style={{ maxWidth: 400 }}>
-        <div className="modal-header">
-          <h3>Personalizar Chat</h3>
-          <button className="btn-icon btn-secondary compact" onClick={onClose}><CloseIcon size={14} /></button>
-        </div>
+        <ModalHeader title="Personalizar Chat" onClose={onClose} />
         <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
           <label className="setting-row">
             <span>Tamaño de letra</span>

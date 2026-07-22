@@ -1,4 +1,5 @@
 import { memo, useCallback, useState } from "react"
+import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import type { Question } from "../types"
 
@@ -28,9 +29,7 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
   return (
     <div className="modal-overlay" onClick={onDismiss}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('settings.questionPrompt')}>
-        <div className="modal-header">
-          <h3>{t('settings.questionPrompt')}</h3>
-        </div>
+        <ModalHeader title={t('settings.questionPrompt')} onClose={onDismiss} />
         <div className="modal-body">
           <p className="question-text">{question.question}</p>
           <textarea

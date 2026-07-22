@@ -1,4 +1,5 @@
 import { memo, useCallback } from "react"
+import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import type { PermissionRequest } from "../types"
 
@@ -25,9 +26,7 @@ export const PermissionPrompt = memo(function PermissionPrompt({ request, onAppr
   return (
     <div className="modal-overlay" onClick={onDismiss}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('settings.permissionRequest')}>
-        <div className="modal-header">
-          <h3>{t('settings.permissionRequest')}</h3>
-        </div>
+        <ModalHeader title={t('settings.permissionRequest')} onClose={onDismiss} />
         <div className="modal-body">
           <p className="permission-detail">{request.permission}</p>
         </div>

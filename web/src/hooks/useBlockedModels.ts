@@ -1,41 +1,23 @@
-import { useState, useCallback, useMemo } from "react"
+import { useCallback, useMemo } from "react"
 import type { ModelOption } from "../types"
 import { STORAGE_KEYS } from "../constants"
-import { modelKey } from "./useSessions"
-
-function loadBlocked(): Set<string> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.BLOCKED_MODELS)
-    return new Set(raw ? JSON.parse(raw) : [])
-  } catch {
-    localStorage.removeItem(STORAGE_KEYS.BLOCKED_MODELS)
-    return new Set()
-  }
-}
-
-function saveBlocked(set: Set<string>) {
-  localStorage.setItem(STORAGE_KEYS.BLOCKED_MODELS, JSON.stringify([...set]))
-}
+import { modelKey } from "../utils/model-utils"
+import { useLocalStorage } from "./useLocalStorage"
 
 export function useBlockedModels(modelOptions: ModelOption[]) {
-  const [blocked, setBlocked] = useState<Set<string>>(loadBlocked)
+  const [blockedArr, setBlockedArr] = useLocalStorage<string[]>(STORAGE_KEYS.BLOCKED_MODELS, [])
+  const blocked = useMemo(() => new Set(blockedArr), [blockedArr])
 
   const filteredModelOptions = useMemo(() => {
     return modelOptions.filter((m) => !blocked.has(modelKey(m)))
   }, [modelOptions, blocked])
 
   const toggleBlocked = useCallback((key: string) => {
-    setBlocked((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      saveBlocked(next)
-      return next
+    setBlockedArr((prev) => {
+      if (prev.includes(key)) return prev.filter((k) => k !== key)
+      return [...prev, key]
     })
-  }, [])
+  }, [setBlockedArr])
 
   const isBlocked = useCallback((key: string) => blocked.has(key), [blocked])
 

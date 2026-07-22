@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from "react"
+import { useCallback, useEffect } from "react"
 import { STORAGE_KEYS } from "../constants"
 import type { ChatSettings } from "../types"
+import { useLocalStorage } from "./useLocalStorage"
 
 const DEFAULTS: ChatSettings = {
   fontSize: 14,
@@ -16,18 +17,6 @@ const SPACING_MAP: Record<ChatSettings["messageSpacing"], string> = {
   comfortable: "var(--space-5)",
 }
 
-function load(): ChatSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.CHAT_SETTINGS)
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) }
-  } catch { /* fall through */ }
-  return { ...DEFAULTS }
-}
-
-function save(settings: ChatSettings) {
-  try { localStorage.setItem(STORAGE_KEYS.CHAT_SETTINGS, JSON.stringify(settings)) } catch {}
-}
-
 function applyCSSVars(s: ChatSettings) {
   const root = document.documentElement
   root.style.setProperty("--chat-font-size", `${s.fontSize}px`)
@@ -38,22 +27,17 @@ function applyCSSVars(s: ChatSettings) {
 }
 
 export function useChatSettings() {
-  const [settings, setSettings] = useState<ChatSettings>(load)
+  const [settings, setSettings] = useLocalStorage<ChatSettings>(STORAGE_KEYS.CHAT_SETTINGS, DEFAULTS)
 
   useEffect(() => { applyCSSVars(settings) }, [settings])
 
   const setSetting = useCallback(<K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => {
-    setSettings((prev) => {
-      const next = { ...prev, [key]: value }
-      save(next)
-      return next
-    })
-  }, [])
+    setSettings((prev) => ({ ...prev, [key]: value }))
+  }, [setSettings])
 
   const resetDefaults = useCallback(() => {
     setSettings({ ...DEFAULTS })
-    save(DEFAULTS)
-  }, [])
+  }, [setSettings])
 
   return { settings, setSetting, resetDefaults, DEFAULTS }
 }

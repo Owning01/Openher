@@ -4,7 +4,8 @@ import { I18nProvider, useT, normalizeLanguage } from "./i18n-context"
 import { languageOptions } from "./i18n"
 import { useConfig } from "./hooks/useConfig"
 import { useTheme } from "./hooks/useTheme"
-import { useSessions, modelKey, sameModel } from "./hooks/useSessions"
+import { useSessions } from "./hooks/useSessions"
+import { modelKey, sameModel } from "./utils/model-utils"
 import { useAI, agentLabel } from "./hooks/useAI"
 import { useMessages } from "./hooks/useMessages"
 import { useSessionSidecar } from "./hooks/useSessionSidecar"
@@ -48,9 +49,8 @@ import { FavoritesManager } from "./components/FavoritesManager"
 import { useShell } from "./hooks/useShell"
 import { useChatSettings } from "./hooks/useChatSettings"
 import { useOfflineQueue } from "./hooks/useOfflineQueue"
-import { useNotifications, loadNotificationFlags } from "./hooks/useNotifications"
+import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
-import type { NotificationFlags } from "./hooks/useNotifications"
 import { CloseIcon } from "./Icons"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
@@ -177,8 +177,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const { enqueue: queueAction, dequeueAll } = useOfflineQueue()
 
   // ===== Feature: Notifications =====
-  const [notifFlags] = useState<NotificationFlags>(() => loadNotificationFlags())
-  const { notify } = useNotifications()
+  const { notify, flags: notifFlags } = useNotifications()
 
   // ===== Feature: Deep Link =====
   useDeepLink((partial) => {

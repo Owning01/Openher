@@ -1,38 +1,10 @@
-import { useState, useCallback, type MutableRefObject } from "react"
+import { useState, useCallback, useMemo, type MutableRefObject } from "react"
 import type { ServerConfig, Session, SessionView, SessionStatus, ModelSelection, ConnectionState } from "../types"
 import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
+import { useLocalStorage } from "./useLocalStorage"
 
 const FAVORITES_KEY = STORAGE_KEYS.FAVORITES
-
-function loadFavorites(): Set<string> {
-  try {
-    const raw = localStorage.getItem(FAVORITES_KEY)
-    return new Set(raw ? JSON.parse(raw) : [])
-  } catch {
-    localStorage.removeItem(FAVORITES_KEY)
-    return new Set()
-  }
-}
-
-export function modelKey(model: { providerID: string; modelID: string; variant?: string }): string {
-  const parts = [model.providerID, model.modelID]
-  if (model.variant) parts.push(model.variant)
-  return parts.map((p) => encodeURIComponent(p).replace(/%7C/gi, "|")).join("|")
-}
-
-export function modelFromKey(value: string | null): { providerID: string; modelID: string; variant?: string } | null {
-  if (!value) return null
-  const [providerID, modelID, ...rest] = value.split("|").map((part) => decodeURIComponent(part))
-  const variant = rest.length > 0 ? rest.join("|") : undefined
-  if (!providerID || !modelID) return null
-  return { providerID, modelID, variant: variant || undefined }
-}
-
-export function sameModel(a: { providerID: string; modelID: string; variant?: string } | null | undefined,
-                          b: { providerID: string; modelID: string; variant?: string } | null | undefined): boolean {
-  return Boolean(a && b && a.providerID === b.providerID && a.modelID === b.modelID && (a.variant ?? "") === (b.variant ?? ""))
-}
 
 function toSessionView(session: Session, status?: SessionStatus): SessionView {
   return {
@@ -100,7 +72,8 @@ export function useSessions(
   const [sessionToDelete, setSessionToDelete] = useState<SessionView | null>(null)
   const [renamingSessionID, setRenamingSessionID] = useState<string | null>(null)
   const [renameValue, setRenameValueState] = useState("")
-  const [favorites, setFavorites] = useState<Set<string>>(loadFavorites)
+  const [favoritesArr, setFavoritesArr] = useLocalStorage<string[]>(FAVORITES_KEY, [])
+  const favorites = useMemo(() => new Set(favoritesArr), [favoritesArr])
 
   const selectedSession = sessions.find((s) => s.id === selectedID) ?? null
 
@@ -259,15 +232,11 @@ export function useSessions(
   }, [])
 
   const toggleFavorite = useCallback((id: string) => {
-    const faves = loadFavorites()
-    if (faves.has(id)) {
-      faves.delete(id)
-    } else {
-      faves.add(id)
-    }
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify([...faves]))
-    setFavorites(new Set(faves))
-  }, [])
+    setFavoritesArr((prev) => {
+      if (prev.includes(id)) return prev.filter((fid) => fid !== id)
+      return [...prev, id]
+    })
+  }, [setFavoritesArr])
 
   return {
     sessions, selectedID, loadingSessionID, refreshingSessions, creatingSession,

@@ -702,53 +702,6 @@ p {
 .mode-btn.active {
   background: var(--primary);
 }
-.mode-switcher {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: var(--space-1);
-  margin: var(--space-3) 0;
-}
-
-.mode-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  padding-right: var(--space-1);
-  white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.mode-btn {
-  flex: 1 0 auto;
-  min-width: 0;
-  text-align: center;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.2rem 0.3rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--muted);
-  cursor: pointer;
-  transition: all 0.12s;
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.mode-btn.active {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-  font-weight: 800;
-}
 
 .mode-btn:not(.active):hover {
   background: var(--surface-strong);
@@ -3625,40 +3578,11 @@ button.compact {
     transform: translateY(-4px);
   }
 }
-.fade-in {
-  animation: fade-in 120ms ease-out;
-}
 
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes typing-dot {
-  0%, 60%, 100% {
-    opacity: 0.35;
-    transform: translateY(0);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-4px);
-  }
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 
@@ -3847,29 +3771,6 @@ button.compact {
 /* Inline rename */
 
 /* ===== Inline Rename & Icon Buttons ===== */
-.rename-inline {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.rename-input {
-  font-size: inherit;
-  font-family: inherit;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--primary);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--text);
-  width: 100%;
-  min-width: 140px;
-  outline: none;
-}
-
-.rename-input:focus {
-  box-shadow: 0 0 0 2px var(--primary-soft);
-}
-
 .rename-inline {
   display: flex;
   align-items: center;

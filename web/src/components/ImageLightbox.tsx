@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react"
+import { memo, useCallback, useState } from "react"
 import { CloseIcon } from "../Icons"
 
 type Props = {
@@ -12,14 +12,6 @@ export const ImageLightbox = memo(function ImageLightbox({ src, alt, onClose }: 
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", handleKey)
-    return () => window.removeEventListener("keydown", handleKey)
-  }, [onClose])
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()

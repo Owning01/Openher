@@ -66,6 +66,27 @@ export const StatsIcon = (p: { className?: string; size?: number }) => (
 export const ArrowLeftIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Back"><path d="M19 12H5M12 19l-7-7 7-7"/></Svg>)
 
+export const MenuDotsIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Menu"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></Svg>)
+export const ChevronIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Chevron"><path d="M6 9l6 6 6-6"/></Svg>)
+export const ArchiveIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Archive"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></Svg>)
+export const ForkIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Fork"><path d="M6 3v12"/><path d="M18 3v12"/><path d="M6 15c0 3 3 5 6 5s6-2 6-5"/></Svg>)
+export const PaintIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Paint"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></Svg>)
+export const KeyboardIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Keyboard"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h0"/><path d="M10 8h0"/><path d="M14 8h0"/><path d="M18 8h0"/><path d="M6 12h0"/><path d="M10 12h0"/><path d="M14 12h0"/><path d="M18 12h0"/><path d="M8 16h8"/></Svg>)
+export const AttachmentIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Attachment"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></Svg>)
+export const BranchIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Branch"><path d="M6 3v12"/><path d="M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M18 9a9 9 0 0 1-9 9"/></Svg>)
+export const ScrollDownIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Scroll down"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></Svg>)
+export const LayersIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Layers"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></Svg>)
+
 export const UndoIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Undo"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></Svg>)
 export const RedoIcon = (p: { className?: string; size?: number }) => (

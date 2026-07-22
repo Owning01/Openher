@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react"
+import { useCallback } from "react"
 import { STORAGE_KEYS } from "../constants"
+import { useLocalStorage } from "./useLocalStorage"
 
 const STATS_KEY = STORAGE_KEYS.STATS
 
@@ -9,43 +10,22 @@ type UsageStats = {
   firstUsed: number
 }
 
-function loadStats(): UsageStats {
-  try {
-    const raw = localStorage.getItem(STATS_KEY)
-    return raw ? JSON.parse(raw) : { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }
-  } catch {
-    return { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }
-  }
-}
-
-function saveStats(stats: UsageStats) {
-  localStorage.setItem(STATS_KEY, JSON.stringify(stats))
-}
+const initialStats: UsageStats = { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }
 
 export function useStats() {
-  const [stats, setStats] = useState<UsageStats>(loadStats)
+  const [stats, setStats] = useLocalStorage<UsageStats>(STATS_KEY, initialStats)
 
   const recordPrompt = useCallback((_text: string) => {
-    setStats((prev) => {
-      const next = { ...prev, promptsSent: prev.promptsSent + 1 }
-      saveStats(next)
-      return next
-    })
-  }, [])
+    setStats((prev) => ({ ...prev, promptsSent: prev.promptsSent + 1 }))
+  }, [setStats])
 
   const recordSessionCreated = useCallback(() => {
-    setStats((prev) => {
-      const next = { ...prev, sessionsCreated: prev.sessionsCreated + 1 }
-      saveStats(next)
-      return next
-    })
-  }, [])
+    setStats((prev) => ({ ...prev, sessionsCreated: prev.sessionsCreated + 1 }))
+  }, [setStats])
 
   const resetStats = useCallback(() => {
-    const next = { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }
-    saveStats(next)
-    setStats(next)
-  }, [])
+    setStats({ promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() })
+  }, [setStats])
 
   return { stats, recordPrompt, recordSessionCreated, resetStats }
 }

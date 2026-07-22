@@ -1,4 +1,5 @@
 import { memo, useState, useCallback, type ReactNode } from "react"
+import { ChevronIcon } from "../Icons"
 
 type Props = {
   icon: ReactNode
@@ -21,10 +22,8 @@ export const CollapsibleSection = memo(function CollapsibleSection({ icon, title
         <span className="collapsible-title">{title}</span>
         {subtitle && <span className="collapsible-subtitle">{subtitle}</span>}
         {filePath && <span className="collapsible-file">{filePath}</span>}
-        <span className="collapsible-chevron">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.15s" }}>
-            <path d="M6 9l6 6 6-6"/>
-          </svg>
+        <span className="collapsible-chevron" style={{ transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.15s" }}>
+          <ChevronIcon size={10} />
         </span>
       </button>
       {open && <div className="collapsible-content">{children}</div>}

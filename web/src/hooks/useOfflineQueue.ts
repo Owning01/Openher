@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from "react"
 import { DB_NAME, DB_VERSION } from "../constants"
+import { openDatabase } from "../utils/db"
 
 const QUEUE_STORE = "pendingActions"
 
@@ -13,17 +14,11 @@ type QueuedAction = {
 }
 
 function openQueueDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains(QUEUE_STORE)) {
-        const store = db.createObjectStore(QUEUE_STORE, { keyPath: "id", autoIncrement: true })
-        store.createIndex("createdAt", "createdAt")
-      }
+  return openDatabase(DB_NAME, DB_VERSION, (db) => {
+    if (!db.objectStoreNames.contains(QUEUE_STORE)) {
+      const store = db.createObjectStore(QUEUE_STORE, { keyPath: "id", autoIncrement: true })
+      store.createIndex("createdAt", "createdAt")
     }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
   })
 }
 

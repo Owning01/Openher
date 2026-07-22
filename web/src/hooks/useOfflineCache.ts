@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react"
 import type { MessageEnvelope, Session } from "../types"
 import { DB_NAME, DB_VERSION, DB_STORES } from "../constants"
 import { encrypt, decrypt } from "../utils/crypto"
+import { openDatabase } from "../utils/db"
 
 const ENC_PREFIX = "enc:"
 
@@ -30,19 +31,13 @@ async function decryptMessages(messages: MessageEnvelope[]): Promise<MessageEnve
 }
 
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains(DB_STORES.sessions)) {
-        db.createObjectStore(DB_STORES.sessions, { keyPath: "id" })
-      }
-      if (!db.objectStoreNames.contains(DB_STORES.messages)) {
-        db.createObjectStore(DB_STORES.messages, { keyPath: "sessionID" })
-      }
+  return openDatabase(DB_NAME, DB_VERSION, (db) => {
+    if (!db.objectStoreNames.contains(DB_STORES.sessions)) {
+      db.createObjectStore(DB_STORES.sessions, { keyPath: "id" })
     }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    if (!db.objectStoreNames.contains(DB_STORES.messages)) {
+      db.createObjectStore(DB_STORES.messages, { keyPath: "sessionID" })
+    }
   })
 }
 

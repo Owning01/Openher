@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect } from "react"
-import { CloseIcon } from "../Icons"
+import { ModalHeader } from "./ModalHeader"
 import type { ShellLine } from "../hooks/useShell"
 
 type Props = {
@@ -56,13 +56,9 @@ export const TerminalView = memo(function TerminalView({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content terminal-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Terminal">
-        <div className="modal-header">
-          <h3>Terminal</h3>
-          <div className="detail-header-actions">
-            <button className="btn-secondary compact" onClick={onClear}>Clear</button>
-            <button className="btn-icon btn-secondary compact" onClick={onClose}><CloseIcon size={14} /></button>
-          </div>
-        </div>
+        <ModalHeader title="Terminal" onClose={onClose}>
+          <button className="btn-secondary compact" onClick={onClear}>Clear</button>
+        </ModalHeader>
         <div className="terminal-body">
           <div className="terminal-output">
             {lines.length === 0 && <span className="terminal-welcome">Type a command to run in the project shell</span>}

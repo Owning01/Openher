@@ -1,6 +1,6 @@
 import { memo, useState, useEffect } from "react"
 import { api } from "../api"
-import { CloseIcon } from "../Icons"
+import { ModalHeader } from "./ModalHeader"
 import type { ServerConfig } from "../types"
 
 type Props = {
@@ -32,10 +32,7 @@ export const MCPBrowser = memo(function MCPBrowser({ config, onClose, onSelect }
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content mcp-browser" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="MCP Resources">
-        <div className="modal-header">
-          <h3>MCP Resources</h3>
-          <button className="btn-icon btn-secondary compact" onClick={onClose}><CloseIcon size={14} /></button>
-        </div>
+        <ModalHeader title="MCP Resources" onClose={onClose} />
         <div className="modal-body">
           <input
             placeholder="Search resources..."

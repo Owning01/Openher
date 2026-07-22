@@ -2,22 +2,10 @@ import { useState, useCallback, useMemo } from "react"
 import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
 import type { ServerConfig, ModelOption, ProviderInfo } from "../types"
-
-function loadConnected(): Record<string, true> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.CONNECTED_PROVIDERS)
-    return raw ? JSON.parse(raw) : {}
-  } catch {
-    return {}
-  }
-}
-
-function saveConnected(map: Record<string, true>) {
-  localStorage.setItem(STORAGE_KEYS.CONNECTED_PROVIDERS, JSON.stringify(map))
-}
+import { useLocalStorage } from "./useLocalStorage"
 
 export function useProviderManager(modelOptions: ModelOption[], config: ServerConfig | null) {
-  const [connectedMap, setConnectedMap] = useState<Record<string, true>>(loadConnected)
+  const [connectedMap, setConnectedMap] = useLocalStorage<Record<string, true>>(STORAGE_KEYS.CONNECTED_PROVIDERS, {})
   const [connecting, setConnecting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -46,11 +34,7 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
     setError(null)
     try {
       await api.sendCommand(config, sessionID, `/connect ${providerID} ${apiKey}`, "", directory)
-      setConnectedMap((prev) => {
-        const next = { ...prev, [providerID]: true as const }
-        saveConnected(next)
-        return next
-      })
+      setConnectedMap((prev) => ({ ...prev, [providerID]: true as const }))
       setConnecting(null)
       return true
     } catch (err) {
@@ -59,16 +43,15 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
       setConnecting(null)
       return false
     }
-  }, [config])
+  }, [config, setConnectedMap])
 
   const disconnectProvider = useCallback((providerID: string) => {
     setConnectedMap((prev) => {
       const next = { ...prev }
       delete next[providerID]
-      saveConnected(next)
       return next
     })
-  }, [])
+  }, [setConnectedMap])
 
   return { providers, connecting, error, connectProvider, disconnectProvider }
 }
