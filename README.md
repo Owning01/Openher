@@ -211,6 +211,35 @@ En el teléfono: **Host** = `100.x.x.x`, **Port** = `4096`, **Username/Password*
 
 ---
 
+## 📱 Datos móviles / Mobile Data
+
+La app ajusta automáticamente el modo al detectar datos móviles (cellular → Reducido, WiFi → Full).
+También podés cambiarlo manualmente en **Ajustes**.
+
+| Modo | Polling | KB/min (idle) | ~30 min | Ideal para |
+|------|---------|---------------|---------|------------|
+| **Full** | 3.5s | ~35 KB | ~1 MB | WiFi ilimitado · streaming SSE en tiempo real con audio |
+| **Balance** | 15s | ~10 KB | ~300 KB | WiFi o datos generosos · payload completo + notificaciones |
+| **Reducido** | 30s | ~3.6 KB | ~108 KB | 4G/LTE · sin audio ni tool parts · solo polling si activa |
+| **Mínimo** | 60s | ~1.8 KB | ~54 KB | Datos limitados o roaming · solo texto, sin notificaciones |
+
+Durante generación activa el consumo puntual se multiplica 2-3× por unos segundos (respuesta con tool calls).
+Cifras estimadas sobre HTTP/2 comprimido con ~10 sesiones en el servidor.
+
+The app auto-switches on cellular (→ Reduced) or WiFi (→ Full). Manual override in **Settings**.
+
+| Mode | Polling | KB/min (idle) | ~30 min | Best for |
+|------|---------|---------------|---------|----------|
+| **Full** | 3.5s | ~35 KB | ~1 MB | Unlimited WiFi · real-time SSE streaming with audio |
+| **Balance** | 15s | ~10 KB | ~300 KB | WiFi or generous data · full payload + notifications |
+| **Reduced** | 30s | ~3.6 KB | ~108 KB | 4G/LTE · no audio or tool parts · polls only when active |
+| **Miser** | 60s | ~1.8 KB | ~54 KB | Limited data or roaming · text only, no notifications |
+
+During active generation, consumption can spike 2-3× for seconds (response with tool calls).
+Estimates over compressed HTTP/2 with ~10 server sessions.
+
+---
+
 > 📖 **Catálogo completo**: [`CATALOGO.md`](CATALOGO.md) — 47 componentes, 27 hooks, 35 endpoints, grafos, guía para LLM.
 
 ## 📁 Estructura del proyecto
