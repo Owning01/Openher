@@ -81,6 +81,8 @@ func (s *Server) Start() error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/logo.jpg", s.handleLogo)
+	mux.HandleFunc("/favicon.ico", s.handleLogo)
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/discover", s.handleDiscover)
 	mux.HandleFunc("/api/start-server", s.handleStartServer)
@@ -115,6 +117,17 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(data)
+}
+
+func (s *Server) handleLogo(w http.ResponseWriter, r *http.Request) {
+	data, err := fs.ReadFile(staticFS, "static/logo.jpg")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.Write(data)
 }
 
