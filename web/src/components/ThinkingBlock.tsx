@@ -1,5 +1,6 @@
 import { memo } from "react"
 import { CollapsibleSection } from "./CollapsibleSection"
+import { BrainIcon } from "../Icons"
 
 type ThinkingPart = { id: string; text: string }
 
@@ -13,7 +14,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({ parts }: Props) {
   const text = parts.map((p) => p.text).join("\n\n")
 
   return (
-    <CollapsibleSection icon="💭" title="Razonamiento">
+    <CollapsibleSection icon={<BrainIcon size={14} />} title="Razonamiento">
       <pre className="thinking-text">{text}</pre>
     </CollapsibleSection>
   )

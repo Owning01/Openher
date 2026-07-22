@@ -1,18 +1,9 @@
-import { memo, useMemo } from "react"
+import { memo, useMemo, type ReactNode } from "react"
 import type { ServerConfig } from "../types"
 import { toolMeta, detectToolName, isTaskTool, isQuestionTool } from "../utils/toolMeta"
 import { QuestionPrompt } from "./QuestionPrompt"
 import { CollapsibleSection } from "./CollapsibleSection"
-
-const toolIcons: Record<string, string> = {
-  tool_use: "▶",
-  tool_result: "◀",
-  execution: "⚙",
-  terminal: "▸",
-  code_execution: "◇",
-  tool_call: "▶",
-  tool: "◆",
-}
+import { CodeIcon, FileIcon, TerminalIcon, GlobeIcon, SearchIcon, ToolIcon } from "../Icons"
 
 const toolLabels: Record<string, string> = {
   tool_use: "Tool call",
@@ -22,6 +13,18 @@ const toolLabels: Record<string, string> = {
   code_execution: "Code execution",
   tool_call: "Tool call",
   tool: "Tool",
+}
+
+function toolSvgIcon(toolName: string | null): ReactNode {
+  const size = 14
+  switch (toolName) {
+    case "write": case "edit": case "apply_patch": return <CodeIcon size={size} />
+    case "read": return <FileIcon size={size} />
+    case "bash": case "execute": return <TerminalIcon size={size} />
+    case "grep": case "glob": return <SearchIcon size={size} />
+    case "websearch": case "webfetch": return <GlobeIcon size={size} />
+    default: return <CodeIcon size={size} />
+  }
 }
 
 function extractParam(text: string, name: string): string {
@@ -128,7 +131,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   if (part.type === "tool_use" && meta) {
     return (
       <CollapsibleSection
-        icon={meta.icon}
+        icon={toolSvgIcon(toolName)}
         title={toolName!}
         subtitle={subtitle ?? undefined}
         filePath={filePath ?? undefined}
@@ -142,7 +145,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   if (part.type === "tool_result" && toolName && toolName !== "task") {
     return (
       <CollapsibleSection
-        icon={meta?.icon ?? "◀"}
+        icon={toolSvgIcon(toolName)}
         title={`${toolName} result`}
         subtitle={subtitle ?? undefined}
         filePath={filePath ?? undefined}
@@ -153,13 +156,12 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     )
   }
 
-  const icon = toolIcons[part.type] || "◆"
   const label = toolLabels[part.type] || part.type
 
   if (part.type === "tool") {
     return (
       <CollapsibleSection
-        icon={icon}
+        icon={<ToolIcon size={14} />}
         title={label}
         subtitle={meta?.label ? `${toolName}` : undefined}
         filePath={filePath ?? undefined}
@@ -172,7 +174,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
 
   return (
     <CollapsibleSection
-      icon={icon}
+      icon={<ToolIcon size={14} />}
       title={label}
       subtitle={subtitle ?? undefined}
       filePath={filePath ?? undefined}
