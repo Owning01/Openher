@@ -87,7 +87,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     renderedMessages, messageScrollSignature, assistantResponseSignature,
     toolMessage, completionShouldPlayRef,
     clearSession, loadSelected, send, abortSession,
-    setMessages
+    setMessages, undoMessage, redoMessage, compactSession
   } = useMessages(config)
 
   const {
@@ -564,6 +564,35 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setView(target)
   }, [])
 
+  const handleRevertToMessage = useCallback(async (messageID: string) => {
+    if (!selectedSession) return
+    try {
+      if (awaitingAssistantReply) {
+        await api.abort(config, selectedSession.id, selectedSession.directory)
+      }
+      await api.revert(config, selectedSession.id, messageID, selectedSession.directory)
+      await loadSelected(selectedSession.id, selectedSession.directory)
+      await refreshSessions()
+    } catch (err) {
+      setRuntimeError((err as Error).message)
+    }
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, refreshSessions])
+
+  const handleUndo = useCallback(() => {
+    if (!selectedSession) return
+    undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
+  }, [selectedSession, undoMessage, refreshSessions, loadSelected])
+
+  const handleRedo = useCallback(() => {
+    if (!selectedSession) return
+    redoMessage(selectedSession.id, selectedSession.directory, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
+  }, [selectedSession, redoMessage, refreshSessions, loadSelected])
+
+  const handleCompact = useCallback(() => {
+    if (!selectedSession || !activeModel) return
+    compactSession(selectedSession.id, selectedSession.directory, activeModel.providerID, activeModel.modelID, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
+  }, [selectedSession, activeModel, compactSession, refreshSessions, loadSelected])
+
   return (
     <div className="app-shell" data-navbar="header">
       {view !== "detail" && (
@@ -713,6 +742,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onPermissionReject={handlePermissionReject}
             onDismissQuestion={handleDismissQuestion}
             onDismissPermission={handleDismissPermission}
+            onRevertToMessage={handleRevertToMessage}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            onCompact={handleCompact}
             onForkSession={() => selectedSession && handleCreateSession(selectedSession.directory)}
             onOpenTerminal={() => setShowTerminal(true)}
             onOpenMCPBrowser={() => setShowMCPBrowser(true)}
