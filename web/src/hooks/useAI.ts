@@ -95,8 +95,9 @@ export function useAI(config: ServerConfig) {
   }, [modelOptions, recentModelsArr])
 
   const variantGroups = useMemo(() => {
+    const hasQuery = modelQuery.trim().length > 0
     const recentKeys = new Set(recentModels.map(modelKey))
-    const allModels = filteredModelOptions.filter((m) => !recentKeys.has(modelKey(m)))
+    const allModels = hasQuery ? filteredModelOptions : filteredModelOptions.filter((m) => !recentKeys.has(modelKey(m)))
     const groups = new Map<string, VariantGroup>()
     for (const opt of allModels) {
       const key = modelKey(opt)
