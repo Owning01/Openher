@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Owning01/Opencode-Mobile/main/web/public/img/opencode-logo-dark.jpg" width="64" height="64" alt="OpenCode Logo" style="border-radius: 12px;" />
+</div>
+
 # ⚡ OpenCode Mobile — Catálogo de Funcionalidades
 
 > **Cliente Android para [OpenCode](https://opencode.ai)** — asistente de codificación AI desde el celular.
@@ -677,3 +681,13 @@ git tag v1.x.x && git push --tags
 | 9 | `web/src/styles.css` | Sistema de diseño completo |
 
 </details>
+
+---
+
+<div align="center">
+
+**OpenCode Mobile** es un cliente para [**OpenCode**](https://opencode.ai) — el asistente de codificación AI open-source.
+
+Desarrollado por [@Owning01](https://github.com/Owning01) · [Reportar issue](https://github.com/Owning01/Opencode-Mobile/issues) · [Contribuir](https://github.com/Owning01/Opencode-Mobile)
+
+</div>
