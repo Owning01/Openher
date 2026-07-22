@@ -21,7 +21,23 @@ export function useBlockedModels(modelOptions: ModelOption[]) {
 
   const isBlocked = useCallback((key: string) => blocked.has(key), [blocked])
 
+  const toggleAllForProvider = useCallback((providerID: string, block: boolean) => {
+    const keys = modelOptions.filter((m) => m.providerID === providerID).map(modelKey)
+    setBlockedArr((prev) => {
+      const current = new Set(prev)
+      for (const k of keys) {
+        if (block) current.add(k)
+        else current.delete(k)
+      }
+      return [...current]
+    })
+  }, [modelOptions, setBlockedArr])
+
+  const providerBlockedCount = useCallback((providerID: string) => {
+    return modelOptions.filter((m) => m.providerID === providerID && blocked.has(modelKey(m))).length
+  }, [modelOptions, blocked])
+
   const blockedCount = blocked.size
 
-  return { blocked, filteredModelOptions, toggleBlocked, isBlocked, blockedCount }
+  return { blocked, filteredModelOptions, toggleBlocked, isBlocked, toggleAllForProvider, providerBlockedCount, blockedCount }
 }

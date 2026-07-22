@@ -5,8 +5,8 @@ import { languageOptions } from "./i18n"
 import { useConfig } from "./hooks/useConfig"
 import { useTheme } from "./hooks/useTheme"
 import { useSessions } from "./hooks/useSessions"
-import { modelKey, sameModel } from "./utils/model-utils"
-import { useAI, agentLabel } from "./hooks/useAI"
+import { modelKey } from "./utils/model-utils"
+import { useAI } from "./hooks/useAI"
 import { useMessages } from "./hooks/useMessages"
 import { useSessionSidecar } from "./hooks/useSessionSidecar"
 import { usePolling } from "./hooks/usePolling"
@@ -73,10 +73,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const backgroundFailureCountRef = useRef(0)
   const initialSessionLoadRef = useRef(true)
 
-  const { agentOptions, agentLoadError, modelOptions, modelLoadError,
+  const { agentOptions, modelOptions, modelLoadError,
     modelQuery, setModelQuery, primaryAgentOptions,
-    activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
-    selectedModelKey, showModelChip, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
+    activeAgent, activeAgentID, activeModelOption, activeModel,
+    groupedModelOptions, selectedModelKey, showModelChip, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
   const blockedModels = useBlockedModels(modelOptions)
   const { flags, toggleFlag, setFlag } = useFeatureFlags()
 
@@ -112,6 +112,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (reqId !== loadSessionRef.current) return
     loadTodos(id, dir)
   }, [loadSelected, loadAgents, loadModels, loadTodos, clearSession, clearSidecar])
+
+  // Auto-refresh models when AI sheet opens
+  useEffect(() => {
+    if (activeDetailSheet === "ai") {
+      loadModels()
+    }
+  }, [activeDetailSheet, loadModels])
 
   const {
     sessions, selectedID, loadingSessionID, refreshingSessions, creatingSession,
@@ -717,24 +724,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={() => setActiveDetailSheet(null)}
-            agentOptions={agentOptions}
-            agentLoadError={agentLoadError}
-            activeAgentID={activeAgentID}
-            activeAgent={activeAgent}
             modelOptions={modelOptions}
             modelLoadError={modelLoadError}
             activeModelOption={activeModelOption}
-            filteredModelOptions={filteredModelOptions}
-            recentModels={modelOptions.slice(0, 3)}
+            groupedModelOptions={groupedModelOptions}
             modelQuery={modelQuery}
             isWorking={isWorking}
-            onRefreshAI={() => { loadAgents(); loadModels() }}
-            onChangeAgent={changeAgent}
             onChangeModel={changeModel}
             onModelQueryChange={setModelQuery}
-            modelKey={modelKey}
-            sameModel={sameModel}
-            agentLabel={agentLabel}
             formatLimit={formatLimit}
             projectName={projectName}
             projectPath={projectPath}

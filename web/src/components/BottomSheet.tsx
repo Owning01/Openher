@@ -1,33 +1,21 @@
-import { memo, useRef } from "react"
-import { RefreshIcon } from "../Icons"
+import { memo, useRef, useMemo } from "react"
 import { useT } from "../i18n-context"
 import { useFocusTrap } from "../hooks/useFocusTrap"
-import type { AgentOption, ModelOption } from "../types"
+import { modelKey, sameModel } from "../utils/model-utils"
+import type { ModelOption } from "../types"
 
 type BottomSheetProps = {
   activeSheet: "ai" | "details" | null
   onClose: () => void
-  // AI sheet
-  agentOptions: AgentOption[]
-  agentLoadError: string | null
-  activeAgentID: string
-  activeAgent: AgentOption | null
   modelOptions: ModelOption[]
   modelLoadError: string | null
   activeModelOption: ModelOption | null
-  filteredModelOptions: ModelOption[]
-  recentModels: ModelOption[]
+  groupedModelOptions: { recentModels: ModelOption[]; allGroups: Map<string, ModelOption[]> }
   modelQuery: string
   isWorking: boolean
-  onRefreshAI: () => void
-  onChangeAgent: (id: string) => void
   onChangeModel: (key: string) => void
   onModelQueryChange: (query: string) => void
-  modelKey: (model: { providerID: string; modelID: string; variant?: string }) => string
-  sameModel: (a: { providerID: string; modelID: string; variant?: string } | null | undefined, b: { providerID: string; modelID: string; variant?: string } | null | undefined) => boolean
-  agentLabel: (agent: AgentOption) => string
   formatLimit: (value?: number) => string
-  // Details sheet
   projectName: string | null
   projectPath: string | null
   vcsBranch: string | null
@@ -38,18 +26,75 @@ type BottomSheetProps = {
   dashboardError: string | null
 }
 
+function groupLabel(providerID: string): string {
+  if (providerID === "opencode") return "OpenCode"
+  return providerID.charAt(0).toUpperCase() + providerID.slice(1)
+}
+
+function isZenModel(modelID: string): boolean {
+  return modelID.startsWith("zen-") || modelID.includes("/zen-")
+}
+
+function isGoModel(modelID: string): boolean {
+  return modelID.startsWith("go-") || modelID.includes("/go-")
+}
+
+function renderModelOption(option: ModelOption, isActive: boolean, onChange: (key: string) => void, disabled: boolean, mk: typeof modelKey, t: ReturnType<typeof useT>) {
+  const optionKey = mk(option)
+  return (
+    <button type="button" key={optionKey}
+      className={isActive ? "model-option active" : "model-option"}
+      onClick={() => onChange(optionKey)} disabled={disabled}
+      role="option" aria-selected={isActive}>
+      <span>
+        <strong>{option.modelName}</strong>
+        <small>{option.providerName}{option.variant ? ` · ${option.variant}` : ""}</small>
+      </span>
+      {option.isDefault && <em>{t('detail.modelDefault')}</em>}
+    </button>
+  )
+}
+
+function renderProviderGroup(providerID: string, options: ModelOption[], activeModelOption: ModelOption | null, onChangeModel: (key: string) => void, isWorking: boolean, mk: typeof modelKey, t: ReturnType<typeof useT>) {
+  if (providerID !== "opencode") {
+    return options.map((opt) => renderModelOption(opt, activeModelOption ? sameModel(opt, activeModelOption) : false, onChangeModel, isWorking, mk, t))
+  }
+  const zen = options.filter((o) => isZenModel(o.modelID))
+  const go = options.filter((o) => isGoModel(o.modelID))
+  const other = options.filter((o) => !isZenModel(o.modelID) && !isGoModel(o.modelID))
+  return (
+    <>
+      {zen.length > 0 && (
+        <>
+          <div className="model-subsection-label">Zen</div>
+          {zen.map((opt) => renderModelOption(opt, activeModelOption ? sameModel(opt, activeModelOption) : false, onChangeModel, isWorking, mk, t))}
+        </>
+      )}
+      {go.length > 0 && (
+        <>
+          <div className="model-subsection-label">Go</div>
+          {go.map((opt) => renderModelOption(opt, activeModelOption ? sameModel(opt, activeModelOption) : false, onChangeModel, isWorking, mk, t))}
+        </>
+      )}
+      {other.map((opt) => renderModelOption(opt, activeModelOption ? sameModel(opt, activeModelOption) : false, onChangeModel, isWorking, mk, t))}
+    </>
+  )
+}
+
 export const BottomSheet = memo(function BottomSheet({
   activeSheet, onClose,
-  agentOptions, agentLoadError, activeAgentID, activeAgent, modelOptions, modelLoadError,
-  activeModelOption, filteredModelOptions, recentModels, modelQuery, isWorking,
-  onRefreshAI, onChangeAgent, onChangeModel, onModelQueryChange,
-  modelKey: mk, sameModel, agentLabel, formatLimit,
+  modelOptions, modelLoadError, activeModelOption, groupedModelOptions,
+  modelQuery, isWorking,
+  onChangeModel, onModelQueryChange, formatLimit,
   projectName, projectPath, vcsBranch, projectDashboard, diffFiles,
   totalDiffAdditions, totalDiffDeletions, dashboardError
 }: BottomSheetProps) {
   const t = useT()
   const sheetRef = useRef<HTMLElement>(null)
   useFocusTrap(sheetRef, onClose, !!activeSheet)
+  const mk = modelKey
+
+  const providerEntries = useMemo(() => Array.from(groupedModelOptions.allGroups.entries()), [groupedModelOptions])
 
   if (!activeSheet) return null
 
@@ -82,27 +127,6 @@ export const BottomSheet = memo(function BottomSheet({
 
         {activeSheet === "ai" && (
           <div className="sheet-content">
-            <button type="button" className="btn-secondary" onClick={onRefreshAI}>
-              <RefreshIcon size={16} />
-              {t('detail.refreshAi')}
-            </button>
-            {agentOptions.length > 0 ? (
-              <div className="agent-controls">
-                <label htmlFor="agent-select">
-                  {t('detail.agentSelectLabel')}
-                  <select id="agent-select" value={activeAgentID} onChange={(e) => onChangeAgent(e.target.value)} disabled={isWorking}>
-                    {agentOptions.filter((a) => a.mode === "primary" || a.mode === "all").map((agent) => (
-                      <option key={agent.id} value={agent.id}>{agentLabel(agent)}</option>
-                    ))}
-                  </select>
-                </label>
-                <p className="subtle">
-                  {activeAgent?.description || t('detail.agentMode', { mode: activeAgent?.mode ?? 'primary' })}
-                </p>
-              </div>
-            ) : (
-              <p className="subtle">{agentLoadError ? t('detail.agentLoadError', { message: agentLoadError }) : t('detail.agentLoading')}</p>
-            )}
             {modelOptions.length > 0 ? (
               <div className="model-controls">
                 <label htmlFor="model-search">
@@ -111,45 +135,23 @@ export const BottomSheet = memo(function BottomSheet({
                     placeholder={t('detail.modelSearchPlaceholder')} disabled={isWorking} autoComplete="off" />
                 </label>
                 <div className="model-option-list" role="listbox" aria-label={t('detail.modelSelectLabel')}>
-                  {!modelQuery && recentModels.length > 0 && (
+                  {!modelQuery && groupedModelOptions.recentModels.length > 0 && (
                     <>
                       <div className="model-section-label">{t('detail.modelRecent')}</div>
-                      {recentModels.map((option) => {
-                        const optionKey = mk(option)
+                      {groupedModelOptions.recentModels.map((option) => {
                         const active = activeModelOption ? sameModel(option, activeModelOption) : false
-                        return (
-                          <button type="button" key={optionKey}
-                            className={active ? "model-option active" : "model-option"}
-                            onClick={() => onChangeModel(optionKey)} disabled={isWorking}
-                            role="option" aria-selected={active}>
-                            <span>
-                              <strong>{option.modelName}</strong>
-                              <small>{option.providerName}{option.variant ? ` · ${option.variant}` : ""}</small>
-                            </span>
-                          </button>
-                        )
+                        return renderModelOption(option, active, onChangeModel, isWorking, mk, t)
                       })}
                     </>
                   )}
-                  {filteredModelOptions.length > 0 ? (
+                  {providerEntries.length > 0 ? (
                     <>
-                      {!modelQuery && recentModels.length > 0 && <div className="model-section-label">{t('detail.modelAll')}</div>}
-                      {filteredModelOptions.map((option) => {
-                        const optionKey = mk(option)
-                        const active = activeModelOption ? sameModel(option, activeModelOption) : false
-                        return (
-                          <button type="button" key={optionKey}
-                            className={active ? "model-option active" : "model-option"}
-                            onClick={() => onChangeModel(optionKey)} disabled={isWorking}
-                            role="option" aria-selected={active}>
-                            <span>
-                              <strong>{option.modelName}</strong>
-                              <small>{option.providerName}{option.variant ? ` · ${option.variant}` : ""}</small>
-                            </span>
-                            {option.isDefault && <em>{t('detail.modelDefault')}</em>}
-                          </button>
-                        )
-                      })}
+                      {providerEntries.map(([providerID, options]) => (
+                        <div key={providerID}>
+                          <div className="model-section-label">{groupLabel(providerID)}</div>
+                          {renderProviderGroup(providerID, options, activeModelOption, onChangeModel, isWorking, mk, t)}
+                        </div>
+                      ))}
                     </>
                   ) : modelQuery ? (
                     <p className="subtle model-empty">{t('detail.modelSearchEmpty')}</p>

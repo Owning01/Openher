@@ -39,7 +39,7 @@ type SettingsPanelProps = {
   onResetStats: () => void
   navBarMode: "header" | "bottom"
   onNavBarModeChange: (mode: "header" | "bottom") => void
-  blockedModels: { isBlocked: (key: string) => boolean; toggleBlocked: (key: string) => void; blockedCount: number }
+  blockedModels: { isBlocked: (key: string) => boolean; toggleBlocked: (key: string) => void; toggleAllForProvider: (providerID: string, block: boolean) => void; providerBlockedCount: (providerID: string) => number; blockedCount: number }
   onOpenThemePicker?: () => void
   flags: FeatureFlags
   onToggleFlag: (key: keyof FeatureFlags) => void
@@ -286,11 +286,12 @@ export const SettingsPanel = memo(function SettingsPanel({
       </div>
 
       <div className="setting-group">
+        <h4 className="quick-access-label">{t('settings.blockedModels')}</h4>
         <p className="subtle">{t('settings.blockedModelsHint')}</p>
-        <div className="blocked-model-list">
-          {modelOptions.length === 0 ? (
-            <p className="subtle">{t('detail.modelLoading')}</p>
-          ) : modelOptions.length > 30 ? (
+        {modelOptions.length === 0 ? (
+          <p className="subtle">{t('detail.modelLoading')}</p>
+        ) : (
+          <>
             <div className="blocked-model-search">
               <input placeholder={t('settings.blockedModelsSearch')}
                 onChange={(e) => {
@@ -302,19 +303,42 @@ export const SettingsPanel = memo(function SettingsPanel({
                   }
                 }} />
             </div>
-          ) : null}
-          {modelOptions.map((opt) => {
-            const key = mk(opt)
-            const blocked = blockedModels.isBlocked(key)
-            return (
-              <label key={key} className={`blocked-model-item${blocked ? " blocked" : ""}`} data-label={`${opt.modelName} ${opt.providerName}`}>
-                <input type="checkbox" checked={blocked} onChange={() => blockedModels.toggleBlocked(key)} />
-                <span>{opt.modelName}</span>
-                <small>{opt.providerName}{opt.variant ? ` · ${opt.variant}` : ""}</small>
-              </label>
-            )
-          })}
-        </div>
+            {Array.from(new Set(modelOptions.map((o) => o.providerID))).map((providerID) => {
+              const providerModels = modelOptions.filter((o) => o.providerID === providerID)
+              const total = providerModels.length
+              const blockedCount = providerModels.filter((o) => blockedModels.isBlocked(mk(o))).length
+              const allBlocked = blockedCount === total
+              return (
+                <div key={providerID} className="blocked-model-group">
+                  <div className="blocked-model-group-header">
+                    <strong>{providerID}</strong>
+                    <small className="subtle">{blockedCount}/{total} ocultos</small>
+                    <button type="button" className="btn-link" onClick={() => blockedModels.toggleAllForProvider(providerID, !allBlocked)}>
+                      {allBlocked ? "Mostrar todos" : "Ocultar todos"}
+                    </button>
+                  </div>
+                  {providerModels.map((opt) => {
+                    const key = mk(opt)
+                    const blocked = blockedModels.isBlocked(key)
+                    return (
+                      <label key={key} className={`blocked-model-item${blocked ? " blocked" : ""}`} data-label={`${opt.modelName} ${opt.providerName}`}>
+                        <span>{opt.modelName}</span>
+                        <small>{opt.variant ? ` · ${opt.variant}` : ""}</small>
+                        <button type="button"
+                          className={`toggle-btn${blocked ? "" : " active"}`}
+                          onClick={() => blockedModels.toggleBlocked(key)}
+                          aria-pressed={!blocked}
+                          style={{ marginLeft: "auto", flex: "0 0 auto", minWidth: 80 }}>
+                          {blocked ? "Oculto" : "Visible"}
+                        </button>
+                      </label>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </>
+        )}
       </div>
 
       <div className="settings-help">

@@ -70,6 +70,23 @@ export function useAI(config: ServerConfig) {
     return modelOptions.filter((option) => modelSearchText(option).includes(text))
   }, [modelOptions, modelQuery])
 
+  const recentModels = useMemo(() => {
+    const keys = new Set(modelOptions.map(modelKey))
+    return recentModelsArr.filter((m) => keys.has(modelKey(m)))
+  }, [modelOptions, recentModelsArr])
+
+  const groupedModelOptions = useMemo(() => {
+    const recentKeys = new Set(recentModels.map(modelKey))
+    const allModels = filteredModelOptions.filter((m) => !recentKeys.has(modelKey(m)))
+    const allGroups = new Map<string, ModelOption[]>()
+    for (const option of allModels) {
+      const key = option.providerID || option.providerName || "other"
+      if (!allGroups.has(key)) allGroups.set(key, [])
+      allGroups.get(key)!.push(option)
+    }
+    return { recentModels, allGroups }
+  }, [filteredModelOptions, recentModels])
+
   const showModelChip = modelOptions.length > 1 || Boolean(activeModelOption) || primaryAgentOptions.length > 0
 
   const loadAgents = useCallback(async (directory?: string) => {
@@ -109,11 +126,6 @@ export function useAI(config: ServerConfig) {
     }
   }, [config, selectedModelKey])
 
-  const recentModels = useMemo(() => {
-    const keys = new Set(modelOptions.map(modelKey))
-    return recentModelsArr.filter((m) => keys.has(modelKey(m)))
-  }, [modelOptions, recentModelsArr])
-
   const changeModel = useCallback((nextKey: string) => {
     setSelectedModelKey(nextKey)
     localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
@@ -136,7 +148,7 @@ export function useAI(config: ServerConfig) {
     agentOptions, agentLoadError, selectedAgentID, modelOptions, modelLoadError,
     selectedModelKey, modelQuery, setModelQuery, selectedModel, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
-    recentModels,
+    groupedModelOptions, recentModels,
     showModelChip, loadAgents, loadModels, changeModel, changeAgent
   }
 }

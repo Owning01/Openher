@@ -1577,6 +1577,16 @@ p {
   padding: var(--space-1) var(--space-2);
   margin-top: var(--space-1);
 }
+.model-subsection-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  opacity: 0.7;
+  padding: var(--space-1) var(--space-2) 0;
+  margin-top: 0;
+}
 
 .blocked-model-list {
   display: flex;
