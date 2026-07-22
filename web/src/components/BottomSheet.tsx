@@ -3,6 +3,7 @@ import { useT } from "../i18n-context"
 import { useFocusTrap } from "../hooks/useFocusTrap"
 import { modelKey, sameModel } from "../utils/model-utils"
 import type { ModelOption } from "../types"
+import type { VariantGroup } from "../hooks/useAI"
 
 type BottomSheetProps = {
   activeSheet: "ai" | "details" | null
@@ -10,11 +11,12 @@ type BottomSheetProps = {
   modelOptions: ModelOption[]
   modelLoadError: string | null
   activeModelOption: ModelOption | null
-  groupedModelOptions: { recentModels: ModelOption[]; allGroups: Map<string, ModelOption[]> }
+  variantGroups: { recentModels: ModelOption[]; groups: Map<string, VariantGroup> }
   modelQuery: string
   isWorking: boolean
-  onChangeModel: (key: string) => void
+  onChangeModel: (key: string, variant?: string | null) => void
   onModelQueryChange: (query: string) => void
+  selectedVariant: string | null
   formatLimit: (value?: number) => string
   projectName: string | null
   projectPath: string | null
@@ -39,53 +41,111 @@ function isGoModel(modelID: string): boolean {
   return modelID.startsWith("go-") || modelID.includes("/go-")
 }
 
-function renderModelOption(option: ModelOption, isActive: boolean, onChange: (key: string) => void, disabled: boolean, mk: typeof modelKey, t: ReturnType<typeof useT>) {
-  const optionKey = mk(option)
+function renderVariantGroup(
+  group:   VariantGroup,
+  activeModelOption: ModelOption | null,
+  selectedVariant: string | null,
+  onChangeModel: (key: string, variant?: string | null) => void,
+  isWorking: boolean,
+  mk: typeof modelKey,
+  t: ReturnType<typeof useT>
+) {
+  const { base, variants } = group
+  const baseKey = mk(base)
+  const isActive = activeModelOption ? sameModel(base, activeModelOption) : false
+  const activeVariant = isActive ? selectedVariant : null
+
   return (
-    <button type="button" key={optionKey}
-      className={isActive ? "model-option active" : "model-option"}
-      onClick={() => onChange(optionKey)} disabled={disabled}
-      role="option" aria-selected={isActive}>
-      <span>
-        <strong>{option.modelName}</strong>
-        <small>{option.providerName}{option.variant ? ` · ${option.variant}` : ""}</small>
-      </span>
-      {option.isDefault && <em>{t('detail.modelDefault')}</em>}
-    </button>
+    <div key={baseKey} className={`model-group${isActive ? " active" : ""}`}>
+      <button type="button" className="model-group-row"
+        onClick={() => onChangeModel(baseKey, activeVariant)}
+        disabled={isWorking}
+        role="option" aria-selected={isActive}>
+        <strong>{base.modelName}</strong>
+        <small>{base.providerName}</small>
+        {base.isDefault && <em>{t('detail.modelDefault')}</em>}
+      </button>
+      {variants.length > 0 && (
+        <div className="model-variant-pills">
+          <button type="button"
+            className={`variant-pill${!activeVariant ? " active" : ""}`}
+            onClick={() => onChangeModel(baseKey, null)}
+            disabled={isWorking}>
+            Default
+          </button>
+          {variants.map((v) => (
+            <button key={v.variant} type="button"
+              className={`variant-pill${activeVariant === v.variant ? " active" : ""}`}
+              onClick={() => onChangeModel(baseKey, v.variant)}
+              disabled={isWorking}>
+              {v.variant}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
-function renderProviderGroup(providerID: string, options: ModelOption[], activeModelOption: ModelOption | null, onChangeModel: (key: string) => void, isWorking: boolean, mk: typeof modelKey, t: ReturnType<typeof useT>) {
-  if (providerID !== "opencode") {
-    return options.map((opt) => renderModelOption(opt, activeModelOption ? sameModel(opt, activeModelOption) : false, onChangeModel, isWorking, mk, t))
+function renderGroupedModels(
+  options: ModelOption[],
+  activeModelOption: ModelOption | null,
+  selectedVariant: string | null,
+  onChangeModel: (key: string, variant?: string | null) => void,
+  isWorking: boolean,
+  mk: typeof modelKey,
+  t: ReturnType<typeof useT>,
+  providerID: string
+) {
+  const groups = new Map<string, VariantGroup>()
+  for (const opt of options) {
+    const k = mk(opt)
+    if (!groups.has(k)) groups.set(k, { base: opt, variants: [] })
+    if (opt.variant) groups.get(k)!.variants.push(opt)
   }
-  const zen = options.filter((o) => isZenModel(o.modelID))
-  const go = options.filter((o) => isGoModel(o.modelID))
-  const other = options.filter((o) => !isZenModel(o.modelID) && !isGoModel(o.modelID))
+
+  if (providerID !== "opencode") {
+    return Array.from(groups.values()).map((g) =>
+      renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t)
+    )
+  }
+
+  const zenGroups: VariantGroup[] = []
+  const goGroups: VariantGroup[] = []
+  const otherGroups: VariantGroup[] = []
+
+  for (const [, group] of groups) {
+    if (isZenModel(group.base.modelID)) zenGroups.push(group)
+    else if (isGoModel(group.base.modelID)) goGroups.push(group)
+    else otherGroups.push(group)
+  }
+
   return (
     <>
-      {zen.length > 0 && (
+      {zenGroups.length > 0 && (
         <>
           <div className="model-subsection-label">Zen</div>
-          {zen.map((opt) => renderModelOption(opt, activeModelOption ? sameModel(opt, activeModelOption) : false, onChangeModel, isWorking, mk, t))}
+          {zenGroups.map((g) => renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t))}
         </>
       )}
-      {go.length > 0 && (
+      {goGroups.length > 0 && (
         <>
           <div className="model-subsection-label">Go</div>
-          {go.map((opt) => renderModelOption(opt, activeModelOption ? sameModel(opt, activeModelOption) : false, onChangeModel, isWorking, mk, t))}
+          {goGroups.map((g) => renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t))}
         </>
       )}
-      {other.map((opt) => renderModelOption(opt, activeModelOption ? sameModel(opt, activeModelOption) : false, onChangeModel, isWorking, mk, t))}
+      {otherGroups.map((g) => renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t))}
     </>
   )
 }
 
 export const BottomSheet = memo(function BottomSheet({
   activeSheet, onClose,
-  modelOptions, modelLoadError, activeModelOption, groupedModelOptions,
+  modelOptions, modelLoadError, activeModelOption, variantGroups,
   modelQuery, isWorking,
-  onChangeModel, onModelQueryChange, formatLimit,
+  onChangeModel, onModelQueryChange,
+  selectedVariant,
+  formatLimit,
   projectName, projectPath, vcsBranch, projectDashboard, diffFiles,
   totalDiffAdditions, totalDiffDeletions, dashboardError
 }: BottomSheetProps) {
@@ -94,7 +154,15 @@ export const BottomSheet = memo(function BottomSheet({
   useFocusTrap(sheetRef, onClose, !!activeSheet)
   const mk = modelKey
 
-  const providerEntries = useMemo(() => Array.from(groupedModelOptions.allGroups.entries()), [groupedModelOptions])
+  const providerEntries = useMemo(() => {
+    const byProvider = new Map<string, ModelOption[]>()
+    for (const [, group] of variantGroups.groups) {
+      const pid = group.base.providerID || group.base.providerName || "other"
+      if (!byProvider.has(pid)) byProvider.set(pid, [])
+      byProvider.get(pid)!.push(group.base)
+    }
+    return Array.from(byProvider.entries())
+  }, [variantGroups])
 
   if (!activeSheet) return null
 
@@ -135,12 +203,25 @@ export const BottomSheet = memo(function BottomSheet({
                     placeholder={t('detail.modelSearchPlaceholder')} disabled={isWorking} autoComplete="off" />
                 </label>
                 <div className="model-option-list" role="listbox" aria-label={t('detail.modelSelectLabel')}>
-                  {!modelQuery && groupedModelOptions.recentModels.length > 0 && (
+                  {!modelQuery && variantGroups.recentModels.length > 0 && (
                     <>
                       <div className="model-section-label">{t('detail.modelRecent')}</div>
-                      {groupedModelOptions.recentModels.map((option) => {
-                        const active = activeModelOption ? sameModel(option, activeModelOption) : false
-                        return renderModelOption(option, active, onChangeModel, isWorking, mk, t)
+                      {variantGroups.recentModels.map((opt) => {
+                        const isActive = activeModelOption ? sameModel(opt, activeModelOption) : false
+                        const optKey = mk(opt)
+                        return (
+                          <button type="button" key={optKey}
+                            className={isActive ? "model-option active" : "model-option"}
+                            onClick={() => onChangeModel(optKey, opt.variant || null)}
+                            disabled={isWorking}
+                            role="option" aria-selected={isActive}>
+                            <span>
+                              <strong>{opt.modelName}</strong>
+                              <small>{opt.providerName}{opt.variant ? ` · ${opt.variant}` : ""}</small>
+                            </span>
+                            {opt.isDefault && <em>{t('detail.modelDefault')}</em>}
+                          </button>
+                        )
                       })}
                     </>
                   )}
@@ -149,7 +230,7 @@ export const BottomSheet = memo(function BottomSheet({
                       {providerEntries.map(([providerID, options]) => (
                         <div key={providerID}>
                           <div className="model-section-label">{groupLabel(providerID)}</div>
-                          {renderProviderGroup(providerID, options, activeModelOption, onChangeModel, isWorking, mk, t)}
+                          {renderGroupedModels(options, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t, providerID)}
                         </div>
                       ))}
                     </>
@@ -162,7 +243,7 @@ export const BottomSheet = memo(function BottomSheet({
                     <span>{t('detail.modelProvider', { provider: activeModelOption.providerName })}</span>
                     <span>{t('detail.modelContext', { context: formatLimit(activeModelOption.contextLimit), output: formatLimit(activeModelOption.outputLimit) })}</span>
                     <span>{activeModelOption.tools ? t('detail.modelToolsYes') : t('detail.modelToolsNo')}</span>
-                    {activeModelOption.variant && <span>{t('detail.modelVariant', { variant: activeModelOption.variant })}</span>}
+                    {selectedVariant && <span>{t('detail.modelVariant', { variant: selectedVariant })}</span>}
                   </div>
                 )}
               </div>
@@ -201,3 +282,5 @@ export const BottomSheet = memo(function BottomSheet({
     </div>
   )
 })
+
+export default BottomSheet

@@ -26,6 +26,8 @@ function filterPrimary(agents: AgentOption[]): AgentOption[] {
   return agents.filter((agent) => agent.mode === "primary" || agent.mode === "all")
 }
 
+export type VariantGroup = { base: ModelOption; variants: ModelOption[] }
+
 export function useAI(config: ServerConfig) {
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([])
   const [agentLoadError, setAgentLoadError] = useState<string | null>(null)
@@ -33,6 +35,10 @@ export function useAI(config: ServerConfig) {
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
   const [modelLoadError, setModelLoadError] = useState<string | null>(null)
   const [selectedModelKey, setSelectedModelKey] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.MODEL))
+  const [selectedVariant, setSelectedVariant] = useState<string | null>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.MODEL_VARIANT)
+    return saved || null
+  })
   const [modelQuery, setModelQuery] = useState("")
   const [recentModelsArr, setRecentModelsArr] = useLocalStorage<ModelOption[]>(RECENT_MODELS_KEY, [])
 
@@ -51,18 +57,31 @@ export function useAI(config: ServerConfig) {
 
   const activeModelOption = useMemo(() => {
     if (selectedModel) {
-      const explicit = modelOptions.find((option) => sameModel(option, selectedModel))
-      if (explicit) return explicit
+      if (selectedVariant) {
+        const exact = modelOptions.find(
+          (opt) => sameModel(opt, selectedModel) && opt.variant === selectedVariant
+        )
+        if (exact) return exact
+      }
+      const base = modelOptions.find(
+        (opt) => sameModel(opt, selectedModel) && !opt.variant
+      )
+      if (base) return base
+      const any = modelOptions.find((opt) => sameModel(opt, selectedModel))
+      if (any) return any
     }
-    return modelOptions.find((option) => option.isDefault) ?? modelOptions[0] ?? null
-  }, [modelOptions, selectedModel])
+    return modelOptions.find((opt) => opt.isDefault) ?? modelOptions[0] ?? null
+  }, [modelOptions, selectedModel, selectedVariant])
 
   const activeModel = useMemo(() => {
-    if (activeModelOption) {
-      return { providerID: activeModelOption.providerID, modelID: activeModelOption.modelID, variant: activeModelOption.variant }
+    if (selectedModel) {
+      return { providerID: selectedModel.providerID, modelID: selectedModel.modelID, variant: selectedVariant || undefined }
     }
-    return selectedModel ?? undefined
-  }, [activeModelOption, selectedModel])
+    if (activeModelOption) {
+      return { providerID: activeModelOption.providerID, modelID: activeModelOption.modelID, variant: selectedVariant || undefined }
+    }
+    return undefined
+  }, [selectedModel, activeModelOption, selectedVariant])
 
   const filteredModelOptions = useMemo(() => {
     const text = modelQuery.trim().toLowerCase()
@@ -74,6 +93,22 @@ export function useAI(config: ServerConfig) {
     const keys = new Set(modelOptions.map(modelKey))
     return recentModelsArr.filter((m) => keys.has(modelKey(m)))
   }, [modelOptions, recentModelsArr])
+
+  const variantGroups = useMemo(() => {
+    const recentKeys = new Set(recentModels.map(modelKey))
+    const allModels = filteredModelOptions.filter((m) => !recentKeys.has(modelKey(m)))
+    const groups = new Map<string, VariantGroup>()
+    for (const opt of allModels) {
+      const key = modelKey(opt)
+      if (!groups.has(key)) {
+        groups.set(key, { base: opt, variants: [] })
+      }
+      if (opt.variant) {
+        groups.get(key)!.variants.push(opt)
+      }
+    }
+    return { recentModels, groups }
+  }, [filteredModelOptions, recentModels])
 
   const groupedModelOptions = useMemo(() => {
     const recentKeys = new Set(recentModels.map(modelKey))
@@ -126,18 +161,44 @@ export function useAI(config: ServerConfig) {
     }
   }, [config, selectedModelKey])
 
-  const changeModel = useCallback((nextKey: string) => {
+  const changeModel = useCallback((nextKey: string, variant?: string | null) => {
     setSelectedModelKey(nextKey)
     localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
+    const v = variant !== undefined ? (variant ?? null) : null
+    setSelectedVariant(v)
+    if (v) {
+      localStorage.setItem(STORAGE_KEYS.MODEL_VARIANT, v)
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.MODEL_VARIANT)
+    }
     const model = modelOptions.find((m) => modelKey(m) === nextKey)
     if (model) {
       setRecentModelsArr((prev) => {
         const filtered = prev.filter((m) => modelKey(m) !== nextKey)
-        filtered.unshift(model)
+        filtered.unshift(v ? { ...model, variant: v } : model)
         return filtered.slice(0, MAX_RECENT)
       })
     }
   }, [modelOptions, setRecentModelsArr])
+
+  const changeVariant = useCallback((variant: string | null) => {
+    setSelectedVariant(variant)
+    if (variant) {
+      localStorage.setItem(STORAGE_KEYS.MODEL_VARIANT, variant)
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.MODEL_VARIANT)
+    }
+    if (selectedModelKey) {
+      const model = modelOptions.find((m) => modelKey(m) === selectedModelKey)
+      if (model) {
+        setRecentModelsArr((prev) => {
+          const filtered = prev.filter((m) => modelKey(m) !== selectedModelKey)
+          filtered.unshift(variant ? { ...model, variant } : model)
+          return filtered.slice(0, MAX_RECENT)
+        })
+      }
+    }
+  }, [selectedModelKey, modelOptions, setRecentModelsArr])
 
   const changeAgent = useCallback((nextAgentID: string, directory?: string) => {
     setSelectedAgentID(nextAgentID)
@@ -148,7 +209,8 @@ export function useAI(config: ServerConfig) {
     agentOptions, agentLoadError, selectedAgentID, modelOptions, modelLoadError,
     selectedModelKey, modelQuery, setModelQuery, selectedModel, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
-    groupedModelOptions, recentModels,
+    groupedModelOptions, variantGroups, recentModels,
+    selectedVariant, changeVariant,
     showModelChip, loadAgents, loadModels, changeModel, changeAgent
   }
 }

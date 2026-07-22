@@ -4,19 +4,19 @@ import { STORAGE_KEYS, DEFAULT_AUTO_SUMMARIZE_THRESHOLD } from "../constants"
 import { useLocalStorage } from "./useLocalStorage"
 
 const DEFAULT_FLAGS: FeatureFlags = {
-  fileBrowser: false,
-  inlineDiff: false,
-  contextMenu: false,
-  planBreakdown: false,
-  gitOps: false,
-  mcpConfig: false,
-  sessionArchive: false,
-  autoSummarize: false,
+  fileBrowser: true,
+  inlineDiff: true,
+  contextMenu: true,
+  planBreakdown: true,
+  gitOps: true,
+  mcpConfig: true,
+  sessionArchive: true,
+  autoSummarize: true,
   autoSummarizeThreshold: DEFAULT_AUTO_SUMMARIZE_THRESHOLD,
-  streamingFull: false,
+  streamingFull: true,
   offlineCache: true,
-  questionAuto: false,
-  permissionUI: false,
+  questionAuto: true,
+  permissionUI: true,
 }
 
 export function useFeatureFlags() {

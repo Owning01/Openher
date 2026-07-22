@@ -2108,6 +2108,93 @@ p {
   margin: 0;
 }
 
+/* ===== Model Group + Variant Pills ===== */
+.model-group {
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-1);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.model-group.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.model-group-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.model-group-row:hover {
+  background: var(--surface-subtle);
+}
+
+.model-group-row strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-group-row small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
+.model-group-row em {
+  color: var(--muted-strong);
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.model-variant-pills {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-3) var(--space-2);
+  flex-wrap: wrap;
+}
+
+.variant-pill {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted-strong);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.variant-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.variant-pill.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
 .model-meta {
   display: flex;
   flex-wrap: wrap;
