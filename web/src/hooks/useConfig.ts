@@ -4,6 +4,7 @@ import { Directory, Filesystem } from "@capacitor/filesystem"
 import type { ServerConfig, ConnectionState, NoticeType, DataMode } from "../types"
 import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
+import { encrypt, decrypt, isCiphertext } from "../utils/crypto"
 
 const CONFIG_FILENAME = "opencode-mobile-config.json"
 
@@ -27,18 +28,22 @@ export function canTestConfig(config: ServerConfig): boolean {
   return Boolean(config.host.trim() && config.port > 0 && config.username.trim())
 }
 
-function readConfigFromFile(): ServerConfig | null {
+async function readConfigFromFile(): Promise<ServerConfig | null> {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SERVER_FILE)
     if (!raw) return null
-    return JSON.parse(raw)
+    return decryptConfig(raw)
   } catch {
     return null
   }
 }
 
-function writeConfigToFile(config: ServerConfig) {
-  localStorage.setItem(STORAGE_KEYS.SERVER_FILE, JSON.stringify(config))
+async function writeConfigToFile(config: ServerConfig) {
+  const toStore = { ...config }
+  if (toStore.password) {
+    try { toStore.password = await encrypt(toStore.password) } catch { }
+  }
+  localStorage.setItem(STORAGE_KEYS.SERVER_FILE, JSON.stringify(toStore))
 }
 
 async function readConfigFromExternal(): Promise<ServerConfig | null> {
@@ -68,12 +73,34 @@ async function writeConfigToExternal(config: ServerConfig) {
   }
 }
 
+async function decryptConfig(raw: string): Promise<ServerConfig> {
+  const parsed = JSON.parse(raw)
+  if (parsed.password && isCiphertext(parsed.password)) {
+    try { parsed.password = await decrypt(parsed.password) } catch { /* keep as-is */ }
+  }
+  return { ...defaultConfig, ...parsed }
+}
+
 function loadInitialConfig(): ServerConfig {
   const stored = localStorage.getItem(STORAGE_KEYS.SERVER)
   if (stored) {
-    try { return { ...defaultConfig, ...JSON.parse(stored) } } catch { }
+    try {
+      const parsed = JSON.parse(stored)
+      if (parsed.password && isCiphertext(parsed.password)) {
+        parsed.password = ""
+      }
+      return { ...defaultConfig, ...parsed }
+    } catch { }
   }
   return defaultConfig
+}
+
+async function persistConfigToLS(config: ServerConfig) {
+  const toStore = { ...config }
+  if (toStore.password) {
+    try { toStore.password = await encrypt(toStore.password) } catch { }
+  }
+  localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(toStore))
 }
 
 function loadInitialDataMode(): DataMode {
@@ -96,10 +123,10 @@ export function useConfig() {
 
   // Restore config from external storage on mount (survives uninstall)
   useEffect(() => {
-    readConfigFromExternal().then((restored) => {
+    (async () => {
+      const restored = await readConfigFromExternal()
       if (!restored) {
-        // Fallback: try file in localStorage
-        const fileBackup = readConfigFromFile()
+        const fileBackup = await readConfigFromFile()
         if (fileBackup) {
           setConfig(fileBackup)
           setDraftConfig(fileBackup)
@@ -114,10 +141,11 @@ export function useConfig() {
           if (configKey(current) === configKey(restored)) return
         } catch { }
       }
+      persistConfigToLS(restored)
       setConfig(restored)
       setDraftConfig(restored)
-      localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(restored))
-    })
+      writeConfigToExternal(restored)
+    })()
   }, [])
 
   const hasConfiguredServer = Boolean(config.host && config.port > 0)
@@ -129,7 +157,7 @@ export function useConfig() {
 
   const saveConfig = useCallback(() => {
     setConfig(draftConfig)
-    localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(draftConfig))
+    persistConfigToLS(draftConfig)
     writeConfigToFile(draftConfig)
     writeConfigToExternal(draftConfig)
     setSettingsNotice({ type: "success", text: "Configuration saved. It will be used for Sessions." })
@@ -149,7 +177,22 @@ export function useConfig() {
       setLastTestedConfigKey(configKey(draftConfig))
       setSettingsNotice({ type: "success", text: t('settings.testedNotSaved', { version: health.version }) })
     } catch (err) {
-      setSettingsNotice({ type: "error", text: t('settings.connectionFailed', { message: (err as Error).message }) })
+      const msg = (err as Error).message
+      let hint = msg === "Connection timed out"
+        ? "El servidor no respondió en 12 segundos. Verificá que OpenCode esté corriendo, que el puerto sea correcto y que no haya un firewall bloqueando la conexión."
+        : msg.includes("Failed to fetch") || msg.includes("ERR_CONNECTION_REFUSED") || msg.includes("ECONNREFUSED")
+          ? "Conexión rechazada. El servidor no está aceptando conexiones en esa dirección y puerto. Revisá la IP, el puerto y que el servidor esté iniciado."
+          : msg.includes("ERR_NAME_NOT_RESOLVED") || msg.includes("ENOTFOUND")
+            ? "No se pudo resolver el nombre del host. Revisá que la dirección IP o el hostname sea correcto."
+            : msg.includes("401") || msg.includes("403")
+              ? "Autenticación fallida. Revisá el nombre de usuario y contraseña."
+              : msg.includes("ERR_CONNECTION_RESET")
+                ? "La conexión fue interrumpida. El servidor puede estar reiniciándose o hay un proxy bloqueando el tráfico."
+                : msg.includes("CORS")
+                  ? "Error CORS. El servidor necesita iniciarse con el flag --cors para aceptar conexiones desde la app."
+                  : null
+      const fullMsg = hint ? `${msg}\n\n${hint}` : msg
+      setSettingsNotice({ type: "error", text: t('settings.connectionFailed', { message: fullMsg }) })
     } finally {
       setTestingConnection(false)
     }

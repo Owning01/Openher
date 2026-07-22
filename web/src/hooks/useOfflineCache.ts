@@ -1,6 +1,33 @@
 import { useCallback, useEffect, useRef } from "react"
 import type { MessageEnvelope, Session } from "../types"
 import { DB_NAME, DB_VERSION, DB_STORES } from "../constants"
+import { encrypt, decrypt } from "../utils/crypto"
+
+const ENC_PREFIX = "enc:"
+
+function isEncoded(val: unknown): boolean {
+  return typeof val === "string" && val.startsWith(ENC_PREFIX)
+}
+
+async function encryptMessages(messages: MessageEnvelope[]): Promise<MessageEnvelope[]> {
+  return Promise.all(messages.map(async (msg) => ({
+    ...msg,
+    parts: await Promise.all((msg.parts || []).map(async (part) => ({
+      ...part,
+      text: part.text ? ENC_PREFIX + await encrypt(part.text) : part.text,
+    }))),
+  })))
+}
+
+async function decryptMessages(messages: MessageEnvelope[]): Promise<MessageEnvelope[]> {
+  return Promise.all(messages.map(async (msg) => ({
+    ...msg,
+    parts: await Promise.all((msg.parts || []).map(async (part) => ({
+      ...part,
+      text: part.text && isEncoded(part.text) ? await decrypt(part.text.slice(4)) : part.text,
+    }))),
+  })))
+}
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -24,7 +51,7 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
 
   useEffect(() => {
     if (!flags.offlineCache) return
-    openDB().then((db) => { dbRef.current = db }).catch(() => {})
+    openDB().then((db) => { dbRef.current = db }).catch((err) => console.error("[OfflineCache] openDB:", err))
     return () => { dbRef.current?.close(); dbRef.current = null }
   }, [flags.offlineCache])
 
@@ -34,7 +61,7 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
       const tx = dbRef.current.transaction(DB_STORES.sessions, "readwrite")
       const store = tx.objectStore(DB_STORES.sessions)
       for (const s of sessions) store.put(s)
-    } catch { /* silently fail */ }
+    } catch (err) { console.error("[OfflineCache] cacheSessions:", err) }
   }, [flags.offlineCache])
 
   const getCachedSessions = useCallback(async (): Promise<Session[]> => {
@@ -47,16 +74,17 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
         req.onsuccess = () => resolve(req.result)
         req.onerror = () => reject(req.error)
       })
-    } catch { return [] }
+    } catch (err) { console.error("[OfflineCache] getCachedSessions:", err); return [] }
   }, [flags.offlineCache])
 
   const cacheMessages = useCallback(async (sessionID: string, messages: MessageEnvelope[]) => {
     if (!dbRef.current || !flags.offlineCache) return
     try {
+      const encrypted = await encryptMessages(messages)
       const tx = dbRef.current.transaction(DB_STORES.messages, "readwrite")
       const store = tx.objectStore(DB_STORES.messages)
-      store.put({ sessionID, messages, cachedAt: Date.now() })
-    } catch { /* silently fail */ }
+      store.put({ sessionID, messages: encrypted, cachedAt: Date.now() })
+    } catch (err) { console.error("[OfflineCache] cacheMessages:", err) }
   }, [flags.offlineCache])
 
   const getCachedMessages = useCallback(async (sessionID: string): Promise<MessageEnvelope[] | null> => {
@@ -64,12 +92,14 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
     try {
       const tx = dbRef.current.transaction(DB_STORES.messages, "readonly")
       const store = tx.objectStore(DB_STORES.messages)
-      return new Promise((resolve, reject) => {
+      const raw = await new Promise<any>((resolve, reject) => {
         const req = store.get(sessionID)
-        req.onsuccess = () => resolve(req.result?.messages ?? null)
+        req.onsuccess = () => resolve(req.result)
         req.onerror = () => reject(req.error)
       })
-    } catch { return null }
+      if (!raw?.messages) return null
+      return decryptMessages(raw.messages)
+    } catch (err) { console.error("[OfflineCache] getCachedMessages:", err); return null }
   }, [flags.offlineCache])
 
   const searchMessages = useCallback(async (query: string): Promise<Array<{ sessionID: string; text: string; messageID: string }>> => {
@@ -88,8 +118,12 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
         if (!entry.messages) continue
         for (const msg of entry.messages) {
           for (const part of msg.parts || []) {
-            if (part.text && part.text.toLowerCase().includes(q)) {
-              results.push({ sessionID: entry.sessionID, text: part.text.slice(0, 200), messageID: msg.info?.id || "" })
+            let text = part.text || ""
+            if (isEncoded(text)) {
+              try { text = await decrypt(text.slice(4)) } catch { text = "" }
+            }
+            if (text.toLowerCase().includes(q)) {
+              results.push({ sessionID: entry.sessionID, text: text.slice(0, 200), messageID: msg.info?.id || "" })
               if (results.length >= 50) break
             }
           }
@@ -98,7 +132,7 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
         if (results.length >= 50) break
       }
       return results
-    } catch { return [] }
+    } catch (err) { console.error("[OfflineCache] searchMessages:", err); return [] }
   }, [flags.offlineCache])
 
   return { cacheSessions, getCachedSessions, cacheMessages, getCachedMessages, searchMessages }

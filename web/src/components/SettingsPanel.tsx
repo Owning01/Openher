@@ -177,7 +177,7 @@ export const SettingsPanel = memo(function SettingsPanel({
           {settingsNotice.type === 'success' && '✓ '}
           {settingsNotice.type === 'error' && '✗ '}
           {settingsNotice.type === 'info' && 'ℹ '}
-          {settingsNotice.text}
+          <span style={{ whiteSpace: "pre-line" }}>{settingsNotice.text}</span>
         </div>
       )}
 

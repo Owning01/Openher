@@ -12,17 +12,15 @@ export function useDeepLink(onDeepLink: DeepLinkHandler) {
       const host = parsed.searchParams.get("host")
       const port = parsed.searchParams.get("port")
       const username = parsed.searchParams.get("username")
-      const password = parsed.searchParams.get("password")
       if (host) {
         const parsedPort = port ? parseInt(port, 10) : 4096
         onDeepLink({
           host,
           port: Number.isFinite(parsedPort) ? parsedPort : 4096,
           username: username || "",
-          password: password || "",
         })
       }
-    } catch { /* ignore invalid URLs */ }
+    } catch { console.error("[DeepLink] invalid URL:", url) }
   }, [onDeepLink])
 
   useEffect(() => {
