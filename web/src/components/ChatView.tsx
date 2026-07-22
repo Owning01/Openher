@@ -93,6 +93,7 @@ type ChatViewProps = {
   onOpenThemeCreator?: () => void
   onOpenFavoritesManager?: () => void
   onOpenShortcuts?: () => void
+  onOpenChatCustomizer?: () => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -108,7 +109,7 @@ export const ChatView = memo(function ChatView({
   flags, onToggleFlag: _onToggleFlag, onSetFlag: _onSetFlag, diffFiles, projectDashboard,
   streamState, pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
-  onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager, onOpenShortcuts
+  onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager, onOpenShortcuts, onOpenChatCustomizer
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -214,6 +215,16 @@ export const ChatView = memo(function ChatView({
                 onClick={onOpenSettings}
                 title={t('nav.settings') || "Settings"}>
                 <SettingsIcon size={16} />
+              </button>
+            )}
+            {onOpenChatCustomizer && (
+              <button
+                className="btn-icon btn-secondary compact"
+                onClick={onOpenChatCustomizer}
+                title="Personalizar chat">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                </svg>
               </button>
             )}
             <div className="overflow-wrap header-overflow" ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>

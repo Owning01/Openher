@@ -314,3 +314,11 @@ export type CachedMessages = {
   messages: MessageEnvelope[]
   cachedAt: number
 }
+
+export type ChatSettings = {
+  fontSize: number
+  messageSpacing: "compact" | "normal" | "comfortable"
+  showThinking: boolean
+  showToolCalls: boolean
+  showTimestamps: boolean
+}

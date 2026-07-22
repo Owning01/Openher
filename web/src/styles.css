@@ -2006,6 +2006,25 @@ p {
   background: var(--surface);
   box-shadow: var(--shadow-sm);
   transition: border-color 0.15s;
+  margin-bottom: var(--chat-message-gap, var(--space-3));
+}
+
+.message-content {
+  font-size: var(--chat-font-size, 0.88rem);
+}
+.message-content p {
+  font-size: inherit;
+}
+.thinking-block {
+  display: var(--chat-thinking-vis, block);
+}
+.tool-parts {
+  display: var(--chat-tool-vis, block);
+}
+.message footer .msg-footer-duration,
+.message footer .msg-footer-model,
+.message header small {
+  display: var(--chat-time-vis, inline);
 }
 
 .compaction-checkpoint {
@@ -4401,7 +4420,7 @@ button.compact {
 
 /* ===== Context Usage Label & @-Menu ===== */
 .context-usage-label {
-  font-size: 0.4rem;
+  font-size: 0.7rem;
   font-weight: 700;
   color: var(--muted);
   white-space: nowrap;

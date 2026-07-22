@@ -13,7 +13,8 @@ export const STORAGE_KEYS = {
   RECENT_MODELS: "opencode.mobile.recentModels",
   BLOCKED_MODELS: "opencode.mobile.blockedModels",
   FEATURE_FLAGS: "opencode.mobile.featureFlags",
-  CONNECTED_PROVIDERS: "opencode.mobile.connectedProviders"
+  CONNECTED_PROVIDERS: "opencode.mobile.connectedProviders",
+  CHAT_SETTINGS: "opencode.mobile.chatSettings"
 }
 
 export const DEFAULT_AUTO_SUMMARIZE_THRESHOLD = 32000

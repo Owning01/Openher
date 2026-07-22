@@ -43,8 +43,10 @@ import { ShortcutsModal } from "./components/ShortcutsModal"
 import { FileEditor } from "./components/FileEditor"
 import { TerminalView } from "./components/TerminalView"
 import { ThemeCreator } from "./components/ThemeCreator"
+import { ChatCustomizer } from "./components/ChatCustomizer"
 import { FavoritesManager } from "./components/FavoritesManager"
 import { useShell } from "./hooks/useShell"
+import { useChatSettings } from "./hooks/useChatSettings"
 import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications, loadNotificationFlags } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
@@ -162,6 +164,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // ===== Feature: Shortcuts =====
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [showChatCustomizer, setShowChatCustomizer] = useState(false)
+  const { settings: chatSettings, setSetting: setChatSetting, resetDefaults: resetChatSettings } = useChatSettings()
 
   // ===== Feature: Theme Creator =====
   const [showThemeCreator, setShowThemeCreator] = useState(false)
@@ -688,7 +692,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onOpenArchivedView={() => setShowArchivedView(true)}
             onOpenThemeCreator={() => setShowThemeCreator(true)}
             onOpenFavoritesManager={() => setShowFavoritesManager(true)}
-            onOpenShortcuts={() => setShowShortcuts(true)} />
+            onOpenShortcuts={() => setShowShortcuts(true)}
+            onOpenChatCustomizer={() => setShowChatCustomizer(true)} />
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={() => setActiveDetailSheet(null)}
@@ -805,6 +810,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             try { localStorage.setItem("opencode.mobile.favoritesOrder", JSON.stringify(ids)) } catch {}
           }}
           onClose={() => setShowFavoritesManager(false)}
+        />
+      )}
+
+      {showChatCustomizer && (
+        <ChatCustomizer
+          settings={chatSettings}
+          onSettingChange={setChatSetting}
+          onReset={resetChatSettings}
+          onClose={() => setShowChatCustomizer(false)}
         />
       )}
     </div>
