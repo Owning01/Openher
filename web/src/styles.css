@@ -4196,9 +4196,7 @@ button.compact {
   .composer {
     position: relative;
     bottom: 0;
-    margin-left: 0;
-    margin-right: 0;
-    margin-bottom: var(--safe-bottom-boundary) !important;
+    margin: 0;
     border: none !important;
     box-shadow: none !important;
   }
