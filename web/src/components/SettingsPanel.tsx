@@ -37,8 +37,6 @@ type SettingsPanelProps = {
   modelKey: (model: { providerID: string; modelID: string; variant?: string }) => string
   stats: UsageStats
   onResetStats: () => void
-  navBarMode: "header" | "bottom"
-  onNavBarModeChange: (mode: "header" | "bottom") => void
   blockedModels: { isBlocked: (key: string) => boolean; toggleBlocked: (key: string) => void; toggleAllForProvider: (providerID: string, block: boolean) => void; providerBlockedCount: (providerID: string) => number; blockedCount: number }
   onOpenThemePicker?: () => void
   flags: FeatureFlags
@@ -59,7 +57,6 @@ export const SettingsPanel = memo(function SettingsPanel({
   dataMode, onDataModeChange, onNavigate,
   modelOptions, selectedModelKey, onChangeModel, modelKey: mk,
   stats, onResetStats,
-  navBarMode, onNavBarModeChange,
   blockedModels, onOpenThemePicker,
   flags, onToggleFlag, onSetFlag,
   providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider
@@ -218,23 +215,6 @@ export const SettingsPanel = memo(function SettingsPanel({
               <small>{opt.desc}</small>
             </button>
           ))}
-        </div>
-      </div>
-
-      {/* Nav bar & Theme picker */}
-      <div className="settings-card">
-        <h3 className="settings-section-title">{t('settings.navBarPosition')}</h3>
-        <div className="segmented-control">
-          <button type="button" className={`segmented-option${navBarMode === "bottom" ? " active" : ""}`}
-            onClick={() => onNavBarModeChange("bottom")}
-            aria-pressed={navBarMode === "bottom"}>
-            {t('settings.navBarBottom')}
-          </button>
-          <button type="button" className={`segmented-option${navBarMode === "header" ? " active" : ""}`}
-            onClick={() => onNavBarModeChange("header")}
-            aria-pressed={navBarMode === "header"}>
-            {t('settings.navBarHeader')}
-          </button>
         </div>
       </div>
 

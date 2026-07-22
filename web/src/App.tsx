@@ -151,11 +151,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const [readingMode, setReadingMode] = useState(false)
   const [showThemePicker, setShowThemePicker] = useState(false)
   const [tokenStatsOpen, setTokenStatsOpen] = useState(false)
-  const [navBarMode, setNavBarMode] = useState<"header" | "bottom">(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.NAVBAR)
-    return saved === "header" || saved === "bottom" ? saved : "bottom"
-  })
-
   // ===== Feature: MCP Browser =====
   const [showMCPBrowser, setShowMCPBrowser] = useState(false)
 
@@ -616,7 +611,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           modelOptions={modelOptions} selectedModelKey={selectedModelKey}
           onChangeModel={changeModel} modelKey={modelKey}
           stats={stats} onResetStats={resetStats}
-          navBarMode={navBarMode} onNavBarModeChange={(m) => { setNavBarMode(m); localStorage.setItem(STORAGE_KEYS.NAVBAR, m) }}
           blockedModels={blockedModels}
           onOpenThemePicker={() => setShowThemePicker(true)}
           flags={flags}
