@@ -1171,22 +1171,19 @@ p {
 }
 
 .collapsible-section {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  margin: var(--space-3) 0;
+  margin: var(--space-2) 0;
 }
 .collapsible-toggle {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface);
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
   border: none;
   color: var(--text);
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   text-align: left;
   transition: background 0.1s;
 }
@@ -1225,16 +1222,15 @@ p {
   margin-left: auto;
 }
 .collapsible-content {
-  padding: var(--space-2) var(--space-3);
-  border-top: 1px solid var(--border);
-  background: var(--bg);
+  padding: var(--space-1) 0 var(--space-1) var(--space-5);
+  background: transparent;
 }
 .thinking-text {
-  font-size: 0.82rem;
-  line-height: 1.6;
-  color: var(--muted-strong);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted);
   white-space: pre-wrap;
-  margin: var(--space-2) 0;
+  margin: 0;
   font-style: italic;
 }
 
