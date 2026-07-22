@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from "react"
-import { RefreshIcon, PlusIcon, LoadingIcon, SettingsIcon } from "../Icons"
+import { RefreshIcon, PlusIcon, LoadingIcon, SettingsIcon, SearchIcon, StarIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { DataMode } from "../types"
 
@@ -160,10 +160,10 @@ export const SessionToolbar = memo(function SessionToolbar({
               borderRadius: "var(--radius-md, 8px)",
               boxShadow: "0 10px 30px rgba(0,0,0,0.6)", padding: 4, gap: 2
             }}>
-              {onSearchMessages && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onSearchMessages() }}>🔍 Search Messages</button>}
-              {onOpenArchivedView && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenArchivedView() }}>📦 Archived</button>}
-              {onOpenThemeCreator && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenThemeCreator() }}>🎨 Theme Creator</button>}
-              {onOpenFavoritesManager && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenFavoritesManager() }}>⭐ Favorites</button>}
+              {onSearchMessages && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onSearchMessages() }}><SearchIcon size={14} /> Search Messages</button>}
+              {onOpenArchivedView && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenArchivedView() }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg> Archived</button>}
+              {onOpenThemeCreator && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenThemeCreator() }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Theme Creator</button>}
+              {onOpenFavoritesManager && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenFavoritesManager() }}><StarIcon size={14} /> Favorites</button>}
             </div>
           )}
         </div>
