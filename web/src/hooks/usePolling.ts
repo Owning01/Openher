@@ -11,7 +11,7 @@ export type PollingControl = {
 export function usePolling(
   callback: () => void | Promise<void>,
   intervalMs: number,
-  _deps: unknown[] = [],
+  deps: unknown[] = [],
   streamActive = false
 ): PollingControl {
   const savedCallback = useRef(callback)
@@ -20,7 +20,7 @@ export function usePolling(
   const pausedRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const onVisibilityRef = useRef<(() => void) | null>(null)
-  const resumeRef = useRef<() => void>(() => {})
+  const controlRef = useRef<PollingControl>({ pause: () => {}, resume: () => {}, fail: () => {}, succeed: () => {} })
 
   useEffect(() => {
     let mounted = true
@@ -66,7 +66,7 @@ export function usePolling(
     document.addEventListener("visibilitychange", onVisibility)
     onVisibilityRef.current = onVisibility
 
-    const control: PollingControl = {
+    controlRef.current = {
       pause: () => { pausedRef.current = true },
       resume: () => {
         pausedRef.current = false
@@ -87,26 +87,19 @@ export function usePolling(
         failCountRef.current = 0
       }
     }
-    resumeRef.current = control.resume
 
     return () => {
       mounted = false
       if (timerRef.current) clearInterval(timerRef.current)
       if (onVisibilityRef.current) document.removeEventListener("visibilitychange", onVisibilityRef.current)
     }
-  }, [intervalMs, streamActive])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intervalMs, streamActive, ...deps])
 
   return {
-    pause: () => { pausedRef.current = true },
-    resume: () => {
-      pausedRef.current = false
-      failCountRef.current = 0
-    },
-    fail: () => {
-      failCountRef.current = Math.min(failCountRef.current + 1, POLL_MAX_RETRIES)
-    },
-    succeed: () => {
-      failCountRef.current = 0
-    }
+    pause: () => controlRef.current.pause(),
+    resume: () => controlRef.current.resume(),
+    fail: () => controlRef.current.fail(),
+    succeed: () => controlRef.current.succeed()
   }
 }

@@ -90,12 +90,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const {
     composer, setComposer,
-    awaitingAssistantReply,
+    awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
     renderedMessages, messageScrollSignature, assistantResponseSignature,
     toolMessage, completionShouldPlayRef,
     clearSession, loadSelected, send, abortSession,
-    setMessages, undoMessage, redoMessage, compactSession
+    setMessages, undoMessage, redoMessage, compactSession,
+    applyDelta
   } = useMessages(config)
 
   const {
@@ -223,15 +224,47 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const [streamState, setStreamState] = useState<StreamState>("polling")
 
   const handleSSEEvent = useCallback((event: SSEEvent) => {
-    const { type } = event
+    const p = event.properties as Record<string, unknown>
+    const type = event.type
     if (type === "server.connected" || type === "server.heartbeat") return
-    if (type === "message.updated" || type === "message.part.updated" || type === "message.part.delta") {
-      const eventSessionID = (event.properties as { sessionID?: string }).sessionID
-      if (eventSessionID && eventSessionID === selectedSession?.id) {
-        loadSelected(eventSessionID, selectedSession.directory)
+
+    if (type === "message.part.delta") {
+      const sessionID = p.sessionID as string | undefined
+      const messageID = p.messageID as string | undefined
+      const partID = p.partID as string | undefined
+      const hasDelta = typeof p.delta === "string"
+      const text = (hasDelta ? p.delta : p.text ?? "") as string
+      if (sessionID && messageID && partID && text && sessionID === selectedSession?.id) {
+        applyDelta(sessionID, messageID, partID, text, !hasDelta)
       }
+      return
     }
-  }, [selectedSession?.id, selectedSession?.directory, loadSelected])
+
+    if (type === "message.updated" || type === "message.part.updated") {
+      const sessionID = p.sessionID as string | undefined
+      if (sessionID && sessionID === selectedSession?.id) {
+        loadSelected(sessionID, selectedSession.directory)
+      }
+      return
+    }
+
+    if (type === "session.status") {
+      const sessionID = p.sessionID as string | undefined
+      const status = p.status as string | undefined
+      if (sessionID && sessionID === selectedSession?.id && status && status !== "busy") {
+        setAwaitingAssistantReply(false)
+        loadSelected(sessionID, selectedSession.directory)
+        refreshSessions()
+      }
+      return
+    }
+
+    if (type === "session.error") {
+      const msg = (p.message ?? p.text ?? "") as string
+      if (msg) setRuntimeError(msg)
+      setAwaitingAssistantReply(false)
+    }
+  }, [selectedSession?.id, selectedSession?.directory, loadSelected, applyDelta, setAwaitingAssistantReply, setRuntimeError, refreshSessions])
 
   const { streamState: sseState } = useSSE(
     (dataMode === "full" && flags.streamingFull) ? config : null,
@@ -439,6 +472,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (!selectedSession) return
     if (dataMode === "full" || dataMode === "saver" || isSessionActive(selectedSession)) {
       await loadSelected(selectedSession.id, selectedSession.directory)
+    }
+    if (selectedSession && !isSessionActive(selectedSession) && awaitingAssistantReply) {
+      setAwaitingAssistantReply(false)
     }
   }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, selectedSession?.id, selectedSession?.status, isStreamingActive], isStreamingActive)
 

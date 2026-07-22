@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react"
+import { useState, useCallback, useMemo, useRef } from "react"
 import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
 import { api } from "../api"
 import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "../utils/parseCommand"
@@ -92,13 +92,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     return null
   }, [messages])
 
-  useEffect(() => {
-    if (!awaitingAssistantReply) return
-    if (assistantResponseSignature && assistantResponseSignature !== awaitingAssistantBaselineRef.current) {
-      setAwaitingAssistantReply(false)
-    }
-  }, [assistantResponseSignature, awaitingAssistantReply])
-
   const clearSession = useCallback(() => {
     setMessages([])
     setOptimisticUserMessages([])
@@ -116,8 +109,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
 
     setMessages((prev) => {
       const stableTs = Math.max(
-        ...msg.filter((m) => m.info.role === "user" || m.info.time.completed)
-               .map((m) => m.info.time.created || 0), 0)
+        ...msg.map((m) => m.info.time.created || 0), 0)
       if (stableTs > 0) lastMessageTsRef.current.set(sessionID, stableTs)
 
       if (since === 0) {
@@ -247,6 +239,44 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     }
   }, [config, loadSelected])
 
+  const applyDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace = false) => {
+    setMessages((prev) => {
+      const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
+      if (!existing) {
+        return [...prev, {
+          info: {
+            id: messageID,
+            role: "assistant",
+            sessionID,
+            time: { created: Date.now() },
+          },
+          parts: [{ id: partID, type: "text", text }]
+        }]
+      }
+      let changed = false
+      const next = prev.map((m) => {
+        if (m.info.sessionID !== sessionID || m.info.id !== messageID) return m
+        const nextParts = m.parts.map((p) => {
+          if (p.id !== partID) return p
+          if (replace) {
+            if (p.text === text) return p
+            changed = true
+            return { ...p, text }
+          }
+          if (p.text?.endsWith(text)) return p
+          changed = true
+          return { ...p, text: (p.text ?? "") + text }
+        })
+        if (!nextParts.some((p) => p.id === partID)) {
+          changed = true
+          return { ...m, parts: [...nextParts, { id: partID, type: "text", text }] }
+        }
+        return { ...m, parts: nextParts }
+      })
+      return changed ? next : prev
+    })
+  }, [])
+
   const updateSend = useCallback(async (
     selectedSession: SessionView,
     activeModel: ModelSelection | undefined,
@@ -356,6 +386,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     renderedMessages, messageScrollSignature, assistantResponseSignature,
     toolMessage, completionShouldPlayRef,
     clearSession, loadSelected, send: updateSend, abortSession,
-    undoMessage, redoMessage, compactSession, sendShell: sendShellCallback
+    undoMessage, redoMessage, compactSession, sendShell: sendShellCallback,
+    applyDelta
   }
 }
