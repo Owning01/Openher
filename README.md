@@ -1,5 +1,7 @@
 <div align="center">
 
+  <img src="https://raw.githubusercontent.com/Owning01/Opencode-Mobile/main/web/public/img/opencode-logo-dark.jpg" width="64" height="64" alt="OpenCode Logo" style="border-radius: 12px;" />
+
 # ⚡ OpenCode Mobile
 
 **Cliente Android para [OpenCode](https://opencode.ai) — tu asistente de codificación AI desde el celular**
@@ -239,4 +241,13 @@ web/
 | **🛡️ Stale request rejection** | `loadSelected` usa un ID de request para descartar respuestas de polling obsoletas |
 | **🎨 Temas dinámicos** | 30+ temas con variables CSS aplicadas en runtime via `resolveTheme.ts` |
 
+---
+
+<div align="center">
+
+**OpenCode Mobile** es un cliente para [**OpenCode**](https://opencode.ai) — el asistente de codificación AI open-source.
+
+Desarrollado por [@Owning01](https://github.com/Owning01) · [Reportar issue](https://github.com/Owning01/Opencode-Mobile/issues) · [Contribuir](https://github.com/Owning01/Opencode-Mobile)
+
+</div>
 
