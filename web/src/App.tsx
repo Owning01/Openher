@@ -243,10 +243,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const { cacheSessions, getCachedSessions, cacheMessages } = useOfflineCache(flags)
 
   useEffect(() => {
-    if (flags.offlineCache && sessions.length > 0) {
+    if (sessions.length > 0) {
       cacheSessions(sessions as unknown as import("./types").Session[])
     }
-  }, [sessions, flags.offlineCache, cacheSessions])
+  }, [sessions, cacheSessions])
 
   useEffect(() => {
     if (flags.offlineCache && selectedSession && renderedMessages.length > 0) {
@@ -459,11 +459,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     initialSessionLoadRef.current = true
 
     const loadFromCache = async () => {
-      if (flags.offlineCache) {
-        const cached = await getCachedSessions()
-        if (cached.length > 0 && sessions.length === 0) {
-          setSessions(() => cached as any)
-        }
+      if (sessions.length > 0) return
+      const cached = await getCachedSessions()
+      if (cached.length > 0) {
+        setSessions(() => cached as any)
       }
     }
     loadFromCache()

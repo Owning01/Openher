@@ -14,7 +14,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   autoSummarize: false,
   autoSummarizeThreshold: DEFAULT_AUTO_SUMMARIZE_THRESHOLD,
   streamingFull: false,
-  offlineCache: false,
+  offlineCache: true,
   questionAuto: false,
   permissionUI: false,
 }

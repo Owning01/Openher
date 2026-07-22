@@ -45,22 +45,21 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
   const dbRef = useRef<IDBDatabase | null>(null)
 
   useEffect(() => {
-    if (!flags.offlineCache) return
     openDB().then((db) => { dbRef.current = db }).catch((err) => console.error("[OfflineCache] openDB:", err))
     return () => { dbRef.current?.close(); dbRef.current = null }
-  }, [flags.offlineCache])
+  }, [])
 
   const cacheSessions = useCallback(async (sessions: Session[]) => {
-    if (!dbRef.current || !flags.offlineCache) return
+    if (!dbRef.current) return
     try {
       const tx = dbRef.current.transaction(DB_STORES.sessions, "readwrite")
       const store = tx.objectStore(DB_STORES.sessions)
       for (const s of sessions) store.put(s)
     } catch (err) { console.error("[OfflineCache] cacheSessions:", err) }
-  }, [flags.offlineCache])
+  }, [])
 
   const getCachedSessions = useCallback(async (): Promise<Session[]> => {
-    if (!dbRef.current || !flags.offlineCache) return []
+    if (!dbRef.current) return []
     try {
       const tx = dbRef.current.transaction(DB_STORES.sessions, "readonly")
       const store = tx.objectStore(DB_STORES.sessions)
@@ -70,7 +69,7 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
         req.onerror = () => reject(req.error)
       })
     } catch (err) { console.error("[OfflineCache] getCachedSessions:", err); return [] }
-  }, [flags.offlineCache])
+  }, [])
 
   const cacheMessages = useCallback(async (sessionID: string, messages: MessageEnvelope[]) => {
     if (!dbRef.current || !flags.offlineCache) return

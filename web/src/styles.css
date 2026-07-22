@@ -1172,10 +1172,9 @@ p {
   padding: 2px;
   display: inline-flex;
   align-items: center;
-  opacity: 0;
+  opacity: 0.5;
   transition: opacity 0.15s, color 0.15s;
 }
-.quick-access-card:hover .quick-access-dismiss { opacity: 0.6; }
 .quick-access-card .quick-access-dismiss:hover { opacity: 1; color: var(--danger); }
 
 .quick-access-card.confirming-dismiss {
