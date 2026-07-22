@@ -17,7 +17,7 @@ export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, d
   const [contents, setContents] = useState<Record<string, DiffContent>>({})
   const [loading, setLoading] = useState<string | null>(null)
   const loadingRef = useRef<Set<string>>(new Set())
-  const [applying, setApplying] = useState<string | null>(null)
+  const applyingRef = useRef<string | null>(null)
 
   const toggleExpand = useCallback(async (file: string) => {
     if (expanded === file) {
@@ -40,8 +40,10 @@ export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, d
     }
   }, [expanded, contents, config, sessionID, directory])
 
-  const handleApply = useCallback(async (file: string) => {
-    if (onApplyDiff) { setApplying(file); onApplyDiff(file); setApplying(null) }
+  const handleApply = useCallback((file: string) => {
+    if (!onApplyDiff || applyingRef.current) return
+    applyingRef.current = file
+    onApplyDiff(file)
   }, [onApplyDiff])
 
   if (files.length === 0) return null
@@ -72,8 +74,8 @@ export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, d
                   {(onApplyDiff || onRejectDiff) && (
                     <div className="diff-actions">
                       {onApplyDiff && (
-                        <button className="btn-primary compact" onClick={() => handleApply(f.file)} disabled={applying === f.file}>
-                          {applying === f.file ? "..." : "✓ Apply"}
+                        <button className="btn-primary compact" onClick={() => handleApply(f.file)} disabled={applyingRef.current === f.file}>
+                          {applyingRef.current === f.file ? "..." : "✓ Apply"}
                         </button>
                       )}
                       {onRejectDiff && (

@@ -135,7 +135,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     flags.autoSummarize,
     flags.autoSummarizeThreshold,
     assistantResponseSignature,
-    loadSelected ? (() => loadSelected(selectedSession!.id, selectedSession!.directory)) : undefined,
+    selectedSession ? (() => loadSelected(selectedSession.id, selectedSession.directory)) : undefined,
     activeModel?.providerID,
     activeModel?.modelID
   )
@@ -234,7 +234,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   useEffect(() => {
     if (flags.offlineCache && sessions.length > 0) {
-      cacheSessions(sessions as any)
+      cacheSessions(sessions as unknown as import("./types").Session[])
     }
   }, [sessions, flags.offlineCache, cacheSessions])
 
@@ -244,7 +244,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         info: rm.info,
         parts: rm.parts,
       }))
-      cacheMessages(selectedSession.id, msgs as any).catch(() => {})
+      cacheMessages(selectedSession.id, msgs).catch(() => {})
     }
   }, [selectedSession?.id, renderedMessages.length, flags.offlineCache, cacheMessages])
 
@@ -432,7 +432,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       if (flags.offlineCache) {
         const cached = await getCachedSessions()
         if (cached.length > 0 && sessions.length === 0) {
-          setSessions(cached as any)
+          setSessions(() => cached as any)
         }
       }
     }

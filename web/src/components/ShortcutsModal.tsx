@@ -1,4 +1,4 @@
-import { memo } from "react"
+import { memo, useEffect } from "react"
 import { CloseIcon } from "../Icons"
 
 type Props = {
@@ -18,6 +18,11 @@ const SHORTCUTS = [
 ]
 
 export const ShortcutsModal = memo(function ShortcutsModal({ onClose }: Props) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [onClose])
 
   return (
     <div className="modal-overlay" onClick={onClose}>

@@ -20,7 +20,6 @@ export const InlineDiff = memo(function InlineDiff({ content, language }: Props)
           return (
             <span key={i} className={`inline-diff-line ${cls}`}>
               {line}
-              {"\n"}
             </span>
           )
         })}

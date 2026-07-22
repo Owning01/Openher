@@ -701,6 +701,7 @@ p {
 
 .mode-btn.active {
   background: var(--primary);
+}
 .mode-switcher {
   display: flex;
   flex-wrap: wrap;
@@ -860,14 +861,6 @@ p {
 
 
 /* ===== Quick Access ===== */
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border);
-}
-
 .quick-access-section {
   display: flex;
   flex-direction: column;

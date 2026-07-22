@@ -14,9 +14,10 @@ export function useDeepLink(onDeepLink: DeepLinkHandler) {
       const username = parsed.searchParams.get("username")
       const password = parsed.searchParams.get("password")
       if (host) {
+        const parsedPort = port ? parseInt(port, 10) : 4096
         onDeepLink({
           host,
-          port: port ? parseInt(port, 10) : 4096,
+          port: Number.isFinite(parsedPort) ? parsedPort : 4096,
           username: username || "",
           password: password || "",
         })

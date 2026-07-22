@@ -40,6 +40,7 @@ export function useOfflineQueue() {
     try {
       const tx = dbRef.current.transaction(QUEUE_STORE, "readwrite")
       tx.objectStore(QUEUE_STORE).add({ ...action, createdAt: Date.now() })
+      await new Promise<void>((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error) })
     } catch { /* silently fail */ }
   }, [])
 

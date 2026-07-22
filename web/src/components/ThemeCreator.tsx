@@ -53,7 +53,7 @@ export const ThemeCreator = memo(function ThemeCreator({ onClose }: Props) {
       ),
     }
     const json = JSON.stringify(theme, null, 2)
-    navigator.clipboard.writeText(json)
+    navigator.clipboard.writeText(json).catch(() => {})
   }, [colors])
 
   const applyPreview = useCallback(() => {

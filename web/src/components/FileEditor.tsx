@@ -18,17 +18,20 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
     setError(null)
-
     api.readFile(config, path, directory).then((result) => {
+      if (cancelled) return
       setContent(result.content)
       setOriginal(result.content)
       setLoading(false)
     }).catch((err) => {
-      setError(err.message || "Failed to load file")
+      if (cancelled) return
+      setError(err instanceof Error ? err.message : "Failed to load file")
       setLoading(false)
     })
+    return () => { cancelled = true }
   }, [config, path, directory])
 
   const handleSave = useCallback(async () => {
