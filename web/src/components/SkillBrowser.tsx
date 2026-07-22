@@ -35,29 +35,19 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+      <div className="modal-content skill-browser" onClick={(e) => e.stopPropagation()}>
         <ModalHeader title="Skills" onClose={onClose} />
-        <input
-          type="search"
-          placeholder="Search skills..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoFocus
-          style={{ margin: "0 0 var(--space-3)", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.85rem", width: "100%" }}
-        />
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
-          {loading && <div style={{ padding: "1rem", textAlign: "center", color: "var(--muted)" }}>Loading...</div>}
-          {!loading && filtered.length === 0 && <div style={{ padding: "1rem", textAlign: "center", color: "var(--muted)" }}>No skills found</div>}
+        <div className="skill-search">
+          <input type="search" placeholder="Search skills..." value={query}
+            onChange={(e) => setQuery(e.target.value)} autoFocus />
+        </div>
+        <div className="skill-list">
+          {loading && <div className="skill-empty">Loading...</div>}
+          {!loading && filtered.length === 0 && <div className="skill-empty">No skills found</div>}
           {filtered.map((skill) => (
-            <button
-              key={skill.id}
-              onClick={() => handleSelect(skill.name)}
-              style={{ textAlign: "left", padding: "0.6rem 0.8rem", border: "none", borderRadius: "var(--radius-sm)", background: "transparent", color: "var(--text)", cursor: "pointer", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: 2, minHeight: 0 }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--primary-soft)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
+            <button key={skill.id} className="skill-item" onClick={() => handleSelect(skill.name)}>
               <strong>{skill.name}</strong>
-              {skill.description && <small style={{ color: "var(--muted)" }}>{skill.description.length > 120 ? skill.description.slice(0, 120) + "..." : skill.description}</small>}
+              {skill.description && <small className="truncate">{skill.description}</small>}
             </button>
           ))}
         </div>

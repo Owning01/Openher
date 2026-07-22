@@ -4906,6 +4906,16 @@ button.compact {
 .mcp-item.clickable:hover { background: var(--surface-strong); }
 .mcp-id { font-size: 0.7rem; color: var(--muted); }
 
+/* ===== Skill Browser ===== */
+.skill-browser { max-width: 500px; max-height: 80vh; display: flex; flex-direction: column; }
+.skill-search { margin: 0 0 var(--space-3); }
+.skill-search input { width: 100%; padding: 0.5rem; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.85rem; }
+.skill-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.skill-empty { padding: 1rem; text-align: center; color: var(--muted); }
+.skill-item { text-align: left; padding: 0.6rem 0.8rem; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text); cursor: pointer; font-size: 0.85rem; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.skill-item:hover { background: var(--primary-soft); }
+.skill-item small { color: var(--muted); }
+
 /* ===== Image Lightbox ===== */
 .image-lightbox-overlay { background: rgba(0,0,0,0.92); z-index: 100000; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
 .lightbox-close { position: absolute; top: var(--space-4); right: var(--space-4); z-index: 100001; }
