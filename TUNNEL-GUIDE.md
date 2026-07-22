@@ -17,9 +17,40 @@
 
 ## 1. ¿Qué es el túnel remoto?
 
-**Problema**: OpenCode Mobile solo funciona en la misma red local que el servidor de OpenCode (ej. ambos conectados al mismo WiFi). Cuando el celular está en datos móviles u otra red, no puede alcanzar al servidor.
+**Problema**: OpenCode Mobile está diseñado para funcionar en la misma red local que el servidor de OpenCode (ej. ambos conectados al mismo WiFi). Cuando el celular está en datos móviles, en el trabajo, o en cualquier red distinta a la de la PC, no puede alcanzar al servidor porque:
 
-**Solución**: Un túnel WebRTC que conecta el celular con la PC desde cualquier red, usando un servidor de señalización liviano en Cloudflare para establecer la conexión. Una vez establecida, los datos viajan cifrados (DTLS) directamente entre dispositivos sin pasar por ningún servidor intermedio.
+- La PC tiene una IP privada (192.168.x.x, 10.x.x.x, etc.) que no es accesible desde internet
+- Abrir puertos en el router o configurar DNS dinámico es complejo, inseguro y no siempre posible
+- Las redes corporativas/móviles suelen bloquear conexiones entrantes
+
+### Solución que provee este proyecto
+
+Un **túnel WebRTC** integrado en el propio ecosistema de OpenCode Mobile. La PC ejecuta un pequeño binario (el "tunnel companion") que se conecta a un servidor de señalización liviano en Cloudflare. El celular se conecta al mismo servidor, ambos se autentican con nombre+contraseña, y establecen una conexión directa y cifrada (DTLS). Los datos viajan directamente entre dispositivos sin pasar por ningún servidor intermedio.
+
+**Ventajas de esta solución:**
+- ✅ Integrado en la app — no necesitas instalar nada externo
+- ✅ Zero configuración de red — no abrir puertos, no tocar el router
+- ✅ Cifrado extremo a extremo por defecto
+- ✅ Solo datos de OpenCode — no expone toda tu red
+- ✅ Binario único, ejecutable, con ventana GUI
+
+### Alternativa: Tailscale (o cualquier VPN)
+
+Si por algún motivo no querés usar el túnel integrado, podés lograr el mismo resultado con herramientas de terceros:
+
+1. **Instalar Tailscale** (o ZeroTier, WireGuard, etc.) tanto en la PC como en el celular
+2. Ambos dispositivos quedan en la misma red virtual (ej. 100.x.x.x)
+3. En OpenCode Mobile, configurar la conexión con la IP de Tailscale de la PC
+4. El servidor OpenCode en la PC debe estar corriendo y accesible en el puerto configurado
+
+**Desventajas de esta alternativa:**
+- ❌ Requiere instalar, configurar y mantener un software externo
+- ❌ Consume batería y datos constantemente (la VPN siempre activa)
+- ❌ Expone más tráfico del necesario (toda la red, no solo OpenCode)
+- ❌ Tailscale Free tiene límite de 3 usuarios/100 dispositivos
+- ❌ Configuración más compleja para usuarios no técnicos
+
+> **Recomendación**: Usar el túnel integrado que provee este proyecto. Está diseñado específicamente para OpenCode, no requiere software externo, y es más seguro porque solo canaliza el tráfico necesario.
 
 ## 2. Arquitectura
 
