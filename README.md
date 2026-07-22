@@ -56,169 +56,108 @@
 
 ---
 
-## 🕸️ Grafo de dependencias
+## 🕸️ Grafos de dependencias
+
+<details>
+<summary><b>📡 Transporte</b> — SSE, polling, cache y cola offline</summary>
 
 ```mermaid
-flowchart TB
-    %% Estilos
+flowchart LR
     classDef infra fill:#1a1a2e,stroke:#6c8cff,color:#eee
     classDef core fill:#1e3a5f,stroke:#5ba3e6,color:#eee
-    classDef hook fill:#2d1b4e,stroke:#a78bfa,color:#eee
-    classDef ui fill:#3b1f3b,stroke:#f0c060,color:#eee
-    classDef cross fill:#1b3b2b,stroke:#4caf7d,color:#eee
-
-    %% === CAPA 0: Infraestructura ===
-    subgraph Infraestructura["Infraestructura"]
-        Server["🖥️ Servidor OpenCode<br/>(HTTP + SSE)"]
-        API["🌐 api.ts<br/>30 endpoints REST"]
-        Cap["⚡ Capacitor<br/>Plugins nativos"]
-    end
-
-    %% === CAPA 1: Transporte ===
-    subgraph Transporte["Capa de Transporte"]
-        SSE["useSSE.ts<br/>Streaming SSE"]
-        Poll["usePolling.ts<br/>Backoff exponencial"]
-        Cache["useOfflineCache.ts<br/>IndexedDB"]
-        Queue["useOfflineQueue.ts<br/>Cola offline"]
-    end
-
-    %% === CAPA 2: Hooks de Estado ===
-    subgraph Hooks["Capa de Estado & Lógica"]
-        Msgs["useMessages.ts<br/>Chat + prompts + undo/redo"]
-        Sess["useSessions.ts<br/>CRUD sesiones + favoritos"]
-        AI["useAI.ts<br/>Agentes + modelos"]
-        Config["useConfig.ts<br/>Config servidor + auth"]
-        Sidecar["useSessionSidecar.ts<br/>Diffs + todos + dashboard"]
-        Shell["useShell.ts<br/>Terminal"]
-        Notif["useNotifications.ts<br/>Notificaciones push"]
-        Deep["useDeepLink.ts<br/>Deep links"]
-        Stats["useStats.ts<br/>Estadísticas de uso"]
-        Flags["useFeatureFlags.ts<br/>Feature flags"]
-        Net["useNetworkMode.ts<br/>Modo datos móvil/WiFi"]
-        AutoSum["useAutoSummarize.ts<br/>Compactación automática"]
-        Speech["useSpeechRecognition.ts<br/>Voz a texto"]
-    end
-
-    %% === CAPA 3: Componentes UI ===
-    subgraph UI["Capa de Presentación"]
-        App["App.tsx<br/>Orquestador principal"]
-        Chat["💬 ChatView<br/>+ Composer + MessageList"]
-        Sessions["📁 SessionList<br/>+ SessionCard"]
-        Settings["⚙️ SettingsPanel<br/>+ ProviderManager"]
-
-        subgraph Modales["Modales"]
-            Diff["📋 DiffViewer"]
-            Editor["📝 FileEditor"]
-            Terminal["💻 TerminalView"]
-            MCP["🧩 MCPBrowser"]
-            Archive["📦 ArchivedList"]
-            ThemePicker["🎨 ThemePicker"]
-            ThemeCreate["🎨 ThemeCreator"]
-            Lightbox["🖼️ ImageLightbox"]
-            Shortcuts["⌨️ ShortcutsModal"]
-            Favorites["⭐ FavoritesManager"]
-            Question["🤔 AutoQuestionPrompt"]
-            Permission["🔐 PermissionPrompt"]
-            Skills["📚 SkillBrowser"]
-        end
-
-        subgraph Menus["Navegación"]
-            Nav["NavBar"]
-            Sheet["BottomSheet<br/>AI + Detalles"]
-            Help["HelpPage"]
-        end
-    end
-
-    %% === CAPA TRANSVERSAL ===
-    subgraph Transversal["Servicios Transversales"]
-        I18N["🌍 i18n.ts<br/>4 idiomas"]
-        Themes["🎨 resolveTheme.ts<br/>30+ temas"]
-        Styles["📄 styles.css<br/>~4900 líneas"]
-        Types["📐 types.ts<br/>Tipos compartidos"]
-        Icons["🖼️ Icons.tsx<br/>24 SVG icons"]
-        Bench["📊 benchmarks/<br/>212 tests"]
-    end
-
-    %% === CONEXIONES ===
-    Server --> API
-    API --> SSE
-    API --> Poll
-    API --> Cache
-    API --> Queue
-    API --> Msgs
-    API --> Sess
-    API --> AI
-    API --> Config
-    API --> Sidecar
-    API --> Shell
-    Cap --> Speech
-    Cap --> Deep
-
-    SSE --> Msgs
-    Poll --> Msgs
-    Poll --> Sess
-    Cache --> Sess
-    Queue --> Msgs
-
-    Msgs --> App
-    Sess --> App
-    AI --> App
-    Config --> App
-    Sidecar --> App
-    Shell --> App
-    Notif --> App
-    Deep --> Config
-    Stats --> App
-    Flags --> App
-    Net --> Poll
-    AutoSum --> Msgs
-    Speech --> Chat
-
-    App --> Chat
-    App --> Sessions
-    App --> Settings
-    App --> Nav
-    App --> Sheet
-    App --> Help
-    App --> Diff
-    App --> Editor
-    App --> Terminal
-    App --> MCP
-    App --> Archive
-    App --> ThemePicker
-    App --> ThemeCreate
-    App --> Lightbox
-    App --> Shortcuts
-    App --> Favorites
-    App --> Question
-    App --> Permission
-    App --> Skills
-
-    I18N --> App
-    Themes --> ThemePicker
-    Themes --> ThemeCreate
-    Types --> App
-    Icons --> Chat
-    Icons --> Settings
-    Icons --> Sessions
-    Styles --> App
-    Bench -.-> API
-    Bench -.-> Poll
-    Bench -.-> SSE
-    Bench -.-> Cache
-
-    %% Links
-    click SSE "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useSSE.ts"
-    click Poll "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/usePolling.ts"
-    click Cache "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useOfflineCache.ts"
-    click Queue "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useOfflineQueue.ts"
-    click Msgs "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useMessages.ts"
-    click Shell "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useShell.ts"
-    click Diff "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/components/DiffViewer.tsx"
-    click Editor "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/components/FileEditor.tsx"
-    click Terminal "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/components/TerminalView.tsx"
-    click API "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/api.ts"
+    S(["🖥️ Servidor"]) --> A["🌐 api.ts"]
+    A --> SSE["useSSE.ts<br/>SSE streaming"]
+    A --> Poll["usePolling.ts<br/>Backoff 1s→60s"]
+    A --> Cache["useOfflineCache.ts<br/>IndexedDB"]
+    A --> Queue["useOfflineQueue.ts<br/>Cola offline"]
+    Poll -->|pausa/reanuda| SSE
+    Queue -.->|replay| A
+    class S infra
+    class A,SSE,Poll,Cache,Queue core
 ```
+</details>
+
+<details>
+<summary><b>🧠 Estado</b> — hooks principales y sus relaciones</summary>
+
+```mermaid
+flowchart LR
+    classDef hook fill:#2d1b4e,stroke:#a78bfa,color:#eee
+    classDef core fill:#1e3a5f,stroke:#5ba3e6,color:#eee
+    C["useConfig"] --> S["useSessions<br/>CRUD + favs"]
+    C --> M["useMessages<br/>send + undo"]
+    C --> A["useAI<br/>agentes/modelos"]
+    C --> Si["useSessionSidecar<br/>todos/diffs"]
+    M -->|optimistic| S
+    S -->|selectedID| M
+    A -->|activeModel| M
+    F["useFeatureFlags"] -.->|toggle| M
+    N["useNetworkMode"] -.->|modo datos| C
+    Shell["useShell"] -->|terminal| M
+    Speech["useSpeechRecognition"] -->|voz| M
+    class C,S,M,A,Si,F,N,Shell,Speech hook
+```
+</details>
+
+<details>
+<summary><b>🖥️ UI</b> — App, vistas principales y modales</summary>
+
+```mermaid
+flowchart LR
+    classDef ui fill:#3b1f3b,stroke:#f0c060,color:#eee
+    classDef modal fill:#4a2040,stroke:#d08050,color:#eee
+    App["App.tsx<br/>Orquestador"] --> CV["ChatView"]
+    App --> SL["SessionList"]
+    App --> SP["SettingsPanel"]
+    App --> HP["HelpPage"]
+    App --> Mod["15 modales<br/>⬇"]
+    CV --> MB["MessageBubble"]
+    CV --> C["Composer"]
+    CV --> ML["MessageList"]
+    CV --> TB["ThinkingBlock"]
+    CV --> TP["ToolPart"]
+    SL --> SC["SessionCard"]
+    SL --> AL["ArchivedList"]
+    SP --> PM["ProviderManager"]
+    SP --> TPk["ThemePicker"]
+    subgraph Modales[" "]
+        DIFF["DiffViewer"]
+        FE["FileEditor"]
+        TV["TerminalView"]
+        MCP["MCPBrowser"]
+        TC["ThemeCreator"]
+        IL["ImageLightbox"]
+        FM["FavoritesManager"]
+        QP["QuestionPrompt"]
+        PP["PermissionPrompt"]
+        SB["SkillBrowser"]
+    end
+    class App,CV,SL,SP,HP ui
+    class DIFF,FE,TV,MCP,TC,IL,FM,QP,PP,SB,AL,PM,TPk modal
+```
+</details>
+
+<details>
+<summary><b>🔧 Transversal</b> — servicios compartidos</summary>
+
+```mermaid
+flowchart LR
+    classDef cross fill:#1b3b2b,stroke:#4caf7d,color:#eee
+    I18N["🌍 i18n.ts<br/>4 idiomas"]
+    Theme["🎨 resolveTheme.ts<br/>30+ temas"]
+    Styles["📄 styles.css<br/>~5000 líneas"]
+    Types["📐 types.ts<br/>38 tipos"]
+    Icons["🖼️ Icons.tsx<br/>31 SVGs"]
+    Bench["📊 benchmarks/<br/>212 tests"]
+    I18N --> App
+    Theme --> ThemePicker
+    Styles --> App
+    Types --> App
+    Icons --> UI
+    Bench -.-> API
+    class I18N,Theme,Styles,Types,Icons,Bench cross
+```
+</details>
 
 ## 🚀 Inicio rápido
 
@@ -270,6 +209,8 @@ En el teléfono: **Host** = `100.x.x.x`, **Port** = `4096`, **Username/Password*
 
 ---
 
+> 📖 **Catálogo completo**: [`CATALOGO.md`](CATALOGO.md) — 47 componentes, 27 hooks, 35 endpoints, grafos, guía para LLM.
+
 ## 📁 Estructura del proyecto
 
 ```
@@ -277,35 +218,13 @@ web/
 ├── src/
 │   ├── components/       # 43 componentes UI
 │   ├── hooks/            # 26 hooks React
-│   ├── benchmarks/       # 212 tests de velocidad
 │   ├── api.ts            # Cliente HTTP (30 endpoints)
 │   ├── App.tsx           # Orquestador principal
 │   ├── types.ts          # Tipos TypeScript
 │   ├── i18n.ts           # 4 idiomas
 │   └── styles.css        # Sistema de diseño completo
 ├── android/              # Proyecto nativo Android
-└── benchmarks/           # Suite de benchmarks
 ```
-
----
-
-## ⚡ Performance
-
-Suite de benchmarks: **212 tests, 68 grupos** — ejecutar con `pnpm benchmark`
-
-| Capa | Más rápido | Típico | Cuello de botella |
-|------|-----------|--------|-------------------|
-| **SSE parsing** | 4ns/evento | 11µs (10 eventos) | 707µs (1000 eventos — irreal) |
-| **Backoff calc** | 261ns | 1µs | ❌ Ninguno |
-| **i18n lookup** | 56ns | 360ns | ❌ Ninguno |
-| **Cache Map.get** | 24ns | 2µs (1000 gets) | ❌ Ninguno |
-| **Session filter** | 18ns (vacío) | 10µs (100 sesiones) | 489µs (10000 sesiones) |
-| **Message render** | 710ns (4 parts) | 34µs (200 msgs) | ❌ Ninguno |
-| **Diff parse** | 1µs (50 lines) | 132µs (5000 lines) | ❌ Ninguno |
-| **JSON serialize** | 1.7µs (1 sesión) | 250µs (100 sesiones) | ❌ Ninguno |
-| **Virtual list** | 4ns | 90ns | ❌ Ninguno |
-
-> ✅ Todas las operaciones críticas completan en **microsegundos o nanosegundos**. La app está limitada por GPU/red, no por CPU.
 
 ---
 
@@ -320,32 +239,4 @@ Suite de benchmarks: **212 tests, 68 grupos** — ejecutar con `pnpm benchmark`
 | **🛡️ Stale request rejection** | `loadSelected` usa un ID de request para descartar respuestas de polling obsoletas |
 | **🎨 Temas dinámicos** | 30+ temas con variables CSS aplicadas en runtime via `resolveTheme.ts` |
 
----
 
-## 🧪 Benchmarks
-
-```bash
-pnpm benchmark                  # Ejecutar los 212 tests
-pnpm benchmark:report           # Guardar en benchmarks/report.txt
-```
-
-Cobertura: parsing SSE, algoritmos de backoff, escenarios de polling, cadenas de API calls, escritura/lectura IndexedDB, búsqueda i18n, renderizado de mensajes, parsing de diffs, transformación de sesiones, transformación de proveedores, listas virtuales, detección de bloques de código y 8 escenarios de integración.
-
----
-
-## 🧰 Plugins de Capacitor Instalados
-
-| Plugin | Versión | Propósito |
-|--------|---------|-----------|
-| `@capacitor-community/speech-recognition` | 7.0.1 | Reconocimiento de voz nativo |
-| `@capacitor/app` | 8.1.1 | Manejo de ciclo de vida y deep links |
-| `@capacitor/camera` | 8.2.1 | Captura de imágenes |
-| `@capacitor/dialog` | 8.0.1 | Diálogos nativos |
-| `@capacitor/filesystem` | 8.1.2 | Persistencia de archivos |
-| `@capacitor/network` | 8.0.1 | Detección de cambios de red |
-
----
-
-## 📜 Licencia
-
-MIT — hecho por [@Owning01](https://github.com/Owning01)

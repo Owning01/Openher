@@ -46,6 +46,7 @@ type SessionListProps = {
   onOpenArchivedView?: () => void
   onOpenThemeCreator?: () => void
   onOpenFavoritesManager?: () => void
+  onDismissRecent?: (id: string) => void
 }
 
 export const SessionList = memo(function SessionList({
@@ -58,12 +59,15 @@ export const SessionList = memo(function SessionList({
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
   onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive, onFork,
-  onSearchMessages, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager
+  onSearchMessages, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager,
+  onDismissRecent
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
+
+  const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
 
   const toggleProject = useCallback((dir: string) => {
     setExpandedProject((prev) => prev === dir ? null : dir)
@@ -171,16 +175,32 @@ export const SessionList = memo(function SessionList({
               <h4 className="quick-access-label">{t('sessions.recentLabel')}</h4>
               <div className="quick-access-list">
                 {recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)).slice(0, 5).map((session) => (
-                  <div key={session.id} className="quick-access-card" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
-                    <button className="quick-access-star"
-                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
-                      aria-pressed={favorites.has(session.id)}
-                      title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill={favorites.has(session.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    </button>
-                    <ChatIcon size={14} />
-                    <span className="quick-access-title">{session.title}</span>
-                    <span className="quick-access-time">{formatTime(session.updated)}</span>
+                  <div key={session.id} className={`quick-access-card ${confirmingDismissId === session.id ? "confirming-dismiss" : ""}`} onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+                    {confirmingDismissId === session.id ? (
+                      <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
+                        <span>¿Quitar de recientes?</span>
+                        <div className="dismiss-confirm-actions">
+                          <button className="btn-danger compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null); onDismissRecent?.(session.id) }}>Sí</button>
+                          <button className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null) }}>No</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button className="quick-access-star"
+                          onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
+                          aria-pressed={favorites.has(session.id)}
+                          title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill={favorites.has(session.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        </button>
+                        <ChatIcon size={14} />
+                        <span className="quick-access-title">{session.title}</span>
+                        <span className="quick-access-time">{formatTime(session.updated)}</span>
+                        <button className="quick-access-dismiss" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(session.id) }}
+                          title="Quitar de recientes">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                        </button>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

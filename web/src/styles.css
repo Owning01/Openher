@@ -946,6 +946,45 @@ p {
 .quick-access-star:hover { color: var(--warning); }
 .quick-access-star[aria-pressed="true"] { color: var(--warning); }
 
+.quick-access-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.quick-access-card:hover .quick-access-dismiss { opacity: 0.6; }
+.quick-access-card .quick-access-dismiss:hover { opacity: 1; color: var(--danger); }
+
+.quick-access-card.confirming-dismiss {
+  padding: var(--space-2) var(--space-3);
+  cursor: default;
+}
+.quick-access-card.confirming-dismiss:hover {
+  border-color: var(--border);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  transform: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.dismiss-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--space-2);
+  font-size: 0.8rem;
+  color: var(--text);
+}
+.dismiss-confirm-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
 
 /* ===== Session List & Card ===== */
 .session-list {
@@ -1232,6 +1271,19 @@ p {
   white-space: pre-wrap;
   margin: 0;
   font-style: italic;
+}
+.thinking-text code {
+  color: var(--md-code);
+  background: var(--surface-strong);
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.2rem;
+  font-size: 0.76rem;
+  font-style: normal;
+}
+.thinking-text u {
+  text-decoration-color: var(--accent);
+  text-underline-offset: 2px;
+  font-style: normal;
 }
 
 .star-empty {
@@ -3227,6 +3279,9 @@ p {
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
   text-align: center;
+}
+.modal-body .toggle-btn {
+  min-width: 100px;
 }
 
 .toggle-btn:hover {

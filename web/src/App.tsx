@@ -387,7 +387,27 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const projectSessions = selectedProjectDir ? groupedSessions.get(selectedProjectDir) ?? [] : []
 
   const activeSessions = sessions.filter((s) => isSessionActive(s))
-  const recentSessions = useMemo(() => [...sessions].sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 5), [sessions])
+
+  const [dismissedRecentIds, setDismissedRecentIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.RECENT_DISMISS)
+      const arr: string[] = raw ? JSON.parse(raw) : []
+      return new Set(arr)
+    } catch { return new Set() }
+  })
+  const dismissRecent = useCallback((id: string) => {
+    setDismissedRecentIds((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      try { localStorage.setItem(STORAGE_KEYS.RECENT_DISMISS, JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }, [])
+
+  const recentSessions = useMemo(
+    () => [...sessions].sort((a, b) => (b.updated || 0) - (a.updated || 0)).filter((s) => !dismissedRecentIds.has(s.id)).slice(0, 5),
+    [sessions, dismissedRecentIds]
+  )
 
   const filteredProjects = useMemo(() => {
     return filterByQuery(projects, query, ([dir, sessionsList]) => [dir, ...sessionsList.map((s) => s.title)])
@@ -611,7 +631,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onSearchMessages={() => setQuery("search:")}
             onOpenArchivedView={() => setShowArchivedView(true)}
             onOpenThemeCreator={() => setShowThemeCreator(true)}
-            onOpenFavoritesManager={() => setShowFavoritesManager(true)} />
+            onOpenFavoritesManager={() => setShowFavoritesManager(true)}
+            onDismissRecent={dismissRecent} />
           {showNewSessionPicker && (
             <FolderPicker
               pickerPath={pickerPath} pickerItems={pickerItems}

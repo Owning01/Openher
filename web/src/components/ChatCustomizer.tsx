@@ -56,19 +56,25 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
               <span>Mostrar razonamiento</span>
               <button type="button" className={`toggle-btn${settings.showThinking ? " active" : ""}`}
                 onClick={() => onSettingChange("showThinking", !settings.showThinking)}
-                aria-pressed={settings.showThinking} />
+                aria-pressed={settings.showThinking}>
+                {settings.showThinking ? "Activado" : "Desactivado"}
+              </button>
             </label>
             <label className="toggle-row" style={{ width: "100%" }}>
               <span>Mostrar herramientas (tools)</span>
               <button type="button" className={`toggle-btn${settings.showToolCalls ? " active" : ""}`}
                 onClick={() => onSettingChange("showToolCalls", !settings.showToolCalls)}
-                aria-pressed={settings.showToolCalls} />
+                aria-pressed={settings.showToolCalls}>
+                {settings.showToolCalls ? "Activado" : "Desactivado"}
+              </button>
             </label>
             <label className="toggle-row" style={{ width: "100%" }}>
               <span>Mostrar hora</span>
               <button type="button" className={`toggle-btn${settings.showTimestamps ? " active" : ""}`}
                 onClick={() => onSettingChange("showTimestamps", !settings.showTimestamps)}
-                aria-pressed={settings.showTimestamps} />
+                aria-pressed={settings.showTimestamps}>
+                {settings.showTimestamps ? "Activado" : "Desactivado"}
+              </button>
             </label>
           </div>
 
