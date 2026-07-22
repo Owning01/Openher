@@ -862,6 +862,9 @@ p {
 
 /* ===== Quick Access ===== */
 .quick-access-section {
+  margin-bottom: var(--space-5);
+}
+.quick-access-section {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -927,6 +930,21 @@ p {
   color: var(--muted);
   white-space: nowrap;
 }
+.quick-access-card {
+  cursor: pointer;
+}
+.quick-access-star {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.quick-access-star:hover { color: var(--warning); }
+.quick-access-star[aria-pressed="true"] { color: var(--warning); }
 
 
 /* ===== Session List & Card ===== */
@@ -1172,6 +1190,22 @@ p {
 }
 
 
+.project-card-wrap {
+  margin-bottom: var(--space-4);
+}
+.project-chevron {
+  margin-left: var(--space-2);
+  font-size: 0.6rem;
+}
+.project-sessions-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-2) var(--space-5);
+  border-left: 2px solid var(--border);
+  margin-left: var(--space-1);
+}
+
 /* ===== Session Actions ===== */
 .session-actions {
   display: flex;
@@ -1314,6 +1348,7 @@ p {
   margin-bottom: var(--space-3);
   flex-shrink: 0;
   position: relative;
+  background: var(--bg);
 }
 
 .header-overflow {

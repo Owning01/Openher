@@ -61,7 +61,7 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <strong>{skill.name}</strong>
-              {skill.description && <small style={{ color: "var(--muted)" }}>{skill.description}</small>}
+              {skill.description && <small style={{ color: "var(--muted)" }}>{skill.description.length > 120 ? skill.description.slice(0, 120) + "..." : skill.description}</small>}
             </button>
           ))}
         </div>

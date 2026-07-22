@@ -603,7 +603,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               const s = sessions.find(s => s.id === id)
               if (s) api.sendCommand(config, id, "/archive", "", s.directory).catch(() => {})
             } : undefined}
-            onFork={(s) => handleCreateSession(s.directory)} />
+            onFork={(s) => handleCreateSession(s.directory)}
+            onSearchMessages={() => setQuery("search:")}
+            onOpenArchivedView={() => setShowArchivedView(true)}
+            onOpenThemeCreator={() => setShowThemeCreator(true)}
+            onOpenFavoritesManager={() => setShowFavoritesManager(true)} />
           {showNewSessionPicker && (
             <FolderPicker
               pickerPath={pickerPath} pickerItems={pickerItems}

@@ -24,9 +24,10 @@ export const MCPBrowser = memo(function MCPBrowser({ config, onClose, onSelect }
     })
   }, [config])
 
+  const list = Array.isArray(resources) ? resources : []
   const filtered = query.trim()
-    ? resources.filter((r) => r.name.toLowerCase().includes(query.toLowerCase()) || r.id.toLowerCase().includes(query.toLowerCase()))
-    : resources
+    ? list.filter((r) => r.name.toLowerCase().includes(query.toLowerCase()) || r.id.toLowerCase().includes(query.toLowerCase()))
+    : list
 
   return (
     <div className="modal-overlay" onClick={onClose}>

@@ -1,4 +1,4 @@
-import { memo, useRef, useLayoutEffect } from "react"
+import { memo, useRef, useLayoutEffect, useState, useCallback } from "react"
 import { LoadingIcon, FolderIcon, ChatIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
@@ -42,6 +42,10 @@ type SessionListProps = {
   onSnapshot?: (session: SessionView) => void
   onArchive?: (id: string) => void
   onFork?: (session: SessionView) => void
+  onSearchMessages?: () => void
+  onOpenArchivedView?: () => void
+  onOpenThemeCreator?: () => void
+  onOpenFavoritesManager?: () => void
 }
 
 export const SessionList = memo(function SessionList({
@@ -52,11 +56,18 @@ export const SessionList = memo(function SessionList({
   activeSessions, recentSessions, runtimeError, favorites,
   dataMode, onDataModeChange,
   onSelectProject, onQueryChange, onRefresh, onNewSession,
-  onOpen,   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
-  onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive, onFork
+  onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
+  onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive, onFork,
+  onSearchMessages, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [expandedProject, setExpandedProject] = useState<string | null>(null)
+
+  const toggleProject = useCallback((dir: string) => {
+    setExpandedProject((prev) => prev === dir ? null : dir)
+  }, [])
 
   const prevProjectDir = useRef(selectedProjectDir)
   useLayoutEffect(() => {
@@ -99,11 +110,13 @@ export const SessionList = memo(function SessionList({
           </div>
           <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
             onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-            dataMode={dataMode} onDataModeChange={onDataModeChange} />
+            dataMode={dataMode} onDataModeChange={onDataModeChange}
+            onSearchMessages={onSearchMessages} onOpenArchivedView={onOpenArchivedView}
+            onOpenThemeCreator={onOpenThemeCreator} onOpenFavoritesManager={onOpenFavoritesManager} />
         </div>
         <div className="toolbar">
           <input placeholder={t('sessions.searchPlaceholder')} value={query}
-            onChange={(e) => onQueryChange(e.target.value)} className="search" />
+            onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRef} />
         </div>
         {notices}
         <div className="session-list">{sessionCards}</div>
@@ -112,14 +125,18 @@ export const SessionList = memo(function SessionList({
     )
   }
 
+  const handleSearchMessages = onSearchMessages ? () => { onSearchMessages(); searchRef.current?.focus() } : undefined
+
   return (
     <section ref={containerRef} className="panel sessions fade-in">
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-        dataMode={dataMode} onDataModeChange={onDataModeChange} />
+        dataMode={dataMode} onDataModeChange={onDataModeChange}
+        onSearchMessages={handleSearchMessages} onOpenArchivedView={onOpenArchivedView}
+        onOpenThemeCreator={onOpenThemeCreator} onOpenFavoritesManager={onOpenFavoritesManager} />
       <div className="toolbar">
         <input placeholder={t('sessions.searchPlaceholder')} value={query}
-          onChange={(e) => onQueryChange(e.target.value)} className="search" />
+          onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRef} />
       </div>
       <div className="sessions-summary-bar">
         {t('sessions.summary', { total: sessions.length, active: activeSessions.length, changed: sessions.filter((s) => hasFileChanges(s)).length })}
@@ -133,12 +150,18 @@ export const SessionList = memo(function SessionList({
               <h4 className="quick-access-label">{t('sessions.activeLabel')}</h4>
               <div className="quick-access-list">
                 {activeSessions.map((session) => (
-                  <button key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)}>
+                  <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+                    <button className="quick-access-star"
+                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
+                      aria-pressed={favorites.has(session.id)}
+                      title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill={favorites.has(session.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </button>
                     <ChatIcon size={14} />
                     <span className="quick-access-title">{session.title}</span>
                     <span className="quick-access-time">{formatTime(session.updated)}</span>
                     <span className={`pill ${session.status}`}>{session.status}</span>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -148,11 +171,17 @@ export const SessionList = memo(function SessionList({
               <h4 className="quick-access-label">{t('sessions.recentLabel')}</h4>
               <div className="quick-access-list">
                 {recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)).slice(0, 5).map((session) => (
-                  <button key={session.id} className="quick-access-card" onClick={() => onOpen(session.id, session.directory)}>
+                  <div key={session.id} className="quick-access-card" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+                    <button className="quick-access-star"
+                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
+                      aria-pressed={favorites.has(session.id)}
+                      title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill={favorites.has(session.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </button>
                     <ChatIcon size={14} />
                     <span className="quick-access-title">{session.title}</span>
                     <span className="quick-access-time">{formatTime(session.updated)}</span>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -174,30 +203,51 @@ export const SessionList = memo(function SessionList({
             <p className="subtle">{connectionState === "offline" ? t('sessions.offlineHint') : t('sessions.emptyHint')}</p>
           </div>
         ) : (
-          projects.map(([dir, projectSessionsList]) => (
-            <article key={dir} className="project-card fade-in" role="button" tabIndex={0}
-              onClick={() => onSelectProject(dir)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectProject(dir) } }}>
-              <div className="project-card-header">
-                <div className="project-title-group">
-                  <div className="project-icon-wrapper">
-                    <FolderIcon size={18} />
+          projects.map(([dir, projectSessionsList]) => {
+            const isExpanded = expandedProject === dir
+            return (
+              <div key={dir} className="project-card-wrap fade-in">
+                <article className={`project-card${isExpanded ? " expanded" : ""}`} role="button" tabIndex={0}
+                  onClick={() => toggleProject(dir)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProject(dir) } }}>
+                  <div className="project-card-header">
+                    <div className="project-title-group">
+                      <div className="project-icon-wrapper">
+                        <FolderIcon size={18} />
+                      </div>
+                      <strong className="project-path">{dir}</strong>
+                    </div>
+                    <span className="project-count">
+                      {projectSessionsList.length} {projectSessionsList.length === 1 ? 'session' : 'sessions'}
+                      <span className="project-chevron">{isExpanded ? "▲" : "▼"}</span>
+                    </span>
                   </div>
-                  <strong className="project-path">{dir}</strong>
-                </div>
-                <span className="project-count">{projectSessionsList.length} {projectSessionsList.length === 1 ? 'session' : 'sessions'}</span>
+                  <div className="project-meta">
+                    <span className={`project-status ${projectSessionsList.some((s) => isSessionActive(s)) ? "busy" : "idle"}`}>
+                      <span className="status-dot"></span>
+                      {projectSessionsList.filter((s) => isSessionActive(s)).length} active
+                    </span>
+                    <span className="project-changed">
+                      {projectSessionsList.filter((s) => hasFileChanges(s)).length} changed
+                    </span>
+                  </div>
+                </article>
+                {isExpanded && (
+                  <div className="project-sessions-inline">
+                    {projectSessionsList.map((session) => (
+                      <SessionCard key={session.id} session={session} isSelected={selectedID === session.id}
+                        isRenaming={renamingSessionID === session.id} renameValue={renameValue}
+                        isFavorite={favorites.has(session.id)}
+                        onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
+                        onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
+                        onToggleFavorite={onToggleFavorite}
+                        onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} onFork={onFork} />
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="project-meta">
-                <span className={`project-status ${projectSessionsList.some((s) => isSessionActive(s)) ? "busy" : "idle"}`}>
-                  <span className="status-dot"></span>
-                  {projectSessionsList.filter((s) => isSessionActive(s)).length} active
-                </span>
-                <span className="project-changed">
-                  {projectSessionsList.filter((s) => hasFileChanges(s)).length} changed
-                </span>
-              </div>
-            </article>
-          ))
+            )
+          })
         )}
       </div>
 
