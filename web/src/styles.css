@@ -324,7 +324,13 @@ p {
 }
 
 /* ===== Brand / Identity ===== */
-.brand-section,
+.brand-section {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+}
+
 .brand-title {
   display: flex;
   align-items: center;
@@ -817,6 +823,12 @@ p {
   padding: var(--space-2) var(--space-3);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.blocked-group-header:hover {
+  background: var(--surface-subtle);
 }
 
 .blocked-group-header strong {
@@ -827,6 +839,13 @@ p {
 
 .blocked-group-header .btn-link {
   margin-left: auto;
+}
+
+.blocked-chevron {
+  font-size: 0.65rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  width: 12px;
 }
 
 .blocked-item {
@@ -957,6 +976,37 @@ p {
   border-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+/* ===== Home View Background ===== */
+.home-view {
+  position: relative;
+  background: #000 !important;
+  border-color: #1a1a1a !important;
+}
+
+.home-view > *:not(.home-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+.home-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.home-wordmark {
+  width: 60%;
+  max-width: 320px;
+  opacity: 0.06;
+  filter: brightness(0) invert(1);
 }
 
 /* ===== Mode Switcher ===== */

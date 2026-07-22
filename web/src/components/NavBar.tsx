@@ -29,7 +29,8 @@ export const NavBar = memo(function NavBar({ view, onNavigate, hasConfiguredServ
 
   return (
     <header className="top-nav fade-in">
-      <div className="brand-section">
+      <div className="brand-section" onClick={() => onNavigate("sessions")} role="button" tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate("sessions") } }}>
         <div className="brand-title">
           <img src="./img/opencode-logo-dark.jpg" alt="OpenCode" className="app-icon" />
           <span className="brand-name">OpenCode</span>

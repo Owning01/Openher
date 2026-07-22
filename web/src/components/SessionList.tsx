@@ -133,7 +133,10 @@ export const SessionList = memo(function SessionList({
   const handleSearchMessages = onSearchMessages ? () => { onSearchMessages(); searchRef.current?.focus() } : undefined
 
   return (
-    <section ref={containerRef} className="panel sessions fade-in">
+    <section ref={containerRef} className="panel sessions fade-in home-view">
+      <div className="home-bg" aria-hidden="true">
+        <img src="./img/opencode-wordmark-dark.png" alt="" className="home-wordmark" />
+      </div>
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
         dataMode={dataMode} onDataModeChange={onDataModeChange}

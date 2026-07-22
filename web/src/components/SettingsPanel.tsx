@@ -1,4 +1,4 @@
-import { memo, useState } from "react"
+import { memo, useState, useCallback } from "react"
 import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo } from "../types"
@@ -67,6 +67,16 @@ export const SettingsPanel = memo(function SettingsPanel({
 }: SettingsPanelProps) {
   const t = useT()
   const [blockedSearch, setBlockedSearch] = useState("")
+  const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
+
+  const toggleProvider = useCallback((providerID: string) => {
+    setExpandedProviders((prev) => {
+      const next = new Set(prev)
+      if (next.has(providerID)) next.delete(providerID)
+      else next.add(providerID)
+      return next
+    })
+  }, [])
 
   const setField = (field: keyof ServerConfig, value: string | number) => {
     onChange({ ...draftConfig, [field]: value })
@@ -317,16 +327,19 @@ export const SettingsPanel = memo(function SettingsPanel({
               const total = providerModels.length
               const blockedCount = providerModels.filter((o) => blockedModels.isBlocked(mk(o))).length
               const allBlocked = blockedCount === total
+              const isExpanded = expandedProviders.has(providerID) || blockedSearch.length > 0
               return (
                 <div key={providerID} className="blocked-group">
-                  <div className="blocked-group-header">
+                  <div className="blocked-group-header" onClick={() => toggleProvider(providerID)} role="button" tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProvider(providerID) } }}>
+                    <span className="blocked-chevron">{isExpanded ? "▼" : "▶"}</span>
                     <strong>{providerID}</strong>
                     <small className="subtle">{blockedCount}/{total} ocultos</small>
-                    <button type="button" className="btn-link" onClick={() => blockedModels.toggleAllForProvider(providerID, !allBlocked)}>
+                    <button type="button" className="btn-link" onClick={(e) => { e.stopPropagation(); blockedModels.toggleAllForProvider(providerID, !allBlocked) }}>
                       {allBlocked ? "Mostrar todos" : "Ocultar todos"}
                     </button>
                   </div>
-                  {filtered.map((opt) => {
+                  {isExpanded && filtered.map((opt) => {
                     const key = mk(opt)
                     const blocked = blockedModels.isBlocked(key)
                     return (
