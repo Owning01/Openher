@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/Owning01/Opencode-Mobile/main/web/public/img/opencode-logo-dark.jpg" width="64" height="64" alt="OpenCode Logo" style="border-radius: 12px;" />
 </div>
 
-# ⚡ OpenCode Mobile — Catálogo de Funcionalidades
+# OpenCode Mobile — Catálogo de Funcionalidades
 
 > **Cliente Android para [OpenCode](https://opencode.ai)** — asistente de codificación AI desde el celular.
 > React 18.3 + TypeScript 5.6 + Vite 8 + Capacitor 8. 47 componentes, 27 hooks.

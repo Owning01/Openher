@@ -2,7 +2,7 @@
 
   <img src="https://raw.githubusercontent.com/Owning01/Opencode-Mobile/main/web/public/img/opencode-logo-dark.jpg" width="64" height="64" alt="OpenCode Logo" style="border-radius: 12px;" />
 
-# ⚡ OpenCode Mobile
+# OpenCode Mobile
 
 **Cliente Android para [OpenCode](https://opencode.ai) — tu asistente de codificación AI desde el celular**
 
