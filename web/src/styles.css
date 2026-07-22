@@ -1174,7 +1174,7 @@ p {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  margin-bottom: var(--space-2);
+  margin: var(--space-3) 0;
 }
 .collapsible-toggle {
   display: flex;
@@ -1234,7 +1234,7 @@ p {
   line-height: 1.6;
   color: var(--muted-strong);
   white-space: pre-wrap;
-  margin: 0;
+  margin: var(--space-2) 0;
   font-style: italic;
 }
 
