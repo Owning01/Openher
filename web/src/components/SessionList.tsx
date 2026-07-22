@@ -66,6 +66,7 @@ export const SessionList = memo(function SessionList({
   const containerRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
+  const [listMode, setListMode] = useState<"sessions" | "projects">("sessions")
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
 
@@ -209,6 +210,19 @@ export const SessionList = memo(function SessionList({
         </div>
       )}
 
+      <div className="list-mode-toggle">
+        <button type="button" className={`list-mode-pill${listMode === "sessions" ? " active" : ""}`}
+          onClick={() => setListMode("sessions")} aria-pressed={listMode === "sessions"}>
+          <ChatIcon size={14} />
+          Sesiones
+        </button>
+        <button type="button" className={`list-mode-pill${listMode === "projects" ? " active" : ""}`}
+          onClick={() => setListMode("projects")} aria-pressed={listMode === "projects"}>
+          <FolderIcon size={14} />
+          Proyectos
+        </button>
+      </div>
+
       <div className="session-list">
         {projects.length === 0 && ['connecting', 'reconnecting'].includes(connectionState) ? (
           <div className="empty-state connection-pending">
@@ -224,12 +238,12 @@ export const SessionList = memo(function SessionList({
           </div>
         ) : (
           projects.map(([dir, projectSessionsList]) => {
-            const isExpanded = expandedProject === dir
+            const isExpanded = expandedProject === dir || listMode === "projects"
             return (
               <div key={dir} className="project-card-wrap fade-in">
                 <article className={`project-card${isExpanded ? " expanded" : ""}`} role="button" tabIndex={0}
-                  onClick={() => toggleProject(dir)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProject(dir) } }}>
+                  onClick={() => { if (listMode !== "projects") toggleProject(dir) }}
+                  onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && listMode !== "projects") { e.preventDefault(); toggleProject(dir) } }}>
                   <div className="project-card-header">
                     <div className="project-title-group">
                       <div className="project-icon-wrapper">
@@ -239,7 +253,7 @@ export const SessionList = memo(function SessionList({
                     </div>
                     <span className="project-count">
                       {projectSessionsList.length} {projectSessionsList.length === 1 ? 'session' : 'sessions'}
-                      <span className="project-chevron">{isExpanded ? "▲" : "▼"}</span>
+                      {listMode !== "projects" && <span className="project-chevron">{isExpanded ? "▲" : "▼"}</span>}
                     </span>
                   </div>
                   <div className="project-meta">

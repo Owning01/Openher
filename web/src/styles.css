@@ -920,6 +920,38 @@ p {
   font-weight: 600;
 }
 
+.list-mode-toggle {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.list-mode-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--muted-strong);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.list-mode-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.list-mode-pill.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
 
 /* ===== Mode Switcher ===== */
 .mode-switcher {
