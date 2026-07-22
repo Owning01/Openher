@@ -207,14 +207,44 @@ async function checkStatus() {
 }
 
 get('btnConnect').onclick = async () => {
+  const name = val('tunnelName')
+  const password = val('tunnelPass')
+  if (!name || !password) {
+    log('Completá nombre y contraseña primero', 'err')
+    return
+  }
+
+  // 1. Asegurar que el servidor opencode esté corriendo
+  log('Verificando servidor opencode...', 'info')
+  const disc = await api('discover')
+
+  if (!disc.running && disc.bin) {
+    log('Iniciando servidor...', 'busy')
+    const start = await api('start-server?port=' + (parseInt(val('tunnelPort')) || 3000))
+    if (!start.ok) {
+      log('No se pudo iniciar el servidor: ' + (start.error || ''), 'err')
+      return
+    }
+    log('Servidor iniciado', 'ok')
+  } else if (!disc.found) {
+    log('Servidor no encontrado. Usá "Seleccionar binario" primero.', 'err')
+    return
+  }
+
+  // 2. Conectar túnel
+  log('Conectando túnel como "' + name + '"...', 'info')
   const r = await api('tunnel/connect', {
-    name: val('tunnelName'),
-    password: val('tunnelPass'),
+    name, password,
     signalingUrl: val('signalingUrl'),
     host: val('tunnelHost'),
     port: parseInt(val('tunnelPort'))
   })
-  if (r.ok) { setStatus('Conectando...', 'busy') }
+  if (r.ok) {
+    setStatus('Conectando...', 'busy')
+    log('Túnel conectado — ya podés usar OpenCode desde el celular', 'ok')
+    // 3. Guardar config automáticamente
+    saveConfig()
+  }
 }
 
 get('btnDisconnect').onclick = async () => {
@@ -293,17 +323,30 @@ document.querySelectorAll('.route-btn').forEach(btn => {
   }
 })
 
-// Load saved config
+// Load saved config and auto-connect
 async function init() {
   const r = await api('status')
+
+  // Cargar datos guardados
   if (r.bin) setVal('binPath', r.bin)
   if (r.port) { setVal('svPort', r.port); setVal('tunnelPort', r.port) }
+  if (r.configName) {
+    setVal('tunnelName', r.configName)
+    setVal('tunnelHost', r.configHost || '127.0.0.1')
+  }
 
-  setVal('tunnelHost', '127.0.0.1')
+  setVal('tunnelHost', r.configHost || '127.0.0.1')
   setVal('tunnelPort', r.port || 3000)
 
-  discover()
+  // Auto-detectar server al iniciar
+  await discover()
   checkStatus()
+
+  // Auto-conectar si hay nombre+contraseña guardados
+  if (val('tunnelName') && val('tunnelPass')) {
+    log('Config guardada encontrada — conectando automáticamente...', 'info')
+    get('btnConnect').click()
+  }
 
   // SSE log stream
   const es = new EventSource('/api/log')

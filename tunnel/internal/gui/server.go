@@ -48,14 +48,16 @@ type Server struct {
 }
 
 type StatusMsg struct {
-	Type    string `json:"type"`
-	Message string `json:"message,omitempty"`
-	Tunnel  string `json:"tunnel,omitempty"`
-	Server  string `json:"server,omitempty"`
-	Bin     string `json:"bin,omitempty"`
-	Version string `json:"version,omitempty"`
-	Port    int    `json:"port,omitempty"`
+	Type     string `json:"type"`
+	Message  string `json:"message,omitempty"`
+	Tunnel   string `json:"tunnel,omitempty"`
+	Server   string `json:"server,omitempty"`
+	Bin      string `json:"bin,omitempty"`
+	Version  string `json:"version,omitempty"`
+	Port     int    `json:"port,omitempty"`
 	TunnelID string `json:"tunnelId,omitempty"`
+	ConfigName string `json:"configName,omitempty"`
+	ConfigHost string `json:"configHost,omitempty"`
 }
 
 func New(cfg *config.TunnelConfig) *Server {
@@ -119,13 +121,15 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	status := StatusMsg{
-		Type:    "status",
-		Server:  s.serverStatus,
-		Bin:     s.serverBin,
-		Version: s.serverVer,
-		Port:    s.serverPort,
-		Tunnel:  s.tunnelStatus,
-		TunnelID: s.tunnelID,
+		Type:       "status",
+		Server:     s.serverStatus,
+		Bin:        s.serverBin,
+		Version:    s.serverVer,
+		Port:       s.serverPort,
+		Tunnel:     s.tunnelStatus,
+		TunnelID:   s.tunnelID,
+		ConfigName: s.cfg.Name,
+		ConfigHost: s.cfg.ServerHost,
 	}
 	s.mu.Unlock()
 	writeJSON(w, status)

@@ -161,76 +161,57 @@ flowchart LR
 ```
 </details>
 
-## 🚀 Inicio rápido — 4 pasos
+## 🚀 Empezar en 2 pasos
 
-### 📲 Paso 1: Descargar la app
+### 📲 1 — Instalá la app en tu celular
 
-[⬇️ **Descargar OpenCodeMobile.apk**](https://github.com/Owning01/Opencode-Mobile/releases/latest) — última versión estable.
+[⬇️ **Descargar OpenCodeMobile.apk**](https://github.com/Owning01/Opencode-Mobile/releases/latest)
 
-O construíla vos mismo:
-
-```bash
-cd web
-pnpm install && pnpm build && npx cap sync && cd android
-.\gradlew assembleDebug
-# → android/app/build/outputs/apk/debug/app-debug.apk
-```
+O construíla vos mismo (ver [desarrollo](#-desarrollo)).
 
 ---
 
-### 🖥️ Paso 2: Iniciar el servidor OpenCode en tu PC
+### 🖥️ 2 — Descargá **opencode-tunnel.exe** y ejecutalo
 
-```bash
-# Con npx (no requiere instalación):
-OPENCODE_SERVER_USERNAME=opencode \
-OPENCODE_SERVER_PASSWORD=tu-contraseña \
-npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096
+[⬇️ **Descargar opencode-tunnel.exe**](https://github.com/Owning01/Opencode-Mobile/releases/latest)
+
+Al ejecutarlo se abre el navegador con esta interfaz:
+
+```
+┌─ OpenCode Tunnel ──────────────────────────────┐
+│  Nombre del túnel: [MiOficina       ]           │
+│  Contraseña:       [••••••••        ]           │
+│                                                  │
+│  [CONECTAR]  ← un solo botón hace todo          │
+│                                                  │
+│  ● Servidor: detectado · Túnel: conectado       │
+│  [12:00] Servidor iniciado automáticamente       │
+│  [12:01] Cliente conectado desde remoto          │
+└──────────────────────────────────────────────────┘
 ```
 
-> 💡 Puerto `4096` por defecto. Anotá la IP que muestra al iniciar (ej. `192.168.1.100`).
+**El tunnel hace todo solo**:
+- ✅ Busca OpenCode en tu PC y lo inicia si no está corriendo
+- ✅ Conecta el túnel para que tu celular acceda desde cualquier red
+- ✅ Se guarda la configuración para la próxima vez
+
+Solo necesitas poner un **nombre** y **contraseña** (los mismos que vas a usar en el celular).
 
 ---
 
-### 📡 Paso 3: Conectar desde la misma red (WiFi local)
+### 📱 En el celular: abrí la app
 
-En la app: **Ajustes → Servidor** y completá:
+**Ajustes → Conexión Remota** → poné el mismo nombre y contraseña → **Conectar**.
 
-| Campo | Valor |
-|-------|-------|
-| **Host** | IP de tu PC (ej. `192.168.1.100`) |
-| **Port** | `4096` |
-| **Username** | `opencode` |
-| **Password** | La que elegiste |
-
-✓ Si los datos son correctos, la app se conecta automáticamente.
+✓ Listo. Ya podés usar OpenCode desde cualquier lugar.
 
 ---
 
-### 🌐 Paso 4: Conectar desde cualquier red
-
-La app incluye un **túnel WebRTC** para usar OpenCode desde datos móviles, el trabajo, o donde sea sin configurar el router.
-
-#### Opción A — Túnel integrado (recomendado)
-
-1. En la PC, descargá **[opencode-tunnel.exe](https://github.com/Owning01/Opencode-Mobile/releases/latest)** y ejecutalo
-2. En la ventana que se abre: poné un **nombre** y **contraseña**, click **"Conectar túnel"**
-3. En el celular: **Ajustes → Conexión Remota**, ingresá el mismo nombre y contraseña, click **Conectar**
-
-> 📖 Guía detallada en [`TUNNEL-GUIDE.md`](TUNNEL-GUIDE.md)
-
-#### Opción B — Tailscale (alternativa)
-
-[**Tailscale**](https://tailscale.com) crea una VPN mesh. Instalalo en PC y celular:
-
-```bash
-# En tu PC:
-tailscale ip -4                            # → 100.x.x.x
-OPENCODE_SERVER_USERNAME=opencode \
-OPENCODE_SERVER_PASSWORD=tu-contraseña \
-npx -y opencode-ai serve --hostname 100.x.x.x --port 4096
-```
-
-En la app: **Host** = `100.x.x.x`, **Port** = `4096`, **Username/Password** = los mismos.
+> 💡 **¿No querés usar el túnel?** También podés conectar por WiFi local:
+> 1. En PC: `npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096`
+> 2. En la app: **Ajustes → Servidor**, poné la IP de tu PC
+>
+> O con Tailscale: instalalo en PC y celular, usá la IP de Tailscale en vez de la local.
 
 ---
 
