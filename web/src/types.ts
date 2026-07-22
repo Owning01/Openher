@@ -193,6 +193,9 @@ export type FeatureFlags = {
   autoSummarize: boolean
   autoSummarizeThreshold: number
   streamingFull: boolean
+  offlineCache: boolean
+  questionAuto: boolean
+  permissionUI: boolean
 }
 
 export type FileEntry = {
@@ -258,3 +261,56 @@ export type HelpPage = "overview" | "server" | "network" | "troubleshooting" | "
 export type ConnectionState = "idle" | "connecting" | "connected" | "reconnecting" | "offline"
 
 export type DataMode = "full" | "saver" | "ultra" | "miser"
+
+export type StreamState = "polling" | "streaming" | "reconnecting"
+
+export type SSEEvent = {
+  id: string
+  type: string
+  properties: Record<string, unknown>
+}
+
+export type StreamingPart = {
+  messageID: string
+  partID: string
+  text: string
+  field: string
+}
+
+export type Question = {
+  id: string
+  question: string
+  status: string
+}
+
+export type PermissionRequest = {
+  requestID: string
+  permission: string
+  status: string
+  directory?: string
+}
+
+export type DiffContent = {
+  file: string
+  content: string
+  additions: number
+  deletions: number
+}
+
+export type CachedSession = {
+  id: string
+  title: string
+  directory: string
+  updated: number
+  summary?: { additions: number; deletions: number; files: number }
+  tokens?: TokenUsage
+  cost?: number
+  agent?: string
+  model?: ModelSelection
+}
+
+export type CachedMessages = {
+  sessionID: string
+  messages: MessageEnvelope[]
+  cachedAt: number
+}

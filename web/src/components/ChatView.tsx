@@ -12,9 +12,11 @@ import { SkillBrowser } from "./SkillBrowser"
 import { ContextMenu } from "./ContextMenu"
 import { DiffViewer } from "./DiffViewer"
 import { GitToolbar } from "./GitToolbar"
+import { AutoQuestionPrompt } from "./AutoQuestionPrompt"
+import { PermissionPrompt } from "./PermissionPrompt"
 
 import { api } from "../api"
-import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig, FeatureFlags, ProjectDashboard, DiffFile } from "../types"
+import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, StreamState, Question, PermissionRequest } from "../types"
 
 type ChatViewProps = {
   selectedSession: SessionView | null
@@ -75,6 +77,15 @@ type ChatViewProps = {
   onSetFlag: <K extends keyof FeatureFlags>(key: K, value: FeatureFlags[K]) => void
   diffFiles: DiffFile[]
   projectDashboard: ProjectDashboard | null
+  streamState?: StreamState
+  pendingQuestions?: Question[]
+  permissionRequest?: PermissionRequest | null
+  onQuestionReply?: (requestID: string, answers: string[][]) => void
+  onQuestionReject?: (requestID: string) => void
+  onPermissionApprove?: (requestID: string) => void
+  onPermissionReject?: (requestID: string) => void
+  onDismissQuestion?: () => void
+  onDismissPermission?: () => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -87,7 +98,10 @@ export const ChatView = memo(function ChatView({
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, activeSessions, onOpenSession, onOpenSettings, onToggleTokenStats, onShellSend, onThemeCommand,
-  flags, onToggleFlag: _onToggleFlag, onSetFlag: _onSetFlag, diffFiles, projectDashboard
+  flags, onToggleFlag: _onToggleFlag, onSetFlag: _onSetFlag, diffFiles, projectDashboard,
+  streamState, pendingQuestions, permissionRequest,
+  onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
+  onDismissQuestion, onDismissPermission
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -182,6 +196,11 @@ export const ChatView = memo(function ChatView({
         {selectedSession && (
           <div className="detail-header-actions">
             {pendingCount > 0 && <span className="pending-badge" title={`${pendingCount} pending`}>{pendingCount}</span>}
+              {streamState && streamState !== "polling" && (
+                <span className={`stream-indicator ${streamState}`} title={streamState === "streaming" ? "Real-time" : "Reconnecting..."}>
+                  <span className="stream-dot" />
+                </span>
+              )}
             {onOpenSettings && (
               <button
                 className="btn-icon btn-secondary compact"
@@ -326,7 +345,7 @@ export const ChatView = memo(function ChatView({
       )}
 
       {flags.inlineDiff && selectedSession && diffFiles.length > 0 && (
-        <DiffViewer files={diffFiles} />
+        <DiffViewer files={diffFiles} config={config} sessionID={selectedSession.id} directory={selectedSession.directory} />
       )}
 
       {flags.gitOps && projectDashboard?.vcs && (
@@ -383,6 +402,24 @@ export const ChatView = memo(function ChatView({
           onSelect={(name) => onComposerChange(`/skill ${name} `)}
         />,
         document.body
+      )}
+
+      {flags.questionAuto && pendingQuestions && pendingQuestions.length > 0 && onQuestionReply && onDismissQuestion && (
+        <AutoQuestionPrompt
+          question={pendingQuestions[0]}
+          onReply={onQuestionReply}
+          onReject={onQuestionReject ?? (() => {})}
+          onDismiss={onDismissQuestion}
+        />
+      )}
+
+      {flags.permissionUI && permissionRequest && onPermissionApprove && onDismissPermission && (
+        <PermissionPrompt
+          request={permissionRequest}
+          onApprove={onPermissionApprove}
+          onReject={onPermissionReject ?? (() => {})}
+          onDismiss={onDismissPermission}
+        />
       )}
     </main>
   )

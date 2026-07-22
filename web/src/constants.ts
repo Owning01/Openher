@@ -25,3 +25,17 @@ export const DEFAULT_POLL_INTERVALS: Record<string, number> = {
   ultra: 30000,
   miser: 60000,
 }
+
+export const SSE_CONNECT_TIMEOUT_MS = 8_000
+export const SSE_RECONNECT_BASE_MS = 1_000
+export const SSE_RECONNECT_MAX_MS = 30_000
+export const SSE_HEARTBEAT_TIMEOUT_MS = 35_000
+export const POLL_BACKOFF_BASE_MS = 1_000
+export const POLL_BACKOFF_MAX_MS = 60_000
+export const POLL_BACKOFF_JITTER = 0.3
+export const POLL_MAX_RETRIES = 5
+export const QUESTION_POLL_INTERVAL_MS = 15_000
+
+export const DB_NAME = "opencode-mobile"
+export const DB_VERSION = 1
+export const DB_STORES = { sessions: "sessions", messages: "messages" } as const

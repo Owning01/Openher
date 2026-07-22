@@ -12,6 +12,8 @@ import { usePolling } from "./hooks/usePolling"
 import { useCompletionAudio } from "./hooks/useCompletionAudio"
 import { useFolderPicker } from "./hooks/useFolderPicker"
 import { useStats } from "./hooks/useStats"
+import { useSSE } from "./hooks/useSSE"
+import { useOfflineCache } from "./hooks/useOfflineCache"
 import { NavBar } from "./components/NavBar"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import { SettingsPanel } from "./components/SettingsPanel"
@@ -21,10 +23,10 @@ import { BottomSheet } from "./components/BottomSheet"
 import { HelpPage } from "./components/HelpPage"
 import { ConfirmModal } from "./components/ConfirmModal"
 import { FolderPicker } from "./components/FolderPicker"
-import type { ViewType, HelpPage as HelpPageType, SessionView } from "./types"
+import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, Question, PermissionRequest } from "./types"
 import type { LanguageCode } from "./i18n"
 import { formatLimit, extractPath, extractName, extractBranch, isSessionActive, filterByQuery } from "./utils"
-import { STORAGE_KEYS } from "./constants"
+import { STORAGE_KEYS, QUESTION_POLL_INTERVAL_MS } from "./constants"
 import { useBackButton } from "./hooks/useBackButton"
 import { useNetworkMode } from "./hooks/useNetworkMode"
 import { useMemoryCleanup } from "./hooks/useMemoryCleanup"
@@ -133,6 +135,124 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     return saved === "header" || saved === "bottom" ? saved : "bottom"
   })
 
+  // ===== SSE Streaming =====
+  const [streamState, setStreamState] = useState<StreamState>("polling")
+
+  const handleSSEEvent = useCallback((event: SSEEvent) => {
+    const { type } = event
+    if (type === "server.connected" || type === "server.heartbeat") return
+    if (type === "message.updated" || type === "message.part.updated" || type === "message.part.delta") {
+      const eventSessionID = (event.properties as { sessionID?: string }).sessionID
+      if (eventSessionID && eventSessionID === selectedSession?.id) {
+        loadSelected(eventSessionID, selectedSession.directory)
+      }
+    }
+  }, [selectedSession?.id, selectedSession?.directory, loadSelected])
+
+  const { streamState: sseState } = useSSE(
+    (dataMode === "full" && flags.streamingFull) ? config : null,
+    handleSSEEvent
+  )
+
+  useEffect(() => {
+    setStreamState(sseState)
+  }, [sseState])
+
+  // ===== Offline cache =====
+  const { cacheSessions, getCachedSessions, cacheMessages } = useOfflineCache(flags)
+
+  useEffect(() => {
+    if (flags.offlineCache && sessions.length > 0) {
+      cacheSessions(sessions as any)
+    }
+  }, [sessions, flags.offlineCache, cacheSessions])
+
+  useEffect(() => {
+    if (flags.offlineCache && selectedSession && renderedMessages.length > 0) {
+      const msgs = renderedMessages.map((rm) => ({
+        info: rm.info,
+        parts: rm.parts,
+      }))
+      cacheMessages(selectedSession.id, msgs as any).catch(() => {})
+    }
+  }, [selectedSession?.id, renderedMessages.length, flags.offlineCache, cacheMessages])
+
+  // ===== Questions =====
+  const [pendingQuestions, setPendingQuestions] = useState<Question[]>([])
+  const [dismissedQuestions, setDismissedQuestions] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!config || !flags.questionAuto) return
+    const poll = async () => {
+      try {
+        const qs = await api.listPendingQuestions(config, selectedSession?.directory)
+        setPendingQuestions(qs.filter((q) => !dismissedQuestions.has(q.id)))
+      } catch { /* ignore */ }
+    }
+    poll()
+    const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [config, flags.questionAuto, selectedSession?.directory, dismissedQuestions])
+
+  const handleQuestionReply = useCallback(async (requestID: string, answers: string[][]) => {
+    if (!config) return
+    try {
+      await api.questionReply(config, requestID, answers, selectedSession?.directory)
+      setDismissedQuestions((prev) => new Set(prev).add(requestID))
+      setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
+    } catch { /* ignore */ }
+  }, [config, selectedSession?.directory])
+
+  const handleQuestionReject = useCallback(async (requestID: string) => {
+    if (!config) return
+    try {
+      await api.questionReject(config, requestID, selectedSession?.directory)
+      setDismissedQuestions((prev) => new Set(prev).add(requestID))
+      setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
+    } catch { /* ignore */ }
+  }, [config, selectedSession?.directory])
+
+  const handleDismissQuestion = useCallback(() => {
+    setPendingQuestions((prev) => prev.slice(1))
+  }, [])
+
+  // ===== Permissions =====
+  const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null)
+
+  useEffect(() => {
+    if (!config || !flags.permissionUI) return
+    const poll = async () => {
+      try {
+        const perms = await api.listPermissions(config, selectedSession?.directory)
+        const pending = perms.find((p) => p.status === "pending")
+        if (pending) setPermissionRequest(pending)
+      } catch { /* ignore */ }
+    }
+    poll()
+    const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [config, flags.permissionUI, selectedSession?.directory])
+
+  const handlePermissionApprove = useCallback(async (requestID: string) => {
+    if (!config) return
+    try {
+      await api.permissionReply(config, requestID, true, selectedSession?.directory)
+      setPermissionRequest(null)
+    } catch { /* ignore */ }
+  }, [config, selectedSession?.directory])
+
+  const handlePermissionReject = useCallback(async (requestID: string) => {
+    if (!config) return
+    try {
+      await api.permissionReply(config, requestID, false, selectedSession?.directory)
+      setPermissionRequest(null)
+    } catch { /* ignore */ }
+  }, [config, selectedSession?.directory])
+
+  const handleDismissPermission = useCallback(() => {
+    setPermissionRequest(null)
+  }, [])
+
   const isSessionRunning = Boolean(selectedSession && isSessionActive(selectedSession))
   const isWorking = awaitingAssistantReply || isSessionRunning
   const showTypingBubble = Boolean(selectedSession) && isWorking
@@ -147,7 +267,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     navigator.clipboard.writeText(full).then(() => {
       setRuntimeError(null)
     }).catch(() => {
-      // fallback: create a temporary textarea
       const ta = document.createElement("textarea")
       ta.value = full
       document.body.appendChild(ta)
@@ -170,9 +289,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       const key = `opencode.snapshot.${selectedSession.id}`
       localStorage.setItem(key, JSON.stringify(snapshot))
       setRuntimeError(null)
-    } catch {
-      // silently fail
-    }
+    } catch { /* silently fail */ }
   }, [selectedSession, renderedMessages])
 
   // Group sessions by directory for project-based navigation
@@ -209,14 +326,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const projectName = extractName(projectDashboard)
   const vcsBranch = extractBranch(projectDashboard)
 
-  const pollInterval = dataMode === "full" ? 3500 : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
+  const isStreaming = streamState === "streaming" && dataMode === "full" && flags.streamingFull
+  const isStreamingActive = isStreaming && !!selectedSession
+
+  const pollInterval = dataMode === "full" ? (isStreamingActive ? 5000 : 3500) : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
   usePolling(async () => {
     await refreshSessions()
     if (!selectedSession) return
     if (dataMode === "full" || dataMode === "saver" || isSessionActive(selectedSession)) {
       await loadSelected(selectedSession.id, selectedSession.directory)
     }
-  }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, selectedSession?.id, selectedSession?.status])
+  }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, selectedSession?.id, selectedSession?.status, isStreamingActive], isStreamingActive)
 
   useCompletionAudio(awaitingAssistantReply, completionShouldPlayRef, dataMode, () => {
     if (selectedSession && dataMode !== "ultra" && dataMode !== "miser") {
@@ -236,6 +356,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setConnectionMessage(t('connection.connecting'))
     backgroundFailureCountRef.current = 0
     initialSessionLoadRef.current = true
+
+    const loadFromCache = async () => {
+      if (flags.offlineCache) {
+        const cached = await getCachedSessions()
+        if (cached.length > 0 && sessions.length === 0) {
+          setSessions(cached as any)
+        }
+      }
+    }
+    loadFromCache()
+
     refreshSessions(true).catch(() => undefined)
     loadAgents()
     loadModels()
@@ -296,9 +427,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (created) {
       recordSessionCreated()
       setShowNewSessionPicker(false)
-      if (directory) {
-        persistDirectory(directory)
-      }
+      if (directory) persistDirectory(directory)
       setView("detail")
       await onLoadSelected(created.id, created.directory)
       await refreshSessions()
@@ -442,7 +571,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onToggleFlag={toggleFlag}
             onSetFlag={setFlag}
             diffFiles={diffFiles}
-            projectDashboard={projectDashboard} />
+            projectDashboard={projectDashboard}
+            streamState={streamState}
+            pendingQuestions={pendingQuestions}
+            permissionRequest={permissionRequest}
+            onQuestionReply={handleQuestionReply}
+            onQuestionReject={handleQuestionReject}
+            onPermissionApprove={handlePermissionApprove}
+            onPermissionReject={handlePermissionReject}
+            onDismissQuestion={handleDismissQuestion}
+            onDismissPermission={handleDismissPermission} />
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={() => setActiveDetailSheet(null)}

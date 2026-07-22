@@ -18,7 +18,7 @@ import type {
   VcsStatus
 } from "./types"
 
-function toBase64(input: string): string {
+export function toBase64(input: string): string {
   const bytes = new TextEncoder().encode(input)
   const binary = Array.from(bytes).map((b) => String.fromCodePoint(b)).join("")
   return btoa(binary)
@@ -28,7 +28,7 @@ function authHeader(config: ServerConfig): string {
   return `Basic ${toBase64(`${config.username}:${config.password}`)}`
 }
 
-function baseUrl(config: ServerConfig): string {
+export function baseUrl(config: ServerConfig): string {
   let host = config.host.trim()
   const schemeMatch = host.match(/^(https?):\/\//)
   const scheme = schemeMatch ? schemeMatch[1] : "http"
@@ -435,4 +435,14 @@ export const api = {
     return request<{ requestID: string; permission: string; status: string }[]>(config, withDirectory("/permission", directory))
   },
 
+  permissionReply(config: ServerConfig, requestID: string, approve: boolean, directory?: string) {
+    return request<boolean>(config, withDirectory(`/permission/${encodeURIComponent(requestID)}/reply`, directory), {
+      method: "POST",
+      body: { approve }
+    })
+  },
+
+  fetchDiffContent(config: ServerConfig, sessionID: string, file: string, directory?: string) {
+    return request<{ content: string }>(config, withDirectory(`/session/${sessionID}/diff/${encodeURIComponent(file)}`, directory))
+  },
 }

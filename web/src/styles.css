@@ -4329,6 +4329,112 @@ button.compact {
   gap: 0.35rem;
 }
 
+/* ===== Streaming indicator ===== */
+.stream-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+}
+.stream-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: stream-pulse 2s ease-in-out infinite;
+}
+.stream-indicator.reconnecting .stream-dot {
+  background: #f59e0b;
+  animation: stream-pulse 0.8s ease-in-out infinite;
+}
+@keyframes stream-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* ===== Question prompt modal ===== */
+.question-text {
+  margin: 0 0 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.question-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.875rem;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.modal-actions .btn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-primary {
+  background: var(--accent, #3b7dd8);
+  color: #fff;
+  border: none;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* ===== Permission prompt ===== */
+.permission-detail {
+  margin: 0;
+  padding: 12px;
+  background: var(--surface-subtle);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+}
+
+/* ===== Diff viewer content ===== */
+.diff-content {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--surface-subtle);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+}
+.diff-content code {
+  font-family: inherit;
+}
+.diff-loading {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
 .pending-badge {
   display: inline-flex;
   align-items: center;

@@ -247,6 +247,9 @@ export const SettingsPanel = memo(function SettingsPanel({
           { key: "sessionArchive" as const, label: t('settings.sessionArchive'), desc: t('settings.sessionArchiveDesc') },
           { key: "autoSummarize" as const, label: t('settings.autoSummarize'), desc: t('settings.autoSummarizeDesc') },
           { key: "streamingFull" as const, label: t('settings.streamingFull'), desc: t('settings.streamingFullDesc') },
+          { key: "offlineCache" as const, label: t('settings.offlineCache'), desc: t('settings.offlineCacheDesc') },
+          { key: "questionAuto" as const, label: t('settings.questionAuto'), desc: t('settings.questionAutoDesc') },
+          { key: "permissionUI" as const, label: t('settings.permissionUI'), desc: t('settings.permissionUIDesc') },
         ]).map(({ key, label, desc }) => (
           <label key={key} className="toggle-row">
             <span>

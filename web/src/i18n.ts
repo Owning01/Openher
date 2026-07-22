@@ -243,6 +243,19 @@ type TranslationKey =
   | 'settings.showEmpty'
   | 'settings.hideEmpty'
   | 'settings.cancel'
+  | 'settings.offlineCache'
+  | 'settings.offlineCacheDesc'
+  | 'settings.questionAuto'
+  | 'settings.questionAutoDesc'
+  | 'settings.permissionUI'
+  | 'settings.permissionUIDesc'
+  | 'settings.permissionRequest'
+  | 'settings.permissionAllow'
+  | 'settings.permissionDeny'
+  | 'settings.questionPrompt'
+  | 'settings.questionPlaceholder'
+  | 'settings.questionSend'
+  | 'settings.questionSkip'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
@@ -314,6 +327,19 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.showEmpty': 'Show empty providers',
     'settings.hideEmpty': 'Hide empty providers',
     'settings.cancel': 'Cancel',
+    'settings.offlineCache': 'Offline cache',
+    'settings.offlineCacheDesc': 'Cache sessions and messages offline in IndexedDB',
+    'settings.questionAuto': 'Auto-show questions',
+    'settings.questionAutoDesc': 'Automatically show question prompts from the AI',
+    'settings.permissionUI': 'Permission requests',
+    'settings.permissionUIDesc': 'Show permission request dialogs for tool access',
+    'settings.permissionRequest': 'Permission Request',
+    'settings.permissionAllow': 'Allow',
+    'settings.permissionDeny': 'Deny',
+    'settings.questionPrompt': 'AI Question',
+    'settings.questionPlaceholder': 'Type your answer...',
+    'settings.questionSend': 'Send',
+    'settings.questionSkip': 'Skip',
     'settings.featureFlags': 'Experimental features',
     'settings.featureFlagsDesc': 'Enable or disable additional features',
     'settings.fileBrowser': 'File browser',
@@ -594,6 +620,19 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.showEmpty': 'Mostrar proveedores vacíos',
     'settings.hideEmpty': 'Ocultar proveedores vacíos',
     'settings.cancel': 'Cancelar',
+    'settings.offlineCache': 'Caché offline',
+    'settings.offlineCacheDesc': 'Guardar sesiones y mensajes offline en IndexedDB',
+    'settings.questionAuto': 'Auto-mostrar preguntas',
+    'settings.questionAutoDesc': 'Mostrar automáticamente preguntas de la IA',
+    'settings.permissionUI': 'Solicitudes de permiso',
+    'settings.permissionUIDesc': 'Mostrar diálogos de permiso para acceso a herramientas',
+    'settings.permissionRequest': 'Solicitud de permiso',
+    'settings.permissionAllow': 'Permitir',
+    'settings.permissionDeny': 'Denegar',
+    'settings.questionPrompt': 'Pregunta de la IA',
+    'settings.questionPlaceholder': 'Escribe tu respuesta...',
+    'settings.questionSend': 'Enviar',
+    'settings.questionSkip': 'Saltar',
     'settings.featureFlags': 'Funciones experimentales',
     'settings.featureFlagsDesc': 'Activa o desactiva funciones adicionales',
     'settings.fileBrowser': 'Explorador de archivos',
@@ -874,6 +913,19 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.showEmpty': 'Mostra provider vuoti',
     'settings.hideEmpty': 'Nascondi provider vuoti',
     'settings.cancel': 'Annulla',
+    'settings.offlineCache': 'Cache offline',
+    'settings.offlineCacheDesc': 'Salva sessioni e messaggi offline in IndexedDB',
+    'settings.questionAuto': 'Mostra domande automaticamente',
+    'settings.questionAutoDesc': 'Mostra automaticamente le domande dell\'IA',
+    'settings.permissionUI': 'Richiesta permessi',
+    'settings.permissionUIDesc': 'Mostra finestre di permesso per accesso strumenti',
+    'settings.permissionRequest': 'Richiesta di permesso',
+    'settings.permissionAllow': 'Consenti',
+    'settings.permissionDeny': 'Nega',
+    'settings.questionPrompt': 'Domanda IA',
+    'settings.questionPlaceholder': 'Scrivi la tua risposta...',
+    'settings.questionSend': 'Invia',
+    'settings.questionSkip': 'Salta',
     'settings.featureFlags': 'Funzionalità sperimentali',
     'settings.featureFlagsDesc': 'Attiva o disattiva funzionalità aggiuntive',
     'settings.fileBrowser': 'Esplora file',
@@ -1118,6 +1170,19 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.showEmpty': '顯示空提供商',
     'settings.hideEmpty': '隱藏空提供商',
     'settings.cancel': '取消',
+    'settings.offlineCache': '離線緩存',
+    'settings.offlineCacheDesc': '在 IndexedDB 中離線緩存會話和消息',
+    'settings.questionAuto': '自動顯示問題',
+    'settings.questionAutoDesc': '自動顯示 AI 的提問',
+    'settings.permissionUI': '權限請求',
+    'settings.permissionUIDesc': '顯示工具訪問權限請求對話框',
+    'settings.permissionRequest': '權限請求',
+    'settings.permissionAllow': '允許',
+    'settings.permissionDeny': '拒絕',
+    'settings.questionPrompt': 'AI 提問',
+    'settings.questionPlaceholder': '輸入你的回答...',
+    'settings.questionSend': '發送',
+    'settings.questionSkip': '跳過',
     'settings.featureFlags': '實驗性功能',
     'settings.featureFlagsDesc': '啟用或停用附加功能',
     'settings.fileBrowser': '檔案瀏覽器',

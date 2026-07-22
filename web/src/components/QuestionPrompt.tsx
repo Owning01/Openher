@@ -1,231 +1,118 @@
-import { useState, memo, useCallback } from "react"
+import { memo, useState, useCallback } from "react"
 import { api } from "../api"
+import { useT } from "../i18n-context"
 import type { ServerConfig } from "../types"
 
-type Question = {
+type QuestionItem = {
   header: string
   question: string
-  options: Array<{ label: string; description: string }>
-  multiple?: boolean
-  custom?: boolean
+  options: { label: string; description?: string }[]
+  multiple: boolean
+  custom: boolean
 }
 
-type QuestionPromptProps = {
-  questions: Question[]
+type Props = {
+  questions: QuestionItem[]
   requestID: string
   config: ServerConfig
   directory?: string
   onDone: () => void
 }
 
-export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestID, config, directory, onDone }: QuestionPromptProps) {
-  const [step, setStep] = useState(0)
-  const [answers, setAnswers] = useState<string[][]>(() => questions.map(() => []))
-  const [customInputs, setCustomInputs] = useState<string[]>(() => questions.map(() => ""))
-  const [editing, setEditing] = useState(false)
+export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestID, config, directory, onDone }: Props) {
+  const t = useT()
+  const [selected, setSelected] = useState<Record<number, string[]>>({})
+  const [customs, setCustoms] = useState<Record<number, string>>({})
   const [sending, setSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  const q = questions[step]
-  const isSingle = questions.length === 1 && !q?.multiple
-  const isConfirm = step === questions.length
-  const options = q?.options ?? []
-  const hasCustom = q?.custom !== false
-  const isMulti = q?.multiple === true
+  const handleToggle = useCallback((qIdx: number, label: string) => {
+    setSelected((prev) => {
+      const current = prev[qIdx] ?? []
+      if (current.includes(label)) {
+        return { ...prev, [qIdx]: current.filter((l) => l !== label) }
+      }
+      if (questions[qIdx]?.multiple) {
+        return { ...prev, [qIdx]: [...current, label] }
+      }
+      return { ...prev, [qIdx]: [label] }
+    })
+  }, [questions])
 
-  const selected = answers[step] ?? []
-  const customVal = customInputs[step] ?? ""
+  const handleCustomChange = useCallback((qIdx: number, value: string) => {
+    setCustoms((prev) => ({ ...prev, [qIdx]: value }))
+  }, [])
 
-  const pick = useCallback((label: string) => {
-    if (isMulti) {
-      setAnswers((prev) => {
-        const copy = prev.map((a) => [...a])
-        const idx = copy[step].indexOf(label)
-        if (idx >= 0) copy[step].splice(idx, 1)
-        else copy[step].push(label)
-        return copy
-      })
-    } else {
-      setAnswers((prev) => {
-        const copy = prev.map((a) => [...a])
-        copy[step] = [label]
-        return copy
-      })
-      if (isSingle) return
-      setStep((s) => s + 1)
-    }
-  }, [step, isMulti, isSingle])
-
-  const submitCustom = useCallback(() => {
-    const text = customVal.trim()
-    if (!text) return
-    if (isMulti) {
-      setAnswers((prev) => {
-        const copy = prev.map((a) => [...a])
-        if (!copy[step].includes(text)) copy[step].push(text)
-        return copy
-      })
-    } else {
-      setAnswers((prev) => {
-        const copy = prev.map((a) => [...a])
-        copy[step] = [text]
-        return copy
-      })
-      if (isSingle) return
-      setStep((s) => s + 1)
-    }
-    setEditing(false)
-  }, [customVal, step, isMulti, isSingle])
-
-  const nextStep = useCallback(() => {
-    if (step < questions.length) setStep((s) => s + 1)
-  }, [step, questions.length])
-
-  const prevStep = useCallback(() => {
-    if (step > 0) setStep((s) => s - 1)
-  }, [step])
-
-  const handleSubmit = useCallback(async () => {
+  const handleSend = useCallback(async () => {
     setSending(true)
-    setError(null)
+    const answers: string[][] = questions.map((_, i) => {
+      const sel = selected[i] ?? []
+      const custom = customs[i] ?? ""
+      return custom ? [...sel, custom] : sel
+    })
     try {
-      const result = await api.questionReply(config, requestID, answers, directory)
-      if (result) onDone()
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
+      await api.questionReply(config, requestID, answers, directory)
+      onDone()
+    } catch {
       setSending(false)
     }
-  }, [config, requestID, answers, directory, onDone])
+  }, [questions, selected, customs, config, requestID, directory, onDone])
 
-  const handleReject = useCallback(async () => {
+  const handleSkip = useCallback(async () => {
     setSending(true)
     try {
       await api.questionReject(config, requestID, directory)
       onDone()
     } catch {
-      onDone()
+      setSending(false)
     }
   }, [config, requestID, directory, onDone])
 
-  if (sending) {
-    return <div className="question-prompt"><div className="question-prompt-status">Sending...</div></div>
-  }
-
   return (
-    <div className="question-prompt">
-      {!isSingle && (
-        <div className="question-tabs">
-          {questions.map((qq, i) => (
-            <button key={i}
-              className={`question-tab${i === step ? " active" : ""}${(answers[i]?.length ?? 0) > 0 ? " answered" : ""}`}
-              onClick={() => setStep(i)}>
-              {qq.header}
-            </button>
-          ))}
-          <button className={`question-tab${isConfirm ? " active" : ""}`} onClick={() => setStep(questions.length)}>
-            Confirm
-          </button>
+    <div className="question-overlay" onClick={onDone}>
+      <div className="question-card" onClick={(e) => e.stopPropagation()}>
+        <div className="question-card-header">
+          <strong>{t('detail.questionTitle')}</strong>
         </div>
-      )}
-
-      {!isConfirm ? (
-        <div className="question-body">
-          <div className="question-text">
-            {q.question}{isMulti ? " (select all that apply)" : ""}
-          </div>
-          <div className="question-options">
-            {options.map((opt, i) => {
-              const picked = selected.includes(opt.label)
-              return (
-                <button key={i}
-                  className={`question-option${picked ? " picked" : ""}`}
-                  onClick={() => pick(opt.label)}>
-                  {isMulti ? <span className="question-check">{picked ? "✓" : " "}</span> : null}
-                  <span className="question-opt-label">{opt.label}</span>
-                  {opt.description && <span className="question-opt-desc">{opt.description}</span>}
-                  {!isMulti && picked && <span className="question-opt-check"> ✓</span>}
-                </button>
-              )
-            })}
-            {hasCustom && (
-              <div className="question-custom">
-                {!editing ? (
-                  <button className="question-option" onClick={() => setEditing(true)}>
-                    {isMulti ? <span className="question-check">{customVal ? "✓" : " "}</span> : null}
-                    <span>{customVal || "Type your own answer"}</span>
-                    {!isMulti && customVal ? <span className="question-opt-check"> ✓</span> : null}
-                  </button>
-                ) : (
-                  <div className="question-custom-edit">
-                    <textarea
-                      className="question-custom-input"
-                      value={customVal}
-                      onChange={(e) => setCustomInputs((prev) => {
-                        const copy = [...prev]
-                        copy[step] = e.target.value
-                        return copy
-                      })}
-                      placeholder="Type your own answer"
-                      autoFocus
-                    />
-                    <button className="question-custom-submit" onClick={submitCustom}>Done</button>
-                  </div>
-                )}
-                {customVal && !editing && (
-                  <div className="question-custom-preview">{customVal}</div>
-                )}
+        {questions.map((q, qi) => (
+          <div key={qi} className="question-row">
+            <p className="question-label">{q.question}</p>
+            {q.options.length > 0 && (
+              <div className="question-options">
+                {q.options.map((opt) => {
+                  const isActive = (selected[qi] ?? []).includes(opt.label)
+                  return (
+                    <button
+                      key={opt.label}
+                      className={`question-option${isActive ? " active" : ""}`}
+                      onClick={() => handleToggle(qi, opt.label)}
+                    >
+                      {opt.label}
+                      {opt.description && <span className="question-opt-desc">{opt.description}</span>}
+                    </button>
+                  )
+                })}
               </div>
             )}
+            {q.custom && (
+              <input
+                className="question-custom"
+                type="text"
+                placeholder={t('detail.questionCustomPlaceholder')}
+                value={customs[qi] ?? ""}
+                onChange={(e) => handleCustomChange(qi, e.target.value)}
+              />
+            )}
           </div>
-        </div>
-      ) : (
-        <div className="question-review">
-          {questions.map((qq, i) => {
-            const val = answers[i]?.join(", ") ?? ""
-            return (
-              <div key={i} className="question-review-row">
-                <span className="question-review-label">{qq.header}:</span>
-                <span className={`question-review-value${val ? "" : " unanswered"}`}>
-                  {val || "(not answered)"}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {error && <div className="question-error">{error}</div>}
-
-      <div className="question-actions">
-        <div className="question-nav">
-          {!isSingle && step > 0 && (
-            <button className="question-btn" onClick={prevStep}>← Back</button>
-          )}
-          {!isSingle && !isConfirm && (
-            <button className="question-btn" onClick={nextStep} disabled={selected.length === 0}>
-              Next →
-            </button>
-          )}
-        </div>
-        <div className="question-submit">
-          {isConfirm && (
-            <button className="question-btn question-btn-primary" onClick={handleSubmit}
-              disabled={answers.some((a) => a.length === 0)}>
-              Submit
-            </button>
-          )}
-          {isSingle && (
-            <button className="question-btn question-btn-primary" onClick={handleSubmit}
-              disabled={selected.length === 0}>
-              Submit
-            </button>
-          )}
-          <button className="question-btn question-btn-danger" onClick={handleReject}>Dismiss</button>
+        ))}
+        <div className="question-actions">
+          <button className="btn btn-secondary" onClick={handleSkip} disabled={sending}>
+            {t('detail.questionSkip')}
+          </button>
+          <button className="btn btn-primary" onClick={handleSend} disabled={sending}>
+            {t('detail.questionSend')}
+          </button>
         </div>
       </div>
     </div>
   )
 })
-
-export default QuestionPrompt

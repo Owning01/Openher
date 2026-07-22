@@ -1,35 +1,112 @@
 import { useEffect, useRef } from "react"
+import { POLL_BACKOFF_BASE_MS, POLL_BACKOFF_MAX_MS, POLL_BACKOFF_JITTER, POLL_MAX_RETRIES } from "../constants"
 
-export function usePolling(callback: () => void | Promise<void>, intervalMs: number, _deps: unknown[] = []) {
+export type PollingControl = {
+  pause: () => void
+  resume: () => void
+  fail: () => void
+  succeed: () => void
+}
+
+export function usePolling(
+  callback: () => void | Promise<void>,
+  intervalMs: number,
+  _deps: unknown[] = [],
+  streamActive = false
+): PollingControl {
   const savedCallback = useRef(callback)
   savedCallback.current = callback
+  const failCountRef = useRef(0)
+  const pausedRef = useRef(false)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const onVisibilityRef = useRef<(() => void) | null>(null)
+  const resumeRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     let mounted = true
+    pausedRef.current = false
+    failCountRef.current = 0
 
     function isPageVisible() {
       return document.visibilityState === "visible"
     }
 
-    async function tick() {
-      if (!mounted || !isPageVisible()) return
-      try { await savedCallback.current() } catch (e) { console.warn("poll error", e) }
+    function computeDelay(): number {
+      const base = Math.min(
+        POLL_BACKOFF_BASE_MS * Math.pow(2, failCountRef.current),
+        POLL_BACKOFF_MAX_MS
+      )
+      const jitter = base * POLL_BACKOFF_JITTER * Math.random()
+      return Math.round(base + jitter)
     }
 
-    tick()
-    const id = setInterval(tick, intervalMs)
-
-    const onVisibility = () => {
-      if (isPageVisible()) {
-        tick()
+    async function tick() {
+      if (!mounted || !isPageVisible() || pausedRef.current) return
+      try {
+        await savedCallback.current()
+        if (streamActive) failCountRef.current = 0
+        else if (failCountRef.current > 0) failCountRef.current = Math.max(0, failCountRef.current - 1)
+      } catch (e) {
+        failCountRef.current++
+        console.warn("poll error", failCountRef.current, e)
       }
     }
+
+    function schedule() {
+      if (!mounted) return
+      const delay = streamActive ? intervalMs : (failCountRef.current > 0 ? computeDelay() : intervalMs)
+      timerRef.current = setInterval(tick, delay)
+    }
+
+    schedule()
+
+    const onVisibility = () => {
+      if (isPageVisible()) tick()
+    }
     document.addEventListener("visibilitychange", onVisibility)
+    onVisibilityRef.current = onVisibility
+
+    const control: PollingControl = {
+      pause: () => { pausedRef.current = true },
+      resume: () => {
+        pausedRef.current = false
+        failCountRef.current = 0
+        if (timerRef.current) {
+          clearInterval(timerRef.current)
+          schedule()
+        }
+      },
+      fail: () => {
+        failCountRef.current = Math.min(failCountRef.current + 1, POLL_MAX_RETRIES)
+        if (timerRef.current) {
+          clearInterval(timerRef.current)
+          schedule()
+        }
+      },
+      succeed: () => {
+        failCountRef.current = 0
+      }
+    }
+    resumeRef.current = control.resume
 
     return () => {
       mounted = false
-      clearInterval(id)
-      document.removeEventListener("visibilitychange", onVisibility)
+      if (timerRef.current) clearInterval(timerRef.current)
+      if (onVisibilityRef.current) document.removeEventListener("visibilitychange", onVisibilityRef.current)
     }
-  }, [intervalMs])
+  }, [intervalMs, streamActive])
+
+  return {
+    pause: () => { pausedRef.current = true },
+    resume: () => {
+      pausedRef.current = false
+      failCountRef.current = 0
+    },
+    fail: () => {
+      failCountRef.current = Math.min(failCountRef.current + 1, POLL_MAX_RETRIES)
+    },
+    succeed: () => {
+      failCountRef.current = 0
+    }
+  }
 }

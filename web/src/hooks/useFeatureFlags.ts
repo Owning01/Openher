@@ -18,6 +18,9 @@ function loadFlags(): FeatureFlags {
     autoSummarize: false,
     autoSummarizeThreshold: DEFAULT_AUTO_SUMMARIZE_THRESHOLD,
     streamingFull: false,
+    offlineCache: false,
+    questionAuto: false,
+    permissionUI: false,
   }
 }
 
@@ -30,7 +33,8 @@ export function useFeatureFlags() {
 
   const BOOL_FLAGS: ReadonlySet<keyof FeatureFlags> = new Set([
     "fileBrowser", "inlineDiff", "contextMenu", "planBreakdown",
-    "gitOps", "mcpConfig", "sessionArchive", "autoSummarize", "streamingFull"
+    "gitOps", "mcpConfig", "sessionArchive", "autoSummarize", "streamingFull",
+    "offlineCache", "questionAuto", "permissionUI"
   ])
 
   const toggleFlag = useCallback((key: keyof FeatureFlags) => {

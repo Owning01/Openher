@@ -1,7 +1,7 @@
 import { useState, memo, useMemo } from "react"
 import type { ServerConfig } from "../types"
 import { toolMeta, detectToolName, isTaskTool, isQuestionTool } from "../utils/toolMeta"
-import QuestionPrompt from "./QuestionPrompt"
+import { QuestionPrompt } from "./QuestionPrompt"
 
 const toolIcons: Record<string, string> = {
   tool_use: "▶",
