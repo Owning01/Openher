@@ -620,6 +620,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onChangeModel={changeModel} modelKey={modelKey}
           selectedVariant={selectedVariant} onChangeVariant={changeVariant}
           stats={stats} onResetStats={resetStats}
+          activeModelOption={activeModelOption}
           blockedModels={blockedModels}
           onOpenThemePicker={() => setShowThemePicker(true)}
           flags={flags}

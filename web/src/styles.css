@@ -773,6 +773,12 @@ p {
   font-weight: 600;
 }
 
+.model-active-name {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: var(--space-1);
+}
+
 /* ===== Blocked Models ===== */
 .blocked-search {
   margin-bottom: var(--space-2);
@@ -2211,7 +2217,7 @@ p {
 
 .variant-pill {
   padding: 0.2rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--muted-strong);
