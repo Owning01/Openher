@@ -56,6 +56,170 @@
 
 ---
 
+## 🕸️ Grafo de dependencias
+
+```mermaid
+flowchart TB
+    %% Estilos
+    classDef infra fill:#1a1a2e,stroke:#6c8cff,color:#eee
+    classDef core fill:#1e3a5f,stroke:#5ba3e6,color:#eee
+    classDef hook fill:#2d1b4e,stroke:#a78bfa,color:#eee
+    classDef ui fill:#3b1f3b,stroke:#f0c060,color:#eee
+    classDef cross fill:#1b3b2b,stroke:#4caf7d,color:#eee
+
+    %% === CAPA 0: Infraestructura ===
+    subgraph Infraestructura["Infraestructura"]
+        Server["🖥️ Servidor OpenCode<br/>(HTTP + SSE)"]
+        API["🌐 api.ts<br/>30 endpoints REST"]
+        Cap["⚡ Capacitor<br/>Plugins nativos"]
+    end
+
+    %% === CAPA 1: Transporte ===
+    subgraph Transporte["Capa de Transporte"]
+        SSE["useSSE.ts<br/>Streaming SSE"]
+        Poll["usePolling.ts<br/>Backoff exponencial"]
+        Cache["useOfflineCache.ts<br/>IndexedDB"]
+        Queue["useOfflineQueue.ts<br/>Cola offline"]
+    end
+
+    %% === CAPA 2: Hooks de Estado ===
+    subgraph Hooks["Capa de Estado & Lógica"]
+        Msgs["useMessages.ts<br/>Chat + prompts + undo/redo"]
+        Sess["useSessions.ts<br/>CRUD sesiones + favoritos"]
+        AI["useAI.ts<br/>Agentes + modelos"]
+        Config["useConfig.ts<br/>Config servidor + auth"]
+        Sidecar["useSessionSidecar.ts<br/>Diffs + todos + dashboard"]
+        Shell["useShell.ts<br/>Terminal"]
+        Notif["useNotifications.ts<br/>Notificaciones push"]
+        Deep["useDeepLink.ts<br/>Deep links"]
+        Stats["useStats.ts<br/>Estadísticas de uso"]
+        Flags["useFeatureFlags.ts<br/>Feature flags"]
+        Net["useNetworkMode.ts<br/>Modo datos móvil/WiFi"]
+        AutoSum["useAutoSummarize.ts<br/>Compactación automática"]
+        Speech["useSpeechRecognition.ts<br/>Voz a texto"]
+    end
+
+    %% === CAPA 3: Componentes UI ===
+    subgraph UI["Capa de Presentación"]
+        App["App.tsx<br/>Orquestador principal"]
+        Chat["💬 ChatView<br/>+ Composer + MessageList"]
+        Sessions["📁 SessionList<br/>+ SessionCard"]
+        Settings["⚙️ SettingsPanel<br/>+ ProviderManager"]
+
+        subgraph Modales["Modales"]
+            Diff["📋 DiffViewer"]
+            Editor["📝 FileEditor"]
+            Terminal["💻 TerminalView"]
+            MCP["🧩 MCPBrowser"]
+            Archive["📦 ArchivedList"]
+            ThemePicker["🎨 ThemePicker"]
+            ThemeCreate["🎨 ThemeCreator"]
+            Lightbox["🖼️ ImageLightbox"]
+            Shortcuts["⌨️ ShortcutsModal"]
+            Favorites["⭐ FavoritesManager"]
+            Question["🤔 AutoQuestionPrompt"]
+            Permission["🔐 PermissionPrompt"]
+            Skills["📚 SkillBrowser"]
+        end
+
+        subgraph Menus["Navegación"]
+            Nav["NavBar"]
+            Sheet["BottomSheet<br/>AI + Detalles"]
+            Help["HelpPage"]
+        end
+    end
+
+    %% === CAPA TRANSVERSAL ===
+    subgraph Transversal["Servicios Transversales"]
+        I18N["🌍 i18n.ts<br/>4 idiomas"]
+        Themes["🎨 resolveTheme.ts<br/>30+ temas"]
+        Styles["📄 styles.css<br/>~4900 líneas"]
+        Types["📐 types.ts<br/>Tipos compartidos"]
+        Icons["🖼️ Icons.tsx<br/>24 SVG icons"]
+        Bench["📊 benchmarks/<br/>212 tests"]
+    end
+
+    %% === CONEXIONES ===
+    Server --> API
+    API --> SSE
+    API --> Poll
+    API --> Cache
+    API --> Queue
+    API --> Msgs
+    API --> Sess
+    API --> AI
+    API --> Config
+    API --> Sidecar
+    API --> Shell
+    Cap --> Speech
+    Cap --> Deep
+
+    SSE --> Msgs
+    Poll --> Msgs
+    Poll --> Sess
+    Cache --> Sess
+    Queue --> Msgs
+
+    Msgs --> App
+    Sess --> App
+    AI --> App
+    Config --> App
+    Sidecar --> App
+    Shell --> App
+    Notif --> App
+    Deep --> Config
+    Stats --> App
+    Flags --> App
+    Net --> Poll
+    AutoSum --> Msgs
+    Speech --> Chat
+
+    App --> Chat
+    App --> Sessions
+    App --> Settings
+    App --> Nav
+    App --> Sheet
+    App --> Help
+    App --> Diff
+    App --> Editor
+    App --> Terminal
+    App --> MCP
+    App --> Archive
+    App --> ThemePicker
+    App --> ThemeCreate
+    App --> Lightbox
+    App --> Shortcuts
+    App --> Favorites
+    App --> Question
+    App --> Permission
+    App --> Skills
+
+    I18N --> App
+    Themes --> ThemePicker
+    Themes --> ThemeCreate
+    Types --> App
+    Icons --> Chat
+    Icons --> Settings
+    Icons --> Sessions
+    Styles --> App
+    Bench -.-> API
+    Bench -.-> Poll
+    Bench -.-> SSE
+    Bench -.-> Cache
+
+    %% Links
+    click SSE "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useSSE.ts"
+    click Poll "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/usePolling.ts"
+    click Cache "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useOfflineCache.ts"
+    click Queue "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useOfflineQueue.ts"
+    click Msgs "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useMessages.ts"
+    click Shell "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/hooks/useShell.ts"
+    click Diff "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/components/DiffViewer.tsx"
+    click Editor "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/components/FileEditor.tsx"
+    click Terminal "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/components/TerminalView.tsx"
+    click API "https://github.com/Owning01/Opencode-Mobile/blob/main/web/src/api.ts"
+```
+
 ## 🚀 Inicio rápido
 
 ```bash
