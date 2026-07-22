@@ -161,53 +161,76 @@ flowchart LR
 ```
 </details>
 
-## 🚀 Inicio rápido
+## 🚀 Inicio rápido — 4 pasos
+
+### 📲 Paso 1: Descargar la app
+
+[⬇️ **Descargar OpenCodeMobile.apk**](https://github.com/Owning01/Opencode-Mobile/releases/latest) — última versión estable.
+
+O construíla vos mismo:
 
 ```bash
-# Web preview
 cd web
-pnpm install
-pnpm dev                # → http://localhost:5173
-
-# Build APK completo
-pnpm build && npx cap sync && cd android
+pnpm install && pnpm build && npx cap sync && cd android
 .\gradlew assembleDebug
-
-# O con deploy script
-.\deploy-quick.ps1            # Misma WiFi
-.\deploy-quick.ps1 -Tunnel    # Cualquier red
+# → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
 
-## 🖥️ Configurar el servidor
+### 🖥️ Paso 2: Iniciar el servidor OpenCode en tu PC
 
 ```bash
+# Con npx (no requiere instalación):
 OPENCODE_SERVER_USERNAME=opencode \
 OPENCODE_SERVER_PASSWORD=tu-contraseña \
 npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096
 ```
 
-> 💡 El puerto `4096` se auto-asigna por defecto en la app.
+> 💡 Puerto `4096` por defecto. Anotá la IP que muestra al iniciar (ej. `192.168.1.100`).
 
 ---
 
-## 🔗 Conectar desde cualquier red (Tailscale)
+### 📡 Paso 3: Conectar desde la misma red (WiFi local)
 
-[Tailscale](https://tailscale.com) crea una VPN mesh segura — tu teléfono y PC se conectan via IP privada incluso en redes diferentes.
+En la app: **Ajustes → Servidor** y completá:
+
+| Campo | Valor |
+|-------|-------|
+| **Host** | IP de tu PC (ej. `192.168.1.100`) |
+| **Port** | `4096` |
+| **Username** | `opencode` |
+| **Password** | La que elegiste |
+
+✓ Si los datos son correctos, la app se conecta automáticamente.
+
+---
+
+### 🌐 Paso 4: Conectar desde cualquier red
+
+La app incluye un **túnel WebRTC** para usar OpenCode desde datos móviles, el trabajo, o donde sea sin configurar el router.
+
+#### Opción A — Túnel integrado (recomendado)
+
+1. En la PC, descargá **[opencode-tunnel.exe](https://github.com/Owning01/Opencode-Mobile/releases/latest)** y ejecutalo
+2. En la ventana que se abre: poné un **nombre** y **contraseña**, click **"Conectar túnel"**
+3. En el celular: **Ajustes → Conexión Remota**, ingresá el mismo nombre y contraseña, click **Conectar**
+
+> 📖 Guía detallada en [`TUNNEL-GUIDE.md`](TUNNEL-GUIDE.md)
+
+#### Opción B — Tailscale (alternativa)
+
+[**Tailscale**](https://tailscale.com) crea una VPN mesh. Instalalo en PC y celular:
 
 ```bash
 # En tu PC:
-tailscale ip -4
-# → 100.x.x.x
-
-# Iniciar servidor en Tailscale IP:
+tailscale ip -4                            # → 100.x.x.x
 OPENCODE_SERVER_USERNAME=opencode \
 OPENCODE_SERVER_PASSWORD=tu-contraseña \
 npx -y opencode-ai serve --hostname 100.x.x.x --port 4096
 ```
 
-En el teléfono: **Host** = `100.x.x.x`, **Port** = `4096`, **Username/Password** = los mismos.
+En la app: **Host** = `100.x.x.x`, **Port** = `4096`, **Username/Password** = los mismos.
 
 ---
 
