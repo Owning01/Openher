@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
-def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: "release.keystore"
-def keystorePass = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
-def keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: ""
-def keyPass = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
-def hasSigning = keystorePass != "" && keyAlias != "" && keyPass != ""
+def ksPath = System.getenv("ANDROID_KEYSTORE_PATH") ?: "release.keystore"
+def ksPass = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
+def ksAlias = System.getenv("ANDROID_KEY_ALIAS") ?: ""
+def ksKeyPass = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
+def hasSigning = ksPass != "" && ksAlias != "" && ksKeyPass != ""
 
 android {
     namespace = "ai.opencode.remote.web"
@@ -22,10 +22,10 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file(keystorePath)
-            storePassword keystorePass
-            keyAlias keyAlias
-            keyPassword keyPass
+            storeFile file(ksPath)
+            storePassword ksPass
+            keyAlias ksAlias
+            keyPassword ksKeyPass
         }
     }
     buildTypes {
