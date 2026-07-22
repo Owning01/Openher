@@ -80,6 +80,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const blockedModels = useBlockedModels(modelOptions)
   const { flags, toggleFlag, setFlag } = useFeatureFlags()
 
+  const filteredVariantGroups = useMemo(() => {
+    const bs = blockedModels.blocked
+    return {
+      recentModels: variantGroups.recentModels.filter((m) => !bs.has(modelKey(m))),
+      groups: new Map(Array.from(variantGroups.groups.entries()).filter(([k]) => !bs.has(k)))
+    }
+  }, [variantGroups, blockedModels.blocked])
+
   const {
     composer, setComposer,
     awaitingAssistantReply,
@@ -754,7 +762,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             modelOptions={modelOptions}
             modelLoadError={modelLoadError}
             activeModelOption={activeModelOption}
-            variantGroups={variantGroups}
+            variantGroups={filteredVariantGroups}
             modelQuery={modelQuery}
             isWorking={isWorking}
             onChangeModel={changeModel}

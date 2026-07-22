@@ -235,6 +235,8 @@ export const SessionList = memo(function SessionList({
         </div>
       )}
 
+      <div className="section-divider" />
+
       <div className="list-mode-toggle">
         <button type="button" className={`list-mode-pill${listMode === "sessions" ? " active" : ""}`}
           onClick={() => setListMode("sessions")} aria-pressed={listMode === "sessions"}>
