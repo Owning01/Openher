@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { Capacitor } from "@capacitor/core"
 import { App as CapacitorApp } from "@capacitor/app"
 import { Dialog } from "@capacitor/dialog"
@@ -13,38 +13,60 @@ type UseBackButtonOpts = {
   onBackToSessions: () => void
 }
 
-export function useBackButton({
-  view, showNewSessionPicker, activeDetailSheet,
-  onClosePicker, onCloseSheet, onBackToSessions
-}: UseBackButtonOpts) {
+export function useBackButton(opts: UseBackButtonOpts) {
   const t = useT()
+
+  const viewRef = useRef(opts.view)
+  viewRef.current = opts.view
+  const pickerRef = useRef(opts.showNewSessionPicker)
+  pickerRef.current = opts.showNewSessionPicker
+  const sheetRef = useRef(opts.activeDetailSheet)
+  sheetRef.current = opts.activeDetailSheet
+  const onClosePickerRef = useRef(opts.onClosePicker)
+  onClosePickerRef.current = opts.onClosePicker
+  const onCloseSheetRef = useRef(opts.onCloseSheet)
+  onCloseSheetRef.current = opts.onCloseSheet
+  const onBackRef = useRef(opts.onBackToSessions)
+  onBackRef.current = opts.onBackToSessions
+  const tRef = useRef(t)
+  tRef.current = t
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
-    let h: any
+
+    let cancelled = false
+    let handle: any = null
+
     CapacitorApp.addListener("backButton", async () => {
-      if (showNewSessionPicker) {
-        onClosePicker()
+      if (pickerRef.current) {
+        onClosePickerRef.current()
         return
       }
-      if (activeDetailSheet) {
-        onCloseSheet()
+      if (sheetRef.current) {
+        onCloseSheetRef.current()
         return
       }
-      if (view === "detail") {
-        onBackToSessions()
+      if (viewRef.current === "detail") {
+        onBackRef.current()
       } else {
         const result = await Dialog.confirm({
-          title: t('app.exitTitle'),
-          message: t('app.exitMessage'),
-          okButtonTitle: t('app.exitOk'),
-          cancelButtonTitle: t('app.exitCancel')
+          title: tRef.current('app.exitTitle'),
+          message: tRef.current('app.exitMessage'),
+          okButtonTitle: tRef.current('app.exitOk'),
+          cancelButtonTitle: tRef.current('app.exitCancel')
         })
         if (result.value) {
           CapacitorApp.exitApp()
         }
       }
-    }).then((hnd) => { h = hnd })
-    return () => { if (h) h.remove() }
-  }, [view, showNewSessionPicker, activeDetailSheet, onClosePicker, onCloseSheet, onBackToSessions, t])
+    }).then((hnd) => {
+      if (cancelled) { hnd.remove(); return }
+      handle = hnd
+    })
+
+    return () => {
+      cancelled = true
+      if (handle) handle.remove()
+    }
+  }, [])
 }
