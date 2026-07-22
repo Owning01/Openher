@@ -50,6 +50,7 @@ type SettingsPanelProps = {
   providerError: string | null
   onConnectProvider: (providerID: string, apiKey: string) => void
   onDisconnectProvider: (providerID: string) => void
+  onOpenRemoteConnect?: () => void
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
@@ -63,7 +64,8 @@ export const SettingsPanel = memo(function SettingsPanel({
   stats, onResetStats,
   activeModelOption, blockedModels, onOpenThemePicker,
   flags, onToggleFlag, onSetFlag,
-  providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider
+  providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider,
+  onOpenRemoteConnect
 }: SettingsPanelProps) {
   const t = useT()
   const [blockedSearch, setBlockedSearch] = useState("")
@@ -151,6 +153,11 @@ export const SettingsPanel = memo(function SettingsPanel({
             <><TestIcon size={18} />{testAlreadyPassedForDraft ? t('settings.testOk') : t('settings.test')}</>
           )}
         </button>
+        {onOpenRemoteConnect && (
+          <button onClick={onOpenRemoteConnect} className="btn-secondary">
+            {t('tunnel.title')}
+          </button>
+        )}
       </div>
 
       {/* Notice */}

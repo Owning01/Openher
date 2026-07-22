@@ -284,6 +284,23 @@ type TranslationKey =
   | 'favorites.empty'
   | 'offlineQueue.pending'
   | 'themeCreator.title'
+  | 'tunnel.title'
+  | 'tunnel.name'
+  | 'tunnel.namePlaceholder'
+  | 'tunnel.password'
+  | 'tunnel.passwordPlaceholder'
+  | 'tunnel.signalingURL'
+  | 'tunnel.connect'
+  | 'tunnel.connecting'
+  | 'tunnel.connected'
+  | 'tunnel.disconnect'
+  | 'tunnel.disconnected'
+  | 'tunnel.error'
+  | 'tunnel.notConnected'
+  | 'tunnel.qrHint'
+  | 'tunnel.modeLabel'
+  | 'tunnel.modeDirect'
+  | 'tunnel.modeRemote'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
@@ -604,7 +621,24 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.saveOrder': 'Save Order',
     'favorites.empty': 'No favorites yet',
     'offlineQueue.pending': 'Pending actions in queue',
-    'themeCreator.title': 'Theme Creator'
+    'themeCreator.title': 'Theme Creator',
+    'tunnel.title': 'Remote Connection',
+    'tunnel.name': 'Server Name',
+    'tunnel.namePlaceholder': 'e.g. MiOficina',
+    'tunnel.password': 'Password',
+    'tunnel.passwordPlaceholder': 'Tunnel password',
+    'tunnel.signalingURL': 'Signaling URL',
+    'tunnel.connect': 'Connect',
+    'tunnel.connecting': 'Connecting...',
+    'tunnel.connected': 'Connected remotely',
+    'tunnel.disconnect': 'Disconnect',
+    'tunnel.disconnected': 'Not connected',
+    'tunnel.error': 'Connection error',
+    'tunnel.notConnected': 'Configure remote tunnel in Settings',
+    'tunnel.qrHint': 'Scan the QR shown by opencode-tunnel',
+    'tunnel.modeLabel': 'Connection mode',
+    'tunnel.modeDirect': 'Local network',
+    'tunnel.modeRemote': 'Remote (tunnel)'
   },
   es: {
     'app.title': 'OpenCode Remoto',
@@ -924,7 +958,24 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.saveOrder': 'Guardar Orden',
     'favorites.empty': 'Sin favoritos aún',
     'offlineQueue.pending': 'Acciones pendientes en cola',
-    'themeCreator.title': 'Creador de Temas'
+    'themeCreator.title': 'Creador de Temas',
+    'tunnel.title': 'Conexión Remota',
+    'tunnel.name': 'Nombre del Servidor',
+    'tunnel.namePlaceholder': 'ej. MiOficina',
+    'tunnel.password': 'Contraseña',
+    'tunnel.passwordPlaceholder': 'Contraseña del túnel',
+    'tunnel.signalingURL': 'URL de señalización',
+    'tunnel.connect': 'Conectar',
+    'tunnel.connecting': 'Conectando...',
+    'tunnel.connected': 'Conectado remotamente',
+    'tunnel.disconnect': 'Desconectar',
+    'tunnel.disconnected': 'No conectado',
+    'tunnel.error': 'Error de conexión',
+    'tunnel.notConnected': 'Configura el túnel remoto en Ajustes',
+    'tunnel.qrHint': 'Escanea el QR que muestra opencode-tunnel',
+    'tunnel.modeLabel': 'Modo de conexión',
+    'tunnel.modeDirect': 'Red local',
+    'tunnel.modeRemote': 'Remoto (túnel)'
   },
   it: {
     'app.title': 'OpenCode Mobile',
@@ -1208,7 +1259,24 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.saveOrder': 'Salva Ordine',
     'favorites.empty': 'Ancora nessun preferito',
     'offlineQueue.pending': 'Azioni in coda',
-    'themeCreator.title': 'Creatore di Temi'
+    'themeCreator.title': 'Creatore di Temi',
+    'tunnel.title': 'Connessione Remota',
+    'tunnel.name': 'Nome Server',
+    'tunnel.namePlaceholder': 'es. MiOficina',
+    'tunnel.password': 'Password',
+    'tunnel.passwordPlaceholder': 'Password tunnel',
+    'tunnel.signalingURL': 'URL segnalazione',
+    'tunnel.connect': 'Connetti',
+    'tunnel.connecting': 'Connessione...',
+    'tunnel.connected': 'Connesso in remoto',
+    'tunnel.disconnect': 'Disconnetti',
+    'tunnel.disconnected': 'Non connesso',
+    'tunnel.error': 'Errore connessione',
+    'tunnel.notConnected': 'Configura il tunnel remoto in Impostazioni',
+    'tunnel.qrHint': 'Scansiona il QR mostrato da opencode-tunnel',
+    'tunnel.modeLabel': 'Modalità connessione',
+    'tunnel.modeDirect': 'Rete locale',
+    'tunnel.modeRemote': 'Remoto (tunnel)'
   },
   'zh-TW': {
     'app.title': 'OpenCode 遠端',
@@ -1492,7 +1560,24 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.saveOrder': '儲存順序',
     'favorites.empty': '尚無最愛',
     'offlineQueue.pending': '佇列中有待處理的動作',
-    'themeCreator.title': '主題建立器'
+    'themeCreator.title': '主題建立器',
+    'tunnel.title': '遠端連線',
+    'tunnel.name': '伺服器名稱',
+    'tunnel.namePlaceholder': '例如 MiOficina',
+    'tunnel.password': '密碼',
+    'tunnel.passwordPlaceholder': '隧道密碼',
+    'tunnel.signalingURL': '信令 URL',
+    'tunnel.connect': '連線',
+    'tunnel.connecting': '連線中...',
+    'tunnel.connected': '已遠端連線',
+    'tunnel.disconnect': '斷開連線',
+    'tunnel.disconnected': '未連線',
+    'tunnel.error': '連線錯誤',
+    'tunnel.notConnected': '在設定中配置遠端隧道',
+    'tunnel.qrHint': '掃描 opencode-tunnel 顯示的二維碼',
+    'tunnel.modeLabel': '連線模式',
+    'tunnel.modeDirect': '本地網路',
+    'tunnel.modeRemote': '遠端（隧道）'
   }
 }
 

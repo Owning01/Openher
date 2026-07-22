@@ -52,6 +52,8 @@ import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
 import { CloseIcon } from "./Icons"
+import { RemoteConnect } from "./components/RemoteConnect"
+import { useRemoteTunnel } from "./tunnel/useRemoteTunnel"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const t = useT()
@@ -183,6 +185,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // ===== Feature: Favorites Manager =====
   const [showFavoritesManager, setShowFavoritesManager] = useState(false)
+
+  // ===== Feature: Remote Tunnel =====
+  const { tunnelConfig, status: tunnelStatus, error: tunnelError, connect, disconnect } = useRemoteTunnel()
+  const [showRemoteConnect, setShowRemoteConnect] = useState(false)
 
   // ===== Feature: Offline Queue =====
   const { enqueue: queueAction, dequeueAll } = useOfflineQueue()
@@ -669,7 +675,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             if (!selectedSession) return
             connectProvider(pid, key, selectedSession.id, selectedSession.directory)
           }}
-          onDisconnectProvider={disconnectProvider} />
+          onDisconnectProvider={disconnectProvider}
+          onOpenRemoteConnect={() => setShowRemoteConnect(true)} />
       )}
 
       {view === "sessions" && (
@@ -911,6 +918,21 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onReset={resetChatSettings}
           onClose={() => setShowChatCustomizer(false)}
         />
+      )}
+
+      {showRemoteConnect && (
+        <div className="modal-overlay" onClick={() => setShowRemoteConnect(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <RemoteConnect
+              status={tunnelStatus}
+              error={tunnelError}
+              savedConfig={tunnelConfig}
+              onConnect={connect}
+              onDisconnect={disconnect}
+              onClose={() => setShowRemoteConnect(false)}
+            />
+          </div>
+        </div>
       )}
     </div>
   )

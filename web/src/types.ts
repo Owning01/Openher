@@ -323,3 +323,11 @@ export type ChatSettings = {
   showTimestamps: boolean
   showTodoButton: boolean
 }
+
+export type TunnelConfig = {
+  name: string
+  password: string
+  signalingURL: string
+}
+
+export const DEFAULT_SIGNALING_URL = "wss://opencode-tunnel-signaling.owning01.workers.dev/signal"

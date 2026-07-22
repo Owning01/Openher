@@ -5485,3 +5485,27 @@ button.compact {
 /* ===== Message search bar in ChatView ===== */
 .message-search-bar { padding: var(--space-2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: var(--space-2); }
 .message-search-count { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+
+/* ===== Remote Connect (WebRTC Tunnel) ===== */
+.remote-connect { max-width: 400px; width: 85vw; display: flex; flex-direction: column; gap: var(--space-3); }
+.remote-connect-header { display: flex; align-items: center; justify-content: space-between; }
+.remote-connect-header h3 { margin: 0; font-size: 1.1rem; }
+.remote-connect-status { display: flex; align-items: center; gap: var(--space-2); }
+.status-badge { font-size: 0.8rem; padding: 0.2rem 0.6rem; border-radius: 999px; }
+.status-idle, .status-disconnected { background: var(--surface); color: var(--muted); }
+.status-connecting { background: rgba(255,193,7,0.2); color: #ffc107; }
+.status-connected { background: rgba(76,175,80,0.2); color: #4caf50; }
+.status-error { background: rgba(229,85,69,0.2); color: var(--danger); }
+.remote-connect-error { background: rgba(229,85,69,0.15); color: var(--danger); padding: var(--space-2); border-radius: var(--radius-sm); font-size: 0.85rem; }
+.remote-connect-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.remote-connect-form .field-label { display: flex; flex-direction: column; gap: 0.3rem; }
+.remote-connect-form .field-label span { font-size: 0.85rem; color: var(--muted); }
+.remote-connect-form input { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.6rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.9rem; outline: none; }
+.remote-connect-form input:focus { border-color: var(--accent); }
+.remote-connect-hint { font-size: 0.8rem; color: var(--muted); text-align: center; }
+.remote-connect-connected { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-4) 0; }
+.remote-connect-info { font-size: 0.9rem; color: var(--muted); text-align: center; }
+.btn-link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 0; }
+.btn-link:hover { text-decoration: underline; }
+.btn-danger { background: rgba(229,85,69,0.2); color: var(--danger); border: 1px solid var(--danger); padding: 0.6rem 1.2rem; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.9rem; }
+.btn-danger:hover { background: rgba(229,85,69,0.3); }

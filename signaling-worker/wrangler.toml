@@ -1,0 +1,11 @@
+name = "opencode-tunnel-signaling"
+main = "src/index.ts"
+compatibility_date = "2025-02-01"
+
+[[durable_objects.bindings]]
+name = "TUNNEL_MATCHER"
+class_name = "TunnelMatcher"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["TunnelMatcher"]
