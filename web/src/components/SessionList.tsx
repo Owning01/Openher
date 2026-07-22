@@ -148,8 +148,33 @@ export const SessionList = memo(function SessionList({
       </div>
       {notices}
 
-      {!selectedProjectDir && !query.trim() && (activeSessions.length > 0 || recentSessions.length > 0) && (
+      {!selectedProjectDir && !query.trim() && (favorites.size > 0 || activeSessions.length > 0 || recentSessions.length > 0) && (
         <div className="quick-access">
+          {favorites.size > 0 && (() => {
+            const favoriteSessions = sessions.filter((s) => favorites.has(s.id))
+            if (favoriteSessions.length === 0) return null
+            return (
+              <div className="quick-access-section">
+                <h4 className="quick-access-label"><StarIcon size={12} /> Favoritos</h4>
+                <div className="quick-access-list">
+                  {favoriteSessions.slice(0, 5).map((session) => (
+                    <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+                      <button className="quick-access-star"
+                        onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
+                        aria-pressed={favorites.has(session.id)}
+                        title="Remove favorite">
+                        <StarIcon size={12} className="star-filled" />
+                      </button>
+                      <ChatIcon size={14} />
+                      <span className="quick-access-title">{session.title}</span>
+                      <span className="quick-access-time">{formatTime(session.updated)}</span>
+                      <span className={`pill ${session.status}`}>{session.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
           {activeSessions.length > 0 && (
             <div className="quick-access-section">
               <h4 className="quick-access-label">{t('sessions.activeLabel')}</h4>

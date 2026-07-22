@@ -35,6 +35,8 @@ type SettingsPanelProps = {
   selectedModelKey: string | null
   onChangeModel: (key: string) => void
   modelKey: (model: { providerID: string; modelID: string; variant?: string }) => string
+  selectedVariant: string | null
+  onChangeVariant: (variant: string | null) => void
   stats: UsageStats
   onResetStats: () => void
   blockedModels: { isBlocked: (key: string) => boolean; toggleBlocked: (key: string) => void; toggleAllForProvider: (providerID: string, block: boolean) => void; providerBlockedCount: (providerID: string) => number; blockedCount: number }
@@ -56,6 +58,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   theme, onThemeChange, languageOptions,
   dataMode, onDataModeChange, onNavigate,
   modelOptions, selectedModelKey, onChangeModel, modelKey: mk,
+  selectedVariant, onChangeVariant,
   stats, onResetStats,
   blockedModels, onOpenThemePicker,
   flags, onToggleFlag, onSetFlag,
@@ -182,13 +185,37 @@ export const SettingsPanel = memo(function SettingsPanel({
             <select value={selectedModelKey ?? ""}
               onChange={(e) => { const v = e.target.value; if (v) onChangeModel(v) }}>
               <option value="" disabled>{modelOptions.length === 0 ? t('detail.modelLoading') : t('settings.selectModel')}</option>
-              {modelOptions.map((opt) => (
+              {Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values()).map((opt) => (
                 <option key={mk(opt)} value={mk(opt)}>
-                  {opt.modelName || opt.modelID}{opt.variant ? ` (${opt.variant})` : ""} — {opt.providerName}
+                  {opt.modelName || opt.modelID} — {opt.providerName}
                 </option>
               ))}
             </select>
           </label>
+          {(() => {
+            if (!selectedModelKey) return null
+            const vars = modelOptions.filter((opt) => mk(opt) === selectedModelKey && opt.variant)
+            if (vars.length === 0) return null
+            return (
+              <div className="form-field">
+                <span>Variante</span>
+                <div className="model-variant-pills">
+                  <button type="button"
+                    className={`variant-pill${!selectedVariant ? " active" : ""}`}
+                    onClick={() => onChangeVariant(null)}>
+                    Default
+                  </button>
+                  {vars.map((v) => (
+                    <button key={v.variant} type="button"
+                      className={`variant-pill${selectedVariant === v.variant ? " active" : ""}`}
+                      onClick={() => onChangeVariant(v.variant ?? null)}>
+                      {v.variant}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
           {onOpenThemePicker && (
             <div className="form-field">
               <span>Tema visual</span>

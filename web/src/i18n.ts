@@ -125,10 +125,12 @@ type TranslationKey =
   | 'detail.modelHint'
   | 'detail.refreshModels'
   | 'detail.modelSelectLabel'
+  | 'detail.thought'
   | 'detail.modelSearchPlaceholder'
   | 'detail.modelSearchEmpty'
   | 'detail.modelDefault'
   | 'detail.modelRecent'
+  | 'detail.thought'
   | 'detail.modelAll'
   | 'detail.modelProvider'
   | 'detail.modelContext'
@@ -488,6 +490,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchEmpty': 'No models match your search.',
     'detail.modelDefault': 'default',
     'detail.modelRecent': 'Recent',
+    'detail.thought': 'Thought',
     'detail.modelAll': 'All models',
     'detail.modelProvider': 'Provider: {provider}',
     'detail.modelContext': 'Context {context} · output {output}',
@@ -807,6 +810,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchEmpty': 'Ningún modelo coincide con la búsqueda.',
     'detail.modelDefault': 'defecto',
     'detail.modelRecent': 'Recientes',
+    'detail.thought': 'Razonamiento',
     'detail.modelAll': 'Todos los modelos',
     'detail.modelProvider': 'Proveedor: {provider}',
     'detail.modelContext': 'Contexto {context} · salida {output}',
@@ -1126,6 +1130,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchEmpty': 'Nessun modello corrisponde alla ricerca.',
     'detail.modelDefault': 'default',
     'detail.modelRecent': 'Recenti',
+    'detail.thought': 'Ragionamento',
     'detail.modelAll': 'Tutti i modelli',
     'detail.modelProvider': 'Provider: {provider}',
     'detail.modelContext': 'Contesto {context} · output {output}',
@@ -1409,6 +1414,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchEmpty': '沒有符合搜尋的模型。',
     'detail.modelDefault': '預設',
     'detail.modelRecent': '最近使用',
+    'detail.thought': '思考',
     'detail.modelAll': '所有模型',
     'detail.modelProvider': '提供者：{provider}',
     'detail.modelContext': '上下文 {context} · 輸出 {output}',
