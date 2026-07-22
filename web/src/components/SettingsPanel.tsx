@@ -122,7 +122,7 @@ export const SettingsPanel = memo(function SettingsPanel({
 
         <label htmlFor="port">
           {t('settings.port')}
-          <input id="port" type="number" value={draftConfig.port} onChange={(e) => setField("port", Number(e.target.value || 0))} placeholder="4096" />
+          <input id="port" type="number" value={draftConfig.port || 4096} onChange={(e) => setField("port", Number(e.target.value || 4096))} placeholder="4096" />
         </label>
 
         <label htmlFor="username">

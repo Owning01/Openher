@@ -37,6 +37,18 @@ import { useAutoSummarize } from "./hooks/useAutoSummarize"
 import { ThemeVariantProvider } from "./context/themeVariant"
 import { ThemePicker } from "./components/ThemePicker"
 import { SessionTokenUsage } from "./components/SessionTokenUsage"
+import { MCPBrowser } from "./components/MCPBrowser"
+import { ArchivedList } from "./components/ArchivedList"
+import { ShortcutsModal } from "./components/ShortcutsModal"
+import { FileEditor } from "./components/FileEditor"
+import { TerminalView } from "./components/TerminalView"
+import { ThemeCreator } from "./components/ThemeCreator"
+import { FavoritesManager } from "./components/FavoritesManager"
+import { useShell } from "./hooks/useShell"
+import { useOfflineQueue } from "./hooks/useOfflineQueue"
+import { useNotifications, loadNotificationFlags } from "./hooks/useNotifications"
+import { useDeepLink } from "./hooks/useDeepLink"
+import type { NotificationFlags } from "./hooks/useNotifications"
 import { CloseIcon } from "./Icons"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
@@ -72,7 +84,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     runtimeError, setRuntimeError,
     renderedMessages, messageScrollSignature, assistantResponseSignature,
     toolMessage, completionShouldPlayRef,
-    clearSession, loadSelected, send, abortSession, sendShell,
+    clearSession, loadSelected, send, abortSession,
     setMessages
   } = useMessages(config)
 
@@ -134,6 +146,65 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const saved = localStorage.getItem(STORAGE_KEYS.NAVBAR)
     return saved === "header" || saved === "bottom" ? saved : "bottom"
   })
+
+  // ===== Feature: MCP Browser =====
+  const [showMCPBrowser, setShowMCPBrowser] = useState(false)
+
+  // ===== Feature: Archived View =====
+  const [showArchivedView, setShowArchivedView] = useState(false)
+
+  // ===== Feature: File Editor =====
+  const [fileEditorPath, setFileEditorPath] = useState<string | null>(null)
+
+  // ===== Feature: Terminal =====
+  const { lines: shellLines, running: shellRunning, execute: shellExecute, clear: shellClear, history: shellHistory } = useShell(config)
+  const [showTerminal, setShowTerminal] = useState(false)
+
+  // ===== Feature: Shortcuts =====
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
+  // ===== Feature: Theme Creator =====
+  const [showThemeCreator, setShowThemeCreator] = useState(false)
+
+  // ===== Feature: Favorites Manager =====
+  const [showFavoritesManager, setShowFavoritesManager] = useState(false)
+
+  // ===== Feature: Offline Queue =====
+  const { enqueue: queueAction, dequeueAll } = useOfflineQueue()
+
+  // ===== Feature: Notifications =====
+  const [notifFlags] = useState<NotificationFlags>(() => loadNotificationFlags())
+  const { notify } = useNotifications()
+
+  // ===== Feature: Deep Link =====
+  useDeepLink((partial) => {
+    setDraftConfig((prev) => ({ ...prev, ...partial }))
+  })
+
+  // Replay offline queue when connected
+  useEffect(() => {
+    if (connectionState !== "connected" || !config || !selectedSession) return
+    dequeueAll().then((actions) => {
+      for (const a of actions) {
+        if (a.type === "prompt") {
+          api.sendPrompt(config, a.sessionID, a.payload, a.directory).catch(() => {})
+        } else if (a.type === "command") {
+          api.sendCommand(config, a.sessionID, a.payload, "", a.directory).catch(() => {})
+        } else if (a.type === "shell") {
+          api.sendShell(config, a.sessionID, a.payload, a.directory).catch(() => {})
+        }
+      }
+    })
+  }, [connectionState, config, selectedSession, dequeueAll])
+
+  // Notify on completion
+  useEffect(() => {
+    if (!notifFlags.onCompletion || !awaitingAssistantReply) return
+    const prev = assistantResponseSignature
+    if (prev) {
+      notify(t('notification.completionTitle'), t('notification.completionBody'))
+    }
+  }, [assistantResponseSignature])
 
   // ===== SSE Streaming =====
   const [streamState, setStreamState] = useState<StreamState>("polling")
@@ -397,6 +468,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   useNetworkMode(changeDataMode)
 
+  // Global ? key for shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        setShowShortcuts(true)
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [])
+
   const handleLanguageChange = useCallback((lang: LanguageCode) => {
     setLanguage(lang)
     localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang)
@@ -404,6 +486,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>) => {
     if (!selectedSession) return
+    if (connectionState === "offline") {
+      queueAction({ type: "prompt", sessionID: selectedSession.id, directory: selectedSession.directory, payload: composer })
+      setComposer("")
+      setRuntimeError("Prompt queued - will send when connection is restored")
+      return
+    }
     recordPrompt(composer)
     setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "busy" } : s))
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
@@ -411,7 +499,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
       setCommands, setRuntimeError, images)
     if (result === "help") { setHelpPage("commands"); setView("help") }
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions])
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer])
 
   const handleAbort = useCallback(async () => {
     if (!selectedSession) return
@@ -514,7 +602,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onArchive={flags.sessionArchive ? (id) => {
               const s = sessions.find(s => s.id === id)
               if (s) api.sendCommand(config, id, "/archive", "", s.directory).catch(() => {})
-            } : undefined} />
+            } : undefined}
+            onFork={(s) => handleCreateSession(s.directory)} />
           {showNewSessionPicker && (
             <FolderPicker
               pickerPath={pickerPath} pickerItems={pickerItems}
@@ -566,7 +655,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onToggleTokenStats={() => setTokenStatsOpen((v) => !v)}
             config={config}
             agents={agentOptions}
-            onShellSend={() => sendShell(selectedSession!.id, selectedSession!.directory)}
+            onShellSend={(cmd) => {
+              if (selectedSession) {
+                if (connectionState === "offline") {
+                  queueAction({ type: "shell", sessionID: selectedSession.id, directory: selectedSession.directory, payload: cmd })
+                } else {
+                  shellExecute(cmd, selectedSession.id, selectedSession.directory)
+                }
+              }
+            }}
             flags={flags}
             onToggleFlag={toggleFlag}
             onSetFlag={setFlag}
@@ -580,7 +677,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onPermissionApprove={handlePermissionApprove}
             onPermissionReject={handlePermissionReject}
             onDismissQuestion={handleDismissQuestion}
-            onDismissPermission={handleDismissPermission} />
+            onDismissPermission={handleDismissPermission}
+            onForkSession={() => selectedSession && handleCreateSession(selectedSession.directory)}
+            onOpenTerminal={() => setShowTerminal(true)}
+            onOpenMCPBrowser={() => setShowMCPBrowser(true)}
+            onOpenArchivedView={() => setShowArchivedView(true)}
+            onOpenThemeCreator={() => setShowThemeCreator(true)}
+            onOpenFavoritesManager={() => setShowFavoritesManager(true)}
+            onOpenShortcuts={() => setShowShortcuts(true)} />
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={() => setActiveDetailSheet(null)}
@@ -647,6 +751,57 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <SessionTokenUsage tokens={selectedSession.tokens} cost={selectedSession.cost} />
           </div>
         </div>
+      )}
+
+      {showMCPBrowser && config && <MCPBrowser config={config} onClose={() => setShowMCPBrowser(false)} />}
+
+      {showArchivedView && (
+        <ArchivedList
+          sessions={sessions.filter((s) => s.status === "archived")}
+          onRestore={(id) => {
+            const s = sessions.find((x) => x.id === id)
+            if (s) api.sendCommand(config, id, "/unarchive", "", s.directory).catch(() => {})
+            setShowArchivedView(false)
+          }}
+          onOpen={(id, dir) => { setShowArchivedView(false); handleOpenSession(id, dir) }}
+          onClose={() => setShowArchivedView(false)}
+        />
+      )}
+
+      {fileEditorPath && config && (
+        <FileEditor
+          config={config}
+          path={fileEditorPath}
+          directory={selectedSession?.directory}
+          onClose={() => setFileEditorPath(null)}
+        />
+      )}
+
+      {showTerminal && selectedSession && (
+        <TerminalView
+          lines={shellLines}
+          running={shellRunning}
+          sessionID={selectedSession.id}
+          directory={selectedSession.directory}
+          onExecute={shellExecute}
+          onClear={shellClear}
+          onClose={() => setShowTerminal(false)}
+          history={shellHistory}
+        />
+      )}
+
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+
+      {showThemeCreator && <ThemeCreator onClose={() => setShowThemeCreator(false)} />}
+
+      {showFavoritesManager && (
+        <FavoritesManager
+          favorites={sessions.filter((s) => favorites.has(s.id))}
+          onReorder={(ids) => {
+            try { localStorage.setItem("opencode.mobile.favoritesOrder", JSON.stringify(ids)) } catch {}
+          }}
+          onClose={() => setShowFavoritesManager(false)}
+        />
       )}
     </div>
   )

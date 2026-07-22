@@ -445,4 +445,15 @@ export const api = {
   fetchDiffContent(config: ServerConfig, sessionID: string, file: string, directory?: string) {
     return request<{ content: string }>(config, withDirectory(`/session/${sessionID}/diff/${encodeURIComponent(file)}`, directory))
   },
+
+  readFile(config: ServerConfig, path: string, directory?: string) {
+    return request<{ content: string }>(config, withDirectory(`/file?path=${encodeURIComponent(normalizeSlashes(path))}`, directory))
+  },
+
+  writeFile(config: ServerConfig, path: string, content: string, directory?: string) {
+    return request<boolean>(config, withDirectory("/file", directory), {
+      method: "POST",
+      body: { path: normalizeSlashes(path), content }
+    })
+  },
 }

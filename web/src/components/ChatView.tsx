@@ -86,6 +86,13 @@ type ChatViewProps = {
   onPermissionReject?: (requestID: string) => void
   onDismissQuestion?: () => void
   onDismissPermission?: () => void
+  onForkSession?: () => void
+  onOpenTerminal?: () => void
+  onOpenMCPBrowser?: () => void
+  onOpenArchivedView?: () => void
+  onOpenThemeCreator?: () => void
+  onOpenFavoritesManager?: () => void
+  onOpenShortcuts?: () => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -101,7 +108,7 @@ export const ChatView = memo(function ChatView({
   flags, onToggleFlag: _onToggleFlag, onSetFlag: _onSetFlag, diffFiles, projectDashboard,
   streamState, pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
-  onDismissQuestion, onDismissPermission
+  onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager, onOpenShortcuts
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -275,6 +282,48 @@ export const ChatView = memo(function ChatView({
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                     Skills
                   </button>
+                  {onOpenTerminal && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenTerminal() }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                      Terminal
+                    </button>
+                  )}
+                  {onOpenMCPBrowser && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenMCPBrowser() }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                      MCP Resources
+                    </button>
+                  )}
+                  {onOpenArchivedView && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenArchivedView() }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/></svg>
+                      Archived
+                    </button>
+                  )}
+                  {onOpenThemeCreator && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenThemeCreator() }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                      Theme Creator
+                    </button>
+                  )}
+                  {onOpenFavoritesManager && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenFavoritesManager() }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                      Manage Favorites
+                    </button>
+                  )}
+                  {onOpenShortcuts && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenShortcuts() }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h4"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M6 12h.01"/><path d="M10 12h.01"/><path d="M14 12h4"/><path d="M6 16h.01"/><path d="M10 16h.01"/><path d="M14 16h4"/></svg>
+                      Shortcuts
+                    </button>
+                  )}
+                  {onForkSession && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onForkSession() }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 3v12"/><path d="M18 3v12"/><path d="M6 15c0 3 3 5 6 5s6-2 6-5"/></svg>
+                      Fork Session
+                    </button>
+                  )}
                 </div>
               )}
             </div>

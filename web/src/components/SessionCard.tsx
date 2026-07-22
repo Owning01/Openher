@@ -21,12 +21,13 @@ type SessionCardProps = {
   onExportChat?: (session: SessionView) => void
   onSnapshot?: (session: SessionView) => void
   onArchive?: (id: string) => void
+  onFork?: (session: SessionView) => void
 }
 
 export const SessionCard = memo(function SessionCard({
   session, isSelected, isRenaming, renameValue, isFavorite,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
-  onToggleFavorite, onExportChat, onSnapshot, onArchive
+  onToggleFavorite, onExportChat, onSnapshot, onArchive, onFork
 }: SessionCardProps) {
   const t = useT()
 
@@ -110,6 +111,11 @@ export const SessionCard = memo(function SessionCard({
           <button className="btn-icon compact" onClick={(e) => { e.stopPropagation(); onArchive(session.id) }}
             title={t('detail.archive')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+          </button>
+        )}
+        {onFork && (
+          <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); onFork(session) }} title={t('session.fork') || "Fork"}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 3v12"/><path d="M18 3v12"/><path d="M6 15c0 3 3 5 6 5s6-2 6-5"/></svg>
           </button>
         )}
         <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); handleStartRename() }} title={t('session.renameTitle')}>

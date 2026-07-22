@@ -72,5 +72,34 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
     } catch { return null }
   }, [flags.offlineCache])
 
-  return { cacheSessions, getCachedSessions, cacheMessages, getCachedMessages }
+  const searchMessages = useCallback(async (query: string): Promise<Array<{ sessionID: string; text: string; messageID: string }>> => {
+    if (!dbRef.current || !flags.offlineCache || !query.trim()) return []
+    try {
+      const tx = dbRef.current.transaction(DB_STORES.messages, "readonly")
+      const store = tx.objectStore(DB_STORES.messages)
+      const all = await new Promise<any[]>((resolve, reject) => {
+        const req = store.getAll()
+        req.onsuccess = () => resolve(req.result)
+        req.onerror = () => reject(req.error)
+      })
+      const q = query.toLowerCase()
+      const results: Array<{ sessionID: string; text: string; messageID: string }> = []
+      for (const entry of all) {
+        if (!entry.messages) continue
+        for (const msg of entry.messages) {
+          for (const part of msg.parts || []) {
+            if (part.text && part.text.toLowerCase().includes(q)) {
+              results.push({ sessionID: entry.sessionID, text: part.text.slice(0, 200), messageID: msg.info?.id || "" })
+              if (results.length >= 50) break
+            }
+          }
+          if (results.length >= 50) break
+        }
+        if (results.length >= 50) break
+      }
+      return results
+    } catch { return [] }
+  }, [flags.offlineCache])
+
+  return { cacheSessions, getCachedSessions, cacheMessages, getCachedMessages, searchMessages }
 }

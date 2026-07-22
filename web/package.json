@@ -13,7 +13,9 @@
     "cap:add:android": "npx cap add android",
     "test:ui": "node src/ui-regression.test.mjs",
     "test:settings": "node src/settings-regression.test.mjs",
-    "test:model": "node src/model-regression.test.mjs"
+    "test:model": "node src/model-regression.test.mjs",
+    "benchmark": "node benchmarks/runner.mjs",
+    "benchmark:report": "node benchmarks/runner.mjs > benchmarks/report.txt"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "^7.0.1",

@@ -8,13 +8,16 @@ type Props = {
   config?: ServerConfig
   sessionID?: string
   directory?: string
+  onApplyDiff?: (file: string) => void
+  onRejectDiff?: (file: string) => void
 }
 
-export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, directory }: Props) {
+export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, directory, onApplyDiff, onRejectDiff }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [contents, setContents] = useState<Record<string, DiffContent>>({})
   const [loading, setLoading] = useState<string | null>(null)
   const loadingRef = useRef<Set<string>>(new Set())
+  const [applying, setApplying] = useState<string | null>(null)
 
   const toggleExpand = useCallback(async (file: string) => {
     if (expanded === file) {
@@ -36,6 +39,10 @@ export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, d
       }
     }
   }, [expanded, contents, config, sessionID, directory])
+
+  const handleApply = useCallback(async (file: string) => {
+    if (onApplyDiff) { setApplying(file); onApplyDiff(file); setApplying(null) }
+  }, [onApplyDiff])
 
   if (files.length === 0) return null
 
@@ -60,7 +67,21 @@ export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, d
               {loading === f.file ? (
                 <div className="diff-loading">Loading diff...</div>
               ) : contents[f.file] ? (
-                <pre className="diff-content"><code>{contents[f.file].content}</code></pre>
+                <>
+                  <pre className="diff-content"><code>{contents[f.file].content}</code></pre>
+                  {(onApplyDiff || onRejectDiff) && (
+                    <div className="diff-actions">
+                      {onApplyDiff && (
+                        <button className="btn-primary compact" onClick={() => handleApply(f.file)} disabled={applying === f.file}>
+                          {applying === f.file ? "..." : "✓ Apply"}
+                        </button>
+                      )}
+                      {onRejectDiff && (
+                        <button className="btn-secondary compact" onClick={() => onRejectDiff(f.file)}>✗ Reject</button>
+                      )}
+                    </div>
+                  )}
+                </>
               ) : (
                 <DiffMini lines={f.additions + f.deletions} />
               )}

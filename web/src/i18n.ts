@@ -256,6 +256,32 @@ type TranslationKey =
   | 'settings.questionPlaceholder'
   | 'settings.questionSend'
   | 'settings.questionSkip'
+  | 'session.fork'
+  | 'session.restore'
+  | 'session.archiveView'
+  | 'notification.completionTitle'
+  | 'notification.completionBody'
+  | 'notification.questionTitle'
+  | 'notification.questionBody'
+  | 'notification.errorBody'
+  | 'mcpBrowser.title'
+  | 'mcpBrowser.empty'
+  | 'mcpBrowser.search'
+  | 'fileEditor.title'
+  | 'fileEditor.save'
+  | 'fileEditor.saving'
+  | 'fileEditor.loading'
+  | 'fileEditor.noChanges'
+  | 'terminal.title'
+  | 'terminal.clear'
+  | 'terminal.input'
+  | 'terminal.welcome'
+  | 'shortcuts.title'
+  | 'favorites.manage'
+  | 'favorites.saveOrder'
+  | 'favorites.empty'
+  | 'offlineQueue.pending'
+  | 'themeCreator.title'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
@@ -549,7 +575,33 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.commands.serverTab': 'Server Commands',
     'help.commands.skillsTab': 'Skills',
     'help.commands.empty': 'No {type} available',
-    'help.commands.emptyConnected': 'Connect to a server to see available commands and skills'
+    'help.commands.emptyConnected': 'Connect to a server to see available commands and skills',
+    'session.fork': 'Fork',
+    'session.restore': 'Restore',
+    'session.archiveView': 'Archived sessions',
+    'notification.completionTitle': 'OpenCode Complete',
+    'notification.completionBody': 'Assistant finished replying',
+    'notification.questionTitle': 'Question from AI',
+    'notification.questionBody': 'The AI has a question for you',
+    'notification.errorBody': 'An error occurred',
+    'mcpBrowser.title': 'MCP Resources',
+    'mcpBrowser.empty': 'No MCP resources available',
+    'mcpBrowser.search': 'Search resources...',
+    'fileEditor.title': 'File Editor',
+    'fileEditor.save': 'Save',
+    'fileEditor.saving': 'Saving...',
+    'fileEditor.loading': 'Loading file...',
+    'fileEditor.noChanges': 'No changes',
+    'terminal.title': 'Terminal',
+    'terminal.clear': 'Clear',
+    'terminal.input': 'Enter shell command',
+    'terminal.welcome': 'Type a command to run in the project shell',
+    'shortcuts.title': 'Keyboard Shortcuts',
+    'favorites.manage': 'Manage Favorites',
+    'favorites.saveOrder': 'Save Order',
+    'favorites.empty': 'No favorites yet',
+    'offlineQueue.pending': 'Pending actions in queue',
+    'themeCreator.title': 'Theme Creator'
   },
   es: {
     'app.title': 'OpenCode Remoto',
@@ -842,7 +894,33 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.commands.serverTab': 'Comandos del Servidor',
     'help.commands.skillsTab': 'Skills',
     'help.commands.empty': 'No hay {type} disponibles',
-    'help.commands.emptyConnected': 'Conéctate a un servidor para ver los comandos y skills disponibles'
+    'help.commands.emptyConnected': 'Conéctate a un servidor para ver los comandos y skills disponibles',
+    'session.fork': 'Bifurcar',
+    'session.restore': 'Restaurar',
+    'session.archiveView': 'Sesiones archivadas',
+    'notification.completionTitle': 'OpenCode Completado',
+    'notification.completionBody': 'El asistente terminó de responder',
+    'notification.questionTitle': 'Pregunta del AI',
+    'notification.questionBody': 'El AI tiene una pregunta para ti',
+    'notification.errorBody': 'Ocurrió un error',
+    'mcpBrowser.title': 'Recursos MCP',
+    'mcpBrowser.empty': 'No hay recursos MCP disponibles',
+    'mcpBrowser.search': 'Buscar recursos...',
+    'fileEditor.title': 'Editor de Archivos',
+    'fileEditor.save': 'Guardar',
+    'fileEditor.saving': 'Guardando...',
+    'fileEditor.loading': 'Cargando archivo...',
+    'fileEditor.noChanges': 'Sin cambios',
+    'terminal.title': 'Terminal',
+    'terminal.clear': 'Limpiar',
+    'terminal.input': 'Ingresa comando shell',
+    'terminal.welcome': 'Escribe un comando para ejecutar en el shell del proyecto',
+    'shortcuts.title': 'Atajos de Teclado',
+    'favorites.manage': 'Gestionar Favoritos',
+    'favorites.saveOrder': 'Guardar Orden',
+    'favorites.empty': 'Sin favoritos aún',
+    'offlineQueue.pending': 'Acciones pendientes en cola',
+    'themeCreator.title': 'Creador de Temas'
   },
   it: {
     'app.title': 'OpenCode Mobile',
@@ -1099,7 +1177,33 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.commands.serverTab': 'Comandi del Server',
     'help.commands.skillsTab': 'Skills',
     'help.commands.empty': 'Nessun {type} disponibile',
-    'help.commands.emptyConnected': 'Connettiti a un server per vedere comandi e skills disponibili'
+    'help.commands.emptyConnected': 'Connettiti a un server per vedere comandi e skills disponibili',
+    'session.fork': 'Deriva',
+    'session.restore': 'Ripristina',
+    'session.archiveView': 'Sessioni archiviate',
+    'notification.completionTitle': 'OpenCode Completato',
+    'notification.completionBody': "L'assistente ha finito di rispondere",
+    'notification.questionTitle': 'Domanda dall\'AI',
+    'notification.questionBody': "L'AI ha una domanda per te",
+    'notification.errorBody': "Si è verificato un errore",
+    'mcpBrowser.title': 'Risorse MCP',
+    'mcpBrowser.empty': 'Nessuna risorsa MCP disponibile',
+    'mcpBrowser.search': 'Cerca risorse...',
+    'fileEditor.title': 'Editor File',
+    'fileEditor.save': 'Salva',
+    'fileEditor.saving': 'Salvataggio...',
+    'fileEditor.loading': 'Caricamento file...',
+    'fileEditor.noChanges': 'Nessuna modifica',
+    'terminal.title': 'Terminale',
+    'terminal.clear': 'Pulisci',
+    'terminal.input': 'Inserisci comando shell',
+    'terminal.welcome': 'Digita un comando da eseguire nella shell del progetto',
+    'shortcuts.title': 'Scorciatoie da Tastiera',
+    'favorites.manage': 'Gestisci Preferiti',
+    'favorites.saveOrder': 'Salva Ordine',
+    'favorites.empty': 'Ancora nessun preferito',
+    'offlineQueue.pending': 'Azioni in coda',
+    'themeCreator.title': 'Creatore di Temi'
   },
   'zh-TW': {
     'app.title': 'OpenCode 遠端',
@@ -1356,7 +1460,33 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.commands.serverTab': '伺服器命令',
     'help.commands.skillsTab': '技能',
     'help.commands.empty': '沒有可用的 {type}',
-    'help.commands.emptyConnected': '連線至伺服器以查看可用的命令與技能'
+    'help.commands.emptyConnected': '連線至伺服器以查看可用的命令與技能',
+    'session.fork': '分岔',
+    'session.restore': '還原',
+    'session.archiveView': '已封存的工作階段',
+    'notification.completionTitle': 'OpenCode 完成',
+    'notification.completionBody': '助手已完成回覆',
+    'notification.questionTitle': 'AI 有問題',
+    'notification.questionBody': 'AI 有一個問題想問你',
+    'notification.errorBody': '發生錯誤',
+    'mcpBrowser.title': 'MCP 資源',
+    'mcpBrowser.empty': '沒有可用的 MCP 資源',
+    'mcpBrowser.search': '搜尋資源...',
+    'fileEditor.title': '檔案編輯器',
+    'fileEditor.save': '儲存',
+    'fileEditor.saving': '儲存中...',
+    'fileEditor.loading': '載入檔案中...',
+    'fileEditor.noChanges': '無變更',
+    'terminal.title': '終端機',
+    'terminal.clear': '清除',
+    'terminal.input': '輸入 shell 指令',
+    'terminal.welcome': '輸入要在專案 shell 中執行的指令',
+    'shortcuts.title': '鍵盤快捷鍵',
+    'favorites.manage': '管理最愛',
+    'favorites.saveOrder': '儲存順序',
+    'favorites.empty': '尚無最愛',
+    'offlineQueue.pending': '佇列中有待處理的動作',
+    'themeCreator.title': '主題建立器'
   }
 }
 

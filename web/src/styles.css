@@ -4820,3 +4820,84 @@ button.compact {
   opacity: 0.4;
   cursor: default;
 }
+
+/* ===== MCP Browser ===== */
+.mcp-browser { max-width: 500px; }
+.mcp-list { display: flex; flex-direction: column; gap: 1px; margin-top: var(--space-3); }
+.mcp-item { display: flex; flex-direction: column; gap: 0.2rem; padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: var(--radius-sm); }
+.mcp-item.clickable { cursor: pointer; }
+.mcp-item.clickable:hover { background: var(--surface-strong); }
+.mcp-id { font-size: 0.7rem; color: var(--muted); }
+
+/* ===== Image Lightbox ===== */
+.image-lightbox-overlay { background: rgba(0,0,0,0.92); z-index: 100000; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.lightbox-close { position: absolute; top: var(--space-4); right: var(--space-4); z-index: 100001; }
+.image-lightbox-container { display: flex; align-items: center; justify-content: center; cursor: grab; user-select: none; }
+
+/* ===== Shortcuts Modal ===== */
+.shortcuts-modal { max-width: 420px; }
+.shortcuts-table { width: 100%; border-collapse: collapse; }
+.shortcuts-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+.shortcuts-table tr:last-child td { border-bottom: none; }
+.shortcut-key { display: inline-block; padding: 0.1rem 0.5rem; background: var(--surface-strong); border: 1px solid var(--border); border-radius: 4px; font-size: 0.8rem; font-family: inherit; white-space: nowrap; }
+
+/* ===== Archived List ===== */
+.archived-list { max-width: 500px; }
+.archived-list-items { display: flex; flex-direction: column; gap: var(--space-2); }
+.archived-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: var(--radius-sm); }
+.archived-item-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
+.archived-item-actions { display: flex; gap: var(--space-2); flex-shrink: 0; }
+
+/* ===== Inline Diff ===== */
+.inline-diff { margin: var(--space-2) 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.inline-diff-lang { font-size: 0.7rem; padding: 0.15rem 0.5rem; background: var(--surface-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.inline-diff-pre { margin: 0; padding: var(--space-2); font-size: 0.78rem; line-height: 1.5; overflow-x: auto; }
+.inline-diff-line { display: block; white-space: pre; }
+.inline-diff-line.diff-add { background: rgba(76,175,125,0.15); color: var(--success); }
+.inline-diff-line.diff-rem { background: rgba(229,85,69,0.15); color: var(--danger); }
+.inline-diff-line.diff-hunk { color: var(--muted); font-weight: 600; }
+
+/* ===== File Editor ===== */
+.file-editor { max-width: 800px; width: 90vw; height: 80vh; display: flex; flex-direction: column; }
+.file-editor-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.file-editor-textarea { flex: 1; width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-3); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem; line-height: 1.5; resize: none; tab-size: 2; }
+
+/* ===== Terminal ===== */
+.terminal-modal { max-width: 700px; width: 90vw; height: 70vh; display: flex; flex-direction: column; }
+.terminal-body { flex: 1; display: flex; flex-direction: column; min-height: 0; background: #0a0a0f; border-radius: 0 0 var(--radius-md) var(--radius-md); }
+.terminal-output { flex: 1; overflow-y: auto; padding: var(--space-3); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem; line-height: 1.5; }
+.terminal-line { white-space: pre-wrap; word-break: break-all; }
+.terminal-line pre { margin: 0; }
+.terminal-input { color: var(--success); }
+.terminal-output { color: #ccc; }
+.terminal-error { color: var(--danger); }
+.terminal-welcome { color: var(--muted); font-style: italic; }
+.terminal-input-row { display: flex; align-items: stretch; border-top: 1px solid #222; background: #0d0d14; }
+.terminal-prompt { padding: var(--space-2) var(--space-2); color: var(--success); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5; flex-shrink: 0; }
+.terminal-input { flex: 1; background: transparent; border: none; color: #eee; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; padding: var(--space-2) 0; outline: none; resize: none; line-height: 1.5; }
+
+/* ===== Diff Apply/Reject Actions ===== */
+.diff-actions { display: flex; gap: var(--space-2); padding: var(--space-2); border-top: 1px solid var(--border); }
+
+/* ===== Theme Creator ===== */
+.theme-creator { max-width: 500px; max-height: 80vh; overflow-y: auto; }
+.theme-color-grid { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-3) 0; }
+.theme-color-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.theme-color-item span { flex-shrink: 0; min-width: 80px; font-size: 0.85rem; }
+.theme-color-input-row { display: flex; align-items: center; gap: var(--space-2); }
+.theme-color-input-row input[type="color"] { width: 36px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: none; }
+.theme-color-hex { width: 90px; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; }
+
+/* ===== Favorites Manager ===== */
+.favorites-manager { max-width: 500px; }
+.favorites-list { display: flex; flex-direction: column; gap: 2px; margin: var(--space-3) 0; }
+.favorite-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: var(--radius-sm); cursor: grab; }
+.favorite-item.dragging { opacity: 0.5; }
+.favorite-drag-handle { cursor: grab; color: var(--muted); font-size: 1.1rem; user-select: none; }
+.favorite-item-info { display: flex; flex-direction: column; gap: 0.15rem; flex: 1; min-width: 0; }
+.favorite-item-arrows { display: flex; flex-direction: column; gap: 2px; }
+.favorite-item-arrows button { font-size: 0.7rem; padding: 0.1rem 0.3rem; line-height: 1; }
+
+/* ===== Message search bar in ChatView ===== */
+.message-search-bar { padding: var(--space-2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: var(--space-2); }
+.message-search-count { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
