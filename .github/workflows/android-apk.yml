@@ -1,7 +1,15 @@
 name: Build Android APK
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v1.0.0)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -19,19 +27,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Install web dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         working-directory: web
 
       - name: Build web app
-        run: npm run build
+        run: pnpm build
         working-directory: web
 
       - name: Setup JDK 21
@@ -43,7 +56,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android 36 SDK packages
+      - name: Install Android SDK packages
         run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Accept Android SDK licenses
@@ -75,66 +88,75 @@ jobs:
       - name: Sync Android version metadata
         run: node web/scripts/sync-android-version.mjs "${{ steps.version.outputs.app_version }}" "${{ steps.version.outputs.version_code }}"
 
-      - name: Build release APK (unsigned)
+      - name: Decode keystore for Gradle signing
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > web/android/app/release.keystore
+          echo "ANDROID_KEYSTORE_PATH=release.keystore" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
         run: ./gradlew assembleRelease --stacktrace --no-daemon
         working-directory: web/android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ env.ANDROID_KEYSTORE_PATH || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || '' }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || '' }}
 
-      - name: Require signing secrets for tagged release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Verify APK signature
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
         run: |
-          test -n "$ANDROID_KEYSTORE_BASE64" || (echo "Missing ANDROID_KEYSTORE_BASE64" && exit 1)
-          test -n "$ANDROID_KEYSTORE_PASSWORD" || (echo "Missing ANDROID_KEYSTORE_PASSWORD" && exit 1)
-          test -n "$ANDROID_KEY_ALIAS" || (echo "Missing ANDROID_KEY_ALIAS" && exit 1)
-          test -n "$ANDROID_KEY_PASSWORD" || (echo "Missing ANDROID_KEY_PASSWORD" && exit 1)
-
-      - name: Decode Android release keystore
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != '' }}
-        run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > web/android/release.keystore
-
-      - name: Sign release APK
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != '' }}
-        run: |
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
-            --ks web/android/release.keystore \
-            --ks-pass pass:"$ANDROID_KEYSTORE_PASSWORD" \
-            --ks-key-alias "$ANDROID_KEY_ALIAS" \
-            --key-pass pass:"$ANDROID_KEY_PASSWORD" \
-            --out web/android/app/build/outputs/apk/release/app-release-signed.apk \
-            web/android/app/build/outputs/apk/release/app-release-unsigned.apk
-
-      - name: Verify release APK signature
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != '' }}
-        run: |
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose web/android/app/build/outputs/apk/release/app-release-signed.apk
-
-      - name: Select release APK path
-        id: apk
-        run: |
-          if [ -f web/android/app/build/outputs/apk/release/app-release-signed.apk ]; then
-            echo "path=web/android/app/build/outputs/apk/release/app-release-signed.apk" >> "$GITHUB_OUTPUT"
-          else
-            echo "path=web/android/app/build/outputs/apk/release/app-release-unsigned.apk" >> "$GITHUB_OUTPUT"
-          fi
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose web/android/app/build/outputs/apk/release/app-release.apk
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: opencode-remote-release-apk-v${{ steps.version.outputs.app_version }}
-          path: ${{ steps.apk.outputs.path }}
+          name: opencode-mobile-apk-v${{ steps.version.outputs.app_version }}
+          path: web/android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Generate release notes
+        id: release_body
+        run: |
+          cat > /tmp/release-body.md << 'RELEASEEOF'
+          ## OpenCode Mobile v${{ steps.version.outputs.app_version }}
+
+          ### ✨ Funcionalidades
+          - **Streaming SSE en tiempo real** — Eventos via `/event` con heartbeat y reconexión automática
+          - **Polling adaptativo** — 4 modos de datos (Full/Saver/Ultra/Miser) con backoff exponencial
+          - **Chat completo** — Prompts, comandos slash, shell, imágenes, undo/redo, revert
+          - **Cache offline** — IndexedDB para navegar sesiones y mensajes sin conexión
+          - **Cola offline** — Las acciones se encolan y reenvían al reconectar
+          - **47 componentes UI** — ChatView, MessageList, Composer, ThinkingBlock, ToolPart, DiffViewer, etc.
+          - **27 hooks React** — useSSE, usePolling, useMessages, useSessions, useAI, etc.
+          - **i18n** — 4 idiomas: español, english, italiano, 繁體中文
+          - **Temas dinámicos** — 30+ temas con creador visual y exportación JSON
+          - **Gestión de sesiones** — Crear, renombrar, eliminar, favoritos, archivar, fork
+          - **MCP Browser** — Explora recursos MCP del servidor
+          - **File Editor** — Lee y edita archivos del proyecto remoto
+          - **Terminal** — Shell integrado con historial
+          - **Image Lightbox** — Zoom, pan y drag en imágenes
+          - **Notificaciones** — Alertas al completar respuesta, preguntas o errores
+          - **Deep Links** — Conexión via `opencode://connect?host=...`
+          - **Atajos de teclado** — Referencia completa de shortcuts
+          - **Feature Flags** — 13 flags experimentales configurables
+
+          ### 📦 Instalación
+          1. Descargar el APK de esta release
+          2. Habilitar "Instalar apps de origen desconocido" en Android
+          3. Abrir el archivo APK e instalar
+
+          ### 🔧 Requisitos
+          - Android 7.0+ (API 24)
+          - Servidor OpenCode corriendo (ver [opencode.ai](https://opencode.ai))
+          RELEASEEOF
+          echo "path=/tmp/release-body.md" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: OpenCode Remote v${{ steps.version.outputs.app_version }}
-          files: ${{ steps.apk.outputs.path }}
-          generate_release_notes: true
-          body: |
-            ## Release
-            Stable Android release APK for OpenCode Remote `${{ steps.version.outputs.app_version }}`.
-
-            ## Notes
-            - Built from `${{ github.sha }}`
-            - Version code `${{ steps.version.outputs.version_code }}`
+          name: OpenCode Mobile v${{ steps.version.outputs.app_version }}
+          files: web/android/app/build/outputs/apk/release/app-release.apk
+          body_path: ${{ steps.release_body.outputs.path }}
+          fail_on_unmatched_files: true
