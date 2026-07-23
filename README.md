@@ -4,7 +4,7 @@
 
 # OpenCode Mobile
 
-**Cliente Android para [OpenCode](https://opencode.ai) — tu asistente de codificación AI desde el celular**
+**Cliente Android/iOS para [OpenCode](https://opencode.ai) — tu asistente de codificación AI desde el celular**
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=white" alt="React 18"/>
@@ -169,6 +169,8 @@ flowchart LR
 
 O construíla vos mismo (ver [desarrollo](#-desarrollo)).
 
+**iOS** (requiere macOS + Xcode 16+): cloná el repo y abrí `web/ios/App/App.xcworkspace` en Xcode, seleccioná tu team de desarrollo y Build & Run.
+
 ---
 
 ### 🖥️ 2 — Descargá **opencode-tunnel.exe** y ejecutalo
@@ -259,6 +261,7 @@ web/
 │   ├── i18n.ts           # 4 idiomas
 │   └── styles.css        # Sistema de diseño completo
 ├── android/              # Proyecto nativo Android
+├── ios/                  # Proyecto nativo iOS (Xcode)
 ```
 
 ---

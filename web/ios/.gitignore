@@ -1,0 +1,14 @@
+build/
+DerivedData/
+*.xcworkspace/xcuserdata/
+Pods/
+
+# Xcode user data
+*.xcuserdata
+xcuserdata/
+
+# Generated files
+*.app
+*.ipa
+*.dSYM.zip
+*.dSYM

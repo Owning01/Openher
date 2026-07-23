@@ -1,0 +1,22 @@
+{
+	"appId": "ai.opencode.remote.web",
+	"appName": "OpenCode Mobile",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "http",
+		"iosScheme": "http",
+		"cleartext": true
+	},
+	"ios": {
+		"contentInset": "always",
+		"preferredContentMode": "mobile"
+	},
+	"packageClassList": [
+		"SpeechRecognition",
+		"AppPlugin",
+		"CAPCameraPlugin",
+		"DialogPlugin",
+		"FilesystemPlugin",
+		"CAPNetworkPlugin"
+	]
+}

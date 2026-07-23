@@ -6,7 +6,12 @@ const config: CapacitorConfig = {
   webDir: "dist",
   server: {
     androidScheme: "http",
+    iosScheme: "http",
     cleartext: true
+  },
+  ios: {
+    contentInset: "always",
+    preferredContentMode: "mobile"
   }
 }
 
