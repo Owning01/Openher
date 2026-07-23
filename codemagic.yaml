@@ -1,0 +1,41 @@
+workflows:
+  ios:
+    name: Build iOS (IPA)
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      node: 20
+      xcode: 16
+    scripts:
+      - cd web
+      - corepack enable && corepack prepare pnpm@10.32.0 --activate
+      - pnpm install --frozen-lockfile
+      - pnpm build
+      - npx cap sync ios
+      - cd ios/App
+      - xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$APPLE_SIGNING_IDENTITY" PROVISIONING_PROFILE_SPECIFIER="$APPLE_PROVISIONING_PROFILE" DEVELOPMENT_TEAM="$APPLE_DEVELOPER_TEAM"
+    artifacts:
+      - ~/Library/Developer/Xcode/DerivedData/**/Build/**/*.ipa
+    publishing:
+      app_store_connect:
+        apple_id: "$APPLE_ID"
+        password: "$APPLE_APP_SPECIFIC_PASSWORD"
+
+  android:
+    name: Build Android (APK/AAB)
+    max_build_duration: 20
+    instance_type: mac_mini_m2
+    environment:
+      node: 20
+      java: 17
+    scripts:
+      - cd web
+      - corepack enable && corepack prepare pnpm@10.32.0 --activate
+      - pnpm install --frozen-lockfile
+      - pnpm build
+      - npx cap sync android
+      - cd android
+      - ./gradlew assembleRelease
+    artifacts:
+      - web/android/app/build/outputs/**/*.apk
+      - web/android/app/build/outputs/**/*.aab
