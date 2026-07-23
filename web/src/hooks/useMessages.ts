@@ -239,7 +239,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     }
   }, [config, loadSelected])
 
-  const applyDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace = false) => {
+  const applyDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace = false, partType = "text") => {
     setMessages((prev) => {
       const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
       if (!existing) {
@@ -250,7 +250,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
             sessionID,
             time: { created: Date.now() },
           },
-          parts: [{ id: partID, type: "text", text }]
+          parts: [{ id: partID, type: partType, text }]
         }]
       }
       let changed = false
@@ -261,15 +261,15 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
           if (replace) {
             if (p.text === text) return p
             changed = true
-            return { ...p, text }
+            return { ...p, text, type: partType }
           }
           if (p.text?.endsWith(text)) return p
           changed = true
-          return { ...p, text: (p.text ?? "") + text }
+          return { ...p, text: (p.text ?? "") + text, type: partType }
         })
         if (!nextParts.some((p) => p.id === partID)) {
           changed = true
-          return { ...m, parts: [...nextParts, { id: partID, type: "text", text }] }
+          return { ...m, parts: [...nextParts, { id: partID, type: partType, text }] }
         }
         return { ...m, parts: nextParts }
       })

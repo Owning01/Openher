@@ -240,8 +240,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       const partID = p.partID as string | undefined
       const hasDelta = typeof p.delta === "string"
       const text = (hasDelta ? p.delta : p.text ?? "") as string
+      const partType = (p.type ?? p.partType ?? "text") as string
       if (sessionID && messageID && partID && text && sessionID === selectedSession?.id) {
-        applyDelta(sessionID, messageID, partID, text, !hasDelta)
+        applyDelta(sessionID, messageID, partID, text, !hasDelta, partType)
       }
       return
     }
