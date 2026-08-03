@@ -33,5 +33,10 @@ web/deploy-ngrok.ps1
 .sisyphus/
 implementation_plan.md
 walkthrough.md
+tmpfiles-page.png
+architecture.html
+architecture.json
+web/android/build-log.txt
+web/dist-stale/
 
 tunnel/tunnel.exe
