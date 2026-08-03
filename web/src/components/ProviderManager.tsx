@@ -1,6 +1,7 @@
 import { memo, useState, useCallback } from "react"
 import { useT } from "../i18n-context"
 import type { ProviderInfo } from "../types"
+import { EyeIcon, EyeOffIcon } from "../Icons"
 
 type ApiKeyModalProps = {
   provider: ProviderInfo
@@ -12,6 +13,7 @@ type ApiKeyModalProps = {
 const ApiKeyModal = memo(function ApiKeyModal({ provider, onConnect, onClose, connecting }: ApiKeyModalProps) {
   const t = useT()
   const [key, setKey] = useState("")
+  const [showKey, setShowKey] = useState(false)
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault()
@@ -27,16 +29,21 @@ const ApiKeyModal = memo(function ApiKeyModal({ provider, onConnect, onClose, co
             <label style={{ display: "block", fontSize: "0.8rem", color: "var(--muted)", marginBottom: "var(--space-1)" }}>
               {t('settings.apiKey')}
             </label>
-            <input
-              type="password"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder={t('settings.apiKeyPlaceholder')}
-              autoFocus
-              disabled={connecting}
-              className="input"
-              style={{ width: "100%", boxSizing: "border-box" }}
-            />
+            <div className="password-wrapper">
+              <input
+                type={showKey ? "text" : "password"}
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                placeholder={t('settings.apiKeyPlaceholder')}
+                autoFocus
+                disabled={connecting}
+                className="input"
+                style={{ width: "100%", boxSizing: "border-box" }}
+              />
+              <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowKey((v) => !v)} tabIndex={-1} disabled={connecting}>
+                {showKey ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+              </button>
+            </div>
           </div>
           {connecting && <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>{t('settings.connecting')}</span>}
           <div className="modal-actions" style={{ gridTemplateColumns: "1fr 1fr" }}>

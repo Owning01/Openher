@@ -141,15 +141,26 @@ export function useConfig() {
   const canTestDraft = canTestConfig(draftConfig)
   const testAlreadyPassedForDraft = lastTestedConfigKey === draftConfigKey
 
-  const saveConfig = useCallback(() => {
+  const saveConfig = useCallback((t?: (key: string, params?: Record<string, string | number>) => string) => {
     setConfig(draftConfig)
     localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(draftConfig))
     writeConfigToFile(draftConfig)
     writeConfigToExternal(draftConfig)
-    setSettingsNotice({ type: "success", text: "Configuration saved. It will be used for Sessions." })
+    const tested = lastTestedConfigKey === configKey(draftConfig)
+    setSettingsNotice({
+      type: "success",
+      text: t
+        ? tested
+          ? t('settings.saved')
+          : `${t('settings.saved')}\n${t('settings.savedNotTested')}`
+        : tested
+          ? "Configuration saved. It will be used for Sessions."
+          : "Configuration saved. It will be used for Sessions.\nTest the connection before using it."
+    })
+    setTimeout(() => setSettingsNotice(null), 6000)
     setConnectionState("connecting")
     setConnectionMessage("Connecting to OpenCode...")
-  }, [draftConfig])
+  }, [draftConfig, lastTestedConfigKey])
 
   const testConnection = useCallback(async (t: (key: string, params?: Record<string, string | number>) => string) => {
     setTestingConnection(true)

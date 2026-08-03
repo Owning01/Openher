@@ -1,5 +1,5 @@
 import { memo, useState, useCallback } from "react"
-import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon } from "../Icons"
+import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo } from "../types"
 import type { LanguageCode } from "../i18n"
@@ -68,6 +68,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   onOpenRemoteConnect
 }: SettingsPanelProps) {
   const t = useT()
+  const [showPassword, setShowPassword] = useState(false)
   const [blockedSearch, setBlockedSearch] = useState("")
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
 
@@ -85,10 +86,10 @@ export const SettingsPanel = memo(function SettingsPanel({
   }
 
   const dataModes = [
-    { value: "full" as const, label: "Full", desc: "3.5s · ~35 KB/min · SSE + audio · datos completos" },
-    { value: "saver" as const, label: "Balance", desc: "15s · ~10 KB/min · payload completo · con audio" },
-    { value: "ultra" as const, label: "Reducido", desc: "30s · ~3.6 KB/min · sin audio · datos esenciales" },
-    { value: "miser" as const, label: "Mínimo", desc: "60s · ~1.8 KB/min · solo texto · sin notificaciones" }
+    { value: "full" as const, label: "Full", desc: t('settings.modeFullDesc') },
+    { value: "saver" as const, label: t('settings.modeSaver'), desc: t('settings.modeSaverDesc') },
+    { value: "ultra" as const, label: t('settings.modeUltra'), desc: t('settings.modeUltraDesc') },
+    { value: "miser" as const, label: t('settings.modeMiser'), desc: t('settings.modeMiserDesc') }
   ]
 
   const featureFlags = [
@@ -99,11 +100,11 @@ export const SettingsPanel = memo(function SettingsPanel({
     { key: "gitOps" as const, label: t('settings.gitOps'), desc: t('settings.gitOpsDesc') },
     { key: "mcpConfig" as const, label: t('settings.mcpConfig'), desc: t('settings.mcpConfigDesc') },
     { key: "sessionArchive" as const, label: t('settings.sessionArchive'), desc: t('settings.sessionArchiveDesc') },
-    { key: "autoSummarize" as const, label: t('settings.autoSummarize'), desc: t('settings.autoSummarizeDesc') },
     { key: "streamingFull" as const, label: t('settings.streamingFull'), desc: t('settings.streamingFullDesc') },
     { key: "offlineCache" as const, label: t('settings.offlineCache'), desc: t('settings.offlineCacheDesc') },
     { key: "questionAuto" as const, label: t('settings.questionAuto'), desc: t('settings.questionAutoDesc') },
     { key: "permissionUI" as const, label: t('settings.permissionUI'), desc: t('settings.permissionUIDesc') },
+    { key: "promptQueue" as const, label: t('settings.promptQueue'), desc: t('settings.promptQueueDesc') },
   ]
 
   return (
@@ -118,23 +119,28 @@ export const SettingsPanel = memo(function SettingsPanel({
 
       {/* Server config */}
       <div className="settings-card">
-        <h3 className="settings-section-title">Servidor</h3>
+        <h3 className="settings-section-title">{t('settings.sectionServer')}</h3>
         <div className="form-grid">
           <label className="form-field">
             <span>{t('settings.host')}</span>
-            <input value={draftConfig.host} onChange={(e) => setField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
+            <input name="host" value={draftConfig.host} onChange={(e) => setField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
           </label>
           <label className="form-field">
             <span>{t('settings.port')}</span>
-            <input type="number" value={draftConfig.port || 4096} onChange={(e) => setField("port", Number(e.target.value || 4096))} placeholder="4096" />
+            <input name="port" type="number" value={draftConfig.port || 4096} onChange={(e) => setField("port", Number(e.target.value || 4096))} placeholder="4096" />
           </label>
           <label className="form-field">
             <span>{t('settings.username')}</span>
-            <input value={draftConfig.username} onChange={(e) => setField("username", e.target.value)} placeholder="opencode" />
+            <input name="username" value={draftConfig.username} onChange={(e) => setField("username", e.target.value)} placeholder="opencode" />
           </label>
           <label className="form-field">
             <span>{t('settings.password')}</span>
-            <input type="password" value={draftConfig.password} onChange={(e) => setField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
+            <div className="password-wrapper">
+              <input name="password" type={showPassword ? "text" : "password"} value={draftConfig.password} onChange={(e) => setField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
+              <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
+                {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+              </button>
+            </div>
           </label>
         </div>
       </div>
@@ -179,11 +185,11 @@ export const SettingsPanel = memo(function SettingsPanel({
 
       {/* Preferences */}
       <div className="settings-card">
-        <h3 className="settings-section-title">Preferencias</h3>
+        <h3 className="settings-section-title">{t('settings.sectionPreferences')}</h3>
         <div className="form-grid">
           <label className="form-field">
             <span>{t('settings.language')}</span>
-            <select value={language} onChange={(e) => onLanguageChange(e.target.value as LanguageCode)}>
+            <select name="language" value={language} onChange={(e) => onLanguageChange(e.target.value as LanguageCode)}>
               {languageOptions.map((option) => (
                 <option key={option.code} value={option.code}>{option.label}</option>
               ))}
@@ -191,7 +197,7 @@ export const SettingsPanel = memo(function SettingsPanel({
           </label>
           <label className="form-field">
             <span>{t('settings.theme')}</span>
-            <select value={theme} onChange={(e) => onThemeChange(e.target.value as "system" | "light" | "dark" | "scheduled")}>
+            <select name="theme" value={theme} onChange={(e) => onThemeChange(e.target.value as "system" | "light" | "dark" | "scheduled")}>
               <option value="system">{t('settings.themeSystem')}</option>
               <option value="light">{t('settings.themeLight')}</option>
               <option value="dark">{t('settings.themeDark')}</option>
@@ -200,7 +206,7 @@ export const SettingsPanel = memo(function SettingsPanel({
           </label>
           <label className="form-field">
             <span>{t('settings.defaultModel')}</span>
-            <select value={selectedModelKey ?? ""}
+            <select name="model" value={selectedModelKey ?? ""}
               onChange={(e) => { const v = e.target.value; if (v) onChangeModel(v) }}>
               <option value="" disabled>{modelOptions.length === 0 ? t('detail.modelLoading') : t('settings.selectModel')}</option>
               {Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values()).map((opt) => (
@@ -236,9 +242,9 @@ export const SettingsPanel = memo(function SettingsPanel({
           })()}
           {onOpenThemePicker && (
             <div className="form-field">
-              <span>Tema visual</span>
+              <span>{t('settings.visualTheme')}</span>
               <button type="button" className="btn-secondary" onClick={onOpenThemePicker}>
-                <span>Switch theme</span>
+                <span>{t('settings.switchTheme')}</span>
                 <span className="badge">33 temas</span>
               </button>
               {activeModelOption && (
@@ -251,8 +257,8 @@ export const SettingsPanel = memo(function SettingsPanel({
 
       {/* Data mode */}
       <div className="settings-card">
-        <h3 className="settings-section-title">Data mode</h3>
-        <p className="subtle">Controls network polling frequency and automatic data loading.</p>
+        <h3 className="settings-section-title">{t('settings.dataModeTitle')}</h3>
+        <p className="subtle">{t('settings.dataModeDesc')}</p>
         <div className="data-mode-grid">
           {dataModes.map((opt) => (
             <button key={opt.value}
@@ -280,20 +286,24 @@ export const SettingsPanel = memo(function SettingsPanel({
               <button type="button"
                 className={`switch-track${flags[key] ? " active" : ""}`}
                 onClick={() => onToggleFlag(key)}
-                aria-pressed={flags[key]}
+                aria-checked={flags[key]}
                 role="switch">
                 <span className="switch-thumb" />
               </button>
             </label>
           ))}
-          {flags.autoSummarize && (
+          {flags.promptQueue && (
             <label className="switch-row">
               <span className="switch-label">
-                <strong>{t('settings.autoSummarizeThreshold')}</strong>
+                <strong>{t('settings.promptQueueMode')}</strong>
+                <small>{t('settings.promptQueueModeDesc')}</small>
               </span>
-              <input type="number" className="switch-input" value={flags.autoSummarizeThreshold}
-                onChange={(e) => onSetFlag("autoSummarizeThreshold", Number(e.target.value))}
-                min={1000} step={1000} />
+              <select name="promptQueueMode" value={flags.promptQueueMode}
+                onChange={(e) => onSetFlag("promptQueueMode", e.target.value as "manual" | "auto")}
+                className="switch-input" style={{ width: "auto", minWidth: 100 }}>
+                <option value="auto">{t('settings.promptQueueModeAuto')}</option>
+                <option value="manual">{t('settings.promptQueueModeManual')}</option>
+              </select>
             </label>
           )}
         </div>
@@ -356,7 +366,7 @@ export const SettingsPanel = memo(function SettingsPanel({
                         <button type="button"
                           className={`switch-track compact${blocked ? "" : " active"}`}
                           onClick={() => blockedModels.toggleBlocked(key)}
-                          aria-pressed={!blocked}
+                          aria-checked={!blocked}
                           role="switch">
                           <span className="switch-thumb" />
                         </button>
@@ -383,9 +393,15 @@ export const SettingsPanel = memo(function SettingsPanel({
             <span className="stat-label">{t('settings.statsSessions')}</span>
           </div>
         </div>
-        <button type="button" className="btn-secondary compact" onClick={onResetStats}>
-          {t('settings.resetStats')}
-        </button>
+        <div className="settings-actions">
+          <button type="button" className="btn-secondary compact" onClick={onResetStats}>
+            {t('settings.resetStats')}
+          </button>
+          <button type="button" className="btn-primary compact" onClick={() => onNavigate("stats")}>
+            <StatsIcon size={14} />
+            {t('settings.serverStats')}
+          </button>
+        </div>
       </div>
 
       <div className="settings-footer">

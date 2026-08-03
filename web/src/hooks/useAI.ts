@@ -131,17 +131,20 @@ export function useAI(config: ServerConfig) {
       const list = await api.listAgents(config, directory)
       setAgentOptions(list)
       setAgentLoadError(null)
-      const saved = localStorage.getItem(agentStorageKey(directory)) || localStorage.getItem(STORAGE_KEYS.AGENT) || ""
+      const saved = localStorage.getItem(STORAGE_KEYS.AGENT) || localStorage.getItem(agentStorageKey(directory)) || ""
       const primary = filterPrimary(list)
       const next = primary.find((agent) => agent.id === saved) ?? primary[0]
       if (next) {
         setSelectedAgentID(next.id)
         localStorage.setItem(agentStorageKey(directory), next.id)
+        if (saved && saved !== next.id && !primary.some((agent) => agent.id === saved)) {
+          localStorage.removeItem(agentStorageKey(directory))
+        }
       }
     } catch (err) {
       setAgentLoadError((err as Error).message)
     }
-  }, [config, selectedAgentID])
+  }, [config])
 
   const loadModels = useCallback(async (directory?: string) => {
     if (!config.host || config.port <= 0) return
@@ -203,7 +206,8 @@ export function useAI(config: ServerConfig) {
 
   const changeAgent = useCallback((nextAgentID: string, directory?: string) => {
     setSelectedAgentID(nextAgentID)
-    localStorage.setItem(agentStorageKey(directory), nextAgentID)
+    localStorage.setItem(STORAGE_KEYS.AGENT, nextAgentID)
+    if (directory) localStorage.setItem(agentStorageKey(directory), nextAgentID)
   }, [])
 
   return {

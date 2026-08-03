@@ -88,6 +88,14 @@ export type SessionStatus = {
   next?: number
 }
 
+export type FileDiff = {
+  file?: string
+  patch?: string
+  additions: number
+  deletions: number
+  status?: string
+}
+
 export type MessageEnvelope = {
   info: {
     id: string
@@ -103,6 +111,7 @@ export type MessageEnvelope = {
     providerID?: string
     mode?: string
     finish?: string
+    summary?: { diffs?: FileDiff[] }
     error?: { name: string; message?: string }
     tokens?: {
       total?: number
@@ -119,6 +128,17 @@ export type MessageEnvelope = {
     text?: string
     data?: string
     mimeType?: string
+    callID?: string
+    tool?: string
+    state?: {
+      status?: string
+      input?: unknown
+      output?: unknown
+      error?: unknown
+      duration?: number
+      metadata?: Record<string, unknown>
+    }
+    time?: { created?: number; completed?: number }
   }>
 }
 
@@ -141,7 +161,24 @@ export type RenderedMessage = {
   text: string
   hasCompaction: boolean
   thinkingParts: ThinkingPart[]
-  toolParts: Array<{ id: string; type: string; text?: string }>
+  toolParts: Array<{
+    id: string
+    type: string
+    text?: string
+    callID?: string
+    tool?: string
+    state?: {
+      status?: string
+      input?: unknown
+      output?: unknown
+      error?: unknown
+      duration?: number
+      title?: string
+      metadata?: Record<string, unknown>
+    }
+  }>
+  summaryDiffs?: FileDiff[]
+  dataMode?: string
   tokens?: MessageTokens
   cost?: number
 }
@@ -182,6 +219,13 @@ export type FileStatusEntry = {
   [key: string]: unknown
 }
 
+export type QueuedPrompt = {
+  id: string
+  text: string
+  timestamp: number
+  images?: Array<{ base64: string; mime: string }>
+}
+
 export type FeatureFlags = {
   fileBrowser: boolean
   inlineDiff: boolean
@@ -190,12 +234,12 @@ export type FeatureFlags = {
   gitOps: boolean
   mcpConfig: boolean
   sessionArchive: boolean
-  autoSummarize: boolean
-  autoSummarizeThreshold: number
   streamingFull: boolean
   offlineCache: boolean
   questionAuto: boolean
   permissionUI: boolean
+  promptQueue: boolean
+  promptQueueMode: "manual" | "auto"
 }
 
 export type FileEntry = {
@@ -254,7 +298,7 @@ export type NoticeType = "info" | "success" | "error"
 
 export type ThemePreference = "system" | "light" | "dark" | "scheduled"
 
-export type ViewType = "settings" | "sessions" | "detail" | "help"
+export type ViewType = "settings" | "sessions" | "detail" | "help" | "stats"
 
 export type HelpPage = "overview" | "server" | "network" | "troubleshooting" | "commands"
 
@@ -331,3 +375,77 @@ export type TunnelConfig = {
 }
 
 export const DEFAULT_SIGNALING_URL = "wss://opencode-tunnel-signaling.owning01.workers.dev/signal"
+
+export type StatsMeta = {
+  sessions: number
+  models: number
+  since: string
+  until: string
+  avg_cost: number
+  db: string
+  filtered: boolean
+}
+
+export type StatsTotals = {
+  input: number
+  output: number
+  reasoning: number
+  cache_read: number
+  cache_write: number
+}
+
+export type StatsRow = {
+  key?: string
+  model?: string
+  id?: string
+  title?: string
+  start?: string
+  sessions: number
+  requests?: number
+  input: number
+  output: number
+  reasoning: number
+  cache_read: number
+  cache_write: number
+  cost: number
+  est?: number
+}
+
+export type StatsLimitRow = {
+  model: string
+  u5h: number
+  u7d: number
+  u30d: number
+  l5h: number | null
+  l7d: number | null
+  l30d: number | null
+}
+
+export type StatsPriceRow = {
+  model: string
+  in: number
+  out: number
+  cr: number
+  cw: number
+}
+
+export type StatsPayload = {
+  meta: StatsMeta
+  totals: StatsTotals
+  cost: number
+  est_total: number
+  stats: {
+    mas_cara: { cost: number; title: string; model: string }
+    mas_tokens: { title: string; model: string }
+    input_medio: number
+  }
+  days: Array<{ day: string; cost: number }>
+  models_chart: Array<{ model: string; cost: number }>
+  by_model: StatsRow[]
+  by_project: StatsRow[]
+  by_day: StatsRow[]
+  by_month: StatsRow[]
+  sessions: StatsRow[]
+  limits: StatsLimitRow[]
+  prices: StatsPriceRow[]
+}

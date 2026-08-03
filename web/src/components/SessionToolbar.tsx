@@ -18,7 +18,13 @@ type SessionToolbarProps = {
 }
 
 const MODES: DataMode[] = ["full", "saver", "ultra", "miser"]
-const MODE_LABELS: Record<DataMode, string> = { full: "Full", saver: "Balance", ultra: "Reducido", miser: "Mínimo" }
+
+function modeLabel(mode: DataMode, t: (key: string, params?: Record<string, string | number>) => string): string {
+  if (mode === "full") return "Full"
+  if (mode === "saver") return t('settings.modeSaver')
+  if (mode === "ultra") return t('settings.modeUltra')
+  return t('settings.modeMiser')
+}
 
 export const SessionToolbar = memo(function SessionToolbar({
   refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onDataModeChange,
@@ -85,7 +91,7 @@ export const SessionToolbar = memo(function SessionToolbar({
           }}
           title="Data mode"
           style={{ height: 32, padding: "0 0.55rem", display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 700, fontSize: "0.75rem" }}>
-          <span className="mode-btn-text">{MODE_LABELS[dataMode]}</span>
+          <span className="mode-btn-text">{modeLabel(dataMode, t)}</span>
           <ChevronIcon size={10} />
         </button>
         {open && (
@@ -131,7 +137,7 @@ export const SessionToolbar = memo(function SessionToolbar({
                   onDataModeChange(m)
                   setOpen(false)
                 }}>
-                {MODE_LABELS[m]}
+                {modeLabel(m, t)}
               </button>
             ))}
           </div>

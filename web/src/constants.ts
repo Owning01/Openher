@@ -17,10 +17,11 @@ export const STORAGE_KEYS = {
   CHAT_SETTINGS: "opencode.mobile.chatSettings",
   RECENT_DISMISS: "opencode.mobile.recentDismiss",
   MODEL_VARIANT: "opencode.mobile.modelVariant",
-  TUNNEL: "opencode.mobile.tunnel"
+  TUNNEL: "opencode.mobile.tunnel",
+  STATS_PORT: "opencode.remote.statsPort"
 }
 
-export const DEFAULT_AUTO_SUMMARIZE_THRESHOLD = 32000
+export const DEFAULT_STATS_PORT = 8765
 
 export const STREAMING_POLL_INTERVAL_MS = 1000
 export const DEFAULT_POLL_INTERVALS: Record<string, number> = {
@@ -41,5 +42,5 @@ export const POLL_MAX_RETRIES = 5
 export const QUESTION_POLL_INTERVAL_MS = 15_000
 
 export const DB_NAME = "opencode-mobile"
-export const DB_VERSION = 1
+export const DB_VERSION = 2
 export const DB_STORES = { sessions: "sessions", messages: "messages" } as const

@@ -1,6 +1,6 @@
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
 import type { FeatureFlags } from "../types"
-import { STORAGE_KEYS, DEFAULT_AUTO_SUMMARIZE_THRESHOLD } from "../constants"
+import { STORAGE_KEYS } from "../constants"
 import { useLocalStorage } from "./useLocalStorage"
 
 const DEFAULT_FLAGS: FeatureFlags = {
@@ -11,31 +11,35 @@ const DEFAULT_FLAGS: FeatureFlags = {
   gitOps: true,
   mcpConfig: true,
   sessionArchive: true,
-  autoSummarize: true,
-  autoSummarizeThreshold: DEFAULT_AUTO_SUMMARIZE_THRESHOLD,
   streamingFull: true,
   offlineCache: true,
   questionAuto: true,
   permissionUI: true,
+  promptQueue: true,
+  promptQueueMode: "auto",
 }
 
 export function useFeatureFlags() {
-  const [flags, setFlags] = useLocalStorage<FeatureFlags>(STORAGE_KEYS.FEATURE_FLAGS, DEFAULT_FLAGS)
+  // Merge con defaults: si el storage guardó flags viejos (sin streamingFull, etc.)
+  // los campos faltantes toman su default en vez de quedar undefined (que
+  // deshabilitaba el SSE en modo full silenciosamente).
+  const [storedFlags, setStoredFlags] = useLocalStorage<Partial<FeatureFlags>>(STORAGE_KEYS.FEATURE_FLAGS, {})
+  const flags = useMemo<FeatureFlags>(() => ({ ...DEFAULT_FLAGS, ...(storedFlags ?? {}) }), [storedFlags])
 
   const BOOL_FLAGS: ReadonlySet<keyof FeatureFlags> = new Set([
     "fileBrowser", "inlineDiff", "contextMenu", "planBreakdown",
-    "gitOps", "mcpConfig", "sessionArchive", "autoSummarize", "streamingFull",
-    "offlineCache", "questionAuto", "permissionUI"
+    "gitOps", "mcpConfig", "sessionArchive", "streamingFull",
+    "offlineCache", "questionAuto", "permissionUI", "promptQueue"
   ])
 
   const toggleFlag = useCallback((key: keyof FeatureFlags) => {
     if (!BOOL_FLAGS.has(key)) return
-    setFlags((prev) => ({ ...prev, [key]: !prev[key as keyof FeatureFlags] as never }))
-  }, [setFlags])
+    setStoredFlags((prev) => ({ ...(prev ?? {}), [key]: !flags[key] as never }))
+  }, [setStoredFlags, flags])
 
   const setFlag = useCallback(<K extends keyof FeatureFlags>(key: K, value: FeatureFlags[K]) => {
-    setFlags((prev) => ({ ...prev, [key]: value }))
-  }, [setFlags])
+    setStoredFlags((prev) => ({ ...(prev ?? {}), [key]: value }))
+  }, [setStoredFlags])
 
   return { flags, toggleFlag, setFlag }
 }

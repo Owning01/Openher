@@ -80,8 +80,11 @@ export function useSessions(
   const openSession = useCallback(async (id: string, dir: string) => {
     setSelectedID(id)
     setLoadingSessionID(id)
-    await onLoadSelected(id, dir)
-    setLoadingSessionID((current) => (current === id ? null : current))
+    try {
+      await onLoadSelected(id, dir)
+    } finally {
+      setLoadingSessionID((current) => (current === id ? null : current))
+    }
   }, [onLoadSelected])
 
   const refreshSessions = useCallback(async (full = false) => {

@@ -1,5 +1,5 @@
 import { memo, useRef, useEffect, useState, Fragment, useMemo } from "react"
-import { LoadingIcon, ChatIcon, ScrollDownIcon } from "../Icons"
+import { LoadingIcon, ChatIcon, ScrollDownIcon, CompressIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
 import { MessageBubble } from "./MessageBubble"
@@ -9,6 +9,7 @@ type MessageListProps = {
   loadingSessionID: string | null
   selectedID: string | null
   showTypingBubble: boolean
+  compacting?: boolean
   isWorking: boolean
   messageScrollSignature: string
   view: string
@@ -19,11 +20,15 @@ type MessageListProps = {
   directory?: string
   onViewSubagents?: () => void
   onContextMenu?: (x: number, y: number, messageID: string) => void
+  onEditMessage?: (messageID: string, text: string) => void
+  showTodoButton?: boolean
+  onToggleTodos?: () => void
+  todosOpen?: boolean
 }
 
 export const MessageList = memo(function MessageList({
-  messages, loadingSessionID, selectedID, showTypingBubble, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu
+  messages, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -110,10 +115,22 @@ export const MessageList = memo(function MessageList({
                   directory={directory}
                   onViewSubagents={onViewSubagents}
                   onContextMenu={onContextMenu}
+                  onEditMessage={onEditMessage}
+                  showTodoButton={showTodoButton}
+                  onToggleTodos={onToggleTodos}
+                  todosOpen={todosOpen}
                 />
               </Fragment>
             ))}
-            {showTypingBubble && (
+            {compacting && (
+              <article className="message assistant compacting-bubble fade-in" aria-label="Compacting session">
+                <div className="compacting-indicator" aria-hidden="true">
+                  <CompressIcon size={18} />
+                  <span>Compacting session...</span>
+                </div>
+              </article>
+            )}
+            {showTypingBubble && !compacting && (
               <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')}>
                 <div className="typing-dots" aria-hidden="true">
                   <span className="typing-dot" />

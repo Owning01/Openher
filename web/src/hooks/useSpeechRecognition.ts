@@ -2,6 +2,8 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import { Capacitor } from "@capacitor/core"
 import { SpeechRecognition as CapSpeechRecognition } from "@capacitor-community/speech-recognition"
 import { STORAGE_KEYS } from "../constants"
+import type { LanguageCode } from "../i18n"
+import { normalizeLanguage } from "../i18n-context"
 
 const WebSpeechAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
 
@@ -12,18 +14,19 @@ const LANG_MAP: Record<string, string> = {
   "zh-TW": "zh-TW",
 }
 
-function getLanguage(): string {
-  const code = localStorage.getItem(STORAGE_KEYS.LANGUAGE) || "en"
+function getLanguage(language?: LanguageCode): string {
+  const code = language ?? normalizeLanguage(localStorage.getItem(STORAGE_KEYS.LANGUAGE) || "es")
   return LANG_MAP[code] || "en-US"
 }
 
-export function useSpeechRecognition() {
+export function useSpeechRecognition(language?: LanguageCode) {
   const [isListening, setIsListening] = useState(false)
   const [supported, setSupported] = useState(false)
   const currentTranscript = useRef("")
   const onResultRef = useRef<((text: string) => void) | null>(null)
   const recognitionRef = useRef<any>(null)
   const cleanupListenersRef = useRef<(() => void) | null>(null)
+  const manuallyStoppedRef = useRef(false)
 
   const isNative = Capacitor.isNativePlatform()
 
@@ -40,7 +43,7 @@ export function useSpeechRecognition() {
 
     setSupported(true)
     const rec = new WebSpeechAPI()
-    rec.lang = getLanguage()
+    rec.lang = getLanguage(language)
     rec.continuous = true
     rec.interimResults = true
     rec.maxAlternatives = 1
@@ -61,11 +64,20 @@ export function useSpeechRecognition() {
     }
 
     rec.onend = () => {
+      if (!manuallyStoppedRef.current) {
+        try { rec.start() } catch {}
+        return
+      }
       setIsListening(false)
     }
 
     rec.onerror = (event: any) => {
-      if (event.error === "no-speech" || event.error === "aborted") return
+      if (event.error === "no-speech" || event.error === "aborted") {
+        if (!manuallyStoppedRef.current) {
+          try { rec.start() } catch {}
+        }
+        return
+      }
       setIsListening(false)
     }
 
@@ -73,9 +85,10 @@ export function useSpeechRecognition() {
     return () => {
       try { rec.abort() } catch {}
     }
-  }, [isNative])
+  }, [isNative, language])
 
   const start = useCallback(async (onResult: (text: string) => void) => {
+    manuallyStoppedRef.current = false
     onResultRef.current = onResult
     currentTranscript.current = ""
 
@@ -95,7 +108,7 @@ export function useSpeechRecognition() {
 
       await CapSpeechRecognition.requestPermissions()
       await CapSpeechRecognition.start({
-        language: getLanguage(),
+        language: getLanguage(language),
         partialResults: true,
         popup: false,
         maxResults: 5,
@@ -109,11 +122,13 @@ export function useSpeechRecognition() {
     try {
       await navigator.mediaDevices?.getUserMedia?.({ audio: true })
     } catch {}
+    rec.lang = getLanguage(language)
     rec.start()
     setIsListening(true)
-  }, [isNative])
+  }, [isNative, language])
 
   const stop = useCallback(() => {
+    manuallyStoppedRef.current = true
     if (isNative) {
       CapSpeechRecognition.stop().catch(() => {})
       cleanupListenersRef.current?.()

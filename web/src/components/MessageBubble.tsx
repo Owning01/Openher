@@ -1,9 +1,10 @@
 import { memo, useCallback, useState, useMemo, useRef } from "react"
-import { UndoIcon } from "../Icons"
+import { PencilIcon, UndoIcon } from "../Icons"
 import { formatTime } from "../utils"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
 import { useT } from "../i18n-context"
 import ToolPart from "./ToolPart"
+import { FileDiffs } from "./FileDiffs"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { Markdown } from "./Markdown"
 import { isTaskTool } from "../utils/toolMeta"
@@ -23,27 +24,32 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number): string {
   return `${Math.floor(dur / 60000)}m ${Math.round((dur % 60000) / 1000)}s`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, agents, prevUserTs, config, directory, onViewSubagents, onContextMenu }: {
+export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen }: {
   message: RenderedMessage
   revert?: SessionView["revert"]
   onRevertToMessage?: (messageID: string) => void
+  onEditMessage?: (messageID: string, text: string) => void
   agents?: AgentOption[]
   prevUserTs?: number
   config?: ServerConfig
   directory?: string
   onViewSubagents?: () => void
   onContextMenu?: (x: number, y: number, messageID: string) => void
+  showTodoButton?: boolean
+  onToggleTodos?: () => void
+  todosOpen?: boolean
 }) {
   const t = useT()
   const [showConfirm, setShowConfirm] = useState(false)
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const msgParts = message.info.id.split("-")
-  const msgTs = msgParts.length >= 2 ? Number(msgParts[msgParts.length - 2]) : 0
-  const msgIdNum = message.info.time.created ? Number(message.info.time.created) : msgTs
-  const revParts = revert ? revert.messageID.split("-") : []
-  const revertIdNum = revert && revParts.length >= 2 ? Number(revParts[revParts.length - 2]) : 0
-  const isReverted = revert && msgIdNum >= revertIdNum
+  function extractOrder(id: string): number {
+    const parts = id.split("-")
+    return parts.length >= 2 ? Number(parts[parts.length - 2]) || 0 : 0
+  }
+  const msgIdNum = extractOrder(message.info.id)
+  const revertIdNum = revert ? extractOrder(revert.messageID) : 0
+  const isReverted = revert && msgIdNum > revertIdNum
   const isRevertPoint = revert && message.info.id === revert.messageID
 
   const isAssistant = message.info.role === "assistant"
@@ -112,6 +118,13 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
             touchTimerRef.current = null
           }
         }}
+        onTouchMove={() => {
+          // Cualquier movimiento = scroll/gesto: cancela el long-press
+          if (touchTimerRef.current) {
+            clearTimeout(touchTimerRef.current)
+            touchTimerRef.current = null
+          }
+        }}
         onTouchStart={(e) => {
           touchTimerRef.current = setTimeout(() => {
             const touch = e.changedTouches[0]
@@ -122,7 +135,14 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
         {message.info.role === "user" && (
           <header>
             <strong>{t('detail.you')}</strong>
-            <small>{formatTime(message.info.time.created)}</small>
+            <div className="header-actions">
+              <small>{formatTime(message.info.time.created)}</small>
+              {onEditMessage && (
+                <button className="btn-icon btn-ghost edit-msg-btn" onClick={(e) => { e.stopPropagation(); onEditMessage(message.info.id, message.text) }} title="Edit message">
+                  <PencilIcon size={14} />
+                </button>
+              )}
+            </div>
           </header>
         )}
 
@@ -150,9 +170,20 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
         {message.toolParts.length > 0 && !showConfirm && (
           <div className="tool-parts">
             {message.toolParts.map((tp) => (
-              <ToolPart key={tp.id} part={tp} config={config} directory={directory} onViewSubagents={onViewSubagents} />
+              <ToolPart
+                key={tp.id}
+                part={tp}
+                config={config}
+                directory={directory}
+                onViewSubagents={onViewSubagents}
+                compact={message.dataMode === "ultra" || message.dataMode === "miser"}
+              />
             ))}
           </div>
+        )}
+
+        {message.summaryDiffs && message.summaryDiffs.length > 0 && !showConfirm && (
+          <FileDiffs diffs={message.summaryDiffs} />
         )}
 
         {isAssistant && (
@@ -171,6 +202,20 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
           <button className="subagent-hint" onClick={onViewSubagents}>
             ↳ view subagents
           </button>
+        )}
+
+        {showTodoButton && onToggleTodos && (
+          <div className="msg-tasks-row">
+            <button
+              className={`btn-icon msg-tasks-btn${todosOpen ? " active" : ""}`}
+              onClick={(e) => { e.stopPropagation(); onToggleTodos() }}
+              aria-pressed={!!todosOpen}
+              title="Tareas del agente">
+              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M2 3h8M2 6h8M2 9h5" />
+              </svg>
+            </button>
+          </div>
         )}
 
         {message.hasCompaction && <div className="compaction-checkpoint" />}

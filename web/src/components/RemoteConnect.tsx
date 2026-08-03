@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useT } from "../i18n-context"
 import { DEFAULT_SIGNALING_URL } from "../types"
+import { EyeIcon, EyeOffIcon } from "../Icons"
 import type { TunnelConfig } from "../types"
 
 type RemoteConnectProps = {
@@ -16,6 +17,7 @@ export function RemoteConnect({ status, error, savedConfig, onConnect, onDisconn
   const t = useT()
   const [name, setName] = useState(savedConfig.name || "")
   const [password, setPassword] = useState(savedConfig.password || "")
+  const [showPassword, setShowPassword] = useState(false)
   const [signalingURL, setSignalingURL] = useState(savedConfig.signalingURL || DEFAULT_SIGNALING_URL)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -60,13 +62,18 @@ export function RemoteConnect({ status, error, savedConfig, onConnect, onDisconn
 
           <label className="field-label">
             <span>{t('tunnel.password')}</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t('tunnel.passwordPlaceholder')}
-              disabled={status === "connecting"}
-            />
+            <div className="password-wrapper">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t('tunnel.passwordPlaceholder')}
+                disabled={status === "connecting"}
+              />
+              <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1} disabled={status === "connecting"}>
+                {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+              </button>
+            </div>
           </label>
 
           <button

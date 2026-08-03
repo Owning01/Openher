@@ -1,10 +1,9 @@
 import { memo, useRef, useLayoutEffect, useState, useCallback } from "react"
-import { LoadingIcon, FolderIcon, ChatIcon, StarIcon, CloseIcon } from "../Icons"
+import { LoadingIcon, FolderIcon, ChatIcon, StarIcon, CloseIcon, PlusIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
 import { SessionToolbar } from "./SessionToolbar"
-import { ErrorNotice } from "./ErrorNotice"
 import { formatTime, isSessionActive, hasFileChanges } from "../utils"
 import type { SessionView, ConnectionState, DataMode } from "../types"
 
@@ -22,7 +21,6 @@ type SessionListProps = {
   query: string
   activeSessions: SessionView[]
   recentSessions: SessionView[]
-  runtimeError: string | null
   favorites: Set<string>
   dataMode: DataMode
   onDataModeChange: (mode: DataMode) => void
@@ -47,6 +45,7 @@ type SessionListProps = {
   onOpenThemeCreator?: () => void
   onOpenFavoritesManager?: () => void
   onDismissRecent?: (id: string) => void
+  onNewSessionHere?: (directory: string) => void
 }
 
 export const SessionList = memo(function SessionList({
@@ -54,13 +53,13 @@ export const SessionList = memo(function SessionList({
   sessions, selectedID, refreshingSessions, creatingSession,
   renamingSessionID, renameValue,
   connectionState, query,
-  activeSessions, recentSessions, runtimeError, favorites,
+  activeSessions, recentSessions, favorites,
   dataMode, onDataModeChange,
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
   onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive, onFork,
   onSearchMessages, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager,
-  onDismissRecent
+  onDismissRecent, onNewSessionHere
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -113,19 +112,25 @@ export const SessionList = memo(function SessionList({
               <span style={{ marginLeft: 'var(--space-3)' }}>{projectSessions.length} sessions</span>
             </p>
           </div>
-          <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
-            onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-            dataMode={dataMode} onDataModeChange={onDataModeChange}
-            onSearchMessages={onSearchMessages} onOpenArchivedView={onOpenArchivedView}
-            onOpenThemeCreator={onOpenThemeCreator} onOpenFavoritesManager={onOpenFavoritesManager} />
+          <div className="section-actions">
+            {onNewSessionHere && (
+              <button className="btn-icon btn-primary compact" onClick={() => onNewSessionHere(selectedProjectDir!)} title={t('sessions.newHere') || "New session here"}>
+                <PlusIcon size={16} />
+              </button>
+            )}
+            <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
+              onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
+              dataMode={dataMode} onDataModeChange={onDataModeChange}
+              onSearchMessages={onSearchMessages} onOpenArchivedView={onOpenArchivedView}
+              onOpenThemeCreator={onOpenThemeCreator} onOpenFavoritesManager={onOpenFavoritesManager} />
+          </div>
         </div>
         <div className="toolbar">
-          <input placeholder={t('sessions.searchPlaceholder')} value={query}
-            onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRef} />
+<input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
+onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRef} />
         </div>
         {notices}
         <div className="session-list">{sessionCards}</div>
-        <ErrorNotice message={runtimeError} />
       </section>
     )
   }
@@ -143,7 +148,7 @@ export const SessionList = memo(function SessionList({
         onSearchMessages={handleSearchMessages} onOpenArchivedView={onOpenArchivedView}
         onOpenThemeCreator={onOpenThemeCreator} onOpenFavoritesManager={onOpenFavoritesManager} />
       <div className="toolbar">
-        <input placeholder={t('sessions.searchPlaceholder')} value={query}
+        <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRef} />
       </div>
       <div className="sessions-summary-bar">
@@ -314,8 +319,6 @@ export const SessionList = memo(function SessionList({
           })
         )}
       </div>
-
-      <ErrorNotice message={runtimeError} />
     </section>
   )
 })

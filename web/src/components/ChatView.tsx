@@ -5,12 +5,13 @@ import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
 import { InlineRename } from "./InlineRename"
-import { ErrorNotice } from "./ErrorNotice"
 import { SubagentFooter } from "./SubagentFooter"
 import { ToolStatus } from "./ToolStatus"
 import { SkillBrowser } from "./SkillBrowser"
 import { ContextMenu } from "./ContextMenu"
 import { DiffViewer } from "./DiffViewer"
+import { QueuedPrompts } from "./QueuedPrompts"
+import type { QueuedPrompt } from "../types"
 import { GitToolbar } from "./GitToolbar"
 import { AutoQuestionPrompt } from "./AutoQuestionPrompt"
 import { PermissionPrompt } from "./PermissionPrompt"
@@ -32,7 +33,6 @@ type ChatViewProps = {
   view: string
   dataMode: DataMode
   toolMessage: Array<{ id: string; type: string; text?: string }> | null
-  runtimeError: string | null
   renamingSessionID: string | null
   renameValue: string
   showModelChip: boolean
@@ -54,6 +54,8 @@ type ChatViewProps = {
   onRedo?: () => void
   onCompact?: () => void
   onRevertToMessage?: (messageID: string) => void
+  onEditMessage?: (messageID: string, text: string) => void
+  revertID?: string | null
   onTodosToggle: () => void
   onBackToSessions: () => void
   onSheetOpen: (sheet: "ai" | "details") => void
@@ -95,23 +97,27 @@ type ChatViewProps = {
   onOpenShortcuts?: () => void
   onOpenChatCustomizer?: () => void
   showTodoButton?: boolean
+  queuedPrompts?: QueuedPrompt[]
+  onRemoveQueued?: (id: string) => void
+  compacting?: boolean
 }
 
 export const ChatView = memo(function ChatView({
   selectedSession, messages, composer, isWorking,
   showTypingBubble, loadingSessionID, selectedID, messageScrollSignature, view,
   dataMode, toolMessage,
-  runtimeError, renamingSessionID, renameValue,
+  renamingSessionID, renameValue,
   activeModelOption, activeAgentID, primaryAgentOptions, onChangeAgent,
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
-  commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onBackToSessions,
+  commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, activeSessions, onOpenSession, onOpenSettings, onToggleTokenStats, onShellSend, onThemeCommand,
   flags, onToggleFlag: _onToggleFlag, onSetFlag: _onSetFlag, diffFiles, projectDashboard,
   streamState, pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
   onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager, onOpenShortcuts, onOpenChatCustomizer,
-  todos, todosExpanded, onTodosToggle, showTodoButton
+  todos, todosExpanded, onTodosToggle, showTodoButton,
+  queuedPrompts, onRemoveQueued, compacting, revertID
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -120,6 +126,44 @@ export const ChatView = memo(function ChatView({
   const [showSkills, setShowSkills] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
+  const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
+  const messagesWrapRef = useRef<HTMLDivElement | null>(null)
+
+  // Copiar selección: aparece solo cuando hay texto seleccionado dentro del chat;
+  // cualquier scroll lo oculta.
+  useEffect(() => {
+    const update = () => {
+      const sel = window.getSelection()
+      const wrap = messagesWrapRef.current
+      if (!sel || sel.isCollapsed || !wrap || !sel.anchorNode || !wrap.contains(sel.anchorNode)) {
+        setSelectionCopy(null)
+        return
+      }
+      const text = sel.toString().trim()
+      if (!text) {
+        setSelectionCopy(null)
+        return
+      }
+      const rect = sel.getRangeAt(0).getBoundingClientRect()
+      if (rect.width === 0 && rect.height === 0) {
+        setSelectionCopy(null)
+        return
+      }
+      const vw = window.innerWidth
+      const btnW = 140
+      const x = Math.min(Math.max(rect.left + rect.width / 2 - btnW / 2, 8), vw - btnW - 8)
+      const y = rect.top - 42
+      setSelectionCopy({ x, y, text })
+    }
+    const hide = () => setSelectionCopy(null)
+    document.addEventListener("selectionchange", update)
+    document.addEventListener("scroll", hide, true)
+    return () => {
+      document.removeEventListener("selectionchange", update)
+      document.removeEventListener("scroll", hide, true)
+    }
+  }, [])
+  const [showQueued, setShowQueued] = useState(false)
   const overflowRef = useRef<HTMLDivElement | null>(null)
 
   const handleViewSubagents = useCallback(() => {
@@ -151,6 +195,12 @@ export const ChatView = memo(function ChatView({
     const q = messageQuery.toLowerCase()
     return messages.filter((m) => m.text.toLowerCase().includes(q))
   }, [messages, messageQuery])
+
+  const effectiveRevertID = revertID ?? selectedSession?.revert?.messageID ?? null
+
+  const revertObj = useMemo(() => {
+    return effectiveRevertID ? { messageID: effectiveRevertID } : undefined
+  }, [effectiveRevertID])
 
   const contextDisplay = useMemo(() => {
     // Use the LAST assistant message's tokens (per-exchange, like the TUI does)
@@ -206,6 +256,11 @@ export const ChatView = memo(function ChatView({
         {selectedSession && (
           <div className="detail-header-actions">
             {pendingCount > 0 && <span className="pending-badge" title={`${pendingCount} pending`}>{pendingCount}</span>}
+            {queuedPrompts && queuedPrompts.length > 0 && (
+              <button className="queued-badge" onClick={() => setShowQueued(true)} title={t('detail.queuedTitle')}>
+                {queuedPrompts.length} {t('detail.queuedBadge')}
+              </button>
+            )}
               {streamState && streamState !== "polling" && (
                 <span className={`stream-indicator ${streamState}`} title={streamState === "streaming" ? "Real-time" : "Reconnecting..."}>
                   <span className="stream-dot" />
@@ -213,7 +268,7 @@ export const ChatView = memo(function ChatView({
               )}
             {onOpenSettings && (
               <button
-                className="btn-icon btn-secondary compact"
+                className="btn-icon compact"
                 onClick={onOpenSettings}
                 title={t('nav.settings') || "Settings"}>
                 <SettingsIcon size={16} />
@@ -288,6 +343,12 @@ export const ChatView = memo(function ChatView({
                     <LayersIcon size={14} />
                     Skills
                   </button>
+                  {queuedPrompts && queuedPrompts.length > 0 && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowQueued(true) }}>
+                      <LayersIcon size={14} />
+                      {t('detail.queuedTitle')} ({queuedPrompts.length})
+                    </button>
+                  )}
                   {onOpenTerminal && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenTerminal() }}>
                       <TerminalIcon size={14} />
@@ -361,28 +422,33 @@ export const ChatView = memo(function ChatView({
         </div>
       )}
 
-      <div className="messages-wrap">
+      <div className="messages-wrap" ref={messagesWrapRef}>
         <MessageList
           messages={filteredMessages}
           loadingSessionID={loadingSessionID}
           selectedID={selectedID}
           showTypingBubble={showTypingBubble}
+          compacting={compacting}
           isWorking={isWorking}
           messageScrollSignature={messageScrollSignature}
           view={view}
-          revert={selectedSession?.revert}
+          revert={revertObj}
           onRevertToMessage={onRevertToMessage}
+          onEditMessage={onEditMessage}
           agents={agents}
           config={config}
           directory={selectedSession?.directory}
           onViewSubagents={handleViewSubagents}
           onContextMenu={flags.contextMenu ? (x, y, messageID) => setContextMenu({ x, y, messageID }) : undefined}
+          showTodoButton={showTodoButton ?? false}
+          onToggleTodos={onTodosToggle}
+          todosOpen={todosExpanded}
         />
       </div>
 
       {isWorking && toolMessage && (
         <div className="live-tools">
-          {toolMessage.filter((p) => p.type === "tool_use").map((tp) => (
+          {toolMessage.filter((p) => p.type === "tool" || p.type === "tool_use").map((tp) => (
             <ToolStatus key={tp.id} part={tp} />
           ))}
         </div>
@@ -425,6 +491,23 @@ export const ChatView = memo(function ChatView({
         />
       )}
 
+      {selectionCopy && (
+        <button
+          className="selection-copy-btn"
+          style={{ left: selectionCopy.x, top: selectionCopy.y }}
+          onClick={() => {
+            navigator.clipboard.writeText(selectionCopy.text).catch(() => {})
+            setSelectionCopy(null)
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4">
+            <rect x="3.5" y="3.5" width="7" height="7" rx="1" />
+            <path d="M8.5 3.5V2.5a1 1 0 0 0-1-1h-5a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h1" />
+          </svg>
+          {t('detail.copySelection')}
+        </button>
+      )}
+
       {todos.length > 0 && (
         <div className={`todo-panel${todosExpanded ? " open" : ""}`}>
           <div className="todo-panel-header">
@@ -465,13 +548,8 @@ export const ChatView = memo(function ChatView({
           config={config}
           directory={selectedSession?.directory}
           onThemeCommand={onThemeCommand}
-          onToggleTodos={onTodosToggle}
-          todosOpen={todosExpanded}
-          showTodoButton={showTodoButton ?? false}
         />
       )}
-
-      <ErrorNotice message={runtimeError} />
 
       {showSkills && config && createPortal(
         <SkillBrowser
@@ -480,6 +558,15 @@ export const ChatView = memo(function ChatView({
           onSelect={(name) => onComposerChange(`/skill ${name} `)}
         />,
         document.body
+      )}
+
+      {showQueued && queuedPrompts && onRemoveQueued && (
+        <QueuedPrompts
+          prompts={queuedPrompts}
+          onSend={(id) => { onRemoveQueued(id); setShowQueued(false) }}
+          onRemove={onRemoveQueued}
+          onClose={() => setShowQueued(false)}
+        />
       )}
 
       {flags.questionAuto && pendingQuestions && pendingQuestions.length > 0 && onQuestionReply && onDismissQuestion && (

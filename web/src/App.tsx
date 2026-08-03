@@ -13,6 +13,7 @@ import { usePolling } from "./hooks/usePolling"
 import { useCompletionAudio } from "./hooks/useCompletionAudio"
 import { useFolderPicker } from "./hooks/useFolderPicker"
 import { useStats } from "./hooks/useStats"
+import { StatsView } from "./components/StatsView"
 import { useSSE } from "./hooks/useSSE"
 import { useOfflineCache } from "./hooks/useOfflineCache"
 import { NavBar } from "./components/NavBar"
@@ -23,6 +24,7 @@ import { ChatView } from "./components/ChatView"
 import { BottomSheet } from "./components/BottomSheet"
 import { HelpPage } from "./components/HelpPage"
 import { ConfirmModal } from "./components/ConfirmModal"
+import { ErrorModal } from "./components/ErrorModal"
 import { FolderPicker } from "./components/FolderPicker"
 import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, Question, PermissionRequest } from "./types"
 import type { LanguageCode } from "./i18n"
@@ -34,7 +36,6 @@ import { useMemoryCleanup } from "./hooks/useMemoryCleanup"
 import { useBlockedModels } from "./hooks/useBlockedModels"
 import { useFeatureFlags } from "./hooks/useFeatureFlags"
 import { useProviderManager } from "./hooks/useProviderManager"
-import { useAutoSummarize } from "./hooks/useAutoSummarize"
 import { ThemeVariantProvider } from "./context/themeVariant"
 import { ThemePicker } from "./components/ThemePicker"
 import { SessionTokenUsage } from "./components/SessionTokenUsage"
@@ -48,6 +49,8 @@ import { ChatCustomizer } from "./components/ChatCustomizer"
 import { FavoritesManager } from "./components/FavoritesManager"
 import { useShell } from "./hooks/useShell"
 import { useChatSettings } from "./hooks/useChatSettings"
+import { useFileBrowser } from "./hooks/useFileBrowser"
+import { FileBrowser } from "./components/FileBrowser"
 import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
@@ -65,7 +68,27 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     saveConfig, testConnection, setConnectionState, setConnectionMessage } = useConfig()
 
   const { theme, setTheme } = useTheme()
+  const handleToggleLightMode = useCallback(() => {
+    const isLight = document.documentElement.getAttribute("data-theme") === "light"
+    setTheme(isLight ? "dark" : "light")
+  }, [setTheme])
+  const [localRevertID, setLocalRevertID] = useState<string | null>(null)
+
   const [view, setView] = useState<ViewType>(() => config.host && config.port > 0 ? "sessions" : "settings")
+  const navStackRef = useRef<ViewType[]>(["sessions"])
+
+  const navigate = useCallback((target: ViewType) => {
+    if (target === view) return
+    navStackRef.current = [...navStackRef.current, view]
+    setView(target)
+  }, [view])
+
+  const goBack = useCallback(() => {
+    if (navStackRef.current.length === 0) return
+    const last = navStackRef.current[navStackRef.current.length - 1]
+    navStackRef.current = navStackRef.current.slice(0, -1)
+    setView(last)
+  }, [])
 
   const [commands, setCommands] = useState<{ name: string; description?: string; source?: "command" | "mcp" | "skill" }[]>([])
   const [commandFilter, setCommandFilter] = useState<"all" | "skill">("all")
@@ -94,11 +117,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     composer, setComposer,
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
-    renderedMessages, messageScrollSignature, assistantResponseSignature,
+    queuedPrompts, setQueuedPrompts, queuePrompt, removeQueued,
+    renderedMessages, messageScrollSignature,
     toolMessage, completionShouldPlayRef,
     clearSession, loadSelected, send, abortSession,
     setMessages, undoMessage, redoMessage, compactSession,
-    applyDelta
+    applyDelta, applyPart, compacting, messages
   } = useMessages(config)
 
   const {
@@ -139,6 +163,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setSessionToDelete, setSessions, favorites, toggleFavorite
   } = useSessions(config, onLoadSelected, backgroundFailureCountRef, initialSessionLoadRef, setConnectionState, setConnectionMessage)
 
+  useEffect(() => {
+    setLocalRevertID(null)
+  }, [selectedSession?.id])
+
   const {
     showNewSessionPicker, pickerPath,
     pickerItems, pickerLoading, pickerError,
@@ -146,19 +174,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setShowNewSessionPicker, persistDirectory
   } = useFolderPicker(config)
 
+  const fb = useFileBrowser(config, selectedSession?.directory)
+
   const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
   const { providers: providerList, connecting: connectingProvider, error: providerError, connectProvider, disconnectProvider } = useProviderManager(modelOptions, config)
-  useAutoSummarize(
-    config,
-    selectedSession?.id ?? null,
-    selectedSession?.directory ?? "",
-    flags.autoSummarize,
-    flags.autoSummarizeThreshold,
-    assistantResponseSignature,
-    selectedSession ? (() => loadSelected(selectedSession.id, selectedSession.directory)) : undefined,
-    activeModel?.providerID,
-    activeModel?.modelID
-  )
   const [readingMode, setReadingMode] = useState(false)
   const [showThemePicker, setShowThemePicker] = useState(false)
   const [tokenStatsOpen, setTokenStatsOpen] = useState(false)
@@ -217,22 +236,70 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     })
   }, [connectionState, config, selectedSession, dequeueAll])
 
-  // Notify on completion
+  // Notify on completion (transición awaiting → false, no en el primer delta)
+  const wasAwaitingRef = useRef(false)
   useEffect(() => {
-    if (!notifFlags.onCompletion || !awaitingAssistantReply) return
-    const prev = assistantResponseSignature
-    if (prev) {
-      notify(t('notification.completionTitle'), t('notification.completionBody'))
+    if (awaitingAssistantReply) {
+      wasAwaitingRef.current = true
+      return
     }
-  }, [assistantResponseSignature])
+    if (wasAwaitingRef.current) {
+      wasAwaitingRef.current = false
+      if (notifFlags.onCompletion) {
+        notify(t('notification.completionTitle'), t('notification.completionBody'))
+      }
+    }
+  }, [awaitingAssistantReply, notifFlags.onCompletion, notify, t])
 
   // ===== SSE Streaming =====
+
+  // Ahorro de datos (modos no-full): si session.time.updated no cambió desde el
+  // último fetch, el contenido no cambió (verificado: updated solo avanza al
+  // completar turnos) → saltear el fetch de mensajes.
+  const lastMsgFetchUpdatedRef = useRef<Record<string, number>>({})
+
+  const settleSession = useCallback(async (sessionID: string, dir: string) => {
+    if (dataMode === "full") {
+      await refreshSessions(true)
+    } else {
+      await refreshSessions()
+      api.listStatuses(config, dir).then((statuses) => {
+        const st = statuses?.[sessionID]
+        setSessions((prev) => prev.map((s) => s.id === sessionID ? { ...s, status: st?.type ?? "idle" } : s))
+      }).catch(() => undefined)
+      const upd = selectedSession?.updated ?? 0
+      if (upd > 0) lastMsgFetchUpdatedRef.current[sessionID] = upd
+    }
+  }, [dataMode, refreshSessions, config, setSessions, selectedSession?.updated])
   const [streamState, setStreamState] = useState<StreamState>("polling")
+  const partTypeCacheRef = useRef<Map<string, string>>(new Map())
+  useEffect(() => {
+    partTypeCacheRef.current.clear()
+  }, [selectedSession?.id])
 
   const handleSSEEvent = useCallback((event: SSEEvent) => {
     const p = event.properties as Record<string, unknown>
     const type = event.type
     if (type === "server.connected" || type === "server.heartbeat") return
+
+    if (type === "message.part.updated") {
+      const part = p.part as { id?: string; type?: string } | undefined
+      if (part?.id && part.type) partTypeCacheRef.current.set(part.id, part.type)
+      const sessionID = p.sessionID as string | undefined
+      const messageID = p.messageID as string | undefined
+      if (sessionID && messageID && part?.id && sessionID === selectedSession?.id) {
+        const fullPart = p.part as { id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown } | undefined
+        applyPart(sessionID, messageID, {
+          id: fullPart?.id ?? "",
+          type: fullPart?.type,
+          text: fullPart?.text,
+          tool: fullPart?.tool,
+          callID: fullPart?.callID,
+          state: fullPart?.state,
+        })
+      }
+      return
+    }
 
     if (type === "message.part.delta") {
       const sessionID = p.sessionID as string | undefined
@@ -240,28 +307,75 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       const partID = p.partID as string | undefined
       const hasDelta = typeof p.delta === "string"
       const text = (hasDelta ? p.delta : p.text ?? "") as string
-      const partType = (p.type ?? p.partType ?? "text") as string
+      const cachedType = partID ? partTypeCacheRef.current.get(partID) : undefined
+      const partType = cachedType ?? (p.type ?? p.partType ?? "text") as string
       if (sessionID && messageID && partID && text && sessionID === selectedSession?.id) {
         applyDelta(sessionID, messageID, partID, text, !hasDelta, partType)
       }
       return
     }
 
-    if (type === "message.updated" || type === "message.part.updated") {
+    if (type === "session.next.text.delta" || type === "session.next.reasoning.delta" ||
+        type === "session.next.text.ended" || type === "session.next.reasoning.ended" ||
+        type === "session.next.tool.input.delta") {
       const sessionID = p.sessionID as string | undefined
-      if (sessionID && sessionID === selectedSession?.id) {
-        loadSelected(sessionID, selectedSession.directory)
+      if (!sessionID || sessionID !== selectedSession?.id) return
+      const assistantMessageID = p.assistantMessageID as string | undefined
+      const partID = (p.textID ?? p.reasoningID ?? p.callID) as string | undefined
+      const partType = type.startsWith("session.next.reasoning") ? "reasoning"
+        : type === "session.next.tool.input.delta" ? "tool"
+        : "text"
+      const hasDelta = typeof p.delta === "string"
+      const text = (hasDelta ? p.delta : p.text ?? "") as string
+      if (assistantMessageID && partID && text) {
+        applyDelta(sessionID, assistantMessageID, partID, text, !hasDelta, partType)
       }
+      return
+    }
+
+    if (type === "session.next.compaction.delta" || type === "session.next.compaction.ended") {
+      const sessionID = p.sessionID as string | undefined
+      const messageID = p.messageID as string | undefined
+      if (sessionID && messageID && sessionID === selectedSession?.id) {
+        if (type === "session.next.compaction.delta") {
+          const text = p.text as string | undefined
+          if (text) applyDelta(sessionID, messageID, messageID, text, true, "compaction")
+        } else {
+          loadSelected(sessionID, selectedSession.directory)
+        }
+      }
+      return
+    }
+
+    if (type === "session.next.step.failed" || type === "session.next.retried") {
+      setAwaitingAssistantReply(false)
+      return
+    }
+
+    if (type === "message.updated" || type === "message.part.updated") {
       return
     }
 
     if (type === "session.status") {
       const sessionID = p.sessionID as string | undefined
-      const status = p.status as string | undefined
-      if (sessionID && sessionID === selectedSession?.id && status && status !== "busy") {
+      const rawStatus = p.status as unknown
+      const statusType = typeof rawStatus === "string"
+        ? rawStatus
+        : (rawStatus as { type?: string } | undefined)?.type
+      if (sessionID && sessionID === selectedSession?.id && statusType === "idle") {
         setAwaitingAssistantReply(false)
         loadSelected(sessionID, selectedSession.directory)
-        refreshSessions()
+        settleSession(sessionID, selectedSession.directory)
+      }
+      return
+    }
+
+    if (type === "session.idle") {
+      const sessionID = p.sessionID as string | undefined
+      if (sessionID && sessionID === selectedSession?.id) {
+        setAwaitingAssistantReply(false)
+        loadSelected(sessionID, selectedSession.directory)
+        settleSession(sessionID, selectedSession.directory)
       }
       return
     }
@@ -271,11 +385,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       if (msg) setRuntimeError(msg)
       setAwaitingAssistantReply(false)
     }
-  }, [selectedSession?.id, selectedSession?.directory, loadSelected, applyDelta, setAwaitingAssistantReply, setRuntimeError, refreshSessions])
+  }, [selectedSession?.id, selectedSession?.directory, loadSelected, applyDelta, applyPart, setAwaitingAssistantReply, setRuntimeError, refreshSessions, settleSession])
+
+  const stopGenerationRef = useRef(false)
 
   const { streamState: sseState } = useSSE(
     (dataMode === "full" && flags.streamingFull) ? config : null,
-    handleSSEEvent
+    useCallback((event: SSEEvent) => {
+      if (stopGenerationRef.current) {
+        if (event.type === "message.part.delta" || event.type === "message.updated" || event.type === "message.part.updated"
+          || event.type === "session.next.text.delta" || event.type === "session.next.reasoning.delta"
+          || event.type === "session.next.tool.input.delta") return
+      }
+      handleSSEEvent(event)
+    }, [handleSSEEvent])
   )
 
   useEffect(() => {
@@ -283,7 +406,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [sseState])
 
   // ===== Offline cache =====
-  const { cacheSessions, getCachedSessions, cacheMessages } = useOfflineCache(flags)
+  const { cacheSessions, getCachedSessions, cacheMessages, getCachedMessages } = useOfflineCache(flags)
 
   useEffect(() => {
     if (sessions.length > 0) {
@@ -291,15 +414,28 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [sessions, cacheSessions])
 
+  // Caché con debounce: escribe solo cuando el estado real cambió (evita
+  // re-encriptar todo el historial en cada delta/merge).
+  const cacheTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cacheSignatureRef = useRef("")
+
   useEffect(() => {
-    if (flags.offlineCache && selectedSession && renderedMessages.length > 0) {
-      const msgs = renderedMessages.map((rm) => ({
-        info: rm.info,
-        parts: rm.parts,
-      }))
-      cacheMessages(selectedSession.id, msgs).catch(() => {})
-    }
-  }, [selectedSession?.id, renderedMessages.length, flags.offlineCache, cacheMessages])
+    if (!flags.offlineCache || !selectedSession || messages.length === 0) return
+    const last = messages[messages.length - 1]
+    const signature = `${selectedSession.id}|${messages.length}|${last?.info.id ?? ""}|${last?.info.time.completed ?? ""}`
+    if (signature === cacheSignatureRef.current) return
+    cacheSignatureRef.current = signature
+    const sessionID = selectedSession.id
+    const snapshot = messages
+    if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current)
+    cacheTimerRef.current = setTimeout(() => {
+      cacheMessages(sessionID, snapshot).catch(() => {})
+    }, 2500)
+  }, [selectedSession?.id, messages, flags.offlineCache, cacheMessages])
+
+  useEffect(() => () => {
+    if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current)
+  }, [])
 
   // ===== Questions =====
   const [pendingQuestions, setPendingQuestions] = useState<Question[]>([])
@@ -473,12 +609,26 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const isStreaming = streamState === "streaming" && dataMode === "full" && flags.streamingFull
   const isStreamingActive = isStreaming && !!selectedSession
 
+  const connectionStateRef = useRef(connectionState)
+  useEffect(() => {
+    connectionStateRef.current = connectionState
+  }, [connectionState])
+
   const pollInterval = dataMode === "full" ? (isStreamingActive ? 5000 : 3500) : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
+
   usePolling(async () => {
     await refreshSessions()
+    if (connectionStateRef.current === "offline") {
+      throw new Error("offline")
+    }
     if (!selectedSession) return
     if (dataMode === "full" || dataMode === "saver" || isSessionActive(selectedSession)) {
-      await loadSelected(selectedSession.id, selectedSession.directory)
+      const prevUpdated = lastMsgFetchUpdatedRef.current[selectedSession.id]
+      const skip = dataMode !== "full" && prevUpdated !== undefined && selectedSession.updated <= prevUpdated
+      if (!skip) {
+        await loadSelected(selectedSession.id, selectedSession.directory)
+        lastMsgFetchUpdatedRef.current[selectedSession.id] = selectedSession.updated
+      }
     }
     if (selectedSession && !isSessionActive(selectedSession) && awaitingAssistantReply) {
       setAwaitingAssistantReply(false)
@@ -534,11 +684,30 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     loadDashboard(selectedSession.directory)
   }, [activeDetailSheet, selectedSession?.id, selectedSession?.directory])
 
+  // Auto-drain queue when assistant finishes replying
+  const prevAwaitingRef = useRef(awaitingAssistantReply)
+  useEffect(() => {
+    if (!flags.promptQueue || flags.promptQueueMode !== "auto") {
+      prevAwaitingRef.current = awaitingAssistantReply
+      return
+    }
+    if (!awaitingAssistantReply && prevAwaitingRef.current && queuedPrompts.length > 0 && selectedSession) {
+      const next = queuedPrompts[0]
+      setQueuedPrompts((prev) => prev.slice(1))
+      recordPrompt(next.text)
+      send(selectedSession, activeModel, activeAgentID, commands,
+        () => refreshSessions(),
+        () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
+        setCommands, setRuntimeError, next.images, next.text).catch(() => {})
+    }
+    prevAwaitingRef.current = awaitingAssistantReply
+  }, [awaitingAssistantReply])
+
   useBackButton({
     view, showNewSessionPicker, activeDetailSheet,
     onClosePicker: () => setShowNewSessionPicker(false),
     onCloseSheet: () => setActiveDetailSheet(null),
-    onBackToSessions: () => setView("sessions")
+    onBackToSessions: goBack
   })
 
   useNetworkMode(changeDataMode)
@@ -567,23 +736,37 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setRuntimeError("Prompt queued - will send when connection is restored")
       return
     }
+    if (flags.promptQueue && awaitingAssistantReply) {
+      queuePrompt(composer, images)
+      setComposer("")
+      return
+    }
     recordPrompt(composer)
+    stopGenerationRef.current = false
     setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "busy" } : s))
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
       setCommands, setRuntimeError, images)
-    if (result === "help") { setHelpPage("commands"); setView("help") }
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer])
+    if (result === "help") { setHelpPage("commands"); navigate("help") }
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, flags.promptQueue, awaitingAssistantReply, queuePrompt])
 
   const handleAbort = useCallback(async () => {
     if (!selectedSession) return
-    await abortSession(selectedSession.id, selectedSession.directory)
-    if (selectedSession) {
-      await loadSelected(selectedSession.id, selectedSession.directory)
-      await refreshSessions()
-    }
-  }, [selectedSession, abortSession, loadSelected, refreshSessions])
+    stopGenerationRef.current = true
+    setAwaitingAssistantReply(false)
+    const sid = selectedSession.id
+    const dir = selectedSession.directory
+    try {
+      await Promise.race([
+        abortSession(sid, dir),
+        new Promise((resolve) => setTimeout(resolve, 4500))
+      ])
+    } catch { /* ignore */ }
+    await loadSelected(sid, dir).catch(() => undefined)
+    await settleSession(sid, dir).catch(() => undefined)
+    setTimeout(() => { stopGenerationRef.current = false }, 2000)
+  }, [selectedSession, abortSession, loadSelected, settleSession])
 
   const handleCreateSession = useCallback(async (directory?: string) => {
     const created = await createSession(directory, activeModel)
@@ -591,23 +774,33 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       recordSessionCreated()
       setShowNewSessionPicker(false)
       if (directory) persistDirectory(directory)
-      setView("detail")
+      navigate("detail")
       await onLoadSelected(created.id, created.directory)
       await refreshSessions()
     }
   }, [createSession, activeModel, onLoadSelected, refreshSessions, persistDirectory])
 
-  const handleOpenSession = useCallback((id: string, dir: string) => {
-    setView("detail")
-    openSession(id, dir).catch(() => undefined)
-  }, [openSession])
+  const handleOpenSession = useCallback(async (id: string, dir: string) => {
+    navigate("detail")
+    try {
+      await openSession(id, dir)
+    } catch {
+      // Server inaccesible: restaurar el historial cacheado (nunca mostrar vacío si ya se trabajó)
+      if (flags.offlineCache) {
+        const cached = await getCachedMessages(id).catch(() => null)
+        if (cached && cached.length > 0) {
+          setMessages((prev) => [...prev.filter((m) => m.info.sessionID !== id), ...cached])
+        }
+      }
+    }
+  }, [navigate, openSession, flags.offlineCache, getCachedMessages, setMessages])
 
   const handleTest = useCallback(() => testConnection(t), [testConnection, t])
 
   const handleNavigate = useCallback((target: ViewType) => {
     if (target === "sessions") setSelectedProjectDir(null)
-    setView(target)
-  }, [])
+    navigate(target)
+  }, [navigate])
 
   const handleRevertToMessage = useCallback(async (messageID: string) => {
     if (!selectedSession) return
@@ -616,8 +809,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         await api.abort(config, selectedSession.id, selectedSession.directory)
       }
       await api.revert(config, selectedSession.id, messageID, selectedSession.directory)
+      setLocalRevertID(messageID)
       await loadSelected(selectedSession.id, selectedSession.directory)
       await refreshSessions()
+    } catch (err) {
+      setRuntimeError((err as Error).message)
+    }
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, refreshSessions])
+
+  const handleEditMessage = useCallback(async (messageID: string, text: string) => {
+    if (!selectedSession) return
+    try {
+      if (awaitingAssistantReply) {
+        await api.abort(config, selectedSession.id, selectedSession.directory)
+      }
+      await api.revert(config, selectedSession.id, messageID, selectedSession.directory)
+      setLocalRevertID(messageID)
+      await loadSelected(selectedSession.id, selectedSession.directory)
+      await refreshSessions()
+      setComposer(text)
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
@@ -630,6 +840,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleRedo = useCallback(() => {
     if (!selectedSession) return
+    setLocalRevertID(null)
     redoMessage(selectedSession.id, selectedSession.directory, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
   }, [selectedSession, redoMessage, refreshSessions, loadSelected])
 
@@ -643,13 +854,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       {view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={handleNavigate}
           hasConfiguredServer={hasConfiguredServer}
-          hasSelectedSession={!!selectedSession} />
+          hasSelectedSession={!!selectedSession}
+          onToggleLightMode={handleToggleLightMode} />
       )}
 
       {view === "settings" && (
         <SettingsPanel
           draftConfig={draftConfig} onChange={setDraftConfig}
-          onSave={saveConfig} onTest={handleTest}
+          onSave={() => saveConfig(t)} onTest={handleTest}
           testingConnection={testingConnection}
           hasDraftChanges={hasDraftChanges} canTestDraft={canTestDraft}
           testAlreadyPassedForDraft={testAlreadyPassedForDraft}
@@ -691,7 +903,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             renamingSessionID={renamingSessionID} renameValue={renameValue}
             connectionState={connectionState}
             query={query} activeSessions={activeSessions} recentSessions={recentSessions}
-            runtimeError={runtimeError}
             favorites={favorites}
             dataMode={dataMode} onDataModeChange={changeDataMode}
             onSelectProject={setSelectedProjectDir}
@@ -714,12 +925,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onOpenArchivedView={() => setShowArchivedView(true)}
             onOpenThemeCreator={() => setShowThemeCreator(true)}
             onOpenFavoritesManager={() => setShowFavoritesManager(true)}
-            onDismissRecent={dismissRecent} />
+            onDismissRecent={dismissRecent}
+            onNewSessionHere={(dir) => handleCreateSession(dir)} />
           {showNewSessionPicker && (
             <FolderPicker
               pickerPath={pickerPath} pickerItems={pickerItems}
               pickerLoading={pickerLoading} pickerError={pickerError}
               creatingSession={creatingSession}
+              projects={sessions.map((s) => s.directory)}
               onBrowse={browseNewSessionDirectory}
               onCreate={handleCreateSession}
               onCreateDefault={() => handleCreateSession("")}
@@ -732,20 +945,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         <>
           <ChatView
             selectedSession={selectedSession}
+            revertID={localRevertID}
             messages={renderedMessages} todos={todos}
             todosExpanded={todosExpanded} composer={composer}
             isWorking={isWorking} showTypingBubble={showTypingBubble}
             loadingSessionID={loadingSessionID} selectedID={selectedID}
             messageScrollSignature={messageScrollSignature} view={view}
-            dataMode={dataMode} toolMessage={toolMessage}
-            runtimeError={runtimeError}
+            dataMode={dataMode}             toolMessage={toolMessage}
             renamingSessionID={renamingSessionID} renameValue={renameValue}
             showModelChip={showModelChip}
             commands={commands}
             activeAgent={activeAgent} activeAgentID={activeAgentID}
             activeModelOption={activeModelOption}
             primaryAgentOptions={primaryAgentOptions}
-            onChangeAgent={changeAgent}
+            onChangeAgent={(id) => changeAgent(id, selectedSession?.directory)}
             projectName={projectName}
             onStartRename={startRename}
             onRenameChange={setRenameValue}
@@ -755,13 +968,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onSend={(imgs) => handleSend(imgs)}
             onAbort={handleAbort}
             onTodosToggle={() => setTodosExpanded((v) => !v)}
-            onBackToSessions={() => setView("sessions")}
+            onBackToSessions={goBack}
             onSheetOpen={setActiveDetailSheet}
             recentSessions={recentSessions} activeSessions={activeSessions}
             onOpenSession={handleOpenSession}
             readingMode={readingMode} onToggleReadingMode={() => setReadingMode((v) => !v)}
             onExportChat={handleExportChat} onSnapshot={handleSnapshot}
-            onOpenSettings={() => setView("settings")}
+            onOpenSettings={() => navigate("settings")}
             onThemeCommand={() => setShowThemePicker(true)}
             onToggleTokenStats={() => setTokenStatsOpen((v) => !v)}
             config={config}
@@ -781,6 +994,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             diffFiles={diffFiles}
             projectDashboard={projectDashboard}
             streamState={streamState}
+            compacting={compacting}
             pendingQuestions={pendingQuestions}
             permissionRequest={permissionRequest}
             onQuestionReply={handleQuestionReply}
@@ -790,10 +1004,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onDismissQuestion={handleDismissQuestion}
             onDismissPermission={handleDismissPermission}
             onRevertToMessage={handleRevertToMessage}
+            onEditMessage={handleEditMessage}
             onUndo={handleUndo}
             onRedo={handleRedo}
             onCompact={handleCompact}
             onForkSession={() => selectedSession && handleCreateSession(selectedSession.directory)}
+            onOpenFileBrowser={() => selectedSession && fb.open(selectedSession.directory)}
+            fileBrowserPath={fb.currentPath}
             onOpenTerminal={() => setShowTerminal(true)}
             onOpenMCPBrowser={() => setShowMCPBrowser(true)}
             onOpenArchivedView={() => setShowArchivedView(true)}
@@ -801,7 +1018,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onOpenFavoritesManager={() => setShowFavoritesManager(true)}
             onOpenShortcuts={() => setShowShortcuts(true)}
             onOpenChatCustomizer={() => setShowChatCustomizer(true)}
-            showTodoButton={chatSettings.showTodoButton} />
+            showTodoButton={chatSettings.showTodoButton}
+            queuedPrompts={queuedPrompts}
+            onRemoveQueued={removeQueued} />
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={() => setActiveDetailSheet(null)}
@@ -832,8 +1051,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onHelpPageChange={setHelpPage}
           commands={commands}
           commandFilter={commandFilter}
-          onCommandFilterChange={setCommandFilter}
-          runtimeError={runtimeError} />
+          onCommandFilterChange={setCommandFilter} />
+      )}
+
+      {view === "stats" && config && (
+        <StatsView config={config} onBack={goBack} />
       )}
 
       {sessionToDelete && (
@@ -882,6 +1104,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           path={fileEditorPath}
           directory={selectedSession?.directory}
           onClose={() => setFileEditorPath(null)}
+        />
+      )}
+
+      {fb.isOpen && (
+        <FileBrowser
+          currentPath={fb.currentPath}
+          items={fb.items}
+          loading={fb.loading}
+          error={fb.error}
+          onClose={fb.close}
+          onNavigate={fb.navigateTo}
+          onGoUp={fb.goUp}
         />
       )}
 
@@ -934,6 +1168,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             />
           </div>
         </div>
+      )}
+
+      {runtimeError && (
+        <ErrorModal message={runtimeError} onClose={() => setRuntimeError(null)} />
       )}
     </div>
   )

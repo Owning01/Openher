@@ -9,7 +9,6 @@ type HelpPageProps = {
   commands: CommandInfo[]
   commandFilter: "all" | "skill"
   onCommandFilterChange: (filter: "all" | "skill") => void
-  runtimeError: string | null
 }
 
 const helpTabs: HelpPageType[] = ["overview", "server", "network", "troubleshooting", "commands"]
@@ -32,7 +31,7 @@ function helpContent(t: ReturnType<typeof useT>, key: string): JSX.Element[] {
 }
 
 export const HelpPage = memo(function HelpPage({
-  helpPage, onHelpPageChange, commands, commandFilter, onCommandFilterChange, runtimeError
+  helpPage, onHelpPageChange, commands, commandFilter, onCommandFilterChange
 }: HelpPageProps) {
   const t = useT()
   const displayedCommands = commandFilter === "skill" ? commands.filter((c) => c.source === "skill") : commands
@@ -109,7 +108,6 @@ export const HelpPage = memo(function HelpPage({
           )}
         </div>
       )}
-      {runtimeError && <p className="error">{runtimeError}</p>}
     </section>
   )
 })

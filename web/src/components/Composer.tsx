@@ -1,6 +1,6 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
 import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon, CloseIcon, AttachmentIcon } from "../Icons"
-import { useT } from "../i18n-context"
+import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
 import type { AgentOption, ModelOption, CommandInfo, ServerConfig } from "../types"
@@ -42,9 +42,6 @@ type ComposerProps = {
   config?: ServerConfig
   directory?: string
   onThemeCommand?: () => void
-  onToggleTodos?: () => void
-  todosOpen?: boolean
-  showTodoButton?: boolean
 }
 
 let imgId = 0
@@ -58,7 +55,7 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "theme", description: "Open theme picker", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen, contextLabel, config, directory, onThemeCommand, onToggleTodos, todosOpen, showTodoButton }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen, contextLabel, config, directory, onThemeCommand }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const slashItemsRef = useRef<HTMLDivElement | null>(null)
@@ -87,22 +84,31 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       id: a.id, name: a.name, description: a.description, source: "agent" as const,
     }))
 
-    const fileFetch = config ? api.findFiles(config, atQuery, directory, 10).then((files) =>
-      files.map((f) => ({ id: f.path, name: f.path, source: "file" as const, description: f.type }))
-    ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
+    let cancelled = false
+    const timer = setTimeout(() => {
+      const fileFetch = config ? api.findFiles(config, atQuery, directory, 10).then((files) =>
+        files.map((f) => ({ id: f.path, name: f.path, source: "file" as const, description: f.type }))
+      ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
 
-    const mcpFetch = config ? api.listMCPResources(config).then((resources) =>
-      resources.filter((r) => !atQuery || r.name.toLowerCase().includes(atQuery))
-        .map((r) => ({ id: r.id, name: r.name, description: r.description, source: "mcp" as const }))
-    ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
+      const mcpFetch = config ? api.listMCPResources(config).then((resources) =>
+        resources.filter((r) => !atQuery || r.name.toLowerCase().includes(atQuery))
+          .map((r) => ({ id: r.id, name: r.name, description: r.description, source: "mcp" as const }))
+      ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
 
-    Promise.all([fileFetch, mcpFetch]).then(([files, mcps]) => {
-      const q = atQuery.toLowerCase()
-      const filteredAgents = !atQuery ? agentItems : agentItems.filter((a) =>
-        a.name.toLowerCase().includes(q) || (a.description?.toLowerCase() ?? "").includes(q))
-      setMentionItems([...filteredAgents, ...files, ...mcps])
-      setMentionLoading(false)
-    })
+      Promise.all([fileFetch, mcpFetch]).then(([files, mcps]) => {
+        if (cancelled) return
+        const q = atQuery.toLowerCase()
+        const filteredAgents = !atQuery ? agentItems : agentItems.filter((a) =>
+          a.name.toLowerCase().includes(q) || (a.description?.toLowerCase() ?? "").includes(q))
+        setMentionItems([...filteredAgents, ...files, ...mcps])
+        setMentionLoading(false)
+      })
+    }, 250)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [showAtMenu, atQuery, config, directory, visibleAgents])
 
   useEffect(() => {
@@ -195,7 +201,9 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [showSlashMenu, slashFiltered, slashIndex, selectSlashCommand, showAtMenu, mentionItems, atIndex, selectMention])
 
   const t = useT()
-  const { isListening, supported, start, stop } = useSpeechRecognition()
+  const language = useLanguage()
+  const { isListening, supported, start, stop } = useSpeechRecognition(language)
+  const prefixRef = useRef("")
   const composerRef = useRef<HTMLDivElement | null>(null)
   const [images, setImages] = useState<ImageAttachment[]>([])
 
@@ -217,8 +225,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [])
 
   const handleMicClick = useCallback(() => {
-    if (isListening) { stop() } else { start((text) => onChange(text)) }
-  }, [isListening, start, stop, onChange])
+    if (isListening) {
+      stop()
+    } else {
+      prefixRef.current = value
+      start((text) => onChange(prefixRef.current + (prefixRef.current && text ? " " : "") + text))
+    }
+  }, [isListening, start, stop, onChange, value])
 
   const addImage = useCallback((base64: string, mime: string, name: string) => {
     setImages((prev) => [...prev, { id: `img-${++imgId}`, base64, mime, name }])
@@ -258,14 +271,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [value, allSlashCommands])
 
   const agentColorIdx = useMemo(() => {
-    const idx = primaryAgentOptions.findIndex((a) => a.id === activeAgentID)
+    const visible = primaryAgentOptions.filter((a) => !a.hidden)
+    const idx = visible.findIndex((a) => a.id === activeAgentID)
     return idx >= 0 ? idx % 7 : 0
   }, [primaryAgentOptions, activeAgentID])
 
   const handleToggleAgent = useCallback(() => {
-    if (primaryAgentOptions.length < 2) return
-    const next = primaryAgentOptions[0]?.id === activeAgentID ? primaryAgentOptions[1]!.id : primaryAgentOptions[0]!.id
-    onChangeAgent(next)
+    const visible = primaryAgentOptions.filter((a) => !a.hidden)
+    if (visible.length < 2) return
+    const curIdx = visible.findIndex((a) => a.id === activeAgentID)
+    const next = visible[(curIdx + 1) % visible.length]
+    onChangeAgent(next.id)
   }, [primaryAgentOptions, activeAgentID, onChangeAgent])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -403,22 +419,12 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
-          {primaryAgentOptions.length > 1 && (
+          {primaryAgentOptions.filter((a) => !a.hidden).length > 1 && (
             <button onClick={handleToggleAgent} disabled={disabled}
-              className={`agent-toggle ${activeAgentID === "plan" ? "agent-plan" : "agent-build"}`}
-              aria-pressed={activeAgentID === "plan"}>
-              <span>{activeAgentID === "plan" ? "Plan" : "Build"}</span>
-            </button>
-          )}
-          {showTodoButton && (
-            <button onClick={onToggleTodos}
-              className={`composer-tasks-btn${todosOpen ? " active" : ""}`}
-              aria-pressed={!!todosOpen}
-              title="Tareas del agente">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <path d="M2 3h8M2 6h8M2 9h5" />
-              </svg>
-              <span>Tareas</span>
+              className="agent-toggle"
+              style={{ borderColor: `var(--agent-${agentColorIdx})`, color: `var(--agent-${agentColorIdx})` } as React.CSSProperties}
+              aria-pressed={activeAgentID === primaryAgentOptions.filter((a) => !a.hidden)[0]?.id}>
+              <span>{primaryAgentOptions.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
             </button>
           )}
           <button onClick={() => onSheetOpen("ai")} className="model-toggle"

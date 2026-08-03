@@ -42,6 +42,13 @@ export const FileBrowser = memo(function FileBrowser({
             )}
             {error ? (
               <p className="subtle" style={{ color: "var(--color-error)" }}>{error}</p>
+            ) : items.length === 0 && currentPath === "/" ? (
+              ["C:", "D:", "E:", "F:", "G:"].map((drive) => (
+                <button key={drive} type="button" className="folder-row" onClick={() => onNavigate(drive + "/")}>
+                  <FolderIcon size={16} />
+                  <span>{drive}/</span>
+                </button>
+              ))
             ) : items.length === 0 ? (
               <p className="subtle">{t('sessions.folderPickerEmpty')}</p>
             ) : items.map((item) => (

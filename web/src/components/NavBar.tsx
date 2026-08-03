@@ -1,5 +1,5 @@
-import { memo } from "react"
-import { SettingsIcon, FolderIcon, ChatIcon } from "../Icons"
+import { memo, useState, useEffect } from "react"
+import { SettingsIcon, SunIcon, MoonIcon, StatsIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { ViewType } from "../types"
 
@@ -11,19 +11,30 @@ type NavBarProps = {
   onNavigate: (view: ViewType) => void
   hasConfiguredServer: boolean
   hasSelectedSession: boolean
+  onToggleLightMode?: () => void
 }
 
+// Navegación mínima: a las sesiones/proyectos se llega tocando el brand
+// "OpenCode"; al chat se entra tocando cada sesión.
 const navItems: Array<{ view: ViewType; icon: JSX.Element; label: string }> = [
-  { view: "sessions", icon: <FolderIcon size={18} />, label: "nav.sessions" },
-  { view: "detail", icon: <ChatIcon size={18} />, label: "nav.detail" },
+  { view: "stats", icon: <StatsIcon size={18} />, label: "nav.stats" },
   { view: "settings", icon: <SettingsIcon size={18} />, label: "nav.settings" }
 ]
 
-export const NavBar = memo(function NavBar({ view, onNavigate, hasConfiguredServer, hasSelectedSession }: NavBarProps) {
+export const NavBar = memo(function NavBar({ view, onNavigate, hasConfiguredServer, onToggleLightMode }: NavBarProps) {
   const t = useT()
+  const [isLight, setIsLight] = useState(() => document.documentElement.getAttribute("data-theme") === "light")
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsLight(document.documentElement.getAttribute("data-theme") === "light")
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
+    return () => observer.disconnect()
+  }, [])
+
   const disabledMap: Record<string, boolean> = {
-    sessions: !hasConfiguredServer,
-    detail: !hasSelectedSession,
+    stats: !hasConfiguredServer,
     settings: false
   }
 
@@ -45,6 +56,13 @@ export const NavBar = memo(function NavBar({ view, onNavigate, hasConfiguredServ
             {item.icon}
           </button>
         ))}
+        {onToggleLightMode && (
+          <button className="btn-icon btn-ghost theme-toggle-nav" onClick={onToggleLightMode}
+            title={isLight ? "Dark mode" : "Light mode"}
+            aria-label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}>
+            {isLight ? <MoonIcon size={16} /> : <SunIcon size={16} />}
+          </button>
+        )}
       </nav>
     </header>
   )

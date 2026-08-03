@@ -6,10 +6,45 @@ type TranslationKey =
   | 'app.exitMessage'
   | 'app.exitOk'
   | 'app.exitCancel'
+  | 'error.title'
+  | 'error.close'
   | 'nav.settings'
   | 'nav.sessions'
   | 'nav.detail'
   | 'nav.help'
+  | 'nav.stats'
+  | 'settings.serverStats'
+  | 'stats.title'
+  | 'stats.refresh'
+  | 'stats.loading'
+  | 'stats.error'
+  | 'stats.empty'
+  | 'stats.metaLine'
+  | 'stats.filterSince'
+  | 'stats.filterUntil'
+  | 'stats.filterModel'
+  | 'stats.apply'
+  | 'stats.port'
+  | 'stats.portHint'
+  | 'stats.cost'
+  | 'stats.estCost'
+  | 'stats.mostExpensive'
+  | 'stats.mostTokens'
+  | 'stats.avgInput'
+  | 'stats.costPerDay'
+  | 'stats.costPerModel'
+  | 'stats.prices'
+  | 'stats.tabOverview'
+  | 'stats.tabModel'
+  | 'stats.tabProject'
+  | 'stats.tabDay'
+  | 'stats.tabMonth'
+  | 'stats.tabSessions'
+  | 'stats.tabLimits'
+  | 'stats.setupTitle'
+  | 'stats.setupHint'
+  | 'stats.setupCopy'
+  | 'stats.setupCopied'
   | 'menu.title'
   | 'menu.settingsDescription'
   | 'menu.sessionsDescription'
@@ -28,6 +63,7 @@ type TranslationKey =
   | 'settings.testing'
   | 'settings.testingConnection'
   | 'settings.saved'
+  | 'settings.savedNotTested'
   | 'settings.connectedSaved'
   | 'settings.connectionFailed'
   | 'settings.connectedTo'
@@ -40,6 +76,20 @@ type TranslationKey =
   | 'settings.draftHint'
   | 'settings.testedNotSaved'
   | 'settings.savedButton'
+  | 'settings.sectionServer'
+  | 'settings.sectionPreferences'
+  | 'settings.dataModeTitle'
+  | 'settings.dataModeDesc'
+  | 'settings.modeFullDesc'
+  | 'settings.modeSaver'
+  | 'settings.modeSaverDesc'
+  | 'settings.modeUltra'
+  | 'settings.modeUltraDesc'
+  | 'settings.modeMiser'
+  | 'settings.modeMiserDesc'
+  | 'settings.visualTheme'
+  | 'settings.switchTheme'
+  | 'detail.copySelection'
   | 'settings.testOk'
   | 'settings.testNeedsFields'
   | 'settings.testAlreadyPassed'
@@ -79,6 +129,7 @@ type TranslationKey =
   | 'sessions.folderPickerEmpty'
   | 'sessions.projectDirectoryInvalid'
   | 'sessions.searchPlaceholder'
+  | 'sessions.newHere'
   | 'sessions.emptyTitle'
   | 'sessions.emptyHint'
   | 'sessions.noFileChanges'
@@ -150,6 +201,10 @@ type TranslationKey =
   | 'todo.hide'
   | 'todo.show'
   | 'todo.more'
+  | 'diff.filesModified'
+  | 'toolpart.wrote'
+  | 'toolpart.edited'
+  | 'toolpart.patched'
   | 'session.deleteTitle'
   | 'session.deleteBodyPrefix'
   | 'session.cancel'
@@ -207,14 +262,16 @@ type TranslationKey =
   | 'settings.mcpConfigDesc'
   | 'settings.sessionArchive'
   | 'settings.sessionArchiveDesc'
-  | 'settings.autoSummarize'
-  | 'settings.autoSummarizeDesc'
-  | 'settings.autoSummarizeThreshold'
   | 'settings.streamingFull'
   | 'settings.streamingFullDesc'
   | 'detail.contextMenu.copy'
   | 'detail.contextMenu.revert'
   | 'detail.contextMenu.fork'
+  | 'detail.queuedTitle'
+  | 'detail.queuedEmpty'
+  | 'detail.queuedSend'
+  | 'detail.queuedRemove'
+  | 'detail.queuedBadge'
   | 'detail.git.stage'
   | 'detail.git.unstage'
   | 'detail.git.commit'
@@ -251,6 +308,12 @@ type TranslationKey =
   | 'settings.questionAutoDesc'
   | 'settings.permissionUI'
   | 'settings.permissionUIDesc'
+  | 'settings.promptQueue'
+  | 'settings.promptQueueDesc'
+  | 'settings.promptQueueMode'
+  | 'settings.promptQueueModeDesc'
+  | 'settings.promptQueueModeAuto'
+  | 'settings.promptQueueModeManual'
   | 'settings.permissionRequest'
   | 'settings.permissionAllow'
   | 'settings.permissionDeny'
@@ -309,6 +372,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'app.exitMessage': 'Are you sure you want to exit?',
     'app.exitOk': 'Close',
     'app.exitCancel': 'Cancel',
+    'error.title': 'Error',
+    'error.close': 'Close',
     'nav.settings': 'Settings',
     'nav.sessions': 'Sessions',
     'nav.detail': 'Detail',
@@ -330,11 +395,26 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.test': 'Test Connection',
     'settings.testing': 'Testing...',
     'settings.testingConnection': 'Testing connection...',
-    'settings.saved': 'Configuration saved. It will be used for Sessions.',
+      'settings.saved': 'Configuration saved. It will be used for Sessions.',
+      'settings.savedNotTested': 'Test the connection before using it.',
     'settings.connectedSaved': 'Connected to OpenCode {version}. Configuration saved.',
     'settings.draftHint': 'Edits are drafts until you tap Save. Test checks the fields below without saving or changing page.',
     'settings.testedNotSaved': 'Connection OK: OpenCode {version}. Nothing was saved yet.',
-    'settings.savedButton': 'Saved',
+      'settings.savedButton': 'Saved',
+      'settings.sectionServer': 'Server',
+      'settings.sectionPreferences': 'Preferences',
+      'settings.dataModeTitle': 'Data mode',
+      'settings.dataModeDesc': 'Controls network polling frequency and automatic data loading.',
+      'settings.modeFullDesc': '3.5s · ~35 KB/min · SSE + audio · full data',
+      'settings.modeSaver': 'Balance',
+      'settings.modeSaverDesc': '15s · ~10 KB/min · full payload · with audio',
+      'settings.modeUltra': 'Reduced',
+      'settings.modeUltraDesc': '30s · ~3.6 KB/min · no audio · essential data',
+      'settings.modeMiser': 'Minimum',
+      'settings.modeMiserDesc': '60s · ~1.8 KB/min · text only · no notifications',
+      'settings.visualTheme': 'Visual theme',
+      'settings.switchTheme': 'Switch theme',
+      'detail.copySelection': 'Copy selection',
     'settings.testOk': 'Test OK',
     'settings.testNeedsFields': 'Enter host, port, and username to test.',
     'settings.testAlreadyPassed': 'This draft already passed the connection test.',
@@ -378,6 +458,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.questionAutoDesc': 'Automatically show question prompts from the AI',
     'settings.permissionUI': 'Permission requests',
     'settings.permissionUIDesc': 'Show permission request dialogs for tool access',
+    'settings.promptQueue': 'Prompt queue',
+    'settings.promptQueueDesc': 'Queue prompts while assistant is replying',
+    'settings.promptQueueMode': 'Queue mode',
+    'settings.promptQueueModeDesc': 'How queued prompts are sent',
+    'settings.promptQueueModeAuto': 'Auto',
+    'settings.promptQueueModeManual': 'Manual',
     'settings.permissionRequest': 'Permission Request',
     'settings.permissionAllow': 'Allow',
     'settings.permissionDeny': 'Deny',
@@ -401,14 +487,16 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.mcpConfigDesc': 'List and configure MCP servers',
     'settings.sessionArchive': 'Archive sessions',
     'settings.sessionArchiveDesc': 'Hide archived sessions from the list',
-    'settings.autoSummarize': 'Auto-summarize',
-    'settings.autoSummarizeDesc': 'Compact conversation automatically above threshold',
-    'settings.autoSummarizeThreshold': 'Auto-summarize threshold (tokens)',
     'settings.streamingFull': 'Fast streaming (Full mode)',
     'settings.streamingFullDesc': 'Poll every 1s while the assistant replies',
     'detail.contextMenu.copy': 'Copy message',
     'detail.contextMenu.revert': 'Revert here',
     'detail.contextMenu.fork': 'Fork session',
+    'detail.queuedTitle': 'Queued prompts',
+    'detail.queuedEmpty': 'No queued prompts',
+    'detail.queuedSend': 'Send now',
+    'detail.queuedRemove': 'Remove',
+    'detail.queuedBadge': 'queued',
     'detail.git.stage': 'Stage',
     'detail.git.unstage': 'Unstage',
     'detail.git.commit': 'Commit',
@@ -456,6 +544,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.searchPlaceholder': 'Search sessions by title or directory...',
     'sessions.emptyTitle': 'No sessions found',
     'sessions.emptyHint': 'Create a new session to get started',
+    'sessions.newHere': 'New session here',
     'sessions.loadingTitle': 'Connecting to OpenCode',
     'sessions.loadingHint': 'Loading sessions. This can take a few seconds on mobile or after the server wakes up.',
     'sessions.offlineHint': 'OpenCode is not reachable yet. Check Settings or try Refresh.',
@@ -538,6 +627,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'todo.hide': 'Hide',
     'todo.show': 'Show',
     'todo.more': '... and {count} more',
+    'diff.filesModified': '{count} files modified',
+    'toolpart.wrote': 'wrote',
+    'toolpart.edited': 'edited',
+    'toolpart.patched': 'patched',
     'session.deleteTitle': 'Delete session?',
     'session.deleteBodyPrefix': 'This will permanently delete',
     'session.cancel': 'Cancel',
@@ -638,7 +731,40 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'tunnel.qrHint': 'Scan the QR shown by opencode-tunnel',
     'tunnel.modeLabel': 'Connection mode',
     'tunnel.modeDirect': 'Local network',
-    'tunnel.modeRemote': 'Remote (tunnel)'
+    'tunnel.modeRemote': 'Remote (tunnel)',
+    'nav.stats': 'Stats',
+    'settings.serverStats': 'Server stats',
+    'stats.title': 'Statistics',
+    'stats.refresh': 'Refresh',
+    'stats.loading': 'Reading database...',
+    'stats.error': 'Error',
+    'stats.empty': 'No data (is the opencode-stats server running?)',
+    'stats.metaLine': '{sessions} sessions · {models} models · {since} → {until} · avg cost {avg}/session · DB: {db}',
+    'stats.filterSince': 'Since',
+    'stats.filterUntil': 'Until',
+    'stats.filterModel': 'Model',
+    'stats.apply': 'Apply',
+    'stats.port': 'Stats port',
+    'stats.portHint': 'Port of the opencode-stats server on the PC (default 8765)',
+    'stats.cost': 'Total cost',
+    'stats.estCost': 'est.',
+    'stats.mostExpensive': 'Most expensive session',
+    'stats.mostTokens': 'Session with most tokens',
+    'stats.avgInput': 'Avg input per session',
+    'stats.costPerDay': 'Cost per day',
+    'stats.costPerModel': 'Cost per model',
+    'stats.prices': 'Prices per 1M tokens (USD)',
+    'stats.tabOverview': 'Overview',
+    'stats.tabModel': 'By model',
+    'stats.tabProject': 'By project',
+    'stats.tabDay': 'By day',
+    'stats.tabMonth': 'By month',
+    'stats.tabSessions': 'Sessions',
+    'stats.tabLimits': 'Limits & prices',
+    'stats.setupTitle': 'Activate on your PC',
+    'stats.setupHint': 'Double-click start-stats.bat (or run this command) on the computer that runs opencode. It opens firewall port 8765 automatically.',
+    'stats.setupCopy': 'Copy command',
+    'stats.setupCopied': 'Copied!'
   },
   es: {
     'app.title': 'OpenCode Remoto',
@@ -646,6 +772,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'app.exitMessage': '¿Seguro que quieres salir?',
     'app.exitOk': 'Cerrar',
     'app.exitCancel': 'Cancelar',
+    'error.title': 'Error',
+    'error.close': 'Cerrar',
     'nav.settings': 'Configuración',
     'nav.sessions': 'Sesiones',
     'nav.detail': 'Detalle',
@@ -667,11 +795,26 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.test': 'Probar conexión',
     'settings.testing': 'Probando...',
     'settings.testingConnection': 'Probando conexión...',
-    'settings.saved': 'Configuración guardada. Se usará en las Sesiones.',
+      'settings.saved': 'Configuración guardada. Se usará en las Sesiones.',
+      'settings.savedNotTested': 'Probá la conexión antes de usarla.',
     'settings.connectedSaved': 'Conectado a OpenCode {version}. Configuración guardada.',
     'settings.draftHint': 'Los cambios son borradores hasta que pulses Guardar. La prueba verifica los campos sin guardar ni cambiar de página.',
     'settings.testedNotSaved': 'Conexión OK: OpenCode {version}. Aún no se guardó nada.',
-    'settings.savedButton': 'Guardado',
+      'settings.savedButton': 'Guardado',
+      'settings.sectionServer': 'Servidor',
+      'settings.sectionPreferences': 'Preferencias',
+      'settings.dataModeTitle': 'Modo de datos',
+      'settings.dataModeDesc': 'Controla la frecuencia de consulta de red y la carga automática de datos.',
+      'settings.modeFullDesc': '3.5s · ~35 KB/min · SSE + audio · datos completos',
+      'settings.modeSaver': 'Equilibrio',
+      'settings.modeSaverDesc': '15s · ~10 KB/min · payload completo · con audio',
+      'settings.modeUltra': 'Reducido',
+      'settings.modeUltraDesc': '30s · ~3.6 KB/min · sin audio · datos esenciales',
+      'settings.modeMiser': 'Mínimo',
+      'settings.modeMiserDesc': '60s · ~1.8 KB/min · solo texto · sin notificaciones',
+      'settings.visualTheme': 'Tema visual',
+      'settings.switchTheme': 'Cambiar tema',
+      'detail.copySelection': 'Copiar selección',
     'settings.testOk': 'Prueba OK',
     'settings.testNeedsFields': 'Ingresa host, puerto y usuario para probar.',
     'settings.testAlreadyPassed': 'Este borrador ya pasó la prueba de conexión.',
@@ -715,6 +858,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.questionAutoDesc': 'Mostrar automáticamente preguntas de la IA',
     'settings.permissionUI': 'Solicitudes de permiso',
     'settings.permissionUIDesc': 'Mostrar diálogos de permiso para acceso a herramientas',
+    'settings.promptQueue': 'Cola de mensajes',
+    'settings.promptQueueDesc': 'Encolar mensajes mientras el asistente responde',
+    'settings.promptQueueMode': 'Modo de cola',
+    'settings.promptQueueModeDesc': 'Cómo se envían los mensajes encolados',
+    'settings.promptQueueModeAuto': 'Automático',
+    'settings.promptQueueModeManual': 'Manual',
     'settings.permissionRequest': 'Solicitud de permiso',
     'settings.permissionAllow': 'Permitir',
     'settings.permissionDeny': 'Denegar',
@@ -738,14 +887,16 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.mcpConfigDesc': 'Listar y configurar servidores MCP',
     'settings.sessionArchive': 'Archivar sesiones',
     'settings.sessionArchiveDesc': 'Ocultar sesiones archivadas de la lista',
-    'settings.autoSummarize': 'Auto-resumen',
-    'settings.autoSummarizeDesc': 'Compactar conversación automáticamente al superar un umbral',
-    'settings.autoSummarizeThreshold': 'Umbral de auto-resumen (tokens)',
     'settings.streamingFull': 'Streaming rápido (modo Full)',
     'settings.streamingFullDesc': 'Polling cada 1s mientras el asistente responde',
     'detail.contextMenu.copy': 'Copiar mensaje',
     'detail.contextMenu.revert': 'Revertir aquí',
     'detail.contextMenu.fork': 'Bifurcar sesión',
+    'detail.queuedTitle': 'Mensajes en cola',
+    'detail.queuedEmpty': 'Sin mensajes en cola',
+    'detail.queuedSend': 'Enviar ahora',
+    'detail.queuedRemove': 'Eliminar',
+    'detail.queuedBadge': 'en cola',
     'detail.git.stage': 'Stage',
     'detail.git.unstage': 'Unstage',
     'detail.git.commit': 'Commit',
@@ -793,6 +944,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.searchPlaceholder': 'Buscar sesiones por título o carpeta...',
     'sessions.emptyTitle': 'No se encontraron sesiones',
     'sessions.emptyHint': 'Crea una nueva sesión para empezar',
+    'sessions.newHere': 'Nueva sesión aquí',
     'sessions.loadingTitle': 'Conectando a OpenCode',
     'sessions.loadingHint': 'Cargando sesiones. Puede tomar unos segundos en móvil o después de que el servidor se active.',
     'sessions.offlineHint': 'OpenCode aún no está accesible. Revisa Configuración o pulsa Actualizar.',
@@ -875,6 +1027,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'todo.hide': 'Ocultar',
     'todo.show': 'Mostrar',
     'todo.more': '... y {count} más',
+    'diff.filesModified': '{count} archivos modificados',
+    'toolpart.wrote': 'escribió',
+    'toolpart.edited': 'editó',
+    'toolpart.patched': 'parcheó',
     'session.deleteTitle': '¿Eliminar sesión?',
     'session.deleteBodyPrefix': 'Esto eliminará permanentemente',
     'session.cancel': 'Cancelar',
@@ -975,7 +1131,40 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'tunnel.qrHint': 'Escanea el QR que muestra opencode-tunnel',
     'tunnel.modeLabel': 'Modo de conexión',
     'tunnel.modeDirect': 'Red local',
-    'tunnel.modeRemote': 'Remoto (túnel)'
+    'tunnel.modeRemote': 'Remoto (túnel)',
+    'nav.stats': 'Estadísticas',
+    'settings.serverStats': 'Estadísticas del servidor',
+    'stats.title': 'Estadísticas',
+    'stats.refresh': 'Actualizar',
+    'stats.loading': 'Leyendo base de datos...',
+    'stats.error': 'Error',
+    'stats.empty': 'Sin datos (¿el servidor opencode-stats está corriendo?)',
+    'stats.metaLine': '{sessions} sesiones · {models} modelos · {since} → {until} · costo medio {avg}/sesión · DB: {db}',
+    'stats.filterSince': 'Desde',
+    'stats.filterUntil': 'Hasta',
+    'stats.filterModel': 'Modelo',
+    'stats.apply': 'Aplicar',
+    'stats.port': 'Puerto de estadísticas',
+    'stats.portHint': 'Puerto del servidor opencode-stats en la PC (default 8765)',
+    'stats.cost': 'Costo total',
+    'stats.estCost': 'est.',
+    'stats.mostExpensive': 'Sesión más cara',
+    'stats.mostTokens': 'Sesión con más tokens',
+    'stats.avgInput': 'Input medio por sesión',
+    'stats.costPerDay': 'Costo por día',
+    'stats.costPerModel': 'Costo por modelo',
+    'stats.prices': 'Precios por 1M tokens (USD)',
+    'stats.tabOverview': 'Resumen',
+    'stats.tabModel': 'Por modelo',
+    'stats.tabProject': 'Por proyecto',
+    'stats.tabDay': 'Por día',
+    'stats.tabMonth': 'Por mes',
+    'stats.tabSessions': 'Sesiones',
+    'stats.tabLimits': 'Límites y precios',
+    'stats.setupTitle': 'Activá en tu PC',
+    'stats.setupHint': 'Doble clic en start-stats.bat (o ejecutá este comando) en la computadora donde corre opencode. Abre el puerto 8765 del firewall automáticamente.',
+    'stats.setupCopy': 'Copiar comando',
+    'stats.setupCopied': '¡Copiado!'
   },
   it: {
     'app.title': 'OpenCode Mobile',
@@ -983,6 +1172,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'app.exitMessage': 'Sei sicuro di voler uscire?',
     'app.exitOk': 'Chiudi',
     'app.exitCancel': 'Annulla',
+    'error.title': 'Errore',
+    'error.close': 'Chiudi',
     'nav.settings': 'Impostazioni',
     'nav.sessions': 'Sessioni',
     'nav.detail': 'Dettaglio',
@@ -1004,11 +1195,26 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.test': 'Test connessione',
     'settings.testing': 'Test...',
     'settings.testingConnection': 'Test connessione...',
-    'settings.saved': 'Configurazione salvata. Verrà usata nelle Sessioni.',
+      'settings.saved': 'Configurazione salvata. Verrà usata nelle Sessioni.',
+      'settings.savedNotTested': 'Prova la connessione prima di usarla.',
     'settings.connectedSaved': 'Connesso a OpenCode {version}. Configurazione salvata.',
     'settings.draftHint': 'Le modifiche restano in bozza finché tocchi Salva. Test controlla i campi qui sotto senza salvare né cambiare pagina.',
     'settings.testedNotSaved': 'Connessione OK: OpenCode {version}. Non è stato ancora salvato nulla.',
-    'settings.savedButton': 'Salvato',
+      'settings.savedButton': 'Salvato',
+      'settings.sectionServer': 'Server',
+      'settings.sectionPreferences': 'Preferenze',
+      'settings.dataModeTitle': 'Modalità dati',
+      'settings.dataModeDesc': 'Controlla la frequenza di polling di rete e il caricamento automatico dei dati.',
+      'settings.modeFullDesc': '3.5s · ~35 KB/min · SSE + audio · dati completi',
+      'settings.modeSaver': 'Bilanciato',
+      'settings.modeSaverDesc': '15s · ~10 KB/min · payload completo · con audio',
+      'settings.modeUltra': 'Ridotto',
+      'settings.modeUltraDesc': '30s · ~3.6 KB/min · senza audio · dati essenziali',
+      'settings.modeMiser': 'Minimo',
+      'settings.modeMiserDesc': '60s · ~1.8 KB/min · solo testo · senza notifiche',
+      'settings.visualTheme': 'Tema visivo',
+      'settings.switchTheme': 'Cambia tema',
+      'detail.copySelection': 'Copia selezione',
     'settings.testOk': 'Test OK',
     'settings.testNeedsFields': 'Inserisci host, porta e username per fare il test.',
     'settings.testAlreadyPassed': 'Questa bozza ha già superato il test connessione.',
@@ -1052,6 +1258,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.questionAutoDesc': 'Mostra automaticamente le domande dell\'IA',
     'settings.permissionUI': 'Richiesta permessi',
     'settings.permissionUIDesc': 'Mostra finestre di permesso per accesso strumenti',
+    'settings.promptQueue': 'Coda prompt',
+    'settings.promptQueueDesc': 'Accoda i prompt mentre l\'assistente risponde',
+    'settings.promptQueueMode': 'Modalità coda',
+    'settings.promptQueueModeDesc': 'Come vengono inviati i prompt in coda',
+    'settings.promptQueueModeAuto': 'Auto',
+    'settings.promptQueueModeManual': 'Manuale',
     'settings.permissionRequest': 'Richiesta di permesso',
     'settings.permissionAllow': 'Consenti',
     'settings.permissionDeny': 'Nega',
@@ -1075,14 +1287,16 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.mcpConfigDesc': 'Elenca e configura server MCP',
     'settings.sessionArchive': 'Archivia sessioni',
     'settings.sessionArchiveDesc': 'Nascondi sessioni archiviate dall\'elenco',
-    'settings.autoSummarize': 'Auto-riepilogo',
-    'settings.autoSummarizeDesc': 'Compatta automaticamente la conversazione oltre una soglia',
-    'settings.autoSummarizeThreshold': 'Soglia auto-riepilogo (token)',
     'settings.streamingFull': 'Streaming veloce (modalità Full)',
     'settings.streamingFullDesc': 'Polling ogni 1s mentre l\'assistente risponde',
     'detail.contextMenu.copy': 'Copia messaggio',
     'detail.contextMenu.revert': 'Ripristina qui',
     'detail.contextMenu.fork': 'Duplica sessione',
+    'detail.queuedTitle': 'Prompt in coda',
+    'detail.queuedEmpty': 'Nessun prompt in coda',
+    'detail.queuedSend': 'Invia ora',
+    'detail.queuedRemove': 'Rimuovi',
+    'detail.queuedBadge': 'in coda',
     'detail.git.stage': 'Stage',
     'detail.git.unstage': 'Unstage',
     'detail.git.commit': 'Commit',
@@ -1130,6 +1344,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.searchPlaceholder': 'Cerca sessioni per titolo o cartella...',
     'sessions.emptyTitle': 'Nessuna sessione trovata',
     'sessions.emptyHint': 'Crea una nuova sessione per iniziare',
+    'sessions.newHere': 'Nuova sessione qui',
     'sessions.loadingTitle': 'Connessione a OpenCode',
     'sessions.loadingHint': 'Carico le sessioni. Su mobile o dopo il risveglio del server può volerci qualche secondo.',
     'sessions.offlineHint': 'OpenCode non è ancora raggiungibile. Controlla Impostazioni o riprova con Aggiorna.',
@@ -1212,6 +1427,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'todo.hide': 'Nascondi',
     'todo.show': 'Mostra',
     'todo.more': '... e altri {count}',
+    'diff.filesModified': '{count} file modificati',
+    'toolpart.wrote': 'scritto',
+    'toolpart.edited': 'modificato',
+    'toolpart.patched': 'patch applicata',
     'session.deleteTitle': 'Eliminare la sessione?',
     'session.deleteBodyPrefix': 'Questo eliminerà definitivamente',
     'session.cancel': 'Annulla',
@@ -1276,7 +1495,40 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'tunnel.qrHint': 'Scansiona il QR mostrato da opencode-tunnel',
     'tunnel.modeLabel': 'Modalità connessione',
     'tunnel.modeDirect': 'Rete locale',
-    'tunnel.modeRemote': 'Remoto (tunnel)'
+    'tunnel.modeRemote': 'Remoto (tunnel)',
+    'nav.stats': 'Statistiche',
+    'settings.serverStats': 'Statistiche del server',
+    'stats.title': 'Statistiche',
+    'stats.refresh': 'Aggiorna',
+    'stats.loading': 'Lettura database...',
+    'stats.error': 'Errore',
+    'stats.empty': 'Nessun dato (il server opencode-stats è in esecuzione?)',
+    'stats.metaLine': '{sessions} sessioni · {models} modelli · {since} → {until} · costo medio {avg}/sessione · DB: {db}',
+    'stats.filterSince': 'Da',
+    'stats.filterUntil': 'A',
+    'stats.filterModel': 'Modello',
+    'stats.apply': 'Applica',
+    'stats.port': 'Porta statistiche',
+    'stats.portHint': 'Porta del server opencode-stats sul PC (default 8765)',
+    'stats.cost': 'Costo totale',
+    'stats.estCost': 'est.',
+    'stats.mostExpensive': 'Sessione più costosa',
+    'stats.mostTokens': 'Sessione con più token',
+    'stats.avgInput': 'Input medio per sessione',
+    'stats.costPerDay': 'Costo per giorno',
+    'stats.costPerModel': 'Costo per modello',
+    'stats.prices': 'Prezzi per 1M token (USD)',
+    'stats.tabOverview': 'Riepilogo',
+    'stats.tabModel': 'Per modello',
+    'stats.tabProject': 'Per progetto',
+    'stats.tabDay': 'Per giorno',
+    'stats.tabMonth': 'Per mese',
+    'stats.tabSessions': 'Sessioni',
+    'stats.tabLimits': 'Limiti e prezzi',
+    'stats.setupTitle': 'Attiva sul tuo PC',
+    'stats.setupHint': 'Fai doppio clic su start-stats.bat (o esegui questo comando) sul computer dove gira opencode. Apre automaticamente la porta 8765 del firewall.',
+    'stats.setupCopy': 'Copia comando',
+    'stats.setupCopied': 'Copiato!'
   },
   'zh-TW': {
     'app.title': 'OpenCode 遠端',
@@ -1284,6 +1536,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'app.exitMessage': '確定要退出嗎？',
     'app.exitOk': '關閉',
     'app.exitCancel': '取消',
+    'error.title': '錯誤',
+    'error.close': '關閉',
     'nav.settings': '設定',
     'nav.sessions': '工作階段',
     'nav.detail': '詳情',
@@ -1305,11 +1559,26 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.test': '測試連線',
     'settings.testing': '測試中...',
     'settings.testingConnection': '正在測試連線...',
-    'settings.saved': '設定已儲存，將用於工作階段。',
+      'settings.saved': '設定已儲存，將用於工作階段。',
+      'settings.savedNotTested': '使用前請先測試連線。',
     'settings.connectedSaved': '已連線至 OpenCode {version}。設定已儲存。',
     'settings.draftHint': '變更會保持草稿，直到點選儲存。測試只檢查下方欄位，不會儲存或切換頁面。',
     'settings.testedNotSaved': '連線正常：OpenCode {version}。尚未儲存任何變更。',
-    'settings.savedButton': '已儲存',
+      'settings.savedButton': '已儲存',
+      'settings.sectionServer': '伺服器',
+      'settings.sectionPreferences': '偏好設定',
+      'settings.dataModeTitle': '資料模式',
+      'settings.dataModeDesc': '控制網路輪詢頻率和自動資料載入。',
+      'settings.modeFullDesc': '3.5s · ~35 KB/min · SSE + 音訊 · 完整資料',
+      'settings.modeSaver': '平衡',
+      'settings.modeSaverDesc': '15s · ~10 KB/min · 完整負載 · 含音訊',
+      'settings.modeUltra': '精簡',
+      'settings.modeUltraDesc': '30s · ~3.6 KB/min · 無音訊 · 必要資料',
+      'settings.modeMiser': '最低',
+      'settings.modeMiserDesc': '60s · ~1.8 KB/min · 僅文字 · 無通知',
+      'settings.visualTheme': '視覺主題',
+      'settings.switchTheme': '切換主題',
+      'detail.copySelection': '複製選取內容',
     'settings.testOk': '測試正常',
     'settings.testNeedsFields': '請輸入主機、連接埠與使用者名稱以測試。',
     'settings.testAlreadyPassed': '此草稿已通過連線測試。',
@@ -1353,6 +1622,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.questionAutoDesc': '自動顯示 AI 的提問',
     'settings.permissionUI': '權限請求',
     'settings.permissionUIDesc': '顯示工具訪問權限請求對話框',
+    'settings.promptQueue': '提示佇列',
+    'settings.promptQueueDesc': '在助理回覆時將提示加入佇列',
+    'settings.promptQueueMode': '佇列模式',
+    'settings.promptQueueModeDesc': '如何發送佇列中的提示',
+    'settings.promptQueueModeAuto': '自動',
+    'settings.promptQueueModeManual': '手動',
     'settings.permissionRequest': '權限請求',
     'settings.permissionAllow': '允許',
     'settings.permissionDeny': '拒絕',
@@ -1376,14 +1651,16 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.mcpConfigDesc': '列出並設定 MCP 伺服器',
     'settings.sessionArchive': '歸檔工作階段',
     'settings.sessionArchiveDesc': '從清單中隱藏已歸檔的工作階段',
-    'settings.autoSummarize': '自動摘要',
-    'settings.autoSummarizeDesc': '超過閾值時自動壓縮對話',
-    'settings.autoSummarizeThreshold': '自動摘要閾值（Token）',
     'settings.streamingFull': '快速串流（Full 模式）',
     'settings.streamingFullDesc': '助理回覆時每秒輪詢',
     'detail.contextMenu.copy': '複製訊息',
     'detail.contextMenu.revert': '還原至此',
     'detail.contextMenu.fork': '分叉工作階段',
+    'detail.queuedTitle': '佇列提示',
+    'detail.queuedEmpty': '無佇列提示',
+    'detail.queuedSend': '立即發送',
+    'detail.queuedRemove': '刪除',
+    'detail.queuedBadge': '佇列中',
     'detail.git.stage': 'Stage',
     'detail.git.unstage': 'Unstage',
     'detail.git.commit': 'Commit',
@@ -1431,6 +1708,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.searchPlaceholder': '依標題或目錄搜尋工作階段...',
     'sessions.emptyTitle': '找不到工作階段',
     'sessions.emptyHint': '建立新的工作階段以開始',
+    'sessions.newHere': '在此建立新工作階段',
     'sessions.loadingTitle': '正在連線到 OpenCode',
     'sessions.loadingHint': '正在載入工作階段。行動裝置或伺服器剛喚醒時可能需要幾秒。',
     'sessions.offlineHint': '尚無法連線到 OpenCode。請檢查設定或重新整理。',
@@ -1513,6 +1791,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'todo.hide': '隱藏',
     'todo.show': '顯示',
     'todo.more': '... 還有 {count} 項',
+    'diff.filesModified': '{count} 個檔案已修改',
+    'toolpart.wrote': '已寫入',
+    'toolpart.edited': '已編輯',
+    'toolpart.patched': '已套用補丁',
     'session.deleteTitle': '刪除工作階段？',
     'session.deleteBodyPrefix': '這會永久刪除',
     'session.cancel': '取消',
@@ -1577,7 +1859,40 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'tunnel.qrHint': '掃描 opencode-tunnel 顯示的二維碼',
     'tunnel.modeLabel': '連線模式',
     'tunnel.modeDirect': '本地網路',
-    'tunnel.modeRemote': '遠端（隧道）'
+    'tunnel.modeRemote': '遠端（隧道）',
+    'nav.stats': '統計',
+    'settings.serverStats': '伺服器統計',
+    'stats.title': '統計資料',
+    'stats.refresh': '重新整理',
+    'stats.loading': '讀取資料庫...',
+    'stats.error': '錯誤',
+    'stats.empty': '沒有資料（opencode-stats 伺服器有在執行嗎？）',
+    'stats.metaLine': '{sessions} 個工作階段 · {models} 個模型 · {since} → {until} · 平均成本 {avg}/工作階段 · DB: {db}',
+    'stats.filterSince': '從',
+    'stats.filterUntil': '至',
+    'stats.filterModel': '模型',
+    'stats.apply': '套用',
+    'stats.port': '統計連接埠',
+    'stats.portHint': 'PC 上 opencode-stats 伺服器的連接埠（預設 8765）',
+    'stats.cost': '總成本',
+    'stats.estCost': '估',
+    'stats.mostExpensive': '最貴的工作階段',
+    'stats.mostTokens': 'Token 最多的工作階段',
+    'stats.avgInput': '每工作階段平均輸入',
+    'stats.costPerDay': '每日成本',
+    'stats.costPerModel': '各模型成本',
+    'stats.prices': '每 1M token 價格（USD）',
+    'stats.tabOverview': '摘要',
+    'stats.tabModel': '依模型',
+    'stats.tabProject': '依專案',
+    'stats.tabDay': '依天',
+    'stats.tabMonth': '依月',
+    'stats.tabSessions': '工作階段',
+    'stats.tabLimits': '限制與價格',
+    'stats.setupTitle': '在您的 PC 上啟用',
+    'stats.setupHint': '在執行 opencode 的電腦上雙擊 start-stats.bat（或執行此命令）。會自動開啟防火牆的 8765 連接埠。',
+    'stats.setupCopy': '複製命令',
+    'stats.setupCopied': '已複製！'
   }
 }
 

@@ -4,7 +4,7 @@
 
 # OpenCode Mobile
 
-**Cliente Android/iOS para [OpenCode](https://opencode.ai) — tu asistente de codificación AI desde el celular**
+**Android/iOS client for [OpenCode](https://opencode.ai) — your AI coding assistant from your phone**
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=white" alt="React 18"/>
@@ -15,64 +15,66 @@
   <br/>
   <img src="https://img.shields.io/badge/SSE%20streaming-%E2%9C%85-6c8cff" alt="SSE"/>
   <img src="https://img.shields.io/badge/Offline%20cache-%E2%9C%85-6c8cff" alt="Offline"/>
-  <img src="https://img.shields.io/badge/i18n-4%20idiomas-6c8cff" alt="i18n"/>
-  <img src="https://img.shields.io/badge/30%2B%20temas-%E2%9C%85-6c8cff" alt="Themes"/>
+  <img src="https://img.shields.io/badge/i18n-4%20languages-6c8cff" alt="i18n"/>
+  <img src="https://img.shields.io/badge/30%2B%20themes-%E2%9C%85-6c8cff" alt="Themes"/>
 </p>
+
+**[Español](README.es.md)** · **English**
 
 </div>
 
 ---
 
-## ✨ Características
+## ✨ Features
 
 <div class="features-grid">
 
 | | |
 |---|---|
-| **⚡ Streaming en tiempo real** | Eventos SSE via `/event` — indicadores de escritura, entrega instantánea |
-| **🔄 Polling adaptativo** | 4 modos: Full (3.5s), Saver (15s), Ultra (30s), Miser (60s). Cambio automático en datos móviles |
-| **📦 Cache offline** | IndexedDB — navegá sesiones y mensajes sin conexión |
-| **💬 Chat completo** | Enviá prompts, comandos, shell. Abortá, revertí, undo/redo |
-| **📋 Diff viewer** | Diffs expandibles por archivo con carga inline de contenido |
-| **📁 Gestión de sesiones** | Crear, renombrar, eliminar, favoritos, archivar, exportar snapshots |
-| **🤖 Control de agentes AI** | Seleccioná y cambiá entre agentes/modelos por sesión |
-| **🔌 Multi-proveedor** | Conectá proveedores externos (OpenAI, Anthropic, etc.) via API key |
-| **📂 File browser** | Navegá archivos remotos del proyecto |
-| **🌿 Git toolbar** | Stage, commit, estado de rama (ahead/behind) |
-| **🎤 Entrada por voz** | Speech-to-text con Web Speech API + plugin nativo Capacitor |
-| **🔐 Permisos y Preguntas** | Modales automáticos para preguntas del AI y permisos de herramientas |
-| **🎨 30+ temas** | Modos oscuro, claro, sistema y programado; selector de variantes con preview |
+| **⚡ Real-time streaming** | SSE events via `/event` — typing indicators, instant delivery |
+| **🔄 Adaptive polling** | 4 modes: Full (3.5s), Balance (15s), Reduced (30s), Miser (60s). Auto-switches on mobile data |
+| **📦 Offline cache** | IndexedDB — browse sessions and messages without a connection |
+| **💬 Full chat** | Send prompts, commands, shell. Abort, revert, undo/redo |
+| **📋 Diff viewer** | Per-file expandable diffs with inline content loading |
+| **📁 Session management** | Create, rename, delete, favorites, archive, export snapshots |
+| **🤖 AI agent control** | Select and switch between agents/models per session |
+| **🔌 Multi-provider** | Connect external providers (OpenAI, Anthropic, etc.) via API key |
+| **📂 File browser** | Browse the remote project's files |
+| **🌿 Git toolbar** | Stage, commit, branch state (ahead/behind) |
+| **🎤 Voice input** | Speech-to-text with Web Speech API + native Capacitor plugin |
+| **🔐 Permissions & Questions** | Automatic modals for AI questions and tool permissions |
+| **🎨 30+ themes** | Dark, light, system and scheduled modes; variant picker with preview |
 | **🌍 i18n** | Español, English, Italiano, 繁體中文 |
-| **📉 Auto-summarize** | Compactación automática cuando el contexto crece |
-| **📋 Plan breakdown** | Visualización de tareas para flujos de orquestación AI |
-| **⌨️ Atajos de teclado** | Tab + acciones para usuarios avanzados |
-| **🚀 Deploy rápido** | Scripts de 1 comando para LAN (misma WiFi) o tunnel (cualquier red) |
-| **📝 Editor de archivos** | Leer, editar y guardar archivos del proyecto |
-| **🖼️ Lightbox de imágenes** | Vista completa con zoom y arrastre |
-| **🧩 MCP Browser** | Explorá recursos MCP conectados |
-| **📦 Cola offline** | Las acciones se encolan y reenvían al reconectar |
-| **🎨 Creador de temas** | Editor visual de colores con exportación JSON |
-| **⭐ Favoritos reordenables** | Arrastrá y soltá para ordenar |
+| **📉 Auto-summarize** | Automatic compaction when the context grows |
+| **📋 Plan breakdown** | Task visualization for AI orchestration flows |
+| **⌨️ Keyboard shortcuts** | Tab + actions for power users |
+| **🚀 Quick deploy** | 1-command scripts for LAN (same WiFi) or tunnel (any network) |
+| **📝 File editor** | Read, edit and save project files |
+| **🖼️ Image lightbox** | Full view with zoom and drag |
+| **🧩 MCP Browser** | Explore connected MCP resources |
+| **📦 Offline queue** | Actions are queued and resent on reconnect |
+| **🎨 Theme creator** | Visual color editor with JSON export |
+| **⭐ Reorderable favorites** | Drag and drop to sort |
 
 </div>
 
 ---
 
-## 🕸️ Grafos de dependencias
+## 🕸️ Dependency graphs
 
 <details>
-<summary><b>📡 Transporte</b> — SSE, polling, cache y cola offline</summary>
+<summary><b>📡 Transport</b> — SSE, polling, cache and offline queue</summary>
 
 ```mermaid
 flowchart LR
     classDef infra fill:#1a1a2e,stroke:#6c8cff,color:#eee
     classDef core fill:#1e3a5f,stroke:#5ba3e6,color:#eee
-    S(["🖥️ Servidor"]) --> A["🌐 api.ts"]
+    S(["🖥️ Server"]) --> A["🌐 api.ts"]
     A --> SSE["useSSE.ts<br/>SSE streaming"]
     A --> Poll["usePolling.ts<br/>Backoff 1s→60s"]
     A --> Cache["useOfflineCache.ts<br/>IndexedDB"]
-    A --> Queue["useOfflineQueue.ts<br/>Cola offline"]
-    Poll -->|pausa/reanuda| SSE
+    A --> Queue["useOfflineQueue.ts<br/>Offline queue"]
+    Poll -->|pause/resume| SSE
     Queue -.->|replay| A
     class S infra
     class A,SSE,Poll,Cache,Queue core
@@ -80,39 +82,39 @@ flowchart LR
 </details>
 
 <details>
-<summary><b>🧠 Estado</b> — hooks principales y sus relaciones</summary>
+<summary><b>🧠 State</b> — main hooks and their relationships</summary>
 
 ```mermaid
 flowchart LR
     classDef hook fill:#2d1b4e,stroke:#a78bfa,color:#eee
     classDef core fill:#1e3a5f,stroke:#5ba3e6,color:#eee
-    C["useConfig"] --> S["useSessions<br/>CRUD + favs"]
+    C["useConfig"] --> S["useSessions<br/>CRUD + favorites"]
     C --> M["useMessages<br/>send + undo"]
-    C --> A["useAI<br/>agentes/modelos"]
+    C --> A["useAI<br/>agents/models"]
     C --> Si["useSessionSidecar<br/>todos/diffs"]
     M -->|optimistic| S
     S -->|selectedID| M
     A -->|activeModel| M
     F["useFeatureFlags"] -.->|toggle| M
-    N["useNetworkMode"] -.->|modo datos| C
+    N["useNetworkMode"] -.->|data mode| C
     Shell["useShell"] -->|terminal| M
-    Speech["useSpeechRecognition"] -->|voz| M
+    Speech["useSpeechRecognition"] -->|voice| M
     class C,S,M,A,Si,F,N,Shell,Speech hook
 ```
 </details>
 
 <details>
-<summary><b>🖥️ UI</b> — App, vistas principales y modales</summary>
+<summary><b>🖥️ UI</b> — App, main views and modals</summary>
 
 ```mermaid
 flowchart LR
     classDef ui fill:#3b1f3b,stroke:#f0c060,color:#eee
     classDef modal fill:#4a2040,stroke:#d08050,color:#eee
-    App["App.tsx<br/>Orquestador"] --> CV["ChatView"]
+    App["App.tsx<br/>Orchestrator"] --> CV["ChatView"]
     App --> SL["SessionList"]
     App --> SP["SettingsPanel"]
     App --> HP["HelpPage"]
-    App --> Mod["15 modales<br/>⬇"]
+    App --> Mod["15 modals<br/>⬇"]
     CV --> MB["MessageBubble"]
     CV --> C["Composer"]
     CV --> ML["MessageList"]
@@ -122,7 +124,7 @@ flowchart LR
     SL --> AL["ArchivedList"]
     SP --> PM["ProviderManager"]
     SP --> TPk["ThemePicker"]
-    subgraph Modales[" "]
+    subgraph Modals[" "]
         DIFF["DiffViewer"]
         FE["FileEditor"]
         TV["TerminalView"]
@@ -140,15 +142,15 @@ flowchart LR
 </details>
 
 <details>
-<summary><b>🔧 Transversal</b> — servicios compartidos</summary>
+<summary><b>🔧 Cross-cutting</b> — shared services</summary>
 
 ```mermaid
 flowchart LR
     classDef cross fill:#1b3b2b,stroke:#4caf7d,color:#eee
-    I18N["🌍 i18n.ts<br/>4 idiomas"]
-    Theme["🎨 resolveTheme.ts<br/>30+ temas"]
-    Styles["📄 styles.css<br/>~5000 líneas"]
-    Types["📐 types.ts<br/>38 tipos"]
+    I18N["🌍 i18n.ts<br/>4 languages"]
+    Theme["🎨 resolveTheme.ts<br/>30+ themes"]
+    Styles["📄 styles.css<br/>~5000 lines"]
+    Types["📐 types.ts<br/>38 types"]
     Icons["🖼️ Icons.tsx<br/>31 SVGs"]
     Bench["📊 benchmarks/<br/>212 tests"]
     I18N --> App
@@ -161,78 +163,69 @@ flowchart LR
 ```
 </details>
 
-## 🚀 Empezar en 2 pasos
+## 🚀 Get started in 2 steps
 
-### 📲 1 — Instalá la app en tu celular
+### 📲 1 — Install the app on your phone
 
-[⬇️ **Descargar OpenCodeMobile.apk**](https://github.com/Owning01/Opencode-Mobile/releases/latest)
+[⬇️ **Download OpenCodeMobile.apk**](https://github.com/Owning01/Opencode-Mobile/releases/latest)
 
-O construíla vos mismo (ver [desarrollo](#-desarrollo)).
+Or build it yourself (see [development](#-development)).
 
-**iOS** (requiere macOS + Xcode 16+): cloná el repo y abrí `web/ios/App/App.xcworkspace` en Xcode, seleccioná tu team de desarrollo y Build & Run.
+**iOS** (requires macOS + Xcode 16+): clone the repo and open `web/ios/App/App.xcworkspace` in Xcode, select your development team and Build & Run.
 
 ---
 
-### 🖥️ 2 — Descargá **opencode-tunnel.exe** y ejecutalo
+### 🖥️ 2 — Download **opencode-tunnel.exe** and run it
 
-[⬇️ **Descargar opencode-tunnel.exe**](https://github.com/Owning01/Opencode-Mobile/releases/latest)
+[⬇️ **Download opencode-tunnel.exe**](https://github.com/Owning01/Opencode-Mobile/releases/latest)
 
-Al ejecutarlo se abre el navegador con esta interfaz:
+Running it opens the browser with this interface:
 
 ```
 ┌─ OpenCode Tunnel ──────────────────────────────┐
-│  Nombre del túnel: [MiOficina       ]           │
-│  Contraseña:       [••••••••        ]           │
-│                                                  │
-│  [CONECTAR]  ← un solo botón hace todo          │
-│                                                  │
-│  ● Servidor: detectado · Túnel: conectado       │
-│  [12:00] Servidor iniciado automáticamente       │
-│  [12:01] Cliente conectado desde remoto          │
-└──────────────────────────────────────────────────┘
+│  Tunnel name:   [MyOffice        ]             │
+│  Password:      [••••••••        ]             │
+│                                                │
+│  [CONNECT]  ← a single button does everything  │
+│                                                │
+│  ● Server: detected · Tunnel: connected        │
+│  [12:00] Server started automatically          │
+│  [12:01] Client connected remotely             │
+└────────────────────────────────────────────────┘
 ```
 
-**El tunnel hace todo solo**:
-- ✅ Busca OpenCode en tu PC y lo inicia si no está corriendo
-- ✅ Conecta el túnel para que tu celular acceda desde cualquier red
-- ✅ Se guarda la configuración para la próxima vez
+**The tunnel does everything on its own**:
+- ✅ Finds OpenCode on your PC and starts it if it's not running
+- ✅ Connects the tunnel so your phone can reach it from any network
+- ✅ Saves the configuration for next time
 
-Solo necesitas poner un **nombre** y **contraseña** (los mismos que vas a usar en el celular).
-
----
-
-### 📱 En el celular: abrí la app
-
-**Ajustes → Conexión Remota** → poné el mismo nombre y contraseña → **Conectar**.
-
-✓ Listo. Ya podés usar OpenCode desde cualquier lugar.
+You only need to set a **name** and **password** (the same ones you'll use on the phone).
 
 ---
 
-> 💡 **¿No querés usar el túnel?** También podés conectar por WiFi local:
-> 1. En PC: `npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096`
-> 2. En la app: **Ajustes → Servidor**, poné la IP de tu PC
+### 📱 On the phone: open the app
+
+**Settings → Remote Connection** → enter the same name and password → **Connect**.
+
+✓ Done. You can now use OpenCode from anywhere.
+
+---
+
+> 💡 **Don't want to use the tunnel?** You can also connect over local WiFi:
+> 1. On PC: `npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096`
+> 2. In the app: **Settings → Server**, enter your PC's IP
 >
-> O con Tailscale: instalalo en PC y celular, usá la IP de Tailscale en vez de la local.
+> Or with Tailscale: install it on PC and phone, use the Tailscale IP instead of the local one.
 
 ---
 
-## 📱 Datos móviles / Mobile Data
+## 📱 Mobile Data
 
-La app ajusta automáticamente el modo al detectar datos móviles (cellular → Reducido, WiFi → Full).
-También podés cambiarlo manualmente en **Ajustes**.
+<details>
+<summary><b>Mobile data — usage modes</b> (click to expand)</summary>
 
-| Modo | Polling | KB/min (idle) | ~30 min | Ideal para |
-|------|---------|---------------|---------|------------|
-| **Full** | 3.5s | ~35 KB | ~1 MB | WiFi ilimitado · streaming SSE en tiempo real con audio |
-| **Balance** | 15s | ~10 KB | ~300 KB | WiFi o datos generosos · payload completo + notificaciones |
-| **Reducido** | 30s | ~3.6 KB | ~108 KB | 4G/LTE · sin audio ni tool parts · solo polling si activa |
-| **Mínimo** | 60s | ~1.8 KB | ~54 KB | Datos limitados o roaming · solo texto, sin notificaciones |
-
-Durante generación activa el consumo puntual se multiplica 2-3× por unos segundos (respuesta con tool calls).
-Cifras estimadas sobre HTTP/2 comprimido con ~10 sesiones en el servidor.
-
-The app auto-switches on cellular (→ Reduced) or WiFi (→ Full). Manual override in **Settings**.
+The app automatically adjusts the mode when it detects mobile data (cellular → Reduced, WiFi → Full).
+You can also change it manually in **Settings**.
 
 | Mode | Polling | KB/min (idle) | ~30 min | Best for |
 |------|---------|---------------|---------|----------|
@@ -244,46 +237,57 @@ The app auto-switches on cellular (→ Reduced) or WiFi (→ Full). Manual overr
 During active generation, consumption can spike 2-3× for seconds (response with tool calls).
 Estimates over compressed HTTP/2 with ~10 server sessions.
 
+</details>
+
 ---
 
-> 📖 **Catálogo completo**: [`CATALOGO.md`](CATALOGO.md) — 47 componentes, 27 hooks, 35 endpoints, grafos, guía para LLM.
+> 📖 **Full catalog**: [`CATALOGO.md`](CATALOGO.md) — 47 components, 27 hooks, 35 endpoints, graphs, LLM guide.
 
-## 📁 Estructura del proyecto
+## 📁 Project structure
+
+<details>
+<summary><b>Project structure</b> (click to expand)</summary>
 
 ```
 web/
 ├── src/
-│   ├── components/       # 43 componentes UI
-│   ├── hooks/            # 26 hooks React
-│   ├── api.ts            # Cliente HTTP (30 endpoints)
-│   ├── App.tsx           # Orquestador principal
-│   ├── types.ts          # Tipos TypeScript
-│   ├── i18n.ts           # 4 idiomas
-│   └── styles.css        # Sistema de diseño completo
-├── android/              # Proyecto nativo Android
-├── ios/                  # Proyecto nativo iOS (Xcode)
+│   ├── components/       # 43 UI components
+│   ├── hooks/            # 26 React hooks
+│   ├── api.ts            # HTTP client (30 endpoints)
+│   ├── App.tsx           # Main orchestrator
+│   ├── types.ts          # TypeScript types
+│   ├── i18n.ts           # 4 languages
+│   └── styles.css        # Complete design system
+├── android/              # Native Android project
+├── ios/                  # Native iOS project (Xcode)
 ```
+
+</details>
 
 ---
 
-## 🏗️ Arquitectura
+## 🏗️ Architecture
 
-| Principio | Descripción |
+<details>
+<summary><b>Architecture — core principles</b> (click to expand)</summary>
+
+| Principle | Description |
 |-----------|-------------|
-| **🔄 SSE + Polling handoff** | Cuando SSE está activo, el polling corre a 5s en vez del intervalo completo. Al desconectarse, el backoff entra inmediatamente |
-| **📈 Backoff exponencial** | Polling empieza en 1s, se duplica por cada fallo hasta 60s, con 30% de jitter. SSE similar pero tope en 30s |
-| **📦 Offline-first** | IndexedDB cachea sesiones + mensajes. Navegar datos antiguos funciona offline; las escrituras requieren conectividad |
-| **⚡ Optimistic updates** | Los mensajes del usuario se renderizan inmediatamente antes del round-trip al servidor |
-| **🛡️ Stale request rejection** | `loadSelected` usa un ID de request para descartar respuestas de polling obsoletas |
-| **🎨 Temas dinámicos** | 30+ temas con variables CSS aplicadas en runtime via `resolveTheme.ts` |
+| **🔄 SSE + Polling handoff** | While SSE is active, polling runs at 5s instead of the full interval. On disconnect, backoff kicks in immediately |
+| **📈 Exponential backoff** | Polling starts at 1s, doubles per failure up to 60s, with 30% jitter. SSE similar but capped at 30s |
+| **📦 Offline-first** | IndexedDB caches sessions + messages. Browsing old data works offline; writes require connectivity |
+| **⚡ Optimistic updates** | User messages render immediately before the server round-trip |
+| **🛡️ Stale request rejection** | `loadSelected` uses a request ID to discard outdated polling responses |
+| **🎨 Dynamic themes** | 30+ themes with CSS variables applied at runtime via `resolveTheme.ts` |
+
+</details>
 
 ---
 
 <div align="center">
 
-**OpenCode Mobile** es un cliente para [**OpenCode**](https://opencode.ai) — el asistente de codificación AI open-source.
+**OpenCode Mobile** is a client for [**OpenCode**](https://opencode.ai) — the open-source AI coding assistant.
 
-Desarrollado por [@Owning01](https://github.com/Owning01) · [Reportar issue](https://github.com/Owning01/Opencode-Mobile/issues) · [Contribuir](https://github.com/Owning01/Opencode-Mobile)
+Developed by [@Owning01](https://github.com/Owning01) · [Report issue](https://github.com/Owning01/Opencode-Mobile/issues) · [Contribute](https://github.com/Owning01/Opencode-Mobile)
 
 </div>
-

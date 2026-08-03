@@ -46,7 +46,7 @@ function renderVariantGroup(
   activeModelOption: ModelOption | null,
   selectedVariant: string | null,
   onChangeModel: (key: string, variant?: string | null) => void,
-  isWorking: boolean,
+  _isWorking: boolean,
   mk: typeof modelKey,
   t: ReturnType<typeof useT>
 ) {
@@ -59,7 +59,6 @@ function renderVariantGroup(
     <div key={baseKey} className={`model-group${isActive ? " active" : ""}`}>
       <button type="button" className="model-group-row"
         onClick={() => onChangeModel(baseKey, activeVariant)}
-        disabled={isWorking}
         role="option" aria-selected={isActive}>
         <strong>{base.modelName}</strong>
         <small>{base.providerName}</small>
@@ -69,15 +68,13 @@ function renderVariantGroup(
         <div className="model-variant-pills">
           <button type="button"
             className={`variant-pill${!activeVariant ? " active" : ""}`}
-            onClick={() => onChangeModel(baseKey, null)}
-            disabled={isWorking}>
+            onClick={() => onChangeModel(baseKey, null)}>
             Default
           </button>
           {variants.map((v) => (
             <button key={v.variant} type="button"
               className={`variant-pill${activeVariant === v.variant ? " active" : ""}`}
-              onClick={() => onChangeModel(baseKey, v.variant)}
-              disabled={isWorking}>
+              onClick={() => onChangeModel(baseKey, v.variant)}>
               {v.variant}
             </button>
           ))}
@@ -200,7 +197,7 @@ export const BottomSheet = memo(function BottomSheet({
                 <label htmlFor="model-search">
                   {t('detail.modelSelectLabel')}
                   <input id="model-search" value={modelQuery} onChange={(e) => onModelQueryChange(e.target.value)}
-                    placeholder={t('detail.modelSearchPlaceholder')} disabled={isWorking} autoComplete="off" />
+                    placeholder={t('detail.modelSearchPlaceholder')} autoComplete="off" />
                 </label>
                 <div className="model-option-list" role="listbox" aria-label={t('detail.modelSelectLabel')}>
                   {!modelQuery && variantGroups.recentModels.length > 0 && (
@@ -213,7 +210,6 @@ export const BottomSheet = memo(function BottomSheet({
                           <button type="button" key={optKey}
                             className={isActive ? "model-option active" : "model-option"}
                             onClick={() => onChangeModel(optKey, opt.variant || null)}
-                            disabled={isWorking}
                             role="option" aria-selected={isActive}>
                             <span>
                               <strong>{opt.modelName}</strong>

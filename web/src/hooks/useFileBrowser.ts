@@ -12,9 +12,10 @@ export function useFileBrowser(config: ServerConfig, directory?: string) {
   const browseDir = useCallback(async (path: string) => {
     setLoading(true)
     setError(null)
+    const normalizedPath = /^[A-Za-z]:$/.test(path) ? path + "/" : path
     try {
-      const result = await api.listFiles(config, path, directory)
-      setCurrentPath(path)
+      const result = await api.listFiles(config, normalizedPath, directory)
+      setCurrentPath(normalizedPath)
       setItems(result.sort((a, b) => {
         if (a.type !== b.type) return a.type === "directory" ? -1 : 1
         return a.name.localeCompare(b.name)
@@ -54,6 +55,10 @@ function parentDir(path: string): string | null {
   if (!path || path === "/") return null
   const normalized = path.replace(/[\\/]+$/, "").replace(/\\/g, "/")
   const index = normalized.lastIndexOf("/")
-  if (index <= 0) return "/"
+  if (index < 0) {
+    if (/^[A-Za-z]:$/.test(normalized)) return "/"
+    return null
+  }
+  if (index === 0) return "/"
   return normalized.slice(0, index)
 }

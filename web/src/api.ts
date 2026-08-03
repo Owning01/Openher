@@ -316,10 +316,8 @@ export const api = {
     return request<boolean>(config, withDirectory(`/session/${id}`, directory), { method: "DELETE" })
   },
 
-  loadMessages(config: ServerConfig, sessionID: string, directory?: string, since?: number) {
-    let path = `/session/${sessionID}/message?limit=100`
-    if (since && since > 0) path += `&since=${since}`
-    return request<MessageEnvelope[]>(config, withDirectory(path, directory))
+  loadMessages(config: ServerConfig, sessionID: string, directory?: string, limit = 100) {
+    return request<MessageEnvelope[]>(config, withDirectory(`/session/${sessionID}/message?limit=${limit}`, directory))
   },
 
   loadTodo(config: ServerConfig, sessionID: string, directory?: string) {
@@ -454,6 +452,22 @@ export const api = {
     return request<boolean>(config, withDirectory("/file", directory), {
       method: "POST",
       body: { path: normalizeSlashes(path), content }
+    })
+  },
+
+  fetchStats(config: ServerConfig, statsPort: number, since = "", until = "", model = "") {
+    const host = config.host.replace(/^https?:\/\//, "").replace(/\/+$/, "")
+    const params = new URLSearchParams({ raw: "1" })
+    if (since) params.set("since", since)
+    if (until) params.set("until", until)
+    if (model) params.set("model", model)
+    return fetch(`http://${host}:${statsPort}/api/data?${params.toString()}`, {
+      cache: "no-store"
+    }).then(async (res) => {
+      if (!res.ok) throw new Error(`Stats HTTP ${res.status}`)
+      const data = await res.json()
+      if (data?.error) throw new Error(data.error)
+      return data as import("./types").StatsPayload
     })
   },
 }

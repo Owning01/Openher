@@ -12,14 +12,17 @@ type Props = {
 export const MCPBrowser = memo(function MCPBrowser({ config, onClose, onSelect }: Props) {
   const [resources, setResources] = useState<{ id: string; name: string; description?: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
 
   useEffect(() => {
     setLoading(true)
+    setError(null)
     api.listMCPResources(config).then((r) => {
       setResources(r)
       setLoading(false)
-    }).catch(() => {
+    }).catch((err) => {
+      setError((err as Error).message || "Failed to load MCP resources")
       setLoading(false)
     })
   }, [config])
@@ -42,6 +45,8 @@ export const MCPBrowser = memo(function MCPBrowser({ config, onClose, onSelect }
           />
           {loading ? (
             <p className="subtle">Loading...</p>
+          ) : error ? (
+            <p className="error">{error}</p>
           ) : filtered.length === 0 ? (
             <p className="subtle">{query ? "No matches" : "No MCP resources available"}</p>
           ) : (

@@ -25,6 +25,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
     if (!config || !mountedRef.current) return
 
     abortRef.current?.abort()
+    clearHeartbeat()
     const abort = new AbortController()
     abortRef.current = abort
 
@@ -38,6 +39,18 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
     const headers: Record<string, string> = { Accept: "text/event-stream" }
     if (config.username && config.password) {
       headers.Authorization = `Basic ${toBase64(`${config.username}:${config.password}`)}`
+    }
+
+    // Refresca el watchdog con cualquier evento; el timeout fuerza reconexión.
+    const resetHeartbeat = (reader: ReadableStreamDefaultReader<Uint8Array>) => {
+      clearHeartbeat()
+      heartbeatTimerRef.current = setTimeout(() => {
+        if (!mountedRef.current) return
+        abortRef.current?.abort()
+        reader.cancel().catch(() => {})
+        setStreamState("reconnecting")
+        scheduleReconnect()
+      }, SSE_HEARTBEAT_TIMEOUT_MS)
     }
 
     try {
@@ -59,51 +72,64 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
       const decoder = new TextDecoder()
       let buffer = ""
 
+      const dispatch = (event: Partial<SSEEvent>) => {
+        if (event.type === "server.heartbeat") return
+        if (event.properties) {
+          const props = event.properties as Record<string, unknown>
+          onEventRef.current({
+            id: String(event.id ?? props.id ?? ""),
+            type: event.type as string,
+            properties: props,
+          })
+        }
+      }
+
+      const processBuffer = () => {
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
+        let currentEvent: Partial<SSEEvent> = {}
+        for (const rawLine of lines) {
+          const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine
+          if (line.startsWith("event: ")) {
+            currentEvent.type = line.slice(7).trim()
+          } else if (line.startsWith("data: ")) {
+            try {
+              const parsed = JSON.parse(line.slice(6)) as {
+                id?: string
+                type?: string
+                properties?: Record<string, unknown>
+              }
+              currentEvent.type = parsed.type ?? currentEvent.type
+              currentEvent.properties = parsed.properties ?? (parsed as unknown as Record<string, unknown>)
+              if (parsed.id) currentEvent.id = parsed.id
+            } catch {
+              currentEvent.properties = { raw: line.slice(6) }
+            }
+          } else if (line === "" && currentEvent.type) {
+            resetHeartbeat(reader)
+            dispatch(currentEvent)
+            currentEvent = {}
+          }
+        }
+        if (currentEvent.type) {
+          resetHeartbeat(reader)
+          dispatch(currentEvent)
+        }
+      }
+
       const pump = async () => {
         while (mountedRef.current && !abort.signal.aborted) {
           try {
             const { done, value } = await reader.read()
             if (done) break
-
             buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split("\n")
-            buffer = lines.pop() ?? ""
-
-            let currentEvent: Partial<SSEEvent> = {}
-            for (const line of lines) {
-              if (line.startsWith("event: ")) {
-                currentEvent.type = line.slice(7).trim()
-              } else if (line.startsWith("data: ")) {
-                try {
-                  currentEvent.properties = JSON.parse(line.slice(6))
-                } catch {
-                  currentEvent.properties = { raw: line.slice(6) }
-                }
-              } else if (line === "" && currentEvent.type) {
-                if (currentEvent.type === "server.heartbeat") {
-                  clearHeartbeat()
-                  heartbeatTimerRef.current = setTimeout(() => {
-                    if (mountedRef.current) {
-                      reader.cancel()
-                      setStreamState("reconnecting")
-                      scheduleReconnect()
-                    }
-                  }, SSE_HEARTBEAT_TIMEOUT_MS)
-                } else if (currentEvent.properties) {
-                  onEventRef.current({
-                    id: String(currentEvent.properties.id ?? ""),
-                    type: currentEvent.type,
-                    properties: currentEvent.properties as Record<string, unknown>,
-                  })
-                }
-                currentEvent = {}
-              }
-            }
+            processBuffer()
           } catch (err) {
             if (err instanceof Error && err.name === "AbortError") return
             break
           }
         }
+        processBuffer()
       }
 
       await pump()
@@ -132,7 +158,8 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
 
   useEffect(() => {
     mountedRef.current = true
-    if (config) {
+    const enabled = Boolean(config)
+    if (enabled) {
       const timeout = setTimeout(() => connect(), 500)
       return () => {
         mountedRef.current = false
@@ -144,7 +171,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
       }
     }
     return () => { mountedRef.current = false }
-  }, [config?.host, config?.port, config?.username, config?.password])
+  }, [Boolean(config), config?.host, config?.port, config?.username, config?.password, clearHeartbeat, connect])
 
   const reconnect = useCallback(() => {
     reconnectAttemptRef.current = 0

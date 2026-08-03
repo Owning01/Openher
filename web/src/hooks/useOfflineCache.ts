@@ -6,6 +6,9 @@ import { openDatabase } from "../utils/db"
 
 const ENC_PREFIX = "enc:"
 
+// Tope de mensajes cacheados por sesión (los más recientes se conservan).
+const CACHE_MAX_MESSAGES_PER_SESSION = 2000
+
 function isEncoded(val: unknown): boolean {
   return typeof val === "string" && val.startsWith(ENC_PREFIX)
 }
@@ -74,9 +77,32 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
   const cacheMessages = useCallback(async (sessionID: string, messages: MessageEnvelope[]) => {
     if (!dbRef.current || !flags.offlineCache) return
     try {
-      const encrypted = await encryptMessages(messages)
       const tx = dbRef.current.transaction(DB_STORES.messages, "readwrite")
       const store = tx.objectStore(DB_STORES.messages)
+      const existing = await new Promise<{ sessionID: string; messages: MessageEnvelope[]; cachedAt: number } | null>((resolve) => {
+        const req = store.get(sessionID)
+        req.onsuccess = () => resolve(req.result ?? null)
+        req.onerror = () => resolve(null)
+      })
+
+      // Merge por id: la caché NUNCA se encoge — solo agrega/actualiza con lo nuevo.
+      let merged = messages
+      if (existing?.messages?.length) {
+        try {
+          const decrypted = await decryptMessages(existing.messages)
+          const map = new Map<string, MessageEnvelope>()
+          for (const m of decrypted) map.set(m.info.id, m)
+          for (const m of messages) map.set(m.info.id, m)
+          merged = [...map.values()].sort((a, b) => (b.info.time.created || 0) - (a.info.time.created || 0))
+        } catch {
+          // si la decriptación falla, conservamos solo lo nuevo
+        }
+      }
+      if (merged.length > CACHE_MAX_MESSAGES_PER_SESSION) {
+        merged = merged.slice(0, CACHE_MAX_MESSAGES_PER_SESSION)
+      }
+
+      const encrypted = await encryptMessages(merged)
       store.put({ sessionID, messages: encrypted, cachedAt: Date.now() })
     } catch (err) { console.error("[OfflineCache] cacheMessages:", err) }
   }, [flags.offlineCache])

@@ -1,9 +1,15 @@
-import { useState, useCallback, useMemo, useRef } from "react"
-import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
+import { useState, useCallback, useMemo, useRef, useEffect } from "react"
+import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView, QueuedPrompt } from "../types"
 import { api } from "../api"
 import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "../utils/parseCommand"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
+
+// Tools de archivos: se conservan en modos ahorro para mostrar los cambios
+// (badge +N/−M y orden de ejecución); el diff completo vive en el resumen final.
+const fileToolNames = new Set(["write", "edit", "apply_patch", "patch"])
+
+const COMPOSER_STORAGE_KEY = "opencode.remote.composer"
 
 function extractText(msg: MessageEnvelope): string {
   const blocks: string[] = []
@@ -24,32 +30,70 @@ export function assistantPayloadLength(items: MessageEnvelope[]): number {
 
 function stripNonEssential(msg: MessageEnvelope, dataMode?: DataMode): MessageEnvelope {
   if (dataMode === "full" || dataMode === "saver") return msg
-  const filtered = msg.parts.filter((p) => !toolPartTypes.has(p.type))
+  const filtered = msg.parts.filter((p) => !toolPartTypes.has(p.type) || (typeof p.tool === "string" && fileToolNames.has(p.tool)))
   return filtered.length === msg.parts.length ? msg : { ...msg, parts: filtered }
 }
 
 export function useMessages(config: ServerConfig, dataMode?: DataMode) {
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<MessageEnvelope[]>([])
-  const [composer, setComposer] = useState("")
+  const [composer, setComposer] = useState(() => localStorage.getItem(COMPOSER_STORAGE_KEY) ?? "")
   const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
+  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
+  const [compacting, setCompacting] = useState(false)
+
+  const composerRef = useRef(composer)
+  composerRef.current = composer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const current = composerRef.current
+      if (current) localStorage.setItem(COMPOSER_STORAGE_KEY, current)
+      else localStorage.removeItem(COMPOSER_STORAGE_KEY)
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [])
 
   const loadSelectedRequestRef = useRef(0)
   const awaitingAssistantBaselineRef = useRef("")
   const completionShouldPlayRef = useRef(false)
-  const lastMessageTsRef = useRef<Map<string, number>>(new Map())
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
     const all = [...messages, ...optimisticUserMessages]
     const out: RenderedMessage[] = []
+    // Los diffs del turno (info.summary.diffs del user message) se muestran al
+    // final del turno: en el ÚLTIMO mensaje assistant que le sigue.
+    let pendingDiffs: import("../types").FileDiff[] | undefined
+    let lastAssistantId: string | null = null
+    const diffForMessage = new Map<string, import("../types").FileDiff[]>()
+    for (const message of all) {
+      if (message.info.role === "user") {
+        pendingDiffs = message.info.summary?.diffs
+        lastAssistantId = null
+      } else if (pendingDiffs && pendingDiffs.length > 0) {
+        if (lastAssistantId) diffForMessage.delete(lastAssistantId)
+        diffForMessage.set(message.info.id, pendingDiffs)
+        lastAssistantId = message.info.id
+      }
+    }
     for (const message of all) {
       let text = ""
       let hasCompaction = false
       const thinkingParts: Array<{ id: string; text: string }> = []
-      const toolParts: Array<{ id: string; type: string; text?: string }> = []
+      const toolParts: Array<{ id: string; type: string; text?: string; callID?: string; tool?: string; state?: MessageEnvelope["parts"][number]["state"] }> = []
       const textBlocks: string[] = []
       for (const part of message.parts) {
+        if (part.type === "tool" || toolPartTypes.has(part.type)) {
+          toolParts.push({
+            id: part.id,
+            type: part.type,
+            text: part.text,
+            callID: part.callID,
+            tool: part.tool,
+            state: part.state
+          })
+          continue
+        }
         const t = part.text
         if (t) {
           if (part.type === "text" || part.type === "compaction") {
@@ -57,18 +101,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
             if (part.type === "compaction") hasCompaction = true
           } else if (part.type === "reasoning" || part.type === "thinking") {
             thinkingParts.push({ id: part.id, text: t })
-          } else if (toolPartTypes.has(part.type)) {
-            toolParts.push({ id: part.id, type: part.type, text: t })
           }
         }
       }
       text = textBlocks.join("\n\n").trim()
-      if (text || toolParts.length > 0) {
-        out.push({ ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost })
+      const hasImages = message.parts.some((p) => p.type === "image")
+      if (text || toolParts.length > 0 || hasImages) {
+        out.push({ ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffForMessage.get(message.info.id), dataMode })
       }
     }
     return out
-  }, [messages, optimisticUserMessages])
+  }, [messages, optimisticUserMessages, dataMode])
 
   const messageScrollSignature = useMemo(() => {
     return renderedMessages.map((m) => `${m.info.id}:${m.text.length}`).join("|")
@@ -85,7 +128,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i]
       if (m.info.role === "assistant") {
-        const toolParts = m.parts.filter((p) => toolPartTypes.has(p.type) && p.text)
+        const toolParts = m.parts.filter((p) => p.type === "tool" || toolPartTypes.has(p.type))
         if (toolParts.length > 0) return toolParts
       }
     }
@@ -101,22 +144,15 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
 
   const loadSelected = useCallback(async (sessionID: string, directory: string) => {
     const requestID = ++loadSelectedRequestRef.current
-    const since = lastMessageTsRef.current.get(sessionID) || 0
+    const limit = dataMode === "ultra" ? 30 : dataMode === "miser" ? 20 : 100
 
-    const raw = await api.loadMessages(config, sessionID, directory, since)
+    const raw = await api.loadMessages(config, sessionID, directory, limit)
     if (requestID !== loadSelectedRequestRef.current) return
     const msg = dataMode === "full" || dataMode === "saver" ? raw : raw.map((m) => stripNonEssential(m, dataMode))
 
     setMessages((prev) => {
-      const stableTs = Math.max(
-        ...msg.map((m) => m.info.time.created || 0), 0)
-      if (stableTs > 0) lastMessageTsRef.current.set(sessionID, stableTs)
-
-      if (since === 0) {
-        const other = prev.filter((m) => m.info.sessionID !== sessionID)
-        return [...other, ...msg]
-      }
-
+      // Merge por id: el historial local nunca se reemplaza ni se descarta por
+      // una respuesta parcial o vacía — solo se agrega/actualiza lo nuevo.
       const other = prev.filter((m) => m.info.sessionID !== sessionID)
       const msgMap = new Map(msg.map((m) => [m.info.id, m]))
       const merged = [...other]
@@ -138,14 +174,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
       }
       if (!changed) return prev
 
-      return merged.slice(-500)
+      return merged
     })
 
-    if (since === 0) {
-      setOptimisticUserMessages([])
-    } else {
-      setOptimisticUserMessages((current) => current.filter((m) => !msg.some((n) => n.info.id === m.info.id)))
-    }
+    setOptimisticUserMessages((current) => {
+      const confirmedTexts = new Set(msg.filter((m) => m.info.role === "user").map(extractText))
+      return current.filter((m) => m.info.sessionID !== sessionID || !confirmedTexts.has(extractText(m)))
+    })
   }, [config, dataMode])
 
   const removeOptimistic = useCallback((id: string) => {
@@ -153,13 +188,16 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
   }, [])
 
   const abortSession = useCallback(async (sessionID: string, directory: string) => {
+    setAwaitingAssistantReply(false)
     try {
-      await api.abort(config, sessionID, directory)
+      await Promise.race([
+        api.abort(config, sessionID, directory),
+        new Promise((resolve) => setTimeout(resolve, 4000))
+      ])
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
     completionShouldPlayRef.current = false
-    setAwaitingAssistantReply(false)
   }, [config])
 
   const undoMessage = useCallback(async (
@@ -231,7 +269,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
       const ok = await api.summarize(config, sessionID, providerID, modelID, directory, false)
       if (!ok) { setRuntimeError("Compact returned false from server"); return }
       await new Promise((r) => setTimeout(r, 500))
-      lastMessageTsRef.current.delete(sessionID)
       await loadSelected(sessionID, directory)
       await onRefreshSessions()
     } catch (err) {
@@ -258,14 +295,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
         if (m.info.sessionID !== sessionID || m.info.id !== messageID) return m
         const nextParts = m.parts.map((p) => {
           if (p.id !== partID) return p
+          // Nunca demotar un part ya tipado (reasoning/tool) a texto por un
+          // delta sin tipo resuelto.
+          const keepType = partType === "text" && p.type !== "text" ? p.type : partType
           if (replace) {
             if (p.text === text) return p
             changed = true
-            return { ...p, text, type: partType }
+            return { ...p, text, type: keepType }
           }
           if (p.text?.endsWith(text)) return p
           changed = true
-          return { ...p, text: (p.text ?? "") + text, type: partType }
+          return { ...p, text: (p.text ?? "") + text, type: keepType }
         })
         if (!nextParts.some((p) => p.id === partID)) {
           changed = true
@@ -277,6 +317,54 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     })
   }, [])
 
+  // Materializa un part emitido por `message.part.updated`: crea el mensaje/part
+  // con el tipo correcto antes de que lleguen los deltas.
+  const applyPart = useCallback((sessionID: string, messageID: string, part: { id: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown }) => {
+    if (!part.id) return
+    setMessages((prev) => {
+      const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
+      if (!existing) {
+        return [...prev, {
+          info: { id: messageID, role: "assistant", sessionID, time: { created: Date.now() } },
+          parts: [{ id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}) }]
+        }]
+      }
+      let changed = false
+      const next = prev.map((m) => {
+        if (m.info.sessionID !== sessionID || m.info.id !== messageID) return m
+        const hasPart = m.parts.some((p) => p.id === part.id)
+        if (!hasPart) {
+          changed = true
+          return { ...m, parts: [...m.parts, { id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}) }] }
+        }
+        const nextParts = m.parts.map((p) => {
+          if (p.id !== part.id) return p
+          const incoming = part.text ?? ""
+          if (!incoming && p.text) return p
+          if (p.text === incoming && (part.type ?? p.type) === p.type) return p
+          changed = true
+          return { ...p, text: incoming, ...(part.type ? { type: part.type } : {}) }
+        })
+        return { ...m, parts: nextParts }
+      })
+      return changed ? next : prev
+    })
+  }, [])
+
+  const queuePrompt = useCallback((text: string, images?: Array<{ base64: string; mime: string }>) => {
+    const qp: QueuedPrompt = {
+      id: `queued-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      timestamp: Date.now(),
+      images,
+    }
+    setQueuedPrompts((prev) => [...prev, qp])
+  }, [])
+
+  const removeQueued = useCallback((id: string) => {
+    setQueuedPrompts((prev) => prev.filter((p) => p.id !== id))
+  }, [])
+
   const updateSend = useCallback(async (
     selectedSession: SessionView,
     activeModel: ModelSelection | undefined,
@@ -286,9 +374,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     onLoadSelected: () => Promise<void>,
     onSetCommands: (cmds: { name: string }[]) => void,
     onSetRuntimeError: (err: string | null) => void,
-    images?: Array<{ base64: string; mime: string }>
+    images?: Array<{ base64: string; mime: string }>,
+    textOverride?: string,
   ) => {
-    const text = composer.trim()
+    const text = (textOverride ?? composer).trim()
     if ((!text || !selectedSession) && (!images || images.length === 0)) return
 
     const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
@@ -306,7 +395,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
       try {
         await sendFn()
         await then()
-        removeOptimistic(optimisticMessage.info.id)
         await onRefreshSessions()
       } catch (err) {
         completionShouldPlayRef.current = false
@@ -340,11 +428,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     if (parsed?.type === "compact") {
       setComposer("")
       if (activeModel) {
+        setCompacting(true)
         setAwaitingAssistantReply(true)
         completionShouldPlayRef.current = true
         try {
           await compactSession(selectedSession.id, selectedSession.directory, activeModel.providerID, activeModel.modelID, onRefreshSessions, onLoadSelected)
         } finally {
+          setCompacting(false)
           setAwaitingAssistantReply(false)
         }
       } else {
@@ -383,10 +473,12 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     composer, setComposer,
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
+    queuedPrompts, setQueuedPrompts, queuePrompt, removeQueued,
+    compacting,
     renderedMessages, messageScrollSignature, assistantResponseSignature,
     toolMessage, completionShouldPlayRef,
     clearSession, loadSelected, send: updateSend, abortSession,
     undoMessage, redoMessage, compactSession, sendShell: sendShellCallback,
-    applyDelta
+    applyDelta, applyPart
   }
 }
