@@ -23,6 +23,14 @@
 
 </div>
 
+> # ⚠️ BETA — App en desarrollo
+>
+> **OpenCode Mobile está en fase BETA y desarrollo activo.** Puede contener errores,
+> cambios sin aviso, y funcionalidades incompletas. No está recomendada para uso
+> crítico o de producción. Usala bajo tu propio riesgo.
+>
+> Si encontrás un problema, reportalo en [Issues](https://github.com/Owning01/Opencode-Mobile/issues).
+
 ---
 
 ## ✨ Características

@@ -99,7 +99,9 @@ jobs:
           echo "ANDROID_KEYSTORE_PATH=release.keystore" >> "$GITHUB_ENV"
 
       - name: Build signed release AAB
-        run: ./gradlew bundleRelease --stacktrace --no-daemon
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease --stacktrace --no-daemon
         working-directory: web/android
         env:
           ANDROID_KEYSTORE_PATH: ${{ env.ANDROID_KEYSTORE_PATH || '' }}
