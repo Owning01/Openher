@@ -78,11 +78,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
   useEffect(() => {
     if (!showAtMenu) { setMentionItems([]); return }
-    setMentionLoading(true)
 
     const agentItems: MentionItem[] = visibleAgents.map((a) => ({
       id: a.id, name: a.name, description: a.description, source: "agent" as const,
     }))
+
+    const q = atQuery.toLowerCase()
+    const filteredAgents = !atQuery ? agentItems : agentItems.filter((a) =>
+      a.name.toLowerCase().includes(q) || (a.description?.toLowerCase() ?? "").includes(q))
+
+    setMentionItems(filteredAgents)
+    setMentionLoading(true)
 
     let cancelled = false
     const timer = setTimeout(() => {
@@ -97,13 +103,10 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
       Promise.all([fileFetch, mcpFetch]).then(([files, mcps]) => {
         if (cancelled) return
-        const q = atQuery.toLowerCase()
-        const filteredAgents = !atQuery ? agentItems : agentItems.filter((a) =>
-          a.name.toLowerCase().includes(q) || (a.description?.toLowerCase() ?? "").includes(q))
         setMentionItems([...filteredAgents, ...files, ...mcps])
         setMentionLoading(false)
       })
-    }, 250)
+    }, 150)
 
     return () => {
       cancelled = true
@@ -349,9 +352,9 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           ))}
         </div>
       )}
-      {showAtMenu && mentionItems.length > 0 && (
+      {showAtMenu && (mentionItems.length > 0 || mentionLoading) && (
         <div className="slash-menu at-menu">
-          {mentionLoading && <div className="slash-menu-item"><span className="slash-menu-desc">Searching...</span></div>}
+          {mentionItems.length === 0 && mentionLoading && <div className="slash-menu-item"><span className="slash-menu-desc">Searching...</span></div>}
           {mentionItems.map((item, i) => (
             <div
               key={item.id}
