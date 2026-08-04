@@ -22,6 +22,4 @@ project(':capacitor-network').projectDir = new File('../node_modules/.pnpm/@capa
 include ':capacitor-share'
 project(':capacitor-share').projectDir = new File('../node_modules/.pnpm/@capacitor+share@8.0.1_@capacitor+core@8.3.4/node_modules/@capacitor/share/android')
 
-include ':capacitor-push-notifications'
-project(':capacitor-push-notifications').projectDir = new File('../node_modules/.pnpm/@capacitor+push-notifications@8.0.1_@capacitor+core@8.3.4/node_modules/@capacitor/push-notifications/android')
 
