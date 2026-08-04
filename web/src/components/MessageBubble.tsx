@@ -24,7 +24,7 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number): string {
   return `${Math.floor(dur / 60000)}m ${Math.round((dur % 60000) / 1000)}s`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen }: {
+export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight }: {
   message: RenderedMessage
   revert?: SessionView["revert"]
   onRevertToMessage?: (messageID: string) => void
@@ -38,6 +38,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   showTodoButton?: boolean
   onToggleTodos?: () => void
   todosOpen?: boolean
+  highlight?: string
 }) {
   const t = useT()
   const [showConfirm, setShowConfirm] = useState(false)
@@ -106,6 +107,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
       )}
       <article
         className={`message ${message.info.role} fade-in${isReverted ? " revert-hidden" : ""}${isUserClickable ? " clickable" : ""}${showConfirm ? " confirming-undo" : ""}`}
+        data-message-id={message.info.id}
         onClick={isUserClickable ? handleClick : undefined}
         role={isUserClickable ? "button" : undefined}
         tabIndex={isUserClickable ? 0 : undefined}
@@ -148,7 +150,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
 
         {message.text && !showConfirm && (
           <div className="message-content">
-            <Markdown text={message.text} />
+            <Markdown text={message.text} highlight={highlight} />
           </div>
         )}
 

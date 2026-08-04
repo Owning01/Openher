@@ -24,11 +24,13 @@ type MessageListProps = {
   showTodoButton?: boolean
   onToggleTodos?: () => void
   todosOpen?: boolean
+  highlight?: string
+  scrollToMessageID?: string | null
 }
 
 export const MessageList = memo(function MessageList({
   messages, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -81,6 +83,15 @@ export const MessageList = memo(function MessageList({
     if (messages.length > 0) scrollToBottom("auto")
   }, [view, loadingSessionID, selectedID, messages.length])
 
+  // Navegación del buscador: centra el mensaje con la coincidencia actual.
+  useEffect(() => {
+    if (!scrollToMessageID || view !== "detail") return
+    const el = messagesRef.current?.querySelector(`[data-message-id="${scrollToMessageID}"]`)
+    if (el) {
+      el.scrollIntoView({ block: "center", behavior: "smooth" })
+    }
+  }, [scrollToMessageID, view])
+
   useEffect(() => {
     if (view !== "detail") return
     if (isAtBottom) {
@@ -120,6 +131,7 @@ export const MessageList = memo(function MessageList({
                   showTodoButton={showTodoButton}
                   onToggleTodos={onToggleTodos}
                   todosOpen={todosOpen}
+                  highlight={highlight}
                 />
               </Fragment>
             ))}

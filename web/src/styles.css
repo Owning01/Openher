@@ -6014,7 +6014,16 @@ button.compact {
 
 /* ===== Message search bar in ChatView ===== */
 .message-search-bar { padding: var(--space-2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: var(--space-2); }
+.message-search-bar input { flex: 1; min-width: 0; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text); font-size: 0.85rem; }
 .message-search-count { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+
+/* Resaltado de coincidencias del buscador de mensajes */
+mark {
+  background: var(--warning-soft, rgba(240, 180, 40, 0.35));
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
 
 /* ===== Remote Connect (WebRTC Tunnel) ===== */
 .remote-connect { max-width: 400px; width: 85vw; display: flex; flex-direction: column; gap: var(--space-3); }

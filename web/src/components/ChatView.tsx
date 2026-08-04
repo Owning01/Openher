@@ -1,4 +1,4 @@
-import { memo, useState, useMemo, useRef, useEffect, useCallback } from "react"
+import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
 import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, StatsIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, StarIcon, MenuDotsIcon, LayersIcon, ArchiveIcon, ForkIcon, PaintIcon, KeyboardIcon, CloseIcon, ShareIcon } from "../Icons"
 import { useT } from "../i18n-context"
@@ -127,6 +127,7 @@ export const ChatView = memo(function ChatView({
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
+  const [searchPos, setSearchPos] = useState(0)
   const [showOverflow, setShowOverflow] = useState(false)
   const [showSkills, setShowSkills] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
@@ -186,11 +187,31 @@ export const ChatView = memo(function ChatView({
 
   useOutsideClick(overflowRef, () => setShowOverflow(false), showOverflow)
 
-  const filteredMessages = useMemo(() => {
-    if (!messageQuery.trim()) return messages
-    const q = messageQuery.toLowerCase()
-    return messages.filter((m) => m.text.toLowerCase().includes(q))
-  }, [messages, messageQuery])
+  // Buscador de mensajes: navegación entre coincidencias (no filtra la lista).
+  const deferredQuery = useDeferredValue(messageQuery)
+  const searchMatches = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase()
+    if (!q) return []
+    return messages
+      .map((m) => ({
+        id: m.info.id,
+        haystack: [
+          m.text,
+          ...(m.thinkingParts ?? []).map((p) => p.text ?? ""),
+          ...(m.toolParts ?? []).map((p) => p.text ?? ""),
+        ].join("\n").toLowerCase(),
+      }))
+      .filter((m) => m.haystack.includes(q))
+      .map((m) => m.id)
+  }, [messages, deferredQuery])
+
+  const searchIndex = Math.min(searchPos, Math.max(searchMatches.length - 1, 0))
+  const scrollToMessageID = searchMatches.length > 0 ? searchMatches[searchIndex] : null
+  const gotoMatch = (dir: 1 | -1) => {
+    if (searchMatches.length === 0) return
+    const next = (searchIndex + dir + searchMatches.length) % searchMatches.length
+    setSearchPos(next)
+  }
 
   const effectiveRevertID = revertID ?? selectedSession?.revert?.messageID ?? null
 
@@ -402,21 +423,35 @@ export const ChatView = memo(function ChatView({
           <input
             type="search"
             value={messageQuery}
-            onChange={(e) => setMessageQuery(e.target.value)}
+            onChange={(e) => { setMessageQuery(e.target.value); setSearchPos(0) }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                gotoMatch(e.shiftKey ? -1 : 1)
+              }
+            }}
             placeholder={t('sessions.searchPlaceholder')}
             autoFocus
           />
           {messageQuery && (
-            <span className="message-search-count">
-              {filteredMessages.length}/{messages.length}
-            </span>
+            <>
+              <span className="message-search-count">
+                {searchMatches.length > 0 ? `${searchIndex + 1}/${searchMatches.length}` : "0/0"}
+              </span>
+              <button className="btn-icon btn-ghost compact" onClick={() => gotoMatch(-1)} aria-label="Anterior" title="Anterior (Shift+Enter)">
+                ↑
+              </button>
+              <button className="btn-icon btn-ghost compact" onClick={() => gotoMatch(1)} aria-label="Siguiente" title="Siguiente (Enter)">
+                ↓
+              </button>
+            </>
           )}
         </div>
       )}
 
       <div className="messages-wrap" ref={messagesWrapRef}>
         <MessageList
-          messages={filteredMessages}
+          messages={messages}
           loadingSessionID={loadingSessionID}
           selectedID={selectedID}
           showTypingBubble={showTypingBubble}
@@ -435,6 +470,8 @@ export const ChatView = memo(function ChatView({
           showTodoButton={showTodoButton ?? false}
           onToggleTodos={onTodosToggle}
           todosOpen={todosExpanded}
+          highlight={deferredQuery.trim() || undefined}
+          scrollToMessageID={scrollToMessageID}
         />
       </div>
 
