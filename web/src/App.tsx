@@ -647,6 +647,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (selectedSession && !isSessionActive(selectedSession) && awaitingAssistantReply) {
       setAwaitingAssistantReply(false)
     }
+    if (selectedSession && isSessionActive(selectedSession) && !awaitingAssistantReply) {
+      const st = await api.listStatuses(config, selectedSession.directory).catch(() => undefined)
+      const real = st?.[selectedSession.id]
+      if (real && real.type !== "busy" && real.type !== "retry") {
+        setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "idle" } : s))
+      }
+    }
   }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, selectedSession?.id, selectedSession?.status, isStreamingActive], isStreamingActive)
 
   useCompletionAudio(awaitingAssistantReply, completionShouldPlayRef, dataMode, () => {
