@@ -375,17 +375,17 @@ export type TunnelConfig = {
   iceServers?: RTCIceServer[]
 }
 
-export type ServerProfile =
-  | { id: string; name: string; kind: "http"; config: ServerConfig }
-  | { id: string; name: string; kind: "tunnel"; config: TunnelConfig }
+export type ServerProfile = {
+  id: string
+  name: string
+  config: ServerConfig
+}
 
 export type DeepLinkAction = {
-  kind: "server" | "tunnel" | "session"
+  kind: "server" | "session"
   host?: string
   port?: number
   username?: string
-  tunnelName?: string
-  tunnelID?: string
   sessionID?: string
   directory?: string
 }

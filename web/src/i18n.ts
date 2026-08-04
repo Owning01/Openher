@@ -84,7 +84,6 @@ type TranslationKey =
   | 'settings.serverNamePlaceholder'
   | 'settings.serverRemove'
   | 'settings.serverSaveHttp'
-  | 'settings.serverSaveTunnel'
   | 'settings.serverUse'
   | 'settings.sectionPreferences'
   | 'settings.dataModeTitle'
@@ -355,23 +354,6 @@ type TranslationKey =
   | 'favorites.empty'
   | 'offlineQueue.pending'
   | 'themeCreator.title'
-  | 'tunnel.title'
-  | 'tunnel.name'
-  | 'tunnel.namePlaceholder'
-  | 'tunnel.password'
-  | 'tunnel.passwordPlaceholder'
-  | 'tunnel.signalingURL'
-  | 'tunnel.connect'
-  | 'tunnel.connecting'
-  | 'tunnel.connected'
-  | 'tunnel.disconnect'
-  | 'tunnel.disconnected'
-  | 'tunnel.error'
-  | 'tunnel.notConnected'
-  | 'tunnel.qrHint'
-  | 'tunnel.modeLabel'
-  | 'tunnel.modeDirect'
-  | 'tunnel.modeRemote'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
@@ -411,13 +393,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.savedButton': 'Saved',
       'settings.sectionServer': 'Server',
       'settings.sectionServers': 'Saved servers',
-      'settings.sectionServersDesc': 'Connect to different computers. Each profile is one machine (direct HTTP or WebRTC tunnel).',
+      'settings.sectionServersDesc': 'Connect to different computers. Each profile is one machine (direct HTTP over LAN or Tailscale).',
       'settings.serverActive': 'Active',
       'settings.serverApplied': 'Server applied',
       'settings.serverNamePlaceholder': 'Profile name (e.g. Work PC)',
       'settings.serverRemove': 'Remove server',
       'settings.serverSaveHttp': 'Save current as HTTP',
-      'settings.serverSaveTunnel': 'Save current as Tunnel',
       'settings.serverUse': 'Use',
       'settings.sectionPreferences': 'Preferences',
       'settings.dataModeTitle': 'Data mode',
@@ -731,23 +712,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.empty': 'No favorites yet',
     'offlineQueue.pending': 'Pending actions in queue',
     'themeCreator.title': 'Theme Creator',
-    'tunnel.title': 'Remote Connection',
-    'tunnel.name': 'Server Name',
-    'tunnel.namePlaceholder': 'e.g. MiOficina',
-    'tunnel.password': 'Password',
-    'tunnel.passwordPlaceholder': 'Tunnel password',
-    'tunnel.signalingURL': 'Signaling URL',
-    'tunnel.connect': 'Connect',
-    'tunnel.connecting': 'Connecting...',
-    'tunnel.connected': 'Connected remotely',
-    'tunnel.disconnect': 'Disconnect',
-    'tunnel.disconnected': 'Not connected',
-    'tunnel.error': 'Connection error',
-    'tunnel.notConnected': 'Configure remote tunnel in Settings',
-    'tunnel.qrHint': 'Scan the QR shown by opencode-tunnel',
-    'tunnel.modeLabel': 'Connection mode',
-    'tunnel.modeDirect': 'Local network',
-    'tunnel.modeRemote': 'Remote (tunnel)',
     'nav.stats': 'Stats',
     'settings.serverStats': 'Server stats',
     'stats.title': 'Statistics',
@@ -819,13 +783,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.savedButton': 'Guardado',
       'settings.sectionServer': 'Servidor',
       'settings.sectionServers': 'Servidores guardados',
-      'settings.sectionServersDesc': 'Conectate a distintas computadoras. Cada perfil es una máquina (HTTP directo o túnel WebRTC).',
+      'settings.sectionServersDesc': 'Conectate a distintas computadoras. Cada perfil es una máquina (HTTP por LAN o Tailscale).',
       'settings.serverActive': 'Activo',
       'settings.serverApplied': 'Servidor aplicado',
       'settings.serverNamePlaceholder': 'Nombre del perfil (ej. PC trabajo)',
       'settings.serverRemove': 'Quitar servidor',
       'settings.serverSaveHttp': 'Guardar actual como HTTP',
-      'settings.serverSaveTunnel': 'Guardar actual como Túnel',
       'settings.serverUse': 'Usar',
       'settings.sectionPreferences': 'Preferencias',
       'settings.dataModeTitle': 'Modo de datos',
@@ -1139,23 +1102,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.empty': 'Sin favoritos aún',
     'offlineQueue.pending': 'Acciones pendientes en cola',
     'themeCreator.title': 'Creador de Temas',
-    'tunnel.title': 'Conexión Remota',
-    'tunnel.name': 'Nombre del Servidor',
-    'tunnel.namePlaceholder': 'ej. MiOficina',
-    'tunnel.password': 'Contraseña',
-    'tunnel.passwordPlaceholder': 'Contraseña del túnel',
-    'tunnel.signalingURL': 'URL de señalización',
-    'tunnel.connect': 'Conectar',
-    'tunnel.connecting': 'Conectando...',
-    'tunnel.connected': 'Conectado remotamente',
-    'tunnel.disconnect': 'Desconectar',
-    'tunnel.disconnected': 'No conectado',
-    'tunnel.error': 'Error de conexión',
-    'tunnel.notConnected': 'Configura el túnel remoto en Ajustes',
-    'tunnel.qrHint': 'Escanea el QR que muestra opencode-tunnel',
-    'tunnel.modeLabel': 'Modo de conexión',
-    'tunnel.modeDirect': 'Red local',
-    'tunnel.modeRemote': 'Remoto (túnel)',
     'nav.stats': 'Estadísticas',
     'settings.serverStats': 'Estadísticas del servidor',
     'stats.title': 'Estadísticas',
@@ -1227,13 +1173,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.savedButton': 'Salvato',
       'settings.sectionServer': 'Server',
       'settings.sectionServers': 'Server salvati',
-      'settings.sectionServersDesc': 'Connettiti a computer diversi. Ogni profilo è una macchina (HTTP diretto o tunnel WebRTC).',
+      'settings.sectionServersDesc': 'Connettiti a computer diversi. Ogni profilo è una macchina (HTTP via LAN o Tailscale).',
       'settings.serverActive': 'Attivo',
       'settings.serverApplied': 'Server applicato',
       'settings.serverNamePlaceholder': 'Nome profilo (es. PC lavoro)',
       'settings.serverRemove': 'Rimuovi server',
       'settings.serverSaveHttp': 'Salva attuale come HTTP',
-      'settings.serverSaveTunnel': 'Salva attuale come Tunnel',
       'settings.serverUse': 'Usa',
       'settings.sectionPreferences': 'Preferenze',
       'settings.dataModeTitle': 'Modalità dati',
@@ -1511,23 +1456,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.empty': 'Ancora nessun preferito',
     'offlineQueue.pending': 'Azioni in coda',
     'themeCreator.title': 'Creatore di Temi',
-    'tunnel.title': 'Connessione Remota',
-    'tunnel.name': 'Nome Server',
-    'tunnel.namePlaceholder': 'es. MiOficina',
-    'tunnel.password': 'Password',
-    'tunnel.passwordPlaceholder': 'Password tunnel',
-    'tunnel.signalingURL': 'URL segnalazione',
-    'tunnel.connect': 'Connetti',
-    'tunnel.connecting': 'Connessione...',
-    'tunnel.connected': 'Connesso in remoto',
-    'tunnel.disconnect': 'Disconnetti',
-    'tunnel.disconnected': 'Non connesso',
-    'tunnel.error': 'Errore connessione',
-    'tunnel.notConnected': 'Configura il tunnel remoto in Impostazioni',
-    'tunnel.qrHint': 'Scansiona il QR mostrato da opencode-tunnel',
-    'tunnel.modeLabel': 'Modalità connessione',
-    'tunnel.modeDirect': 'Rete locale',
-    'tunnel.modeRemote': 'Remoto (tunnel)',
     'nav.stats': 'Statistiche',
     'settings.serverStats': 'Statistiche del server',
     'stats.title': 'Statistiche',
@@ -1599,13 +1527,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.savedButton': '已儲存',
       'settings.sectionServer': '伺服器',
       'settings.sectionServers': '已儲存伺服器',
-      'settings.sectionServersDesc': '連接不同的電腦。每個設定檔代表一台機器（直接 HTTP 或 WebRTC 隧道）。',
+      'settings.sectionServersDesc': '連接不同的電腦。每個設定檔代表一台機器（透過 LAN 或 Tailscale 的 HTTP）。',
       'settings.serverActive': '使用中',
       'settings.serverApplied': '已套用伺服器',
       'settings.serverNamePlaceholder': '設定檔名稱（例如：工作電腦）',
       'settings.serverRemove': '移除伺服器',
       'settings.serverSaveHttp': '將目前儲存為 HTTP',
-      'settings.serverSaveTunnel': '將目前儲存為隧道',
       'settings.serverUse': '使用',
       'settings.sectionPreferences': '偏好設定',
       'settings.dataModeTitle': '資料模式',
@@ -1883,23 +1810,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.empty': '尚無最愛',
     'offlineQueue.pending': '佇列中有待處理的動作',
     'themeCreator.title': '主題建立器',
-    'tunnel.title': '遠端連線',
-    'tunnel.name': '伺服器名稱',
-    'tunnel.namePlaceholder': '例如 MiOficina',
-    'tunnel.password': '密碼',
-    'tunnel.passwordPlaceholder': '隧道密碼',
-    'tunnel.signalingURL': '信令 URL',
-    'tunnel.connect': '連線',
-    'tunnel.connecting': '連線中...',
-    'tunnel.connected': '已遠端連線',
-    'tunnel.disconnect': '斷開連線',
-    'tunnel.disconnected': '未連線',
-    'tunnel.error': '連線錯誤',
-    'tunnel.notConnected': '在設定中配置遠端隧道',
-    'tunnel.qrHint': '掃描 opencode-tunnel 顯示的二維碼',
-    'tunnel.modeLabel': '連線模式',
-    'tunnel.modeDirect': '本地網路',
-    'tunnel.modeRemote': '遠端（隧道）',
     'nav.stats': '統計',
     'settings.serverStats': '伺服器統計',
     'stats.title': '統計資料',

@@ -1,34 +1,28 @@
 import { useCallback } from "react"
 import { useLocalStorage } from "./useLocalStorage"
 import { STORAGE_KEYS } from "../constants"
-import type { ServerConfig, ServerProfile, TunnelConfig } from "../types"
+import type { ServerConfig, ServerProfile } from "../types"
 
-export type ServerProfileInput =
-  | { kind: "http"; config: ServerConfig }
-  | { kind: "tunnel"; config: TunnelConfig }
+export type ServerProfileInput = { config: ServerConfig }
 
-function profileKey(input: ServerProfileInput): string {
-  return input.kind === "http"
-    ? `http:${input.config.host}:${input.config.port}`
-    : `tunnel:${input.config.name}`
+function profileKey(p: ServerProfile): string {
+  return `http:${p.config.host}:${p.config.port}`
 }
 
 export function describeProfile(p: ServerProfile): string {
-  return p.kind === "http"
-    ? `${p.config.host}:${p.config.port}`
-    : p.config.name
+  return `${p.config.host}:${p.config.port}`
 }
 
-// Perfiles de servidores guardados: cada uno apunta a una computadora distinta
-// (HTTP directo o túnel WebRTC). El perfil activo se aplica a `useConfig`/`useRemoteTunnel`.
+// Perfiles de servidores guardados: cada uno apunta a una computadora distinta.
+// El perfil activo se aplica a `useConfig`.
 export function useServers() {
   const [profiles, setProfiles] = useLocalStorage<ServerProfile[]>(STORAGE_KEYS.SERVERS, [])
 
   const addProfile = useCallback((name: string, input: ServerProfileInput): ServerProfile => {
     const id = `srv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
-    const profile: ServerProfile = { id, name, ...input }
+    const profile: ServerProfile = { id, name, config: input.config }
     setProfiles((prev) => {
-      const withoutDuplicate = prev.filter((p) => profileKey(p) !== profileKey(input))
+      const withoutDuplicate = prev.filter((p) => profileKey(p) !== profileKey(profile))
       return [...withoutDuplicate, profile]
     })
     return profile

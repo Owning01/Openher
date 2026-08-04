@@ -39,6 +39,7 @@ architecture.json
 web/android/build-log.txt
 web/dist-stale/
 
-tunnel/tunnel.exe
+signaling-worker/node_modules/
+signaling-worker/.wrangler/
 "web/scripts/copy-dist.py"  
 ".playwright-mcp/"  

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react"
 import { Capacitor } from "@capacitor/core"
 import { PushNotifications } from "@capacitor/push-notifications"
-import { notify } from "../hooks/useNotifications"
+import { notify } from "./useNotifications"
 
 // Notificaciones push (FCM) — requieren google-services.json en el proyecto
 // Android para funcionar. Sin la credencial, el registro falla silenciosamente

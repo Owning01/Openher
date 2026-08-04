@@ -11,14 +11,6 @@ function parseDeepLink(url: string): DeepLinkAction | null {
 
     const hostname = parsed.hostname
 
-    // opencode://tunnel?id=...&name=... — QR generado por el exe de tunnel
-    if (hostname === "tunnel") {
-      const tunnelID = parsed.searchParams.get("id") ?? ""
-      const tunnelName = parsed.searchParams.get("name") ?? ""
-      if (!tunnelName) return null
-      return { kind: "tunnel", tunnelName, tunnelID }
-    }
-
     // opencode://session/<id>?directory=... — abrir sesión directa
     if (hostname === "session") {
       const sessionID = parsed.pathname.replace(/^\//, "").split("/")[0] ?? ""

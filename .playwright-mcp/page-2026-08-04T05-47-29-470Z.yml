@@ -1,0 +1,37 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "OpenCode OpenCode" [active] [ref=e5] [cursor=pointer]:
+      - generic [ref=e6]:
+        - img "OpenCode" [ref=e7]
+        - generic [ref=e8]: OpenCode
+    - navigation "Main navigation" [ref=e9]:
+      - button "Estadísticas" [ref=e10] [cursor=pointer]:
+        - img "Stats" [ref=e11]
+      - button "Configuración" [ref=e12] [cursor=pointer]:
+        - img "Settings" [ref=e13]
+      - button "Cambiar a modo oscuro" [ref=e16] [cursor=pointer]:
+        - img "Dark mode" [ref=e17]
+  - generic [ref=e237]:
+    - generic [ref=e238]:
+      - button [ref=e239] [cursor=pointer]:
+        - img "Refresh" [ref=e240]
+      - button "Add Nueva sesión" [ref=e245] [cursor=pointer]:
+        - img "Add" [ref=e246]
+        - generic [ref=e247]: Nueva sesión
+      - button "Full Chevron" [ref=e249] [cursor=pointer]:
+        - generic [ref=e250]: Full
+        - img "Chevron" [ref=e251]
+      - button "⋮" [ref=e254] [cursor=pointer]
+    - textbox "Buscar sesiones por título o carpeta..." [ref=e256]
+    - generic [ref=e257]: 0 totales · 0 activas · 0 con cambios
+    - generic [ref=e259]:
+      - button [pressed] [ref=e260] [cursor=pointer]:
+        - img "Detail" [ref=e261]
+        - text: Sesiones
+      - button [ref=e263] [cursor=pointer]:
+        - img "Sessions" [ref=e264]
+        - text: Proyectos
+    - generic [ref=e267]:
+      - img "Loading" [ref=e268]
+      - paragraph [ref=e270]: Conectando a OpenCode
+      - paragraph [ref=e271]: Cargando sesiones. Puede tomar unos segundos en móvil o después de que el servidor se active.

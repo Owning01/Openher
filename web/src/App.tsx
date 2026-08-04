@@ -57,10 +57,8 @@ import { useDeepLink } from "./hooks/useDeepLink"
 import { CloseIcon } from "./Icons"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
-import { RemoteConnect } from "./components/RemoteConnect"
-import { useRemoteTunnel } from "./tunnel/useRemoteTunnel"
-import { useShareReceiver } from "./tunnel/useShareReceiver"
-import { usePushNotifications } from "./tunnel/usePushNotifications"
+import { useShareReceiver } from "./hooks/useShareReceiver"
+import { usePushNotifications } from "./hooks/usePushNotifications"
 import { useServers } from "./hooks/useServers"
 import type { ServerProfile } from "./types"
 
@@ -211,31 +209,19 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   // ===== Feature: Favorites Manager =====
   const [showFavoritesManager, setShowFavoritesManager] = useState(false)
 
-  // ===== Feature: Remote Tunnel =====
-  const { tunnelConfig, setTunnelConfig, status: tunnelStatus, error: tunnelError, connect, disconnect } = useRemoteTunnel()
-  const [showRemoteConnect, setShowRemoteConnect] = useState(false)
-
   // ===== Feature: Saved servers (profiles) =====
   const { profiles: serverProfiles, addProfile, removeProfile } = useServers()
   const [activeServerProfileID, setActiveServerProfileID] = useState<string | null>(() =>
     localStorage.getItem("opencode.mobile.activeServer") ?? null
   )
   const applyServerProfile = useCallback((profile: ServerProfile) => {
-    if (profile.kind === "http") {
-      setDraftConfig(profile.config)
-      saveConfig(t)
-      setActiveServerProfileID(profile.id)
-      localStorage.setItem("opencode.mobile.activeServer", profile.id)
-      setSettingsNotice({ type: "success", text: `${t('settings.serverApplied')}: ${profile.name}` })
-      setTimeout(() => setSettingsNotice(null), 4000)
-    } else {
-      setTunnelConfig(profile.config)
-      setActiveServerProfileID(profile.id)
-      localStorage.setItem("opencode.mobile.activeServer", profile.id)
-      setShowRemoteConnect(true)
-      connect(profile.config)
-    }
-  }, [setDraftConfig, saveConfig, t, setTunnelConfig, connect, setSettingsNotice])
+    setDraftConfig(profile.config)
+    saveConfig(t)
+    setActiveServerProfileID(profile.id)
+    localStorage.setItem("opencode.mobile.activeServer", profile.id)
+    setSettingsNotice({ type: "success", text: `${t('settings.serverApplied')}: ${profile.name}` })
+    setTimeout(() => setSettingsNotice(null), 4000)
+  }, [setDraftConfig, saveConfig, t, setSettingsNotice])
 
   // ===== Feature: Share to OpenCode (Android ACTION_SEND) =====
   useShareReceiver((payload) => {
@@ -259,9 +245,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         setDraftConfig((prev) => ({ ...prev, host, port: port ?? prev.port, username: username ?? prev.username }))
         navigate("settings")
       }
-    } else if (action.kind === "tunnel") {
-      setTunnelConfig((prev) => ({ ...prev, name: action.tunnelName ?? "" }))
-      setShowRemoteConnect(true)
     } else if (action.kind === "session") {
       if (!action.sessionID) return
       navigate("detail")
@@ -990,12 +973,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             connectProvider(pid, key, selectedSession.id, selectedSession.directory)
           }}
           onDisconnectProvider={disconnectProvider}
-          onOpenRemoteConnect={() => setShowRemoteConnect(true)}
           serverProfiles={serverProfiles}
-          onAddServerProfile={(name, kind) => {
-            const profile = kind === "http"
-              ? addProfile(name, { kind: "http", config: draftConfig })
-              : addProfile(name, { kind: "tunnel", config: tunnelConfig })
+          onAddServerProfile={(name, _kind) => {
+            const profile = addProfile(name, { config: draftConfig })
             if (profile) {
               setActiveServerProfileID(profile.id)
               localStorage.setItem("opencode.mobile.activeServer", profile.id)
@@ -1274,21 +1254,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onReset={resetChatSettings}
           onClose={() => setShowChatCustomizer(false)}
         />
-      )}
-
-      {showRemoteConnect && (
-        <div className="modal-overlay" onClick={() => setShowRemoteConnect(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <RemoteConnect
-              status={tunnelStatus}
-              error={tunnelError}
-              savedConfig={tunnelConfig}
-              onConnect={connect}
-              onDisconnect={disconnect}
-              onClose={() => setShowRemoteConnect(false)}
-            />
-          </div>
-        </div>
       )}
 
       {runtimeError && (

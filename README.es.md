@@ -56,10 +56,10 @@
 | **📉 Auto-summarize** | Compactación automática cuando el contexto crece |
 | **📋 Plan breakdown** | Visualización de tareas para flujos de orquestación AI |
 | **⌨️ Atajos de teclado** | Tab + acciones para usuarios avanzados |
-| **🚀 Deploy rápido** | Scripts de 1 comando para LAN (misma WiFi) o tunnel (cualquier red) |
-| **🛰️ Tunnel remoto (WebRTC)** | Túnel peer-to-peer con pairing por QR, auto-reconexión y soporte TURN para NATs restrictivos |
+| **🚀 Deploy rápido** | Scripts de 1 comando para LAN (misma WiFi) o remoto vía Tailscale |
+| **🌐 Acceso remoto (Tailscale)** | VPN mesh privada gratuita — conectate desde cualquier red sin abrir puertos |
 | **📝 Editor de archivos** | Leer, editar y guardar archivos del proyecto |
-| **🔗 Deep links** | `opencode://connect`, `opencode://tunnel` (QR) y `opencode://session/<id>` |
+| **🔗 Deep links** | `opencode://connect` y `opencode://session/<id>` |
 | **📤 Compartir a OpenCode** | Share sheet de Android → texto/imagen se convierte en prompt |
 | **⬇️ Exportar chat** | Copiar como Markdown o compartir archivo `.md` con el share sheet del sistema |
 | **🔧 Editar desde diff** | Abrí cualquier archivo modificado directo en el editor desde el diff |
@@ -188,47 +188,72 @@ O construíla vos mismo (ver [desarrollo](#-desarrollo)).
 
 ---
 
-### 🖥️ 2 — Descargá **opencode-tunnel.exe** y ejecutalo
+### 🖥️ 2 — Instalá Tailscale en tu PC (para acceso remoto)
 
-[⬇️ **Descargar opencode-tunnel.exe**](https://github.com/Owning01/Opencode-Mobile/releases/latest)
+OpenCode Mobile se conecta a tu servidor OpenCode por HTTP directo. Para **acceso remoto desde cualquier red** (no solo tu WiFi), usá [**Tailscale**](https://tailscale.com) — una VPN mesh privada, gratuita y sin configuración.
 
-Al ejecutarlo se abre el navegador con esta interfaz:
+#### Paso A — Instalá Tailscale en la PC (servidor)
+
+1. Instalá Tailscale desde https://tailscale.com/download (Windows/macOS/Linux).
+2. Iniciá sesión con tu cuenta y uní la PC a tu tailnet:
+   ```
+   tailscale up
+   ```
+3. Buscá la IP de Tailscale de la PC:
+   ```
+   tailscale ip -4
+   ```
+   → ej. `100.101.102.103`. Anotala — nunca cambia.
+
+#### Paso B — Iniciá OpenCode escuchando en la interfaz Tailscale
+
+OpenCode escucha en **0.0.0.0** por defecto, así que la IP de Tailscale ya es alcanzable — sin flags extra:
 
 ```
-┌─ OpenCode Tunnel ──────────────────────────────┐
-│  Nombre del túnel: [MiOficina       ]           │
-│  Contraseña:       [••••••••        ]           │
-│                                                │
-│  [CONECTAR]  ← un solo botón hace todo         │
-│                                                │
-│  ● Servidor: detectado · Túnel: conectado      │
-│  [12:00] Servidor iniciado automáticamente     │
-│  [12:01] Cliente conectado desde remoto        │
-└────────────────────────────────────────────────┘
+npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096
 ```
 
-**El tunnel hace todo solo**:
-- ✅ Busca OpenCode en tu PC y lo inicia si no está corriendo
-- ✅ Conecta el túnel para que tu celular acceda desde cualquier red
-- ✅ Se guarda la configuración para la próxima vez
+> 🔒 **Tip de seguridad**: activá autenticación para que el tailnet no sea la única protección:
+> ```
+> set OPENCODE_SERVER_USERNAME=opencode
+> set OPENCODE_SERVER_PASSWORD=<una contraseña fuerte>
+> npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096
+> ```
 
-Solo necesitas poner un **nombre** y **contraseña** (los mismos que vas a usar en el celular).
+#### Paso C — Instalá Tailscale en tu celular
+
+1. Instalá **Tailscale** desde Play Store / App Store.
+2. Iniciá sesión con la **misma cuenta** que la PC.
+3. Tu celular ya está en la misma red privada que la PC — incluso con 4G/5G.
+
+#### Paso D — Conectá la app
+
+En OpenCode Mobile: **Ajustes → Servidor**:
+
+| Campo | Valor |
+|-------|-------|
+| Host | La IP de Tailscale de la PC, ej. `100.101.102.103` |
+| Puerto | `4096` (o el puerto en que iniciaste el servidor) |
+| Usuario / Contraseña | Solo si activaste auth en el Paso B |
+
+Tocá **Probar conexión** y luego **Guardar**. ✓ Listo — podés usar OpenCode desde cualquier lugar, sin abrir puertos en tu router.
 
 ---
 
-### 📱 En el celular: abrí la app
+### 🏠 Alternativa: WiFi local (sin Tailscale)
 
-**Ajustes → Conexión Remota** → poné el mismo nombre y contraseña → **Conectar**.
-
-✓ Listo. Ya podés usar OpenCode desde cualquier lugar.
+Si siempre estás en la misma red:
+1. En PC: `npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096`
+2. En la app: **Ajustes → Servidor**, poné la IP local de tu PC (ej. `192.168.1.20`)
 
 ---
 
-> 💡 **¿No querés usar el túnel?** También podés conectar por WiFi local:
-> 1. En PC: `npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096`
-> 2. En la app: **Ajustes → Servidor**, poné la IP de tu PC
->
-> O con Tailscale: instalalo en PC y celular, usá la IP de Tailscale en vez de la local.
+### ❓ Preguntas frecuentes de Tailscale
+
+- **¿Es gratis?** Sí — hasta 100 dispositivos y 3 usuarios en el plan gratuito.
+- **¿Necesita abrir puertos en el router?** No. Tailscale usa NAT traversal (con relay de respaldo) — tu router no necesita nada.
+- **¿Por qué no un túnel QR/WebRTC?** Tailscale es más confiable (relay de respaldo), ya está probado, y le da a tu PC una IP privada estable.
+- **El celular muestra "offline"?** Verificá que Tailscale esté **conectado** (verde) en el celular y que el `tailscale status` de la PC muestre ambos dispositivos.
 
 ---
 

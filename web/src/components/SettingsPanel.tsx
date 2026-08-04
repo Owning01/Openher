@@ -51,9 +51,8 @@ type SettingsPanelProps = {
   providerError: string | null
   onConnectProvider: (providerID: string, apiKey: string) => void
   onDisconnectProvider: (providerID: string) => void
-  onOpenRemoteConnect?: () => void
   serverProfiles: ServerProfile[]
-  onAddServerProfile: (name: string, kind: "http" | "tunnel") => void
+  onAddServerProfile: (name: string, kind: "http") => void
   onRemoveServerProfile: (id: string) => void
   onApplyServerProfile: (profile: ServerProfile) => void
   activeServerProfileID: string | null
@@ -71,7 +70,6 @@ export const SettingsPanel = memo(function SettingsPanel({
   activeModelOption, blockedModels, onOpenThemePicker,
   flags, onToggleFlag, onSetFlag,
   providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider,
-  onOpenRemoteConnect,
   serverProfiles, onAddServerProfile, onRemoveServerProfile, onApplyServerProfile, activeServerProfileID
 }: SettingsPanelProps) {
   const t = useT()
@@ -133,9 +131,6 @@ export const SettingsPanel = memo(function SettingsPanel({
           <div className="server-profile-list">
             {serverProfiles.map((profile) => (
               <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}`}>
-                <span className={`server-profile-kind ${profile.kind}`}>
-                  {profile.kind === "http" ? "HTTP" : "Túnel"}
-                </span>
                 <span className="server-profile-name">{profile.name}</span>
                 <span className="server-profile-desc">{describeProfile(profile)}</span>
                 {activeServerProfileID === profile.id ? (
@@ -163,11 +158,6 @@ export const SettingsPanel = memo(function SettingsPanel({
             disabled={!newProfileName.trim()}
             onClick={() => { onAddServerProfile(newProfileName.trim(), "http"); setNewProfileName("") }}>
             <PlusIcon size={14} /> {t('settings.serverSaveHttp')}
-          </button>
-          <button type="button" className="btn-secondary compact"
-            disabled={!newProfileName.trim()}
-            onClick={() => { onAddServerProfile(newProfileName.trim(), "tunnel"); setNewProfileName("") }}>
-            <PlusIcon size={14} /> {t('settings.serverSaveTunnel')}
           </button>
         </div>
       </div>
@@ -214,11 +204,6 @@ export const SettingsPanel = memo(function SettingsPanel({
             <><TestIcon size={18} />{testAlreadyPassedForDraft ? t('settings.testOk') : t('settings.test')}</>
           )}
         </button>
-        {onOpenRemoteConnect && (
-          <button onClick={onOpenRemoteConnect} className="btn-secondary">
-            {t('tunnel.title')}
-          </button>
-        )}
       </div>
 
       {/* Notice */}
