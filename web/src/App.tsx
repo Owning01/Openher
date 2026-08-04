@@ -238,6 +238,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // Notify on completion (transición awaiting → false, no en el primer delta)
   const wasAwaitingRef = useRef(false)
+  const awaitingReplyRef = useRef(false)
+  useEffect(() => {
+    awaitingReplyRef.current = awaitingAssistantReply
+  }, [awaitingAssistantReply])
   useEffect(() => {
     if (awaitingAssistantReply) {
       wasAwaitingRef.current = true
@@ -353,6 +357,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
 
     if (type === "message.updated" || type === "message.part.updated") {
+      if (type === "message.updated") {
+        const sessionID = p.sessionID as string | undefined
+        if (sessionID && sessionID === selectedSession?.id) {
+          const rawMsg = p.message as { info?: { time?: { completed?: number } } } | undefined
+          if (rawMsg?.info?.time?.completed && awaitingReplyRef.current) {
+            setAwaitingAssistantReply(false)
+            settleSession(sessionID, selectedSession.directory)
+          }
+        }
+      }
       return
     }
 
