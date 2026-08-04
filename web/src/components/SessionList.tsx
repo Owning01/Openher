@@ -78,7 +78,12 @@ export const SessionList = memo(function SessionList({
   })
   const toggleSection = useCallback((key: string) => {
     setCollapsedSections((prev) => {
-      const next = { ...prev, [key]: !prev[key] }
+      // Accordion: solo un panel abierto a la vez.
+      const opening = !prev[key]
+      const next: Record<string, boolean> = {}
+      for (const k of ["favorites", "active", "recent"] as const) {
+        next[k] = k === key ? !opening : opening
+      }
       try {
         localStorage.setItem("opencode.collapsedSections", JSON.stringify(next))
       } catch { /* ignore */ }
