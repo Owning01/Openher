@@ -105,7 +105,7 @@ type ChatViewProps = {
 export const ChatView = memo(function ChatView({
   selectedSession, messages, composer, isWorking,
   showTypingBubble, loadingSessionID, selectedID, messageScrollSignature, view,
-  dataMode, toolMessage,
+  dataMode: _dataMode, toolMessage,
   renamingSessionID, renameValue,
   activeModelOption, activeAgentID, primaryAgentOptions, onChangeAgent,
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
@@ -451,13 +451,6 @@ export const ChatView = memo(function ChatView({
           {toolMessage.filter((p) => p.type === "tool" || p.type === "tool_use").map((tp) => (
             <ToolStatus key={tp.id} part={tp} />
           ))}
-        </div>
-      )}
-
-      {dataMode === "ultra" && selectedSession && toolMessage && toolMessage.length > 0 && (
-        <div className="blocker-notice">
-          <span className="pill busy">ULTRA</span>
-          {t('detail.ultraNotice')}
         </div>
       )}
 

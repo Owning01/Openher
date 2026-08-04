@@ -237,7 +237,6 @@ type TranslationKey =
   | 'detail.compact'
   | 'detail.reverted'
   | 'detail.revertToHere'
-  | 'detail.ultraNotice'
   | 'settings.mode'
   | 'voice.input'
   | 'voice.listening'
@@ -622,7 +621,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.compact': 'Compact session',
     'detail.reverted': '⏪ Session reverted.',
     'detail.revertToHere': 'Revert session to this message',
-    'detail.ultraNotice': 'Process running — switch to Full to see output',
     'todo.title': 'Todo Items',
     'todo.hide': 'Hide',
     'todo.show': 'Show',
@@ -1022,7 +1020,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.compact': 'Compactar sesión',
     'detail.reverted': '⏪ Sesión revertida.',
     'detail.revertToHere': 'Revertir sesión hasta este mensaje',
-    'detail.ultraNotice': 'Proceso en ejecución — cambiá a Full para ver la salida',
     'todo.title': 'Tareas pendientes',
     'todo.hide': 'Ocultar',
     'todo.show': 'Mostrar',
@@ -1422,7 +1419,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.compact': 'Compatta sessione',
     'detail.reverted': '⏪ Sessione annullata.',
     'detail.revertToHere': 'Annulla sessione fino a questo messaggio',
-    'detail.ultraNotice': 'Processo in esecuzione — passa alla modalità Full per vedere l\'output',
     'todo.title': 'Todo',
     'todo.hide': 'Nascondi',
     'todo.show': 'Mostra',
@@ -1786,7 +1782,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.compact': '壓縮會話',
     'detail.reverted': '⏪ 會話已復原。',
     'detail.revertToHere': '將會話復原到此訊息',
-    'detail.ultraNotice': '進程正在執行 — 切換到完整模式以查看輸出',
     'todo.title': '待辦事項',
     'todo.hide': '隱藏',
     'todo.show': '顯示',
