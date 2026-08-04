@@ -18,6 +18,7 @@ export const STORAGE_KEYS = {
   RECENT_DISMISS: "opencode.mobile.recentDismiss",
   MODEL_VARIANT: "opencode.mobile.modelVariant",
   TUNNEL: "opencode.mobile.tunnel",
+  SERVERS: "opencode.mobile.servers",
   STATS_PORT: "opencode.remote.statsPort"
 }
 

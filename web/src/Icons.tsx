@@ -21,6 +21,10 @@ export const HelpIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Help"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></Svg>)
 export const PlusIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Add"><path d="M5 12h14"/><path d="M12 5v14"/></Svg>)
+export const CheckIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Check"><polyline points="20 6 9 17 4 12"/></Svg>)
+export const ServerIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Server"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></Svg>)
 export const PlayIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Open"><polygon points="5 3 19 12 5 21 5 3"/></Svg>)
 export const TrashIcon = (p: { className?: string; size?: number }) => (

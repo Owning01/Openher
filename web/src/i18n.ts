@@ -77,6 +77,15 @@ type TranslationKey =
   | 'settings.testedNotSaved'
   | 'settings.savedButton'
   | 'settings.sectionServer'
+  | 'settings.sectionServers'
+  | 'settings.sectionServersDesc'
+  | 'settings.serverActive'
+  | 'settings.serverApplied'
+  | 'settings.serverNamePlaceholder'
+  | 'settings.serverRemove'
+  | 'settings.serverSaveHttp'
+  | 'settings.serverSaveTunnel'
+  | 'settings.serverUse'
   | 'settings.sectionPreferences'
   | 'settings.dataModeTitle'
   | 'settings.dataModeDesc'
@@ -401,6 +410,15 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.testedNotSaved': 'Connection OK: OpenCode {version}. Nothing was saved yet.',
       'settings.savedButton': 'Saved',
       'settings.sectionServer': 'Server',
+      'settings.sectionServers': 'Saved servers',
+      'settings.sectionServersDesc': 'Connect to different computers. Each profile is one machine (direct HTTP or WebRTC tunnel).',
+      'settings.serverActive': 'Active',
+      'settings.serverApplied': 'Server applied',
+      'settings.serverNamePlaceholder': 'Profile name (e.g. Work PC)',
+      'settings.serverRemove': 'Remove server',
+      'settings.serverSaveHttp': 'Save current as HTTP',
+      'settings.serverSaveTunnel': 'Save current as Tunnel',
+      'settings.serverUse': 'Use',
       'settings.sectionPreferences': 'Preferences',
       'settings.dataModeTitle': 'Data mode',
       'settings.dataModeDesc': 'Controls network polling frequency and automatic data loading.',
@@ -800,6 +818,15 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.testedNotSaved': 'Conexión OK: OpenCode {version}. Aún no se guardó nada.',
       'settings.savedButton': 'Guardado',
       'settings.sectionServer': 'Servidor',
+      'settings.sectionServers': 'Servidores guardados',
+      'settings.sectionServersDesc': 'Conectate a distintas computadoras. Cada perfil es una máquina (HTTP directo o túnel WebRTC).',
+      'settings.serverActive': 'Activo',
+      'settings.serverApplied': 'Servidor aplicado',
+      'settings.serverNamePlaceholder': 'Nombre del perfil (ej. PC trabajo)',
+      'settings.serverRemove': 'Quitar servidor',
+      'settings.serverSaveHttp': 'Guardar actual como HTTP',
+      'settings.serverSaveTunnel': 'Guardar actual como Túnel',
+      'settings.serverUse': 'Usar',
       'settings.sectionPreferences': 'Preferencias',
       'settings.dataModeTitle': 'Modo de datos',
       'settings.dataModeDesc': 'Controla la frecuencia de consulta de red y la carga automática de datos.',
@@ -1199,6 +1226,15 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.testedNotSaved': 'Connessione OK: OpenCode {version}. Non è stato ancora salvato nulla.',
       'settings.savedButton': 'Salvato',
       'settings.sectionServer': 'Server',
+      'settings.sectionServers': 'Server salvati',
+      'settings.sectionServersDesc': 'Connettiti a computer diversi. Ogni profilo è una macchina (HTTP diretto o tunnel WebRTC).',
+      'settings.serverActive': 'Attivo',
+      'settings.serverApplied': 'Server applicato',
+      'settings.serverNamePlaceholder': 'Nome profilo (es. PC lavoro)',
+      'settings.serverRemove': 'Rimuovi server',
+      'settings.serverSaveHttp': 'Salva attuale come HTTP',
+      'settings.serverSaveTunnel': 'Salva attuale come Tunnel',
+      'settings.serverUse': 'Usa',
       'settings.sectionPreferences': 'Preferenze',
       'settings.dataModeTitle': 'Modalità dati',
       'settings.dataModeDesc': 'Controlla la frequenza di polling di rete e il caricamento automatico dei dati.',
@@ -1562,6 +1598,15 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.testedNotSaved': '連線正常：OpenCode {version}。尚未儲存任何變更。',
       'settings.savedButton': '已儲存',
       'settings.sectionServer': '伺服器',
+      'settings.sectionServers': '已儲存伺服器',
+      'settings.sectionServersDesc': '連接不同的電腦。每個設定檔代表一台機器（直接 HTTP 或 WebRTC 隧道）。',
+      'settings.serverActive': '使用中',
+      'settings.serverApplied': '已套用伺服器',
+      'settings.serverNamePlaceholder': '設定檔名稱（例如：工作電腦）',
+      'settings.serverRemove': '移除伺服器',
+      'settings.serverSaveHttp': '將目前儲存為 HTTP',
+      'settings.serverSaveTunnel': '將目前儲存為隧道',
+      'settings.serverUse': '使用',
       'settings.sectionPreferences': '偏好設定',
       'settings.dataModeTitle': '資料模式',
       'settings.dataModeDesc': '控制網路輪詢頻率和自動資料載入。',

@@ -1,8 +1,9 @@
 import { memo, useState, useCallback } from "react"
-import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon } from "../Icons"
+import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo } from "../types"
+import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo, ServerProfile } from "../types"
 import type { LanguageCode } from "../i18n"
+import { describeProfile } from "../hooks/useServers"
 import { ProviderManager } from "./ProviderManager"
 
 type UsageStats = {
@@ -51,6 +52,11 @@ type SettingsPanelProps = {
   onConnectProvider: (providerID: string, apiKey: string) => void
   onDisconnectProvider: (providerID: string) => void
   onOpenRemoteConnect?: () => void
+  serverProfiles: ServerProfile[]
+  onAddServerProfile: (name: string, kind: "http" | "tunnel") => void
+  onRemoveServerProfile: (id: string) => void
+  onApplyServerProfile: (profile: ServerProfile) => void
+  activeServerProfileID: string | null
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
@@ -65,12 +71,14 @@ export const SettingsPanel = memo(function SettingsPanel({
   activeModelOption, blockedModels, onOpenThemePicker,
   flags, onToggleFlag, onSetFlag,
   providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider,
-  onOpenRemoteConnect
+  onOpenRemoteConnect,
+  serverProfiles, onAddServerProfile, onRemoveServerProfile, onApplyServerProfile, activeServerProfileID
 }: SettingsPanelProps) {
   const t = useT()
   const [showPassword, setShowPassword] = useState(false)
   const [blockedSearch, setBlockedSearch] = useState("")
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
+  const [newProfileName, setNewProfileName] = useState("")
 
   const toggleProvider = useCallback((providerID: string) => {
     setExpandedProviders((prev) => {
@@ -115,6 +123,53 @@ export const SettingsPanel = memo(function SettingsPanel({
           {draftConfig.host && draftConfig.port > 0 ? `${draftConfig.host}:${draftConfig.port}` : t('settings.hostPlaceholder')}
         </p>
         <p className="subtle">{t('settings.draftHint')}</p>
+      </div>
+
+      {/* Saved servers */}
+      <div className="settings-card">
+        <h3 className="settings-section-title"><ServerIcon size={14} /> {t('settings.sectionServers')}</h3>
+        <p className="subtle">{t('settings.sectionServersDesc')}</p>
+        {serverProfiles.length > 0 && (
+          <div className="server-profile-list">
+            {serverProfiles.map((profile) => (
+              <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}`}>
+                <span className={`server-profile-kind ${profile.kind}`}>
+                  {profile.kind === "http" ? "HTTP" : "Túnel"}
+                </span>
+                <span className="server-profile-name">{profile.name}</span>
+                <span className="server-profile-desc">{describeProfile(profile)}</span>
+                {activeServerProfileID === profile.id ? (
+                  <span className="server-profile-active"><CheckIcon size={12} /> {t('settings.serverActive')}</span>
+                ) : (
+                  <button type="button" className="btn-secondary compact" onClick={() => onApplyServerProfile(profile)}>
+                    {t('settings.serverUse')}
+                  </button>
+                )}
+                <button type="button" className="btn-icon btn-ghost" onClick={() => onRemoveServerProfile(profile.id)}
+                  aria-label={t('settings.serverRemove')} title={t('settings.serverRemove')}>
+                  <TrashIcon size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="server-profile-add">
+          <input
+            value={newProfileName}
+            onChange={(e) => setNewProfileName(e.target.value)}
+            placeholder={t('settings.serverNamePlaceholder')}
+          />
+          <button type="button" className="btn-secondary compact"
+            disabled={!newProfileName.trim()}
+            onClick={() => { onAddServerProfile(newProfileName.trim(), "http"); setNewProfileName("") }}>
+            <PlusIcon size={14} /> {t('settings.serverSaveHttp')}
+          </button>
+          <button type="button" className="btn-secondary compact"
+            disabled={!newProfileName.trim()}
+            onClick={() => { onAddServerProfile(newProfileName.trim(), "tunnel"); setNewProfileName("") }}>
+            <PlusIcon size={14} /> {t('settings.serverSaveTunnel')}
+          </button>
+        </div>
       </div>
 
       {/* Server config */}

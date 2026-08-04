@@ -492,20 +492,26 @@ p {
 
 .form-field input,
 .form-field select {
-  padding: 0.45rem 0.65rem;
+  padding: 0.6rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-subtle);
   color: var(--text);
-  font-size: 0.88rem;
-  transition: border-color 0.15s;
+  font-size: 0.92rem;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.form-field input:hover,
+.form-field select:hover {
+  border-color: var(--border-strong, #555);
 }
 
 .form-field input:focus,
 .form-field select:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-soft);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 .form-field .btn-secondary {
@@ -534,20 +540,32 @@ p {
 }
 
 .settings-card {
-  background: var(--surface-subtle);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+}
+
+.settings-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-strong, rgba(128,128,128,0.25)), transparent);
 }
 
 .settings-section-title {
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--muted-strong);
   margin: 0;
   display: flex;
@@ -555,10 +573,125 @@ p {
   gap: var(--space-2);
 }
 
+.settings-section-title svg {
+  color: var(--primary);
+}
+
+/* ===== Saved Servers (multi-machine profiles) ===== */
+.server-profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.server-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.server-profile:hover {
+  border-color: var(--border-strong, #555);
+}
+
+.server-profile.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.server-profile-kind {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.server-profile-kind.http {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.server-profile-kind.tunnel {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+}
+
+.server-profile-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.server-profile-desc {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-profile-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--success);
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.server-profile-add {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.server-profile-add input {
+  flex: 1;
+  min-width: 160px;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.server-profile-add input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
 .settings-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+.settings-actions .btn-primary,
+.settings-actions .btn-secondary {
+  padding: 0.65rem 1rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
 }
 
 .settings-footer {
@@ -592,9 +725,9 @@ p {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-3);
-  background: var(--surface);
+  background: var(--surface-subtle);
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
   text-align: left;
   font-family: inherit;
   color: var(--text);
@@ -602,11 +735,13 @@ p {
 
 .data-mode-card:hover {
   border-color: var(--primary);
+  transform: translateY(-1px);
 }
 
 .data-mode-card.active {
   border-color: var(--primary);
   background: var(--primary-soft);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 .data-mode-card strong {
@@ -6256,5 +6391,70 @@ button.compact {
   }
   .stats-model-name {
     flex-basis: 80px;
+  }
+}
+
+/* ===== Tablet: 781-1024px ===== */
+@media (min-width: 781px) and (max-width: 1024px) {
+  .app-shell {
+    padding: var(--space-3);
+    width: 100%;
+    max-width: none;
+  }
+
+  .settings {
+    max-width: 760px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .data-mode-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .settings-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .quick-access-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .session-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .messages-wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .composer {
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .detail-header {
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .project-dashboard {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .blocked-group-header {
+    flex-wrap: wrap;
+  }
+
+  .server-profile-add {
+    flex-wrap: nowrap;
   }
 }
