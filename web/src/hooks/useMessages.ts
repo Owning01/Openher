@@ -340,10 +340,22 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
         const nextParts = m.parts.map((p) => {
           if (p.id !== part.id) return p
           const incoming = part.text ?? ""
-          if (!incoming && p.text) return p
-          if (p.text === incoming && (part.type ?? p.type) === p.type) return p
+          // Los tool parts (task/subagent) suelen llegar SIN texto: solo traen
+          // state.status (running→completed) y tool. Mergear siempre esos campos.
+          const newState = part.state && typeof part.state === "object" ? part.state : undefined
+          const stateChanged = newState !== undefined && JSON.stringify(p.state ?? null) !== JSON.stringify(newState)
+          const toolChanged = part.tool !== undefined && part.tool !== p.tool
+          if (!incoming && p.text && !stateChanged && !toolChanged) return p
+          if (p.text === incoming && (part.type ?? p.type) === p.type && !stateChanged && !toolChanged) return p
           changed = true
-          return { ...p, text: incoming, ...(part.type ? { type: part.type } : {}) }
+          return {
+            ...p,
+            text: incoming || p.text,
+            ...(part.type ? { type: part.type } : {}),
+            ...(part.tool ? { tool: part.tool } : {}),
+            ...(part.callID ? { callID: part.callID } : {}),
+            ...(newState !== undefined ? { state: newState } : {}),
+          }
         })
         return { ...m, parts: nextParts }
       })
