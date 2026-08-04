@@ -27,6 +27,25 @@ export function formatLimit(value?: number, decimals = 0): string {
   return String(value)
 }
 
+// Formato compacto para contadores (tokens, líneas): 1.2K, 3.4M.
+export function formatCompact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
+}
+
+export function formatCost(c: number): string {
+  return c < 0.01 ? `$${c.toFixed(6)}` : `$${c.toFixed(4)}`
+}
+
+// Backoff exponencial con jitter para reconexiones y polling.
+// `attempt` es 0-based; `jitterFactor` agrega aleatoriedad para evitar thundering herd.
+// El resultado nunca supera `maxMs`.
+export function computeBackoff(baseMs: number, maxMs: number, attempt: number, jitterFactor = 0.5): number {
+  const base = Math.min(baseMs * Math.pow(2, attempt), maxMs)
+  return Math.round(Math.min(base + base * jitterFactor * Math.random(), maxMs))
+}
+
 export function pickString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null
 }

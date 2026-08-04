@@ -1,4 +1,5 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core"
+import { computeBackoff } from "./utils"
 import type {
   AgentOption,
   CommandInfo,
@@ -185,8 +186,7 @@ async function requestWithHeaders<T>(config: ServerConfig, path: string, options
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
       if (attempt < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 10_000)
-        await new Promise((r) => setTimeout(r, delay))
+        await new Promise((r) => setTimeout(r, computeBackoff(1_000, 10_000, attempt)))
       }
     }
   }

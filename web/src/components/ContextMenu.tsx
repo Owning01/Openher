@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { useOutsideClick } from "../hooks/useOutsideClick"
 
 type ContextAction = {
   id: string
@@ -17,13 +18,7 @@ type Props = {
 export const ContextMenu = function ContextMenu({ x, y, actions, onClose }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
-  }, [onClose])
+  useOutsideClick(ref, onClose)
 
   useEffect(() => {
     if (!ref.current) return

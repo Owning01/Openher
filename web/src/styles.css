@@ -5807,7 +5807,7 @@ button.compact {
 .inline-diff-pre { margin: 0; padding: var(--space-2); font-size: 0.78rem; line-height: 1.5; overflow-x: auto; }
 .inline-diff-line { display: block; white-space: pre; }
 .inline-diff-line.diff-add { background: rgba(76,175,125,0.15); color: var(--success); }
-.inline-diff-line.diff-rem { background: rgba(229,85,69,0.15); color: var(--danger); }
+.inline-diff-line.diff-del { background: rgba(229,85,69,0.15); color: var(--danger); }
 .inline-diff-line.diff-hunk { color: var(--muted); font-weight: 600; }
 
 /* ===== File Editor ===== */

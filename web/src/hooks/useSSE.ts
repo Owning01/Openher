@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
 import { toBase64 } from "../api"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS } from "../constants"
+import { computeBackoff } from "../utils"
 
 export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void) {
   const [streamState, setStreamState] = useState<StreamState>("polling")
@@ -146,14 +147,10 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   const scheduleReconnect = useCallback(() => {
     if (!mountedRef.current) return
     const attempt = reconnectAttemptRef.current++
-    const delay = Math.min(
-      SSE_RECONNECT_BASE_MS * Math.pow(2, attempt),
-      SSE_RECONNECT_MAX_MS
-    )
-    const jitter = delay * (0.5 + Math.random() * 0.5)
+    const delay = computeBackoff(SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, attempt)
     reconnectTimerRef.current = setTimeout(() => {
       if (mountedRef.current) connect()
-    }, jitter)
+    }, delay)
   }, [connect])
 
   useEffect(() => {

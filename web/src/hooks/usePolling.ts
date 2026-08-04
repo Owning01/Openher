@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import { POLL_BACKOFF_BASE_MS, POLL_BACKOFF_MAX_MS, POLL_BACKOFF_JITTER, POLL_MAX_RETRIES } from "../constants"
+import { computeBackoff } from "../utils"
 
 export type PollingControl = {
   pause: () => void
@@ -32,12 +33,7 @@ export function usePolling(
     }
 
     function computeDelay(): number {
-      const base = Math.min(
-        POLL_BACKOFF_BASE_MS * Math.pow(2, failCountRef.current),
-        POLL_BACKOFF_MAX_MS
-      )
-      const jitter = base * POLL_BACKOFF_JITTER * Math.random()
-      return Math.round(base + jitter)
+      return computeBackoff(POLL_BACKOFF_BASE_MS, POLL_BACKOFF_MAX_MS, failCountRef.current, POLL_BACKOFF_JITTER)
     }
 
     async function tick() {

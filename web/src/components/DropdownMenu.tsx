@@ -1,4 +1,5 @@
 import { memo, useState, useRef, useEffect, type ReactNode } from "react"
+import { useOutsideClick } from "../hooks/useOutsideClick"
 
 type Props = {
   trigger: ReactNode
@@ -11,14 +12,7 @@ export const DropdownMenu = memo(function DropdownMenu({ trigger, children, alig
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
-  }, [open])
+  useOutsideClick(ref, () => setOpen(false), open)
 
   useEffect(() => {
     if (!open) return

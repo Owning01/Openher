@@ -17,6 +17,8 @@ import { AutoQuestionPrompt } from "./AutoQuestionPrompt"
 import { PermissionPrompt } from "./PermissionPrompt"
 
 import { api } from "../api"
+import { useOutsideClick } from "../hooks/useOutsideClick"
+import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, StreamState, Question, PermissionRequest } from "../types"
 
 type ChatViewProps = {
@@ -179,16 +181,7 @@ export const ChatView = memo(function ChatView({
     return () => clearInterval(id)
   }, [config, selectedSession?.directory])
 
-  useEffect(() => {
-    if (!showOverflow) return
-    function handleClick(e: MouseEvent) {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-        setShowOverflow(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
-  }, [showOverflow])
+  useOutsideClick(overflowRef, () => setShowOverflow(false), showOverflow)
 
   const filteredMessages = useMemo(() => {
     if (!messageQuery.trim()) return messages
@@ -216,18 +209,9 @@ export const ChatView = memo(function ChatView({
     const limit = activeModelOption?.contextLimit
     const pct = limit && limit > 0 ? Math.round((total / limit) * 100) : null
     const cost = selectedSession?.cost ?? 0
-    const label = formatTuiNum(total) + (pct !== null ? ` (${pct}%)` : "")
+    const label = formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")
     return { total, pct, limit, cost, label: cost > 0 ? `${label} · ${formatCost(cost)}` : label }
   }, [messages, activeModelOption?.contextLimit, selectedSession?.cost])
-
-  function formatTuiNum(n: number): string {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-    return String(n)
-  }
-  function formatCost(c: number): string {
-    return c < 0.01 ? `$${c.toFixed(6)}` : `$${c.toFixed(4)}`
-  }
 
   return (
     <main className="panel detail fade-in">

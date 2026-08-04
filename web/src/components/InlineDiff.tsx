@@ -1,4 +1,5 @@
 import { memo, useMemo } from "react"
+import { diffLineClass } from "./DiffView"
 
 type Props = {
   content: string
@@ -12,17 +13,11 @@ export const InlineDiff = memo(function InlineDiff({ content, language }: Props)
     <div className="inline-diff">
       {language && <div className="inline-diff-lang">{language}</div>}
       <pre className="inline-diff-pre">
-        {lines.map((line, i) => {
-          let cls = ""
-          if (line.startsWith("+")) cls = "diff-add"
-          else if (line.startsWith("-")) cls = "diff-rem"
-          else if (line.startsWith("@@")) cls = "diff-hunk"
-          return (
-            <span key={i} className={`inline-diff-line ${cls}`}>
-              {line}
-            </span>
-          )
-        })}
+        {lines.map((line, i) => (
+          <span key={i} className={`inline-diff-line ${diffLineClass(line)}`}>
+            {line}
+          </span>
+        ))}
       </pre>
     </div>
   )
