@@ -56,13 +56,19 @@ export function extractPath(dashboard: ProjectDashboard | null): string | null {
   return pickString(project.path) ?? pickString(project.directory) ?? pickString(project.root) ?? null
 }
 
+// Último segmento de una ruta (file.ts, src/main.go...).
+export function basename(path: string): string {
+  const clean = path.replace(/\\/g, "/")
+  return clean.split("/").filter(Boolean).pop() ?? path
+}
+
 export function extractName(dashboard: ProjectDashboard | null): string | null {
   const project = dashboard?.project
   if (!project) return null
   const name = pickString(project.name)
   if (name) return name
   const path = extractPath(dashboard)
-  return path ? path.split("/").filter(Boolean).pop() ?? path : null
+  return path ? basename(path) : null
 }
 
 export function extractBranch(dashboard: ProjectDashboard | null): string | null {

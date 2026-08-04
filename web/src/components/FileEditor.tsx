@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useCallback } from "react"
 import { api } from "../api"
 import { ModalHeader } from "./ModalHeader"
 import { SaveIcon } from "../Icons"
+import { basename } from "../utils"
 import type { ServerConfig } from "../types"
 
 type Props = {
@@ -55,7 +56,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content file-editor" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="File Editor">
-        <ModalHeader title={path} onClose={onClose}>
+        <ModalHeader title={basename(path)} titleTooltip={path} onClose={onClose}>
           {hasChanges && (
             <button className="btn-primary compact" onClick={handleSave} disabled={saving}>
               <SaveIcon size={14} /> {saving ? "Saving..." : "Save"}
