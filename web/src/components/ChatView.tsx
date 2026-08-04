@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, StatsIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, StarIcon, MenuDotsIcon, LayersIcon, ArchiveIcon, ForkIcon, PaintIcon, KeyboardIcon, CloseIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, StatsIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, StarIcon, MenuDotsIcon, LayersIcon, ArchiveIcon, ForkIcon, PaintIcon, KeyboardIcon, CloseIcon, ShareIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -67,7 +67,9 @@ type ChatViewProps = {
   readingMode: boolean
   onToggleReadingMode: () => void
   onExportChat: () => void
+  onExportMarkdown?: () => void
   onSnapshot: () => void
+  onEditFile?: (file: string) => void
   onOpenFileBrowser?: () => void
   fileBrowserPath?: string
   agents?: AgentOption[]
@@ -119,7 +121,8 @@ export const ChatView = memo(function ChatView({
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
   onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager, onOpenShortcuts, onOpenChatCustomizer,
   todos, todosExpanded, onTodosToggle, showTodoButton,
-  queuedPrompts, onRemoveQueued, compacting, revertID
+  queuedPrompts, onRemoveQueued, compacting, revertID,
+  onExportMarkdown, onEditFile
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -318,6 +321,11 @@ export const ChatView = memo(function ChatView({
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); onToggleTokenStats?.() }}>
                     <StatsIcon size={14} /> Token Stats
                   </button>
+                  {onExportMarkdown && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onExportMarkdown() }}>
+                      <ShareIcon size={14} /> Export .md
+                    </button>
+                  )}
                   {flags.fileBrowser && onOpenFileBrowser && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenFileBrowser() }}>
                       <FolderIcon size={14} /> Browse Files
@@ -443,7 +451,8 @@ export const ChatView = memo(function ChatView({
       )}
 
       {flags.inlineDiff && selectedSession && diffFiles.length > 0 && (
-        <DiffViewer files={diffFiles} config={config} sessionID={selectedSession.id} directory={selectedSession.directory} />
+        <DiffViewer files={diffFiles} config={config} sessionID={selectedSession.id} directory={selectedSession.directory}
+          onEditFile={onEditFile} />
       )}
 
       {flags.gitOps && projectDashboard?.vcs && (

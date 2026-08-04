@@ -55,8 +55,12 @@ import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
 import { CloseIcon } from "./Icons"
+import { Filesystem, Directory } from "@capacitor/filesystem"
+import { Share } from "@capacitor/share"
 import { RemoteConnect } from "./components/RemoteConnect"
 import { useRemoteTunnel } from "./tunnel/useRemoteTunnel"
+import { useShareReceiver } from "./tunnel/useShareReceiver"
+import { usePushNotifications } from "./tunnel/usePushNotifications"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const t = useT()
@@ -206,18 +210,47 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const [showFavoritesManager, setShowFavoritesManager] = useState(false)
 
   // ===== Feature: Remote Tunnel =====
-  const { tunnelConfig, status: tunnelStatus, error: tunnelError, connect, disconnect } = useRemoteTunnel()
+  const { tunnelConfig, setTunnelConfig, status: tunnelStatus, error: tunnelError, connect, disconnect } = useRemoteTunnel()
   const [showRemoteConnect, setShowRemoteConnect] = useState(false)
+
+  // ===== Feature: Share to OpenCode (Android ACTION_SEND) =====
+  useShareReceiver((payload) => {
+    if (payload.text) setComposer((prev) => prev ? `${prev}\n\n${payload.text}` : payload.text)
+    if (!payload.text) setComposer(payload.uri)
+    navigate("detail")
+  })
 
   // ===== Feature: Offline Queue =====
   const { enqueue: queueAction, dequeueAll } = useOfflineQueue()
 
   // ===== Feature: Notifications =====
   const { notify, flags: notifFlags } = useNotifications()
+  usePushNotifications(notifFlags.onCompletion)
 
   // ===== Feature: Deep Link =====
-  useDeepLink((partial) => {
-    setDraftConfig((prev) => ({ ...prev, ...partial }))
+  useDeepLink((action) => {
+    if (action.kind === "server") {
+      const { host, port, username } = action
+      if (host) {
+        setDraftConfig((prev) => ({ ...prev, host, port: port ?? prev.port, username: username ?? prev.username }))
+        navigate("settings")
+      }
+    } else if (action.kind === "tunnel") {
+      setTunnelConfig((prev) => ({ ...prev, name: action.tunnelName ?? "" }))
+      setShowRemoteConnect(true)
+    } else if (action.kind === "session") {
+      if (!action.sessionID) return
+      navigate("detail")
+      setTimeout(() => {
+        const dir = action.directory ?? ""
+        const target = sessions.find((s) => s.id === action.sessionID)
+        if (target) {
+          openSession(target.id, target.directory)
+        } else {
+          openSession(action.sessionID!, dir)
+        }
+      }, 300)
+    }
   })
 
   // Replay offline queue when connected
@@ -531,13 +564,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const isWorking = awaitingAssistantReply || isSessionRunning
   const showTypingBubble = Boolean(selectedSession) && isWorking
 
-  const handleExportChat = useCallback(() => {
-    if (!selectedSession || renderedMessages.length === 0) return
+  const buildMarkdown = useCallback((): string | null => {
+    if (!selectedSession || renderedMessages.length === 0) return null
     const header = `# ${selectedSession.title}\n\n`
     const body = renderedMessages.map((m) =>
       `## ${m.info.role === "user" ? "User" : "OpenCode"}\n${m.text}\n`
     ).join("\n")
-    const full = header + body
+    return header + body
+  }, [selectedSession, renderedMessages])
+
+  const handleExportChat = useCallback(() => {
+    const full = buildMarkdown()
+    if (!full) return
     navigator.clipboard.writeText(full).then(() => {
       setRuntimeError(null)
     }).catch(() => {
@@ -548,7 +586,23 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       document.execCommand("copy")
       document.body.removeChild(ta)
     })
-  }, [selectedSession, renderedMessages])
+  }, [buildMarkdown])
+
+  const handleExportMarkdown = useCallback(async () => {
+    const full = buildMarkdown()
+    if (!full) return
+    const filename = `${(selectedSession?.title ?? "chat").replace(/[^\w\-]+/g, "_")}.md`
+    try {
+      const saved = await Filesystem.writeFile({
+        path: filename,
+        data: full,
+        directory: Directory.Cache,
+      })
+      await Share.share({ title: filename, url: saved.uri })
+    } catch {
+      /* share canceled or write failed */
+    }
+  }, [buildMarkdown, selectedSession?.title])
 
   const handleSnapshot = useCallback(() => {
     if (!selectedSession) return
@@ -994,7 +1048,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             recentSessions={recentSessions} activeSessions={activeSessions}
             onOpenSession={handleOpenSession}
             readingMode={readingMode} onToggleReadingMode={() => setReadingMode((v) => !v)}
-            onExportChat={handleExportChat} onSnapshot={handleSnapshot}
+            onExportChat={handleExportChat} onExportMarkdown={handleExportMarkdown} onSnapshot={handleSnapshot}
+            onEditFile={(file) => setFileEditorPath(file)}
             onOpenSettings={() => navigate("settings")}
             onThemeCommand={() => setShowThemePicker(true)}
             onToggleTokenStats={() => setTokenStatsOpen((v) => !v)}

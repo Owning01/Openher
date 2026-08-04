@@ -31,10 +31,17 @@ type Response struct {
 type OnOffer func() (sdp string, err error)
 type OnRemoteSDP func(sdp string) error
 
+type ICEServer struct {
+	URLs       []string `json:"urls"`
+	Username   string   `json:"username,omitempty"`
+	Credential string   `json:"credential,omitempty"`
+}
+
 type WebRTCTransport struct {
 	peerConn   *webrtc.PeerConnection
 	dataChan   *webrtc.DataChannel
 	targetURL  string
+	iceServers []ICEServer
 	pending    sync.Map
 	mu         sync.Mutex
 	connected  bool
@@ -44,14 +51,32 @@ type WebRTCTransport struct {
 func New(targetURL string) *WebRTCTransport {
 	return &WebRTCTransport{
 		targetURL: targetURL,
+		iceServers: []ICEServer{
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
+		},
 	}
 }
 
+// SetICEServers reemplaza la lista por defecto (STUN de Google) por la provista
+// por el usuario (ej. TURN para NATs restrictivos).
+func (t *WebRTCTransport) SetICEServers(servers []ICEServer) {
+	if len(servers) == 0 {
+		return
+	}
+	t.iceServers = servers
+}
+
 func (t *WebRTCTransport) CreateOffer() (string, error) {
+	iceServers := make([]webrtc.ICEServer, 0, len(t.iceServers))
+	for _, s := range t.iceServers {
+		iceServers = append(iceServers, webrtc.ICEServer{
+			URLs:       s.URLs,
+			Username:   s.Username,
+			Credential: s.Credential,
+		})
+	}
 	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
-		},
+		ICEServers: iceServers,
 	}
 
 	pc, err := webrtc.NewPeerConnection(config)

@@ -1,4 +1,5 @@
 import type { TunnelConfig } from "../types"
+import { computeBackoff } from "../utils"
 
 type RequestResolve = {
   resolve: (value: { status: number; headers: Record<string, string>; body: string }) => void
@@ -11,6 +12,10 @@ type SSEHandler = {
   onDone: () => void
   onError: (err: Error) => void
 }
+
+const TUNNEL_RECONNECT_BASE_MS = 1_000
+const TUNNEL_RECONNECT_MAX_MS = 30_000
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }]
 
 export class TunnelTransport {
   private ws: WebSocket | null = null
@@ -25,6 +30,9 @@ export class TunnelTransport {
   private _onError: ((err: string) => void) | null = null
   private _connectReject: ((err: Error) => void) | null = null
   private _connectResolve: (() => void) | null = null
+  private reconnectAttempt = 0
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private stopped = false
 
   get connected() { return this._connected }
 
@@ -33,6 +41,8 @@ export class TunnelTransport {
 
   async connect(config: TunnelConfig): Promise<void> {
     this.config = config
+    this.stopped = false
+    this.reconnectAttempt = 0
     this.setStatus("connecting")
 
     const wsURL = config.signalingURL
@@ -69,9 +79,21 @@ export class TunnelTransport {
             this._connectReject(new Error("Signaling closed"))
             this._connectReject = null
           }
+          this.scheduleReconnect()
         }
       }
     })
+  }
+
+  private scheduleReconnect() {
+    if (this.stopped || this.reconnectTimer) return
+    const delay = computeBackoff(TUNNEL_RECONNECT_BASE_MS, TUNNEL_RECONNECT_MAX_MS, this.reconnectAttempt++)
+    this.setStatus("connecting")
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (this.stopped || !this.config) return
+      this.connect(this.config).catch(() => { /* error already surfaced via onError/status */ })
+    }, delay)
   }
 
   private async handleSignaling(msg: any, reject: (err: Error) => void) {
@@ -99,7 +121,7 @@ export class TunnelTransport {
 
   private async handleRemoteSDP(sdpJSON: string) {
     const config: RTCConfiguration = {
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      iceServers: this.config?.iceServers?.length ? this.config.iceServers : DEFAULT_ICE_SERVERS,
     }
 
     this.pc = new RTCPeerConnection(config)
@@ -124,6 +146,10 @@ export class TunnelTransport {
           this.pc?.iceConnectionState === "failed") {
         this._connected = false
         this.setStatus("disconnected")
+        this.pc?.close()
+        this.pc = null
+        this.dc = null
+        this.scheduleReconnect()
       }
     }
 
@@ -146,6 +172,7 @@ export class TunnelTransport {
     if (!this.dc) return
 
     this.dc.onopen = () => {
+      this.reconnectAttempt = 0
       this._connected = true
       this.setStatus("connected")
       if (this._connectResolve) {
@@ -158,6 +185,7 @@ export class TunnelTransport {
     this.dc.onclose = () => {
       this._connected = false
       this.setStatus("disconnected")
+      this.scheduleReconnect()
     }
 
     this.dc.onmessage = (evt) => {
@@ -238,7 +266,12 @@ export class TunnelTransport {
   }
 
   disconnect() {
+    this.stopped = true
     this._connected = false
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     this.dc?.close()
     this.pc?.close()
     this.ws?.close()

@@ -57,7 +57,12 @@
 | **📋 Plan breakdown** | Task visualization for AI orchestration flows |
 | **⌨️ Keyboard shortcuts** | Tab + actions for power users |
 | **🚀 Quick deploy** | 1-command scripts for LAN (same WiFi) or tunnel (any network) |
+| **🛰️ Remote tunnel (WebRTC)** | Peer-to-peer tunnel with QR pairing, auto-reconnect and TURN support for restrictive NATs |
 | **📝 File editor** | Read, edit and save project files |
+| **🔗 Deep links** | `opencode://connect`, `opencode://tunnel` (QR) and `opencode://session/<id>` |
+| **📤 Share to OpenCode** | Android share sheet → text/image becomes a prompt |
+| **⬇️ Export chat** | Copy as Markdown or share a `.md` file via the system share sheet |
+| **🔧 Edit from diff** | Open any changed file directly in the editor from the diff view |
 | **🖼️ Image lightbox** | Full view with zoom and drag |
 | **🧩 MCP Browser** | Explore connected MCP resources |
 | **📦 Offline queue** | Actions are queued and resent on reconnect |

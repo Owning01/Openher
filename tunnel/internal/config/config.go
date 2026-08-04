@@ -10,15 +10,22 @@ import (
 	"github.com/owning01/opencode-mobile/tunnel/internal/security"
 )
 
+type ICEServer struct {
+	URLs       []string `json:"urls"`
+	Username   string   `json:"username,omitempty"`
+	Credential string   `json:"credential,omitempty"`
+}
+
 type TunnelConfig struct {
-	Name         string `json:"name"`
-	Password     string `json:"password"`
-	SignalingURL string `json:"signaling_url"`
-	ServerHost   string `json:"server_host"`
-	ServerPort   int    `json:"server_port"`
-	AutoStart    bool   `json:"auto_start"`
-	BinPath      string `json:"bin_path"`
-	Language     string `json:"language"`
+	Name         string      `json:"name"`
+	Password     string      `json:"password"`
+	SignalingURL string      `json:"signaling_url"`
+	ServerHost   string      `json:"server_host"`
+	ServerPort   int         `json:"server_port"`
+	ICEServers   []ICEServer `json:"ice_servers,omitempty"`
+	AutoStart    bool        `json:"auto_start"`
+	BinPath      string      `json:"bin_path"`
+	Language     string      `json:"language"`
 }
 
 var (

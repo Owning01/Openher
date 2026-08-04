@@ -11,9 +11,10 @@ type Props = {
   directory?: string
   onApplyDiff?: (file: string) => void
   onRejectDiff?: (file: string) => void
+  onEditFile?: (file: string) => void
 }
 
-export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, directory, onApplyDiff, onRejectDiff }: Props) {
+export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, directory, onApplyDiff, onRejectDiff, onEditFile }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [contents, setContents] = useState<Record<string, DiffContent>>({})
   const [loading, setLoading] = useState<string | null>(null)
@@ -83,6 +84,9 @@ export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, d
                       )}
                       {onRejectDiff && (
                         <button className="btn-secondary compact" onClick={() => onRejectDiff(f.file)}>✗ Reject</button>
+                      )}
+                      {onEditFile && (
+                        <button className="btn-secondary compact" onClick={() => onEditFile(f.file)}>✎ Edit</button>
                       )}
                     </div>
                   )}

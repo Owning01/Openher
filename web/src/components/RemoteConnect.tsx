@@ -13,6 +13,13 @@ type RemoteConnectProps = {
   onClose: () => void
 }
 
+function parseICEServers(raw: string): RTCIceServer[] {
+  return raw.split(/[\n,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => ({ urls: s }))
+}
+
 export function RemoteConnect({ status, error, savedConfig, onConnect, onDisconnect, onClose }: RemoteConnectProps) {
   const t = useT()
   const [name, setName] = useState(savedConfig.name || "")
@@ -20,10 +27,18 @@ export function RemoteConnect({ status, error, savedConfig, onConnect, onDisconn
   const [showPassword, setShowPassword] = useState(false)
   const [signalingURL, setSignalingURL] = useState(savedConfig.signalingURL || DEFAULT_SIGNALING_URL)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [iceServersRaw, setIceServersRaw] = useState(
+    (savedConfig.iceServers ?? []).map((s) => (Array.isArray(s.urls) ? s.urls.join(", ") : s.urls)).join("\n")
+  )
 
   const handleConnect = () => {
     if (!name.trim() || !password.trim()) return
-    onConnect({ name: name.trim(), password: password.trim(), signalingURL: signalingURL.trim() || DEFAULT_SIGNALING_URL })
+    onConnect({
+      name: name.trim(),
+      password: password.trim(),
+      signalingURL: signalingURL.trim() || DEFAULT_SIGNALING_URL,
+      iceServers: parseICEServers(iceServersRaw),
+    })
   }
 
   const isConnected = status === "connected"
@@ -89,15 +104,26 @@ export function RemoteConnect({ status, error, savedConfig, onConnect, onDisconn
           </button>
 
           {showAdvanced && (
-            <label className="field-label">
-              <span>{t('tunnel.signalingURL')}</span>
-              <input
-                type="text"
-                value={signalingURL}
-                onChange={(e) => setSignalingURL(e.target.value)}
-                placeholder={DEFAULT_SIGNALING_URL}
-              />
-            </label>
+            <>
+              <label className="field-label">
+                <span>{t('tunnel.signalingURL')}</span>
+                <input
+                  type="text"
+                  value={signalingURL}
+                  onChange={(e) => setSignalingURL(e.target.value)}
+                  placeholder={DEFAULT_SIGNALING_URL}
+                />
+              </label>
+              <label className="field-label">
+                <span>TURN / STUN servers (opcional, uno por línea)</span>
+                <textarea
+                  value={iceServersRaw}
+                  onChange={(e) => setIceServersRaw(e.target.value)}
+                  placeholder="stun:stun.l.google.com:19302&#10;turn:turn.example.com:3478?transport=udp"
+                  rows={3}
+                />
+              </label>
+            </>
           )}
 
           <p className="remote-connect-hint">{t('tunnel.qrHint')}</p>

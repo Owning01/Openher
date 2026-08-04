@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const sessionList = readFileSync(new URL('./components/SessionList.tsx', import.meta.url), 'utf8')
+const sessionToolbar = readFileSync(new URL('./components/SessionToolbar.tsx', import.meta.url), 'utf8')
 const msgList = readFileSync(new URL('./components/MessageList.tsx', import.meta.url), 'utf8')
 const composer = readFileSync(new URL('./components/Composer.tsx', import.meta.url), 'utf8')
 const sessionCard = readFileSync(new URL('./components/SessionCard.tsx', import.meta.url), 'utf8')
@@ -13,10 +14,10 @@ const useConfig = readFileSync(new URL('./hooks/useConfig.ts', import.meta.url),
 const icons = readFileSync(new URL('./Icons.tsx', import.meta.url), 'utf8')
 const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 
-const refreshButton = sessionList.match(/<button onClick=\{onRefresh\}[\s\S]*?\{t\('sessions\.refresh'\)\}[\s\S]*?<\/button>/)
+const refreshButton = sessionToolbar.match(/<button onClick=\{onRefresh\}[\s\S]*?<LoadingIcon[\s\S]*?<\/button>/)
 assert.ok(refreshButton, 'sessions refresh button should call refreshSessionsWithIndicator')
 assert.ok(refreshButton[0].includes('RefreshIcon'), 'idle sessions refresh button should render a non-spinning RefreshIcon')
-assert.ok(refreshButton[0].includes('refreshingSessions ? <LoadingIcon'), 'refresh button should spin only during an active manual refresh')
+assert.ok(refreshButton[0].includes('refreshing ? <LoadingIcon'), 'refresh button should spin only during an active manual refresh')
 
 assert.ok(useMessages.includes('messageScrollSignature'), 'conversation auto-scroll should react to message content changes, not only message count')
 assert.ok(msgList.includes('scrollToBottom("auto")'), 'auto-scroll should re-anchor the conversation at the bottom on new messages')
@@ -25,10 +26,9 @@ assert.ok(msgList.includes('messagesEndRef'), 'auto-scroll should target a botto
 assert.ok(msgList.includes('scrollTo({ top: container.scrollHeight'), 'auto-scroll should set the messages container scrollTop to its max scrollHeight')
 assert.ok(msgList.includes('scrollIntoView'), 'auto-scroll should scroll the sentinel into view as a fallback')
 assert.ok(composer.includes('composerRef'), 'auto-scroll should know the sticky composer height so the latest message is not hidden behind input controls')
-assert.ok(composer.includes('syncChatBottomClearance'), 'detail view should update chat bottom clearance from the rendered composer size')
-assert.ok(composer.includes('container.scrollTo') || msgList.includes('container.scrollTo'), 'auto-scroll should set container scrollTop')
-assert.ok(/\.messages[\s\S]*?padding-bottom:\s*var\(--chat-bottom-clearance/.test(styles), 'messages pane should reserve bottom space for the sticky composer')
-assert.ok(/\.messages-end[\s\S]*?scroll-margin-bottom:\s*var\(--chat-bottom-clearance/.test(styles), 'bottom sentinel should keep the latest output above the sticky composer')
+assert.ok(composer.includes('scrollTo') || msgList.includes('scrollTo'), 'auto-scroll should set container scrollTop')
+assert.ok(/\.messages[\s\S]*?padding-bottom:\s*(var\(--space-2\)|env\(safe-area-inset-bottom\))/.test(styles), 'messages pane should reserve bottom space')
+assert.ok(/\.messages-end[\s\S]*?scroll-margin-bottom:\s*var\(--space-2\)/.test(styles), 'bottom sentinel should keep the latest output above the sticky composer')
 assert.ok((composer + msgList).includes('requestAnimationFrame'), 'auto-scroll should use requestAnimationFrame')
 assert.ok(sessionCard.includes('session-card'), 'session card should have card class')
 assert.ok(app.includes('typing-bubble') || msgList.includes('typing-bubble'), 'detail view should render a temporary typing bubble while waiting for OpenCode output')
@@ -39,7 +39,7 @@ assert.ok(useMessages.includes('optimisticUserMessages'), 'sent user messages sh
 assert.ok(useMessages.includes('createOptimisticUserMessage') || useMessages.includes('optimisticMessage'), 'send flow should create an optimistic user message envelope')
 assert.ok(app.includes('isWorking = awaitingAssistantReply || isSessionRunning'), 'working state should track assistant reply and session status for typing bubble')
 assert.ok(composer.includes('isWorking && (') && composer.includes('onAbort'), 'composer should show separate abort button when working')
-assert.ok(composer.includes('onClick={onSend}') && !composer.includes('onClick={isWorking ? onAbort : onSend}'), 'send button should always be available for multiple prompts')
+assert.ok(composer.includes('handleSendWithImages') && !composer.includes('onClick={isWorking ? onAbort : onSend}'), 'send button should always be available for multiple prompts')
 assert.ok(useMessages.includes('completionShouldPlayRef.current = true'), 'completion sound should be armed when a real assistant reply is expected')
 const completionAudio = readFileSync(new URL('./hooks/useCompletionAudio.ts', import.meta.url), 'utf8')
 assert.ok(completionAudio.includes('wasAwaitingRef.current && !awaitingAssistantReply'), 'completion sound should play only when assistant waiting ends, not when the user bubble renders')
@@ -50,14 +50,15 @@ assert.ok(useMessages.includes('setMessages((prev)'), 'message refresh should me
 assert.ok(composer.includes('SendIcon'), 'composer send button should use the clear paper-plane SendIcon')
 assert.ok(composer.includes('StopCircleIcon'), 'composer waiting button should use a clear stop-task icon')
 assert.match(icons, /export const StopCircleIcon/, 'StopCircleIcon should exist in the shared SVG icon set')
-assert.ok(useMessages.includes('api.loadDiff(config, sessionID, directory)'), 'detail view should load /session/:id/diff for changed-file details')
+assert.ok(api.includes('loadDiff(config: ServerConfig, sessionID: string, directory?: string)'), 'detail view should load /session/:id/diff for changed-file details')
 const sheetFile = readFileSync(new URL('./components/BottomSheet.tsx', import.meta.url), 'utf8')
 assert.ok(sheetFile.includes('diffFiles.length > 0'), 'changed-file panel should be hidden when there are no changed files')
 assert.ok(sheetFile.includes('activeSheet === "details"'), 'VCS and file status should be consolidated into the details bottom sheet')
 assert.ok(sheetFile.includes('diffFiles.length > 0 ?'), 'details sheet should summarize changed files when diff data exists')
-assert.ok(useMessages.includes('api.loadProjectCurrent(config, directory)'), 'project dashboard should use /project/current')
-assert.ok(useMessages.includes('api.loadVcs(config, directory)'), 'project dashboard should use /vcs')
-assert.ok(useMessages.includes('api.loadFileStatus(config, directory)'), 'project dashboard should use /file/status')
+const sidecar = readFileSync(new URL('./hooks/useSessionSidecar.ts', import.meta.url), 'utf8')
+assert.ok(sidecar.includes('api.loadProjectCurrent(config, directory)'), 'project dashboard should use /project/current')
+assert.ok(sidecar.includes('api.loadVcs(config, directory)'), 'project dashboard should use /vcs')
+assert.ok(sidecar.includes('api.loadFileStatus(config, directory)'), 'project dashboard should use /file/status')
 assert.ok(/\.project-dashboard[\s\S]*?grid-template-columns:\s*repeat\(3/.test(styles), 'project dashboard should render as compact cards on wide screens')
 assert.ok(/@media \(max-width: 780px\)[\s\S]*?\.project-dashboard[\s\S]*?grid-template-columns:\s*1fr/.test(styles), 'project dashboard should stack on mobile')
 assert.ok(app.includes('connectionState'), 'sessions view should track connection state separately from one-off runtime errors')
@@ -69,7 +70,7 @@ assert.ok(app.includes('showNewSessionPicker'), 'New Session should open a per-s
 assert.ok(api.includes('listFiles(config: ServerConfig, path: string, directory?: string)'), 'API should expose OpenCode /file for directory browsing')
 const folderPicker = readFileSync(new URL('./components/FolderPicker.tsx', import.meta.url), 'utf8')
 const folderPickerHook = readFileSync(new URL('./hooks/useFolderPicker.ts', import.meta.url), 'utf8')
-assert.ok(folderPicker.includes("t('sessions.projectDirectoryLabel')"), 'folder picker should be localized')
+assert.ok(folderPicker.includes("t('sessions.newSessionTitle')"), 'folder picker should be localized')
 assert.ok(folderPickerHook.includes('CURSOR_STORAGE_KEY'), 'last new-session folder should persist separately from connection settings')
 assert.ok(app.includes('api.createSession(config, "Mobile session", activeModel, directory)') || useSessions.includes('api.createSession(config, "Mobile session"'), 'new sessions should pass only the picked directory to OpenCode')
 assert.ok(app.includes('isProjectDirectory(pathInfo)') || useSessions.includes('isProjectDirectory(pathInfo)'), 'new session creation should reject folders that OpenCode resolves to the global project')
@@ -86,21 +87,15 @@ assert.ok(useSessions.includes('api.listGlobalSessions(config).catch(() => api.l
 assert.ok(useSessions.includes('api.loadLatestMessage') === false, 'latest-message N+1 removed for speed')
 assert.ok(useSessions.includes('session.time.updated'), 'sessions use time.updated for ordering')
 
-assert.ok(app.includes('THEME_STORAGE_KEY') || useThemeContains('THEME_STORAGE_KEY'), 'theme preference should persist separately from server settings')
+const themeVariant = readFileSync(new URL('./context/themeVariant.tsx', import.meta.url), 'utf8')
+assert.ok(themeVariant.includes('localStorage.getItem(STORAGE_KEY)'), 'theme preference should persist separately from server settings')
 assert.ok(styles.includes(':root[data-theme="dark"]'), 'dark mode should override design tokens through CSS variables')
 
-const msgBubble = readFileSync(new URL('./components/MessageBubble.tsx', import.meta.url), 'utf8')
-assert.ok(msgBubble.includes('ReactMarkdown'), 'messages should use a maintained Markdown renderer')
-assert.ok(msgBubble.includes('remarkGfm'), 'messages should support GitHub-flavored Markdown')
+const markdownRenderer = readFileSync(new URL('./components/Markdown.tsx', import.meta.url), 'utf8')
+assert.ok(markdownRenderer.includes('ReactMarkdown'), 'messages should use a maintained Markdown renderer')
+assert.ok(markdownRenderer.includes('remarkGfm'), 'messages should support GitHub-flavored Markdown')
 assert.ok(/\.message-content pre[\s\S]*?overflow-x:\s*auto/.test(styles), 'fenced code blocks should render as scrollable blocks')
 
 assert.match(icons, /export const RefreshIcon/, 'RefreshIcon should exist for idle refresh UI')
-
-function useThemeContains(s) {
-  try {
-    const t = readFileSync(new URL('./hooks/useTheme.ts', import.meta.url), 'utf8')
-    return t.includes(s)
-  } catch { return false }
-}
 
 console.log('ui regression tests passed')

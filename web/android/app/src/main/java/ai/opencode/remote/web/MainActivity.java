@@ -1,5 +1,19 @@
 package ai.opencode.remote.web;
 
-import com.getcapacitor.BridgeActivity;
+import android.content.Intent;
 
-public class MainActivity extends BridgeActivity {}
+import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.PluginHandle;
+
+public class MainActivity extends BridgeActivity {
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // Pasar el share entrante (ACTION_SEND) al plugin ShareReceiver
+        PluginHandle handle = getBridge().getPlugin("ShareReceiver");
+        if (handle != null && handle.getInstance() instanceof ShareReceiverPlugin) {
+            ((ShareReceiverPlugin) handle.getInstance()).onNewIntent(intent);
+        }
+    }
+}

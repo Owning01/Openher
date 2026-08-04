@@ -372,6 +372,18 @@ export type TunnelConfig = {
   name: string
   password: string
   signalingURL: string
+  iceServers?: RTCIceServer[]
+}
+
+export type DeepLinkAction = {
+  kind: "server" | "tunnel" | "session"
+  host?: string
+  port?: number
+  username?: string
+  tunnelName?: string
+  tunnelID?: string
+  sessionID?: string
+  directory?: string
 }
 
 export const DEFAULT_SIGNALING_URL = "wss://opencode-tunnel-signaling.owning01.workers.dev/signal"
