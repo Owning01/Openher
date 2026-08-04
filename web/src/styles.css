@@ -1424,6 +1424,35 @@ p {
   margin: 0;
 }
 
+.quick-access-label.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  width: fit-content;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.quick-access-label.toggle:hover {
+  color: var(--text);
+}
+
+.quick-access-chevron {
+  transition: transform 0.2s;
+}
+
+.quick-access-label.toggle.collapsed .quick-access-chevron {
+  transform: rotate(-90deg);
+}
+
 .quick-access-list {
   display: flex;
   flex-direction: column;

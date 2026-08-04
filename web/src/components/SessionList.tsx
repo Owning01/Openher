@@ -1,5 +1,5 @@
 import { memo, useRef, useLayoutEffect, useState, useCallback } from "react"
-import { LoadingIcon, FolderIcon, ChatIcon, StarIcon, CloseIcon, PlusIcon } from "../Icons"
+import { LoadingIcon, FolderIcon, ChatIcon, StarIcon, CloseIcon, PlusIcon, ChevronIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
@@ -68,6 +68,23 @@ export const SessionList = memo(function SessionList({
   const [listMode, setListMode] = useState<"sessions" | "projects">("sessions")
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
+
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("opencode.collapsedSections") || "{}")
+    } catch {
+      return {}
+    }
+  })
+  const toggleSection = useCallback((key: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      try {
+        localStorage.setItem("opencode.collapsedSections", JSON.stringify(next))
+      } catch { /* ignore */ }
+      return next
+    })
+  }, [])
 
   const toggleProject = useCallback((dir: string) => {
     setExpandedProject((prev) => prev === dir ? null : dir)
@@ -163,15 +180,48 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
             if (favoriteSessions.length === 0) return null
             return (
               <div className="quick-access-section">
-                <h4 className="quick-access-label"><StarIcon size={12} /> Favoritos</h4>
-                <div className="quick-access-list">
-                  {favoriteSessions.slice(0, 5).map((session) => (
+                <button type="button" className={`quick-access-label toggle${collapsedSections.favorites ? " collapsed" : ""}`}
+                  onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites} aria-controls="quick-favorites">
+                  <StarIcon size={12} /> Favoritos
+                  <ChevronIcon size={12} className="quick-access-chevron" />
+                </button>
+                {!collapsedSections.favorites && (
+                  <div className="quick-access-list" id="quick-favorites">
+                    {favoriteSessions.slice(0, 5).map((session) => (
+                      <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+                        <button className="quick-access-star"
+                          onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
+                          aria-pressed={favorites.has(session.id)}
+                          title="Remove favorite">
+                          <StarIcon size={12} className="star-filled" />
+                        </button>
+                        <ChatIcon size={14} />
+                        <span className="quick-access-title">{session.title}</span>
+                        <span className="quick-access-time">{formatTime(session.updated)}</span>
+                        <span className={`pill ${session.status}`}>{session.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+          {activeSessions.length > 0 && (
+            <div className="quick-access-section">
+              <button type="button" className={`quick-access-label toggle${collapsedSections.active ? " collapsed" : ""}`}
+                onClick={() => toggleSection("active")} aria-expanded={!collapsedSections.active} aria-controls="quick-active">
+                {t('sessions.activeLabel')}
+                <ChevronIcon size={12} className="quick-access-chevron" />
+              </button>
+              {!collapsedSections.active && (
+                <div className="quick-access-list" id="quick-active">
+                  {activeSessions.map((session) => (
                     <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
                       <button className="quick-access-star"
                         onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
                         aria-pressed={favorites.has(session.id)}
-                        title="Remove favorite">
-                        <StarIcon size={12} className="star-filled" />
+                        title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
+                        <StarIcon size={12} className={favorites.has(session.id) ? "star-filled" : "star-empty"} />
                       </button>
                       <ChatIcon size={14} />
                       <span className="quick-access-title">{session.title}</span>
@@ -180,34 +230,18 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                     </div>
                   ))}
                 </div>
-              </div>
-            )
-          })()}
-          {activeSessions.length > 0 && (
-            <div className="quick-access-section">
-              <h4 className="quick-access-label">{t('sessions.activeLabel')}</h4>
-              <div className="quick-access-list">
-                {activeSessions.map((session) => (
-                  <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
-                    <button className="quick-access-star"
-                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
-                      aria-pressed={favorites.has(session.id)}
-                      title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
-                      <StarIcon size={12} className={favorites.has(session.id) ? "star-filled" : "star-empty"} />
-                    </button>
-                    <ChatIcon size={14} />
-                    <span className="quick-access-title">{session.title}</span>
-                    <span className="quick-access-time">{formatTime(session.updated)}</span>
-                    <span className={`pill ${session.status}`}>{session.status}</span>
-                  </div>
-                ))}
-              </div>
+              )}
             </div>
           )}
           {recentSessions.length > 0 && (
             <div className="quick-access-section">
-              <h4 className="quick-access-label">{t('sessions.recentLabel')}</h4>
-              <div className="quick-access-list">
+              <button type="button" className={`quick-access-label toggle${collapsedSections.recent ? " collapsed" : ""}`}
+                onClick={() => toggleSection("recent")} aria-expanded={!collapsedSections.recent} aria-controls="quick-recent">
+                {t('sessions.recentLabel')}
+                <ChevronIcon size={12} className="quick-access-chevron" />
+              </button>
+              {!collapsedSections.recent && (
+                <div className="quick-access-list" id="quick-recent">
                 {recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)).slice(0, 5).map((session) => (
                   <div key={session.id} className={`quick-access-card ${confirmingDismissId === session.id ? "confirming-dismiss" : ""}`} onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
                     {confirmingDismissId === session.id ? (
@@ -236,9 +270,10 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                       </>
                     )}
                   </div>
-                ))}
+                    ))}
+                </div>
+                )}
               </div>
-            </div>
           )}
         </div>
       )}
