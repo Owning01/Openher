@@ -40,3 +40,4 @@ web/android/build-log.txt
 web/dist-stale/
 
 tunnel/tunnel.exe
+"web/scripts/copy-dist.py"  
