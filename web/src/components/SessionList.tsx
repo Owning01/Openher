@@ -70,20 +70,23 @@ export const SessionList = memo(function SessionList({
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    // Normaliza el estado guardado: exactamente un panel abierto (recientes
+    // por defecto), el resto cerrado. Ignora estados viejos/corruptos.
     try {
-      return JSON.parse(localStorage.getItem("opencode.collapsedSections") || "{}")
+      const raw = JSON.parse(localStorage.getItem("opencode.collapsedSections") || "{}") as Record<string, boolean>
+      const all = { favorites: true, active: true, recent: true, ...raw }
+      const openCount = Object.values(all).filter((v) => !v).length
+      if (openCount > 1) return { favorites: true, active: true, recent: false }
+      return all
     } catch {
-      return {}
+      return { favorites: true, active: true, recent: false }
     }
   })
   const toggleSection = useCallback((key: string) => {
     setCollapsedSections((prev) => {
-      // Accordion: solo un panel abierto a la vez.
-      const opening = !prev[key]
-      const next: Record<string, boolean> = {}
-      for (const k of ["favorites", "active", "recent"] as const) {
-        next[k] = k === key ? !opening : opening
-      }
+      // Accordion: toggle del tocado; el resto siempre queda cerrado.
+      const next: Record<string, boolean> = { favorites: true, active: true, recent: true }
+      next[key] = !prev[key]
       try {
         localStorage.setItem("opencode.collapsedSections", JSON.stringify(next))
       } catch { /* ignore */ }
@@ -185,27 +188,27 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
               <button type="button" className={`quick-access-tab${!collapsedSections.favorites ? " open" : ""}`}
                 onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites}
                 aria-controls="quick-favorites" role="tab">
-                <StarIcon size={12} /> Favoritos
+                Favoritos
                 <span className="quick-access-count">{sessions.filter((s) => favorites.has(s.id)).length}</span>
-                <ChevronIcon size={12} className="quick-access-chevron" />
+                <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}
             {activeSessions.length > 0 && (
               <button type="button" className={`quick-access-tab${!collapsedSections.active ? " open" : ""}`}
                 onClick={() => toggleSection("active")} aria-expanded={!collapsedSections.active}
                 aria-controls="quick-active" role="tab">
-                <ChatIcon size={12} /> {t('sessions.activeLabel')}
+                {t('sessions.activeLabel')}
                 <span className="quick-access-count">{activeSessions.length}</span>
-                <ChevronIcon size={12} className="quick-access-chevron" />
+                <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}
             {recentSessions.length > 0 && (
               <button type="button" className={`quick-access-tab${!collapsedSections.recent ? " open" : ""}`}
                 onClick={() => toggleSection("recent")} aria-expanded={!collapsedSections.recent}
                 aria-controls="quick-recent" role="tab">
-                <ChatIcon size={12} /> {t('sessions.recentLabel')}
+                {t('sessions.recentLabel')}
                 <span className="quick-access-count">{recentSessions.length}</span>
-                <ChevronIcon size={12} className="quick-access-chevron" />
+                <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}
           </div>

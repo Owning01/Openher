@@ -1549,25 +1549,28 @@ p {
   overflow: hidden;
   background: var(--surface-subtle);
   margin-bottom: var(--space-2);
-  width: fit-content;
-  max-width: 100%;
+  width: 100%;
 }
 
 .quick-access-tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-  padding: 0.45rem 0.8rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.5rem;
   border: none;
   background: transparent;
   color: var(--muted-strong);
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   white-space: nowrap;
+  overflow: hidden;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.15s, color 0.15s;
 }
