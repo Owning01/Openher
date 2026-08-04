@@ -41,3 +41,4 @@ web/dist-stale/
 
 tunnel/tunnel.exe
 "web/scripts/copy-dist.py"  
+".playwright-mcp/"  
