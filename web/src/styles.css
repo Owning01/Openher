@@ -1543,37 +1543,45 @@ p {
 /* ===== Quick Access ===== */
 .quick-access-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-subtle);
   margin-bottom: var(--space-2);
+  width: fit-content;
+  max-width: 100%;
 }
 
 .quick-access-tab {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0.4rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-subtle);
-  color: var(--text);
+  padding: 0.45rem 0.8rem;
+  border: none;
+  background: transparent;
+  color: var(--muted-strong);
   cursor: pointer;
   font-family: inherit;
   font-size: 0.78rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 0.15s, background 0.15s;
+  transition: background 0.15s, color 0.15s;
+}
+
+.quick-access-tab + .quick-access-tab {
+  border-left: 1px solid var(--border);
 }
 
 .quick-access-tab:hover {
-  border-color: var(--primary);
   background: var(--surface);
+  color: var(--text);
 }
 
 .quick-access-tab.open {
-  border-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary);
 }
