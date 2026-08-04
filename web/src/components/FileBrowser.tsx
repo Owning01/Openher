@@ -34,7 +34,7 @@ export const FileBrowser = memo(function FileBrowser({
           <div className="empty-state compact"><LoadingIcon size={28} /><p>{t('sessions.folderPickerLoading')}</p></div>
         ) : (
           <>
-            {currentPath && currentPath !== "/" && (
+            {currentPath && (
               <button type="button" className="folder-row" onClick={onGoUp}>
                 <FolderIcon size={16} />
                 <span>..</span>
@@ -42,18 +42,11 @@ export const FileBrowser = memo(function FileBrowser({
             )}
             {error ? (
               <p className="subtle" style={{ color: "var(--color-error)" }}>{error}</p>
-            ) : items.length === 0 && currentPath === "/" ? (
-              ["C:", "D:", "E:", "F:", "G:"].map((drive) => (
-                <button key={drive} type="button" className="folder-row" onClick={() => onNavigate(drive + "/")}>
-                  <FolderIcon size={16} />
-                  <span>{drive}/</span>
-                </button>
-              ))
             ) : items.length === 0 ? (
               <p className="subtle">{t('sessions.folderPickerEmpty')}</p>
             ) : items.map((item) => (
               <button key={item.absolute} type="button" className="folder-row"
-                onClick={() => item.type === "directory" ? onNavigate(item.absolute) : undefined}
+                onClick={() => item.type === "directory" ? onNavigate(item.name) : undefined}
                 title={item.type === "file" ? item.absolute : undefined}>
                 {item.type === "directory" ? (
                   <FolderIcon size={16} />

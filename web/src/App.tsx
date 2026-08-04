@@ -1110,7 +1110,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onRedo={handleRedo}
             onCompact={handleCompact}
             onForkSession={() => selectedSession && handleCreateSession(selectedSession.directory)}
-            onOpenFileBrowser={() => selectedSession && fb.open(selectedSession.directory)}
+            onOpenFileBrowser={() => selectedSession && fb.open()}
             fileBrowserPath={fb.currentPath}
             onOpenTerminal={() => setShowTerminal(true)}
             onOpenMCPBrowser={() => setShowMCPBrowser(true)}

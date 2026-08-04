@@ -6,6 +6,9 @@ import { useLocalStorage } from "./useLocalStorage"
 
 const CURSOR_STORAGE_KEY = STORAGE_KEYS.CURSOR
 
+// El server 1.18.12 lista SOLO rutas relativas al project directory ("" = raíz).
+// El FolderPicker navega relativo; la creación de sesión usa la ruta absoluta
+// que devuelve el server en cada entry (item.absolute).
 export function useFolderPicker(config: ServerConfig) {
   const [newSessionDirectory, setNewSessionDirectory] = useLocalStorage<string>(CURSOR_STORAGE_KEY, "")
   const [showNewSessionPicker, setShowNewSessionPicker] = useState(false)
@@ -19,10 +22,9 @@ export function useFolderPicker(config: ServerConfig) {
   const browseNewSessionDirectory = useCallback(async (path: string) => {
     setPickerLoading(true)
     setPickerError(null)
-    const normalizedPath = /^[A-Za-z]:$/.test(path) ? path + "/" : path
-    setPickerPath(normalizedPath)
+    setPickerPath(path)
     try {
-      const items = await api.listFiles(config, normalizedPath)
+      const items = await api.listFiles(config, path)
       setPickerItems(items.filter((item) => item.type === "directory").sort((a, b) => a.name.localeCompare(b.name)))
     } catch (err) {
       setPickerError((err as Error).message)
@@ -35,28 +37,16 @@ export function useFolderPicker(config: ServerConfig) {
   const openNewSessionPicker = useCallback(async () => {
     setShowNewSessionPicker(true)
     setPickerError(null)
-    const tryBrowse = async (dir: string): Promise<boolean> => {
-      try {
-        const items = await api.listFiles(config, dir)
-        setPickerPath(dir)
-        setPickerItems(items.filter((item) => item.type === "directory").sort((a, b) => a.name.localeCompare(b.name)))
-        setPickerError(null)
-        return true
-      } catch { return false }
-    }
-    const dir = normalizedDirectory
-      ? normalizedDirectory
-      : await api.loadPath(config).then((p) => p.directory).catch(() => undefined)
-    const effectiveDir = dir && /^[A-Za-z]:$/.test(dir) ? dir + "/" : dir
-    if (effectiveDir) {
-      if (await tryBrowse(effectiveDir)) return
-    }
-    if (!(await tryBrowse("/"))) {
+    try {
+      const items = await api.listFiles(config, "")
+      setPickerPath("")
+      setPickerItems(items.filter((item) => item.type === "directory").sort((a, b) => a.name.localeCompare(b.name)))
+    } catch (err) {
       setPickerItems([])
       setPickerPath("")
       setPickerError("Could not load directory listing from server")
     }
-  }, [config, normalizedDirectory])
+  }, [config])
 
   const persistDirectory = useCallback((dir: string) => {
     setNewSessionDirectory(dir)

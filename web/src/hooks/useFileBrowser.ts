@@ -2,6 +2,8 @@ import { useState, useCallback } from "react"
 import type { ServerConfig, FileEntry } from "../types"
 import { api } from "../api"
 
+// Navega el project directory con rutas RELATIVAS al server ("" = raíz).
+// El server 1.18.12 rechaza rutas absolutas en /file (RelativePath.make).
 export function useFileBrowser(config: ServerConfig, directory?: string) {
   const [isOpen, setIsOpen] = useState(false)
   const [currentPath, setCurrentPath] = useState("")
@@ -12,10 +14,9 @@ export function useFileBrowser(config: ServerConfig, directory?: string) {
   const browseDir = useCallback(async (path: string) => {
     setLoading(true)
     setError(null)
-    const normalizedPath = /^[A-Za-z]:$/.test(path) ? path + "/" : path
     try {
-      const result = await api.listFiles(config, normalizedPath, directory)
-      setCurrentPath(normalizedPath)
+      const result = await api.listFiles(config, path, directory)
+      setCurrentPath(path)
       setItems(result.sort((a, b) => {
         if (a.type !== b.type) return a.type === "directory" ? -1 : 1
         return a.name.localeCompare(b.name)
@@ -28,9 +29,9 @@ export function useFileBrowser(config: ServerConfig, directory?: string) {
     }
   }, [config, directory])
 
-  const open = useCallback(async (path: string) => {
+  const open = useCallback(async () => {
     setIsOpen(true)
-    await browseDir(path)
+    await browseDir("")
   }, [browseDir])
 
   const close = useCallback(() => {
@@ -39,9 +40,10 @@ export function useFileBrowser(config: ServerConfig, directory?: string) {
     setItems([])
   }, [])
 
-  const navigateTo = useCallback(async (path: string) => {
-    await browseDir(path)
-  }, [browseDir])
+  const navigateTo = useCallback(async (name: string) => {
+    const next = currentPath ? `${currentPath}/${name}` : name
+    await browseDir(next)
+  }, [currentPath, browseDir])
 
   const goUp = useCallback(() => {
     const parent = parentDir(currentPath)
@@ -52,13 +54,8 @@ export function useFileBrowser(config: ServerConfig, directory?: string) {
 }
 
 function parentDir(path: string): string | null {
-  if (!path || path === "/") return null
-  const normalized = path.replace(/[\\/]+$/, "").replace(/\\/g, "/")
+  if (!path) return null
+  const normalized = path.replace(/\/+$/, "")
   const index = normalized.lastIndexOf("/")
-  if (index < 0) {
-    if (/^[A-Za-z]:$/.test(normalized)) return "/"
-    return null
-  }
-  if (index === 0) return "/"
-  return normalized.slice(0, index)
+  return index <= 0 ? "" : normalized.slice(0, index)
 }

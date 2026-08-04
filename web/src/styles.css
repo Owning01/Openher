@@ -1093,6 +1093,10 @@ p {
   flex-direction: column;
   gap: 2px;
   margin-bottom: var(--space-2);
+  max-height: 30vh;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .fp-project-row {
@@ -1299,13 +1303,6 @@ p {
   margin: 0;
 }
 
-.sessions-summary-bar {
-  font-size: 0.76rem;
-  color: var(--muted);
-  margin-bottom: var(--space-3);
-  font-weight: 600;
-}
-
 .list-mode-toggle {
   display: flex;
   gap: var(--space-1);
@@ -1337,6 +1334,14 @@ p {
   border-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+.list-mode-pill .quick-access-chevron {
+  transition: transform 0.2s;
+}
+
+.list-mode-pill .quick-access-chevron.collapsed {
+  transform: rotate(-90deg);
 }
 
 /* ===== Home View Background ===== */
@@ -1642,11 +1647,6 @@ p {
   background: var(--primary-soft);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.quick-access-card.active {
-  border-color: var(--success);
-  background: var(--success-soft);
 }
 
 .quick-access-title {

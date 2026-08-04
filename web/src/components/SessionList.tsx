@@ -1,10 +1,11 @@
 import { memo, useRef, useLayoutEffect, useState, useCallback } from "react"
-import { LoadingIcon, FolderIcon, ChatIcon, StarIcon, CloseIcon, PlusIcon, ChevronIcon } from "../Icons"
+import { LoadingIcon, FolderIcon, ChatIcon, PlusIcon, ChevronIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
 import { SessionToolbar } from "./SessionToolbar"
-import { formatTime, isSessionActive, hasFileChanges } from "../utils"
+import { QuickAccessCard } from "./QuickAccessCard"
+import { isSessionActive, hasFileChanges } from "../utils"
 import type { SessionView, ConnectionState, DataMode } from "../types"
 
 type SessionListProps = {
@@ -65,7 +66,7 @@ export const SessionList = memo(function SessionList({
   const containerRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
-  const [listMode, setListMode] = useState<"sessions" | "projects">("sessions")
+  const [listOpen, setListOpen] = useState(true)
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
 
@@ -176,9 +177,6 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
         <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRef} />
       </div>
-      <div className="sessions-summary-bar">
-        {t('sessions.summary', { total: sessions.length, active: activeSessions.length, changed: sessions.filter((s) => hasFileChanges(s)).length })}
-      </div>
       {notices}
 
       {!selectedProjectDir && !query.trim() && (favorites.size > 0 || activeSessions.length > 0 || recentSessions.length > 0) && (
@@ -218,18 +216,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
             return (
               <div className="quick-access-list" id="quick-favorites" role="tabpanel">
                 {favoriteSessions.slice(0, 5).map((session) => (
-                  <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
-                    <button className="quick-access-star"
-                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
-                      aria-pressed={favorites.has(session.id)}
-                      title="Remove favorite">
-                      <StarIcon size={12} className="star-filled" />
-                    </button>
-                    <ChatIcon size={14} />
-                    <span className="quick-access-title">{session.title}</span>
-                    <span className="quick-access-time">{formatTime(session.updated)}</span>
-                    <span className={`pill ${session.status}`}>{session.status}</span>
-                  </div>
+                  <QuickAccessCard key={session.id} session={session} isFavorite
+                    onOpen={onOpen} onToggleFavorite={onToggleFavorite} />
                 ))}
               </div>
             )
@@ -237,26 +225,17 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
           {!collapsedSections.active && (
             <div className="quick-access-list" id="quick-active" role="tabpanel">
               {activeSessions.map((session) => (
-                <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
-                  <button className="quick-access-star"
-                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
-                    aria-pressed={favorites.has(session.id)}
-                    title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
-                    <StarIcon size={12} className={favorites.has(session.id) ? "star-filled" : "star-empty"} />
-                  </button>
-                  <ChatIcon size={14} />
-                  <span className="quick-access-title">{session.title}</span>
-                  <span className="quick-access-time">{formatTime(session.updated)}</span>
-                  <span className={`pill ${session.status}`}>{session.status}</span>
-                </div>
+                <QuickAccessCard key={session.id} session={session}
+                  isFavorite={favorites.has(session.id)}
+                  onOpen={onOpen} onToggleFavorite={onToggleFavorite} />
               ))}
             </div>
           )}
           {!collapsedSections.recent && (
             <div className="quick-access-list" id="quick-recent" role="tabpanel">
               {recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)).slice(0, 5).map((session) => (
-                <div key={session.id} className={`quick-access-card ${confirmingDismissId === session.id ? "confirming-dismiss" : ""}`} onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
-                  {confirmingDismissId === session.id ? (
+                confirmingDismissId === session.id ? (
+                  <div key={session.id} className="quick-access-card confirming-dismiss" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
                     <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
                       <span>¿Quitar de recientes?</span>
                       <div className="dismiss-confirm-actions">
@@ -264,24 +243,13 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                         <button className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null) }}>No</button>
                       </div>
                     </div>
-                  ) : (
-                    <>
-                      <button className="quick-access-star"
-                        onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
-                        aria-pressed={favorites.has(session.id)}
-                        title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
-                        <StarIcon size={12} className={favorites.has(session.id) ? "star-filled" : "star-empty"} />
-                      </button>
-                      <ChatIcon size={14} />
-                      <span className="quick-access-title">{session.title}</span>
-                      <span className="quick-access-time">{formatTime(session.updated)}</span>
-                      <button className="quick-access-dismiss" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(session.id) }}
-                        title="Quitar de recientes">
-                        <CloseIcon size={12} />
-                      </button>
-                    </>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <QuickAccessCard key={session.id} session={session}
+                    isFavorite={favorites.has(session.id)}
+                    onOpen={onOpen} onToggleFavorite={onToggleFavorite}
+                    onDismiss={(id) => setConfirmingDismissId(id)} />
+                )
               ))}
             </div>
           )}
@@ -291,18 +259,15 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
       <div className="section-divider" />
 
       <div className="list-mode-toggle">
-        <button type="button" className={`list-mode-pill${listMode === "sessions" ? " active" : ""}`}
-          onClick={() => setListMode("sessions")} aria-pressed={listMode === "sessions"}>
+        <button type="button" className={`list-mode-pill${listOpen ? " active" : ""}`}
+          onClick={() => setListOpen((v) => !v)} aria-pressed={listOpen}>
           <ChatIcon size={14} />
           Sesiones
-        </button>
-        <button type="button" className={`list-mode-pill${listMode === "projects" ? " active" : ""}`}
-          onClick={() => setListMode("projects")} aria-pressed={listMode === "projects"}>
-          <FolderIcon size={14} />
-          Proyectos
+          <ChevronIcon size={12} className={`quick-access-chevron${listOpen ? "" : " collapsed"}`} />
         </button>
       </div>
 
+      {listOpen && (
       <div className="session-list">
         {projects.length === 0 && ['connecting', 'reconnecting'].includes(connectionState) ? (
           <div className="empty-state connection-pending">
@@ -318,12 +283,12 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
           </div>
         ) : (
           projects.map(([dir, projectSessionsList]) => {
-            const isExpanded = expandedProject === dir || listMode === "projects"
+            const isExpanded = expandedProject === dir
             return (
               <div key={dir} className="project-card-wrap fade-in">
                 <article className={`project-card${isExpanded ? " expanded" : ""}`} role="button" tabIndex={0}
-                  onClick={() => { if (listMode !== "projects") toggleProject(dir) }}
-                  onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && listMode !== "projects") { e.preventDefault(); toggleProject(dir) } }}>
+                  onClick={() => toggleProject(dir)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProject(dir) } }}>
                   <div className="project-card-header">
                     <div className="project-title-group">
                       <div className="project-icon-wrapper">
@@ -333,7 +298,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                     </div>
                     <span className="project-count">
                       {projectSessionsList.length} {projectSessionsList.length === 1 ? 'session' : 'sessions'}
-                      {listMode !== "projects" && <span className="project-chevron">{isExpanded ? "▲" : "▼"}</span>}
+                      <span className="project-chevron">{isExpanded ? "▲" : "▼"}</span>
                     </span>
                   </div>
                   <div className="project-meta">
@@ -364,6 +329,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
           })
         )}
       </div>
+      )}
     </section>
   )
 })

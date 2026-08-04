@@ -121,7 +121,6 @@ type TranslationKey =
   | 'sessions.loadingHint'
   | 'sessions.offlineHint'
   | 'sessions.title'
-  | 'sessions.summary'
   | 'sessions.new'
   | 'sessions.creating'
   | 'sessions.refresh'
@@ -524,7 +523,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.themeLight': 'Light',
     'settings.themeDark': 'Dark',
     'sessions.title': 'Sessions',
-    'sessions.summary': '{total} total · {active} active · {changed} changed',
     'sessions.new': 'New Session',
     'sessions.creating': 'Creating...',
     'sessions.refresh': 'Refresh',
@@ -914,7 +912,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.themeLight': 'Claro',
     'settings.themeDark': 'Oscuro',
     'sessions.title': 'Sesiones',
-    'sessions.summary': '{total} totales · {active} activas · {changed} con cambios',
     'sessions.new': 'Nueva sesión',
     'sessions.creating': 'Creando...',
     'sessions.refresh': 'Actualizar',
@@ -1304,7 +1301,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.themeLight': 'Chiaro',
     'settings.themeDark': 'Scuro',
     'sessions.title': 'Sessioni',
-    'sessions.summary': '{total} totali · {active} attive · {changed} con modifiche',
     'sessions.new': 'Nuova sessione',
     'sessions.creating': 'Creazione...',
     'sessions.refresh': 'Aggiorna',
@@ -1658,7 +1654,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.themeLight': '淺色',
     'settings.themeDark': '深色',
     'sessions.title': '工作階段',
-    'sessions.summary': '{total} 總數 · {active} 進行中 · {changed} 有變更',
     'sessions.new': '新增工作階段',
     'sessions.creating': '建立中...',
     'sessions.refresh': '重新整理',

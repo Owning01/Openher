@@ -266,7 +266,10 @@ export const api = {
   },
 
   listFiles(config: ServerConfig, path: string, directory?: string) {
-    return request<FileEntry[]>(config, withDirectory(`/file?path=${encodeURIComponent(normalizeSlashes(path))}`, directory))
+    // El server 1.18.12 usa RelativePath.make: SOLO acepta rutas relativas al
+    // project directory ("" = raíz). Las absolutas de Windows fallan con 500.
+    const rel = path.replace(/\\/g, "/").replace(/^[A-Za-z]:\/?/, "").replace(/^\/+/, "")
+    return request<FileEntry[]>(config, withDirectory(`/file?path=${encodeURIComponent(rel)}`, directory))
   },
 
   listCommands(config: ServerConfig) {
@@ -413,8 +416,10 @@ export const api = {
   },
 
   findFiles(config: ServerConfig, query: string, directory?: string, limit = 20) {
-    return request<{ path: string; type: "file" | "directory" }[]>(config,
+    // El server devuelve string[] (paths relativos), no {path,type}[].
+    return request<string[]>(config,
       withDirectory(`/find/file?query=${encodeURIComponent(query)}&limit=${limit}`, directory))
+      .then((paths) => paths.map((p) => ({ path: p, type: "file" as const })))
   },
 
   listMCPResources(config: ServerConfig) {
