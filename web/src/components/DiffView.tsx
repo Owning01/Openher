@@ -1,4 +1,4 @@
-import { memo } from "react"
+import { memo, useLayoutEffect, useRef } from "react"
 
 export type DiffStat = { add: number; del: number }
 
@@ -33,22 +33,36 @@ export function synthesizeWritePatch(content: string): string {
   return `${header}\n${body}`
 }
 
-export const DiffView = memo(function DiffView({ patch }: { patch: string }) {
+export function diffLineClass(line: string): "diff-hunk" | "diff-add" | "diff-del" | "diff-ctx" {
+  if (line.startsWith("@@")) return "diff-hunk"
+  if (line.startsWith("+") && !line.startsWith("+++")) return "diff-add"
+  if (line.startsWith("-") && !line.startsWith("---")) return "diff-del"
+  return "diff-ctx"
+}
+
+export const DiffView = memo(function DiffView({ patch, autoScroll = false }: { patch: string; autoScroll?: boolean }) {
+  const containerRef = useRef<HTMLPreElement>(null)
+
+  // Al abrir un diff expandido, centra el primer cambio (la primera línea +/−
+  // en orden del archivo) dentro del contenedor scrollable, sin tocar el scroll del chat.
+  useLayoutEffect(() => {
+    if (!autoScroll) return
+    const container = containerRef.current
+    if (!container) return
+    const firstChange = container.querySelector<HTMLDivElement>(".diff-add, .diff-del")
+    if (!firstChange) return
+    container.scrollTop = Math.max(0, firstChange.offsetTop - container.clientHeight / 2)
+  }, [patch, autoScroll])
+
   if (!patch) return null
   const lines = patch.split("\n")
   return (
-    <pre className="diff-view" role="img" aria-label="Diff">
-      {lines.map((line, i) => {
-        let cls = "diff-ctx"
-        if (line.startsWith("@@")) cls = "diff-hunk"
-        else if (line.startsWith("+") && !line.startsWith("+++")) cls = "diff-add"
-        else if (line.startsWith("-") && !line.startsWith("---")) cls = "diff-del"
-        return (
-          <div key={i} className={cls}>
-            {line || "\u00A0"}
-          </div>
-        )
-      })}
+    <pre ref={containerRef} className="diff-view" role="img" aria-label="Diff">
+      {lines.map((line, i) => (
+        <div key={i} className={diffLineClass(line)}>
+          {line || "\u00A0"}
+        </div>
+      ))}
     </pre>
   )
 })

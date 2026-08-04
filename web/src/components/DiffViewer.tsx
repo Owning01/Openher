@@ -2,6 +2,7 @@ import { memo, useState, useCallback, useRef } from "react"
 import { useT } from "../i18n-context"
 import type { DiffFile, ServerConfig, DiffContent } from "../types"
 import { api } from "../api"
+import { DiffView } from "./DiffView"
 
 type Props = {
   files: DiffFile[]
@@ -70,7 +71,9 @@ export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, d
                 <div className="diff-loading">Loading diff...</div>
               ) : contents[f.file] ? (
                 <>
-                  <pre className="diff-content"><code>{contents[f.file].content}</code></pre>
+                  <div className="diff-file-content">
+                    <DiffView patch={contents[f.file].content} autoScroll />
+                  </div>
                   {(onApplyDiff || onRejectDiff) && (
                     <div className="diff-actions">
                       {onApplyDiff && (

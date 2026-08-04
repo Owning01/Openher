@@ -5320,22 +5320,6 @@ button.compact {
 }
 
 /* ===== Diff viewer content ===== */
-.diff-content {
-  margin: 0;
-  padding: 8px 12px;
-  background: var(--surface-subtle);
-  border-radius: 4px;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  max-height: 300px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--text);
-}
-.diff-content code {
-  font-family: inherit;
-}
 .diff-loading {
   padding: 12px;
   color: var(--muted);
