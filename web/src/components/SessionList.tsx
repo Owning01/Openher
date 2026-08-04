@@ -175,48 +175,89 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
 
       {!selectedProjectDir && !query.trim() && (favorites.size > 0 || activeSessions.length > 0 || recentSessions.length > 0) && (
         <div className="quick-access">
-          {favorites.size > 0 && (() => {
+          <div className="quick-access-tabs" role="tablist" aria-label="Acceso rápido">
+            {favorites.size > 0 && sessions.some((s) => favorites.has(s.id)) && (
+              <button type="button" className={`quick-access-tab${!collapsedSections.favorites ? " open" : ""}`}
+                onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites}
+                aria-controls="quick-favorites" role="tab">
+                <StarIcon size={12} /> Favoritos
+                <span className="quick-access-count">{sessions.filter((s) => favorites.has(s.id)).length}</span>
+                <ChevronIcon size={12} className="quick-access-chevron" />
+              </button>
+            )}
+            {activeSessions.length > 0 && (
+              <button type="button" className={`quick-access-tab${!collapsedSections.active ? " open" : ""}`}
+                onClick={() => toggleSection("active")} aria-expanded={!collapsedSections.active}
+                aria-controls="quick-active" role="tab">
+                <ChatIcon size={12} /> {t('sessions.activeLabel')}
+                <span className="quick-access-count">{activeSessions.length}</span>
+                <ChevronIcon size={12} className="quick-access-chevron" />
+              </button>
+            )}
+            {recentSessions.length > 0 && (
+              <button type="button" className={`quick-access-tab${!collapsedSections.recent ? " open" : ""}`}
+                onClick={() => toggleSection("recent")} aria-expanded={!collapsedSections.recent}
+                aria-controls="quick-recent" role="tab">
+                <ChatIcon size={12} /> {t('sessions.recentLabel')}
+                <span className="quick-access-count">{recentSessions.length}</span>
+                <ChevronIcon size={12} className="quick-access-chevron" />
+              </button>
+            )}
+          </div>
+          {favorites.size > 0 && !collapsedSections.favorites && (() => {
             const favoriteSessions = sessions.filter((s) => favorites.has(s.id))
             if (favoriteSessions.length === 0) return null
             return (
-              <div className="quick-access-section">
-                <button type="button" className={`quick-access-label toggle${collapsedSections.favorites ? " collapsed" : ""}`}
-                  onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites} aria-controls="quick-favorites">
-                  <StarIcon size={12} /> Favoritos
-                  <ChevronIcon size={12} className="quick-access-chevron" />
-                </button>
-                {!collapsedSections.favorites && (
-                  <div className="quick-access-list" id="quick-favorites">
-                    {favoriteSessions.slice(0, 5).map((session) => (
-                      <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
-                        <button className="quick-access-star"
-                          onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
-                          aria-pressed={favorites.has(session.id)}
-                          title="Remove favorite">
-                          <StarIcon size={12} className="star-filled" />
-                        </button>
-                        <ChatIcon size={14} />
-                        <span className="quick-access-title">{session.title}</span>
-                        <span className="quick-access-time">{formatTime(session.updated)}</span>
-                        <span className={`pill ${session.status}`}>{session.status}</span>
-                      </div>
-                    ))}
+              <div className="quick-access-list" id="quick-favorites" role="tabpanel">
+                {favoriteSessions.slice(0, 5).map((session) => (
+                  <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+                    <button className="quick-access-star"
+                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
+                      aria-pressed={favorites.has(session.id)}
+                      title="Remove favorite">
+                      <StarIcon size={12} className="star-filled" />
+                    </button>
+                    <ChatIcon size={14} />
+                    <span className="quick-access-title">{session.title}</span>
+                    <span className="quick-access-time">{formatTime(session.updated)}</span>
+                    <span className={`pill ${session.status}`}>{session.status}</span>
                   </div>
-                )}
+                ))}
               </div>
             )
           })()}
-          {activeSessions.length > 0 && (
-            <div className="quick-access-section">
-              <button type="button" className={`quick-access-label toggle${collapsedSections.active ? " collapsed" : ""}`}
-                onClick={() => toggleSection("active")} aria-expanded={!collapsedSections.active} aria-controls="quick-active">
-                {t('sessions.activeLabel')}
-                <ChevronIcon size={12} className="quick-access-chevron" />
-              </button>
-              {!collapsedSections.active && (
-                <div className="quick-access-list" id="quick-active">
-                  {activeSessions.map((session) => (
-                    <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+          {!collapsedSections.active && (
+            <div className="quick-access-list" id="quick-active" role="tabpanel">
+              {activeSessions.map((session) => (
+                <div key={session.id} className="quick-access-card active" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+                  <button className="quick-access-star"
+                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
+                    aria-pressed={favorites.has(session.id)}
+                    title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
+                    <StarIcon size={12} className={favorites.has(session.id) ? "star-filled" : "star-empty"} />
+                  </button>
+                  <ChatIcon size={14} />
+                  <span className="quick-access-title">{session.title}</span>
+                  <span className="quick-access-time">{formatTime(session.updated)}</span>
+                  <span className={`pill ${session.status}`}>{session.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {!collapsedSections.recent && (
+            <div className="quick-access-list" id="quick-recent" role="tabpanel">
+              {recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)).slice(0, 5).map((session) => (
+                <div key={session.id} className={`quick-access-card ${confirmingDismissId === session.id ? "confirming-dismiss" : ""}`} onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+                  {confirmingDismissId === session.id ? (
+                    <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
+                      <span>¿Quitar de recientes?</span>
+                      <div className="dismiss-confirm-actions">
+                        <button className="btn-danger compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null); onDismissRecent?.(session.id) }}>Sí</button>
+                        <button className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null) }}>No</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
                       <button className="quick-access-star"
                         onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
                         aria-pressed={favorites.has(session.id)}
@@ -226,54 +267,15 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                       <ChatIcon size={14} />
                       <span className="quick-access-title">{session.title}</span>
                       <span className="quick-access-time">{formatTime(session.updated)}</span>
-                      <span className={`pill ${session.status}`}>{session.status}</span>
-                    </div>
-                  ))}
+                      <button className="quick-access-dismiss" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(session.id) }}
+                        title="Quitar de recientes">
+                        <CloseIcon size={12} />
+                      </button>
+                    </>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
-          )}
-          {recentSessions.length > 0 && (
-            <div className="quick-access-section">
-              <button type="button" className={`quick-access-label toggle${collapsedSections.recent ? " collapsed" : ""}`}
-                onClick={() => toggleSection("recent")} aria-expanded={!collapsedSections.recent} aria-controls="quick-recent">
-                {t('sessions.recentLabel')}
-                <ChevronIcon size={12} className="quick-access-chevron" />
-              </button>
-              {!collapsedSections.recent && (
-                <div className="quick-access-list" id="quick-recent">
-                {recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)).slice(0, 5).map((session) => (
-                  <div key={session.id} className={`quick-access-card ${confirmingDismissId === session.id ? "confirming-dismiss" : ""}`} onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
-                    {confirmingDismissId === session.id ? (
-                      <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
-                        <span>¿Quitar de recientes?</span>
-                        <div className="dismiss-confirm-actions">
-                          <button className="btn-danger compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null); onDismissRecent?.(session.id) }}>Sí</button>
-                          <button className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null) }}>No</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <button className="quick-access-star"
-                          onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
-                          aria-pressed={favorites.has(session.id)}
-                          title={favorites.has(session.id) ? "Remove favorite" : "Add favorite"}>
-                          <StarIcon size={12} className={favorites.has(session.id) ? "star-filled" : "star-empty"} />
-                        </button>
-                        <ChatIcon size={14} />
-                        <span className="quick-access-title">{session.title}</span>
-                        <span className="quick-access-time">{formatTime(session.updated)}</span>
-                        <button className="quick-access-dismiss" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(session.id) }}
-                          title="Quitar de recientes">
-                          <CloseIcon size={12} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                    ))}
-                </div>
-                )}
-              </div>
           )}
         </div>
       )}

@@ -55,7 +55,7 @@ export const MessageList = memo(function MessageList({
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [messages.length])
+  }, [messages.length, loadingSessionID, selectedID])
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setIsAtBottom(true)
@@ -77,8 +77,9 @@ export const MessageList = memo(function MessageList({
 
   useEffect(() => {
     if (view !== "detail") return
+    if (loadingSessionID === selectedID) return
     if (messages.length > 0) scrollToBottom("auto")
-  }, [messages.length])
+  }, [view, loadingSessionID, selectedID, messages.length])
 
   useEffect(() => {
     if (view !== "detail") return

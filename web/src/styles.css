@@ -1541,51 +1541,65 @@ p {
 
 
 /* ===== Quick Access ===== */
-.quick-access-section {
-  margin-bottom: var(--space-5);
-}
-.quick-access-section {
+.quick-access-tabs {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
-.quick-access-label {
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-  margin: 0;
-}
-
-.quick-access-label.toggle {
-  display: flex;
+.quick-access-tab {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0;
-  border: none;
-  background: none;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  color: var(--text);
   cursor: pointer;
-  color: var(--muted);
-  text-transform: uppercase;
-  font-size: 0.72rem;
+  font-family: inherit;
+  font-size: 0.78rem;
   font-weight: 800;
+  text-transform: uppercase;
   letter-spacing: 0.04em;
-  width: fit-content;
   -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.quick-access-label.toggle:hover {
-  color: var(--text);
+.quick-access-tab:hover {
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
+.quick-access-tab.open {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.quick-access-count {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted-strong);
+}
+
+.quick-access-tab.open .quick-access-count {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
 }
 
 .quick-access-chevron {
   transition: transform 0.2s;
 }
 
-.quick-access-label.toggle.collapsed .quick-access-chevron {
-  transform: rotate(-90deg);
+.quick-access-tab.open .quick-access-chevron {
+  transform: rotate(180deg);
 }
 
 .quick-access-list {
