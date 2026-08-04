@@ -344,10 +344,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (type === "server.connected" || type === "server.heartbeat") return
 
     if (type === "message.part.updated") {
-      const part = p.part as { id?: string; type?: string } | undefined
+      const part = p.part as { id?: string; type?: string; messageID?: string; sessionID?: string } | undefined
       if (part?.id && part.type) partTypeCacheRef.current.set(part.id, part.type)
-      const sessionID = p.sessionID as string | undefined
-      const messageID = p.messageID as string | undefined
+      // El server a veces pone messageID/sessionID dentro de part (no en la raíz
+      // de properties) — es el caso del tool `task` (subagente). Fallback a part.*
+      const sessionID = (p.sessionID as string | undefined) ?? part?.sessionID
+      const messageID = (p.messageID as string | undefined) ?? part?.messageID
       if (sessionID && messageID && part?.id && sessionID === selectedSession?.id) {
         const fullPart = p.part as { id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown } | undefined
         applyPart(sessionID, messageID, {
