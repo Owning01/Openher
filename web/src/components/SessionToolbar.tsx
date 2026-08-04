@@ -151,7 +151,7 @@ export const SessionToolbar = memo(function SessionToolbar({
       {(onSearchMessages || onOpenArchivedView || onOpenThemeCreator || onOpenFavoritesManager) && (
         <div className="mode-dropdown-wrap" ref={overflowRef} style={{ flexShrink: 0, position: "relative", zIndex: 100 }}>
           <button onClick={(e) => { e.stopPropagation(); setOverflowOpen((v) => !v) }}
-            className="btn-icon btn-secondary compact" title="More"
+            className="btn-icon btn-secondary compact" title={t('session.more')}
             style={{ flexShrink: 0, width: 32, height: 32, padding: 0, fontSize: "1.1rem", lineHeight: 1 }}>
             ⋮
           </button>
@@ -164,10 +164,10 @@ export const SessionToolbar = memo(function SessionToolbar({
               borderRadius: "var(--radius-md, 8px)",
               boxShadow: "0 10px 30px rgba(0,0,0,0.6)", padding: 4, gap: 2
             }}>
-              {onSearchMessages && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onSearchMessages() }}><SearchIcon size={14} /> Search Messages</button>}
-              {onOpenArchivedView && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenArchivedView() }}><ArchiveIcon size={14} /> Archived</button>}
-              {onOpenThemeCreator && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenThemeCreator() }}><PaintIcon size={14} /> Theme Creator</button>}
-              {onOpenFavoritesManager && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenFavoritesManager() }}><StarIcon size={14} /> Favorites</button>}
+              {onSearchMessages && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onSearchMessages() }}><SearchIcon size={14} /> {t('session.searchMessages')}</button>}
+              {onOpenArchivedView && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenArchivedView() }}><ArchiveIcon size={14} /> {t('session.archived')}</button>}
+              {onOpenThemeCreator && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenThemeCreator() }}><PaintIcon size={14} /> {t('session.themeCreator')}</button>}
+              {onOpenFavoritesManager && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenFavoritesManager() }}><StarIcon size={14} /> {t('favorites.label')}</button>}
             </div>
           )}
         </div>

@@ -45,8 +45,8 @@ export const SessionCard = memo(function SessionCard({
         <div className="session-card-title-group">
           <button className="star-btn" onClick={handleToggleFavorite}
             aria-pressed={isFavorite}
-            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            title={isFavorite ? "Remove from favorites" : "Add to favorites"}>
+            aria-label={isFavorite ? t('favorites.remove') : t('favorites.add')}
+            title={isFavorite ? t('favorites.remove') : t('favorites.add')}>
             <StarIcon size={15} className={isFavorite ? "star-filled" : "star-empty"} />
           </button>
           {isRenaming ? (
@@ -61,7 +61,7 @@ export const SessionCard = memo(function SessionCard({
         </div>
         <span className={`pill status-pill ${session.status}`}>
           <span className="status-dot"></span>
-          {session.status}
+          {session.status === "busy" ? t('session.statusBusy') : t('session.statusRetry')}
         </span>
       </div>
 

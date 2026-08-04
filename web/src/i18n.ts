@@ -330,6 +330,54 @@ type TranslationKey =
   | 'session.fork'
   | 'session.restore'
   | 'session.archiveView'
+  | 'session.more'
+  | 'session.searchMessages'
+  | 'session.archived'
+  | 'session.themeCreator'
+  | 'session.compact'
+  | 'session.tokenStats'
+  | 'session.exportMd'
+  | 'session.files'
+  | 'session.skills'
+  | 'session.terminal'
+  | 'session.mcpBrowser'
+  | 'session.shortcuts'
+  | 'session.pendingCount'
+  | 'session.realtime'
+  | 'session.reconnecting'
+  | 'session.removeImage'
+  | 'session.rename'
+  | 'session.undo'
+  | 'session.redo'
+  | 'session.browseFiles'
+  | 'session.mcpResources'
+  | 'sessions.count'
+  | 'sessions.activeCount'
+  | 'sessions.changedCount'
+  | 'sessions.recentDismiss'
+  | 'common.yes'
+  | 'common.no'
+  | 'favorites.label'
+  | 'favorites.add'
+  | 'favorites.remove'
+  | 'session.statusBusy'
+  | 'session.statusRetry'
+  | 'archived.empty'
+  | 'archived.restore'
+  | 'archived.open'
+  | 'terminal.placeholder'
+  | 'skills.searchPlaceholder'
+  | 'skills.loading'
+  | 'skills.empty'
+  | 'subagent.parent'
+  | 'themeCreator.name'
+  | 'themeCreator.copyJson'
+  | 'themeCreator.preview'
+  | 'common.apply'
+  | 'themePicker.current'
+  | 'themePicker.searchPlaceholder'
+  | 'themePicker.noMatch'
+  | 'mcpBrowser.loading'
   | 'notification.completionTitle'
   | 'notification.completionBody'
   | 'notification.questionTitle'
@@ -685,6 +733,54 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.commands.empty': 'No {type} available',
     'help.commands.emptyConnected': 'Connect to a server to see available commands and skills',
     'session.fork': 'Fork',
+    'session.more': 'More',
+    'session.searchMessages': 'Search Messages',
+    'session.archived': 'Archived',
+    'session.themeCreator': 'Theme Creator',
+    'session.compact': 'Compact',
+    'session.tokenStats': 'Token Stats',
+    'session.exportMd': 'Export .md',
+    'session.files': 'Files',
+    'session.skills': 'Skills',
+    'session.terminal': 'Terminal',
+    'session.mcpBrowser': 'MCP Browser',
+    'session.shortcuts': 'Shortcuts',
+    'session.pendingCount': '{count} pending',
+    'session.realtime': 'Real-time',
+    'session.reconnecting': 'Reconnecting...',
+    'session.removeImage': 'Remove',
+    'session.rename': 'Rename',
+    'session.undo': 'Undo',
+    'session.redo': 'Redo',
+    'session.browseFiles': 'Browse Files',
+    'session.mcpResources': 'MCP Resources',
+    'sessions.count': '{count} sessions',
+    'sessions.activeCount': '{count} active',
+    'sessions.changedCount': '{count} changed',
+    'sessions.recentDismiss': 'Remove from recent?',
+    'common.yes': 'Yes',
+    'common.no': 'No',
+    'favorites.label': 'Favorites',
+    'favorites.add': 'Add to favorites',
+    'favorites.remove': 'Remove from favorites',
+    'session.statusBusy': 'Busy',
+    'session.statusRetry': 'Retry',
+    'archived.empty': 'No archived sessions',
+    'archived.restore': 'Restore',
+    'archived.open': 'Open',
+    'terminal.placeholder': 'Type a command to run in the project shell',
+    'skills.searchPlaceholder': 'Search skills...',
+    'skills.loading': 'Loading...',
+    'skills.empty': 'No skills found',
+    'subagent.parent': 'Parent',
+    'themeCreator.name': 'Theme name',
+    'themeCreator.copyJson': 'Copy JSON',
+    'themeCreator.preview': 'Preview',
+    'common.apply': 'Apply',
+    'themePicker.current': 'current',
+    'themePicker.searchPlaceholder': 'Search themes...',
+    'themePicker.noMatch': 'No themes match "{query}"',
+    'mcpBrowser.loading': 'Loading...',
     'session.restore': 'Restore',
     'session.archiveView': 'Archived sessions',
     'notification.completionTitle': 'OpenCode Complete',
@@ -1074,6 +1170,54 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.commands.empty': 'No hay {type} disponibles',
     'help.commands.emptyConnected': 'Conéctate a un servidor para ver los comandos y skills disponibles',
     'session.fork': 'Bifurcar',
+    'session.more': 'Más',
+    'session.searchMessages': 'Buscar mensajes',
+    'session.archived': 'Archivadas',
+    'session.themeCreator': 'Creador de temas',
+    'session.compact': 'Compactar',
+    'session.tokenStats': 'Estadísticas de tokens',
+    'session.exportMd': 'Exportar .md',
+    'session.files': 'Archivos',
+    'session.skills': 'Habilidades',
+    'session.terminal': 'Terminal',
+    'session.mcpBrowser': 'Explorador MCP',
+    'session.shortcuts': 'Atajos',
+    'session.pendingCount': '{count} pendientes',
+    'session.realtime': 'Tiempo real',
+    'session.reconnecting': 'Reconectando...',
+    'session.removeImage': 'Quitar',
+    'session.rename': 'Renombrar',
+    'session.undo': 'Deshacer',
+    'session.redo': 'Rehacer',
+    'session.browseFiles': 'Explorar archivos',
+    'session.mcpResources': 'Recursos MCP',
+    'sessions.count': '{count} sesiones',
+    'sessions.activeCount': '{count} activas',
+    'sessions.changedCount': '{count} con cambios',
+    'sessions.recentDismiss': '¿Quitar de recientes?',
+    'common.yes': 'Sí',
+    'common.no': 'No',
+    'favorites.label': 'Favoritos',
+    'favorites.add': 'Añadir a favoritos',
+    'favorites.remove': 'Quitar de favoritos',
+    'session.statusBusy': 'Ocupado',
+    'session.statusRetry': 'Reintento',
+    'archived.empty': 'No hay sesiones archivadas',
+    'archived.restore': 'Restaurar',
+    'archived.open': 'Abrir',
+    'terminal.placeholder': 'Escribe un comando para ejecutar en el shell del proyecto',
+    'skills.searchPlaceholder': 'Buscar habilidades...',
+    'skills.loading': 'Cargando...',
+    'skills.empty': 'No se encontraron habilidades',
+    'subagent.parent': 'Padre',
+    'themeCreator.name': 'Nombre del tema',
+    'themeCreator.copyJson': 'Copiar JSON',
+    'themeCreator.preview': 'Vista previa',
+    'common.apply': 'Aplicar',
+    'themePicker.current': 'actual',
+    'themePicker.searchPlaceholder': 'Buscar temas...',
+    'themePicker.noMatch': 'Ningún tema coincide con "{query}"',
+    'mcpBrowser.loading': 'Cargando...',
     'session.restore': 'Restaurar',
     'session.archiveView': 'Sesiones archivadas',
     'notification.completionTitle': 'OpenCode Completado',
@@ -1427,6 +1571,54 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.commands.empty': 'Nessun {type} disponibile',
     'help.commands.emptyConnected': 'Connettiti a un server per vedere comandi e skills disponibili',
     'session.fork': 'Deriva',
+    'session.more': 'Altro',
+    'session.searchMessages': 'Cerca messaggi',
+    'session.archived': 'Archiviate',
+    'session.themeCreator': 'Creatore temi',
+    'session.compact': 'Compatta',
+    'session.tokenStats': 'Statistiche token',
+    'session.exportMd': 'Esporta .md',
+    'session.files': 'File',
+    'session.skills': 'Competenze',
+    'session.terminal': 'Terminale',
+    'session.mcpBrowser': 'Browser MCP',
+    'session.shortcuts': 'Scorciatoie',
+    'session.pendingCount': '{count} in attesa',
+    'session.realtime': 'In tempo reale',
+    'session.reconnecting': 'Riconnessione...',
+    'session.removeImage': 'Rimuovi',
+    'session.rename': 'Rinomina',
+    'session.undo': 'Annulla',
+    'session.redo': 'Ripeti',
+    'session.browseFiles': 'Sfoglia file',
+    'session.mcpResources': 'Risorse MCP',
+    'sessions.count': '{count} sessioni',
+    'sessions.activeCount': '{count} attive',
+    'sessions.changedCount': '{count} modificate',
+    'sessions.recentDismiss': 'Rimuovere dai recenti?',
+    'common.yes': 'Sì',
+    'common.no': 'No',
+    'favorites.label': 'Preferiti',
+    'favorites.add': 'Aggiungi ai preferiti',
+    'favorites.remove': 'Rimuovi dai preferiti',
+    'session.statusBusy': 'Occupato',
+    'session.statusRetry': 'Riprova',
+    'archived.empty': 'Nessuna sessione archiviata',
+    'archived.restore': 'Ripristina',
+    'archived.open': 'Apri',
+    'terminal.placeholder': 'Scrivi un comando da eseguire nella shell del progetto',
+    'skills.searchPlaceholder': 'Cerca competenze...',
+    'skills.loading': 'Caricamento...',
+    'skills.empty': 'Nessuna competenza trovata',
+    'subagent.parent': 'Genitore',
+    'themeCreator.name': 'Nome tema',
+    'themeCreator.copyJson': 'Copia JSON',
+    'themeCreator.preview': 'Anteprima',
+    'common.apply': 'Applica',
+    'themePicker.current': 'corrente',
+    'themePicker.searchPlaceholder': 'Cerca temi...',
+    'themePicker.noMatch': 'Nessun tema corrisponde a "{query}"',
+    'mcpBrowser.loading': 'Caricamento...',
     'session.restore': 'Ripristina',
     'session.archiveView': 'Sessioni archiviate',
     'notification.completionTitle': 'OpenCode Completato',
@@ -1780,6 +1972,54 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'help.commands.empty': '沒有可用的 {type}',
     'help.commands.emptyConnected': '連線至伺服器以查看可用的命令與技能',
     'session.fork': '分岔',
+    'session.more': '更多',
+    'session.searchMessages': '搜尋訊息',
+    'session.archived': '已封存',
+    'session.themeCreator': '主題建立器',
+    'session.compact': '壓縮',
+    'session.tokenStats': 'Token 統計',
+    'session.exportMd': '匯出 .md',
+    'session.files': '檔案',
+    'session.skills': '技能',
+    'session.terminal': '終端機',
+    'session.mcpBrowser': 'MCP 瀏覽器',
+    'session.shortcuts': '快捷鍵',
+    'session.pendingCount': '{count} 待處理',
+    'session.realtime': '即時',
+    'session.reconnecting': '重新連線中...',
+    'session.removeImage': '移除',
+    'session.rename': '重新命名',
+    'session.undo': '復原',
+    'session.redo': '重做',
+    'session.browseFiles': '瀏覽檔案',
+    'session.mcpResources': 'MCP 資源',
+    'sessions.count': '{count} 個對話',
+    'sessions.activeCount': '{count} 進行中',
+    'sessions.changedCount': '{count} 有變更',
+    'sessions.recentDismiss': '從最近移除？',
+    'common.yes': '是',
+    'common.no': '否',
+    'favorites.label': '最愛',
+    'favorites.add': '加入最愛',
+    'favorites.remove': '從最愛移除',
+    'session.statusBusy': '忙碌中',
+    'session.statusRetry': '重試',
+    'archived.empty': '沒有已封存的對話',
+    'archived.restore': '恢復',
+    'archived.open': '開啟',
+    'terminal.placeholder': '輸入要在專案 shell 中執行的指令',
+    'skills.searchPlaceholder': '搜尋技能...',
+    'skills.loading': '載入中...',
+    'skills.empty': '找不到技能',
+    'subagent.parent': '父層',
+    'themeCreator.name': '主題名稱',
+    'themeCreator.copyJson': '複製 JSON',
+    'themeCreator.preview': '預覽',
+    'common.apply': '套用',
+    'themePicker.current': '目前',
+    'themePicker.searchPlaceholder': '搜尋主題...',
+    'themePicker.noMatch': '沒有符合 "{query}" 的主題',
+    'mcpBrowser.loading': '載入中...',
     'session.restore': '還原',
     'session.archiveView': '已封存的工作階段',
     'notification.completionTitle': 'OpenCode 完成',

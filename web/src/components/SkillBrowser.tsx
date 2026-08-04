@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useCallback } from "react"
 import { ModalHeader } from "./ModalHeader"
+import { useT } from "../i18n-context"
 import { api } from "../api"
 import type { ServerConfig } from "../types"
 
@@ -12,6 +13,7 @@ type Props = {
 }
 
 export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSelect }: Props) {
+  const t = useT()
   const [skills, setSkills] = useState<SkillItem[]>([])
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(true)
@@ -36,14 +38,14 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content skill-browser" onClick={(e) => e.stopPropagation()}>
-        <ModalHeader title="Skills" onClose={onClose} />
+        <ModalHeader title={t('session.skills')} onClose={onClose} />
         <div className="skill-search">
-          <input type="search" placeholder="Search skills..." value={query}
+          <input type="search" placeholder={t('skills.searchPlaceholder')} value={query}
             onChange={(e) => setQuery(e.target.value)} autoFocus />
         </div>
         <div className="skill-list">
-          {loading && <div className="skill-empty">Loading...</div>}
-          {!loading && filtered.length === 0 && <div className="skill-empty">No skills found</div>}
+          {loading && <div className="skill-empty">{t('skills.loading')}</div>}
+          {!loading && filtered.length === 0 && <div className="skill-empty">{t('skills.empty')}</div>}
           {filtered.map((skill) => (
             <button key={skill.id} className="skill-item" onClick={() => handleSelect(skill.name)}>
               <strong>{skill.name}</strong>

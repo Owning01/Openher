@@ -243,7 +243,7 @@ export const ChatView = memo(function ChatView({
         <h2>
           {selectedSession ? (
             <div className="detail-title-row">
-              <button className="btn-icon btn-ghost back-btn" onClick={onBackToSessions} aria-label="Volver" title="Volver a sesiones">
+              <button className="btn-icon btn-ghost back-btn" onClick={onBackToSessions} aria-label={t('detail.backToSessions')} title={t('detail.backToSessions')}>
                 <ArrowLeftIcon size={20} />
               </button>
               <img src="./img/opencode-logo-dark.jpg" alt="OpenCode" className="app-icon header-logo" style={{ width: 22, height: 22, borderRadius: 4, objectFit: "cover" }} />
@@ -263,14 +263,14 @@ export const ChatView = memo(function ChatView({
         </h2>
         {selectedSession && (
           <div className="detail-header-actions">
-            {pendingCount > 0 && <span className="pending-badge" title={`${pendingCount} pending`}>{pendingCount}</span>}
+            {pendingCount > 0 && <span className="pending-badge" title={t('session.pendingCount', { count: pendingCount })}>{pendingCount}</span>}
             {queuedPrompts && queuedPrompts.length > 0 && (
               <button className="queued-badge" onClick={() => setShowQueued(true)} title={t('detail.queuedTitle')}>
                 {queuedPrompts.length} {t('detail.queuedBadge')}
               </button>
             )}
               {streamState && streamState !== "polling" && (
-                <span className={`stream-indicator ${streamState}`} title={streamState === "streaming" ? "Real-time" : "Reconnecting..."}>
+                <span className={`stream-indicator ${streamState}`} title={streamState === "streaming" ? t('session.realtime') : t('session.reconnecting')}>
                   <span className="stream-dot" />
                 </span>
               )}
@@ -296,7 +296,7 @@ export const ChatView = memo(function ChatView({
                   e.stopPropagation()
                   setShowOverflow((v) => !v)
                 }}
-                title="More actions"
+                title={t('session.more')}
                 aria-pressed={showOverflow}>
                 <MenuDotsIcon size={14} />
               </button>
@@ -321,40 +321,40 @@ export const ChatView = memo(function ChatView({
                   }}>
                   {renamingSessionID !== selectedSession.id && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onStartRename(selectedSession) }}>
-                      <PencilIcon size={14} /> Rename
+                      <PencilIcon size={14} /> {t('session.rename')}
                     </button>
                   )}
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSearch((v) => !v) }}>
                     <SearchIcon size={14} />
-                    Search Messages
+                    {t('session.searchMessages')}
                   </button>
                   <button className="overflow-item" disabled={isWorking} onClick={() => { setShowOverflow(false); onUndo?.() }}>
-                    <UndoIcon size={14} /> Undo
+                    <UndoIcon size={14} /> {t('session.undo')}
                   </button>
                   {selectedSession?.revert && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onRedo?.() }}>
-                      <RedoIcon size={14} /> Redo
+                      <RedoIcon size={14} /> {t('session.redo')}
                     </button>
                   )}
                   <button className="overflow-item" disabled={isWorking} onClick={() => { setShowOverflow(false); onCompact?.() }}>
-                    <CompressIcon size={14} /> Compact
+                    <CompressIcon size={14} /> {t('session.compact')}
                   </button>
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); onToggleTokenStats?.() }}>
-                    <StatsIcon size={14} /> Token Stats
+                    <StatsIcon size={14} /> {t('session.tokenStats')}
                   </button>
                   {onExportMarkdown && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onExportMarkdown() }}>
-                      <ShareIcon size={14} /> Export .md
+                      <ShareIcon size={14} /> {t('session.exportMd')}
                     </button>
                   )}
                   {flags.fileBrowser && onOpenFileBrowser && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenFileBrowser() }}>
-                      <FolderIcon size={14} /> Browse Files
+                      <FolderIcon size={14} /> {t('session.browseFiles')}
                     </button>
                   )}
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSkills(true) }}>
                     <LayersIcon size={14} />
-                    Skills
+                    {t('session.skills')}
                   </button>
                   {queuedPrompts && queuedPrompts.length > 0 && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowQueued(true) }}>
@@ -365,43 +365,43 @@ export const ChatView = memo(function ChatView({
                   {onOpenTerminal && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenTerminal() }}>
                       <TerminalIcon size={14} />
-                      Terminal
+                      {t('session.terminal')}
                     </button>
                   )}
                   {onOpenMCPBrowser && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenMCPBrowser() }}>
                       <GlobeIcon size={14} />
-                      MCP Resources
+                      {t('session.mcpResources')}
                     </button>
                   )}
                   {onOpenArchivedView && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenArchivedView() }}>
                       <ArchiveIcon size={14} />
-                      Archived
+                      {t('session.archived')}
                     </button>
                   )}
                   {onOpenThemeCreator && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenThemeCreator() }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                      Theme Creator
+                      {t('session.themeCreator')}
                     </button>
                   )}
                   {onOpenFavoritesManager && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenFavoritesManager() }}>
                       <StarIcon size={14} />
-                      Manage Favorites
+                      {t('favorites.manage')}
                     </button>
                   )}
                   {onOpenShortcuts && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenShortcuts() }}>
                       <KeyboardIcon size={14} />
-                      Shortcuts
+                      {t('session.shortcuts')}
                     </button>
                   )}
                   {onForkSession && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onForkSession() }}>
                       <ForkIcon size={14} />
-                      Fork Session
+                      {t('session.fork')}
                     </button>
                   )}
                 </div>
@@ -534,7 +534,7 @@ export const ChatView = memo(function ChatView({
       {todos.length > 0 && (
         <div className={`todo-panel${todosExpanded ? " open" : ""}`}>
           <div className="todo-panel-header">
-            <span className="todo-panel-title">Tareas</span>
+            <span className="todo-panel-title">{t('todo.title')}</span>
             <button className="btn-icon btn-secondary compact" onClick={onTodosToggle} aria-label="Cerrar">
               <CloseIcon size={12} />
             </button>

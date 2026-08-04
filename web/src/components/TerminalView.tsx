@@ -1,5 +1,6 @@
 import { memo, useState, useCallback, useRef, useEffect } from "react"
 import { ModalHeader } from "./ModalHeader"
+import { useT } from "../i18n-context"
 import type { ShellLine } from "../hooks/useShell"
 
 type Props = {
@@ -16,6 +17,7 @@ type Props = {
 export const TerminalView = memo(function TerminalView({
   lines, running, sessionID, directory, onExecute, onClear, onClose, history
 }: Props) {
+  const t = useT()
   const [input, setInput] = useState("")
   const [histIdx, setHistIdx] = useState(-1)
   const endRef = useRef<HTMLDivElement>(null)
@@ -55,13 +57,13 @@ export const TerminalView = memo(function TerminalView({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content terminal-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Terminal">
-        <ModalHeader title="Terminal" onClose={onClose}>
-          <button className="btn-secondary compact" onClick={onClear}>Clear</button>
+      <div className="modal-content terminal-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('session.terminal')}>
+        <ModalHeader title={t('session.terminal')} onClose={onClose}>
+          <button className="btn-secondary compact" onClick={onClear}>{t('terminal.clear')}</button>
         </ModalHeader>
         <div className="terminal-body">
           <div className="terminal-output">
-            {lines.length === 0 && <span className="terminal-welcome">Type a command to run in the project shell</span>}
+            {lines.length === 0 && <span className="terminal-welcome">{t('terminal.placeholder')}</span>}
             {lines.map((line, i) => (
               <div key={i} className={`terminal-line terminal-${line.type}`}>
                 <pre>{line.text}</pre>

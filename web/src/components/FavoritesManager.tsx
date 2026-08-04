@@ -1,5 +1,6 @@
 import { memo, useState, useCallback } from "react"
 import { ModalHeader } from "./ModalHeader"
+import { useT } from "../i18n-context"
 import type { SessionView } from "../types"
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
 }
 
 export const FavoritesManager = memo(function FavoritesManager({ favorites, onReorder, onClose }: Props) {
+  const t = useT()
   const [items, setItems] = useState(favorites)
   const [dragIdx, setDragIdx] = useState<number | null>(null)
 
@@ -51,11 +53,11 @@ export const FavoritesManager = memo(function FavoritesManager({ favorites, onRe
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content favorites-manager" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Manage Favorites">
-        <ModalHeader title="Manage Favorites" onClose={onClose} />
+      <div className="modal-content favorites-manager" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('favorites.manage')}>
+        <ModalHeader title={t('favorites.manage')} onClose={onClose} />
         <div className="modal-body">
           {items.length === 0 ? (
-            <p className="subtle">No favorites yet</p>
+            <p className="subtle">{t('favorites.empty')}</p>
           ) : (
             <div className="favorites-list">
               {items.map((s, i) => (
@@ -81,8 +83,8 @@ export const FavoritesManager = memo(function FavoritesManager({ favorites, onRe
             </div>
           )}
           <div className="modal-actions">
-            <button className="btn-primary compact" onClick={handleSave} disabled={items.length === 0}>Save Order</button>
-            <button className="btn-secondary compact" onClick={onClose}>Cancel</button>
+            <button className="btn-primary compact" onClick={handleSave} disabled={items.length === 0}>{t('favorites.saveOrder')}</button>
+            <button className="btn-secondary compact" onClick={onClose}>{t('settings.cancel')}</button>
           </div>
         </div>
       </div>

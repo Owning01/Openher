@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react"
+import { useT } from "../i18n-context"
 import { useThemeVariant } from "../context/themeVariant"
 
 type ThemePickerProps = {
@@ -6,6 +7,7 @@ type ThemePickerProps = {
 }
 
 export function ThemePicker({ onClose }: ThemePickerProps) {
+  const t = useT()
   const { themeName, themeNames, setTheme, previewTheme } = useThemeVariant()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(themeName)
@@ -37,7 +39,7 @@ export function ThemePicker({ onClose }: ThemePickerProps) {
         <div className="theme-picker-header">
           <input
             className="theme-picker-search"
-            placeholder="Search themes..."
+            placeholder={t('themePicker.searchPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -52,16 +54,16 @@ export function ThemePicker({ onClose }: ThemePickerProps) {
               onClick={() => handleSelect(name)}
             >
               <span className="theme-picker-name">{name}</span>
-              {themeName === name && <span className="theme-picker-badge">current</span>}
+              {themeName === name && <span className="theme-picker-badge">{t('themePicker.current')}</span>}
             </button>
           ))}
           {filtered.length === 0 && (
-            <div className="theme-picker-empty">No themes match "{query}"</div>
+            <div className="theme-picker-empty">{t('themePicker.noMatch', { query })}</div>
           )}
         </div>
         <div className="theme-picker-footer">
-          <button className="theme-picker-btn theme-picker-cancel" onClick={handleCancel}>Cancel</button>
-          <button className="theme-picker-btn theme-picker-apply" onClick={handleApply}>Apply</button>
+          <button className="theme-picker-btn theme-picker-cancel" onClick={handleCancel}>{t('settings.cancel')}</button>
+          <button className="theme-picker-btn theme-picker-apply" onClick={handleApply}>{t('common.apply')}</button>
         </div>
       </div>
     </div>

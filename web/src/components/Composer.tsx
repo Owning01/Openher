@@ -387,7 +387,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
                 )}
                 <span className="file-info">{img.name}</span>
                 <button className="image-preview-remove" onClick={() => handleRemoveImage(img.id)}
-                  aria-label="Remove"><CloseIcon size={12} /></button>
+                  aria-label={t('session.removeImage')}><CloseIcon size={12} /></button>
               </div>
             )
           })}

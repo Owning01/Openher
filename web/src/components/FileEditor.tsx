@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useCallback } from "react"
 import { api } from "../api"
 import { ModalHeader } from "./ModalHeader"
 import { SaveIcon } from "../Icons"
+import { useT } from "../i18n-context"
 import { basename } from "../utils"
 import type { ServerConfig } from "../types"
 
@@ -13,6 +14,7 @@ type Props = {
 }
 
 export const FileEditor = memo(function FileEditor({ config, path, directory, onClose }: Props) {
+  const t = useT()
   const [content, setContent] = useState("")
   const [original, setOriginal] = useState("")
   const [loading, setLoading] = useState(true)
@@ -59,13 +61,13 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
         <ModalHeader title={basename(path)} titleTooltip={path} onClose={onClose}>
           {hasChanges && (
             <button className="btn-primary compact" onClick={handleSave} disabled={saving}>
-              <SaveIcon size={14} /> {saving ? "Saving..." : "Save"}
+              <SaveIcon size={14} /> {saving ? t('fileEditor.saving') : t('fileEditor.save')}
             </button>
           )}
         </ModalHeader>
         <div className="modal-body file-editor-body">
           {loading ? (
-            <p className="subtle">Loading...</p>
+            <p className="subtle">{t('fileEditor.loading')}</p>
           ) : error ? (
             <p className="error-text">{error}</p>
           ) : (

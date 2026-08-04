@@ -1,5 +1,6 @@
 import { memo } from "react"
 import { ArrowLeftIcon } from "../Icons"
+import { useT } from "../i18n-context"
 import type { SessionView } from "../types"
 
 type SubagentFooterProps = {
@@ -8,6 +9,7 @@ type SubagentFooterProps = {
 }
 
 export const SubagentFooter = memo(function SubagentFooter({ session, onGoBack }: SubagentFooterProps) {
+  const t = useT()
   const tokens = session.tokens
   const totalTokens = tokens
     ? tokens.input + tokens.output + tokens.reasoning + (tokens.cache?.read ?? 0) + (tokens.cache?.write ?? 0)
@@ -18,7 +20,7 @@ export const SubagentFooter = memo(function SubagentFooter({ session, onGoBack }
       <div className="subagent-footer-left">
         <button className="subagent-footer-back" onClick={onGoBack}>
           <ArrowLeftIcon size={14} />
-          <span>Parent</span>
+          <span>{t('subagent.parent')}</span>
         </button>
       </div>
       <div className="subagent-footer-center">

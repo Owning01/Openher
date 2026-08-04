@@ -1,6 +1,7 @@
 import { memo, useState, useEffect } from "react"
 import { api } from "../api"
 import { ModalHeader } from "./ModalHeader"
+import { useT } from "../i18n-context"
 import type { ServerConfig } from "../types"
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 }
 
 export const MCPBrowser = memo(function MCPBrowser({ config, onClose, onSelect }: Props) {
+  const t = useT()
   const [resources, setResources] = useState<{ id: string; name: string; description?: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -35,16 +37,16 @@ export const MCPBrowser = memo(function MCPBrowser({ config, onClose, onSelect }
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content mcp-browser" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="MCP Resources">
-        <ModalHeader title="MCP Resources" onClose={onClose} />
+        <ModalHeader title={t('session.mcpResources')} onClose={onClose} />
         <div className="modal-body">
           <input
-            placeholder="Search resources..."
+            placeholder={t('mcpBrowser.search')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
           {loading ? (
-            <p className="subtle">Loading...</p>
+            <p className="subtle">{t('mcpBrowser.loading')}</p>
           ) : error ? (
             <p className="error">{error}</p>
           ) : filtered.length === 0 ? (

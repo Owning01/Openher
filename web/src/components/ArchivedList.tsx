@@ -16,11 +16,11 @@ export const ArchivedList = memo(function ArchivedList({ sessions, onRestore, on
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content archived-list" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Archived Sessions">
+      <div className="modal-content archived-list" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('session.archiveView')}>
         <ModalHeader title={t('settings.sessionArchive')} onClose={onClose} />
         <div className="modal-body">
           {sessions.length === 0 ? (
-            <p className="subtle">No archived sessions</p>
+            <p className="subtle">{t('archived.empty')}</p>
           ) : (
             <div className="archived-list-items">
               {sessions.map((s) => (
@@ -31,10 +31,10 @@ export const ArchivedList = memo(function ArchivedList({ sessions, onRestore, on
                   </div>
                   <div className="archived-item-actions">
                     <button className="btn-secondary compact" onClick={() => onOpen(s.id, s.directory)}>
-                      Open
+                      {t('archived.open')}
                     </button>
                     <button className="btn-primary compact" onClick={() => onRestore(s.id)}>
-                      Restore
+                      {t('archived.restore')}
                     </button>
                   </div>
                 </div>

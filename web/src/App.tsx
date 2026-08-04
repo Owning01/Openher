@@ -1174,7 +1174,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         <div className="modal-overlay" onClick={() => setTokenStatsOpen(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Token Stats</h3>
+              <h3>{t('session.tokenStats')}</h3>
               <button className="btn-icon btn-secondary compact" onClick={() => setTokenStatsOpen(false)}>
                 <CloseIcon size={14} />
               </button>

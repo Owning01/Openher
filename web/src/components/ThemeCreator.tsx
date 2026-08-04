@@ -1,5 +1,6 @@
 import { memo, useState, useCallback } from "react"
 import { ModalHeader } from "./ModalHeader"
+import { useT } from "../i18n-context"
 
 const COLOR_SLOTS = [
   ["background", "Background"],
@@ -38,6 +39,7 @@ type Props = {
 }
 
 export const ThemeCreator = memo(function ThemeCreator({ onClose }: Props) {
+  const t = useT()
   const [colors, setColors] = useState<Record<string, string>>({ ...DARK_DEFAULTS })
   const [themeName, setThemeName] = useState("my-theme")
 
@@ -78,11 +80,11 @@ export const ThemeCreator = memo(function ThemeCreator({ onClose }: Props) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content theme-creator" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Theme Creator">
-        <ModalHeader title="Theme Creator" onClose={onClose} />
+      <div className="modal-content theme-creator" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('session.themeCreator')}>
+        <ModalHeader title={t('session.themeCreator')} onClose={onClose} />
         <div className="modal-body">
           <label className="setting-row">
-            <span>Theme name</span>
+            <span>{t('themeCreator.name')}</span>
             <input value={themeName} onChange={(e) => setThemeName(e.target.value)} />
           </label>
           <div className="theme-color-grid">
@@ -106,8 +108,8 @@ export const ThemeCreator = memo(function ThemeCreator({ onClose }: Props) {
             ))}
           </div>
           <div className="modal-actions">
-            <button className="btn-primary compact" onClick={exportJSON}>Copy JSON</button>
-            <button className="btn-secondary compact" onMouseEnter={applyPreview} onMouseLeave={resetPreview}>Preview</button>
+            <button className="btn-primary compact" onClick={exportJSON}>{t('themeCreator.copyJson')}</button>
+            <button className="btn-secondary compact" onMouseEnter={applyPreview} onMouseLeave={resetPreview}>{t('themeCreator.preview')}</button>
           </div>
         </div>
       </div>

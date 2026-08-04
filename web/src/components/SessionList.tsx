@@ -135,7 +135,7 @@ export const SessionList = memo(function SessionList({
             <h2>{selectedProjectDir}</h2>
             <p className="subtle">
               <button className="btn-link" onClick={() => onSelectProject(null)}>← {t('sessions.title')}</button>
-              <span style={{ marginLeft: 'var(--space-3)' }}>{projectSessions.length} sessions</span>
+              <span style={{ marginLeft: 'var(--space-3)' }}>{t('sessions.count', { count: projectSessions.length })}</span>
             </p>
           </div>
           <div className="section-actions">
@@ -186,7 +186,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
               <button type="button" className={`quick-access-tab${!collapsedSections.favorites ? " open" : ""}`}
                 onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites}
                 aria-controls="quick-favorites" role="tab">
-                Favoritos
+                {t('favorites.label')}
                 <span className="quick-access-count">{sessions.filter((s) => favorites.has(s.id)).length}</span>
                 <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
@@ -237,10 +237,10 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                 confirmingDismissId === session.id ? (
                   <div key={session.id} className="quick-access-card confirming-dismiss" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
                     <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
-                      <span>¿Quitar de recientes?</span>
+                      <span>{t('sessions.recentDismiss')}</span>
                       <div className="dismiss-confirm-actions">
-                        <button className="btn-danger compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null); onDismissRecent?.(session.id) }}>Sí</button>
-                        <button className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null) }}>No</button>
+                        <button className="btn-danger compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null); onDismissRecent?.(session.id) }}>{t('common.yes')}</button>
+                        <button className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null) }}>{t('common.no')}</button>
                       </div>
                     </div>
                   </div>
@@ -262,7 +262,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
         <button type="button" className={`list-mode-pill${listOpen ? " active" : ""}`}
           onClick={() => setListOpen((v) => !v)} aria-pressed={listOpen}>
           <ChatIcon size={14} />
-          Sesiones
+          {t('sessions.title')}
           <ChevronIcon size={12} className={`quick-access-chevron${listOpen ? "" : " collapsed"}`} />
         </button>
       </div>
@@ -297,17 +297,17 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                       <strong className="project-path">{dir}</strong>
                     </div>
                     <span className="project-count">
-                      {projectSessionsList.length} {projectSessionsList.length === 1 ? 'session' : 'sessions'}
+                      {t('sessions.count', { count: projectSessionsList.length })}
                       <span className="project-chevron">{isExpanded ? "▲" : "▼"}</span>
                     </span>
                   </div>
                   <div className="project-meta">
                     <span className={`project-status ${projectSessionsList.some((s) => isSessionActive(s)) ? "busy" : "idle"}`}>
                       <span className="status-dot"></span>
-                      {projectSessionsList.filter((s) => isSessionActive(s)).length} active
+                      {t('sessions.activeCount', { count: projectSessionsList.filter((s) => isSessionActive(s)).length })}
                     </span>
                     <span className="project-changed">
-                      {projectSessionsList.filter((s) => hasFileChanges(s)).length} changed
+                      {t('sessions.changedCount', { count: projectSessionsList.filter((s) => hasFileChanges(s)).length })}
                     </span>
                   </div>
                 </article>
