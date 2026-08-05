@@ -563,7 +563,9 @@ export const SettingsPanel = memo(function SettingsPanel({
             <DataIcon size={16} />
             <span>
               <strong>{t('extras.dataUsage')}</strong>
-              <small>{formatBytes(getDataUsage().month.total)} · {t('dataUsage.month')}</small>
+              <small>
+                {t('dataUsage.mobile')}: {formatBytes(getDataUsage().month.byNet.mobile.total)} · {t('dataUsage.wifi')}: {formatBytes(getDataUsage().month.byNet.wifi.total)}
+              </small>
             </span>
           </button>
           {onOpenFavoritesManager && (

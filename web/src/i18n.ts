@@ -451,6 +451,8 @@ type TranslationKey =
   | 'dataUsage.down'
   | 'dataUsage.total'
   | 'dataUsage.reset'
+  | 'dataUsage.mobile'
+  | 'dataUsage.wifi'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
@@ -906,6 +908,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'dataUsage.down': 'Down',
     'dataUsage.total': 'Total',
     'dataUsage.reset': 'Reset counter',
+    'dataUsage.mobile': 'Mobile',
+    'dataUsage.wifi': 'WiFi',
     'nav.stats': 'Stats',
     'settings.serverStats': 'Server stats',
     'stats.title': 'Statistics',
@@ -1392,6 +1396,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'dataUsage.down': 'Descarga',
     'dataUsage.total': 'Total',
     'dataUsage.reset': 'Reiniciar contador',
+    'dataUsage.mobile': 'Móvil',
+    'dataUsage.wifi': 'WiFi',
     'themeCreator.title': 'Creador de Temas',
     'nav.stats': 'Estadísticas',
     'settings.serverStats': 'Estadísticas del servidor',
@@ -1843,6 +1849,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'dataUsage.down': 'Download',
     'dataUsage.total': 'Totale',
     'dataUsage.reset': 'Azzera contatore',
+    'dataUsage.mobile': 'Mobile',
+    'dataUsage.wifi': 'WiFi',
     'themeCreator.title': 'Creatore di Temi',
     'nav.stats': 'Statistiche',
     'settings.serverStats': 'Statistiche del server',
@@ -2294,6 +2302,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'dataUsage.down': '下載',
     'dataUsage.total': '總計',
     'dataUsage.reset': '重設計數器',
+    'dataUsage.mobile': '行動網路',
+    'dataUsage.wifi': 'WiFi',
     'themeCreator.title': '主題建立器',
     'nav.stats': '統計',
     'settings.serverStats': '伺服器統計',

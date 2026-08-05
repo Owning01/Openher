@@ -2,11 +2,25 @@ const STORAGE_KEY = "opencode.datausage.v1"
 const MAX_AGE_MS = 31 * 24 * 60 * 60 * 1000
 
 export type DataPeriod = "day" | "week" | "month"
+export type NetworkKind = "mobile" | "wifi" | "other"
 
 export type DataUsageEntry = {
   ts: number
   bytes: number
   dir: "up" | "down"
+  net: NetworkKind
+}
+
+function detectNetwork(): NetworkKind {
+  try {
+    const conn = (navigator as unknown as { connection?: { type?: string } }).connection
+    const type = (conn?.type ?? "").toLowerCase()
+    if (type === "cellular" || type === "mobile" || type === "3g" || type === "4g" || type === "5g") return "mobile"
+    if (type === "wifi" || type === "ethernet") return "wifi"
+    return "other"
+  } catch {
+    return "other"
+  }
 }
 
 function readEntries(): DataUsageEntry[] {
@@ -35,14 +49,16 @@ function writeEntries(entries: DataUsageEntry[]) {
 export function recordDataUsage(bytes: number, dir: "up" | "down") {
   if (!Number.isFinite(bytes) || bytes <= 0) return
   const entries = readEntries()
-  entries.push({ ts: Date.now(), bytes: Math.round(bytes), dir })
+  entries.push({ ts: Date.now(), bytes: Math.round(bytes), dir, net: detectNetwork() })
   writeEntries(entries)
 }
 
+export type NetworkUsage = { up: number; down: number; total: number }
+
 export type DataUsageSummary = {
-  day: { up: number; down: number; total: number }
-  week: { up: number; down: number; total: number }
-  month: { up: number; down: number; total: number }
+  day: NetworkUsage & { byNet: Record<NetworkKind, NetworkUsage> }
+  week: NetworkUsage & { byNet: Record<NetworkKind, NetworkUsage> }
+  month: NetworkUsage & { byNet: Record<NetworkKind, NetworkUsage> }
 }
 
 export function getDataUsage(): DataUsageSummary {
@@ -54,21 +70,36 @@ export function getDataUsage(): DataUsageSummary {
     month: now - 30 * dayMs,
   } as const
 
-  const totals = { day: { up: 0, down: 0 }, week: { up: 0, down: 0 }, month: { up: 0, down: 0 } }
+  const empty = (): NetworkUsage & { byNet: Record<NetworkKind, NetworkUsage> } => ({
+    up: 0, down: 0, total: 0,
+    byNet: {
+      mobile: { up: 0, down: 0, total: 0 },
+      wifi: { up: 0, down: 0, total: 0 },
+      other: { up: 0, down: 0, total: 0 },
+    },
+  })
+
+  const totals = { day: empty(), week: empty(), month: empty() }
 
   for (const e of readEntries()) {
+    const net: NetworkKind = e.net === "mobile" || e.net === "wifi" ? e.net : "other"
     for (const period of ["day", "week", "month"] as const) {
       if (e.ts >= ranges[period]) {
         totals[period][e.dir] += e.bytes
+        totals[period].byNet[net][e.dir] += e.bytes
       }
     }
   }
 
-  return {
-    day: { ...totals.day, total: totals.day.up + totals.day.down },
-    week: { ...totals.week, total: totals.week.up + totals.week.down },
-    month: { ...totals.month, total: totals.month.up + totals.month.down },
+  for (const period of ["day", "week", "month"] as const) {
+    const p = totals[period]
+    p.total = p.up + p.down
+    for (const net of ["mobile", "wifi", "other"] as const) {
+      p.byNet[net].total = p.byNet[net].up + p.byNet[net].down
+    }
   }
+
+  return totals
 }
 
 export function resetDataUsage() {
