@@ -5,7 +5,7 @@
 # OpenCode Mobile — Catálogo de Funcionalidades
 
 > **Cliente Android para [OpenCode](https://opencode.ai)** — asistente de codificación AI desde el celular.
-> React 18.3 + TypeScript 5.6 + Vite 8 + Capacitor 8. 47 componentes, 27 hooks.
+> React 18.3 + TypeScript 5.6 + Vite 8 + Capacitor 8. 57 componentes, 32 hooks.
 
 ---
 
@@ -15,13 +15,13 @@
 |---|---|---|
 | **SSE Streaming** | `useSSE.ts` | EventSource sobre GET `/event`. Eventos: `message.updated`, `message.part.delta`, `message.part.updated`, `session.error`, `session.status`, `server.heartbeat`. Heartbeat timeout 35s, reconexión exponencial 1s→30s con jitter. Solo activo cuando `dataMode === "full"` y `flags.streamingFull === true` |
 | **Polling adaptativo** | `usePolling.ts` | Backoff exponencial (1s→60s, ±30% jitter). 4 modos: Full (3.5s), Saver (15s), Ultra (30s), Miser (60s). Pausa/reanuda según estado SSE (`streamActive`). Reconexión automática |
-| **Cache offline** | `useOfflineCache.ts` | IndexedDB (`opencode-mobile`, v1, stores: sessions, messages). Cachea sesiones y mensajes. Búsqueda full-text sobre mensajes cacheados. Navegación offline completa de datos históricos |
+| **Cache offline** | `useOfflineCache.ts` | IndexedDB (`opencode-mobile`, v2, stores: sessions, messages). Cachea sesiones y mensajes. Búsqueda full-text sobre mensajes cacheados. Navegación offline completa de datos históricos. Si la DB está corrupta (v2 sin stores de versiones bugueadas) se recrea automáticamente desde cero (con retry si el delete queda bloqueado) |
 | **Cola offline** | `useOfflineQueue.ts` | IndexedDB store `pendingActions`. Encola prompts, comandos y shell cuando `connectionState === "offline"`. Reenvía todo al reconectar (`connectionState === "connected"` → `dequeueAll()`) |
 | **Network mode** | `useNetworkMode.ts` | Detecta cambios de red via Capacitor Network plugin. Cambia automáticamente a `"ultra"`/`"miser"` en datos móviles, `"full"` en WiFi |
 
 ---
 
-## 🔧 Hooks de Estado y Lógica (27 hooks)
+## 🔧 Hooks de Estado y Lógica (32 hooks)
 
 | Hook | Archivo | Propósito |
 |---|---|---|
@@ -51,16 +51,22 @@
 | `useMemoryCleanup` | `useMemoryCleanup.ts` | Limpieza periódica de mensajes stale (5 min cutoff) de sesiones no seleccionadas |
 | `useFocusTrap` | `useFocusTrap.ts` | Trampa de foco para modales. Maneja Tab y Escape |
 | `useBackButton` | `useBackButton.ts` | Botón físico "atrás" de Android vía Capacitor App |
+| `useServers` | `useServers.ts` | Perfiles de servidores guardados (add/remove/rename/update) persistidos en localStorage. Cada perfil = una máquina distinta |
+| `useShareReceiver` | `useShareReceiver.ts` | Recepción de "Compartir a OpenCode" de Android (texto/imagen). Guard de plataforma nativa (en web no hace nada) |
+| `usePushNotifications` | `usePushNotifications.ts` | Notificaciones push nativas (solo APK). Completa la respuesta |
+| `useServerStats` | `useServerStats.ts` | Estadísticas del server opencode-stats (`:8765`, `/api/data?raw=1`) |
+| `useLocalStorage` | `useLocalStorage.ts` | Hook genérico de persistencia en localStorage |
+| `useOutsideClick` | `useOutsideClick.ts` | Detecta clic/touch fuera de un elemento (dropdowns, menús) |
 
 ---
 
-## 🎨 Componentes UI (47 componentes)
+## 🎨 Componentes UI (57 componentes)
 
 ### Layout y Navegación
 | Componente | Archivo | Descripción |
 |---|---|---|
 | `NavBar` | `NavBar.tsx` | Barra de navegación (top o bottom) con tabs sessions/detail/settings |
-| `BottomSheet` | `BottomSheet.tsx` | Panel deslizante inferior con detalle de agente/modelo de la sesión actual |
+| `BottomSheet` | `BottomSheet.tsx` | Panel deslizante inferior con detalle de agente/modelo de la sesión actual. Selector de **nivel de pensamiento** (Ninguno/Alto/Medio/Bajo): usa variants existentes o los crea vía `PATCH /config` (`reasoningEffort`) |
 | `ErrorBoundary` | `ErrorBoundary.tsx` | Error boundary que captura y muestra errores gracefulmente |
 | `Modal` | `Modal.tsx` | Wrapper reusable con focus trap y backdrop click-to-close |
 
@@ -68,7 +74,7 @@
 | Componente | Archivo | Descripción |
 |---|---|---|
 | `ChatView` | `ChatView.tsx` | Vista principal de chat: compone MessageList + Composer + ToolStatus + sidecar |
-| `MessageBubble` | `MessageBubble.tsx` | Burbuja de mensaje individual con color de agente, tokens, duración, thinking/tool parts |
+| `MessageBubble` | `MessageBubble.tsx` | Burbuja de mensaje individual con color de agente, tokens, duración, thinking/tool parts. Footer (plan · modelo · nivel de pensamiento · duración) solo en el último mensaje o cuando cambia modelo/plan. Duración = `completed − created del user padre` (mismo cálculo que el TUI) |
 | `MessageList` | `MessageList.tsx` | Lista scrollable de mensajes con auto-scroll, loading, revert |
 | `Composer` | `Composer.tsx` | Input de mensajes con send/stop, slash commands, historial, voz, pegar imágenes |
 | `ToolPart` | `ToolPart.tsx` | Muestra tool call/results con icono, colapsable, preview de archivo |
@@ -84,9 +90,10 @@
 ### Sesiones
 | Componente | Archivo | Descripción |
 |---|---|---|
-| `SessionList` | `SessionList.tsx` | Lista completa de sesiones: proyectos agrupados, recientes, activas, búsqueda, favoritos |
+| `SessionList` | `SessionList.tsx` | Lista completa de sesiones: proyectos agrupados, recientes, activas, búsqueda, favoritos. Toggle "Sesiones" sin borde (separador visual arriba), project cards sin icono ni contadores activas/cambios |
 | `SessionCard` | `SessionCard.tsx` | Card de sesión individual con open/rename/delete/favorite/export/archive/fork |
-| `SessionToolbar` | `SessionToolbar.tsx` | Toolbar: refresh, new session, data mode, settings, archive, favorites, theme creator |
+| `SessionToolbar` | `SessionToolbar.tsx` | Toolbar: refresh (solo icono), nueva sesión, indicador pasivo del modo de datos (el cambio se hace en Settings), settings |
+| `QuickAccessCard` | `QuickAccessCard.tsx` | Card DRY para favoritos/activos/recientes: estrella, tiempo, pill de estado (solo busy/retry), dismiss con confirmación. Sin borde de separación |
 | `SessionTokenUsage` | `SessionTokenUsage.tsx` | Barras de uso de tokens coloreadas (input/output/reasoning/cache) |
 | `ArchivedList` | `ArchivedList.tsx` | Modal de sesiones archivadas con restore/open |
 | `FavoritesManager` | `FavoritesManager.tsx` | Modal de reordenamiento de favoritos (drag + up/down arrows) |
@@ -95,14 +102,16 @@
 ### Modales de Configuración
 | Componente | Archivo | Descripción |
 |---|---|---|
-| `SettingsPanel` | `SettingsPanel.tsx` | Panel completo: host, port, username, password, test, providers, themes, language, flags, about |
+| `SettingsPanel` | `SettingsPanel.tsx` | Panel completo: host, port, username, password, test, providers, themes, language, flags, about. Selector de modo de datos (debajo de Servidor), buscador de modelo predeterminado con lista scrollable, botón "Creador de temas" multicolor |
+| `ServerProfileModal` | `ServerProfileModal.tsx` | Modal de edición de un servidor guardado: nombre, host, puerto, usuario, contraseña. "Guardar y aplicar" actualiza el perfil y lo aplica |
 | `ChatCustomizer` | `ChatCustomizer.tsx` | Personalización visual del chat: fontSize, spacing, toggles thinking/tools/timestamps |
 | `ThemePicker` | `ThemePicker.tsx` | Selector de temas con 30+ variantes, search/filter, preview on hover |
 | `ThemeCreator` | `ThemeCreator.tsx` | Editor visual de temas: 13 slots de color, presets dark/light, export JSON |
 | `ProviderManager` | `ProviderManager.tsx` | Gestión de proveedores externos: lista, conectar, API key modal |
-| `DataModeSwitcher` | `DataModeSwitcher.tsx` | Botones toggle para modo de datos: full/saver/ultra/miser |
+| `DataModeSwitcher` | `DataModeSwitcher.tsx` | ⚠️ Legacy (sin uso): el modo de datos se cambia desde SettingsPanel |
 | `ShortcutsModal` | `ShortcutsModal.tsx` | Referencia de atajos de teclado |
 | `ConfirmModal` | `ConfirmModal.tsx` | Confirmación para eliminar sesión |
+| `ModalHeader` | `ModalHeader.tsx` | Header DRY de modales (título + botón cerrar) |
 
 ### Modales de Acción
 | Componente | Archivo | Descripción |
@@ -113,10 +122,15 @@
 | `SkillBrowser` | `SkillBrowser.tsx` | Explorador de skills del servidor con búsqueda |
 | `TerminalView` | `TerminalView.tsx` | Terminal emulator: input, output, historial, clear/close |
 | `ImageLightbox` | `ImageLightbox.tsx` | Visor de imágenes full-screen con zoom, pan, drag, escape |
-| `FolderPicker` | `FolderPicker.tsx` | Selector de directorio para nueva sesión |
+| `FolderPicker` | `FolderPicker.tsx` | Selector de directorio para nueva sesión (navegación relativa al proyecto, proyectos existentes con scroll) |
 | `QuestionPrompt` | `QuestionPrompt.tsx` | Formulario estructurado de preguntas del AI (opciones, custom input, multiple choice) |
 | `AutoQuestionPrompt` | `AutoQuestionPrompt.tsx` | Prompt para preguntas auto-generadas del AI |
 | `PermissionPrompt` | `PermissionPrompt.tsx` | Modal de aprobación/rechazo de permisos de herramientas |
+| `QueuedPrompts` | `QueuedPrompts.tsx` | Lista de prompts encolados con enviar/descartar |
+| `StatsView` | `StatsView.tsx` | Vista de estadísticas del server (rango de fechas, tokens por sesión) |
+| `DropdownMenu` | `DropdownMenu.tsx` | Menú desplegable genérico con click-outside |
+| `EmptyState` | `EmptyState.tsx` | Estado vacío DRY con icono, título y hint |
+| `ErrorModal` | `ErrorModal.tsx` | Modal de error con detalle |
 
 ### Información
 | Componente | Archivo | Descripción |
@@ -129,7 +143,7 @@
 
 ---
 
-## 🌐 API Layer — `api.ts` (30 endpoints)
+## 🌐 API Layer — `api.ts` (36 endpoints)
 
 | Método | Endpoint | Propósito |
 |---|---|---|
@@ -169,6 +183,7 @@
 | `listMCPResources` | `GET /experimental/resource` | Recursos MCP |
 | `listSkills` | `GET /skill` | Skills disponibles |
 | `findFiles` | `GET /find/file` | Buscar archivos |
+| `setModelVariant` | `PATCH /config` | Crea/actualiza un variant de modelo (ej. `{ high: { reasoningEffort: "high" } }`) en la config del server. El server mergea con la config existente |
 
 ---
 
@@ -195,12 +210,16 @@
 | `opencode.mobile.connectedProviders` | ProviderInfo[] | Proveedores conectados |
 | `opencode.mobile.chatSettings` | `ChatSettings` | Personalización del chat |
 | `opencode.mobile.recentDismiss` | string[] | IDs de sesiones quitadas de recientes |
+| `opencode.mobile.modelVariant` | string | Variante del modelo activo |
+| `opencode.mobile.servers` | `ServerProfile[]` | Perfiles de servidores guardados (id, name, config) |
+| `opencode.mobile.activeServer` | string | ID del perfil activo |
+| `opencode.remote.statsPort` | number | Puerto del server opencode-stats (default 8765) |
 
 ### IndexedDB
 
 | DB Name | Version | Stores | Propósito |
 |---|---|---|---|
-| `opencode-mobile` | 1 | `sessions`, `messages`, `pendingActions` | Cache offline + cola offline |
+| `opencode-mobile` | 2 | `sessions`, `messages`, `pendingActions` | Cache offline + cola offline. Recreación automática si la DB está corrupta (sin stores) |
 
 ---
 
@@ -233,9 +252,16 @@
 | `fileEditor.*` | 5 | Editor de archivos |
 | `terminal.*` | 4 | Terminal |
 | `shortcuts.*` | 1 | Atajos |
-| `favorites.*` | 3 | Gestor de favoritos |
+| `favorites.*` | 5 | Gestor de favoritos |
 | `offlineQueue.*` | 1 | Cola offline |
-| `themeCreator.*` | 1 | Creador de temas |
+| `themeCreator.*` | 3 | Creador de temas |
+| `common.*` | 2 | Yes/No (confirmaciones) |
+| `archived.*` | 3 | Sesiones archivadas |
+| `skills.*` | 3 | Explorador de skills |
+| `subagent.*` | 1 | Footer de subagente |
+| `mcpBrowser.*` | 4 | MCP Browser |
+| `session.*` | 20+ | Acciones de sesión (menú overflow, terminal, skills) |
+| `themePicker.*` | 3 | Selector de temas |
 
 ---
 
@@ -367,7 +393,7 @@ flowchart LR
     classDef infra fill:#1a1a2e,stroke:#6c8cff,color:#eee
     classDef transport fill:#1e3a5f,stroke:#5ba3e6,color:#eee
     S["🖥️ Servidor OpenCode"]
-    A["🌐 api.ts · 35 endpoints"]
+    A["🌐 api.ts · 36 endpoints"]
     Cap["⚡ Capacitor plugins"]
     SSE["useSSE · SSE streaming"]
     Poll["usePolling · backoff 1s→60s"]
@@ -383,7 +409,7 @@ flowchart LR
 </details>
 
 <details>
-<summary><b>🧠 Estado y Lógica</b> — 27 hooks organizados por función</summary>
+<summary><b>🧠 Estado y Lógica</b> — 32 hooks organizados por función</summary>
 
 ```mermaid
 flowchart LR
@@ -416,7 +442,7 @@ flowchart LR
 </details>
 
 <details>
-<summary><b>🖥️ UI</b> — 47 componentes, vistas y modales</summary>
+<summary><b>🖥️ UI</b> — 57 componentes, vistas y modales</summary>
 
 ```mermaid
 flowchart LR
@@ -453,7 +479,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     classDef data fill:#1b3b2b,stroke:#4caf7d,color:#eee
-    LS["localStorage · 17 keys"]
+    LS["localStorage · 22 keys"]
     IDB["IndexedDB · opencode-mobile"]
     I18N["i18n.ts · 4 idiomas"]
     Types["types.ts · 38 tipos"]
@@ -473,15 +499,15 @@ flowchart LR
 
 | Métrica | Valor |
 |---|---|
-| Componentes UI | 47 |
-| Hooks React | 27 |
-| Endpoints API | 35 |
-| Benchmarks | 212 tests |
-| Tipos TypeScript | 38 |
-| Claves i18n | 200+ |
+| Componentes UI | 57 |
+| Hooks React | 32 |
+| Endpoints API | 36 |
+| Suites de test | 4 (ui, settings, model, i18n) |
+| Tipos TypeScript | 38+ |
+| Claves i18n | 400+ |
 | Idiomas | 4 (ES, EN, IT, zh-TW) |
 | Feature Flags | 13 |
-| Storage keys | 17 |
+| Storage keys | 22 |
 | IndexedDB stores | 3 |
 | Herramientas AI trackeadas | 13 |
 | Constantes de timing | 12 |
@@ -505,16 +531,16 @@ El stack es: **React 18.3 + TypeScript 5.6 + Vite 8** para el frontend web, empa
 opencode-remote-android/
 ├── web/                          ← CÓDIGO PRINCIPAL (todo el frontend)
 │   ├── src/
-│   │   ├── components/           ← 47 componentes UI
-│   │   ├── hooks/                ← 27 hooks React
-│   │   ├── utils/                ← 4 archivos de utilidades
-│   │   ├── api.ts                ← Cliente HTTP (35 endpoints)
-│   │   ├── App.tsx               ← Orquestador principal (~860 líneas)
-│   │   ├── types.ts              ← 38 tipos compartidos
-│   │   ├── i18n.ts               ← 4 idiomas, 200+ claves
+│   │   ├── components/           ← 57 componentes UI
+│   │   ├── hooks/                ← 32 hooks React
+│   │   ├── utils/                ← 8 archivos de utilidades + utils.ts
+│   │   ├── api.ts                ← Cliente HTTP (36 endpoints)
+│   │   ├── App.tsx               ← Orquestador principal (~1280 líneas)
+│   │   ├── types.ts              ← 38+ tipos compartidos
+│   │   ├── i18n.ts               ← 4 idiomas, 400+ claves
 │   │   ├── Icons.tsx             ← 31 iconos SVG
 │   │   ├── constants.ts          ← Storage keys + constantes de timing
-│   │   └── styles.css            ← ~5000 líneas de CSS
+│   │   └── styles.css            ← ~6500 líneas de CSS
 │   ├── android/                  ← Proyecto Android nativo (generado por Capacitor)
 │   ├── scripts/                  ← Scripts de deploy y sync
 │   ├── capacitor.config.ts

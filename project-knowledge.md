@@ -5,7 +5,7 @@
 > **Stack**: React 19 + TypeScript + Capacitor + CSS Custom Properties  
 > **Build**: Vite + Capacitor Android  
 > **PM**: npm (web root has `package.json`)  
-> **Last indexed**: 2026-07-20 (codebase-memory-mcp, full mode)
+> **Last indexed**: 2026-08-05 (manual update)
 
 ---
 
@@ -28,10 +28,12 @@ The app is built as a Capacitor Android app with a React SPA frontend. It works 
 |----------|-----------|
 | No state management library | `useState`/`useCallback`/`useMemo` only — app is small enough |
 | Single `AppInner` orchestrator | All state lives in one component, passed as props to children |
-| Custom CSS (no framework) | 2764 lines of CSS custom properties — no Tailwind/MUI |
-| i18n via context | `I18nProvider` + `useT` hook for en/es/it/zh-TW |
-| Data modes (full/saver/ultra/miser) | Mobile-conscious polling and bandwidth control |
+| Custom CSS (no framework) | ~6500 lines of CSS custom properties — no Tailwind/MUI |
+| i18n via context | `I18nProvider` + `useT` hook for en/es/it/zh-TW (400+ keys) |
+| Data modes (full/saver/ultra/miser) | Mobile-conscious polling and bandwidth control. Selector en Settings (debajo de Servidor); en el home solo un indicador pasivo |
 | Optimistic messages | User messages appear immediately before server confirms |
+| Footer de mensaje estilo TUI | Modelo/plan/nivel de pensamiento/duración solo en el último mensaje assistant o cuando cambia modelo; duración = `completed − created` del user padre |
+| Servidores guardados | Perfiles editables vía modal (host/puerto/usuario/contraseña) + "Guardar y aplicar" |
 
 ---
 
@@ -40,57 +42,88 @@ The app is built as a Capacitor Android app with a React SPA frontend. It works 
 ```
 web/src/
 ├── main.tsx                          # Entry point — mounts <App /> into #root
-├── App.tsx                           # Orchestrator + AppInner component
-├── styles.css                        # All CSS (2764 lines, custom properties)
-├── Icons.tsx                         # SVG icon components (18 icons + Logo)
-├── types.ts                          # All TypeScript types (30 types)
-├── constants.ts                      # localStorage keys
-├── api.ts                            # HTTP client (CapacitorHttp + fetch fallback)
+├── App.tsx                           # Orchestrator + AppInner component (~1280 lines)
+├── styles.css                        # All CSS (~6500 lines, custom properties)
+├── Icons.tsx                         # SVG icon components (31 icons + Logo)
+├── types.ts                          # All TypeScript types (38+ types)
+├── constants.ts                      # localStorage keys + timing + DB (opencode-mobile v2)
+├── api.ts                            # HTTP client (36 endpoints, CapacitorHttp + fetch fallback)
 ├── utils.ts                          # Utility functions (time, format, filter)
-├── i18n.ts                           # Translations (en/es/it/zh-TW, 190+ keys)
+├── i18n.ts                           # Translations (en/es/it/zh-TW, 400+ keys)
 ├── i18n-context.tsx                  # I18nProvider + useT hook
 ├── components/
-│   ├── BottomSheet.tsx              # Slide-up sheet for AI/model/project details
-│   ├── ChatView.tsx                 # Main chat view (messages + composer)
+│   ├── BottomSheet.tsx              # Slide-up sheet: AI/model (con nivel de pensamiento) / project details
+│   ├── ChatView.tsx                 # Main chat view (messages + composer + overflow ⋮)
 │   ├── Composer.tsx                 # Chat input with slash commands, mic, images
 │   ├── ConfirmModal.tsx             # Delete session confirmation
 │   ├── ConnectionNotices.tsx        # Offline/reconnecting banners
-│   ├── DataModeSwitcher.tsx         # Full/Saver/ULTRA/Miser toggle
+│   ├── DataModeSwitcher.tsx         # ⚠️ Legacy (sin uso): el modo se cambia en SettingsPanel
+│   ├── DropdownMenu.tsx             # Menú desplegable genérico
+│   ├── EmptyState.tsx               # Estado vacío DRY
 │   ├── ErrorBoundary.tsx            # React error boundary (class component)
+│   ├── ErrorModal.tsx               # Modal de error con detalle
 │   ├── ErrorNotice.tsx              # Dismissible runtime error banner
-│   ├── FileBrowser.tsx              # Modal for browsing server files
-│   ├── FolderPicker.tsx             # Modal for picking new session directory
+│   ├── FileBrowser.tsx              # Modal para navegar archivos (rutas relativas al proyecto)
+│   ├── FolderPicker.tsx             # Modal para nueva sesión (navegación relativa, proyectos con scroll)
 │   ├── HelpPage.tsx                 # Help content (5 tabs)
 │   ├── InlineRename.tsx             # Inline session rename input
-│   ├── MessageBubble.tsx            # Single message with Markdown rendering
-│   ├── MessageList.tsx              # Scrollable message list with lazy loading
+│   ├── MessageBubble.tsx            # Mensaje con Markdown; footer condicional (último mensaje/cambio de modelo)
+│   ├── MessageList.tsx              # Lista scrollable; calcula footerInfoMap (último assistant + cambios)
 │   ├── Modal.tsx                    # Reusable modal with focus trap
+│   ├── ModalHeader.tsx              # Header DRY de modales
 │   ├── NavBar.tsx                   # Top or bottom navigation (3 tabs)
+│   ├── QueuedPrompts.tsx            # Prompts encolados
+│   ├── QuickAccessCard.tsx          # Card DRY favoritos/activos/recientes (sin borde, pill busy/retry)
+│   ├── ServerProfileModal.tsx       # Modal edición de servidor guardado (host/puerto/usuario/pass)
 │   ├── SessionCard.tsx              # Session card in the list
-│   ├── SessionList.tsx              # Project-grouped session list
+│   ├── SessionList.tsx              # Proyectos agrupados + quick access; toggle Sesiones sin borde
 │   ├── SessionTokenUsage.tsx        # Token usage bars + cost display
-│   ├── SessionToolbar.tsx           # Refresh / New Session / Settings buttons
-│   └── SettingsPanel.tsx            # Server config, theme, mode, blocked models
+│   ├── SessionToolbar.tsx           # Refresh (solo icono) / Nueva sesión / indicador de modo / Settings
+│   ├── SettingsPanel.tsx            # Server config, perfiles, modo de datos, modelo con buscador, temas
+│   ├── StatsView.tsx                # Estadísticas del server (opencode-stats :8765)
+│   └── ThemeCreator.tsx             # Editor de temas (botón arcoíris en Settings)
 ├── hooks/
-│   ├── useAI.ts                    # Agent + model selection state
+│   ├── useAI.ts                    # Agent + model selection + variants
 │   ├── useBackButton.ts            # Android hardware back button
 │   ├── useBlockedModels.ts         # Blocked model filtering
-│   ├── useCompletionAudio.ts       # Play audio on completion + notifications
+│   ├── useChatSettings.ts          # Font size / spacing / thinking toggles
+│   ├── useCompletionAudio.ts       # Audio on completion + notifications
 │   ├── useConfig.ts                # Server config CRUD + connection state
-│   ├── useFileBrowser.ts           # File listing navigation
+│   ├── useDeepLink.ts              # opencode://connect deep links
+│   ├── useFeatureFlags.ts          # 13 feature flags
+│   ├── useFileBrowser.ts           # File listing (navegación relativa)
 │   ├── useFocusTrap.ts             # Keyboard focus trap for modals
-│   ├── useFolderPicker.ts          # New session directory picker
+│   ├── useFolderPicker.ts          # New session directory picker (relativo)
+│   ├── useLocalStorage.ts          # Persistencia genérica
 │   ├── useMemoryCleanup.ts         # Clean stale messages every 60s
 │   ├── useMessages.ts              # Message loading, sending, undo/redo/compact
 │   ├── useNetworkMode.ts           # Auto-switch data mode on network change
-│   ├── usePolling.ts               # Interval-based polling with visibility check
+│   ├── useNotifications.ts         # Browser notifications
+│   ├── useOfflineCache.ts          # IndexedDB v2; recrea la DB si está corrupta (sin stores)
+│   ├── useOfflineQueue.ts          # Cola offline (store pendingActions)
+│   ├── useOutsideClick.ts          # Click/touch fuera de elemento
+│   ├── usePolling.ts               # Interval polling with visibility check
+│   ├── useProviderManager.ts       # Proveedores externos
+│   ├── usePushNotifications.ts     # Notificaciones nativas (solo APK)
+│   ├── useSSE.ts                   # SSE streaming /event
+│   ├── useServerStats.ts           # opencode-stats API
+│   ├── useServers.ts               # Perfiles de servidores (add/remove/rename/update)
 │   ├── useSessionSidecar.ts        # Todo, diffs, project dashboard
 │   ├── useSessions.ts              # Session CRUD + favorites
-│   ├── useSpeechRecognition.ts     # Voice input (native Capacitor + Web Speech)
-│   ├── useStats.ts                 # Usage stats (prompts sent, sessions created)
+│   ├── useShareReceiver.ts         # Share to OpenCode (guard nativo; en web no hace nada)
+│   ├── useShell.ts                 # Terminal
+│   ├── useSpeechRecognition.ts     # Voice input
+│   ├── useStats.ts                 # Usage stats local
 │   └── useTheme.ts                 # Theme preference (system/scheduled/light/dark)
 └── utils/
-    └── parseCommand.ts             # Slash command parser (help, status, undo, etc.)
+    ├── crypto.ts                   # Cifrado de partes cacheadas (enc:/dec)
+    ├── db.ts                       # openDatabase wrapper
+    ├── error.ts                    # Extracción de mensajes de error
+    ├── model-utils.ts              # modelKey, sameModel, modelFromKey
+    ├── notifications.ts            # sendNotification
+    ├── parseCommand.ts             # Slash command parser
+    ├── resolveTheme.ts             # Resolución de temas JSON → CSS vars
+    └── toolMeta.ts                 # Metadata de herramientas AI
 ```
 
 Test files:
@@ -114,9 +147,10 @@ I18nProvider
     └── AppInner (all state, all callbacks)
         ├── NavBar (top variant, conditionally rendered)
         ├── [view=settings] SettingsPanel
+        │   └── [editingProfile] ServerProfileModal
         ├── [view=sessions] SessionList
-        │   ├── SessionToolbar
-        │   ├── DataModeSwitcher
+        │   ├── SessionToolbar (indicador de modo pasivo)
+        │   ├── QuickAccessCard[] (favoritos/activos/recientes)
         │   ├── ConnectionNotices
         │   ├── [project] SessionCard[]
         │   │   └── InlineRename (conditional)
@@ -131,7 +165,7 @@ I18nProvider
         ├── [view=help] HelpPage
         ├── [showNewSessionPicker] FolderPicker → Modal
         ├── [fileBrowser.isOpen] FileBrowser → Modal
-        ├── [activeDetailSheet] BottomSheet
+        ├── [activeDetailSheet] BottomSheet (nivel de pensamiento)
         ├── [sessionToDelete] ConfirmModal → Modal
         └── NavBar (bottom variant)
 ```
@@ -143,21 +177,20 @@ I18nProvider
 | `App` | `src/App.tsx:540` | 551 | — | I18nProvider → ErrorBoundary → AppInner | `AppInner` |
 | `AppInner` | `src/App.tsx:35` | 538 | `{language, setLanguage}` | Full app shell with view switching | All components |
 | `NavBar` | `src/components/NavBar.tsx:22` | 64 | `{variant, view, onNavigate, hasConfiguredServer, hasSelectedSession}` | Top header or bottom nav bar | 3 nav buttons |
-| `SettingsPanel` | `src/components/SettingsPanel.tsx:44` | 253 | 32 props incl. `draftConfig`, `onSave`, `onTest`, `modelOptions`, `stats`, `blockedModels` | Server config form + settings | Form fields, buttons, stats, blocked model list |
-| `SessionList` | `src/components/SessionList.tsx:46` | 201 | 27 props incl. `projects`, `sessions`, `connectionState`, `query`, `favorites` | Session browser with project grouping | `SessionToolbar`, `DataModeSwitcher`, `ConnectionNotices`, `SessionCard[]`, `ErrorNotice` |
-| `SessionCard` | `src/components/SessionCard.tsx:25` | 107 | `{session, isSelected, isRenaming, ...callbacks}` | Session card with stats + actions | `InlineRename`, star, play, edit, delete buttons |
-| `ChatView` | `src/components/ChatView.tsx:62` | 252 | 29 props incl. `selectedSession`, `messages`, `composer`, `isWorking` | Chat interface | `MessageList`, `Composer`, `InlineRename`, `SessionTokenUsage`, `ErrorNotice` |
-| `MessageList` | `src/components/MessageList.tsx:20` | 116 | `{messages, loadingSessionID, showTypingBubble, ...}` | Scrollable message list with auto-scroll | `MessageBubble` (lazy), typing dots |
-| `MessageBubble` | `src/components/MessageBubble.tsx:25` | 80 | `{message, revert, onRevertToMessage}` | Single message with Markdown rendering | `ReactMarkdown` with `remarkGfm` |
-| `Composer` | `src/components/Composer.tsx:39` | 298 | `{value, commands, onSend, onAbort, isWorking, ...}` | Chat input with slash menu, mic, images | Textarea, slash menu, image strip, tool buttons |
-| `BottomSheet` | `src/components/BottomSheet.tsx:41` | 201 | 26 props (AI + Details sheets) | Slide-up sheet for AI/model/project details | Agent select, model list, project dashboard |
+| `SettingsPanel` | `src/components/SettingsPanel.tsx` | 464+ | props incl. `draftConfig`, `onSave`, `onTest`, `modelOptions`, `stats`, `blockedModels`, `serverProfiles`, `onUpdateServerProfile` | Server config form + perfiles editables + modo de datos + modelo con buscador + temas | Form fields, lista de modelos, ServerProfileModal |
+| `ServerProfileModal` | `src/components/ServerProfileModal.tsx` | — | `{profile, onSave(name, config), onClose}` | Edición de servidor guardado (nombre/host/puerto/usuario/contraseña) | `ModalHeader`, form grid, modal-actions |
+| `SessionList` | `src/components/SessionList.tsx` | 308 | props incl. `projects`, `sessions`, `connectionState`, `query`, `favorites` | Session browser con quick access + proyectos agrupados | `SessionToolbar`, `QuickAccessCard[]`, `ConnectionNotices`, `SessionCard[]`, `ErrorNotice` |
+| `SessionCard` | `src/components/SessionCard.tsx` | — | `{session, isSelected, isRenaming, ...callbacks}` | Session card con pill de estado localizado (Ocupado/Reintento) | `InlineRename`, star, play, edit, delete buttons |
+| `SessionToolbar` | `src/components/SessionToolbar.tsx` | 107 | `{refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode}` | Refresh (icono 22px sin fondo) + Nueva sesión + indicador de modo + Settings | Buttons, `.mode-indicator` |
+| `QuickAccessCard` | `src/components/QuickAccessCard.tsx` | — | `{session, isFavorite, onOpen, onToggleFavorite, onDismiss?}` | Card DRY de acceso rápido (sin borde; pill solo busy/retry) | star, chat icon, título, tiempo |
+| `MessageList` | `src/components/MessageList.tsx` | 166 | `{messages, ...}` + `activeVariant` | Lista con auto-scroll; `footerInfoMap` decide dónde mostrar el footer del modelo | `MessageBubble`, typing dots |
+| `MessageBubble` | `src/components/MessageBubble.tsx` | 229 | `{message, revert, ...}` + `showModelInfo`, `activeVariant` | Mensaje con footer condicional (último assistant o cambio de modelo/plan) y duración estilo TUI | `ReactMarkdown`, `ThinkingBlock`, `ToolPart`, `FileDiffs` |
 | `HelpPage` | `src/components/HelpPage.tsx:34` | 115 | `{helpPage, onHelpPageChange, commands, ...}` | Help with 5 tabs | Tab navigation, help content |
 | `ConfirmModal` | `src/components/ConfirmModal.tsx:13` | 33 | `{session, onConfirm, onCancel}` | Delete confirmation dialog | `Modal` |
 | `Modal` | `src/components/Modal.tsx:12` | 31 | `{children, onClose, className}` | Reusable modal with focus trap | Children |
 | `FolderPicker` | `src/components/FolderPicker.tsx:28` | 80 | `{pickerPath, pickerItems, ...callbacks}` | Directory picker for new session | `Modal`, folder list |
-| `FileBrowser` | `src/components/FileBrowser.tsx:17` | 70 | `{currentPath, items, ...callbacks}` | Server file browser | `Modal`, folder/file list |
-| `SessionToolbar` | `src/components/SessionToolbar.tsx:12` | 31 | `{refreshing, creating, onRefresh, onNewSession}` | Refresh + New Session buttons | Buttons |
-| `DataModeSwitcher` | `src/components/DataModeSwitcher.tsx:9` | 23 | `{mode, onChange}` | Data mode toggle bar | Mode buttons |
+| `FileBrowser` | `src/components/FileBrowser.tsx:17` | 70 | `{currentPath, items, ...callbacks}` | Server file browser (navegación relativa al proyecto) | `Modal`, folder/file list |
+| `DataModeSwitcher` | `src/components/DataModeSwitcher.tsx` | 23 | — | ⚠️ Legacy sin uso: el modo se cambia en SettingsPanel | Mode buttons |
 | `ConnectionNotices` | `src/components/ConnectionNotices.tsx:4` | 20 | `{connectionState}` | Offline/reconnecting banners | Notice divs |
 | `ErrorNotice` | `src/components/ErrorNotice.tsx:1` | 4 | `{message}` | Runtime error banner | Div |
 | `InlineRename` | `src/components/InlineRename.tsx:13` | 35 | `{value, original, onChange, onConfirm, onCancel}` | Inline session rename | Input + save/cancel buttons |
@@ -194,6 +227,12 @@ I18nProvider
 | `useFileBrowser` | `src/hooks/useFileBrowser.ts:5` | 59 | `isOpen, currentPath, items, loading, error` | File browser state | `AppInner` |
 | `useFocusTrap` | `src/hooks/useFocusTrap.ts:5` | 46 | — (side-effect) | Keyboard focus trap | `Modal` / `BottomSheet` |
 | `useSpeechRecognition` | `src/hooks/useSpeechRecognition.ts:20` | 132 | `isListening, supported` | `{start, stop}` | `Composer` |
+| `useServers` | `src/hooks/useServers.ts` | 45 | `profiles` | `{addProfile, removeProfile, renameProfile, updateProfile}` | `AppInner` (perfiles guardados) |
+| `useShareReceiver` | `src/hooks/useShareReceiver.ts` | 60 | `pendingShare` | `{pendingShare, clearShare}` | `AppInner` (solo nativo; guard web) |
+| `usePushNotifications` | `src/hooks/usePushNotifications.ts` | — | — | Notificaciones nativas push | `AppInner` (solo nativo) |
+| `useServerStats` | `src/hooks/useServerStats.ts` | — | `stats, loading, error` | API opencode-stats `:8765` | `AppInner` / `StatsView` |
+| `useLocalStorage` | `src/hooks/useLocalStorage.ts` | — | `value, setValue` | Persistencia genérica | `useServers`, flags, etc. |
+| `useOutsideClick` | `src/hooks/useOutsideClick.ts` | — | — | Detecta clic fuera | `DropdownMenu`, overflow |
 
 ### 4.1 Hook Dependencies Graph
 
@@ -413,6 +452,7 @@ RenderedMessage   # MessageEnvelope + { text: string, hasCompaction: boolean }
 ModelSelection    # { providerID, modelID, variant? }
 ModelOption       # ModelSelection + { providerName, modelName, status, contextLimit, outputLimit, tools, attachments, isDefault }
 AgentOption       # { id, name, description?, mode, hidden? }
+ServerProfile     # { id, name, config: ServerConfig } — perfiles de servidores guardados
 ```
 
 ### 7.5 File Types (`types.ts`)
@@ -547,6 +587,7 @@ Svg (base) ← SettingsIcon, FolderIcon, ChatIcon, HelpIcon, PlusIcon, PlayIcon,
 | GET | `/file/status` | `api.loadFileStatus()` | File change status |
 | GET | `/file?path=` | `api.listFiles()` | List files in directory |
 | GET | `/path` | `api.loadPath()` | Server path info |
+| PATCH | `/config` | `api.setModelVariant()` | Crear/actualizar variant de modelo (ej. `{ high: { reasoningEffort: "high" } }`). El server mergea con la config existente |
 
 ### 9.2 API Client Details
 
@@ -562,32 +603,32 @@ Svg (base) ← SettingsIcon, FolderIcon, ChatIcon, HelpIcon, PlusIcon, PlayIcon,
 
 ## 10. Style Architecture
 
-### 10.1 CSS Organization (`styles.css`, 2764 lines)
+### 10.1 CSS Organization (`styles.css`, ~6500 lines)
 
 The entire UI is styled with **CSS custom properties** in a single file:
 
 ```
-styles.css ─ 2764 lines
-├── :root (light theme variables)  [1-55]
-├── :root[data-theme="dark"] (dark theme) [57-97]
-├── Reset + base elements [99-221]
-├── App shell + layouts [250-359]
-├── Button variants [360-381]
-├── Form grid + settings [390-528]
-├── Session list + cards [535-925]
-├── Detail/Chat view [951-1567]
-├── Messages + bubbles [1568-1801]
-├── Composer [1803-2062]
-├── Notices + empty states [2088-2132]
-├── Modal + Bottom Sheet [2134-2218]
-├── Help page [2220-2283]
-├── Bottom nav (desktop) [2285-2333]
-├── Animations (fade-in, spin, typing-dot) [2335-2369]
-├── Mobile responsive ≤780px [2371-2588]
-├── Mobile responsive ≤430px [2590-2621]
-├── Inline rename [2623-2655]
-├── Slash command menu [2688-2743]
-└── Session type badges [2745-2764]
+styles.css ─ ~6500 lines
+├── :root (light theme variables)
+├── :root[data-theme="dark"] (dark theme)
+├── Reset + base elements
+├── App shell + layouts
+├── Button variants
+├── Form grid + settings (incl. .settings-model-list, .theme-creator-btn, .mode-indicator)
+├── Session list + cards (incl. project cards sin borde, toggle Sesiones)
+├── Detail/Chat view
+├── Messages + bubbles
+├── Composer
+├── Notices + empty states
+├── Modal + Bottom Sheet (incl. .thinking-levels)
+├── Help page
+├── Bottom nav (desktop)
+├── Animations (fade-in, spin, typing-dot, theme-rainbow-shift)
+├── Mobile responsive ≤780px
+├── Mobile responsive ≤430px
+├── Inline rename
+├── Slash command menu
+└── Session type badges
 ```
 
 ### 10.2 Design Tokens (CSS Variables)
@@ -635,6 +676,11 @@ styles.css ─ 2764 lines
 ## A. Memory & Edge Cases
 
 - **`useMemoryCleanup`** (`useMemoryCleanup.ts:4`): Clears messages from other sessions older than 5 minutes every 60s
+- **`useShareReceiver`**: guard `Capacitor.isNativePlatform()` — en web los métodos del plugin rechazan y generaban "Uncaught (in promise)"
+- **`useOfflineCache`**: la DB v2 puede quedar sin stores por migraciones viejas → `openDB` detecta stores faltantes y **recrea la DB** (delete con retry si hay conexiones que la bloquean)
+- **`useServers`**: perfiles en localStorage (`opencode.mobile.servers`); `updateProfile` preserva id para que el perfil activo no se pierda al editar
+- **`setModelVariant`**: PATCH `/config` parcial — el server hace `mergeDeep`, no pisa la config existente
+- **Footer del mensaje**: `footerInfoMap` en `MessageList` — solo último assistant o cambio de modelo/plan; duración usa `parentID` directo (TUI parity)
 - **`backgroundFailureCountRef`**: After 3 consecutive poll failures, sets connection to "offline"
 - **`initialSessionLoadRef`**: First load sets "offline" on failure; subsequent failures go "reconnecting" then "offline"
 - **`loadSessionRef`** (`App.tsx:88`): Request ID to discard stale responses
@@ -650,10 +696,10 @@ styles.css ─ 2764 lines
 ## B. Performance Considerations
 
 - `memo()` on all components except simple ones (ErrorNotice, ConnectionNotices, etc.)
-- `useMemo()` for derived state (renderedMessages, filteredModels, groupedSessions, etc.)
+- `useMemo()` for derived state (renderedMessages, filteredModels, groupedSessions, footerInfoMap, etc.)
 - `useCallback()` for all handlers passed as props
 - `lazy()` + `Suspense` for MessageBubble
 - Polling interval adapts to data mode (3.5s to 60s)
-- Message list capped at 500 (`messages.slice(-500)`)
+- Message list capped (ventana acotada por data mode: 100/30/20)
 - CSS animations respect `prefers-reduced-motion`
 - Sheets and modals use `useFocusTrap` for accessibility

@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
   <img src="https://img.shields.io/badge/Vite-8.0-646CFF?logo=vite&logoColor=white" alt="Vite"/>
   <img src="https://img.shields.io/badge/Capacitor-8.0-119EFF?logo=capacitor&logoColor=white" alt="Capacitor"/>
-  <img src="https://img.shields.io/badge/212%20tests-%E2%9C%85%20passing-4caf7d" alt="Benchmarks"/>
+  <img src="https://img.shields.io/badge/4%20test%20suites-%E2%9C%85%20passing-4caf7d" alt="Tests"/>
   <br/>
   <img src="https://img.shields.io/badge/SSE%20streaming-%E2%9C%85-6c8cff" alt="SSE"/>
   <img src="https://img.shields.io/badge/Offline%20cache-%E2%9C%85-6c8cff" alt="Offline"/>
@@ -46,6 +46,8 @@
 | **📋 Diff viewer** | Per-file expandable diffs with inline content loading |
 | **📁 Session management** | Create, rename, delete, favorites, archive, export snapshots |
 | **🤖 AI agent control** | Select and switch between agents/models per session |
+| **🧠 Thinking level** | Choose reasoning effort (None/High/Medium/Low) per model — variants are created on the server via `PATCH /config` |
+| **🎨 Theme creator** | Visual color editor with JSON export |
 | **🔌 Multi-provider** | Connect external providers (OpenAI, Anthropic, etc.) via API key |
 | **📂 File browser** | Browse the remote project's files |
 | **🌿 Git toolbar** | Stage, commit, branch state (ahead/behind) |
@@ -68,6 +70,7 @@
 | **📦 Offline queue** | Actions are queued and resent on reconnect |
 | **🎨 Theme creator** | Visual color editor with JSON export |
 | **⭐ Reorderable favorites** | Drag and drop to sort |
+| **🗄️ Saved servers** | Multiple server profiles (host/port/user/password) with edit modal — tap a profile to edit before applying |
 
 </div>
 
@@ -279,7 +282,7 @@ Estimates over compressed HTTP/2 with ~10 server sessions.
 
 ---
 
-> 📖 **Full catalog**: [`CATALOGO.md`](CATALOGO.md) — 47 components, 27 hooks, 35 endpoints, graphs, LLM guide.
+> 📖 **Full catalog**: [`CATALOGO.md`](CATALOGO.md) — 57 components, 32 hooks, 36 endpoints, graphs, LLM guide.
 
 ## 📁 Project structure
 
@@ -289,9 +292,9 @@ Estimates over compressed HTTP/2 with ~10 server sessions.
 ```
 web/
 ├── src/
-│   ├── components/       # 43 UI components
-│   ├── hooks/            # 26 React hooks
-│   ├── api.ts            # HTTP client (30 endpoints)
+│   ├── components/       # 57 UI components
+│   ├── hooks/            # 32 React hooks
+│   ├── api.ts            # HTTP client (36 endpoints)
 │   ├── App.tsx           # Main orchestrator
 │   ├── types.ts          # TypeScript types
 │   ├── i18n.ts           # 4 languages
