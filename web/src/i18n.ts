@@ -82,6 +82,9 @@ type TranslationKey =
   | 'settings.serverActive'
   | 'settings.serverApplied'
   | 'settings.serverNamePlaceholder'
+  | 'settings.serverName'
+  | 'settings.editServer'
+  | 'settings.saveAndApply'
   | 'settings.serverRemove'
   | 'settings.serverSaveHttp'
   | 'settings.serverUse'
@@ -447,6 +450,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.serverActive': 'Active',
       'settings.serverApplied': 'Server applied',
       'settings.serverNamePlaceholder': 'Profile name (e.g. Work PC)',
+      'settings.serverName': 'Name',
+      'settings.editServer': 'Edit saved server',
+      'settings.saveAndApply': 'Save and apply',
       'settings.serverRemove': 'Remove server',
       'settings.serverSaveHttp': 'Save current as HTTP',
       'settings.serverUse': 'Use',
@@ -887,6 +893,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.serverActive': 'Activo',
       'settings.serverApplied': 'Servidor aplicado',
       'settings.serverNamePlaceholder': 'Nombre del perfil (ej. PC trabajo)',
+      'settings.serverName': 'Nombre',
+      'settings.editServer': 'Editar servidor guardado',
+      'settings.saveAndApply': 'Guardar y aplicar',
       'settings.serverRemove': 'Quitar servidor',
       'settings.serverSaveHttp': 'Guardar actual como HTTP',
       'settings.serverUse': 'Usar',
@@ -1327,6 +1336,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.serverActive': 'Attivo',
       'settings.serverApplied': 'Server applicato',
       'settings.serverNamePlaceholder': 'Nome profilo (es. PC lavoro)',
+      'settings.serverName': 'Nome',
+      'settings.editServer': 'Modifica server salvato',
+      'settings.saveAndApply': 'Salva e applica',
       'settings.serverRemove': 'Rimuovi server',
       'settings.serverSaveHttp': 'Salva attuale come HTTP',
       'settings.serverUse': 'Usa',
@@ -1731,6 +1743,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.serverActive': '使用中',
       'settings.serverApplied': '已套用伺服器',
       'settings.serverNamePlaceholder': '設定檔名稱（例如：工作電腦）',
+      'settings.serverName': '名稱',
+      'settings.editServer': '編輯已儲存的伺服器',
+      'settings.saveAndApply': '儲存並套用',
       'settings.serverRemove': '移除伺服器',
       'settings.serverSaveHttp': '將目前儲存為 HTTP',
       'settings.serverUse': '使用',

@@ -1,10 +1,11 @@
-import { memo, useState, useCallback } from "react"
+import { memo, useState, useCallback, useMemo } from "react"
 import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo, ServerProfile } from "../types"
 import type { LanguageCode } from "../i18n"
 import { describeProfile } from "../hooks/useServers"
 import { ProviderManager } from "./ProviderManager"
+import { ServerProfileModal } from "./ServerProfileModal"
 
 type UsageStats = {
   promptsSent: number
@@ -55,6 +56,7 @@ type SettingsPanelProps = {
   serverProfiles: ServerProfile[]
   onAddServerProfile: (name: string, kind: "http") => void
   onRemoveServerProfile: (id: string) => void
+  onUpdateServerProfile: (id: string, name: string, config: ServerConfig) => void
   onApplyServerProfile: (profile: ServerProfile) => void
   activeServerProfileID: string | null
 }
@@ -72,10 +74,27 @@ export const SettingsPanel = memo(function SettingsPanel({
   onOpenThemeCreator,
   flags, onToggleFlag, onSetFlag,
   providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider,
-  serverProfiles, onAddServerProfile, onRemoveServerProfile, onApplyServerProfile, activeServerProfileID
+  serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile, onApplyServerProfile, activeServerProfileID
 }: SettingsPanelProps) {
   const t = useT()
   const [showPassword, setShowPassword] = useState(false)
+  const [editingProfile, setEditingProfile] = useState<ServerProfile | null>(null)
+  const [modelQuery, setModelQuery] = useState("")
+
+  const uniqueModels = useMemo(() => {
+    return Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values())
+  }, [modelOptions, mk])
+
+  const filteredModels = useMemo(() => {
+    const q = modelQuery.trim().toLowerCase()
+    if (!q) return uniqueModels
+    return uniqueModels.filter((opt) =>
+      (opt.modelName || opt.modelID).toLowerCase().includes(q) ||
+      opt.modelID.toLowerCase().includes(q) ||
+      opt.providerName.toLowerCase().includes(q) ||
+      opt.providerID.toLowerCase().includes(q)
+    )
+  }, [uniqueModels, modelQuery])
   const [blockedSearch, setBlockedSearch] = useState("")
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
   const [newProfileName, setNewProfileName] = useState("")
@@ -132,17 +151,16 @@ export const SettingsPanel = memo(function SettingsPanel({
         {serverProfiles.length > 0 && (
           <div className="server-profile-list">
             {serverProfiles.map((profile) => (
-              <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}`}>
+              <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}`}
+                role="button" tabIndex={0}
+                onClick={() => setEditingProfile(profile)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditingProfile(profile) } }}>
                 <span className="server-profile-name">{profile.name}</span>
                 <span className="server-profile-desc">{describeProfile(profile)}</span>
                 {activeServerProfileID === profile.id ? (
                   <span className="server-profile-active"><CheckIcon size={12} /> {t('settings.serverActive')}</span>
-                ) : (
-                  <button type="button" className="btn-secondary compact" onClick={() => onApplyServerProfile(profile)}>
-                    {t('settings.serverUse')}
-                  </button>
-                )}
-                <button type="button" className="btn-icon btn-ghost" onClick={() => onRemoveServerProfile(profile.id)}
+                ) : null}
+                <button type="button" className="btn-icon btn-ghost" onClick={(e) => { e.stopPropagation(); onRemoveServerProfile(profile.id) }}
                   aria-label={t('settings.serverRemove')} title={t('settings.serverRemove')}>
                   <TrashIcon size={14} />
                 </button>
@@ -189,6 +207,23 @@ export const SettingsPanel = memo(function SettingsPanel({
               </button>
             </div>
           </label>
+        </div>
+      </div>
+
+      {/* Data mode */}
+      <div className="settings-card">
+        <h3 className="settings-section-title">{t('settings.dataModeTitle')}</h3>
+        <p className="subtle">{t('settings.dataModeDesc')}</p>
+        <div className="data-mode-grid">
+          {dataModes.map((opt) => (
+            <button key={opt.value}
+              className={`data-mode-card${dataMode === opt.value ? " active" : ""}`}
+              onClick={() => onDataModeChange(opt.value)}
+              aria-pressed={dataMode === opt.value}>
+              <strong>{opt.label}</strong>
+              <small>{opt.desc}</small>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -246,18 +281,31 @@ export const SettingsPanel = memo(function SettingsPanel({
               <option value="scheduled">{t('settings.themeScheduled')}</option>
             </select>
           </label>
-          <label className="form-field">
+          <div className="form-field">
             <span>{t('settings.defaultModel')}</span>
-            <select name="model" value={selectedModelKey ?? ""}
-              onChange={(e) => { const v = e.target.value; if (v) onChangeModel(v) }}>
-              <option value="" disabled>{modelOptions.length === 0 ? t('detail.modelLoading') : t('settings.selectModel')}</option>
-              {Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values()).map((opt) => (
-                <option key={mk(opt)} value={mk(opt)}>
-                  {opt.modelName || opt.modelID} — {opt.providerName}
-                </option>
-              ))}
-            </select>
-          </label>
+            <input name="modelSearch" value={modelQuery} onChange={(e) => setModelQuery(e.target.value)}
+              placeholder={t('detail.modelSearchPlaceholder')} autoComplete="off" />
+            <div className="settings-model-list" role="listbox" aria-label={t('settings.defaultModel')}>
+              {filteredModels.length === 0 ? (
+                <p className="subtle model-empty">{t('detail.modelSearchEmpty')}</p>
+              ) : (
+                filteredModels.map((opt) => {
+                  const key = mk(opt)
+                  const isSelected = key === selectedModelKey
+                  return (
+                    <button key={key} type="button"
+                      className={`settings-model-item${isSelected ? " active" : ""}`}
+                      onClick={() => onChangeModel(key)}
+                      role="option" aria-selected={isSelected}>
+                      <span className="settings-model-name">{opt.modelName || opt.modelID}</span>
+                      <span className="settings-model-provider">{opt.providerName}</span>
+                      {isSelected && <CheckIcon size={14} className="settings-model-check" />}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>
           {(() => {
             if (!selectedModelKey) return null
             const vars = modelOptions.filter((opt) => mk(opt) === selectedModelKey && opt.variant)
@@ -290,7 +338,7 @@ export const SettingsPanel = memo(function SettingsPanel({
                 <span className="badge">33 temas</span>
               </button>
               {onOpenThemeCreator && (
-                <button type="button" className="btn-secondary" onClick={onOpenThemeCreator}>
+                <button type="button" className="theme-creator-btn" onClick={onOpenThemeCreator}>
                   <span>{t('session.themeCreator')}</span>
                 </button>
               )}
@@ -299,23 +347,6 @@ export const SettingsPanel = memo(function SettingsPanel({
               )}
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Data mode */}
-      <div className="settings-card">
-        <h3 className="settings-section-title">{t('settings.dataModeTitle')}</h3>
-        <p className="subtle">{t('settings.dataModeDesc')}</p>
-        <div className="data-mode-grid">
-          {dataModes.map((opt) => (
-            <button key={opt.value}
-              className={`data-mode-card${dataMode === opt.value ? " active" : ""}`}
-              onClick={() => onDataModeChange(opt.value)}
-              aria-pressed={dataMode === opt.value}>
-              <strong>{opt.label}</strong>
-              <small>{opt.desc}</small>
-            </button>
-          ))}
         </div>
       </div>
 
@@ -457,6 +488,17 @@ export const SettingsPanel = memo(function SettingsPanel({
           {t('nav.help')}
         </button>
       </div>
+
+      {editingProfile && (
+        <ServerProfileModal
+          profile={editingProfile}
+          onSave={(name, config) => {
+            onUpdateServerProfile(editingProfile.id, name, config)
+            onApplyServerProfile({ ...editingProfile, name, config })
+            setEditingProfile(null)
+          }}
+          onClose={() => setEditingProfile(null)} />
+      )}
     </section>
   )
 })

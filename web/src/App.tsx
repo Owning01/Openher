@@ -210,7 +210,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const [showFavoritesManager, setShowFavoritesManager] = useState(false)
 
   // ===== Feature: Saved servers (profiles) =====
-  const { profiles: serverProfiles, addProfile, removeProfile } = useServers()
+  const { profiles: serverProfiles, addProfile, removeProfile, updateProfile } = useServers()
   const [activeServerProfileID, setActiveServerProfileID] = useState<string | null>(() =>
     localStorage.getItem("opencode.mobile.activeServer") ?? null
   )
@@ -989,6 +989,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               localStorage.removeItem("opencode.mobile.activeServer")
             }
           }}
+          onUpdateServerProfile={(id, name, config) => updateProfile(id, { name, config })}
           onApplyServerProfile={applyServerProfile}
           activeServerProfileID={activeServerProfileID} />
       )}
@@ -1005,7 +1006,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             connectionState={connectionState}
             query={query} activeSessions={activeSessions} recentSessions={recentSessions}
             favorites={favorites}
-            dataMode={dataMode} onDataModeChange={changeDataMode}
+            dataMode={dataMode}
             onSelectProject={setSelectedProjectDir}
             onQueryChange={setQuery}
             onRefresh={refreshSessionsWithIndicator}

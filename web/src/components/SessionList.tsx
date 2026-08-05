@@ -23,7 +23,6 @@ type SessionListProps = {
   recentSessions: SessionView[]
   favorites: Set<string>
   dataMode: DataMode
-  onDataModeChange: (mode: DataMode) => void
   onSelectProject: (dir: string | null) => void
   onQueryChange: (query: string) => void
   onRefresh: () => void
@@ -50,7 +49,7 @@ export const SessionList = memo(function SessionList({
   renamingSessionID, renameValue,
   connectionState, query,
   activeSessions, recentSessions, favorites,
-  dataMode, onDataModeChange,
+  dataMode,
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
   onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive, onFork,
@@ -139,7 +138,7 @@ export const SessionList = memo(function SessionList({
             )}
             <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
               onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-              dataMode={dataMode} onDataModeChange={onDataModeChange} />
+              dataMode={dataMode} />
           </div>
         </div>
         <div className="toolbar">
@@ -159,7 +158,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-        dataMode={dataMode} onDataModeChange={onDataModeChange} />
+        dataMode={dataMode} />
       <div className="toolbar">
         <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />

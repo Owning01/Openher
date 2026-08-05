@@ -36,5 +36,9 @@ export function useServers() {
     setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)))
   }, [setProfiles])
 
-  return { profiles, addProfile, removeProfile, renameProfile }
+  const updateProfile = useCallback((id: string, patch: Partial<ServerProfileInput> & { name?: string }) => {
+    setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+  }, [setProfiles])
+
+  return { profiles, addProfile, removeProfile, renameProfile, updateProfile }
 }
