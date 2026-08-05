@@ -1802,43 +1802,6 @@ p {
   word-break: break-word;
 }
 
-.project-count {
-  align-self: flex-start;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-}
-
-.project-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-  padding-top: var(--space-2);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-
-.project-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.project-status.idle {
-  color: var(--success);
-}
-
-.project-status.busy {
-  color: var(--warning);
-}
-
 .btn-link {
   background: none;
   border: none;
@@ -2042,7 +2005,6 @@ p {
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3) 0 var(--space-2) var(--space-5);
-  border-left: 2px solid var(--border);
   margin-left: var(--space-1);
 }
 
@@ -2071,34 +2033,16 @@ p {
   justify-content: center;
 }
 
+.session-delete-btn {
+  color: var(--danger);
+}
+
 @media (max-width: 430px) {
   .session-actions button {
     font-size: 0.82rem;
     padding: 0.5rem 0.5rem;
     min-height: 38px;
   }
-}
-
-
-/* ===== Change Summary & Model Badge ===== */
-.change-summary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--muted-strong);
-}
-
-.session-model-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--primary);
-  background: var(--primary-soft);
-  padding: 0.15rem 0.5rem;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
 }
 
 
@@ -2122,22 +2066,6 @@ p {
   font-weight: 800;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.status-pill {
-  gap: 5px;
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.pill.idle {
-  color: var(--success);
-  background: var(--success-soft);
 }
 
 .pill.busy,
@@ -6503,10 +6431,7 @@ mark {
 .mode-indicator {
   flex-shrink: 0;
   margin-left: auto;
-  padding: 0.3rem 0.6rem;
-  border-radius: 999px;
-  background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--muted-strong);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;

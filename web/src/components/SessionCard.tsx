@@ -59,10 +59,6 @@ export const SessionCard = memo(function SessionCard({
             <h3 className="session-title">{session.title}</h3>
           )}
         </div>
-        <span className={`pill status-pill ${session.status}`}>
-          <span className="status-dot"></span>
-          {session.status === "busy" ? t('session.statusBusy') : t('session.statusRetry')}
-        </span>
       </div>
 
       <div className="session-card-body">
@@ -70,24 +66,10 @@ export const SessionCard = memo(function SessionCard({
           <FolderIcon size={13} />
           <span className="session-dir-text">{session.directory}</span>
         </div>
-        {session.model?.modelID && (
-          <span className="session-model-badge">
-            {session.model.modelID}{session.model.variant ? ` · ${session.model.variant}` : ""}
-          </span>
-        )}
       </div>
 
       <div className="session-card-meta">
         <div className="session-stats">
-          {session.files > 0 || session.additions > 0 || session.deletions > 0 ? (
-            <span className="change-summary">
-              <span className="change-files"><strong>{session.files}</strong> files</span>
-              <span className="positive">+{session.additions}</span>
-              <span className="negative">-{session.deletions}</span>
-            </span>
-          ) : (
-            <span className="subtle">{t('sessions.noFileChanges')}</span>
-          )}
           <span className="subtle time-label">{t('sessions.updated', { time: formatTime(session.updated) })}</span>
         </div>
       </div>
@@ -118,10 +100,10 @@ export const SessionCard = memo(function SessionCard({
             <ForkIcon size={14} />
           </button>
         )}
-        <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); handleStartRename() }} title={t('session.renameTitle')}>
+        <button className="btn-icon compact" onClick={(e) => { e.stopPropagation(); handleStartRename() }} title={t('session.renameTitle')}>
           <PencilIcon size={15} />
         </button>
-        <button className="btn-danger compact-action-btn" onClick={(e) => { e.stopPropagation(); handleDelete() }}>
+        <button className="btn-icon compact session-delete-btn" onClick={(e) => { e.stopPropagation(); handleDelete() }}>
           <TrashIcon size={15} />
         </button>
       </div>

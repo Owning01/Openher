@@ -284,14 +284,14 @@ export const ChatView = memo(function ChatView({
             )}
             {onOpenChatCustomizer && (
               <button
-                className="btn-icon btn-secondary compact"
+                className="btn-icon compact"
                 onClick={onOpenChatCustomizer}
                 title="Personalizar chat">
                 <PaintIcon size={15} />
               </button>
             )}
             <div className="overflow-wrap header-overflow" ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
-              <button className="btn-icon btn-secondary compact"
+              <button className="btn-icon compact"
                 onClick={(e) => {
                   e.stopPropagation()
                   setShowOverflow((v) => !v)

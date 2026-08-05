@@ -274,13 +274,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                   onClick={() => toggleProject(dir)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProject(dir) } }}>
                   <div className="project-card-header">
-                    <div className="project-title-group">
-                      <strong className="project-path">{dir}</strong>
-                    </div>
-                    <span className="project-count">
-                      {t('sessions.count', { count: projectSessionsList.length })}
-                      <span className="project-chevron">{isExpanded ? "▲" : "▼"}</span>
-                    </span>
+                    <strong className="project-path">{dir}</strong>
                   </div>
                 </article>
                 {isExpanded && (
