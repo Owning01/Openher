@@ -52,13 +52,9 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   const [showConfirm, setShowConfirm] = useState(false)
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function extractOrder(id: string): number {
-    const parts = id.split("-")
-    return parts.length >= 2 ? Number(parts[parts.length - 2]) || 0 : 0
-  }
-  const msgIdNum = extractOrder(message.info.id)
-  const revertIdNum = revert ? extractOrder(revert.messageID) : 0
-  const isReverted = revert && msgIdNum > revertIdNum
+  // Los IDs del server son msg_<hexTimestamp+counter> (monotónicos): la
+  // comparación lexicográfica es equivalente a la de orden temporal.
+  const isReverted = revert ? message.info.id > revert.messageID : false
   const isRevertPoint = revert && message.info.id === revert.messageID
 
   const isAssistant = message.info.role === "assistant"
@@ -114,8 +110,9 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
         </div>
       )}
       <article
-        className={`message ${message.info.role} fade-in${isReverted ? " revert-hidden" : ""}${isUserClickable ? " clickable" : ""}${showConfirm ? " confirming-undo" : ""}`}
+        className={`message ${message.info.role} fade-in${(isReverted || isRevertPoint) ? " revert-hidden" : ""}${isUserClickable ? " clickable" : ""}${showConfirm ? " confirming-undo" : ""}`}
         data-message-id={message.info.id}
+        data-mode={message.turnMode || undefined}
         onClick={isUserClickable ? handleClick : undefined}
         role={isUserClickable ? "button" : undefined}
         tabIndex={isUserClickable ? 0 : undefined}
@@ -199,7 +196,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
         {isAssistant && showModelInfo && (
           <div className="message-footer">
             <span className="msg-agent-dot" style={{ color: `var(--agent-${agentIdx})` }}>▣</span>
-            <span className="msg-footer-mode">{message.info.mode ?? "chat"}</span>
+            <span className="msg-footer-mode">{message.turnMode ?? message.info.mode ?? "chat"}</span>
             {message.info.modelID && <span className="msg-footer-model"> · {message.info.modelID}</span>}
             {activeVariant && <span className="msg-footer-variant"> · {activeVariant}</span>}
             {duration && <span className="msg-footer-duration"> · {duration}</span>}

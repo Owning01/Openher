@@ -845,6 +845,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
     recordPrompt(composer)
     stopGenerationRef.current = false
+    setLocalRevertID(null)
     setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "busy" } : s))
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
@@ -859,6 +860,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     removeQueued(id)
     recordPrompt(qp.text)
     stopGenerationRef.current = false
+    setLocalRevertID(null)
     send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),

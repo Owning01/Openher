@@ -70,14 +70,24 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     let pendingDiffs: import("../types").FileDiff[] | undefined
     let lastAssistantId: string | null = null
     const diffForMessage = new Map<string, import("../types").FileDiff[]>()
+    // El user message no trae mode del server (solo el assistant): el modo del
+    // turno (plan/build) se toma del primer assistant que le sigue.
+    const turnModeForUser = new Map<string, string>()
+    let lastUserID: string | null = null
     for (const message of all) {
       if (message.info.role === "user") {
         pendingDiffs = message.info.summary?.diffs
         lastAssistantId = null
-      } else if (pendingDiffs && pendingDiffs.length > 0) {
-        if (lastAssistantId) diffForMessage.delete(lastAssistantId)
-        diffForMessage.set(message.info.id, pendingDiffs)
-        lastAssistantId = message.info.id
+        lastUserID = message.info.id
+      } else {
+        if (pendingDiffs && pendingDiffs.length > 0) {
+          if (lastAssistantId) diffForMessage.delete(lastAssistantId)
+          diffForMessage.set(message.info.id, pendingDiffs)
+          lastAssistantId = message.info.id
+        }
+        if (lastUserID && message.info.mode && !turnModeForUser.has(lastUserID)) {
+          turnModeForUser.set(lastUserID, message.info.mode)
+        }
       }
     }
     for (const message of all) {
@@ -111,7 +121,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
       text = textBlocks.join("\n\n").trim()
       const hasImages = message.parts.some((p) => p.type === "image")
       if (text || toolParts.length > 0 || hasImages) {
-        out.push({ ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffForMessage.get(message.info.id), dataMode })
+        const turnMode = message.info.mode ?? (message.info.role === "user" ? turnModeForUser.get(message.info.id) : undefined)
+        out.push({ ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffForMessage.get(message.info.id), dataMode, turnMode })
       }
     }
     return out

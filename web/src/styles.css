@@ -2990,6 +2990,17 @@ p {
   border-radius: 2px;
 }
 
+/* Modo plan: la caja del mensaje y el indicador de modo usan el color del plan */
+.message.user[data-mode="plan"] {
+  background: var(--warning-soft);
+  border-left: 3px solid var(--warning);
+}
+
+.message[data-mode="plan"] .msg-footer-mode {
+  color: var(--warning);
+  font-weight: 700;
+}
+
 .message.assistant {
   background: none;
   border: none;

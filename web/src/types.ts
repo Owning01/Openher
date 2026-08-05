@@ -179,6 +179,7 @@ export type RenderedMessage = {
   }>
   summaryDiffs?: FileDiff[]
   dataMode?: string
+  turnMode?: string
   tokens?: MessageTokens
   cost?: number
 }
