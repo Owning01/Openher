@@ -39,10 +39,8 @@ export const MessageList = memo(function MessageList({
 
   const prevUserTsMap = useMemo(() => {
     const map = new Map<string, number>()
-    let last = 0
     for (const msg of messages) {
-      if (msg.info.role === "user") last = msg.info.time.created
-      else map.set(msg.info.id, last)
+      if (msg.info.role === "user") map.set(msg.info.id, msg.info.time.created)
     }
     return map
   }, [messages])
@@ -122,7 +120,7 @@ export const MessageList = memo(function MessageList({
                   revert={revert}
                   onRevertToMessage={onRevertToMessage}
                   agents={agents}
-                  prevUserTs={prevUserTsMap.get(message.info.id)}
+                  prevUserTs={message.info.parentID ? prevUserTsMap.get(message.info.parentID) : undefined}
                   config={config}
                   directory={directory}
                   onViewSubagents={onViewSubagents}

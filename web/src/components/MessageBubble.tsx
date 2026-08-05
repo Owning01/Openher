@@ -15,13 +15,19 @@ function agentColorIndex(agentName: string | undefined, agents: AgentOption[]): 
   return idx >= 0 ? idx % 7 : 0
 }
 
-function calcDuration(msg: RenderedMessage, prevUserTs: number): string {
-  const end = msg.info.time.completed ?? Date.now()
-  const start = msg.info.time.created
-  const dur = end - Math.max(start, prevUserTs)
-  if (dur < 1000) return "<1s"
-  if (dur < 60000) return `${Math.round(dur / 1000)}s`
-  return `${Math.floor(dur / 60000)}m ${Math.round((dur % 60000) / 1000)}s`
+function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): string {
+  if (!msg.info.time.completed) return ""
+  const finish = msg.info.finish
+  if (!finish || finish === "tool-calls" || finish === "unknown") return ""
+  const start = prevUserTs ?? msg.info.time.created
+  const dur = msg.info.time.completed - start
+  if (dur < 0) return ""
+  if (dur < 1000) return `${dur}ms`
+  if (dur < 60000) return `${(dur / 1000).toFixed(1)}s`
+  if (dur < 3600000) return `${Math.floor(dur / 60000)}m ${Math.floor((dur % 60000) / 1000)}s`
+  const hours = Math.floor(dur / 3600000)
+  const minutes = Math.floor((dur % 3600000) / 60000)
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
 }
 
 export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight }: {
@@ -66,7 +72,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   )
 
   const duration = useMemo(
-    () => calcDuration(message, prevUserTs ?? message.info.time.created),
+    () => calcDuration(message, prevUserTs),
     [message, prevUserTs],
   )
 
@@ -193,7 +199,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
             <span className="msg-agent-dot" style={{ color: `var(--agent-${agentIdx})` }}>▣</span>
             <span className="msg-footer-mode">{message.info.mode ?? "chat"}</span>
             {message.info.modelID && <span className="msg-footer-model"> · {message.info.modelID}</span>}
-            <span className="msg-footer-duration"> · {duration}</span>
+            {duration && <span className="msg-footer-duration"> · {duration}</span>}
             {message.info.finish === "aborted" && (
               <span className="msg-footer-interrupted"> · interrupted</span>
             )}
