@@ -941,14 +941,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       if (awaitingAssistantReply) {
         await api.abort(config, selectedSession.id, selectedSession.directory)
       }
+      const target = renderedMessages.find((m) => m.info.id === messageID)
       await api.revert(config, selectedSession.id, messageID, selectedSession.directory)
       setLocalRevertID(messageID)
       await loadSelected(selectedSession.id, selectedSession.directory)
       await refreshSessions()
+      if (target?.text) setComposer(target.text)
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
-  }, [selectedSession, config, awaitingAssistantReply, loadSelected, refreshSessions])
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, refreshSessions, renderedMessages])
 
   const handleEditMessage = useCallback(async (messageID: string, text: string) => {
     if (!selectedSession) return
