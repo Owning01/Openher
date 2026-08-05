@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { registerPlugin } from "@capacitor/core"
+import { Capacitor, registerPlugin } from "@capacitor/core"
 
 type SharedPayload = {
   text: string
@@ -27,6 +27,10 @@ export function useShareReceiver(onShared?: (payload: PendingShare) => void) {
   handlerRef.current = onShared
 
   useEffect(() => {
+    // El plugin solo existe en el APK nativo; en web registerPlugin lanza
+    // promesas rechazadas al invocar métodos.
+    if (!Capacitor.isNativePlatform()) return
+
     let mounted = true
 
     ShareReceiver.getPendingShare().then((p) => {
@@ -44,9 +48,9 @@ export function useShareReceiver(onShared?: (payload: PendingShare) => void) {
       setPending(value)
       handlerRef.current?.(value)
       ShareReceiver.clearPendingShare().catch(() => {})
-    })
+    }).catch(() => null)
 
-    return () => { mounted = false; listener.then((l) => l.remove()) }
+    return () => { mounted = false; listener.then((l) => l?.remove()).catch(() => {}) }
   }, [])
 
   const clear = useCallback(() => setPending(EMPTY), [])

@@ -33,14 +33,38 @@ async function decryptMessages(messages: MessageEnvelope[]): Promise<MessageEnve
   })))
 }
 
+function deleteDBWithRetry(attempts = 8): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const del = indexedDB.deleteDatabase(DB_NAME)
+    del.onsuccess = () => resolve()
+    del.onerror = () => reject(del.error)
+    del.onblocked = () => {
+      // Otra conexión (otra pestaña, extensión) tiene la DB abierta: reintentar.
+      if (attempts <= 0) { reject(new Error("DB delete blocked")); return }
+      setTimeout(() => deleteDBWithRetry(attempts - 1).then(resolve, reject), 500)
+    }
+  })
+}
+
 function openDB(): Promise<IDBDatabase> {
-  return openDatabase(DB_NAME, DB_VERSION, (db) => {
+  const upgrade = (db: IDBDatabase) => {
     if (!db.objectStoreNames.contains(DB_STORES.sessions)) {
       db.createObjectStore(DB_STORES.sessions, { keyPath: "id" })
     }
     if (!db.objectStoreNames.contains(DB_STORES.messages)) {
       db.createObjectStore(DB_STORES.messages, { keyPath: "sessionID" })
     }
+  }
+
+  return openDatabase(DB_NAME, DB_VERSION, upgrade).then((db) => {
+    const hasStores =
+      db.objectStoreNames.contains(DB_STORES.sessions) &&
+      db.objectStoreNames.contains(DB_STORES.messages)
+    if (hasStores) return db
+
+    // DB corrupta (v2 creada sin stores por versiones bugueadas): recrear desde cero.
+    db.close()
+    return deleteDBWithRetry().then(() => openDatabase(DB_NAME, DB_VERSION, upgrade))
   })
 }
 
