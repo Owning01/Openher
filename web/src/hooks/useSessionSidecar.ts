@@ -20,7 +20,14 @@ export function useSessionSidecar(config: ServerConfig) {
 
   const loadTodos = useCallback(async (sessionID: string, directory: string) => {
     const t = await api.loadTodo(config, sessionID, directory).catch(() => [] as TodoItem[])
-    setTodos(t)
+    // El server puede omitir `id` (usa content/status): asignar uno estable por índice
+    // para que React tenga keys únicas en el render.
+    setTodos(t.map((todo, i) => ({
+      content: todo.content ?? "",
+      status: todo.status ?? "pending",
+      priority: todo.priority ?? "none",
+      id: todo.id ?? `todo-${sessionID}-${i}-${todo.content.slice(0, 16)}`,
+    })))
   }, [config])
 
   const loadDiffs = useCallback(async (sessionID: string, directory: string) => {
