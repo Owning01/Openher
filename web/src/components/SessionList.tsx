@@ -1,5 +1,5 @@
 import { memo, useRef, useLayoutEffect, useState, useCallback } from "react"
-import { LoadingIcon, FolderIcon, ChatIcon, PlusIcon, ChevronIcon } from "../Icons"
+import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
@@ -246,7 +246,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
       <div className="list-mode-toggle">
         <button type="button" className={`list-mode-pill${listOpen ? " active" : ""}`}
           onClick={() => setListOpen((v) => !v)} aria-pressed={listOpen}>
-          <ChatIcon size={14} />
+          <FolderIcon size={14} />
           {t('sessions.title')}
           <ChevronIcon size={12} className={`quick-access-chevron${listOpen ? "" : " collapsed"}`} />
         </button>
@@ -276,9 +276,6 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProject(dir) } }}>
                   <div className="project-card-header">
                     <div className="project-title-group">
-                      <div className="project-icon-wrapper">
-                        <FolderIcon size={18} />
-                      </div>
                       <strong className="project-path">{dir}</strong>
                     </div>
                     <span className="project-count">

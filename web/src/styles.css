@@ -1800,18 +1800,6 @@ p {
   flex: 1;
 }
 
-.project-icon-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-md);
-  background: var(--primary-soft);
-  color: var(--primary);
-  flex-shrink: 0;
-}
-
 .project-path {
   font-size: 0.95rem;
   font-weight: 600;
@@ -1821,7 +1809,6 @@ p {
 
 .project-count {
   align-self: flex-start;
-  margin-left: calc(34px + var(--space-3));
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 600;
