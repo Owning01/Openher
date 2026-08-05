@@ -20,10 +20,8 @@ type UsageStats = {
 type SettingsPanelProps = {
   draftConfig: ServerConfig
   onChange: (config: ServerConfig) => void
-  onSave: () => void
   onTest: () => void
   testingConnection: boolean
-  hasDraftChanges: boolean
   canTestDraft: boolean
   testAlreadyPassedForDraft: boolean
   connectedVersion: string
@@ -73,8 +71,8 @@ type SettingsPanelProps = {
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
-  draftConfig, onChange, onSave, onTest,
-  testingConnection, hasDraftChanges, canTestDraft, testAlreadyPassedForDraft,
+  draftConfig, onChange, onTest,
+  testingConnection, canTestDraft, testAlreadyPassedForDraft,
   connectedVersion, settingsNotice, language, onLanguageChange,
   theme, onThemeChange, languageOptions,
   dataMode, onDataModeChange, onNavigate,
@@ -170,6 +168,14 @@ export const SettingsPanel = memo(function SettingsPanel({
         <p className="subtle">
           {draftConfig.host && draftConfig.port > 0 ? `${draftConfig.host}:${draftConfig.port}` : t('settings.hostPlaceholder')}
         </p>
+        <button onClick={onTest} className="btn-secondary settings-test-btn" disabled={testingConnection || !canTestDraft || testAlreadyPassedForDraft}
+          title={!canTestDraft ? t('settings.testNeedsFields') : testAlreadyPassedForDraft ? t('settings.testAlreadyPassed') : undefined}>
+          {testingConnection ? (
+            <><LoadingIcon size={18} />{t('settings.testing')}</>
+          ) : (
+            <><TestIcon size={18} />{testAlreadyPassedForDraft ? t('settings.testOk') : t('settings.test')}</>
+          )}
+        </button>
         <p className="subtle">{t('settings.draftHint')}</p>
       </div>
 
@@ -308,22 +314,6 @@ export const SettingsPanel = memo(function SettingsPanel({
           ))}
         </div>
       </SettingsSection>
-
-      {/* Actions row */}
-      <div className="settings-actions">
-        <button onClick={onSave} disabled={testingConnection || !hasDraftChanges} className="btn-primary">
-          <SaveIcon size={18} />
-          {hasDraftChanges ? t('settings.save') : t('settings.savedButton')}
-        </button>
-        <button onClick={onTest} className="btn-secondary" disabled={testingConnection || !canTestDraft || testAlreadyPassedForDraft}
-          title={!canTestDraft ? t('settings.testNeedsFields') : testAlreadyPassedForDraft ? t('settings.testAlreadyPassed') : undefined}>
-          {testingConnection ? (
-            <><LoadingIcon size={18} />{t('settings.testing')}</>
-          ) : (
-            <><TestIcon size={18} />{testAlreadyPassedForDraft ? t('settings.testOk') : t('settings.test')}</>
-          )}
-        </button>
-      </div>
 
       {/* Notice */}
       {settingsNotice && (

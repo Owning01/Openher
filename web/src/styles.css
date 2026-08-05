@@ -539,6 +539,17 @@ p {
   margin: 0;
 }
 
+.settings-test-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  padding: 0.55rem 1.2rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
 .settings-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1962,6 +1973,21 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  cursor: pointer;
+}
+
+.session-card-chevron {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.session-card-chevron.open {
+  transform: rotate(180deg);
+}
+
+.session-card-body {
+  cursor: pointer;
 }
 
 .session-card-title-group {

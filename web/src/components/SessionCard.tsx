@@ -1,5 +1,5 @@
-import { memo, useCallback } from "react"
-import { PlayIcon, PencilIcon, TrashIcon, StarIcon, ShareIcon, SaveIcon, FolderIcon, ArchiveIcon, ForkIcon } from "../Icons"
+import { memo, useCallback, useState } from "react"
+import { PlayIcon, PencilIcon, TrashIcon, StarIcon, ShareIcon, SaveIcon, FolderIcon, ArchiveIcon, ForkIcon, ChevronIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { formatTime } from "../utils"
 import { InlineRename } from "./InlineRename"
@@ -30,6 +30,7 @@ export const SessionCard = memo(function SessionCard({
   onToggleFavorite, onExportChat, onSnapshot, onArchive, onFork
 }: SessionCardProps) {
   const t = useT()
+  const [actionsOpen, setActionsOpen] = useState(false)
 
   const handleOpen = useCallback(() => onOpen(session.id, session.directory), [session.id, session.directory, onOpen])
   const handleDelete = useCallback(() => onDelete(session), [session, onDelete])
@@ -39,9 +40,15 @@ export const SessionCard = memo(function SessionCard({
     onToggleFavorite(session.id)
   }, [session.id, onToggleFavorite])
 
+  const toggleActions = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    setActionsOpen((v) => !v)
+  }, [])
+
   return (
-    <article className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} fade-in`}>
-      <div className="session-card-header">
+    <article className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${actionsOpen ? "actions-open" : ""} fade-in`}>
+      <div className="session-card-header" onClick={toggleActions} role="button" tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActionsOpen((v) => !v) } }}>
         <div className="session-card-title-group">
           <button className="star-btn" onClick={handleToggleFavorite}
             aria-pressed={isFavorite}
@@ -59,21 +66,25 @@ export const SessionCard = memo(function SessionCard({
             <h3 className="session-title">{session.title}</h3>
           )}
         </div>
+        <ChevronIcon size={14} className={`session-card-chevron${actionsOpen ? " open" : ""}`} />
       </div>
 
-      <div className="session-card-body">
+      <div className="session-card-body" onClick={toggleActions}>
         <div className="session-dir-badge">
           <FolderIcon size={13} />
           <span className="session-dir-text">{session.directory}</span>
         </div>
       </div>
 
-      <div className="session-card-meta">
-        <div className="session-stats">
-          <span className="subtle time-label">{t('sessions.updated', { time: formatTime(session.updated) })}</span>
+      {actionsOpen && (
+        <div className="session-card-meta">
+          <div className="session-stats">
+            <span className="subtle time-label">{t('sessions.updated', { time: formatTime(session.updated) })}</span>
+          </div>
         </div>
-      </div>
+      )}
 
+      {actionsOpen && (
       <div className="session-actions">
         <button onClick={(e) => { e.stopPropagation(); handleOpen() }} className="btn-primary session-open-btn">
           <PlayIcon size={15} />
@@ -107,6 +118,7 @@ export const SessionCard = memo(function SessionCard({
           <TrashIcon size={15} />
         </button>
       </div>
+      )}
     </article>
   )
 })

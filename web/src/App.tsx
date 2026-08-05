@@ -970,9 +970,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       {view === "settings" && (
         <SettingsPanel
           draftConfig={draftConfig} onChange={setDraftConfig}
-          onSave={() => saveConfig(t)} onTest={handleTest}
+          onTest={handleTest}
           testingConnection={testingConnection}
-          hasDraftChanges={hasDraftChanges} canTestDraft={canTestDraft}
+          canTestDraft={canTestDraft}
           testAlreadyPassedForDraft={testAlreadyPassedForDraft}
           connectedVersion={connectedVersion} settingsNotice={settingsNotice}
           language={language} onLanguageChange={handleLanguageChange}
