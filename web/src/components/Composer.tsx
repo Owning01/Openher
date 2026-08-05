@@ -43,7 +43,6 @@ type ComposerProps = {
   directory?: string
   onThemeCommand?: () => void
   queueEnabled?: boolean
-  queuedCount?: number
   onToggleQueue?: () => void
 }
 
@@ -58,7 +57,7 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "theme", description: "Open theme picker", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen, contextLabel, config, directory, onThemeCommand, queueEnabled = false, queuedCount = 0, onToggleQueue }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const slashItemsRef = useRef<HTMLDivElement | null>(null)
@@ -397,6 +396,15 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         </div>
       )}
       <div className="composer-input-wrap">
+        {onToggleQueue && (
+          <button onClick={onToggleQueue} disabled={disabled}
+            className="composer-inline-btn composer-queue-btn"
+            aria-pressed={queueEnabled}
+            title={queueEnabled ? t('session.queueToggleOn') : t('session.queueToggleOff')}
+            tabIndex={-1}>
+            <LayersIcon size={18} />
+          </button>
+        )}
         <button onClick={handleFilePick} disabled={disabled}
           className="composer-inline-btn composer-img-btn" title="Attach file"
           tabIndex={-1}>
@@ -425,16 +433,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
-          {onToggleQueue && (
-            <button onClick={onToggleQueue} disabled={disabled}
-              className={`queue-toggle${queueEnabled ? " active" : ""}`}
-              aria-pressed={queueEnabled}
-              title={queueEnabled ? t('session.queueToggleOn') : t('session.queueToggleOff')}>
-              <LayersIcon size={12} />
-              {t('session.queueToggle')}
-              {queuedCount > 0 && <span className="queue-toggle-count">{queuedCount}</span>}
-            </button>
-          )}
           {primaryAgentOptions.filter((a) => !a.hidden).length > 1 && (
             <button onClick={handleToggleAgent} disabled={disabled}
               className="agent-toggle"

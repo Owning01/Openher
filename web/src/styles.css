@@ -786,7 +786,25 @@ p {
   padding: 0.7rem 0.8rem;
 }
 
-.extras-btn svg {
+/* Botones de configuración sin borde ni color de fondo */
+.panel.settings .btn-secondary,
+.panel.settings .btn-primary,
+.panel.settings .btn-danger,
+.panel.settings .extras-btn,
+.panel.settings .toggle-btn {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.panel.settings .btn-secondary:hover:not(:disabled),
+.panel.settings .btn-primary:hover:not(:disabled),
+.panel.settings .extras-btn:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+.panel.settings .extras-btn svg {
   flex-shrink: 0;
   color: var(--primary);
 }
@@ -1661,10 +1679,10 @@ p {
 .quick-access-tabs {
   display: flex;
   align-items: stretch;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--surface-subtle);
+  background: transparent;
   margin-bottom: var(--space-2);
   width: 100%;
 }
@@ -1693,7 +1711,7 @@ p {
 }
 
 .quick-access-tab + .quick-access-tab {
-  border-left: 1px solid var(--border);
+  border-left: none;
 }
 
 .quick-access-tab:hover {
@@ -1702,8 +1720,9 @@ p {
 }
 
 .quick-access-tab.open {
-  background: var(--primary-soft);
+  background: transparent;
   color: var(--primary);
+  font-weight: 900;
 }
 
 .quick-access-count {
@@ -1711,15 +1730,15 @@ p {
   font-weight: 800;
   padding: 0.05rem 0.4rem;
   border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: none;
   color: var(--muted-strong);
 }
 
 .quick-access-tab.open .quick-access-count {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
+  background: transparent;
+  border-color: transparent;
+  color: var(--primary);
 }
 
 .quick-access-chevron {
@@ -4153,6 +4172,15 @@ p {
   left: 0.3rem;
 }
 
+.composer-queue-btn {
+  left: 2rem;
+  color: var(--muted);
+}
+
+.composer-queue-btn:hover {
+  color: var(--muted-strong);
+}
+
 .composer-mic-btn {
   right: 0.3rem;
 }
@@ -4218,48 +4246,6 @@ p {
 
 .agent-toggle[aria-pressed="true"] {
   background: rgba(128, 128, 128, 0.12);
-}
-
-.queue-toggle {
-  min-height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted-strong);
-  font-weight: 700;
-  font-size: 0.72rem;
-  padding: 0.15rem 0.45rem;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-  white-space: nowrap;
-}
-
-.queue-toggle:hover:not(:disabled) {
-  border-color: var(--primary);
-}
-
-.queue-toggle.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.queue-toggle-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.62rem;
-  font-weight: 800;
-  padding: 0 4px;
 }
 
 .composer-tasks-btn {
@@ -4476,6 +4462,13 @@ p {
   border-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+.panel.settings .toggle-btn.active {
+  background: transparent;
+  border-color: transparent;
+  color: var(--primary);
+  font-weight: 800;
 }
 
 

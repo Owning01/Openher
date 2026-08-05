@@ -532,7 +532,6 @@ export const ChatView = memo(function ChatView({
           directory={selectedSession?.directory}
           onThemeCommand={onThemeCommand}
           queueEnabled={flags.promptQueue}
-          queuedCount={queuedPrompts?.length ?? 0}
           onToggleQueue={() => {
             if (flags.promptQueue) {
               onSetFlag("promptQueue", false)

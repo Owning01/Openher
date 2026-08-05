@@ -13,7 +13,6 @@ import { usePolling } from "./hooks/usePolling"
 import { useCompletionAudio } from "./hooks/useCompletionAudio"
 import { useFolderPicker } from "./hooks/useFolderPicker"
 import { useStats } from "./hooks/useStats"
-import { StatsView } from "./components/StatsView"
 import { useSSE } from "./hooks/useSSE"
 import { useOfflineCache } from "./hooks/useOfflineCache"
 import { NavBar } from "./components/NavBar"
@@ -965,8 +964,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     <div className="app-shell" data-navbar="header">
       {view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={handleNavigate}
-          hasConfiguredServer={hasConfiguredServer}
-          hasSelectedSession={!!selectedSession}
           onToggleLightMode={handleToggleLightMode} />
       )}
 
@@ -1183,10 +1180,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           commands={commands}
           commandFilter={commandFilter}
           onCommandFilterChange={setCommandFilter} />
-      )}
-
-      {view === "stats" && config && (
-        <StatsView config={config} onBack={goBack} />
       )}
 
       {sessionToDelete && (

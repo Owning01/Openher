@@ -622,10 +622,6 @@ export const SettingsPanel = memo(function SettingsPanel({
           <button type="button" className="btn-secondary compact" onClick={onResetStats}>
             {t('settings.resetStats')}
           </button>
-          <button type="button" className="btn-primary compact" onClick={() => onNavigate("stats")}>
-            <StatsIcon size={14} />
-            {t('settings.serverStats')}
-          </button>
         </div>
       </SettingsSection>
 
