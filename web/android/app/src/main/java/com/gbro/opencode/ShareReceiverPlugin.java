@@ -1,4 +1,4 @@
-package ai.opencode.remote.web;
+package com.gbro.opencode;
 
 import android.content.Intent;
 import android.net.Uri;

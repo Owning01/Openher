@@ -34,6 +34,9 @@ fastlane/
 web/android/keystore/
 PLAY-STORE.md
 web/scripts/play-upload.py
+web/scripts/gen-play-assets.py
+play-store-assets/
+editor-*.png
 
 # Logs
 *.log

@@ -1,5 +1,5 @@
 {
-	"appId": "ai.opencode.remote.web",
+	"appId": "com.gbro.opencode",
 	"appName": "OpenCode Mobile",
 	"webDir": "dist",
 	"server": {

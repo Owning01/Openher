@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">OpenCode Mobile</string>
     <string name="title_activity_main">OpenCode Mobile</string>
-    <string name="package_name">ai.opencode.remote.web</string>
-    <string name="custom_url_scheme">ai.opencode.remote.web</string>
+    <string name="package_name">com.gbro.opencode</string>
+    <string name="custom_url_scheme">com.gbro.opencode</string>
 </resources>

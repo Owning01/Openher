@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli"
 
 const config: CapacitorConfig = {
-  appId: "ai.opencode.remote.web",
+  appId: "com.gbro.opencode",
   appName: "OpenCode Mobile",
   webDir: "dist",
   server: {

@@ -7,10 +7,10 @@ def ksKeyPass = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
 def hasSigning = ksPass != "" && ksAlias != "" && ksKeyPass != ""
 
 android {
-    namespace = "ai.opencode.remote.web"
+    namespace = "com.gbro.opencode"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "ai.opencode.remote.web"
+        applicationId "com.gbro.opencode"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 10000
