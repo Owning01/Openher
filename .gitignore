@@ -32,6 +32,8 @@ OpenCodeMobile-release.aab
 play/
 fastlane/
 web/android/keystore/
+PLAY-STORE.md
+web/scripts/play-upload.py
 
 # Logs
 *.log
