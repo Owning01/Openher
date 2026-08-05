@@ -16,6 +16,22 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+*.keystore
+*.jks
+*.p12
+key.properties
+keystore.properties
+*play-service-account*.json
+service-account*.json
+secrets.json
+
+# Play Store / release artifacts (no commitear)
+*.aab
+*.apk
+OpenCodeMobile-release.aab
+play/
+fastlane/
+web/android/keystore/
 
 # Logs
 *.log
