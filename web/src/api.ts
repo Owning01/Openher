@@ -453,6 +453,23 @@ export const api = {
     return request<{ content: string }>(config, withDirectory(`/file?path=${encodeURIComponent(normalizeSlashes(path))}`, directory))
   },
 
+  setModelVariant(config: ServerConfig, providerID: string, modelID: string, variantName: string, options: Record<string, unknown>, directory?: string) {
+    return request<unknown>(config, withDirectory("/config", directory), {
+      method: "PATCH",
+      body: {
+        provider: {
+          [providerID]: {
+            models: {
+              [modelID]: {
+                variants: { [variantName]: options }
+              }
+            }
+          }
+        }
+      }
+    })
+  },
+
   writeFile(config: ServerConfig, path: string, content: string, directory?: string) {
     return request<boolean>(config, withDirectory("/file", directory), {
       method: "POST",

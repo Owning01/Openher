@@ -472,6 +472,7 @@ export const ChatView = memo(function ChatView({
           todosOpen={todosExpanded}
           highlight={deferredQuery.trim() || undefined}
           scrollToMessageID={scrollToMessageID}
+          activeVariant={activeModelOption?.variant}
         />
       </div>
 

@@ -1139,7 +1139,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             diffFiles={diffFiles}
             totalDiffAdditions={totalDiffAdditions}
             totalDiffDeletions={totalDiffDeletions}
-            dashboardError={dashboardError} />
+            dashboardError={dashboardError}
+            config={config}
+            onVariantsChanged={() => loadModels(selectedSession?.directory).catch(() => undefined)} />
         </>
       )}
 

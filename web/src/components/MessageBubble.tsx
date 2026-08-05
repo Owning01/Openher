@@ -30,13 +30,15 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): str
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight }: {
+export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight }: {
   message: RenderedMessage
   revert?: SessionView["revert"]
   onRevertToMessage?: (messageID: string) => void
   onEditMessage?: (messageID: string, text: string) => void
   agents?: AgentOption[]
   prevUserTs?: number
+  showModelInfo?: boolean
+  activeVariant?: string
   config?: ServerConfig
   directory?: string
   onViewSubagents?: () => void
@@ -194,11 +196,12 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
           <FileDiffs diffs={message.summaryDiffs} />
         )}
 
-        {isAssistant && (
+        {isAssistant && showModelInfo && (
           <div className="message-footer">
             <span className="msg-agent-dot" style={{ color: `var(--agent-${agentIdx})` }}>▣</span>
             <span className="msg-footer-mode">{message.info.mode ?? "chat"}</span>
             {message.info.modelID && <span className="msg-footer-model"> · {message.info.modelID}</span>}
+            {activeVariant && <span className="msg-footer-variant"> · {activeVariant}</span>}
             {duration && <span className="msg-footer-duration"> · {duration}</span>}
             {message.info.finish === "aborted" && (
               <span className="msg-footer-interrupted"> · interrupted</span>

@@ -2,7 +2,8 @@ import { memo, useRef, useMemo } from "react"
 import { useT } from "../i18n-context"
 import { useFocusTrap } from "../hooks/useFocusTrap"
 import { modelKey, sameModel } from "../utils/model-utils"
-import type { ModelOption } from "../types"
+import { api } from "../api"
+import type { ModelOption, ServerConfig } from "../types"
 import type { VariantGroup } from "../hooks/useAI"
 
 type BottomSheetProps = {
@@ -26,6 +27,8 @@ type BottomSheetProps = {
   totalDiffAdditions: number
   totalDiffDeletions: number
   dashboardError: string | null
+  config?: ServerConfig
+  onVariantsChanged?: () => void
 }
 
 function groupLabel(providerID: string): string {
@@ -41,6 +44,55 @@ function isGoModel(modelID: string): boolean {
   return modelID.startsWith("go-") || modelID.includes("/go-")
 }
 
+const REASONING_VARIANTS = new Set(["high", "medium", "low"])
+
+function renderThinkingLevels(
+  base: ModelOption,
+  variants: ModelOption[],
+  activeVariant: string | null,
+  onChangeModel: (key: string, variant?: string | null) => void,
+  config: ServerConfig | undefined,
+  onVariantsChanged: (() => void) | undefined,
+  mk: typeof modelKey,
+  t: ReturnType<typeof useT>
+) {
+  const baseKey = mk(base)
+  const levels: Array<{ name: string; variant: string | null }> = [
+    { name: t('detail.thinkingNone'), variant: null },
+    { name: t('detail.thinkingHigh'), variant: "high" },
+    { name: t('detail.thinkingMedium'), variant: "medium" },
+    { name: t('detail.thinkingLow'), variant: "low" },
+  ]
+  const existing = new Set(variants.map((v) => v.variant))
+
+  const pick = async (level: { name: string; variant: string | null }) => {
+    if (!level.variant) { onChangeModel(baseKey, null); return }
+    if (existing.has(level.variant)) { onChangeModel(baseKey, level.variant); return }
+    if (config) {
+      try {
+        await api.setModelVariant(config, base.providerID, base.modelID, level.variant, { reasoningEffort: level.variant })
+      } catch { /* seleccionar igual: el server puede resolver el effort solo */ }
+    }
+    onChangeModel(baseKey, level.variant)
+    onVariantsChanged?.()
+  }
+
+  return (
+    <div className="thinking-levels">
+      <span className="thinking-levels-label">{t('detail.thinkingLevel')}</span>
+      <div className="model-variant-pills">
+        {levels.map((l) => (
+          <button key={l.variant ?? "none"} type="button"
+            className={`variant-pill${activeVariant === l.variant ? " active" : ""}`}
+            onClick={() => pick(l)}>
+            {l.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function renderVariantGroup(
   group:   VariantGroup,
   activeModelOption: ModelOption | null,
@@ -48,12 +100,15 @@ function renderVariantGroup(
   onChangeModel: (key: string, variant?: string | null) => void,
   _isWorking: boolean,
   mk: typeof modelKey,
-  t: ReturnType<typeof useT>
+  t: ReturnType<typeof useT>,
+  config?: ServerConfig,
+  onVariantsChanged?: () => void
 ) {
   const { base, variants } = group
   const baseKey = mk(base)
   const isActive = activeModelOption ? sameModel(base, activeModelOption) : false
   const activeVariant = isActive ? selectedVariant : null
+  const customVariants = variants.filter((v) => !v.variant || !REASONING_VARIANTS.has(v.variant))
 
   return (
     <div key={baseKey} className={`model-group${isActive ? " active" : ""}`}>
@@ -64,14 +119,14 @@ function renderVariantGroup(
         <small>{base.providerName}</small>
         {base.isDefault && <em>{t('detail.modelDefault')}</em>}
       </button>
-      {variants.length > 0 && (
+      {customVariants.length > 0 && (
         <div className="model-variant-pills">
           <button type="button"
             className={`variant-pill${!activeVariant ? " active" : ""}`}
             onClick={() => onChangeModel(baseKey, null)}>
             Default
           </button>
-          {variants.map((v) => (
+          {customVariants.map((v) => (
             <button key={v.variant} type="button"
               className={`variant-pill${activeVariant === v.variant ? " active" : ""}`}
               onClick={() => onChangeModel(baseKey, v.variant)}>
@@ -80,6 +135,7 @@ function renderVariantGroup(
           ))}
         </div>
       )}
+      {renderThinkingLevels(base, variants, activeVariant, onChangeModel, config, onVariantsChanged, mk, t)}
     </div>
   )
 }
@@ -92,7 +148,9 @@ function renderGroupedModels(
   isWorking: boolean,
   mk: typeof modelKey,
   t: ReturnType<typeof useT>,
-  providerID: string
+  providerID: string,
+  config?: ServerConfig,
+  onVariantsChanged?: () => void
 ) {
   const groups = new Map<string, VariantGroup>()
   for (const opt of options) {
@@ -103,7 +161,7 @@ function renderGroupedModels(
 
   if (providerID !== "opencode") {
     return Array.from(groups.values()).map((g) =>
-      renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t)
+      renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t, config, onVariantsChanged)
     )
   }
 
@@ -144,7 +202,7 @@ export const BottomSheet = memo(function BottomSheet({
   selectedVariant,
   formatLimit,
   projectName, projectPath, vcsBranch, projectDashboard, diffFiles,
-  totalDiffAdditions, totalDiffDeletions, dashboardError
+  totalDiffAdditions, totalDiffDeletions, dashboardError, config, onVariantsChanged
 }: BottomSheetProps) {
   const t = useT()
   const sheetRef = useRef<HTMLElement>(null)
@@ -226,7 +284,7 @@ export const BottomSheet = memo(function BottomSheet({
                       {providerEntries.map(([providerID, options]) => (
                         <div key={providerID}>
                           <div className="model-section-label">{groupLabel(providerID)}</div>
-                          {renderGroupedModels(options, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t, providerID)}
+                          {renderGroupedModels(options, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t, providerID, config, onVariantsChanged)}
                         </div>
                       ))}
                     </>

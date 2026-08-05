@@ -2672,6 +2672,25 @@ p {
   flex-wrap: wrap;
 }
 
+.thinking-levels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.thinking-levels-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.thinking-levels .model-variant-pills {
+  padding: 0;
+}
+
 .variant-pill {
   padding: 0.2rem 0.55rem;
   border-radius: var(--radius-sm);

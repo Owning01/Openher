@@ -195,6 +195,11 @@ type TranslationKey =
   | 'detail.modelToolsYes'
   | 'detail.modelToolsNo'
   | 'detail.modelVariant'
+  | 'detail.thinkingLevel'
+  | 'detail.thinkingNone'
+  | 'detail.thinkingHigh'
+  | 'detail.thinkingMedium'
+  | 'detail.thinkingLow'
   | 'detail.modelLoading'
   | 'detail.modelLoadError'
   | 'detail.contextStripLabel'
@@ -645,6 +650,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelToolsYes': 'Tools enabled',
     'detail.modelToolsNo': 'No tools',
     'detail.modelVariant': 'Variant: {variant}',
+    'detail.thinkingLevel': 'Thinking level',
+    'detail.thinkingNone': 'None',
+    'detail.thinkingHigh': 'High',
+    'detail.thinkingMedium': 'Medium',
+    'detail.thinkingLow': 'Low',
     'detail.modelLoading': 'Loading configured models...',
     'detail.modelLoadError': 'Cannot load models: {message}',
     'detail.contextStripLabel': 'Session context shortcuts',
@@ -1076,6 +1086,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.thought': 'Razonamiento',
     'detail.modelAll': 'Todos los modelos',
     'detail.modelProvider': 'Proveedor: {provider}',
+    'detail.thinkingLevel': 'Nivel de pensamiento',
+    'detail.thinkingNone': 'Ninguno',
+    'detail.thinkingHigh': 'Alto',
+    'detail.thinkingMedium': 'Medio',
+    'detail.thinkingLow': 'Bajo',
     'detail.modelContext': 'Contexto {context} · salida {output}',
     'detail.modelToolsYes': 'Herramientas activadas',
     'detail.modelToolsNo': 'Sin herramientas',
@@ -1508,6 +1523,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchEmpty': 'Nessun modello corrisponde alla ricerca.',
     'detail.modelDefault': 'default',
     'detail.modelRecent': 'Recenti',
+    'detail.thinkingLevel': 'Livello di ragionamento',
+    'detail.thinkingNone': 'Nessuno',
+    'detail.thinkingHigh': 'Alto',
+    'detail.thinkingMedium': 'Medio',
+    'detail.thinkingLow': 'Basso',
     'detail.thought': 'Ragionamento',
     'detail.modelAll': 'Tutti i modelli',
     'detail.modelProvider': 'Provider: {provider}',
@@ -1907,6 +1927,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchEmpty': '沒有符合搜尋的模型。',
     'detail.modelDefault': '預設',
     'detail.modelRecent': '最近使用',
+    'detail.thinkingLevel': '思考等級',
+    'detail.thinkingNone': '無',
+    'detail.thinkingHigh': '高',
+    'detail.thinkingMedium': '中',
+    'detail.thinkingLow': '低',
     'detail.thought': '思考',
     'detail.modelAll': '所有模型',
     'detail.modelProvider': '提供者：{provider}',
