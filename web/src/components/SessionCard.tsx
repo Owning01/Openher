@@ -1,5 +1,5 @@
 import { memo, useCallback, useState } from "react"
-import { PlayIcon, PencilIcon, TrashIcon, StarIcon, ShareIcon, SaveIcon, FolderIcon, ArchiveIcon, ForkIcon, ChevronIcon } from "../Icons"
+import { PlayIcon, PencilIcon, TrashIcon, StarIcon, ShareIcon, SaveIcon, ArchiveIcon, ForkIcon, ChevronIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { formatTime } from "../utils"
 import { InlineRename } from "./InlineRename"
@@ -70,10 +70,6 @@ export const SessionCard = memo(function SessionCard({
       </div>
 
       <div className="session-card-body" onClick={toggleActions}>
-        <div className="session-dir-badge">
-          <FolderIcon size={13} />
-          <span className="session-dir-text">{session.directory}</span>
-        </div>
       </div>
 
       {actionsOpen && (
