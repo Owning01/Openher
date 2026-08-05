@@ -4755,6 +4755,7 @@ p {
 .folder-row {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--space-2);
   width: 100%;
   padding: 0.35rem var(--space-3);

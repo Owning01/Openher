@@ -102,7 +102,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const { agentOptions, modelOptions, modelLoadError,
     modelQuery, setModelQuery, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel,
-    variantGroups, selectedModelKey, selectedVariant, showModelChip, loadAgents, loadModels, changeModel, changeVariant, changeAgent } = useAI(config)
+    variantGroups, selectedModelKey, selectedVariant, showModelChip, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
   const blockedModels = useBlockedModels(modelOptions)
   const { flags, toggleFlag, setFlag } = useFeatureFlags()
 
@@ -1012,7 +1012,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onNavigate={handleNavigate}
           modelOptions={modelOptions} selectedModelKey={selectedModelKey}
           onChangeModel={changeModel} modelKey={modelKey}
-          selectedVariant={selectedVariant} onChangeVariant={changeVariant}
+          selectedVariant={selectedVariant}
           stats={stats} onResetStats={resetStats}
           activeModelOption={activeModelOption}
           blockedModels={blockedModels}

@@ -8,6 +8,7 @@ import { ProviderManager } from "./ProviderManager"
 import { ChatCustomizer } from "./ChatCustomizer"
 import { SettingsSection } from "./SettingsSection"
 import { DataUsageModal } from "./DataUsageModal"
+import { ThinkingLevels } from "./ThinkingLevels"
 import { getDataUsage, formatBytes } from "../utils/dataUsage"
 
 type UsageStats = {
@@ -36,10 +37,9 @@ type SettingsPanelProps = {
   onNavigate: (view: ViewType) => void
   modelOptions: ModelOption[]
   selectedModelKey: string | null
-  onChangeModel: (key: string) => void
+  onChangeModel: (key: string, variant?: string | null) => void
   modelKey: (model: { providerID: string; modelID: string; variant?: string }) => string
   selectedVariant: string | null
-  onChangeVariant: (variant: string | null) => void
   stats: UsageStats
   onResetStats: () => void
   activeModelOption: ModelOption | null
@@ -77,7 +77,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   theme, onThemeChange, languageOptions,
   dataMode, onDataModeChange, onNavigate,
   modelOptions, selectedModelKey, onChangeModel, modelKey: mk,
-  selectedVariant, onChangeVariant,
+  selectedVariant,
   stats, onResetStats,
   activeModelOption, blockedModels, onOpenThemePicker,
   onOpenThemeCreator,
@@ -98,15 +98,18 @@ export const SettingsPanel = memo(function SettingsPanel({
   }, [modelOptions, mk])
 
   const filteredModels = useMemo(() => {
+    // Solo modelos configurados (no bloqueados en la sección de abajo); el
+    // modelo seleccionado se mantiene visible aunque esté bloqueado.
+    const visible = uniqueModels.filter((opt) => !blockedModels.isBlocked(mk(opt)) || mk(opt) === selectedModelKey)
     const q = modelQuery.trim().toLowerCase()
-    if (!q) return uniqueModels
-    return uniqueModels.filter((opt) =>
+    if (!q) return visible
+    return visible.filter((opt) =>
       (opt.modelName || opt.modelID).toLowerCase().includes(q) ||
       opt.modelID.toLowerCase().includes(q) ||
       opt.providerName.toLowerCase().includes(q) ||
       opt.providerID.toLowerCase().includes(q)
     )
-  }, [uniqueModels, modelQuery])
+  }, [uniqueModels, modelQuery, blockedModels, selectedModelKey])
   const [blockedSearch, setBlockedSearch] = useState("")
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
   const [newProfileName, setNewProfileName] = useState("")
@@ -379,30 +382,15 @@ export const SettingsPanel = memo(function SettingsPanel({
           {(() => {
             if (!selectedModelKey) return null
             const selected = uniqueModels.find((opt) => mk(opt) === selectedModelKey)
+            if (!selected) return null
             const vars = modelOptions.filter((opt) => mk(opt) === selectedModelKey && opt.variant)
-            if (vars.length === 0) return null
             return (
               <div className="form-field">
-                {selected && (
-                  <span className="settings-model-selected">
-                    {selected.modelName || selected.modelID} · {selected.providerName}
-                  </span>
-                )}
-                <span>Variante</span>
-                <div className="model-variant-pills">
-                  <button type="button"
-                    className={`variant-pill${!selectedVariant ? " active" : ""}`}
-                    onClick={() => onChangeVariant(null)}>
-                    Default
-                  </button>
-                  {vars.map((v) => (
-                    <button key={v.variant} type="button"
-                      className={`variant-pill${selectedVariant === v.variant ? " active" : ""}`}
-                      onClick={() => onChangeVariant(v.variant ?? null)}>
-                      {v.variant}
-                    </button>
-                  ))}
-                </div>
+                <span className="settings-model-selected">
+                  {selected.modelName || selected.modelID} · {selected.providerName}
+                </span>
+                <ThinkingLevels base={selected} variants={vars} activeVariant={selectedVariant}
+                  onChange={onChangeModel} />
               </div>
             )
           })()}

@@ -2,7 +2,7 @@ import { memo, useRef, useMemo, useState } from "react"
 import { useT } from "../i18n-context"
 import { useFocusTrap } from "../hooks/useFocusTrap"
 import { modelKey, sameModel } from "../utils/model-utils"
-import { api } from "../api"
+import { ThinkingLevels } from "./ThinkingLevels"
 import type { ModelOption, ServerConfig } from "../types"
 import type { VariantGroup } from "../hooks/useAI"
 
@@ -44,59 +44,9 @@ function isGoModel(modelID: string): boolean {
   return modelID.startsWith("go-") || modelID.includes("/go-")
 }
 
-const REASONING_VARIANTS = new Set(["high", "medium", "low"])
-
-function renderThinkingLevels(
-  base: ModelOption,
-  variants: ModelOption[],
-  activeVariant: string | null,
-  onChangeModel: (key: string, variant?: string | null) => void,
-  config: ServerConfig | undefined,
-  onVariantsChanged: (() => void) | undefined,
-  mk: typeof modelKey,
-  t: ReturnType<typeof useT>
-) {
-  const baseKey = mk(base)
-  // Los niveles se muestran TAL CUAL vienen de la api (high/medium/low).
-  const levels: Array<{ name: string; variant: string | null }> = [
-    { name: "none", variant: null },
-    { name: "high", variant: "high" },
-    { name: "medium", variant: "medium" },
-    { name: "low", variant: "low" },
-  ]
-  const existing = new Set(variants.map((v) => v.variant))
-
-  const pick = async (level: { name: string; variant: string | null }) => {
-    if (!level.variant) { onChangeModel(baseKey, null); return }
-    if (existing.has(level.variant)) { onChangeModel(baseKey, level.variant); return }
-    if (config) {
-      try {
-        await api.setModelVariant(config, base.providerID, base.modelID, level.variant, { reasoningEffort: level.variant })
-      } catch { /* seleccionar igual: el server puede resolver el effort solo */ }
-    }
-    onChangeModel(baseKey, level.variant)
-    onVariantsChanged?.()
-  }
-
-  return (
-    <div className="thinking-levels">
-      <span className="thinking-levels-label">{t('detail.thinkingLevel')}</span>
-      <div className="model-variant-pills">
-        {levels.map((l) => (
-          <button key={l.variant ?? "none"} type="button"
-            className={`variant-pill${activeVariant === l.variant ? " active" : ""}`}
-            onClick={() => pick(l)}>
-            {l.name}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function ModelGroupRow({
   group, selectedVariant, onChangeModel, isActive,
-  mk, t, config, onVariantsChanged
+  mk, t
 }: {
   group: VariantGroup
   selectedVariant: string | null
@@ -104,13 +54,10 @@ function ModelGroupRow({
   isActive: boolean
   mk: typeof modelKey
   t: ReturnType<typeof useT>
-  config?: ServerConfig
-  onVariantsChanged?: () => void
 }) {
   const { base, variants } = group
   const baseKey = mk(base)
   const activeVariant = isActive ? selectedVariant : null
-  const customVariants = variants.filter((v) => !v.variant || !REASONING_VARIANTS.has(v.variant))
   const [expanded, setExpanded] = useState(isActive)
 
   return (
@@ -124,25 +71,8 @@ function ModelGroupRow({
         {base.isDefault && <em>{t('detail.modelDefault')}</em>}
       </button>
       {expanded && (
-        <>
-          {customVariants.length > 0 && (
-            <div className="model-variant-pills">
-              <button type="button"
-                className={`variant-pill${!activeVariant ? " active" : ""}`}
-                onClick={() => onChangeModel(baseKey, null)}>
-                Default
-              </button>
-              {customVariants.map((v) => (
-                <button key={v.variant} type="button"
-                  className={`variant-pill${activeVariant === v.variant ? " active" : ""}`}
-                  onClick={() => onChangeModel(baseKey, v.variant)}>
-                  {v.variant}
-                </button>
-              ))}
-            </div>
-          )}
-          {renderThinkingLevels(base, variants, activeVariant, onChangeModel, config, onVariantsChanged, mk, t)}
-        </>
+        <ThinkingLevels base={base} variants={variants} activeVariant={activeVariant}
+          onChange={onChangeModel} />
       )}
     </div>
   )
@@ -156,9 +86,7 @@ function renderGroupedModels(
   _isWorking: boolean,
   mk: typeof modelKey,
   t: ReturnType<typeof useT>,
-  providerID: string,
-  config?: ServerConfig,
-  onVariantsChanged?: () => void
+  providerID: string
 ) {
   const groups = new Map<string, VariantGroup>()
   for (const opt of options) {
@@ -173,7 +101,7 @@ function renderGroupedModels(
       return (
         <ModelGroupRow key={mk(g.base)} group={g}
           selectedVariant={selectedVariant} onChangeModel={onChangeModel} isActive={isActive}
-          mk={mk} t={t} config={config} onVariantsChanged={onVariantsChanged} />
+          mk={mk} t={t} />
       )
     })
   }
@@ -236,7 +164,7 @@ export const BottomSheet = memo(function BottomSheet({
   selectedVariant,
   formatLimit,
   projectName, projectPath, vcsBranch, projectDashboard, diffFiles,
-  totalDiffAdditions, totalDiffDeletions, dashboardError, config, onVariantsChanged
+  totalDiffAdditions, totalDiffDeletions, dashboardError, config: _config, onVariantsChanged: _onVariantsChanged
 }: BottomSheetProps) {
   const t = useT()
   const sheetRef = useRef<HTMLElement>(null)
@@ -318,7 +246,7 @@ export const BottomSheet = memo(function BottomSheet({
                       {providerEntries.map(([providerID, options]) => (
                         <div key={providerID}>
                           <div className="model-section-label">{groupLabel(providerID)}</div>
-                          {renderGroupedModels(options, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t, providerID, config, onVariantsChanged)}
+                          {renderGroupedModels(options, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t, providerID)}
                         </div>
                       ))}
                     </>
