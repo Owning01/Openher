@@ -308,10 +308,16 @@ export const SettingsPanel = memo(function SettingsPanel({
           </div>
           {(() => {
             if (!selectedModelKey) return null
+            const selected = uniqueModels.find((opt) => mk(opt) === selectedModelKey)
             const vars = modelOptions.filter((opt) => mk(opt) === selectedModelKey && opt.variant)
             if (vars.length === 0) return null
             return (
               <div className="form-field">
+                {selected && (
+                  <span className="settings-model-selected">
+                    {selected.modelName || selected.modelID} · {selected.providerName}
+                  </span>
+                )}
                 <span>Variante</span>
                 <div className="model-variant-pills">
                   <button type="button"

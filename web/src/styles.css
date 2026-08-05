@@ -6606,3 +6606,14 @@ mark {
 .settings-model-empty {
   padding: 0.5rem 0.6rem;
 }
+
+.settings-model-selected {
+  display: block;
+  padding: 0.3rem 0.6rem;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
