@@ -98,19 +98,19 @@ export const SessionCard = memo(function SessionCard({
         )}
         {onArchive && (
           <button className="btn-icon compact" onClick={(e) => { e.stopPropagation(); onArchive(session.id) }}
-            title={t('detail.archive')}>
+            title={t('detail.archive')} aria-label={t('detail.archive')}>
             <ArchiveIcon size={14} />
           </button>
         )}
         {onFork && (
-          <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); onFork(session) }} title={t('session.fork') || "Fork"}>
+          <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); onFork(session) }} title={t('session.fork') || "Fork"} aria-label={t('session.fork') || "Fork"}>
             <ForkIcon size={14} />
           </button>
         )}
-        <button className="btn-icon compact" onClick={(e) => { e.stopPropagation(); handleStartRename() }} title={t('session.renameTitle')}>
+        <button className="btn-icon compact" onClick={(e) => { e.stopPropagation(); handleStartRename() }} title={t('session.renameTitle')} aria-label={t('session.renameTitle')}>
           <PencilIcon size={15} />
         </button>
-        <button className="btn-icon compact session-delete-btn" onClick={(e) => { e.stopPropagation(); handleDelete() }}>
+        <button className="btn-icon compact session-delete-btn" onClick={(e) => { e.stopPropagation(); handleDelete() }} title={t('session.deleteTitle')} aria-label={t('session.deleteTitle')}>
           <TrashIcon size={15} />
         </button>
       </div>

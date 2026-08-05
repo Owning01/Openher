@@ -316,6 +316,15 @@ export const SettingsPanel = memo(function SettingsPanel({
             </button>
           ))}
         </div>
+        <button type="button" className="btn-secondary extras-btn" onClick={() => setShowDataUsage(true)}>
+          <DataIcon size={16} />
+          <span>
+            <strong>{t('extras.dataUsage')}</strong>
+            <small>
+              {t('dataUsage.mobile')}: {formatBytes(getDataUsage().month.byNet.mobile.total)} · {t('dataUsage.wifi')}: {formatBytes(getDataUsage().month.byNet.wifi.total)}
+            </small>
+          </span>
+        </button>
       </SettingsSection>
 
       {/* Notice */}
@@ -544,15 +553,6 @@ export const SettingsPanel = memo(function SettingsPanel({
             <span>
               <strong>{t('extras.github')}</strong>
               <small>github.com/Owning01/Opencode-Mobile</small>
-            </span>
-          </button>
-          <button type="button" className="btn-secondary extras-btn" onClick={() => setShowDataUsage(true)}>
-            <DataIcon size={16} />
-            <span>
-              <strong>{t('extras.dataUsage')}</strong>
-              <small>
-                {t('dataUsage.mobile')}: {formatBytes(getDataUsage().month.byNet.mobile.total)} · {t('dataUsage.wifi')}: {formatBytes(getDataUsage().month.byNet.wifi.total)}
-              </small>
             </span>
           </button>
           {onOpenFavoritesManager && (

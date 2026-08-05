@@ -14,7 +14,7 @@ export const ModalHeader = memo(function ModalHeader({ title, onClose, children,
       <h3 title={titleTooltip}>{title}</h3>
       <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
         {children}
-        <button className="btn-icon btn-secondary compact" onClick={onClose}><CloseIcon size={14} /></button>
+        <button className="btn-icon btn-secondary compact" onClick={onClose} aria-label="Close"><CloseIcon size={14} /></button>
       </div>
     </div>
   )

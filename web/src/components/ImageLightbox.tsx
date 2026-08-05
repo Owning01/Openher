@@ -38,7 +38,7 @@ export const ImageLightbox = memo(function ImageLightbox({ src, alt, onClose }: 
   return (
     <div className="modal-overlay image-lightbox-overlay" onClick={onClose} onWheel={handleWheel}
       onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-      <button className="btn-icon btn-secondary lightbox-close" onClick={onClose}><CloseIcon size={20} /></button>
+        <button className="btn-icon btn-secondary lightbox-close" onClick={onClose} aria-label="Close"><CloseIcon size={20} /></button>
       <div className="image-lightbox-container" onClick={(e) => e.stopPropagation()}
         onMouseDown={handleMouseDown} onDoubleClick={handleDoubleClick}
         style={{ cursor: dragging ? "grabbing" : "grab" }}>

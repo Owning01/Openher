@@ -102,7 +102,7 @@ export const FolderPicker = memo(function FolderPicker({
             ))
           )}
         </div>
-        <button className="btn-icon btn-ghost fp-path-edit" onClick={() => { setShowManual((v) => !v); setManualPath(pickerPath) }} title="Editar ruta">
+        <button className="btn-icon btn-ghost fp-path-edit" onClick={() => { setShowManual((v) => !v); setManualPath(pickerPath) }} title="Editar ruta" aria-label="Editar ruta">
           <PencilIcon size={14} />
         </button>
       </div>

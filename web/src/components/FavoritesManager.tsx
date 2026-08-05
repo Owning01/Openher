@@ -75,8 +75,8 @@ export const FavoritesManager = memo(function FavoritesManager({ favorites, onRe
                     <span className="subtle">{s.directory}</span>
                   </div>
                   <div className="favorite-item-arrows">
-                    <button className="btn-icon compact" onClick={() => moveUp(i)} disabled={i === 0}>↑</button>
-                    <button className="btn-icon compact" onClick={() => moveDown(i)} disabled={i === items.length - 1}>↓</button>
+      <button className="btn-icon compact" onClick={() => moveUp(i)} disabled={i === 0} aria-label="Move up">↑</button>
+      <button className="btn-icon compact" onClick={() => moveDown(i)} disabled={i === items.length - 1} aria-label="Move down">↓</button>
                   </div>
                 </div>
               ))}

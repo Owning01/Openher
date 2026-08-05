@@ -148,7 +148,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
             <div className="header-actions">
               <small>{formatTime(message.info.time.created)}</small>
               {onEditMessage && (
-                <button className="btn-icon btn-ghost edit-msg-btn" onClick={(e) => { e.stopPropagation(); onEditMessage(message.info.id, message.text) }} title="Edit message">
+                <button className="btn-icon btn-ghost edit-msg-btn" onClick={(e) => { e.stopPropagation(); onEditMessage(message.info.id, message.text) }} title="Edit message" aria-label="Edit message">
                   <PencilIcon size={14} />
                 </button>
               )}

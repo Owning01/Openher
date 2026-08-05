@@ -132,7 +132,7 @@ export const SessionList = memo(function SessionList({
           </div>
           <div className="section-actions">
             {onNewSessionHere && (
-              <button className="btn-icon btn-primary compact" onClick={() => onNewSessionHere(selectedProjectDir!)} title={t('sessions.newHere') || "New session here"}>
+              <button className="btn-icon btn-primary compact" onClick={() => onNewSessionHere(selectedProjectDir!)} title={t('sessions.newHere') || "New session here"} aria-label={t('sessions.newHere') || "New session here"}>
                 <PlusIcon size={16} />
               </button>
             )}

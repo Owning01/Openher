@@ -26,7 +26,7 @@ export const SessionToolbar = memo(function SessionToolbar({
 
   return (
     <div className="session-toolbar-wrap" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "10px", flexWrap: "nowrap", width: "100%", margin: "0.25rem 0" }}>
-      <button onClick={onRefresh} className="btn-icon" disabled={refreshing} title={t('sessions.refresh')} style={{ flexShrink: 0, width: 40, height: 40, padding: 0, background: "transparent", border: "none" }}>
+      <button onClick={onRefresh} className="btn-icon" disabled={refreshing} title={t('sessions.refresh')} aria-label={t('sessions.refresh')} style={{ flexShrink: 0, width: 40, height: 40, padding: 0, background: "transparent", border: "none" }}>
         {refreshing ? <LoadingIcon size={22} /> : <RefreshIcon size={22} />}
       </button>
       <button onClick={onNewSession} className="btn-primary compact btn-new-session" disabled={creating} title={t('sessions.new')} style={{ flexShrink: 0, height: 32, padding: "0 0.65rem", display: "inline-flex", alignItems: "center", gap: 6 }}>

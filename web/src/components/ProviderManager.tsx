@@ -40,7 +40,7 @@ const ApiKeyModal = memo(function ApiKeyModal({ provider, onConnect, onClose, co
                 className="input"
                 style={{ width: "100%", boxSizing: "border-box" }}
               />
-              <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowKey((v) => !v)} tabIndex={-1} disabled={connecting}>
+              <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowKey((v) => !v)} tabIndex={-1} disabled={connecting} aria-label="Toggle password visibility">
                 {showKey ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
               </button>
             </div>
