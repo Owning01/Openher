@@ -1787,9 +1787,9 @@ p {
 
 .project-card-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
 }
 
 .project-title-group {
@@ -1815,12 +1815,13 @@ p {
 .project-path {
   font-size: 0.95rem;
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .project-count {
+  align-self: flex-start;
+  margin-left: calc(34px + var(--space-3));
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 600;

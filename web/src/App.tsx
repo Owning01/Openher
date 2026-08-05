@@ -962,6 +962,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           activeModelOption={activeModelOption}
           blockedModels={blockedModels}
           onOpenThemePicker={() => setShowThemePicker(true)}
+          onOpenThemeCreator={() => setShowThemeCreator(true)}
           flags={flags}
           onToggleFlag={toggleFlag}
           onSetFlag={setFlag}
@@ -1021,10 +1022,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               if (s) api.sendCommand(config, id, "/archive", "", s.directory).catch(() => {})
             } : undefined}
             onFork={(s) => handleCreateSession(s.directory)}
-            onSearchMessages={() => setQuery("search:")}
-            onOpenArchivedView={() => setShowArchivedView(true)}
-            onOpenThemeCreator={() => setShowThemeCreator(true)}
-            onOpenFavoritesManager={() => setShowFavoritesManager(true)}
             onDismissRecent={dismissRecent}
             onNewSessionHere={(dir) => handleCreateSession(dir)} />
           {showNewSessionPicker && (

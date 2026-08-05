@@ -5,7 +5,6 @@ import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
 import { SessionToolbar } from "./SessionToolbar"
 import { QuickAccessCard } from "./QuickAccessCard"
-import { isSessionActive, hasFileChanges } from "../utils"
 import type { SessionView, ConnectionState, DataMode } from "../types"
 
 type SessionListProps = {
@@ -41,10 +40,6 @@ type SessionListProps = {
   onSnapshot?: (session: SessionView) => void
   onArchive?: (id: string) => void
   onFork?: (session: SessionView) => void
-  onSearchMessages?: () => void
-  onOpenArchivedView?: () => void
-  onOpenThemeCreator?: () => void
-  onOpenFavoritesManager?: () => void
   onDismissRecent?: (id: string) => void
   onNewSessionHere?: (directory: string) => void
 }
@@ -59,12 +54,10 @@ export const SessionList = memo(function SessionList({
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
   onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive, onFork,
-  onSearchMessages, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager,
   onDismissRecent, onNewSessionHere
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
-  const searchRef = useRef<HTMLInputElement>(null)
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(true)
 
@@ -146,22 +139,18 @@ export const SessionList = memo(function SessionList({
             )}
             <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
               onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-              dataMode={dataMode} onDataModeChange={onDataModeChange}
-              onSearchMessages={onSearchMessages} onOpenArchivedView={onOpenArchivedView}
-              onOpenThemeCreator={onOpenThemeCreator} onOpenFavoritesManager={onOpenFavoritesManager} />
+              dataMode={dataMode} onDataModeChange={onDataModeChange} />
           </div>
         </div>
         <div className="toolbar">
 <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
-onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRef} />
+onChange={(e) => onQueryChange(e.target.value)} className="search" />
         </div>
         {notices}
         <div className="session-list">{sessionCards}</div>
       </section>
     )
   }
-
-  const handleSearchMessages = onSearchMessages ? () => { onSearchMessages(); searchRef.current?.focus() } : undefined
 
   return (
     <section ref={containerRef} className="panel sessions fade-in home-view">
@@ -170,12 +159,10 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
       </div>
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-        dataMode={dataMode} onDataModeChange={onDataModeChange}
-        onSearchMessages={handleSearchMessages} onOpenArchivedView={onOpenArchivedView}
-        onOpenThemeCreator={onOpenThemeCreator} onOpenFavoritesManager={onOpenFavoritesManager} />
+        dataMode={dataMode} onDataModeChange={onDataModeChange} />
       <div className="toolbar">
         <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
-          onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRef} />
+          onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
       {notices}
 
@@ -187,7 +174,6 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                 onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites}
                 aria-controls="quick-favorites" role="tab">
                 {t('favorites.label')}
-                <span className="quick-access-count">{sessions.filter((s) => favorites.has(s.id)).length}</span>
                 <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}
@@ -205,7 +191,6 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                 onClick={() => toggleSection("recent")} aria-expanded={!collapsedSections.recent}
                 aria-controls="quick-recent" role="tab">
                 {t('sessions.recentLabel')}
-                <span className="quick-access-count">{recentSessions.length}</span>
                 <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}
@@ -299,15 +284,6 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" ref={searchRe
                     <span className="project-count">
                       {t('sessions.count', { count: projectSessionsList.length })}
                       <span className="project-chevron">{isExpanded ? "▲" : "▼"}</span>
-                    </span>
-                  </div>
-                  <div className="project-meta">
-                    <span className={`project-status ${projectSessionsList.some((s) => isSessionActive(s)) ? "busy" : "idle"}`}>
-                      <span className="status-dot"></span>
-                      {t('sessions.activeCount', { count: projectSessionsList.filter((s) => isSessionActive(s)).length })}
-                    </span>
-                    <span className="project-changed">
-                      {t('sessions.changedCount', { count: projectSessionsList.filter((s) => hasFileChanges(s)).length })}
                     </span>
                   </div>
                 </article>

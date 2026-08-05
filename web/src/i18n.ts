@@ -352,8 +352,6 @@ type TranslationKey =
   | 'session.browseFiles'
   | 'session.mcpResources'
   | 'sessions.count'
-  | 'sessions.activeCount'
-  | 'sessions.changedCount'
   | 'sessions.recentDismiss'
   | 'common.yes'
   | 'common.no'
@@ -755,8 +753,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'session.browseFiles': 'Browse Files',
     'session.mcpResources': 'MCP Resources',
     'sessions.count': '{count} sessions',
-    'sessions.activeCount': '{count} active',
-    'sessions.changedCount': '{count} changed',
     'sessions.recentDismiss': 'Remove from recent?',
     'common.yes': 'Yes',
     'common.no': 'No',
@@ -1192,8 +1188,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'session.browseFiles': 'Explorar archivos',
     'session.mcpResources': 'Recursos MCP',
     'sessions.count': '{count} sesiones',
-    'sessions.activeCount': '{count} activas',
-    'sessions.changedCount': '{count} con cambios',
     'sessions.recentDismiss': '¿Quitar de recientes?',
     'common.yes': 'Sí',
     'common.no': 'No',
@@ -1593,8 +1587,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'session.browseFiles': 'Sfoglia file',
     'session.mcpResources': 'Risorse MCP',
     'sessions.count': '{count} sessioni',
-    'sessions.activeCount': '{count} attive',
-    'sessions.changedCount': '{count} modificate',
     'sessions.recentDismiss': 'Rimuovere dai recenti?',
     'common.yes': 'Sì',
     'common.no': 'No',
@@ -1994,8 +1986,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'session.browseFiles': '瀏覽檔案',
     'session.mcpResources': 'MCP 資源',
     'sessions.count': '{count} 個對話',
-    'sessions.activeCount': '{count} 進行中',
-    'sessions.changedCount': '{count} 有變更',
     'sessions.recentDismiss': '從最近移除？',
     'common.yes': '是',
     'common.no': '否',

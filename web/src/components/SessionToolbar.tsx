@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from "react"
-import { RefreshIcon, PlusIcon, LoadingIcon, SettingsIcon, SearchIcon, StarIcon, ChevronIcon, ArchiveIcon, PaintIcon } from "../Icons"
+import { RefreshIcon, PlusIcon, LoadingIcon, SettingsIcon, ChevronIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { DataMode } from "../types"
 
@@ -11,10 +11,6 @@ type SessionToolbarProps = {
   onOpenSettings?: () => void
   dataMode: DataMode
   onDataModeChange: (mode: DataMode) => void
-  onSearchMessages?: () => void
-  onOpenArchivedView?: () => void
-  onOpenThemeCreator?: () => void
-  onOpenFavoritesManager?: () => void
 }
 
 const MODES: DataMode[] = ["full", "saver", "ultra", "miser"]
@@ -27,14 +23,11 @@ function modeLabel(mode: DataMode, t: (key: string, params?: Record<string, stri
 }
 
 export const SessionToolbar = memo(function SessionToolbar({
-  refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onDataModeChange,
-  onSearchMessages, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager
+  refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onDataModeChange
 }: SessionToolbarProps) {
   const t = useT()
   const [open, setOpen] = useState(false)
-  const [overflowOpen, setOverflowOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const overflowRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -54,28 +47,10 @@ export const SessionToolbar = memo(function SessionToolbar({
     }
   }, [open])
 
-  useEffect(() => {
-    if (!overflowOpen) return
-    const handleClick = (e: MouseEvent | TouchEvent) => {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-        setOverflowOpen(false)
-      }
-    }
-    const timer = setTimeout(() => {
-      document.addEventListener("click", handleClick)
-      document.addEventListener("touchstart", handleClick)
-    }, 20)
-    return () => {
-      clearTimeout(timer)
-      document.removeEventListener("click", handleClick)
-      document.removeEventListener("touchstart", handleClick)
-    }
-  }, [overflowOpen])
-
   return (
     <div className="session-toolbar-wrap" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "10px", flexWrap: "nowrap", width: "100%", margin: "0.25rem 0" }}>
-      <button onClick={onRefresh} className="btn-icon btn-secondary compact" disabled={refreshing} title={t('sessions.refresh')} style={{ flexShrink: 0, width: 32, height: 32, padding: 0 }}>
-        {refreshing ? <LoadingIcon size={14} /> : <RefreshIcon size={14} />}
+      <button onClick={onRefresh} className="btn-icon" disabled={refreshing} title={t('sessions.refresh')} style={{ flexShrink: 0, width: 40, height: 40, padding: 0, background: "transparent", border: "none" }}>
+        {refreshing ? <LoadingIcon size={22} /> : <RefreshIcon size={22} />}
       </button>
       <button onClick={onNewSession} className="btn-primary compact btn-new-session" disabled={creating} title={t('sessions.new')} style={{ flexShrink: 0, height: 32, padding: "0 0.65rem", display: "inline-flex", alignItems: "center", gap: 6 }}>
         {creating ? <LoadingIcon size={14} /> : <PlusIcon size={14} />}
@@ -147,30 +122,6 @@ export const SessionToolbar = memo(function SessionToolbar({
         <button onClick={onOpenSettings} className="btn-icon btn-secondary compact" title={t('nav.settings') || "Settings"} style={{ flexShrink: 0, width: 32, height: 32, padding: 0 }}>
           <SettingsIcon size={14} />
         </button>
-      )}
-      {(onSearchMessages || onOpenArchivedView || onOpenThemeCreator || onOpenFavoritesManager) && (
-        <div className="mode-dropdown-wrap" ref={overflowRef} style={{ flexShrink: 0, position: "relative", zIndex: 100 }}>
-          <button onClick={(e) => { e.stopPropagation(); setOverflowOpen((v) => !v) }}
-            className="btn-icon btn-secondary compact" title={t('session.more')}
-            style={{ flexShrink: 0, width: 32, height: 32, padding: 0, fontSize: "1.1rem", lineHeight: 1 }}>
-            ⋮
-          </button>
-          {overflowOpen && (
-            <div className="mode-dropdown-menu fade-in" style={{
-              position: "absolute", top: "calc(100% + 6px)", right: 0, left: "auto", zIndex: 99999,
-              display: "flex", flexDirection: "column", width: 180,
-              background: "var(--surface-strong, #1a1a20)",
-              border: "1px solid var(--border-strong, #444)",
-              borderRadius: "var(--radius-md, 8px)",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.6)", padding: 4, gap: 2
-            }}>
-              {onSearchMessages && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onSearchMessages() }}><SearchIcon size={14} /> {t('session.searchMessages')}</button>}
-              {onOpenArchivedView && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenArchivedView() }}><ArchiveIcon size={14} /> {t('session.archived')}</button>}
-              {onOpenThemeCreator && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenThemeCreator() }}><PaintIcon size={14} /> {t('session.themeCreator')}</button>}
-              {onOpenFavoritesManager && <button className="mode-dropdown-item" onClick={() => { setOverflowOpen(false); onOpenFavoritesManager() }}><StarIcon size={14} /> {t('favorites.label')}</button>}
-            </div>
-          )}
-        </div>
       )}
     </div>
   )

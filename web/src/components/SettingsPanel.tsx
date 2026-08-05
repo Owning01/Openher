@@ -43,6 +43,7 @@ type SettingsPanelProps = {
   activeModelOption: ModelOption | null
   blockedModels: { isBlocked: (key: string) => boolean; toggleBlocked: (key: string) => void; toggleAllForProvider: (providerID: string, block: boolean) => void; providerBlockedCount: (providerID: string) => number; blockedCount: number }
   onOpenThemePicker?: () => void
+  onOpenThemeCreator?: () => void
   flags: FeatureFlags
   onToggleFlag: (key: keyof FeatureFlags) => void
   onSetFlag: <K extends keyof FeatureFlags>(key: K, value: FeatureFlags[K]) => void
@@ -68,6 +69,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   selectedVariant, onChangeVariant,
   stats, onResetStats,
   activeModelOption, blockedModels, onOpenThemePicker,
+  onOpenThemeCreator,
   flags, onToggleFlag, onSetFlag,
   providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider,
   serverProfiles, onAddServerProfile, onRemoveServerProfile, onApplyServerProfile, activeServerProfileID
@@ -287,6 +289,11 @@ export const SettingsPanel = memo(function SettingsPanel({
                 <span>{t('settings.switchTheme')}</span>
                 <span className="badge">33 temas</span>
               </button>
+              {onOpenThemeCreator && (
+                <button type="button" className="btn-secondary" onClick={onOpenThemeCreator}>
+                  <span>{t('session.themeCreator')}</span>
+                </button>
+              )}
               {activeModelOption && (
                 <small className="model-active-name">{activeModelOption.modelName}{activeModelOption.variant ? ` · ${activeModelOption.variant}` : ""}</small>
               )}
