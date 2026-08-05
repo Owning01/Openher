@@ -97,7 +97,11 @@ jobs:
       - name: Build signed release APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --stacktrace --no-daemon
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            ./gradlew assembleRelease --stacktrace --no-daemon
+          else
+            ./gradlew assembleDebug --stacktrace --no-daemon
+          fi
         working-directory: web/android
         env:
           ANDROID_KEYSTORE_PATH: ${{ env.ANDROID_KEYSTORE_PATH || '' }}
@@ -110,11 +114,20 @@ jobs:
         run: |
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose web/android/app/build/outputs/apk/release/app-release.apk
 
+      - name: Select APK (signed release or debug fallback)
+        id: select_apk
+        run: |
+          if [ -f web/android/app/build/outputs/apk/release/app-release.apk ]; then
+            echo "apk_path=web/android/app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
+          else
+            echo "apk_path=web/android/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: opencode-mobile-apk-v${{ steps.version.outputs.app_version }}
-          path: web/android/app/build/outputs/apk/release/app-release.apk
+          path: ${{ steps.select_apk.outputs.apk_path }}
 
       - name: Generate release notes
         id: release_body
@@ -159,6 +172,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: OpenCode Mobile v${{ steps.version.outputs.app_version }}
-          files: web/android/app/build/outputs/apk/release/app-release.apk
+          files: ${{ steps.select_apk.outputs.apk_path }}
           body_path: ${{ steps.release_body.outputs.path }}
           fail_on_unmatched_files: true
