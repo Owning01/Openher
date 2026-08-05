@@ -327,7 +327,6 @@ export const SettingsPanel = memo(function SettingsPanel({
 
       {connectedVersion && testAlreadyPassedForDraft && (
         <div className="notice success fade-in">
-          <TestIcon size={16} />
           {t('settings.connectedTo', { version: connectedVersion })}
         </div>
       )}
