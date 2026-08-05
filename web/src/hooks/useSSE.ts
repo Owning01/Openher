@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
 import { toBase64 } from "../api"
+import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
 
@@ -123,6 +124,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
           try {
             const { done, value } = await reader.read()
             if (done) break
+            recordDataUsage(value.byteLength, "down")
             buffer += decoder.decode(value, { stream: true })
             processBuffer()
           } catch (err) {
@@ -163,8 +165,8 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
         clearTimeout(timeout)
         clearHeartbeat()
         if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
-        abortRef.current?.abort()
-        readerRef.current?.cancel()
+        try { abortRef.current?.abort() } catch { /* ignore */ }
+        try { readerRef.current?.cancel()?.catch(() => {}) } catch { /* ignore */ }
       }
     }
     return () => { mountedRef.current = false }

@@ -1,5 +1,5 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
-import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon, CloseIcon, AttachmentIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon, CloseIcon, AttachmentIcon, LayersIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
@@ -42,6 +42,9 @@ type ComposerProps = {
   config?: ServerConfig
   directory?: string
   onThemeCommand?: () => void
+  queueEnabled?: boolean
+  queuedCount?: number
+  onToggleQueue?: () => void
 }
 
 let imgId = 0
@@ -55,7 +58,7 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "theme", description: "Open theme picker", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen, contextLabel, config, directory, onThemeCommand }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen, contextLabel, config, directory, onThemeCommand, queueEnabled = false, queuedCount = 0, onToggleQueue }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const slashItemsRef = useRef<HTMLDivElement | null>(null)
@@ -422,6 +425,16 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
+          {onToggleQueue && (
+            <button onClick={onToggleQueue} disabled={disabled}
+              className={`queue-toggle${queueEnabled ? " active" : ""}`}
+              aria-pressed={queueEnabled}
+              title={queueEnabled ? t('session.queueToggleOn') : t('session.queueToggleOff')}>
+              <LayersIcon size={12} />
+              {t('session.queueToggle')}
+              {queuedCount > 0 && <span className="queue-toggle-count">{queuedCount}</span>}
+            </button>
+          )}
           {primaryAgentOptions.filter((a) => !a.hidden).length > 1 && (
             <button onClick={handleToggleAgent} disabled={disabled}
               className="agent-toggle"

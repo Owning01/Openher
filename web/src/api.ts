@@ -1,5 +1,6 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core"
 import { computeBackoff } from "./utils"
+import { recordDataUsage } from "./utils/dataUsage"
 import type {
   AgentOption,
   CommandInfo,
@@ -84,6 +85,17 @@ function normalizeHeaders(headers: Record<string, unknown> | undefined): Record<
   )
 }
 
+function serializedSize(value: unknown): number {
+  if (value === undefined || value === null) return 0
+  if (typeof value === "number" || typeof value === "boolean") return String(value).length
+  if (typeof value === "string") return value.length
+  try {
+    return JSON.stringify(value)?.length ?? 0
+  } catch {
+    return 0
+  }
+}
+
 type ConfigProvidersResponse = {
   providers: Array<{
     id: string
@@ -150,6 +162,8 @@ async function requestWithHeaders<T>(config: ServerConfig, path: string, options
         }
 
         const responseHeaders = normalizeHeaders(response.headers)
+        recordDataUsage(serializedSize(options.body), "up")
+        recordDataUsage(serializedSize(response.data), "down")
         if (response.status === 204) return { data: true as T, headers: responseHeaders }
         return { data: response.data as T, headers: responseHeaders }
       }
@@ -181,8 +195,12 @@ async function requestWithHeaders<T>(config: ServerConfig, path: string, options
       }
 
       const responseHeaders = normalizeHeaders(Object.fromEntries(response.headers.entries()))
+      recordDataUsage(serializedSize(options.body), "up")
+      recordDataUsage(serializedSize(response.headers.get("content-length")), "down")
       if (response.status === 204) return { data: true as T, headers: responseHeaders }
-      return { data: (await response.json()) as T, headers: responseHeaders }
+      const json = (await response.json()) as T
+      recordDataUsage(serializedSize(json), "down")
+      return { data: json, headers: responseHeaders }
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
       if (attempt < maxRetries) {
@@ -423,7 +441,20 @@ export const api = {
   },
 
   listMCPResources(config: ServerConfig) {
-    return request<{ id: string; name: string; description?: string }[]>(config, "/experimental/resource")
+    // El server puede devolver [] o { resources: [...] } según versión; parseo tolerante.
+    return request<unknown>(config, "/experimental/resource").then((raw) => {
+      if (Array.isArray(raw)) return raw as { id: string; name: string; description?: string }[]
+      if (raw && typeof raw === "object") {
+        const wrapped = (raw as { resources?: unknown; data?: unknown }).resources ?? (raw as { data?: unknown }).data
+        if (Array.isArray(wrapped)) return wrapped as { id: string; name: string; description?: string }[]
+        if (Array.isArray((raw as { servers?: unknown }).servers)) {
+          return (raw as { servers: Array<{ id?: string; name?: string; description?: string }> }).servers
+            .filter((s) => s.id || s.name)
+            .map((s) => ({ id: s.id ?? s.name ?? "", name: s.name ?? s.id ?? "", description: s.description }))
+        }
+      }
+      return []
+    })
   },
 
   listSkills(config: ServerConfig) {

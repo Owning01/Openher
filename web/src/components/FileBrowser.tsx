@@ -12,10 +12,11 @@ type FileBrowserProps = {
   onClose: () => void
   onNavigate: (path: string) => void
   onGoUp: () => void
+  onOpenFile?: (path: string) => void
 }
 
 export const FileBrowser = memo(function FileBrowser({
-  currentPath, items, loading, error, onClose, onNavigate, onGoUp
+  currentPath, items, loading, error, onClose, onNavigate, onGoUp, onOpenFile
 }: FileBrowserProps) {
   const t = useT()
   return (
@@ -46,8 +47,8 @@ export const FileBrowser = memo(function FileBrowser({
               <p className="subtle">{t('sessions.folderPickerEmpty')}</p>
             ) : items.map((item) => (
               <button key={item.absolute} type="button" className="folder-row"
-                onClick={() => item.type === "directory" ? onNavigate(item.name) : undefined}
-                title={item.type === "file" ? item.absolute : undefined}>
+                onClick={() => item.type === "directory" ? onNavigate(item.name) : onOpenFile?.(item.absolute)}
+                title={item.type === "file" ? t('fileEditor.title') : undefined}>
                 {item.type === "directory" ? (
                   <FolderIcon size={16} />
                 ) : (

@@ -35,6 +35,13 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
     onClose()
   }, [onSelect, onClose])
 
+  const firstSentence = useCallback((desc: string): string => {
+    const clean = desc.replace(/\s+/g, " ").trim()
+    if (!clean) return ""
+    const match = clean.match(/^[^.!?]*[.!?]/)
+    return (match ? match[0] : clean).trim()
+  }, [])
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content skill-browser" onClick={(e) => e.stopPropagation()}>
@@ -48,8 +55,10 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
           {!loading && filtered.length === 0 && <div className="skill-empty">{t('skills.empty')}</div>}
           {filtered.map((skill) => (
             <button key={skill.id} className="skill-item" onClick={() => handleSelect(skill.name)}>
-              <strong>{skill.name}</strong>
-              {skill.description && <small className="truncate">{skill.description}</small>}
+              <strong className="skill-name">{skill.name}</strong>
+              {skill.description && (
+                <small className="skill-blurb">{firstSentence(skill.description)}</small>
+              )}
             </button>
           ))}
         </div>

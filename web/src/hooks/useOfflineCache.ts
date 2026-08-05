@@ -70,25 +70,43 @@ function openDB(): Promise<IDBDatabase> {
 
 export function useOfflineCache(flags: { offlineCache: boolean }) {
   const dbRef = useRef<IDBDatabase | null>(null)
+  const openingRef = useRef<Promise<IDBDatabase | null> | null>(null)
 
-  useEffect(() => {
-    openDB().then((db) => { dbRef.current = db }).catch((err) => console.error("[OfflineCache] openDB:", err))
-    return () => { dbRef.current?.close(); dbRef.current = null }
+  const getDB = useCallback(async (): Promise<IDBDatabase | null> => {
+    if (dbRef.current) return dbRef.current
+    if (openingRef.current) return openingRef.current
+    openingRef.current = openDB().then((db) => {
+      dbRef.current = db
+      return db
+    }).catch((err) => {
+      console.error("[OfflineCache] openDB:", err)
+      return null
+    }).finally(() => {
+      openingRef.current = null
+    })
+    return openingRef.current
   }, [])
 
+  useEffect(() => {
+    getDB()
+    return () => { dbRef.current?.close(); dbRef.current = null }
+  }, [getDB])
+
   const cacheSessions = useCallback(async (sessions: Session[]) => {
-    if (!dbRef.current) return
+    const db = await getDB()
+    if (!db) return
     try {
-      const tx = dbRef.current.transaction(DB_STORES.sessions, "readwrite")
+      const tx = db.transaction(DB_STORES.sessions, "readwrite")
       const store = tx.objectStore(DB_STORES.sessions)
       for (const s of sessions) store.put(s)
     } catch (err) { console.error("[OfflineCache] cacheSessions:", err) }
-  }, [])
+  }, [getDB])
 
   const getCachedSessions = useCallback(async (): Promise<Session[]> => {
-    if (!dbRef.current) return []
+    const db = await getDB()
+    if (!db) return []
     try {
-      const tx = dbRef.current.transaction(DB_STORES.sessions, "readonly")
+      const tx = db.transaction(DB_STORES.sessions, "readonly")
       const store = tx.objectStore(DB_STORES.sessions)
       return new Promise((resolve, reject) => {
         const req = store.getAll()
@@ -96,12 +114,13 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
         req.onerror = () => reject(req.error)
       })
     } catch (err) { console.error("[OfflineCache] getCachedSessions:", err); return [] }
-  }, [])
+  }, [getDB])
 
   const cacheMessages = useCallback(async (sessionID: string, messages: MessageEnvelope[]) => {
-    if (!dbRef.current || !flags.offlineCache) return
+    let db = await getDB()
+    if (!db || !flags.offlineCache) return
     try {
-      const tx = dbRef.current.transaction(DB_STORES.messages, "readwrite")
+      const tx = db.transaction(DB_STORES.messages, "readwrite")
       const store = tx.objectStore(DB_STORES.messages)
       const existing = await new Promise<{ sessionID: string; messages: MessageEnvelope[]; cachedAt: number } | null>((resolve) => {
         const req = store.get(sessionID)

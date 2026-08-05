@@ -1,11 +1,14 @@
 import { memo, useState, useCallback, useMemo } from "react"
-import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon } from "../Icons"
+import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo, ServerProfile } from "../types"
+import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo, ServerProfile, ChatSettings } from "../types"
 import type { LanguageCode } from "../i18n"
 import { describeProfile } from "../hooks/useServers"
 import { ProviderManager } from "./ProviderManager"
-import { ServerProfileModal } from "./ServerProfileModal"
+import { ChatCustomizer } from "./ChatCustomizer"
+import { SettingsSection } from "./SettingsSection"
+import { DataUsageModal } from "./DataUsageModal"
+import { getDataUsage, formatBytes } from "../utils/dataUsage"
 
 type UsageStats = {
   promptsSent: number
@@ -59,6 +62,14 @@ type SettingsPanelProps = {
   onUpdateServerProfile: (id: string, name: string, config: ServerConfig) => void
   onApplyServerProfile: (profile: ServerProfile) => void
   activeServerProfileID: string | null
+  chatSettings: ChatSettings
+  onChatSettingChange: <K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => void
+  onResetChatSettings: () => void
+  onShutdownHost: () => void
+  onOpenGitHub: () => void
+  onOpenFavoritesManager?: () => void
+  onOpenArchivedView?: () => void
+  onOpenShortcuts?: () => void
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
@@ -74,12 +85,15 @@ export const SettingsPanel = memo(function SettingsPanel({
   onOpenThemeCreator,
   flags, onToggleFlag, onSetFlag,
   providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider,
-  serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile, onApplyServerProfile, activeServerProfileID
+  serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile, onApplyServerProfile, activeServerProfileID,
+  chatSettings, onChatSettingChange, onResetChatSettings,
+  onShutdownHost, onOpenGitHub, onOpenFavoritesManager, onOpenArchivedView, onOpenShortcuts
 }: SettingsPanelProps) {
   const t = useT()
   const [showPassword, setShowPassword] = useState(false)
-  const [editingProfile, setEditingProfile] = useState<ServerProfile | null>(null)
   const [modelQuery, setModelQuery] = useState("")
+  const [showShutdownConfirm, setShowShutdownConfirm] = useState(false)
+  const [showDataUsage, setShowDataUsage] = useState(false)
 
   const uniqueModels = useMemo(() => {
     return Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values())
@@ -98,6 +112,21 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [blockedSearch, setBlockedSearch] = useState("")
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
   const [newProfileName, setNewProfileName] = useState("")
+  const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null)
+  const [profileDraft, setProfileDraft] = useState<ServerConfig | null>(null)
+  const [expandedCurrent, setExpandedCurrent] = useState(false)
+
+  const toggleProfile = useCallback((profile: ServerProfile) => {
+    setExpandedProfileId((cur) => {
+      if (cur === profile.id) return null
+      setProfileDraft(profile.config)
+      return profile.id
+    })
+  }, [])
+
+  const profileField = useCallback(<K extends keyof ServerConfig>(key: K, value: ServerConfig[K]) => {
+    setProfileDraft((prev) => (prev ? { ...prev, [key]: value } : prev))
+  }, [])
 
   const toggleProvider = useCallback((providerID: string) => {
     setExpandedProviders((prev) => {
@@ -144,26 +173,108 @@ export const SettingsPanel = memo(function SettingsPanel({
         <p className="subtle">{t('settings.draftHint')}</p>
       </div>
 
-      {/* Saved servers */}
-      <div className="settings-card">
-        <h3 className="settings-section-title"><ServerIcon size={14} /> {t('settings.sectionServers')}</h3>
+      {/* Saved servers + per-server config */}
+      <SettingsSection title={t('settings.sectionServers')} icon={<ServerIcon size={14} />}>
         <p className="subtle">{t('settings.sectionServersDesc')}</p>
+
+        {/* Current server (active, not saved as profile) */}
+        <div className={`server-profile${expandedCurrent ? " expanded" : ""}`}>
+          <button type="button" className="server-profile-row" onClick={() => setExpandedCurrent((v) => !v)}
+            aria-expanded={expandedCurrent}>
+            <span className="server-profile-kind http">HTTP</span>
+            <span className="server-profile-name">{t('settings.serverCurrent')}</span>
+            <span className="server-profile-desc">{describeProfile({ id: "current", name: "", config: draftConfig })}</span>
+            <span className="settings-chevron" aria-hidden="true">▾</span>
+          </button>
+          {expandedCurrent && (
+            <div className="server-profile-config">
+              <div className="form-grid">
+                <label className="form-field">
+                  <span>{t('settings.host')}</span>
+                  <input name="host" value={draftConfig.host} onChange={(e) => setField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
+                </label>
+                <label className="form-field">
+                  <span>{t('settings.port')}</span>
+                  <input name="port" type="number" value={draftConfig.port || 4096} onChange={(e) => setField("port", Number(e.target.value || 4096))} placeholder="4096" />
+                </label>
+                <label className="form-field">
+                  <span>{t('settings.username')}</span>
+                  <input name="username" value={draftConfig.username} onChange={(e) => setField("username", e.target.value)} placeholder="opencode" />
+                </label>
+                <label className="form-field">
+                  <span>{t('settings.password')}</span>
+                  <div className="password-wrapper">
+                    <input name="password" type={showPassword ? "text" : "password"} value={draftConfig.password} onChange={(e) => setField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
+                    <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
+                      {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                    </button>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+
         {serverProfiles.length > 0 && (
           <div className="server-profile-list">
             {serverProfiles.map((profile) => (
-              <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}`}
-                role="button" tabIndex={0}
-                onClick={() => setEditingProfile(profile)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditingProfile(profile) } }}>
-                <span className="server-profile-name">{profile.name}</span>
-                <span className="server-profile-desc">{describeProfile(profile)}</span>
-                {activeServerProfileID === profile.id ? (
-                  <span className="server-profile-active"><CheckIcon size={12} /> {t('settings.serverActive')}</span>
-                ) : null}
-                <button type="button" className="btn-icon btn-ghost" onClick={(e) => { e.stopPropagation(); onRemoveServerProfile(profile.id) }}
+              <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}${expandedProfileId === profile.id ? " expanded" : ""}`}>
+                <button type="button" className="server-profile-row" onClick={() => toggleProfile(profile)}
+                  aria-expanded={expandedProfileId === profile.id}>
+                  <span className="server-profile-kind http">HTTP</span>
+                  <span className="server-profile-name">{profile.name}</span>
+                  <span className="server-profile-desc">{describeProfile(profile)}</span>
+                  {activeServerProfileID === profile.id ? (
+                    <span className="server-profile-active"><CheckIcon size={12} /> {t('settings.serverActive')}</span>
+                  ) : null}
+                  <span className="settings-chevron" aria-hidden="true">▾</span>
+                </button>
+                <button type="button" className="btn-icon btn-ghost server-profile-remove"
+                  onClick={() => onRemoveServerProfile(profile.id)}
                   aria-label={t('settings.serverRemove')} title={t('settings.serverRemove')}>
                   <TrashIcon size={14} />
                 </button>
+                {expandedProfileId === profile.id && profileDraft && (
+                  <div className="server-profile-config">
+                    <div className="form-grid">
+                      <label className="form-field">
+                        <span>{t('settings.host')}</span>
+                        <input name="host" value={profileDraft.host} onChange={(e) => profileField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
+                      </label>
+                      <label className="form-field">
+                        <span>{t('settings.port')}</span>
+                        <input name="port" type="number" value={profileDraft.port || 4096} onChange={(e) => profileField("port", Number(e.target.value || 4096))} placeholder="4096" />
+                      </label>
+                      <label className="form-field">
+                        <span>{t('settings.username')}</span>
+                        <input name="username" value={profileDraft.username} onChange={(e) => profileField("username", e.target.value)} placeholder="opencode" />
+                      </label>
+                      <label className="form-field">
+                        <span>{t('settings.password')}</span>
+                        <div className="password-wrapper">
+                          <input name="password" type={showPassword ? "text" : "password"} value={profileDraft.password} onChange={(e) => profileField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
+                          <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
+                            {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                          </button>
+                        </div>
+                      </label>
+                    </div>
+                    <div className="server-profile-actions">
+                      <button type="button" className="btn-primary compact"
+                        onClick={() => {
+                          onUpdateServerProfile(profile.id, profile.name, profileDraft)
+                          onApplyServerProfile({ ...profile, config: profileDraft })
+                          setExpandedProfileId(null)
+                        }}>
+                        <CheckIcon size={14} /> {t('settings.serverApplyAndSave')}
+                      </button>
+                      <button type="button" className="btn-secondary compact"
+                        onClick={() => { onUpdateServerProfile(profile.id, profile.name, profileDraft); setExpandedProfileId(null) }}>
+                        <SaveIcon size={14} /> {t('settings.serverSaveOnly')}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -180,39 +291,10 @@ export const SettingsPanel = memo(function SettingsPanel({
             <PlusIcon size={14} /> {t('settings.serverSaveHttp')}
           </button>
         </div>
-      </div>
-
-      {/* Server config */}
-      <div className="settings-card">
-        <h3 className="settings-section-title">{t('settings.sectionServer')}</h3>
-        <div className="form-grid">
-          <label className="form-field">
-            <span>{t('settings.host')}</span>
-            <input name="host" value={draftConfig.host} onChange={(e) => setField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
-          </label>
-          <label className="form-field">
-            <span>{t('settings.port')}</span>
-            <input name="port" type="number" value={draftConfig.port || 4096} onChange={(e) => setField("port", Number(e.target.value || 4096))} placeholder="4096" />
-          </label>
-          <label className="form-field">
-            <span>{t('settings.username')}</span>
-            <input name="username" value={draftConfig.username} onChange={(e) => setField("username", e.target.value)} placeholder="opencode" />
-          </label>
-          <label className="form-field">
-            <span>{t('settings.password')}</span>
-            <div className="password-wrapper">
-              <input name="password" type={showPassword ? "text" : "password"} value={draftConfig.password} onChange={(e) => setField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
-              <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
-                {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-              </button>
-            </div>
-          </label>
-        </div>
-      </div>
+      </SettingsSection>
 
       {/* Data mode */}
-      <div className="settings-card">
-        <h3 className="settings-section-title">{t('settings.dataModeTitle')}</h3>
+      <SettingsSection title={t('settings.dataModeTitle')}>
         <p className="subtle">{t('settings.dataModeDesc')}</p>
         <div className="data-mode-grid">
           {dataModes.map((opt) => (
@@ -225,7 +307,7 @@ export const SettingsPanel = memo(function SettingsPanel({
             </button>
           ))}
         </div>
-      </div>
+      </SettingsSection>
 
       {/* Actions row */}
       <div className="settings-actions">
@@ -261,8 +343,7 @@ export const SettingsPanel = memo(function SettingsPanel({
       )}
 
       {/* Preferences */}
-      <div className="settings-card">
-        <h3 className="settings-section-title">{t('settings.sectionPreferences')}</h3>
+      <SettingsSection title={t('settings.sectionPreferences')}>
         <div className="form-grid">
           <label className="form-field">
             <span>{t('settings.language')}</span>
@@ -354,11 +435,10 @@ export const SettingsPanel = memo(function SettingsPanel({
             </div>
           )}
         </div>
-      </div>
+      </SettingsSection>
 
       {/* Feature flags */}
-      <div className="settings-card">
-        <h3 className="settings-section-title">{t('settings.featureFlags')}</h3>
+      <SettingsSection title={t('settings.featureFlags')}>
         <p className="subtle">{t('settings.featureFlagsDesc')}</p>
         <div className="switch-list">
           {featureFlags.map(({ key, label, desc }) => (
@@ -391,11 +471,10 @@ export const SettingsPanel = memo(function SettingsPanel({
             </label>
           )}
         </div>
-      </div>
+      </SettingsSection>
 
       {/* Providers */}
-      <div className="settings-card">
-        <h3 className="settings-section-title">{t('settings.providers')}</h3>
+      <SettingsSection title={t('settings.providers')}>
         <p className="subtle">{t('settings.providersDesc')}</p>
         <ProviderManager
           providers={providers}
@@ -404,11 +483,10 @@ export const SettingsPanel = memo(function SettingsPanel({
           onConnect={onConnectProvider}
           onDisconnect={onDisconnectProvider}
         />
-      </div>
+      </SettingsSection>
 
       {/* Blocked models */}
-      <div className="settings-card">
-        <h3 className="settings-section-title">{t('settings.blockedModels')}</h3>
+      <SettingsSection title={t('settings.blockedModels')}>
         <p className="subtle">{t('settings.blockedModelsHint')}</p>
         {modelOptions.length === 0 ? (
           <p className="subtle">{t('detail.modelLoading')}</p>
@@ -462,11 +540,74 @@ export const SettingsPanel = memo(function SettingsPanel({
             })}
           </>
         )}
-      </div>
+      </SettingsSection>
+
+      {/* Chat customization */}
+      <SettingsSection title={t('settings.chatCustomization')}>
+        <p className="subtle">{t('settings.chatCustomizationDesc')}</p>
+        <ChatCustomizer
+          settings={chatSettings}
+          onSettingChange={onChatSettingChange}
+          onReset={onResetChatSettings} />
+      </SettingsSection>
+
+      {/* Extras */}
+      <SettingsSection title={t('settings.extras')}>
+        <p className="subtle">{t('settings.extrasDesc')}</p>
+        <div className="settings-extras-list">
+          <button type="button" className="btn-secondary extras-btn" onClick={() => setShowShutdownConfirm(true)}>
+            <PowerIcon size={16} />
+            <span>
+              <strong>{t('extras.shutdownHost')}</strong>
+              <small>{t('extras.shutdownHostDesc')}</small>
+            </span>
+          </button>
+          <button type="button" className="btn-secondary extras-btn" onClick={onOpenGitHub}>
+            <GithubIcon size={16} />
+            <span>
+              <strong>{t('extras.github')}</strong>
+              <small>github.com/Owning01/Opencode-Mobile</small>
+            </span>
+          </button>
+          <button type="button" className="btn-secondary extras-btn" onClick={() => setShowDataUsage(true)}>
+            <DataIcon size={16} />
+            <span>
+              <strong>{t('extras.dataUsage')}</strong>
+              <small>{formatBytes(getDataUsage().month.total)} · {t('dataUsage.month')}</small>
+            </span>
+          </button>
+          {onOpenFavoritesManager && (
+            <button type="button" className="btn-secondary extras-btn" onClick={onOpenFavoritesManager}>
+              <StarIcon size={16} />
+              <span>
+                <strong>{t('favorites.manage')}</strong>
+                <small>{t('favorites.manageDesc')}</small>
+              </span>
+            </button>
+          )}
+          {onOpenArchivedView && (
+            <button type="button" className="btn-secondary extras-btn" onClick={onOpenArchivedView}>
+              <ArchiveIcon size={16} />
+              <span>
+                <strong>{t('session.archived')}</strong>
+                <small>{t('session.archivedDesc')}</small>
+              </span>
+            </button>
+          )}
+          {onOpenShortcuts && (
+            <button type="button" className="btn-secondary extras-btn" onClick={onOpenShortcuts}>
+              <KeyboardIcon size={16} />
+              <span>
+                <strong>{t('session.shortcuts')}</strong>
+                <small>{t('session.shortcutsDesc')}</small>
+              </span>
+            </button>
+          )}
+        </div>
+      </SettingsSection>
 
       {/* Stats */}
-      <div className="settings-card">
-        <h3 className="settings-section-title"><StatsIcon size={14} /> {t('settings.stats')}</h3>
+      <SettingsSection title={t('settings.stats')} icon={<StatsIcon size={14} />}>
         <div className="stats-grid">
           <div className="stat-item">
             <span className="stat-value">{stats.promptsSent}</span>
@@ -486,7 +627,7 @@ export const SettingsPanel = memo(function SettingsPanel({
             {t('settings.serverStats')}
           </button>
         </div>
-      </div>
+      </SettingsSection>
 
       <div className="settings-footer">
         <button type="button" className="btn-secondary" onClick={() => onNavigate("help")}>
@@ -495,15 +636,28 @@ export const SettingsPanel = memo(function SettingsPanel({
         </button>
       </div>
 
-      {editingProfile && (
-        <ServerProfileModal
-          profile={editingProfile}
-          onSave={(name, config) => {
-            onUpdateServerProfile(editingProfile.id, name, config)
-            onApplyServerProfile({ ...editingProfile, name, config })
-            setEditingProfile(null)
-          }}
-          onClose={() => setEditingProfile(null)} />
+      {showShutdownConfirm && (
+        <div className="modal-backdrop" onClick={() => setShowShutdownConfirm(false)}>
+          <div className="modal-card fade-in" role="dialog" aria-modal="true"
+            onClick={(e) => e.stopPropagation()}>
+            <h2>{t('extras.shutdownConfirmTitle')}</h2>
+            <p>{t('extras.shutdownConfirmBody')}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowShutdownConfirm(false)}>
+                {t('extras.shutdownCancel')}
+              </button>
+              <button className="btn-danger" onClick={() => { setShowShutdownConfirm(false); onShutdownHost() }}>
+                <PowerIcon size={16} />
+                {t('extras.shutdownConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDataUsage && (
+        <DataUsageModal
+          onClose={() => setShowDataUsage(false)} />
       )}
     </section>
   )

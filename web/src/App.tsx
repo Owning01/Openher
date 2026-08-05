@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { api } from "./api"
 import { I18nProvider, useT, normalizeLanguage } from "./i18n-context"
 import { languageOptions } from "./i18n"
-import { useConfig } from "./hooks/useConfig"
+import { useConfig, canTestConfig } from "./hooks/useConfig"
 import { useTheme } from "./hooks/useTheme"
 import { useSessions } from "./hooks/useSessions"
 import { modelKey } from "./utils/model-utils"
@@ -38,14 +38,12 @@ import { useFeatureFlags } from "./hooks/useFeatureFlags"
 import { useProviderManager } from "./hooks/useProviderManager"
 import { ThemeVariantProvider } from "./context/themeVariant"
 import { ThemePicker } from "./components/ThemePicker"
-import { SessionTokenUsage } from "./components/SessionTokenUsage"
 import { MCPBrowser } from "./components/MCPBrowser"
 import { ArchivedList } from "./components/ArchivedList"
 import { ShortcutsModal } from "./components/ShortcutsModal"
 import { FileEditor } from "./components/FileEditor"
 import { TerminalView } from "./components/TerminalView"
 import { ThemeCreator } from "./components/ThemeCreator"
-import { ChatCustomizer } from "./components/ChatCustomizer"
 import { FavoritesManager } from "./components/FavoritesManager"
 import { useShell } from "./hooks/useShell"
 import { useChatSettings } from "./hooks/useChatSettings"
@@ -54,7 +52,6 @@ import { FileBrowser } from "./components/FileBrowser"
 import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
-import { CloseIcon } from "./Icons"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
 import { useShareReceiver } from "./hooks/useShareReceiver"
@@ -184,7 +181,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const { providers: providerList, connecting: connectingProvider, error: providerError, connectProvider, disconnectProvider } = useProviderManager(modelOptions, config)
   const [readingMode, setReadingMode] = useState(false)
   const [showThemePicker, setShowThemePicker] = useState(false)
-  const [tokenStatsOpen, setTokenStatsOpen] = useState(false)
   // ===== Feature: MCP Browser =====
   const [showMCPBrowser, setShowMCPBrowser] = useState(false)
 
@@ -200,7 +196,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // ===== Feature: Shortcuts =====
   const [showShortcuts, setShowShortcuts] = useState(false)
-  const [showChatCustomizer, setShowChatCustomizer] = useState(false)
   const { settings: chatSettings, setSetting: setChatSetting, resetDefaults: resetChatSettings } = useChatSettings()
 
   // ===== Feature: Theme Creator =====
@@ -222,6 +217,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setSettingsNotice({ type: "success", text: `${t('settings.serverApplied')}: ${profile.name}` })
     setTimeout(() => setSettingsNotice(null), 4000)
   }, [setDraftConfig, saveConfig, t, setSettingsNotice])
+
+  // ===== Feature: Auto-save config (debounced) =====
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!hasDraftChanges) return
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (!canTestConfig(draftConfig)) return
+      saveConfig(t)
+    }, 700)
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+  }, [draftConfig, hasDraftChanges, saveConfig, t])
 
   // ===== Feature: Share to OpenCode (Android ACTION_SEND) =====
   useShareReceiver((payload) => {
@@ -881,6 +890,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleTest = useCallback(() => testConnection(t), [testConnection, t])
 
+  const handleShutdownHost = useCallback(() => {
+    if (!selectedSession || !config) {
+      setSettingsNotice({ type: "error", text: t('extras.shutdownNoSession') })
+      return
+    }
+    // Windows: shutdown /s /t 0 · Linux: fallback shutdown -h now
+    api.sendShell(config, selectedSession.id, "shutdown /s /t 0 || shutdown -h now", selectedSession.directory)
+      .then(() => {
+        setSettingsNotice({ type: "success", text: t('extras.shutdownSent') })
+      })
+      .catch((err: Error) => {
+        setSettingsNotice({ type: "error", text: t('extras.shutdownFailed', { error: err.message }) })
+      })
+  }, [selectedSession, config, t, setSettingsNotice])
+
+  const handleOpenGitHub = useCallback(() => {
+    window.open("https://github.com/Owning01/Opencode-Mobile", "_system")
+  }, [])
+
   const handleNavigate = useCallback((target: ViewType) => {
     if (target === "sessions") setSelectedProjectDir(null)
     navigate(target)
@@ -991,7 +1019,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           }}
           onUpdateServerProfile={(id, name, config) => updateProfile(id, { name, config })}
           onApplyServerProfile={applyServerProfile}
-          activeServerProfileID={activeServerProfileID} />
+          activeServerProfileID={activeServerProfileID}
+          chatSettings={chatSettings}
+          onChatSettingChange={setChatSetting}
+          onResetChatSettings={resetChatSettings}
+          onShutdownHost={handleShutdownHost}
+          onOpenGitHub={handleOpenGitHub}
+          onOpenFavoritesManager={() => setShowFavoritesManager(true)}
+          onOpenArchivedView={() => setShowArchivedView(true)}
+          onOpenShortcuts={() => setShowShortcuts(true)} />
       )}
 
       {view === "sessions" && (
@@ -1075,7 +1111,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onEditFile={(file) => setFileEditorPath(file)}
             onOpenSettings={() => navigate("settings")}
             onThemeCommand={() => setShowThemePicker(true)}
-            onToggleTokenStats={() => setTokenStatsOpen((v) => !v)}
             config={config}
             agents={agentOptions}
             onShellSend={(cmd) => {
@@ -1112,11 +1147,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             fileBrowserPath={fb.currentPath}
             onOpenTerminal={() => setShowTerminal(true)}
             onOpenMCPBrowser={() => setShowMCPBrowser(true)}
-            onOpenArchivedView={() => setShowArchivedView(true)}
-            onOpenThemeCreator={() => setShowThemeCreator(true)}
-            onOpenFavoritesManager={() => setShowFavoritesManager(true)}
-            onOpenShortcuts={() => setShowShortcuts(true)}
-            onOpenChatCustomizer={() => setShowChatCustomizer(true)}
             showTodoButton={chatSettings.showTodoButton}
             queuedPrompts={queuedPrompts}
             onRemoveQueued={removeQueued} />
@@ -1170,20 +1200,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         <ThemePicker onClose={() => setShowThemePicker(false)} />
       )}
 
-      {tokenStatsOpen && selectedSession?.tokens && (
-        <div className="modal-overlay" onClick={() => setTokenStatsOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{t('session.tokenStats')}</h3>
-              <button className="btn-icon btn-secondary compact" onClick={() => setTokenStatsOpen(false)}>
-                <CloseIcon size={14} />
-              </button>
-            </div>
-            <SessionTokenUsage tokens={selectedSession.tokens} cost={selectedSession.cost} />
-          </div>
-        </div>
-      )}
-
       {showMCPBrowser && config && <MCPBrowser config={config} onClose={() => setShowMCPBrowser(false)} />}
 
       {showArchivedView && (
@@ -1217,6 +1233,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onClose={fb.close}
           onNavigate={fb.navigateTo}
           onGoUp={fb.goUp}
+          onOpenFile={(path) => { setFileEditorPath(path) }}
         />
       )}
 
@@ -1244,15 +1261,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             try { localStorage.setItem("opencode.mobile.favoritesOrder", JSON.stringify(ids)) } catch {}
           }}
           onClose={() => setShowFavoritesManager(false)}
-        />
-      )}
-
-      {showChatCustomizer && (
-        <ChatCustomizer
-          settings={chatSettings}
-          onSettingChange={setChatSetting}
-          onReset={resetChatSettings}
-          onClose={() => setShowChatCustomizer(false)}
         />
       )}
 

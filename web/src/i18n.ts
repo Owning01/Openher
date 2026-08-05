@@ -407,6 +407,50 @@ type TranslationKey =
   | 'favorites.empty'
   | 'offlineQueue.pending'
   | 'themeCreator.title'
+  | 'settings.chatCustomization'
+  | 'settings.chatCustomizationDesc'
+  | 'settings.chatFontSize'
+  | 'settings.chatSpacing'
+  | 'settings.chatSpacingCompact'
+  | 'settings.chatSpacingNormal'
+  | 'settings.chatSpacingComfortable'
+  | 'settings.chatShowThinking'
+  | 'settings.chatShowTools'
+  | 'settings.chatShowTime'
+  | 'settings.chatShowTodo'
+  | 'settings.enabled'
+  | 'settings.disabled'
+  | 'settings.chatReset'
+  | 'settings.extras'
+  | 'settings.extrasDesc'
+  | 'extras.shutdownHost'
+  | 'extras.shutdownHostDesc'
+  | 'extras.shutdownConfirmTitle'
+  | 'extras.shutdownConfirmBody'
+  | 'extras.shutdownConfirm'
+  | 'extras.shutdownCancel'
+  | 'extras.shutdownSent'
+  | 'extras.shutdownFailed'
+  | 'extras.shutdownNoSession'
+  | 'extras.github'
+  | 'extras.dataUsage'
+  | 'settings.serverCurrent'
+  | 'settings.serverApplyAndSave'
+  | 'settings.serverSaveOnly'
+  | 'favorites.manageDesc'
+  | 'session.archivedDesc'
+  | 'session.shortcutsDesc'
+  | 'session.queueToggle'
+  | 'session.queueToggleOn'
+  | 'session.queueToggleOff'
+  | 'dataUsage.title'
+  | 'dataUsage.day'
+  | 'dataUsage.week'
+  | 'dataUsage.month'
+  | 'dataUsage.up'
+  | 'dataUsage.down'
+  | 'dataUsage.total'
+  | 'dataUsage.reset'
 
 const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
   en: {
@@ -818,6 +862,50 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.empty': 'No favorites yet',
     'offlineQueue.pending': 'Pending actions in queue',
     'themeCreator.title': 'Theme Creator',
+    'settings.chatCustomization': 'Chat customization',
+    'settings.chatCustomizationDesc': 'Customize what you see in the chat',
+    'settings.chatFontSize': 'Font size',
+    'settings.chatSpacing': 'Spacing',
+    'settings.chatSpacingCompact': 'Compact',
+    'settings.chatSpacingNormal': 'Normal',
+    'settings.chatSpacingComfortable': 'Comfortable',
+    'settings.chatShowThinking': 'Show reasoning',
+    'settings.chatShowTools': 'Show tools',
+    'settings.chatShowTime': 'Show timestamps',
+    'settings.chatShowTodo': 'Todo button',
+    'settings.enabled': 'On',
+    'settings.disabled': 'Off',
+    'settings.chatReset': 'Reset to defaults',
+    'settings.extras': 'Extras',
+    'settings.extrasDesc': 'Additional tools',
+    'extras.shutdownHost': 'Shut down host computer',
+    'extras.shutdownHostDesc': 'Sends a shutdown command to the computer running the OpenCode server',
+    'extras.shutdownConfirmTitle': 'Shut down host?',
+    'extras.shutdownConfirmBody': 'The computer running the OpenCode server will be turned off. This action cannot be undone.',
+    'extras.shutdownConfirm': 'Shut down',
+    'extras.shutdownCancel': 'Cancel',
+    'extras.shutdownSent': 'Shutdown command sent',
+    'extras.shutdownFailed': 'Shutdown command failed: {error}',
+    'extras.shutdownNoSession': 'You need an active session to shut down the host',
+    'extras.github': 'Project GitHub',
+    'extras.dataUsage': 'Data usage',
+    'settings.serverCurrent': 'Current server',
+    'settings.serverApplyAndSave': 'Use & save',
+    'settings.serverSaveOnly': 'Save only',
+    'favorites.manageDesc': 'Reorder favorite sessions',
+    'session.archivedDesc': 'View archived sessions',
+    'session.shortcutsDesc': 'Keyboard shortcuts reference',
+    'session.queueToggle': 'Queue',
+    'session.queueToggleOn': 'Queue enabled - messages send automatically when the assistant finishes',
+    'session.queueToggleOff': 'Queue disabled',
+    'dataUsage.title': 'Data usage',
+    'dataUsage.day': 'Day',
+    'dataUsage.week': 'Week',
+    'dataUsage.month': 'Month',
+    'dataUsage.up': 'Up',
+    'dataUsage.down': 'Down',
+    'dataUsage.total': 'Total',
+    'dataUsage.reset': 'Reset counter',
     'nav.stats': 'Stats',
     'settings.serverStats': 'Server stats',
     'stats.title': 'Statistics',
@@ -1260,6 +1348,50 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.saveOrder': 'Guardar Orden',
     'favorites.empty': 'Sin favoritos aún',
     'offlineQueue.pending': 'Acciones pendientes en cola',
+    'settings.chatCustomization': 'Personalización del chat',
+    'settings.chatCustomizationDesc': 'Personalizá lo que se ve en el chat',
+    'settings.chatFontSize': 'Tamaño de letra',
+    'settings.chatSpacing': 'Espaciado',
+    'settings.chatSpacingCompact': 'Compacto',
+    'settings.chatSpacingNormal': 'Normal',
+    'settings.chatSpacingComfortable': 'Cómodo',
+    'settings.chatShowThinking': 'Mostrar razonamiento',
+    'settings.chatShowTools': 'Mostrar herramientas (tools)',
+    'settings.chatShowTime': 'Mostrar hora',
+    'settings.chatShowTodo': 'Botón de tareas',
+    'settings.enabled': 'Activado',
+    'settings.disabled': 'Desactivado',
+    'settings.chatReset': 'Restaurar valores por defecto',
+    'settings.extras': 'Extras',
+    'settings.extrasDesc': 'Herramientas adicionales',
+    'extras.shutdownHost': 'Apagar computadora huesped',
+    'extras.shutdownHostDesc': 'Envía un comando de apagado a la computadora que ejecuta el servidor OpenCode',
+    'extras.shutdownConfirmTitle': '¿Apagar la computadora huesped?',
+    'extras.shutdownConfirmBody': 'La computadora que ejecuta el servidor OpenCode se apagará. Esta acción no se puede deshacer.',
+    'extras.shutdownConfirm': 'Apagar',
+    'extras.shutdownCancel': 'Cancelar',
+    'extras.shutdownSent': 'Comando de apagado enviado',
+    'extras.shutdownFailed': 'Error al enviar el comando de apagado: {error}',
+    'extras.shutdownNoSession': 'Necesitás una sesión activa para apagar la computadora',
+    'extras.github': 'Ir al GitHub del proyecto',
+    'extras.dataUsage': 'Consumo de datos',
+    'settings.serverCurrent': 'Servidor actual',
+    'settings.serverApplyAndSave': 'Usar y guardar',
+    'settings.serverSaveOnly': 'Solo guardar',
+    'favorites.manageDesc': 'Reordenar sesiones favoritas',
+    'session.archivedDesc': 'Ver sesiones archivadas',
+    'session.shortcutsDesc': 'Referencia de atajos de teclado',
+    'session.queueToggle': 'Cola',
+    'session.queueToggleOn': 'Cola activada - los mensajes se envían automáticamente cuando el asistente termina',
+    'session.queueToggleOff': 'Cola desactivada',
+    'dataUsage.title': 'Consumo de datos',
+    'dataUsage.day': 'Día',
+    'dataUsage.week': 'Semana',
+    'dataUsage.month': 'Mes',
+    'dataUsage.up': 'Subida',
+    'dataUsage.down': 'Descarga',
+    'dataUsage.total': 'Total',
+    'dataUsage.reset': 'Reiniciar contador',
     'themeCreator.title': 'Creador de Temas',
     'nav.stats': 'Estadísticas',
     'settings.serverStats': 'Estadísticas del servidor',
@@ -1667,6 +1799,50 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.saveOrder': 'Salva Ordine',
     'favorites.empty': 'Ancora nessun preferito',
     'offlineQueue.pending': 'Azioni in coda',
+    'settings.chatCustomization': 'Personalizzazione chat',
+    'settings.chatCustomizationDesc': 'Personalizza cosa vedi nella chat',
+    'settings.chatFontSize': 'Dimensione carattere',
+    'settings.chatSpacing': 'Spaziatura',
+    'settings.chatSpacingCompact': 'Compatta',
+    'settings.chatSpacingNormal': 'Normale',
+    'settings.chatSpacingComfortable': 'Comoda',
+    'settings.chatShowThinking': 'Mostra ragionamento',
+    'settings.chatShowTools': 'Mostra strumenti (tools)',
+    'settings.chatShowTime': 'Mostra ora',
+    'settings.chatShowTodo': 'Pulsante attività',
+    'settings.enabled': 'Attivo',
+    'settings.disabled': 'Disattivo',
+    'settings.chatReset': 'Ripristina valori predefiniti',
+    'settings.extras': 'Extra',
+    'settings.extrasDesc': 'Strumenti aggiuntivi',
+    'extras.shutdownHost': 'Spegni computer host',
+    'extras.shutdownHostDesc': 'Invia un comando di spegnimento al computer che esegue il server OpenCode',
+    'extras.shutdownConfirmTitle': 'Spegnere il computer host?',
+    'extras.shutdownConfirmBody': 'Il computer che esegue il server OpenCode verrà spento. Questa azione non può essere annullata.',
+    'extras.shutdownConfirm': 'Spegni',
+    'extras.shutdownCancel': 'Annulla',
+    'extras.shutdownSent': 'Comando di spegnimento inviato',
+    'extras.shutdownFailed': 'Invio del comando di spegnimento fallito: {error}',
+    'extras.shutdownNoSession': 'Serve una sessione attiva per spegnere il computer host',
+    'extras.github': 'GitHub del progetto',
+    'extras.dataUsage': 'Consumo dati',
+    'settings.serverCurrent': 'Server attuale',
+    'settings.serverApplyAndSave': 'Usa e salva',
+    'settings.serverSaveOnly': 'Solo salva',
+    'favorites.manageDesc': 'Riordina sessioni preferite',
+    'session.archivedDesc': 'Visualizza sessioni archiviate',
+    'session.shortcutsDesc': 'Riferimento scorciatoie da tastiera',
+    'session.queueToggle': 'Coda',
+    'session.queueToggleOn': 'Coda attiva - i messaggi si inviano automaticamente quando l\'assistente finisce',
+    'session.queueToggleOff': 'Coda disattivata',
+    'dataUsage.title': 'Consumo dati',
+    'dataUsage.day': 'Giorno',
+    'dataUsage.week': 'Settimana',
+    'dataUsage.month': 'Mese',
+    'dataUsage.up': 'Invio',
+    'dataUsage.down': 'Download',
+    'dataUsage.total': 'Totale',
+    'dataUsage.reset': 'Azzera contatore',
     'themeCreator.title': 'Creatore di Temi',
     'nav.stats': 'Statistiche',
     'settings.serverStats': 'Statistiche del server',
@@ -2074,6 +2250,50 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'favorites.saveOrder': '儲存順序',
     'favorites.empty': '尚無最愛',
     'offlineQueue.pending': '佇列中有待處理的動作',
+    'settings.chatCustomization': '聊天自訂',
+    'settings.chatCustomizationDesc': '自訂聊天中顯示的內容',
+    'settings.chatFontSize': '字體大小',
+    'settings.chatSpacing': '間距',
+    'settings.chatSpacingCompact': '緊湊',
+    'settings.chatSpacingNormal': '標準',
+    'settings.chatSpacingComfortable': '寬鬆',
+    'settings.chatShowThinking': '顯示推理',
+    'settings.chatShowTools': '顯示工具 (tools)',
+    'settings.chatShowTime': '顯示時間',
+    'settings.chatShowTodo': '任務按鈕',
+    'settings.enabled': '啟用',
+    'settings.disabled': '停用',
+    'settings.chatReset': '恢復預設值',
+    'settings.extras': '其他功能',
+    'settings.extrasDesc': '其他工具',
+    'extras.shutdownHost': '關閉主機電腦',
+    'extras.shutdownHostDesc': '向執行 OpenCode 伺服器的電腦發送關機指令',
+    'extras.shutdownConfirmTitle': '關閉主機電腦？',
+    'extras.shutdownConfirmBody': '執行 OpenCode 伺服器的電腦將被關閉。此操作無法復原。',
+    'extras.shutdownConfirm': '關機',
+    'extras.shutdownCancel': '取消',
+    'extras.shutdownSent': '已發送關機指令',
+    'extras.shutdownFailed': '發送關機指令失敗：{error}',
+    'extras.shutdownNoSession': '需要一個有效的工作階段才能關閉主機',
+    'extras.github': '專案 GitHub',
+    'extras.dataUsage': '資料使用量',
+    'settings.serverCurrent': '目前伺服器',
+    'settings.serverApplyAndSave': '使用並儲存',
+    'settings.serverSaveOnly': '僅儲存',
+    'favorites.manageDesc': '重新排序最愛工作階段',
+    'session.archivedDesc': '檢視已封存的工作階段',
+    'session.shortcutsDesc': '鍵盤快捷鍵參考',
+    'session.queueToggle': '佇列',
+    'session.queueToggleOn': '佇列已啟用 - 助理完成後自動傳送訊息',
+    'session.queueToggleOff': '佇列已停用',
+    'dataUsage.title': '資料使用量',
+    'dataUsage.day': '日',
+    'dataUsage.week': '週',
+    'dataUsage.month': '月',
+    'dataUsage.up': '上傳',
+    'dataUsage.down': '下載',
+    'dataUsage.total': '總計',
+    'dataUsage.reset': '重設計數器',
     'themeCreator.title': '主題建立器',
     'nav.stats': '統計',
     'settings.serverStats': '伺服器統計',

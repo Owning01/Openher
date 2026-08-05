@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, StatsIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, StarIcon, MenuDotsIcon, LayersIcon, ArchiveIcon, ForkIcon, PaintIcon, KeyboardIcon, CloseIcon, ShareIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -75,7 +75,6 @@ type ChatViewProps = {
   agents?: AgentOption[]
   config?: ServerConfig
   onOpenSettings?: () => void
-  onToggleTokenStats?: () => void
   onShellSend?: (command: string) => void
   onThemeCommand?: () => void
   flags: FeatureFlags
@@ -95,11 +94,6 @@ type ChatViewProps = {
   onForkSession?: () => void
   onOpenTerminal?: () => void
   onOpenMCPBrowser?: () => void
-  onOpenArchivedView?: () => void
-  onOpenThemeCreator?: () => void
-  onOpenFavoritesManager?: () => void
-  onOpenShortcuts?: () => void
-  onOpenChatCustomizer?: () => void
   showTodoButton?: boolean
   queuedPrompts?: QueuedPrompt[]
   onRemoveQueued?: (id: string) => void
@@ -115,11 +109,11 @@ export const ChatView = memo(function ChatView({
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
-  agents, config, activeSessions, onOpenSession, onOpenSettings, onToggleTokenStats, onShellSend, onThemeCommand,
-  flags, onToggleFlag: _onToggleFlag, onSetFlag: _onSetFlag, diffFiles, projectDashboard,
+  agents, config, activeSessions, onOpenSession, onOpenSettings, onShellSend, onThemeCommand,
+  flags, onToggleFlag: _onToggleFlag, onSetFlag, diffFiles, projectDashboard,
   streamState, pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
-  onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser, onOpenArchivedView, onOpenThemeCreator, onOpenFavoritesManager, onOpenShortcuts, onOpenChatCustomizer,
+  onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser,
   todos, todosExpanded, onTodosToggle, showTodoButton,
   queuedPrompts, onRemoveQueued, compacting, revertID,
   onExportMarkdown, onEditFile
@@ -282,14 +276,6 @@ export const ChatView = memo(function ChatView({
                 <SettingsIcon size={16} />
               </button>
             )}
-            {onOpenChatCustomizer && (
-              <button
-                className="btn-icon compact"
-                onClick={onOpenChatCustomizer}
-                title="Personalizar chat">
-                <PaintIcon size={15} />
-              </button>
-            )}
             <div className="overflow-wrap header-overflow" ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
               <button className="btn-icon compact"
                 onClick={(e) => {
@@ -339,9 +325,6 @@ export const ChatView = memo(function ChatView({
                   <button className="overflow-item" disabled={isWorking} onClick={() => { setShowOverflow(false); onCompact?.() }}>
                     <CompressIcon size={14} /> {t('session.compact')}
                   </button>
-                  <button className="overflow-item" onClick={() => { setShowOverflow(false); onToggleTokenStats?.() }}>
-                    <StatsIcon size={14} /> {t('session.tokenStats')}
-                  </button>
                   {onExportMarkdown && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onExportMarkdown() }}>
                       <ShareIcon size={14} /> {t('session.exportMd')}
@@ -372,30 +355,6 @@ export const ChatView = memo(function ChatView({
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenMCPBrowser() }}>
                       <GlobeIcon size={14} />
                       {t('session.mcpResources')}
-                    </button>
-                  )}
-                  {onOpenArchivedView && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenArchivedView() }}>
-                      <ArchiveIcon size={14} />
-                      {t('session.archived')}
-                    </button>
-                  )}
-                  {onOpenThemeCreator && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenThemeCreator() }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                      {t('session.themeCreator')}
-                    </button>
-                  )}
-                  {onOpenFavoritesManager && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenFavoritesManager() }}>
-                      <StarIcon size={14} />
-                      {t('favorites.manage')}
-                    </button>
-                  )}
-                  {onOpenShortcuts && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenShortcuts() }}>
-                      <KeyboardIcon size={14} />
-                      {t('session.shortcuts')}
                     </button>
                   )}
                   {onForkSession && (
@@ -572,6 +531,16 @@ export const ChatView = memo(function ChatView({
           config={config}
           directory={selectedSession?.directory}
           onThemeCommand={onThemeCommand}
+          queueEnabled={flags.promptQueue}
+          queuedCount={queuedPrompts?.length ?? 0}
+          onToggleQueue={() => {
+            if (flags.promptQueue) {
+              onSetFlag("promptQueue", false)
+            } else {
+              onSetFlag("promptQueue", true)
+              onSetFlag("promptQueueMode", "auto")
+            }
+          }}
         />
       )}
 

@@ -35,6 +35,9 @@ web/android/keystore/
 PLAY-STORE.md
 web/scripts/play-upload.py
 web/scripts/gen-play-assets.py
+web/scripts/upload-tmpfiles.py
+web/scripts/check-pkg.py
+.playwright-mcp/
 play-store-assets/
 editor-*.png
 
