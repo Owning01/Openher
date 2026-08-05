@@ -411,6 +411,24 @@ p {
   padding: var(--space-5);
 }
 
+.panel.sessions,
+.panel.settings,
+.panel.help {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.panel.detail {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .section-heading,
 .header-row {
   display: flex;
@@ -2723,6 +2741,18 @@ p {
   font-size: 0.85rem;
 }
 
+.model-group-row::after {
+  content: "▸";
+  color: var(--muted);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.model-group.expanded .model-group-row::after {
+  transform: rotate(90deg);
+}
+
 .model-group-row:hover {
   background: var(--surface-subtle);
 }
@@ -2866,6 +2896,11 @@ p {
 
 .message-list-root {
   position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .scroll-to-bottom {
@@ -2952,6 +2987,7 @@ p {
   align-self: flex-end;
   background: var(--primary-soft);
   border-color: var(--primary-border);
+  border-radius: 2px;
 }
 
 .message.assistant {
@@ -3842,6 +3878,69 @@ p {
   gap: var(--space-2);
 }
 
+/* ===== Floating question prompt (no bloquea el chat) ===== */
+.question-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-modal) + 1);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-3);
+  background: transparent;
+  pointer-events: none;
+}
+
+.question-overlay > * {
+  pointer-events: auto;
+}
+
+.question-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-1) 0;
+}
+
+.question-card {
+  width: min(100%, 480px);
+  max-height: 70dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-3);
+  animation: fade-in 150ms ease-out;
+}
+
+.question-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.question-card-header strong {
+  font-size: 0.85rem;
+}
+
+.question-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.question-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .question-nav,
 .question-submit {
   display: flex;
@@ -3981,43 +4080,9 @@ p {
 
 
 /* ===== Live Tool Status ===== */
-.live-tools {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: var(--space-1) 0;
-}
-
-.tool-status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--surface-strong);
-  font-size: 0.78rem;
-  font-family: var(--font-mono);
-  animation: fade-in 150ms ease-out;
-}
-
 .tool-status-icon {
   flex-shrink: 0;
   font-size: 0.85rem;
-}
-
-.tool-status-label {
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.tool-status-preview {
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
 }
 
 .tool-status-dot {
@@ -4162,7 +4227,7 @@ p {
   width: 100%;
   min-height: 42px;
   max-height: 120px;
-  padding: 0.5rem 2.5rem;
+  padding: 0.5rem 2.5rem 0.5rem 4.4rem;
   border: none;
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
@@ -4201,8 +4266,14 @@ p {
 }
 
 .composer-queue-btn {
-  left: 2rem;
+  left: 2.3rem;
   color: var(--muted);
+}
+
+.composer-queue-btn[aria-pressed="true"] {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: var(--radius-md);
 }
 
 .composer-queue-btn:hover {
@@ -4634,6 +4705,81 @@ p {
   overflow-wrap: anywhere;
 }
 
+/* ===== File browser (vista columnar estilo Windows Explorer) ===== */
+.modal-card.file-browser {
+  width: min(100%, 520px);
+  height: min(80dvh, 560px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.file-browser-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.file-browser-header h2 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.file-browser-path {
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+}
+
+.folder-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1) 0;
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0.35rem var(--space-3);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: left;
+  min-height: 30px;
+}
+
+.folder-row:hover {
+  background: var(--surface-subtle);
+}
+
+.folder-row > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .modal-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4897,22 +5043,7 @@ button.compact {
     border-right: 0;
   }
 
-  .panel.sessions,
-  .panel.settings,
-  .panel.help {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
   .panel.detail {
-    flex: 1;
-    height: 100%;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
     border: none !important;
     box-shadow: none !important;
     padding: 0 var(--space-2);
@@ -4940,14 +5071,6 @@ button.compact {
     border: none !important;
     border-bottom: 1px solid var(--border-subtle) !important;
     box-shadow: none !important;
-  }
-
-  .message-list-root {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
   }
 
   .messages {
@@ -5069,7 +5192,15 @@ button.compact {
   min-height: 0;
   border-radius: var(--radius-md);
   line-height: 1;
+  background: transparent;
+  border: none;
 }
+
+.btn-icon.compact {
+  min-height: 0;
+  padding: 0.25rem;
+}
+
 
 .detail-title-row .btn-icon {
   opacity: 0.6;
@@ -6086,6 +6217,17 @@ button.compact {
 
 /* ===== File Editor ===== */
 .file-editor { max-width: 800px; width: 90vw; height: 80vh; display: flex; flex-direction: column; }
+.file-editor-readonly {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.5rem;
+}
 .file-editor-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .file-editor-textarea { flex: 1; width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-3); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem; line-height: 1.5; resize: none; tab-size: 2; }
 

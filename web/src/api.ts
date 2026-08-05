@@ -13,6 +13,7 @@ import type {
   ModelSelection,
   ProjectCurrent,
   PathInfo,
+  QuestionOption,
   ServerConfig,
   Session,
   SessionStatus,
@@ -43,6 +44,20 @@ export function baseUrl(config: ServerConfig): string {
 
 function normalizeSlashes(path: string): string {
   return path.replace(/\\/g, "/")
+}
+
+// El server espera paths RELATIVOS al directory (RelativePath). Si la app
+// recibe un path absoluto (FileBrowser usa item.absolute), se recorta el
+// prefijo del directory para no disparar 500 en /file/content.
+function toServerRelative(path: string, directory?: string): string {
+  const norm = normalizeSlashes(path)
+  if (!directory) return norm
+  const normDir = normalizeSlashes(directory).replace(/\/+$/, "")
+  if (norm.toLowerCase().startsWith(normDir.toLowerCase())) {
+    const rel = norm.slice(normDir.length).replace(/^\/+/, "")
+    if (rel) return rel
+  }
+  return norm
 }
 
 function withDirectory(path: string, directory?: string): string {
@@ -441,10 +456,20 @@ export const api = {
   },
 
   listMCPResources(config: ServerConfig) {
-    // El server puede devolver [] o { resources: [...] } según versión; parseo tolerante.
+    // El server devuelve un RECORD { [key]: { name, uri, description?, client } };
+    // versiones viejas devuelven array o { resources: [...] } — parseo tolerante.
     return request<unknown>(config, "/experimental/resource").then((raw) => {
       if (Array.isArray(raw)) return raw as { id: string; name: string; description?: string }[]
       if (raw && typeof raw === "object") {
+        const entries = Object.entries(raw as Record<string, unknown>)
+        const isRecord = entries.length > 0 && entries.every(([, v]) =>
+          v !== null && typeof v === "object" && "uri" in (v as object))
+        if (isRecord) {
+          return entries.map(([k, v]) => {
+            const r = v as { name?: string; description?: string; client?: string }
+            return { id: r.client ?? k, name: r.name ?? k, description: r.description }
+          })
+        }
         const wrapped = (raw as { resources?: unknown; data?: unknown }).resources ?? (raw as { data?: unknown }).data
         if (Array.isArray(wrapped)) return wrapped as { id: string; name: string; description?: string }[]
         if (Array.isArray((raw as { servers?: unknown }).servers)) {
@@ -462,7 +487,29 @@ export const api = {
   },
 
   listPendingQuestions(config: ServerConfig, directory?: string) {
-    return request<{ id: string; question: string; status: string }[]>(config, withDirectory("/question", directory))
+    // El server moderno devuelve QuestionRequest[]: { id, sessionID, questions:
+    // [{ question, header, options, multiple, custom }], tool }. Servers viejos
+    // mandaban { id, question, status } — parseo tolerante.
+    return request<unknown>(config, withDirectory("/question", directory)).then((raw) => {
+      if (!Array.isArray(raw)) return []
+      return raw.map((q) => {
+        const item = q as { id: string; question?: string; status?: string; sessionID?: string; questions?: unknown[]; tool?: { messageID: string; callID: string } }
+        if (Array.isArray(item.questions)) {
+          return {
+            id: item.id,
+            sessionID: item.sessionID,
+            questions: item.questions as { question: string; header?: string; options: QuestionOption[]; multiple?: boolean; custom?: boolean }[],
+            tool: item.tool,
+          }
+        }
+        return {
+          id: item.id,
+          question: item.question,
+          status: item.status,
+          questions: item.question ? [{ question: item.question, header: "", options: [] }] : [],
+        }
+      })
+    })
   },
 
   listPermissions(config: ServerConfig, directory?: string) {
@@ -481,7 +528,10 @@ export const api = {
   },
 
   readFile(config: ServerConfig, path: string, directory?: string) {
-    return request<{ content: string }>(config, withDirectory(`/file?path=${encodeURIComponent(normalizeSlashes(path))}`, directory))
+    // El read real del server es /file/content (con path relativo al directory);
+    // /file es el LIST y explota con paths absolutos (500).
+    return request<{ type: "text" | "binary"; content: string; encoding?: string }>(config,
+      withDirectory(`/file/content?path=${encodeURIComponent(toServerRelative(path, directory))}`, directory))
   },
 
   setModelVariant(config: ServerConfig, providerID: string, modelID: string, variantName: string, options: Record<string, unknown>, directory?: string) {

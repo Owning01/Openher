@@ -68,14 +68,15 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
   }, [config, requestID, directory, onDone])
 
   return (
-    <div className="question-overlay" onClick={onDone}>
+    <div className="question-inline">
       <div className="question-card" onClick={(e) => e.stopPropagation()}>
         <div className="question-card-header">
           <strong>{t('detail.questionTitle')}</strong>
         </div>
+        <div className="question-card-body">
         {questions.map((q, qi) => (
           <div key={qi} className="question-row">
-            <p className="question-label">{q.question}</p>
+            <p className="question-text">{q.question}</p>
             {q.options.length > 0 && (
               <div className="question-options">
                 {q.options.map((opt) => {
@@ -95,7 +96,7 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
             )}
             {q.custom && (
               <input
-                className="question-custom"
+                className="question-custom-input"
                 type="text"
                 placeholder={t('detail.questionCustomPlaceholder')}
                 value={customs[qi] ?? ""}
@@ -104,6 +105,7 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
             )}
           </div>
         ))}
+        </div>
         <div className="question-actions">
           <button className="btn btn-secondary" onClick={handleSkip} disabled={sending}>
             {t('detail.questionSkip')}

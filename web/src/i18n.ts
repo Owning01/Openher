@@ -395,6 +395,7 @@ type TranslationKey =
   | 'fileEditor.title'
   | 'fileEditor.save'
   | 'fileEditor.saving'
+  | 'fileEditor.readOnly'
   | 'fileEditor.loading'
   | 'fileEditor.noChanges'
   | 'terminal.title'
@@ -851,8 +852,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'mcpBrowser.search': 'Search resources...',
     'fileEditor.title': 'File Editor',
     'fileEditor.save': 'Save',
-    'fileEditor.saving': 'Saving...',
-    'fileEditor.loading': 'Loading file...',
+  'fileEditor.saving': 'Saving...',
+  'fileEditor.readOnly': 'Read only',
+  'fileEditor.loading': 'Loading file...',
     'fileEditor.noChanges': 'No changes',
     'terminal.title': 'Terminal',
     'terminal.clear': 'Clear',
@@ -1340,8 +1342,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'mcpBrowser.search': 'Buscar recursos...',
     'fileEditor.title': 'Editor de Archivos',
     'fileEditor.save': 'Guardar',
-    'fileEditor.saving': 'Guardando...',
-    'fileEditor.loading': 'Cargando archivo...',
+  'fileEditor.saving': 'Guardando...',
+  'fileEditor.readOnly': 'Solo lectura',
+  'fileEditor.loading': 'Cargando archivo...',
     'fileEditor.noChanges': 'Sin cambios',
     'terminal.title': 'Terminal',
     'terminal.clear': 'Limpiar',
@@ -1793,8 +1796,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'mcpBrowser.search': 'Cerca risorse...',
     'fileEditor.title': 'Editor File',
     'fileEditor.save': 'Salva',
-    'fileEditor.saving': 'Salvataggio...',
-    'fileEditor.loading': 'Caricamento file...',
+  'fileEditor.saving': 'Salvataggio...',
+  'fileEditor.readOnly': 'Sola lettura',
+  'fileEditor.loading': 'Caricamento file...',
     'fileEditor.noChanges': 'Nessuna modifica',
     'terminal.title': 'Terminale',
     'terminal.clear': 'Pulisci',
@@ -2246,8 +2250,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'mcpBrowser.search': '搜尋資源...',
     'fileEditor.title': '檔案編輯器',
     'fileEditor.save': '儲存',
-    'fileEditor.saving': '儲存中...',
-    'fileEditor.loading': '載入檔案中...',
+  'fileEditor.saving': '儲存中...',
+  'fileEditor.readOnly': '唯讀',
+  'fileEditor.loading': '載入檔案中...',
     'fileEditor.noChanges': '無變更',
     'terminal.title': '終端機',
     'terminal.clear': '清除',

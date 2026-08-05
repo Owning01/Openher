@@ -3,6 +3,7 @@ import type { FileDiff } from "../types"
 import { useT } from "../i18n-context"
 import { DiffView, sumDiffStat } from "./DiffView"
 import { DiffStatBadge } from "./ToolPart"
+import { FileTypeIcon } from "./FileTypeIcon"
 import { ChevronIcon } from "../Icons"
 
 export const FileDiffs = memo(function FileDiffs({ diffs }: { diffs: FileDiff[] }) {
@@ -35,6 +36,7 @@ export const FileDiffs = memo(function FileDiffs({ diffs }: { diffs: FileDiff[] 
                   onClick={() => setOpenFile((prev) => ({ ...prev, [i]: !prev[i] }))}
                   aria-expanded={fileOpen}
                 >
+                  <FileTypeIcon name={path} size={15} />
                   <span className="file-diff-path">{path}</span>
                   <DiffStatBadge add={d.additions} del={d.deletions} />
                   <span className="tool-part-chevron">{fileOpen ? "▾" : "▸"}</span>

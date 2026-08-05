@@ -51,6 +51,7 @@ import { FileBrowser } from "./components/FileBrowser"
 import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
+import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
 import { useShareReceiver } from "./hooks/useShareReceiver"
@@ -119,10 +120,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     runtimeError, setRuntimeError,
     queuedPrompts, setQueuedPrompts, queuePrompt, removeQueued,
     renderedMessages, messageScrollSignature,
-    toolMessage, completionShouldPlayRef,
+    toolMessage: _toolMessage, completionShouldPlayRef,
     clearSession, loadSelected, send, abortSession,
     setMessages, undoMessage, redoMessage, compactSession,
-    applyDelta, applyPart, compacting, messages
+    applyDelta, applyPart, compacting, setCompacting, messages
   } = useMessages(config)
 
   const {
@@ -609,16 +610,24 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const full = buildMarkdown()
     if (!full) return
     const filename = `${(selectedSession?.title ?? "chat").replace(/[^\w\-]+/g, "_")}.md`
-    try {
-      const saved = await Filesystem.writeFile({
-        path: filename,
-        data: full,
-        directory: Directory.Cache,
-      })
-      await Share.share({ title: filename, url: saved.uri })
-    } catch {
-      /* share canceled or write failed */
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const saved = await Filesystem.writeFile({ path: filename, data: full, directory: Directory.Cache })
+        await Share.share({ title: filename, url: saved.uri })
+        return
+      } catch {
+        /* share canceled or write failed — fall through to web download */
+      }
     }
+    const blob = new Blob([full], { type: "text/markdown;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
   }, [buildMarkdown, selectedSession?.title])
 
   const handleSnapshot = useCallback(() => {
@@ -785,12 +794,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
     if (!awaitingAssistantReply && prevAwaitingRef.current && queuedPrompts.length > 0 && selectedSession) {
       const next = queuedPrompts[0]
-      setQueuedPrompts((prev) => prev.slice(1))
       recordPrompt(next.text)
       send(selectedSession, activeModel, activeAgentID, commands,
         () => refreshSessions(),
         () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-        setCommands, setRuntimeError, next.images, next.text).catch(() => {})
+        setCommands, setRuntimeError, next.images, next.text)
+        .then(() => setQueuedPrompts((prev) => prev.filter((p) => p.id !== next.id)))
+        .catch(() => setQueuedPrompts((prev) => prev.filter((p) => p.id !== next.id)))
     }
     prevAwaitingRef.current = awaitingAssistantReply
   }, [awaitingAssistantReply])
@@ -842,6 +852,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setCommands, setRuntimeError, images)
     if (result === "help") { setHelpPage("commands"); navigate("help") }
   }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, flags.promptQueue, awaitingAssistantReply, queuePrompt])
+
+  const handleSendQueued = useCallback((id: string) => {
+    const qp = queuedPrompts.find((p) => p.id === id)
+    if (!qp || !selectedSession) return
+    removeQueued(id)
+    recordPrompt(qp.text)
+    stopGenerationRef.current = false
+    send(selectedSession, activeModel, activeAgentID, commands,
+      () => refreshSessions(),
+      () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
+      setCommands, setRuntimeError, qp.images, qp.text).catch(() => {})
+  }, [queuedPrompts, selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, removeQueued, recordPrompt, setCommands, setRuntimeError])
 
   const handleAbort = useCallback(async () => {
     if (!selectedSession) return
@@ -955,10 +977,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     redoMessage(selectedSession.id, selectedSession.directory, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
   }, [selectedSession, redoMessage, refreshSessions, loadSelected])
 
-  const handleCompact = useCallback(() => {
+  const handleCompact = useCallback(async () => {
     if (!selectedSession || !activeModel) return
-    compactSession(selectedSession.id, selectedSession.directory, activeModel.providerID, activeModel.modelID, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
-  }, [selectedSession, activeModel, compactSession, refreshSessions, loadSelected])
+    setCompacting(true)
+    setAwaitingAssistantReply(true)
+    completionShouldPlayRef.current = true
+    try {
+      await compactSession(selectedSession.id, selectedSession.directory, activeModel.providerID, activeModel.modelID, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
+    } finally {
+      setCompacting(false)
+      setAwaitingAssistantReply(false)
+    }
+  }, [selectedSession, activeModel, compactSession, refreshSessions, loadSelected, setCompacting, setAwaitingAssistantReply, completionShouldPlayRef])
 
   return (
     <div className="app-shell" data-navbar="header">
@@ -1082,7 +1112,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             isWorking={isWorking} showTypingBubble={showTypingBubble}
             loadingSessionID={loadingSessionID} selectedID={selectedID}
             messageScrollSignature={messageScrollSignature} view={view}
-            dataMode={dataMode}             toolMessage={toolMessage}
+            dataMode={dataMode}
             renamingSessionID={renamingSessionID} renameValue={renameValue}
             showModelChip={showModelChip}
             commands={commands}
@@ -1146,7 +1176,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onOpenMCPBrowser={() => setShowMCPBrowser(true)}
             showTodoButton={chatSettings.showTodoButton}
             queuedPrompts={queuedPrompts}
-            onRemoveQueued={removeQueued} />
+            onRemoveQueued={removeQueued}
+            onSendQueued={handleSendQueued} />
           <BottomSheet
             activeSheet={activeDetailSheet}
             onClose={() => setActiveDetailSheet(null)}

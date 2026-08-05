@@ -138,6 +138,19 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     return resultText
   }, [part.state?.output, resultText])
 
+  // Comandos de terminal: muestran el command en la línea del toggle (visible
+  // sin expandir) y la salida al expandir.
+  const isShellTool = toolName === "bash" || toolName === "execute" || toolName === "terminal" || toolName === "shell"
+  const bashCommand = useMemo(() => {
+    if (!isShellTool) return null
+    const input = part.state?.input
+    if (input && typeof input === "object" && "command" in input) {
+      const cmd = (input as { command?: string }).command
+      if (typeof cmd === "string" && cmd.trim()) return cmd.trim().slice(0, 80)
+    }
+    return null
+  }, [isShellTool, part.state?.input])
+
   // ---- Diff por tool de archivo (write/edit/apply_patch) ----
   const metadata = part.state?.metadata
   const isFileTool = toolName ? FILE_TOOLS.has(toolName) : false
@@ -247,7 +260,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     }
   }
 
-  const subtitle = meta?.label ?? null
+  const subtitle = bashCommand ?? meta?.label ?? null
   const label = toolLabels[part.type] || (toolName ? shortToolLabel(toolName) : "Tool")
 
   const headerIcon = toolSvgIcon(toolName ?? null)

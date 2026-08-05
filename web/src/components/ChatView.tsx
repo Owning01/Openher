@@ -6,7 +6,6 @@ import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
 import { InlineRename } from "./InlineRename"
 import { SubagentFooter } from "./SubagentFooter"
-import { ToolStatus } from "./ToolStatus"
 import { SkillBrowser } from "./SkillBrowser"
 import { ContextMenu } from "./ContextMenu"
 import { DiffViewer } from "./DiffViewer"
@@ -34,7 +33,6 @@ type ChatViewProps = {
   messageScrollSignature: string
   view: string
   dataMode: DataMode
-  toolMessage: Array<{ id: string; type: string; text?: string }> | null
   renamingSessionID: string | null
   renameValue: string
   showModelChip: boolean
@@ -97,13 +95,14 @@ type ChatViewProps = {
   showTodoButton?: boolean
   queuedPrompts?: QueuedPrompt[]
   onRemoveQueued?: (id: string) => void
+  onSendQueued?: (id: string) => void
   compacting?: boolean
 }
 
 export const ChatView = memo(function ChatView({
   selectedSession, messages, composer, isWorking,
   showTypingBubble, loadingSessionID, selectedID, messageScrollSignature, view,
-  dataMode: _dataMode, toolMessage,
+  dataMode: _dataMode,
   renamingSessionID, renameValue,
   activeModelOption, activeAgentID, primaryAgentOptions, onChangeAgent,
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
@@ -115,7 +114,7 @@ export const ChatView = memo(function ChatView({
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
   onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser,
   todos, todosExpanded, onTodosToggle, showTodoButton,
-  queuedPrompts, onRemoveQueued, compacting, revertID,
+  queuedPrompts, onRemoveQueued, onSendQueued, compacting, revertID,
   onExportMarkdown, onEditFile
 }: ChatViewProps) {
   const t = useT()
@@ -435,14 +434,6 @@ export const ChatView = memo(function ChatView({
         />
       </div>
 
-      {isWorking && toolMessage && (
-        <div className="live-tools">
-          {toolMessage.filter((p) => p.type === "tool" || p.type === "tool_use").map((tp) => (
-            <ToolStatus key={tp.id} part={tp} />
-          ))}
-        </div>
-      )}
-
       {selectedSession?.parentID && (
         <SubagentFooter session={selectedSession} onGoBack={onBackToSessions} />
       )}
@@ -555,7 +546,7 @@ export const ChatView = memo(function ChatView({
       {showQueued && queuedPrompts && onRemoveQueued && (
         <QueuedPrompts
           prompts={queuedPrompts}
-          onSend={(id) => { onRemoveQueued(id); setShowQueued(false) }}
+          onSend={(id) => { onSendQueued?.(id); setShowQueued(false) }}
           onRemove={onRemoveQueued}
           onClose={() => setShowQueued(false)}
         />

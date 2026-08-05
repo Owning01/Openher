@@ -5,9 +5,11 @@ import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessag
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
-// Tools de archivos: se conservan en modos ahorro para mostrar los cambios
-// (badge +N/−M y orden de ejecución); el diff completo vive en el resumen final.
+// Tools de archivos y de terminal: se conservan en modos ahorro para mostrar
+// los cambios (+N/−M) y los comandos ejecutados (bash/terminal); el diff
+// completo vive en el resumen final.
 const fileToolNames = new Set(["write", "edit", "apply_patch", "patch"])
+const shellToolNames = new Set(["bash", "execute", "terminal", "shell", "pwsh", "cmd"])
 
 const COMPOSER_STORAGE_KEY = "opencode.remote.composer"
 
@@ -30,7 +32,9 @@ export function assistantPayloadLength(items: MessageEnvelope[]): number {
 
 function stripNonEssential(msg: MessageEnvelope, dataMode?: DataMode): MessageEnvelope {
   if (dataMode === "full" || dataMode === "saver") return msg
-  const filtered = msg.parts.filter((p) => !toolPartTypes.has(p.type) || (typeof p.tool === "string" && fileToolNames.has(p.tool)))
+  const keep = (p: MessageEnvelope["parts"][number]) =>
+    !toolPartTypes.has(p.type) || (typeof p.tool === "string" && (fileToolNames.has(p.tool) || shellToolNames.has(p.tool)))
+  const filtered = msg.parts.filter(keep)
   return filtered.length === msg.parts.length ? msg : { ...msg, parts: filtered }
 }
 
@@ -486,7 +490,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
     queuedPrompts, setQueuedPrompts, queuePrompt, removeQueued,
-    compacting,
+    compacting, setCompacting,
     renderedMessages, messageScrollSignature, assistantResponseSignature,
     toolMessage, completionShouldPlayRef,
     clearSession, loadSelected, send: updateSend, abortSession,

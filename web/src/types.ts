@@ -321,10 +321,26 @@ export type StreamingPart = {
   field: string
 }
 
+export type QuestionOption = {
+  label: string
+  description?: string
+}
+
+export type QuestionInfo = {
+  question: string
+  header?: string
+  options: QuestionOption[]
+  multiple?: boolean
+  custom?: boolean
+}
+
 export type Question = {
   id: string
-  question: string
-  status: string
+  sessionID?: string
+  status?: string
+  question?: string
+  questions?: QuestionInfo[]
+  tool?: { messageID: string; callID: string }
 }
 
 export type PermissionRequest = {

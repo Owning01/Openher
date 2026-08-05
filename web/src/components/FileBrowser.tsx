@@ -1,5 +1,6 @@
 import { memo } from "react"
-import { FolderIcon, CloseIcon, LoadingIcon, FileIcon } from "../Icons"
+import { FolderIcon, CloseIcon, LoadingIcon } from "../Icons"
+import { FileTypeIcon } from "./FileTypeIcon"
 import { useT } from "../i18n-context"
 import type { FileEntry } from "../types"
 import { Modal } from "./Modal"
@@ -52,7 +53,7 @@ export const FileBrowser = memo(function FileBrowser({
                 {item.type === "directory" ? (
                   <FolderIcon size={16} />
                 ) : (
-                  <FileIcon size={16} />
+                  <FileTypeIcon name={item.name} size={16} />
                 )}
                 <span>{item.name}</span>
               </button>

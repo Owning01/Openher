@@ -1,4 +1,4 @@
-import { memo, useRef, useMemo } from "react"
+import { memo, useRef, useMemo, useState } from "react"
 import { useT } from "../i18n-context"
 import { useFocusTrap } from "../hooks/useFocusTrap"
 import { modelKey, sameModel } from "../utils/model-utils"
@@ -57,11 +57,12 @@ function renderThinkingLevels(
   t: ReturnType<typeof useT>
 ) {
   const baseKey = mk(base)
+  // Los niveles se muestran TAL CUAL vienen de la api (high/medium/low).
   const levels: Array<{ name: string; variant: string | null }> = [
-    { name: t('detail.thinkingNone'), variant: null },
-    { name: t('detail.thinkingHigh'), variant: "high" },
-    { name: t('detail.thinkingMedium'), variant: "medium" },
-    { name: t('detail.thinkingLow'), variant: "low" },
+    { name: "none", variant: null },
+    { name: "high", variant: "high" },
+    { name: "medium", variant: "medium" },
+    { name: "low", variant: "low" },
   ]
   const existing = new Set(variants.map((v) => v.variant))
 
@@ -93,49 +94,56 @@ function renderThinkingLevels(
   )
 }
 
-function renderVariantGroup(
-  group:   VariantGroup,
-  activeModelOption: ModelOption | null,
-  selectedVariant: string | null,
-  onChangeModel: (key: string, variant?: string | null) => void,
-  _isWorking: boolean,
-  mk: typeof modelKey,
-  t: ReturnType<typeof useT>,
-  config?: ServerConfig,
+function ModelGroupRow({
+  group, selectedVariant, onChangeModel, isActive,
+  mk, t, config, onVariantsChanged
+}: {
+  group: VariantGroup
+  selectedVariant: string | null
+  onChangeModel: (key: string, variant?: string | null) => void
+  isActive: boolean
+  mk: typeof modelKey
+  t: ReturnType<typeof useT>
+  config?: ServerConfig
   onVariantsChanged?: () => void
-) {
+}) {
   const { base, variants } = group
   const baseKey = mk(base)
-  const isActive = activeModelOption ? sameModel(base, activeModelOption) : false
   const activeVariant = isActive ? selectedVariant : null
   const customVariants = variants.filter((v) => !v.variant || !REASONING_VARIANTS.has(v.variant))
+  const [expanded, setExpanded] = useState(isActive)
 
   return (
-    <div key={baseKey} className={`model-group${isActive ? " active" : ""}`}>
+    <div key={baseKey} className={`model-group${isActive ? " active" : ""}${expanded ? " expanded" : ""}`}>
       <button type="button" className="model-group-row"
-        onClick={() => onChangeModel(baseKey, activeVariant)}
+        aria-expanded={expanded}
+        onClick={() => { setExpanded((v) => !v); onChangeModel(baseKey, activeVariant) }}
         role="option" aria-selected={isActive}>
         <strong>{base.modelName}</strong>
         <small>{base.providerName}</small>
         {base.isDefault && <em>{t('detail.modelDefault')}</em>}
       </button>
-      {customVariants.length > 0 && (
-        <div className="model-variant-pills">
-          <button type="button"
-            className={`variant-pill${!activeVariant ? " active" : ""}`}
-            onClick={() => onChangeModel(baseKey, null)}>
-            Default
-          </button>
-          {customVariants.map((v) => (
-            <button key={v.variant} type="button"
-              className={`variant-pill${activeVariant === v.variant ? " active" : ""}`}
-              onClick={() => onChangeModel(baseKey, v.variant)}>
-              {v.variant}
-            </button>
-          ))}
-        </div>
+      {expanded && (
+        <>
+          {customVariants.length > 0 && (
+            <div className="model-variant-pills">
+              <button type="button"
+                className={`variant-pill${!activeVariant ? " active" : ""}`}
+                onClick={() => onChangeModel(baseKey, null)}>
+                Default
+              </button>
+              {customVariants.map((v) => (
+                <button key={v.variant} type="button"
+                  className={`variant-pill${activeVariant === v.variant ? " active" : ""}`}
+                  onClick={() => onChangeModel(baseKey, v.variant)}>
+                  {v.variant}
+                </button>
+              ))}
+            </div>
+          )}
+          {renderThinkingLevels(base, variants, activeVariant, onChangeModel, config, onVariantsChanged, mk, t)}
+        </>
       )}
-      {renderThinkingLevels(base, variants, activeVariant, onChangeModel, config, onVariantsChanged, mk, t)}
     </div>
   )
 }
@@ -145,7 +153,7 @@ function renderGroupedModels(
   activeModelOption: ModelOption | null,
   selectedVariant: string | null,
   onChangeModel: (key: string, variant?: string | null) => void,
-  isWorking: boolean,
+  _isWorking: boolean,
   mk: typeof modelKey,
   t: ReturnType<typeof useT>,
   providerID: string,
@@ -160,9 +168,14 @@ function renderGroupedModels(
   }
 
   if (providerID !== "opencode") {
-    return Array.from(groups.values()).map((g) =>
-      renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t, config, onVariantsChanged)
-    )
+    return Array.from(groups.values()).map((g) => {
+      const isActive = activeModelOption ? sameModel(g.base, activeModelOption) : false
+      return (
+        <ModelGroupRow key={mk(g.base)} group={g}
+          selectedVariant={selectedVariant} onChangeModel={onChangeModel} isActive={isActive}
+          mk={mk} t={t} config={config} onVariantsChanged={onVariantsChanged} />
+      )
+    })
   }
 
   const zenGroups: VariantGroup[] = []
@@ -180,16 +193,37 @@ function renderGroupedModels(
       {zenGroups.length > 0 && (
         <>
           <div className="model-subsection-label">Zen</div>
-          {zenGroups.map((g) => renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t))}
+          {zenGroups.map((g) => {
+            const isActive = activeModelOption ? sameModel(g.base, activeModelOption) : false
+            return (
+              <ModelGroupRow key={mk(g.base)} group={g}
+                selectedVariant={selectedVariant} onChangeModel={onChangeModel} isActive={isActive}
+                mk={mk} t={t} />
+            )
+          })}
         </>
       )}
       {goGroups.length > 0 && (
         <>
           <div className="model-subsection-label">Go</div>
-          {goGroups.map((g) => renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t))}
+          {goGroups.map((g) => {
+            const isActive = activeModelOption ? sameModel(g.base, activeModelOption) : false
+            return (
+              <ModelGroupRow key={mk(g.base)} group={g}
+                selectedVariant={selectedVariant} onChangeModel={onChangeModel} isActive={isActive}
+                mk={mk} t={t} />
+            )
+          })}
         </>
       )}
-      {otherGroups.map((g) => renderVariantGroup(g, activeModelOption, selectedVariant, onChangeModel, isWorking, mk, t))}
+      {otherGroups.map((g) => {
+        const isActive = activeModelOption ? sameModel(g.base, activeModelOption) : false
+        return (
+          <ModelGroupRow key={mk(g.base)} group={g}
+            selectedVariant={selectedVariant} onChangeModel={onChangeModel} isActive={isActive}
+            mk={mk} t={t} />
+        )
+      })}
     </>
   )
 }
