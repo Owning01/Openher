@@ -30,7 +30,10 @@ export const QuickAccessCard = memo(function QuickAccessCard({
       <ChatIcon size={14} />
       <span className="quick-access-title">{session.title}</span>
       <span className="quick-access-time">{formatTime(session.updated)}</span>
-      {session.status !== "idle" && <span className={`pill ${session.status}`}>{session.status === "busy" ? t('session.statusBusy') : t('session.statusRetry')}</span>}
+      {session.status === "busy" && (
+        <span className="pixel-spinner" role="status" aria-label={t('session.statusBusy')} title={t('session.statusBusy')} />
+      )}
+      {session.status === "retry" && <span className="pill retry">{t('session.statusRetry')}</span>}
       {onDismiss && (
         <button className="quick-access-dismiss" onClick={(e) => { e.stopPropagation(); onDismiss(session.id) }}
           title={t('sessions.recentDismiss')}>

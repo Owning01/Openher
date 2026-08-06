@@ -1815,14 +1815,14 @@ p {
   padding: var(--space-3) var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  background: transparent;
   color: var(--text);
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   min-height: 46px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 
 .quick-access-card:hover {
@@ -1914,14 +1914,20 @@ p {
   overflow-anchor: none;
 }
 
+/* Centinela del lazy loading de sesiones recientes */
+.recent-sentinel {
+  height: 2px;
+  flex-shrink: 0;
+}
+
 .session-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  background: transparent;
   padding: var(--space-4);
   cursor: pointer;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s, box-shadow 0.2s;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -2279,6 +2285,28 @@ p {
 .pill.retry {
   color: var(--warning);
   background: var(--warning-soft);
+}
+
+/* Spinner pixel-art (8-bit): cuadrante naranja que rota en saltos de 90° */
+.pixel-spinner {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--warning);
+  background: conic-gradient(
+    from 0deg,
+    var(--warning) 0 25%,
+    transparent 25% 50%,
+    var(--warning) 50% 75%,
+    transparent 75% 100%
+  );
+  image-rendering: pixelated;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+  animation: pixel-spin 0.9s steps(4) infinite;
+}
+
+@keyframes pixel-spin {
+  to { transform: rotate(360deg); }
 }
 
 

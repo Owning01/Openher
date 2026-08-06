@@ -1,4 +1,4 @@
-import { memo, useRef, useLayoutEffect, useState, useCallback } from "react"
+import { memo, useRef, useLayoutEffect, useState, useCallback, useEffect, useMemo } from "react"
 import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
@@ -63,6 +63,13 @@ export const SessionList = memo(function SessionList({
   const [searchOpen, setSearchOpen] = useState(false)
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
+  const [recentLimit, setRecentLimit] = useState(5)
+  const recentSentinelRef = useRef<HTMLDivElement | null>(null)
+
+  const recentFiltered = useMemo(
+    () => recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)),
+    [recentSessions, activeSessions]
+  )
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
     // Normaliza el estado guardado: exactamente un panel abierto (recientes
@@ -71,6 +78,7 @@ export const SessionList = memo(function SessionList({
       const raw = JSON.parse(localStorage.getItem("opencode.collapsedSections") || "{}") as Record<string, boolean>
       const all = { favorites: true, active: true, recent: true, ...raw }
       const openCount = Object.values(all).filter((v) => !v).length
+      if (openCount === 0) return { favorites: true, active: true, recent: false }
       if (openCount > 1) return { favorites: true, active: true, recent: false }
       return all
     } catch {
@@ -100,6 +108,28 @@ export const SessionList = memo(function SessionList({
     }
     prevProjectDir.current = selectedProjectDir
   }, [selectedProjectDir])
+
+  // Lazy loading de recientes: al llegar al final del scroll se cargan +10.
+  useEffect(() => {
+    if (recentLimit >= recentFiltered.length) return
+    const el = recentSentinelRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setRecentLimit((n) => Math.min(n + 10, recentFiltered.length))
+        }
+      },
+      { root: containerRef.current, rootMargin: "120px" }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [recentLimit, recentFiltered.length, collapsedSections.recent])
+
+  // Si cambia el set de recientes (o se reabre la sección), volver al tope.
+  useEffect(() => {
+    setRecentLimit(5)
+  }, [recentSessions.length, collapsedSections.recent])
 
   const notices = <ConnectionNotices connectionState={connectionState} />
 
@@ -220,7 +250,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
           )}
           {!collapsedSections.recent && (
             <div className="quick-access-list" id="quick-recent" role="tabpanel">
-              {recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)).slice(0, 5).map((session) => (
+              {recentFiltered.slice(0, recentLimit).map((session) => (
                 confirmingDismissId === session.id ? (
                   <div key={session.id} className="quick-access-card confirming-dismiss" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
                     <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
@@ -238,6 +268,9 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                     onDismiss={(id) => setConfirmingDismissId(id)} />
                 )
               ))}
+              {recentLimit < recentFiltered.length && (
+                <div ref={recentSentinelRef} className="recent-sentinel" aria-hidden="true" />
+              )}
             </div>
           )}
         </div>

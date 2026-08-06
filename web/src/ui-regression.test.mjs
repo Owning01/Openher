@@ -98,4 +98,23 @@ assert.ok(/\.message-content pre[\s\S]*?overflow-x:\s*auto/.test(styles), 'fence
 
 assert.match(icons, /export const RefreshIcon/, 'RefreshIcon should exist for idle refresh UI')
 
+// Lazy loading de sesiones recientes (5 iniciales, +10 al scrollear al final)
+assert.ok(sessionList.includes('recentLimit') && sessionList.includes('setRecentLimit(5)'), 'recent sessions should start at 5 visible')
+assert.ok(sessionList.includes('recentSentinelRef'), 'recent list should render a scroll sentinel for lazy loading')
+assert.ok(sessionList.includes('IntersectionObserver'), 'recent lazy loading should use IntersectionObserver on the scroll container')
+assert.ok(sessionList.includes('setRecentLimit((n) => Math.min(n + 10'), 'recent lazy loading should add 10 sessions per batch')
+assert.ok(sessionList.includes('recentFiltered.slice(0, recentLimit)'), 'recent list should render up to the current lazy limit')
+
+// Spinner pixel-art en vez de la pill "Ocupado" para sesiones corriendo
+const quickAccess = readFileSync(new URL('./components/QuickAccessCard.tsx', import.meta.url), 'utf8')
+assert.ok(quickAccess.includes('pixel-spinner'), 'busy sessions should render a pixel-art spinner')
+assert.ok(!quickAccess.includes('pill ${session.status}'), 'busy/retry should not share a single pill class')
+assert.ok(styles.includes('.pixel-spinner') && styles.includes('steps(4)'), 'pixel spinner should rotate in 90° steps (8-bit)')
+assert.ok(styles.includes('conic-gradient'), 'pixel spinner should use a conic-gradient quadrant')
+
+// Mensaje optimista: confirmación por reintento + orden estable por time.created
+assert.ok(useMessages.includes('optimisticIDsRef'), 'send flow should track optimistic ids in a ref for async confirmation')
+assert.ok(useMessages.includes('deadline = Date.now() + 10000'), 'optimistic confirmation should retry loadSelected with a deadline')
+assert.ok(useMessages.includes('merged.sort((a, b) => (a.info.time.created'), 'message merge should sort by time.created so confirmed user messages land in position')
+
 console.log('ui regression tests passed')

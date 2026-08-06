@@ -194,6 +194,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       }
       if (!changed) return prev
 
+      // Orden por time.created: un mensaje de usuario confirmado por el server
+      // (que llega en un fetch posterior) debe caer en su posición, no al final.
+      merged.sort((a, b) => (a.info.time.created ?? 0) - (b.info.time.created ?? 0))
       return merged
     })
 
@@ -206,6 +209,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const removeOptimistic = useCallback((id: string) => {
     setOptimisticUserMessages((current) => current.filter((m) => m.info.id !== id))
   }, [])
+
+  // Sincroniza los ids optimistas en un ref para poder consultarlos desde
+  // callbacks asíncronos (confirmación del envío).
+  const optimisticIDsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    optimisticIDsRef.current = new Set(optimisticUserMessages.map((m) => m.info.id))
+  }, [optimisticUserMessages])
 
   const abortSession = useCallback(async (sessionID: string, directory: string) => {
     setAwaitingAssistantReply(false)
@@ -430,7 +440,15 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       onSetRuntimeError(null)
       try {
         await sendFn()
-        await then()
+        // El server persiste el user message de forma asíncrona: loadSelected
+        // (match por texto) confirma el optimista. Reintentar hasta que
+        // desaparezca, para que el prompt no quede pegado al final del chat.
+        const deadline = Date.now() + 10000
+        while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
+          await then()
+          if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
+          await new Promise((r) => setTimeout(r, 700))
+        }
         await onRefreshSessions()
       } catch (err) {
         completionShouldPlayRef.current = false
