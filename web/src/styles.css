@@ -303,6 +303,16 @@ p {
   backdrop-filter: blur(4px);
 }
 
+/* Contenido móvil: acota el panel del chat (detail) al viewport. En desktop
+   la MQ lo convierte en display: contents para el grid de splits. */
+.app-mobile-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 :root[data-theme="dark"] .composer {
   border-color: rgba(255, 255, 255, 0.06);
   background: rgba(0, 0, 0, 0.85);
