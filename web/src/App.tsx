@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { lazy, Suspense, useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { api } from "./api"
 import { I18nProvider, useT, normalizeLanguage } from "./i18n-context"
 import { languageOptions } from "./i18n"
@@ -23,10 +23,9 @@ import { ChatView } from "./components/ChatView"
 import type { ChatViewProps } from "./components/ChatView"
 import { SessionChatPanel } from "./components/SessionChatPanel"
 import { BottomSheet } from "./components/BottomSheet"
-import { HelpPage } from "./components/HelpPage"
 import { ConfirmModal } from "./components/ConfirmModal"
 import { ErrorModal } from "./components/ErrorModal"
-import { FolderPicker } from "./components/FolderPicker"
+import { ShortcutsModal } from "./components/ShortcutsModal"
 import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, Question, PermissionRequest } from "./types"
 import type { LanguageCode } from "./i18n"
 import { formatLimit, extractPath, extractName, extractBranch, isSessionActive, filterByQuery } from "./utils"
@@ -38,18 +37,9 @@ import { useBlockedModels } from "./hooks/useBlockedModels"
 import { useFeatureFlags } from "./hooks/useFeatureFlags"
 import { useProviderManager } from "./hooks/useProviderManager"
 import { ThemeVariantProvider } from "./context/themeVariant"
-import { ThemePicker } from "./components/ThemePicker"
-import { MCPBrowser } from "./components/MCPBrowser"
-import { ArchivedList } from "./components/ArchivedList"
-import { ShortcutsModal } from "./components/ShortcutsModal"
-import { FileEditor } from "./components/FileEditor"
-import { TerminalView } from "./components/TerminalView"
-import { ThemeCreator } from "./components/ThemeCreator"
-import { FavoritesManager } from "./components/FavoritesManager"
 import { useShell } from "./hooks/useShell"
 import { useChatSettings } from "./hooks/useChatSettings"
 import { useFileBrowser } from "./hooks/useFileBrowser"
-import { FileBrowser } from "./components/FileBrowser"
 import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
@@ -65,6 +55,18 @@ import { useServers } from "./hooks/useServers"
 import type { ServerProfile } from "./types"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
+
+// Componentes pesados o poco frecuentes: se descargan bajo demanda
+const ThemePicker = lazy(() => import("./components/ThemePicker").then((m) => ({ default: m.ThemePicker })))
+const MCPBrowser = lazy(() => import("./components/MCPBrowser").then((m) => ({ default: m.MCPBrowser })))
+const ArchivedList = lazy(() => import("./components/ArchivedList").then((m) => ({ default: m.ArchivedList })))
+const FileEditor = lazy(() => import("./components/FileEditor").then((m) => ({ default: m.FileEditor })))
+const TerminalView = lazy(() => import("./components/TerminalView").then((m) => ({ default: m.TerminalView })))
+const ThemeCreator = lazy(() => import("./components/ThemeCreator").then((m) => ({ default: m.ThemeCreator })))
+const FavoritesManager = lazy(() => import("./components/FavoritesManager").then((m) => ({ default: m.FavoritesManager })))
+const FileBrowser = lazy(() => import("./components/FileBrowser").then((m) => ({ default: m.FileBrowser })))
+const HelpPage = lazy(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
+const FolderPicker = lazy(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
 
 type DesktopLayout = { cols: number; rows: number; sessions: Array<string | null>; colSizes: Array<number | null>; rowSizes: Array<number | null> }
 
@@ -1157,15 +1159,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         onNewSessionHere={(dir) => handleCreateSession(dir)}
         onDragStartSession={handleSessionDragStart} />
       {showNewSessionPicker && (
-        <FolderPicker
-          pickerPath={pickerPath} pickerItems={pickerItems}
-          pickerLoading={pickerLoading} pickerError={pickerError}
-          creatingSession={creatingSession}
-          projects={sessions.map((s) => s.directory)}
-          onBrowse={browseNewSessionDirectory}
-          onCreate={handleCreateSession}
-          onCreateDefault={() => handleCreateSession("")}
-          onClose={() => setShowNewSessionPicker(false)} />
+        <Suspense fallback={null}>
+          <FolderPicker
+            pickerPath={pickerPath} pickerItems={pickerItems}
+            pickerLoading={pickerLoading} pickerError={pickerError}
+            creatingSession={creatingSession}
+            projects={sessions.map((s) => s.directory)}
+            onBrowse={browseNewSessionDirectory}
+            onCreate={handleCreateSession}
+            onCreateDefault={() => handleCreateSession("")}
+            onClose={() => setShowNewSessionPicker(false)} />
+          </Suspense>
       )}
     </>
   )
@@ -1508,12 +1512,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       )}
 
       {view === "help" && (
-        <HelpPage
-          helpPage={helpPage}
-          onHelpPageChange={setHelpPage}
-          commands={commands}
-          commandFilter={commandFilter}
-          onCommandFilterChange={setCommandFilter} />
+        <Suspense fallback={null}>
+          <HelpPage
+            helpPage={helpPage}
+            onHelpPageChange={setHelpPage}
+            commands={commands}
+            commandFilter={commandFilter}
+            onCommandFilterChange={setCommandFilter} />
+          </Suspense>
       )}
       </main>
 
@@ -1549,72 +1555,86 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       )}
 
       {showThemePicker && (
-        <ThemePicker onClose={() => setShowThemePicker(false)} />
+        <Suspense fallback={null}>
+          <ThemePicker onClose={() => setShowThemePicker(false)} />
+        </Suspense>
       )}
 
-      {showMCPBrowser && config && <MCPBrowser config={config} onClose={() => setShowMCPBrowser(false)} />}
+      {showMCPBrowser && config && <Suspense fallback={null}><MCPBrowser config={config} onClose={() => setShowMCPBrowser(false)} /></Suspense>}
 
       {showArchivedView && (
-        <ArchivedList
-          sessions={sessions.filter((s) => s.status === "archived")}
-          onRestore={(id) => {
-            const s = sessions.find((x) => x.id === id)
-            if (s) api.sendCommand(config, id, "/unarchive", "", s.directory).catch(() => {})
-            setShowArchivedView(false)
-          }}
-          onOpen={(id, dir) => { setShowArchivedView(false); handleOpenSession(id, dir) }}
-          onClose={() => setShowArchivedView(false)}
-        />
+        <Suspense fallback={null}>
+          <ArchivedList
+            sessions={sessions.filter((s) => s.status === "archived")}
+            onRestore={(id) => {
+              const s = sessions.find((x) => x.id === id)
+              if (s) api.sendCommand(config, id, "/unarchive", "", s.directory).catch(() => {})
+              setShowArchivedView(false)
+            }}
+            onOpen={(id, dir) => { setShowArchivedView(false); handleOpenSession(id, dir) }}
+            onClose={() => setShowArchivedView(false)}
+          />
+        </Suspense>
       )}
 
       {fileEditorPath && config && (
-        <FileEditor
-          config={config}
-          path={fileEditorPath}
-          directory={selectedSession?.directory}
-          onClose={() => setFileEditorPath(null)}
-        />
+        <Suspense fallback={null}>
+          <FileEditor
+            config={config}
+            path={fileEditorPath}
+            directory={selectedSession?.directory}
+            onClose={() => setFileEditorPath(null)}
+          />
+        </Suspense>
       )}
 
       {fb.isOpen && (
-        <FileBrowser
-          currentPath={fb.currentPath}
-          items={fb.items}
-          loading={fb.loading}
-          error={fb.error}
-          onClose={fb.close}
-          onNavigate={fb.navigateTo}
-          onGoUp={fb.goUp}
-          onOpenFile={(path) => { setFileEditorPath(path) }}
-        />
+        <Suspense fallback={null}>
+          <FileBrowser
+            currentPath={fb.currentPath}
+            items={fb.items}
+            loading={fb.loading}
+            error={fb.error}
+            onClose={fb.close}
+            onNavigate={fb.navigateTo}
+            onGoUp={fb.goUp}
+            onOpenFile={(path) => { setFileEditorPath(path) }}
+          />
+        </Suspense>
       )}
 
       {showTerminal && selectedSession && (
-        <TerminalView
-          lines={shellLines}
-          running={shellRunning}
-          sessionID={selectedSession.id}
-          directory={selectedSession.directory}
-          onExecute={shellExecute}
-          onClear={shellClear}
-          onClose={() => setShowTerminal(false)}
-          history={shellHistory}
-        />
+        <Suspense fallback={null}>
+          <TerminalView
+            lines={shellLines}
+            running={shellRunning}
+            sessionID={selectedSession.id}
+            directory={selectedSession.directory}
+            onExecute={shellExecute}
+            onClear={shellClear}
+            onClose={() => setShowTerminal(false)}
+            history={shellHistory}
+          />
+        </Suspense>
       )}
 
           {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} desktop={isDesktop} />}
 
-      {showThemeCreator && <ThemeCreator onClose={() => setShowThemeCreator(false)} />}
+      <Suspense fallback={null}>
+        {showThemeCreator && <ThemeCreator onClose={() => setShowThemeCreator(false)} />}
+      </Suspense>
 
-      {showFavoritesManager && (
-        <FavoritesManager
-          favorites={sessions.filter((s) => favorites.has(s.id))}
-          onReorder={(ids) => {
-            try { localStorage.setItem("opencode.mobile.favoritesOrder", JSON.stringify(ids)) } catch {}
-          }}
-          onClose={() => setShowFavoritesManager(false)}
-        />
-      )}
+      <Suspense fallback={null}>
+        {showFavoritesManager && (
+          <FavoritesManager
+            favorites={sessions.filter((s) => favorites.has(s.id))}
+            onReorder={(ids) => {
+              try { localStorage.setItem("opencode.mobile.favoritesOrder", JSON.stringify(ids)) } catch {}
+            }}
+            onClose={() => setShowFavoritesManager(false)}
+          />
+        )}
+      </Suspense>
 
       {runtimeError && (
         <ErrorModal message={runtimeError} onClose={() => setRuntimeError(null)} />

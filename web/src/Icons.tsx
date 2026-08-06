@@ -121,7 +121,7 @@ export const DataIcon = (p: { className?: string; size?: number }) => (
 
 export const LogoIcon = ({ className = "", size = 32 }: { className?: string; size?: number }) => {
   return (
-    <img src="./img/opencode-logo-dark.jpg" alt="OpenCode"
+    <img src="./img/apple-touch-icon-180x180.jpg" alt="OpenCode"
       width={size} height={size} className={className}
       style={{ objectFit: "contain", display: "inline-block", verticalAlign: "middle" }} />
   )

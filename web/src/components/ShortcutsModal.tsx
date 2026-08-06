@@ -36,6 +36,12 @@ export const ShortcutsModal = memo(function ShortcutsModal({ onClose, desktop }:
         <ModalHeader title={t('shortcuts.title')} onClose={onClose} />
         <div className="modal-body">
           <table className="shortcuts-table">
+            <thead>
+              <tr>
+                <th scope="col">{t('shortcuts.shortcut')}</th>
+                <th scope="col">{t('shortcuts.action')}</th>
+              </tr>
+            </thead>
             <tbody>
               {SHORTCUTS.map((s) => (
                 <tr key={s.key}>
@@ -49,6 +55,12 @@ export const ShortcutsModal = memo(function ShortcutsModal({ onClose, desktop }:
             <>
               <h4 className="shortcuts-section-title">{t('shortcuts.desktop')}</h4>
               <table className="shortcuts-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{t('shortcuts.shortcut')}</th>
+                    <th scope="col">{t('shortcuts.action')}</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {desktopShortcuts.map((s) => (
                     <tr key={s.key}>

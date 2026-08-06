@@ -22,7 +22,7 @@ export function notify(title: string, body: string) {
   } else if (Notification.permission !== "denied") {
     Notification.requestPermission().then((permission) => {
       if (permission === "granted") {
-        new Notification(title, { body, icon: "/img/opencode-logo-dark.jpg" })
+new Notification(title, { body, icon: "/img/apple-touch-icon-180x180.jpg" })
       }
     })
   }

@@ -252,7 +252,7 @@ export const ChatView = memo(function ChatView({
               <button className="btn-icon btn-ghost back-btn" onClick={onBackToSessions} aria-label={t('detail.backToSessions')} title={t('detail.backToSessions')}>
                 <ArrowLeftIcon size={20} />
               </button>
-              <img src="./img/opencode-logo-dark.jpg" alt="OpenCode" className="app-icon header-logo" style={{ width: 22, height: 22, borderRadius: 4, objectFit: "cover" }} />
+              <img src="./img/apple-touch-icon-180x180.jpg" alt="OpenCode" className="app-icon header-logo" style={{ width: 22, height: 22, borderRadius: 4, objectFit: "cover" }} />
               {renamingSessionID === selectedSession.id ? (
                 <InlineRename value={renameValue} original={selectedSession.title}
                   onChange={onRenameChange}

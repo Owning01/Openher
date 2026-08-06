@@ -172,6 +172,8 @@ type TranslationKey =
   | 'shortcuts.maximize'
   | 'shortcuts.toggleSidebar'
   | 'shortcuts.newSession'
+  | 'shortcuts.shortcut'
+  | 'shortcuts.action'
   | 'detail.backToSessions'
   | 'detail.selectSession'
   | 'detail.loading'
@@ -690,6 +692,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'shortcuts.maximize': 'Maximize / restore panel',
     'shortcuts.toggleSidebar': 'Toggle sidebar',
     'shortcuts.newSession': 'New session',
+    'shortcuts.shortcut': 'Shortcut',
+    'shortcuts.action': 'Action',
     'sessions.emptyTitle': 'No sessions found',
     'sessions.emptyHint': 'Create a new session to get started',
     'sessions.newHere': 'New session here',
@@ -1205,6 +1209,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'shortcuts.maximize': 'Maximizar / restaurar panel',
     'shortcuts.toggleSidebar': 'Alternar barra lateral',
     'shortcuts.newSession': 'Nueva sesión',
+    'shortcuts.shortcut': 'Atajo',
+    'shortcuts.action': 'Acción',
     'sessions.emptyTitle': 'No se encontraron sesiones',
     'sessions.emptyHint': 'Crea una nueva sesión para empezar',
     'sessions.newHere': 'Nueva sesión aquí',
@@ -1720,6 +1726,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'shortcuts.maximize': 'Massimizza / ripristina pannello',
     'shortcuts.toggleSidebar': 'Attiva/disattiva barra laterale',
     'shortcuts.newSession': 'Nuova sessione',
+    'shortcuts.shortcut': 'Scorciatoia',
+    'shortcuts.action': 'Azione',
     'sessions.emptyTitle': 'Nessuna sessione trovata',
     'sessions.emptyHint': 'Crea una nuova sessione per iniziare',
     'sessions.newHere': 'Nuova sessione qui',
@@ -2199,6 +2207,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'shortcuts.maximize': '最大化／還原面板',
     'shortcuts.toggleSidebar': '切換側邊欄',
     'shortcuts.newSession': '新增工作階段',
+    'shortcuts.shortcut': '捷徑',
+    'shortcuts.action': '操作',
     'sessions.emptyTitle': '找不到工作階段',
     'sessions.emptyHint': '建立新的工作階段以開始',
     'sessions.newHere': '在此建立新工作階段',

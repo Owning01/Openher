@@ -15,6 +15,7 @@
   --muted-strong: #595959;
   --primary: #3b7dd8;
   --primary-strong: #2968c3;
+  --on-primary: #ffffff;
   --primary-soft: rgba(59, 125, 216, 0.1);
   --accent: #9d7cd8;
   --accent-soft: rgba(157, 124, 216, 0.12);
@@ -92,6 +93,7 @@
   --muted-strong: #9a9a9a;
   --primary: #fab283;
   --primary-strong: #ffc09f;
+  --on-primary: #2a1203;
   --primary-soft: rgba(250, 178, 131, 0.12);
   --accent: #9d7cd8;
   --accent-soft: rgba(157, 124, 216, 0.12);
@@ -195,7 +197,7 @@ button:disabled {
 
 ::selection {
   background: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
 }
 
 :root[data-theme="dark"] ::selection {
@@ -453,7 +455,7 @@ p {
 .btn-primary {
   background: var(--primary);
   border-color: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -948,7 +950,7 @@ p {
 
 .segmented-option.active {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 /* ===== Switch ===== */
@@ -1612,7 +1614,7 @@ p {
 
 .mode-btn.active {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .mode-btn:not(.active):hover {
@@ -2852,7 +2854,7 @@ p {
 .variant-pill.active {
   border-color: var(--primary);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .model-meta {
@@ -2913,7 +2915,7 @@ p {
   border: none;
   border-radius: 50%;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 1rem;
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);

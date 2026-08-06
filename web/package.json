@@ -33,10 +33,10 @@
     "@capacitor/share": "8.0.1",
     "@tanstack/react-virtual": "^3.14.7",
     "highlight.js": "^11.11.1",
+    "lowlight": "^3.3.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-markdown": "^10.1.0",
-    "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
