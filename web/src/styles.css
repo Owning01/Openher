@@ -5671,6 +5671,49 @@ button.compact {
   padding: 0.25rem;
 }
 
+/* Touch: hit targets de 44px en pantallas táctiles (WCAG 2.5.8).
+   Desktop (mouse) conserva la densidad de 24px. */
+@media (pointer: coarse), (max-width: 780px) {
+  .btn-icon,
+  .btn-icon.compact {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.5rem;
+  }
+
+  .star-btn,
+  .quick-access-star,
+  .quick-access-dismiss {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .tool-part-toggle {
+    min-height: 44px;
+  }
+
+  .composer-inline-btn,
+  .composer-mic-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .model-toggle,
+  .agent-toggle {
+    min-height: 44px;
+  }
+
+  .composer-bar-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .session-toolbar-wrap .btn-primary {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 
 .detail-title-row .btn-icon {
   opacity: 0.6;

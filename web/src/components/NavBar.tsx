@@ -50,8 +50,8 @@ export const NavBar = memo(function NavBar({ view, onNavigate, onToggleLightMode
         ))}
         {onToggleLightMode && (
           <button className="btn-icon btn-ghost theme-toggle-nav" onClick={onToggleLightMode}
-            title={isLight ? "Dark mode" : "Light mode"}
-            aria-label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}>
+            title={isLight ? t('nav.darkMode') : t('nav.lightMode')}
+            aria-label={isLight ? t('nav.darkMode') : t('nav.lightMode')}>
             {isLight ? <MoonIcon size={16} /> : <SunIcon size={16} />}
           </button>
         )}

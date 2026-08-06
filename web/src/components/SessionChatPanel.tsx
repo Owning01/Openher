@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { ChatView } from "./ChatView"
 import { ErrorModal } from "./ErrorModal"
 import { useMessages } from "../hooks/useMessages"
@@ -255,7 +255,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       .catch(() => undefined)
   }, [msgs, session, baseProps.activeModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt])
 
-  const chatProps: ChatViewProps = {
+  const chatProps: ChatViewProps = useMemo(() => ({
     ...baseProps,
     view: "detail",
     selectedSession: session,
@@ -292,7 +292,15 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     onChangeAgent: (id) => onChangeAgentGlobal(id, session.directory),
     onBackToSessions: () => undefined,
     onOpenSession: (id, dir) => onOpenInThisPanel(id, dir),
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [
+    baseProps, session, localRevertID, msgs, streamState, pendingQuestions,
+    permissionRequest, handleSendQueued, handleSend, handleAbort, handleUndo,
+    handleRedo, handleCompact, handleRevertToMessage, handleEditMessage,
+    handleQuestionReply, handleQuestionReject, handleDismissQuestion,
+    handlePermissionApprove, handlePermissionReject, onShellExecute,
+    onChangeAgentGlobal, onOpenInThisPanel,
+  ])
 
   return (
     <div className={`session-panel${active ? " active" : ""}`} onClick={onActivate}

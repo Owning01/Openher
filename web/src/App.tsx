@@ -45,7 +45,7 @@ import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
 import { useSSEHandler } from "./hooks/useSSEHandler"
-import { FolderIcon } from "./Icons"
+import { FolderIcon, SettingsIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -1170,7 +1170,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     </>
   )
 
-  const baseChatProps: ChatViewProps = {
+  // Memoizado: un objeto literal por render re-renderiza todo el árbol del
+  // chat (SessionChatPanel/ChatView) con cada setState global.
+  const baseChatProps: ChatViewProps = useMemo(() => ({
     selectedSession,
     revertID: localRevertID,
     messages: renderedMessages, todos,
@@ -1244,7 +1246,24 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     queuedPrompts,
     onRemoveQueued: removeQueued,
     onSendQueued: handleSendQueued,
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [
+    selectedSession, localRevertID, renderedMessages, todos, todosExpanded, composer,
+    isWorking, showTypingBubble, loadingSessionID, selectedID, messageScrollSignature,
+    view, dataMode, renamingSessionID, renameValue, showModelChip, commands,
+    activeAgent, activeAgentID, activeModelOption, primaryAgentOptions, changeAgent,
+    projectName, startRename, setRenameValue, renameSession, cancelRename, setComposer,
+    handleSend, handleAbort, setTodosExpanded, goBack, setActiveDetailSheet,
+    recentSessions, activeSessions, handleOpenSession, readingMode, setReadingMode,
+    handleExportChat, handleExportMarkdown, handleSnapshot, setFileEditorPath, navigate,
+    setShowThemePicker, config, agentOptions, connectionState, queueAction, shellExecute,
+    flags, toggleFlag, setFlag, diffFiles, projectDashboard, streamState, compacting,
+    pendingQuestions, permissionRequest, handleQuestionReply, handleQuestionReject,
+    handlePermissionApprove, handlePermissionReject, handleDismissQuestion,
+    handleDismissPermission, handleRevertToMessage, handleEditMessage, handleUndo,
+    handleRedo, handleCompact, handleCreateSession, fb, setShowTerminal,
+    setShowMCPBrowser, chatSettings, queuedPrompts, removeQueued, handleSendQueued,
+  ])
 
   const detailView = <ChatView {...baseChatProps} />
 
@@ -1267,7 +1286,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               <div className="desktop-sidebar-header">
                 <span className="desktop-sidebar-title">Opencode</span>
                 <span className="desktop-sidebar-actions">
-                  <button type="button" className="btn-icon compact" title={t('nav.settings')} aria-label={t('nav.settings')} onClick={() => navigate("settings")}>⚙</button>
+                  <button type="button" className="btn-icon compact" title={t('nav.settings')} aria-label={t('nav.settings')} onClick={() => navigate("settings")}><SettingsIcon size={16} /></button>
                   <button type="button" className="btn-icon compact" title={t('desktop.collapseSidebar')} aria-label={t('desktop.collapseSidebar')} onClick={() => setSidebarCollapsed(true)}>«</button>
                 </span>
               </div>

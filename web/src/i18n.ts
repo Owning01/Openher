@@ -13,6 +13,11 @@ type TranslationKey =
   | 'nav.detail'
   | 'nav.help'
   | 'nav.stats'
+  | 'nav.lightMode'
+  | 'nav.darkMode'
+  | 'composer.inputLabel'
+  | 'composer.send'
+  | 'composer.stop'
   | 'settings.serverStats'
   | 'stats.title'
   | 'stats.refresh'
@@ -495,6 +500,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'nav.sessions': 'Sessions',
     'nav.detail': 'Detail',
     'nav.help': 'Help',
+    'nav.lightMode': 'Switch to light mode',
+    'nav.darkMode': 'Switch to dark mode',
+    'composer.inputLabel': 'Message OpenCode',
+    'composer.send': 'Send',
+    'composer.stop': 'Stop',
     'menu.title': 'Menu',
     'menu.settingsDescription': 'Configure server connection',
     'menu.sessionsDescription': 'Manage your sessions',
@@ -1012,6 +1022,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'nav.sessions': 'Sesiones',
     'nav.detail': 'Detalle',
     'nav.help': 'Ayuda',
+    'nav.lightMode': 'Cambiar a modo claro',
+    'nav.darkMode': 'Cambiar a modo oscuro',
+    'composer.inputLabel': 'Mensaje para OpenCode',
+    'composer.send': 'Enviar',
+    'composer.stop': 'Detener',
     'menu.title': 'Menú',
     'menu.settingsDescription': 'Configurar conexión al servidor',
     'menu.sessionsDescription': 'Gestionar tus sesiones',
@@ -1529,6 +1544,11 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'nav.sessions': 'Sessioni',
     'nav.detail': 'Dettaglio',
     'nav.help': 'Aiuto',
+    'nav.lightMode': 'Passa alla modalità chiara',
+    'nav.darkMode': 'Passa alla modalità scura',
+    'composer.inputLabel': 'Messaggio per OpenCode',
+    'composer.send': 'Invia',
+    'composer.stop': 'Ferma',
     'menu.title': 'Menu',
     'menu.settingsDescription': 'Configura connessione server',
     'menu.sessionsDescription': 'Gestisci le sessioni',
@@ -2008,8 +2028,13 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'error.close': '關閉',
     'nav.settings': '設定',
     'nav.sessions': '工作階段',
-    'nav.detail': '詳情',
+    'nav.detail': '詳細',
     'nav.help': '說明',
+    'nav.lightMode': '切換至淺色模式',
+    'nav.darkMode': '切換至深色模式',
+    'composer.inputLabel': '傳送訊息給 OpenCode',
+    'composer.send': '傳送',
+    'composer.stop': '停止',
     'menu.title': '選單',
     'menu.settingsDescription': '設定伺服器連線',
     'menu.sessionsDescription': '管理工作階段',

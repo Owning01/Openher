@@ -415,6 +415,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={shellPlaceholder}
+          aria-label={t('composer.inputLabel')}
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
           disabled={disabled}
@@ -453,11 +454,11 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         </div>
         <div className="composer-bar-right">
           {isWorking && (
-            <button onClick={onAbort} className="btn-danger composer-bar-btn" title="Stop">
+            <button onClick={onAbort} className="btn-danger composer-bar-btn" title={t('composer.stop')} aria-label={t('composer.stop')}>
               <StopCircleIcon size={16} />
             </button>
           )}
-          <button onClick={handleSendWithImages} disabled={disabled} className="btn-primary composer-bar-btn" title="Send">
+          <button onClick={handleSendWithImages} disabled={disabled} className="btn-primary composer-bar-btn" title={t('composer.send')} aria-label={t('composer.send')}>
             <SendIcon size={16} />
           </button>
         </div>

@@ -117,4 +117,18 @@ assert.ok(useMessages.includes('optimisticIDsRef'), 'send flow should track opti
 assert.ok(useMessages.includes('deadline = Date.now() + 10000'), 'optimistic confirmation should retry loadSelected with a deadline')
 assert.ok(useMessages.includes('merged.sort((a, b) => (a.info.time.created'), 'message merge should sort by time.created so confirmed user messages land in position')
 
+// Touch: hit targets de 44px en pantallas táctiles (WCAG 2.5.8)
+assert.ok(styles.includes('@media (pointer: coarse), (max-width: 780px)'), 'touch targets should scale up on coarse pointers')
+assert.ok(/@media \(pointer: coarse\), \(max-width: 780px\)[\s\S]*?min-width: 44px[\s\S]*?min-height: 44px/.test(styles), 'btn-icon should be at least 44px on touch')
+assert.ok(styles.includes('.composer-bar-btn') && styles.includes('min-height: 44px'), 'composer send/stop buttons should be 44px on touch')
+
+// A11y: labels localizados en composer y nav
+assert.ok(composer.includes("aria-label={t('composer.inputLabel')}"), 'composer textarea should have a localized aria-label')
+assert.ok(composer.includes("title={t('composer.send')}"), 'composer send button should use a localized title')
+const navBar = readFileSync(new URL('./components/NavBar.tsx', import.meta.url), 'utf8')
+assert.ok(navBar.includes("t('nav.lightMode')") && navBar.includes("t('nav.darkMode')"), 'theme toggle should use localized labels')
+
+// Memo de props del chat: sin objetos literales por render
+assert.ok(app.includes('const baseChatProps: ChatViewProps = useMemo'), 'chat props should be memoized to avoid cascading re-renders')
+
 console.log('ui regression tests passed')
