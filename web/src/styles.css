@@ -1204,6 +1204,25 @@ p {
   margin-bottom: var(--space-3);
 }
 
+/* En mobile el buscador de sesiones se abre con el icono de la toolbar */
+.session-search-toggle {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  .session-search-toggle {
+    display: inline-flex;
+  }
+
+  .toolbar {
+    display: none;
+  }
+
+  .toolbar.search-open {
+    display: block;
+  }
+}
+
 
 /* ===== Toolbar & Folder Picker ===== */
 /* ===== Folder Picker (Windows-style mobile) ===== */
@@ -2880,12 +2899,38 @@ p {
   overflow: hidden;
 }
 
+.float-down {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 5;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.float-down:hover {
+  filter: brightness(1.1);
+}
+
 .messages {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  background: #000;
+
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--space-2) var(--space-1);
@@ -3036,12 +3081,12 @@ p {
 }
 
 .message-content code {
-  background: var(--surface-strong);
+  background: transparent;
   color: var(--md-code);
-  font-weight: 400;
+  font-weight: 500;
   font-size: 0.82rem;
-  padding: 0.05rem 0.3rem;
-  border-radius: 0.2rem;
+  padding: 0;
+  border-radius: 0;
 }
 
 
@@ -3431,8 +3476,8 @@ p {
 
 /* ===== Tool Parts / Tool Calls ===== */
 .tool-part {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border: none;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -3444,7 +3489,7 @@ p {
   padding: 0.3rem 0.5rem;
   border: none;
   min-height: 0;
-  background: var(--surface-strong);
+  background: transparent;
   color: var(--muted);
   font-size: 0.8rem;
   cursor: pointer;
@@ -3453,7 +3498,7 @@ p {
 }
 
 .tool-part-toggle:hover {
-  background: var(--surface-subtle);
+  background: transparent;
 }
 
 .tool-part-icon {
@@ -3494,7 +3539,7 @@ p {
 }
 
 .tool-part-body {
-  border-top: 1px solid var(--border);
+  border-top: none;
 }
 
 .tool-part-pre {
@@ -3505,7 +3550,7 @@ p {
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
-  background: var(--code-bg);
+  background: transparent;
   color: var(--code-text);
   overflow-x: auto;
   max-height: 300px;
@@ -4937,6 +4982,363 @@ button.compact {
   .app-shell[data-navbar="bottom"] {
     padding-bottom: 80px;
   }
+
+  /* ===== Vista escritorio: sidebar de sesiones + contenido ===== */
+  .app-shell {
+    display: grid;
+    grid-template-columns: 340px minmax(0, 1fr);
+    height: 100dvh;
+    overflow: hidden;
+    padding: 0;
+    gap: 0;
+  }
+
+  .top-nav {
+    display: none;
+  }
+
+  .app-mobile-content {
+    display: contents;
+  }
+
+  .app-desktop-sidebar {
+    min-height: 0;
+    overflow-y: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+  }
+
+  .app-desktop-sidebar > .panel.sessions {
+    height: 100%;
+    border: none;
+    border-radius: 0;
+  }
+
+  .app-desktop-content {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-3);
+    gap: var(--space-3);
+  }
+
+  .app-desktop-content > .panel {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .app-desktop-content > .panel.detail {
+    border-radius: var(--radius-lg);
+  }
+
+  .app-desktop-placeholder {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+
+  .detail-header .back-btn {
+    display: none;
+  }
+
+  /* ===== Grid de paneles (splits) ===== */
+  .desktop-grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+  }
+
+  .desktop-cell {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .desktop-cell-placeholder {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    cursor: pointer;
+  }
+
+  .desktop-cell-placeholder:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .desktop-resize-col {
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    touch-action: none;
+  }
+
+  .desktop-resize-row {
+    cursor: row-resize;
+    background: transparent;
+    position: relative;
+    touch-action: none;
+  }
+
+  .desktop-resize-col::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 2px;
+    right: 2px;
+    background: var(--border-subtle);
+    transition: background 0.12s;
+  }
+
+  .desktop-resize-row::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 2px;
+    bottom: 2px;
+    background: var(--border-subtle);
+    transition: background 0.12s;
+  }
+
+  .desktop-resize-col:hover::after,
+  .desktop-resize-row:hover::after {
+    background: var(--primary);
+  }
+
+  .desktop-cell-placeholder .desktop-cell-close {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+  }
+
+  .session-panel {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .session-panel.active {
+    box-shadow: inset 0 0 0 2px var(--primary);
+  }
+
+  .session-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 0.25rem var(--space-2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--surface-subtle);
+  }
+
+  .session-panel-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--muted-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .session-panel-actions {
+    display: flex;
+    gap: var(--space-1);
+    flex-shrink: 0;
+  }
+
+  /* ===== Sidebar de escritorio (resize + colapsar) ===== */
+  .app-desktop-sidebar {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .desktop-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 0.5rem var(--space-2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .desktop-sidebar-title {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--muted-strong);
+    letter-spacing: 0.05em;
+  }
+
+  .desktop-sidebar-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .app-desktop-sidebar .panel.sessions {
+    height: 100%;
+    border: none;
+    border-radius: 0;
+  }
+
+  .desktop-sidebar-rail {
+    width: 48px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .desktop-sidebar-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 2;
+  }
+
+  .desktop-sidebar-resizer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 2px;
+    right: 2px;
+    background: var(--border-subtle);
+    transition: background 0.12s;
+  }
+
+  .desktop-sidebar-resizer:hover::after {
+    background: var(--primary);
+  }
+
+  /* ===== Barra de layouts predefinidos ===== */
+  .desktop-layout-area {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .desktop-layout-bar {
+    display: flex;
+    gap: var(--space-1);
+    flex-shrink: 0;
+  }
+
+  .desktop-layout-btn {
+    min-height: 0;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .desktop-layout-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .desktop-layout-btn.active {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--surface-subtle);
+  }
+
+  /* ===== Panel maximizado ===== */
+  .desktop-maximized {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .desktop-maximized .session-panel {
+    border: none;
+    border-radius: 0;
+  }
+
+  /* ===== Badge de actividad (busy en panel no activo) ===== */
+  .session-panel-busy-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warning);
+    flex-shrink: 0;
+    animation: pulse-dot 1.2s ease-in-out infinite;
+  }
+
+  .session-panel-header {
+    user-select: none;
+  }
+
+  .session-panel-header[draggable="true"] {
+    cursor: grab;
+  }
+
+  .session-panel-header[draggable="true"]:active {
+    cursor: grabbing;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  .session-panel .panel.detail {
+    border: none;
+    border-radius: 0;
+    height: auto;
+  }
+
   .bottom-nav {
     position: fixed;
     left: 50%;

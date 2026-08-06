@@ -41,6 +41,7 @@ type SessionListProps = {
   onFork?: (session: SessionView) => void
   onDismissRecent?: (id: string) => void
   onNewSessionHere?: (directory: string) => void
+  onDragStartSession?: (id: string, dir: string) => void
 }
 
 export const SessionList = memo(function SessionList({
@@ -53,12 +54,13 @@ export const SessionList = memo(function SessionList({
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
   onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive, onFork,
-  onDismissRecent, onNewSessionHere
+  onDismissRecent, onNewSessionHere, onDragStartSession
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(true)
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
 
@@ -115,7 +117,8 @@ export const SessionList = memo(function SessionList({
         onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
         onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
         onToggleFavorite={onToggleFavorite}
-        onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} onFork={onFork} />
+        onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} onFork={onFork}
+        onDragStartSession={onDragStartSession} />
     ))
   )
 
@@ -138,10 +141,10 @@ export const SessionList = memo(function SessionList({
             )}
             <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
               onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-              dataMode={dataMode} />
+              dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen} />
           </div>
         </div>
-        <div className="toolbar">
+        <div className={`toolbar${searchOpen ? " search-open" : ""}`}>
 <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
 onChange={(e) => onQueryChange(e.target.value)} className="search" />
         </div>
@@ -158,8 +161,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-        dataMode={dataMode} />
-      <div className="toolbar">
+        dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen} />
+      <div className={`toolbar${searchOpen ? " search-open" : ""}`}>
         <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
@@ -286,7 +289,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                         onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
                         onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
                         onToggleFavorite={onToggleFavorite}
-                        onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} onFork={onFork} />
+                        onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} onFork={onFork}
+                        onDragStartSession={onDragStartSession} />
                     ))}
                   </div>
                 )}

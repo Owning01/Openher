@@ -22,12 +22,13 @@ type SessionCardProps = {
   onSnapshot?: (session: SessionView) => void
   onArchive?: (id: string) => void
   onFork?: (session: SessionView) => void
+  onDragStartSession?: (id: string, dir: string) => void
 }
 
 export const SessionCard = memo(function SessionCard({
   session, isSelected, isRenaming, renameValue, isFavorite,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
-  onToggleFavorite, onExportChat, onSnapshot, onArchive, onFork
+  onToggleFavorite, onExportChat, onSnapshot, onArchive, onFork, onDragStartSession
 }: SessionCardProps) {
   const t = useT()
   const [actionsOpen, setActionsOpen] = useState(false)
@@ -46,7 +47,9 @@ export const SessionCard = memo(function SessionCard({
   }, [])
 
   return (
-    <article className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${actionsOpen ? "actions-open" : ""} fade-in`}>
+    <article className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${actionsOpen ? "actions-open" : ""} fade-in`}
+      draggable={!!onDragStartSession}
+      onDragStart={() => { if (onDragStartSession) onDragStartSession(session.id, session.directory) }}>
       <div className="session-card-header" onClick={toggleActions} role="button" tabIndex={0}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActionsOpen((v) => !v) } }}>
         <div className="session-card-title-group">

@@ -20,7 +20,7 @@ import { useOutsideClick } from "../hooks/useOutsideClick"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, StreamState, Question, PermissionRequest } from "../types"
 
-type ChatViewProps = {
+export type ChatViewProps = {
   selectedSession: SessionView | null
   messages: RenderedMessage[]
   todos: TodoItem[]
@@ -127,6 +127,19 @@ export const ChatView = memo(function ChatView({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
   const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
   const messagesWrapRef = useRef<HTMLDivElement | null>(null)
+  const [showDown, setShowDown] = useState(false)
+
+  const handleWrapScroll = useCallback(() => {
+    const wrap = messagesWrapRef.current
+    if (!wrap) return
+    setShowDown(wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight > 200)
+  }, [])
+
+  const scrollToBottom = useCallback(() => {
+    const wrap = messagesWrapRef.current
+    if (!wrap) return
+    wrap.scrollTo({ top: wrap.scrollHeight, behavior: "smooth" })
+  }, [])
 
   // Copiar selección: aparece solo cuando hay texto seleccionado dentro del chat;
   // cualquier scroll lo oculta.
@@ -407,7 +420,7 @@ export const ChatView = memo(function ChatView({
         </div>
       )}
 
-      <div className="messages-wrap" ref={messagesWrapRef}>
+      <div className="messages-wrap" ref={messagesWrapRef} onScroll={handleWrapScroll}>
         <MessageList
           messages={messages}
           loadingSessionID={loadingSessionID}
@@ -432,6 +445,10 @@ export const ChatView = memo(function ChatView({
           scrollToMessageID={scrollToMessageID}
           activeVariant={activeModelOption?.variant}
         />
+        {showDown && (
+          <button type="button" className="float-down" onClick={scrollToBottom}
+            title={t('chat.scrollToBottom')} aria-label={t('chat.scrollToBottom')}>↓</button>
+        )}
       </div>
 
       {selectedSession?.parentID && (

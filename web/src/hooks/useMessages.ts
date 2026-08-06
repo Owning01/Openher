@@ -38,10 +38,10 @@ function stripNonEssential(msg: MessageEnvelope, dataMode?: DataMode): MessageEn
   return filtered.length === msg.parts.length ? msg : { ...msg, parts: filtered }
 }
 
-export function useMessages(config: ServerConfig, dataMode?: DataMode) {
+export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKey = COMPOSER_STORAGE_KEY) {
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<MessageEnvelope[]>([])
-  const [composer, setComposer] = useState(() => localStorage.getItem(COMPOSER_STORAGE_KEY) ?? "")
+  const [composer, setComposer] = useState(() => localStorage.getItem(storageKey) ?? "")
   const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
@@ -52,11 +52,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
   useEffect(() => {
     const timer = setInterval(() => {
       const current = composerRef.current
-      if (current) localStorage.setItem(COMPOSER_STORAGE_KEY, current)
-      else localStorage.removeItem(COMPOSER_STORAGE_KEY)
+      if (current) localStorage.setItem(storageKey, current)
+      else localStorage.removeItem(storageKey)
     }, 2000)
     return () => clearInterval(timer)
-  }, [])
+  }, [storageKey])
 
   const loadSelectedRequestRef = useRef(0)
   const awaitingAssistantBaselineRef = useRef("")

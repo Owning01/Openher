@@ -20,6 +20,8 @@ import { ErrorBoundary } from "./components/ErrorBoundary"
 import { SettingsPanel } from "./components/SettingsPanel"
 import { SessionList } from "./components/SessionList"
 import { ChatView } from "./components/ChatView"
+import type { ChatViewProps } from "./components/ChatView"
+import { SessionChatPanel } from "./components/SessionChatPanel"
 import { BottomSheet } from "./components/BottomSheet"
 import { HelpPage } from "./components/HelpPage"
 import { ConfirmModal } from "./components/ConfirmModal"
@@ -51,6 +53,9 @@ import { FileBrowser } from "./components/FileBrowser"
 import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
+import { useIsDesktop } from "./hooks/useIsDesktop"
+import { useSSEHandler } from "./hooks/useSSEHandler"
+import { FolderIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -58,6 +63,36 @@ import { useShareReceiver } from "./hooks/useShareReceiver"
 import { usePushNotifications } from "./hooks/usePushNotifications"
 import { useServers } from "./hooks/useServers"
 import type { ServerProfile } from "./types"
+
+const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
+
+type DesktopLayout = { cols: number; rows: number; sessions: Array<string | null>; colSizes: Array<number | null>; rowSizes: Array<number | null> }
+
+function loadDesktopState(fallbackSessionID: string | null): { layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean } {
+  const fallback = {
+    layout: { cols: 1, rows: 1, sessions: [fallbackSessionID], colSizes: [null], rowSizes: [null] } as DesktopLayout,
+    sidebarWidth: 340,
+    sidebarCollapsed: false,
+  }
+  try {
+    const raw = JSON.parse(localStorage.getItem(DESKTOP_STATE_KEY) ?? "null") as Partial<{ layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean }> | null
+    const layout = raw?.layout
+    if (layout && layout.cols >= 1 && layout.rows >= 1 && Array.isArray(layout.sessions) && layout.sessions.length === layout.cols * layout.rows) {
+      return {
+        layout: {
+          cols: layout.cols,
+          rows: layout.rows,
+          sessions: layout.sessions.map((s) => (typeof s === "string" ? s : null)),
+          colSizes: Array.isArray(layout.colSizes) && layout.colSizes.length === layout.cols ? layout.colSizes : new Array(layout.cols).fill(null),
+          rowSizes: Array.isArray(layout.rowSizes) && layout.rowSizes.length === layout.rows ? layout.rowSizes : new Array(layout.rows).fill(null),
+        },
+        sidebarWidth: Math.max(200, Math.min(480, raw.sidebarWidth ?? 340)),
+        sidebarCollapsed: !!raw.sidebarCollapsed,
+      }
+    }
+  } catch { /* ignore */ }
+  return fallback
+}
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const t = useT()
@@ -325,132 +360,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [dataMode, refreshSessions, config, setSessions, selectedSession?.updated])
   const [streamState, setStreamState] = useState<StreamState>("polling")
-  const partTypeCacheRef = useRef<Map<string, string>>(new Map())
-  useEffect(() => {
-    partTypeCacheRef.current.clear()
-  }, [selectedSession?.id])
 
-  const handleSSEEvent = useCallback((event: SSEEvent) => {
-    const p = event.properties as Record<string, unknown>
-    const type = event.type
-    if (type === "server.connected" || type === "server.heartbeat") return
-
-    if (type === "message.part.updated") {
-      const part = p.part as { id?: string; type?: string; messageID?: string; sessionID?: string; text?: string } | undefined
-      if (part?.id && part.type) partTypeCacheRef.current.set(part.id, part.type)
-      // El server a veces pone messageID/sessionID dentro de part (no en la raíz
-      // de properties) — es el caso del tool `task` (subagente). Fallback a part.*
-      const sessionID = (p.sessionID as string | undefined) ?? part?.sessionID
-      const messageID = (p.messageID as string | undefined) ?? part?.messageID
-      if (sessionID && messageID && part?.id && sessionID === selectedSession?.id) {
-        const fullPart = p.part as { id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown } | undefined
-        applyPart(sessionID, messageID, {
-          id: fullPart?.id ?? "",
-          type: fullPart?.type,
-          text: fullPart?.text,
-          tool: fullPart?.tool,
-          callID: fullPart?.callID,
-          state: fullPart?.state,
-        })
-      }
-      return
-    }
-
-    if (type === "message.part.delta") {
-      const sessionID = p.sessionID as string | undefined
-      const messageID = p.messageID as string | undefined
-      const partID = p.partID as string | undefined
-      const hasDelta = typeof p.delta === "string"
-      const text = (hasDelta ? p.delta : p.text ?? "") as string
-      const cachedType = partID ? partTypeCacheRef.current.get(partID) : undefined
-      const partType = cachedType ?? (p.type ?? p.partType ?? "text") as string
-      if (sessionID && messageID && partID && text && sessionID === selectedSession?.id) {
-        applyDelta(sessionID, messageID, partID, text, !hasDelta, partType)
-      }
-      return
-    }
-
-    if (type === "session.next.text.delta" || type === "session.next.reasoning.delta" ||
-        type === "session.next.text.ended" || type === "session.next.reasoning.ended" ||
-        type === "session.next.tool.input.delta") {
-      const sessionID = p.sessionID as string | undefined
-      if (!sessionID || sessionID !== selectedSession?.id) return
-      const assistantMessageID = p.assistantMessageID as string | undefined
-      const partID = (p.textID ?? p.reasoningID ?? p.callID) as string | undefined
-      const partType = type.startsWith("session.next.reasoning") ? "reasoning"
-        : type === "session.next.tool.input.delta" ? "tool"
-        : "text"
-      const hasDelta = typeof p.delta === "string"
-      const text = (hasDelta ? p.delta : p.text ?? "") as string
-      if (assistantMessageID && partID && text) {
-        applyDelta(sessionID, assistantMessageID, partID, text, !hasDelta, partType)
-      }
-      return
-    }
-
-    if (type === "session.next.compaction.delta" || type === "session.next.compaction.ended") {
-      const sessionID = p.sessionID as string | undefined
-      const messageID = p.messageID as string | undefined
-      if (sessionID && messageID && sessionID === selectedSession?.id) {
-        if (type === "session.next.compaction.delta") {
-          const text = p.text as string | undefined
-          if (text) applyDelta(sessionID, messageID, messageID, text, true, "compaction")
-        } else {
-          loadSelected(sessionID, selectedSession.directory)
-        }
-      }
-      return
-    }
-
-    if (type === "session.next.step.failed" || type === "session.next.retried") {
-      setAwaitingAssistantReply(false)
-      return
-    }
-
-    if (type === "message.updated" || type === "message.part.updated") {
-      if (type === "message.updated") {
-        const sessionID = p.sessionID as string | undefined
-        if (sessionID && sessionID === selectedSession?.id) {
-          const rawMsg = p.message as { info?: { time?: { completed?: number } } } | undefined
-          if (rawMsg?.info?.time?.completed && awaitingReplyRef.current) {
-            setAwaitingAssistantReply(false)
-            settleSession(sessionID, selectedSession.directory)
-          }
-        }
-      }
-      return
-    }
-
-    if (type === "session.status") {
-      const sessionID = p.sessionID as string | undefined
-      const rawStatus = p.status as unknown
-      const statusType = typeof rawStatus === "string"
-        ? rawStatus
-        : (rawStatus as { type?: string } | undefined)?.type
-      if (sessionID && sessionID === selectedSession?.id && statusType === "idle") {
-        setAwaitingAssistantReply(false)
-        loadSelected(sessionID, selectedSession.directory)
-        settleSession(sessionID, selectedSession.directory)
-      }
-      return
-    }
-
-    if (type === "session.idle") {
-      const sessionID = p.sessionID as string | undefined
-      if (sessionID && sessionID === selectedSession?.id) {
-        setAwaitingAssistantReply(false)
-        loadSelected(sessionID, selectedSession.directory)
-        settleSession(sessionID, selectedSession.directory)
-      }
-      return
-    }
-
-    if (type === "session.error") {
-      const msg = (p.message ?? p.text ?? "") as string
-      if (msg) setRuntimeError(msg)
-      setAwaitingAssistantReply(false)
-    }
-  }, [selectedSession?.id, selectedSession?.directory, loadSelected, applyDelta, applyPart, setAwaitingAssistantReply, setRuntimeError, refreshSessions, settleSession])
+  const handleSSEEvent = useSSEHandler({
+    sessionID: selectedSession?.id,
+    directory: selectedSession?.directory,
+    loadSelected,
+    applyDelta,
+    applyPart,
+    setAwaitingAssistantReply,
+    setRuntimeError,
+    awaitingRef: () => awaitingReplyRef.current,
+    onSettled: settleSession,
+  })
 
   const stopGenerationRef = useRef(false)
 
@@ -897,8 +818,216 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [createSession, activeModel, onLoadSelected, refreshSessions, persistDirectory])
 
+  const isDesktop = useIsDesktop()
+
+  // ===== Desktop: grid de paneles (splits) =====
+  const [desktopState, setDesktopState] = useState(() => loadDesktopState(selectedSession?.id ?? null))
+  const desktopLayout = desktopState.layout
+  const setDesktopLayout = useCallback((updater: (prev: DesktopLayout) => DesktopLayout) => {
+    setDesktopState((prev) => ({ ...prev, layout: updater(prev.layout) }))
+  }, [])
+  const sidebarWidth = desktopState.sidebarWidth
+  const sidebarCollapsed = desktopState.sidebarCollapsed
+  const setSidebarWidth = useCallback((w: number) => setDesktopState((prev) => ({ ...prev, sidebarWidth: w })), [])
+  const setSidebarCollapsed = useCallback((collapsed: boolean | ((v: boolean) => boolean)) => {
+    setDesktopState((prev) => ({ ...prev, sidebarCollapsed: typeof collapsed === "function" ? collapsed(prev.sidebarCollapsed) : collapsed }))
+  }, [])
+  const [activePanel, setActivePanel] = useState(0)
+  const [maximizedPanel, setMaximizedPanel] = useState<number | null>(null)
+
+  // Persistencia del layout + sidebar (debounced)
+  useEffect(() => {
+    if (!isDesktop) return
+    const id = setTimeout(() => {
+      try {
+        localStorage.setItem(DESKTOP_STATE_KEY, JSON.stringify(desktopState))
+      } catch { /* ignore */ }
+    }, 300)
+    return () => clearTimeout(id)
+  }, [desktopState, isDesktop])
+
+  const openInPanel = useCallback((index: number, id: string) => {
+    setDesktopLayout((prev) => {
+      const sessions = [...prev.sessions]
+      sessions[index] = id
+      return { ...prev, sessions }
+    })
+    setActivePanel(index)
+  }, [])
+
+  const splitPanel = useCallback((index: number, dir: "right" | "bottom") => {
+    setDesktopLayout((prev) => {
+      if (dir === "right") {
+        const cols = prev.cols + 1
+        const col = index % prev.cols
+        const sessions: Array<string | null> = []
+        for (let r = 0; r < prev.rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (c <= col) sessions.push(prev.sessions[r * prev.cols + c] ?? null)
+            else sessions.push(c === col + 1 ? null : prev.sessions[r * prev.cols + (c - 1)] ?? null)
+          }
+        }
+        const colSizes = [...prev.colSizes]
+        colSizes.splice(col + 1, 0, null)
+        return { ...prev, cols, sessions, colSizes }
+      }
+      const rows = prev.rows + 1
+      const row = Math.floor(index / prev.cols)
+      const sessions: Array<string | null> = []
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < prev.cols; c++) {
+          if (r <= row) sessions.push(prev.sessions[r * prev.cols + c] ?? null)
+          else sessions.push(r === row + 1 ? null : prev.sessions[(r - 1) * prev.cols + c] ?? null)
+        }
+      }
+      const rowSizes = [...prev.rowSizes]
+      rowSizes.splice(row + 1, 0, null)
+      return { ...prev, rows, sessions, rowSizes }
+    })
+  }, [])
+
+  const closePanel = useCallback((index: number) => {
+    setDesktopLayout((prev) => {
+      let sessions = [...prev.sessions]
+      sessions[index] = null
+      let { cols, rows, colSizes, rowSizes } = prev
+      // Colapsar filas/columnas enteras vacías
+      let changed = true
+      while (changed) {
+        changed = false
+        for (let r = 0; r < rows; r++) {
+          const rowEmpty = sessions.slice(r * cols, r * cols + cols).every((s) => s === null)
+          if (rowEmpty && rows > 1) {
+            sessions = sessions.filter((_, i) => Math.floor(i / cols) !== r)
+            rows -= 1
+            rowSizes = rowSizes.filter((_, i) => i !== r)
+            changed = true
+            break
+          }
+        }
+        if (changed) continue
+        for (let c = 0; c < cols; c++) {
+          const colEmpty = sessions.filter((_, i) => i % cols === c).every((s) => s === null)
+          if (colEmpty && cols > 1) {
+            sessions = sessions.filter((_, i) => i % cols !== c)
+            cols -= 1
+            colSizes = colSizes.filter((_, i) => i !== c)
+            changed = true
+            break
+          }
+        }
+      }
+      return { ...prev, cols, rows, sessions, colSizes, rowSizes }
+    })
+    if (activePanel === index) setActivePanel(0)
+  }, [activePanel])
+
+  const resizeCol = useCallback((colIndex: number, width: number) => {
+    setDesktopLayout((prev) => {
+      const colSizes = [...prev.colSizes]
+      colSizes[colIndex] = Math.max(220, Math.min(900, width))
+      return { ...prev, colSizes }
+    })
+  }, [])
+
+  const resizeRow = useCallback((rowIndex: number, height: number) => {
+    setDesktopLayout((prev) => {
+      const rowSizes = [...prev.rowSizes]
+      rowSizes[rowIndex] = Math.max(200, Math.min(800, height))
+      return { ...prev, rowSizes }
+    })
+  }, [])
+
+  const toggleMaximize = useCallback((index: number) => {
+    setMaximizedPanel((prev) => (prev === index ? null : index))
+  }, [])
+
+  const applyLayout = useCallback((cols: number, rows: number) => {
+    setMaximizedPanel(null)
+    setDesktopLayout((prev) => {
+      const total = cols * rows
+      const sessions: Array<string | null> = []
+      for (let i = 0; i < total; i++) sessions.push(prev.sessions[i] ?? null)
+      return { cols, rows, sessions, colSizes: new Array(cols).fill(null), rowSizes: new Array(rows).fill(null) }
+    })
+  }, [setDesktopLayout])
+
+  // Drag & drop de sesiones (sidebar → panel) e intercambio de paneles
+  const draggedSessionRef = useRef<{ id: string; dir: string } | null>(null)
+  const handleSessionDragStart = useCallback((id: string, dir: string) => {
+    draggedSessionRef.current = { id, dir }
+  }, [])
+  const handleDropSessionOnPanel = useCallback((index: number) => {
+    const drag = draggedSessionRef.current
+    if (!drag) return
+    draggedSessionRef.current = null
+    openInPanel(index, drag.id)
+  }, [openInPanel])
+  const handleSwapPanels = useCallback((from: number, to: number) => {
+    if (from === to) return
+    setDesktopLayout((prev) => {
+      const sessions = [...prev.sessions]
+      ;[sessions[from], sessions[to]] = [sessions[to], sessions[from]]
+      return { ...prev, sessions }
+    })
+  }, [setDesktopLayout])
+
+  const startSidebarResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = sidebarWidth
+    const onMove = (ev: PointerEvent) => setSidebarWidth(Math.max(200, Math.min(480, startWidth + (ev.clientX - startX))))
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+  }, [sidebarWidth, setSidebarWidth])
+
+  // Atajos de escritorio (splits/sidebar/layouts) — solo desktop
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!isDesktop || (view !== "sessions" && view !== "detail") || !(e.ctrlKey || e.metaKey)) return
+      const inEditable = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const k = e.key.toLowerCase()
+      if (k === "w") {
+        e.preventDefault()
+        if (maximizedPanel !== null) { setMaximizedPanel(null); return }
+        if (desktopLayout.cols > 1 || desktopLayout.rows > 1 || desktopLayout.sessions.some((s) => s !== null)) {
+          closePanel(activePanel)
+        }
+        return
+      }
+      if (inEditable) return
+      if (e.shiftKey && k === "s") { e.preventDefault(); splitPanel(activePanel, "right"); return }
+      if (e.shiftKey && k === "v") { e.preventDefault(); splitPanel(activePanel, "bottom"); return }
+      if (k === "m") { e.preventDefault(); if (desktopLayout.sessions[activePanel]) toggleMaximize(activePanel); return }
+      if (k === "b") { e.preventDefault(); setSidebarCollapsed((v) => !v); return }
+      if (k === "n") { e.preventDefault(); openNewSessionPicker(); return }
+      if (!e.shiftKey && /^[1-9]$/.test(k)) {
+        const idx = Number(k) - 1
+        if (idx < desktopLayout.cols * desktopLayout.rows) { e.preventDefault(); setActivePanel(idx) }
+        return
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [isDesktop, view, maximizedPanel, desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions, activePanel, closePanel, splitPanel, toggleMaximize, setSidebarCollapsed, openNewSessionPicker])
+
   const handleOpenSession = useCallback(async (id: string, dir: string) => {
     navigate("detail")
+    if (isDesktop) {
+      // Regla "activar si ya existe": si la sesión ya está en un panel, se
+      // activa ese panel; si no, reemplaza la sesión del panel activo.
+      const existing = desktopLayout.sessions.indexOf(id)
+      if (existing >= 0) {
+        setActivePanel(existing)
+        return
+      }
+      openInPanel(activePanel, id)
+      return
+    }
     try {
       await openSession(id, dir)
     } catch {
@@ -910,7 +1039,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         }
       }
     }
-  }, [navigate, openSession, flags.offlineCache, getCachedMessages, setMessages])
+  }, [navigate, openSession, flags.offlineCache, getCachedMessages, setMessages, isDesktop, desktopLayout.sessions, activePanel, openInPanel])
 
   const handleTest = useCallback(() => testConnection(t), [testConnection, t])
 
@@ -995,12 +1124,328 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [selectedSession, activeModel, compactSession, refreshSessions, loadSelected, setCompacting, setAwaitingAssistantReply, completionShouldPlayRef])
 
+  const sessionsView = (
+    <>
+      <SessionList
+        projects={filteredProjects} projectSessions={filteredProjectSessions}
+        selectedProjectDir={selectedProjectDir}
+        sessions={sessions}
+        selectedID={selectedID}
+        refreshingSessions={refreshingSessions} creatingSession={creatingSession}
+        renamingSessionID={renamingSessionID} renameValue={renameValue}
+        connectionState={connectionState}
+        query={query} activeSessions={activeSessions} recentSessions={recentSessions}
+        favorites={favorites}
+        dataMode={dataMode}
+        onSelectProject={setSelectedProjectDir}
+        onQueryChange={setQuery}
+        onRefresh={refreshSessionsWithIndicator}
+        onNewSession={openNewSessionPicker}
+        onOpen={handleOpenSession}
+        onStartRename={startRename}
+        onRenameChange={setRenameValue}
+        onRenameConfirm={renameSession}
+        onRenameCancel={cancelRename}
+        onDelete={setSessionToDelete}
+        onToggleFavorite={toggleFavorite}
+        onArchive={flags.sessionArchive ? (id) => {
+          const s = sessions.find(s => s.id === id)
+          if (s) api.sendCommand(config, id, "/archive", "", s.directory).catch(() => {})
+        } : undefined}
+        onFork={(s) => handleCreateSession(s.directory)}
+        onDismissRecent={dismissRecent}
+        onNewSessionHere={(dir) => handleCreateSession(dir)}
+        onDragStartSession={handleSessionDragStart} />
+      {showNewSessionPicker && (
+        <FolderPicker
+          pickerPath={pickerPath} pickerItems={pickerItems}
+          pickerLoading={pickerLoading} pickerError={pickerError}
+          creatingSession={creatingSession}
+          projects={sessions.map((s) => s.directory)}
+          onBrowse={browseNewSessionDirectory}
+          onCreate={handleCreateSession}
+          onCreateDefault={() => handleCreateSession("")}
+          onClose={() => setShowNewSessionPicker(false)} />
+      )}
+    </>
+  )
+
+  const baseChatProps: ChatViewProps = {
+    selectedSession,
+    revertID: localRevertID,
+    messages: renderedMessages, todos,
+    todosExpanded, composer,
+    isWorking, showTypingBubble,
+    loadingSessionID, selectedID,
+    messageScrollSignature, view,
+    dataMode,
+    renamingSessionID, renameValue,
+    showModelChip,
+    commands,
+    activeAgent, activeAgentID,
+    activeModelOption,
+    primaryAgentOptions,
+    onChangeAgent: (id) => changeAgent(id, selectedSession?.directory),
+    projectName,
+    onStartRename: startRename,
+    onRenameChange: setRenameValue,
+    onRenameConfirm: renameSession,
+    onRenameCancel: cancelRename,
+    onComposerChange: setComposer,
+    onSend: (imgs) => handleSend(imgs),
+    onAbort: handleAbort,
+    onTodosToggle: () => setTodosExpanded((v) => !v),
+    onBackToSessions: goBack,
+    onSheetOpen: setActiveDetailSheet,
+    recentSessions, activeSessions,
+    onOpenSession: handleOpenSession,
+    readingMode, onToggleReadingMode: () => setReadingMode((v) => !v),
+    onExportChat: handleExportChat, onExportMarkdown: handleExportMarkdown, onSnapshot: handleSnapshot,
+    onEditFile: (file) => setFileEditorPath(file),
+    onOpenSettings: () => navigate("settings"),
+    onThemeCommand: () => setShowThemePicker(true),
+    config,
+    agents: agentOptions,
+    onShellSend: (cmd) => {
+      if (selectedSession) {
+        if (connectionState === "offline") {
+          queueAction({ type: "shell", sessionID: selectedSession.id, directory: selectedSession.directory, payload: cmd })
+        } else {
+          shellExecute(cmd, selectedSession.id, selectedSession.directory)
+        }
+      }
+    },
+    flags,
+    onToggleFlag: toggleFlag,
+    onSetFlag: setFlag,
+    diffFiles,
+    projectDashboard,
+    streamState,
+    compacting,
+    pendingQuestions,
+    permissionRequest,
+    onQuestionReply: handleQuestionReply,
+    onQuestionReject: handleQuestionReject,
+    onPermissionApprove: handlePermissionApprove,
+    onPermissionReject: handlePermissionReject,
+    onDismissQuestion: handleDismissQuestion,
+    onDismissPermission: handleDismissPermission,
+    onRevertToMessage: handleRevertToMessage,
+    onEditMessage: handleEditMessage,
+    onUndo: handleUndo,
+    onRedo: handleRedo,
+    onCompact: handleCompact,
+    onForkSession: () => selectedSession && handleCreateSession(selectedSession.directory),
+    onOpenFileBrowser: () => selectedSession && fb.open(),
+    fileBrowserPath: fb.currentPath,
+    onOpenTerminal: () => setShowTerminal(true),
+    onOpenMCPBrowser: () => setShowMCPBrowser(true),
+    showTodoButton: chatSettings.showTodoButton,
+    queuedPrompts,
+    onRemoveQueued: removeQueued,
+    onSendQueued: handleSendQueued,
+  }
+
+  const detailView = <ChatView {...baseChatProps} />
+
   return (
-    <div className="app-shell" data-navbar="header">
-      {view !== "detail" && (
+    <div className="app-shell" data-navbar="header"
+      style={isDesktop ? { gridTemplateColumns: sidebarCollapsed ? "48px minmax(0, 1fr)" : `${sidebarWidth}px minmax(0, 1fr)` } : undefined}>
+      {!isDesktop && view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={handleNavigate}
           onToggleLightMode={handleToggleLightMode} />
       )}
+
+      {isDesktop && (
+        <aside className={`app-desktop-sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
+          {sidebarCollapsed ? (
+            <div className="desktop-sidebar-rail">
+              <button type="button" className="btn-icon compact" title={t('desktop.expandSidebar')} aria-label={t('desktop.expandSidebar')} onClick={() => setSidebarCollapsed(false)}>»</button>
+            </div>
+          ) : (
+            <>
+              <div className="desktop-sidebar-header">
+                <span className="desktop-sidebar-title">Opencode</span>
+                <button type="button" className="btn-icon compact" title={t('desktop.collapseSidebar')} aria-label={t('desktop.collapseSidebar')} onClick={() => setSidebarCollapsed(true)}>«</button>
+              </div>
+              <div className="desktop-sidebar-body">
+                {sessionsView}
+              </div>
+              <div className="desktop-sidebar-resizer" onPointerDown={startSidebarResize} title={t('desktop.resizeSidebar')} />
+            </>
+          )}
+        </aside>
+      )}
+
+      <main className={isDesktop ? "app-desktop-content" : "app-mobile-content"}>
+        {view === "sessions" && !isDesktop && sessionsView}
+
+        {isDesktop && (view === "sessions" || view === "detail") && (
+          (() => {
+            const gridCols: Array<number | null | "handle"> = []
+            desktopLayout.colSizes.forEach((s, i) => {
+              if (i > 0) gridCols.push("handle")
+              gridCols.push(s)
+            })
+            const gridRows: Array<number | null | "handle"> = []
+            desktopLayout.rowSizes.forEach((s, i) => {
+              if (i > 0) gridRows.push("handle")
+              gridRows.push(s)
+            })
+            const startColResize = (colIndex: number) => (e: React.PointerEvent<HTMLDivElement>) => {
+              e.preventDefault()
+              const startX = e.clientX
+              const startSize = desktopLayout.colSizes[colIndex]
+                ?? (e.currentTarget.parentElement!.getBoundingClientRect().width / desktopLayout.cols)
+              const onMove = (ev: PointerEvent) => resizeCol(colIndex, startSize + (ev.clientX - startX))
+              const onUp = () => {
+                window.removeEventListener("pointermove", onMove)
+                window.removeEventListener("pointerup", onUp)
+              }
+              window.addEventListener("pointermove", onMove)
+              window.addEventListener("pointerup", onUp)
+            }
+            const startRowResize = (rowIndex: number) => (e: React.PointerEvent<HTMLDivElement>) => {
+              e.preventDefault()
+              const startY = e.clientY
+              const startSize = desktopLayout.rowSizes[rowIndex]
+                ?? (e.currentTarget.parentElement!.getBoundingClientRect().height / desktopLayout.rows)
+              const onMove = (ev: PointerEvent) => resizeRow(rowIndex, startSize + (ev.clientY - startY))
+              const onUp = () => {
+                window.removeEventListener("pointermove", onMove)
+                window.removeEventListener("pointerup", onUp)
+              }
+              window.addEventListener("pointermove", onMove)
+              window.addEventListener("pointerup", onUp)
+            }
+            const cells = Array.from({ length: desktopLayout.cols * desktopLayout.rows }).map((_, i) => {
+              const sid = desktopLayout.sessions[i]
+              const session = sid ? sessions.find((s) => s.id === sid) ?? null : null
+              const col = i % desktopLayout.cols
+              const row = Math.floor(i / desktopLayout.cols)
+              const placement = { gridColumn: col * 2 + 1, gridRow: row * 2 + 1 }
+              if (!session) {
+                return (
+                  <div key={`ph-${i}`} className="desktop-cell-placeholder" style={placement} onClick={() => setActivePanel(i)}>
+                    <button type="button" className="btn-icon compact desktop-cell-close"
+                      title="Close split" aria-label="Close split"
+                      onClick={(e) => { e.stopPropagation(); closePanel(i) }}>×</button>
+                    <FolderIcon size={48} className="icon-empty-state" />
+                    <p>{t('sessions.selectOne')}</p>
+                  </div>
+                )
+              }
+              return (
+                <div key={`panel-${i}`} style={placement} className="desktop-cell">
+                  <SessionChatPanel
+                    session={session}
+                    config={config!}
+                    dataMode={dataMode}
+                    baseProps={baseChatProps}
+                    active={activePanel === i}
+                    connectionState={connectionState}
+                    panelIndex={i}
+                    onActivate={() => setActivePanel(i)}
+                    onSplitRight={() => splitPanel(i, "right")}
+                    onSplitBottom={() => splitPanel(i, "bottom")}
+                    onClose={() => { closePanel(i); if (maximizedPanel === i) setMaximizedPanel(null) }}
+                    onSettled={settleSession}
+                    onRefreshSessions={refreshSessions}
+                    onSetCommands={setCommands}
+                    onRecordPrompt={recordPrompt}
+                    onQueueAction={queueAction}
+                    onShellExecute={shellExecute}
+                    onChangeAgentGlobal={changeAgent}
+                    onOpenInThisPanel={(id) => openInPanel(i, id)}
+                    onToggleMaximize={toggleMaximize}
+                    onDropSession={handleDropSessionOnPanel}
+                    onSwapPanels={handleSwapPanels} />
+                </div>
+              )
+            })
+            const colHandles = desktopLayout.cols > 1
+              ? Array.from({ length: desktopLayout.cols - 1 }).map((_, h) => (
+                <div key={`ch-${h}`} className="desktop-resize-col" style={{ gridColumn: h * 2 + 2, gridRow: "1 / -1" }}
+                  onPointerDown={startColResize(h)} />
+              ))
+              : null
+            const rowHandles = desktopLayout.rows > 1
+              ? Array.from({ length: desktopLayout.rows - 1 }).map((_, h) => (
+                <div key={`rh-${h}`} className="desktop-resize-row" style={{ gridRow: h * 2 + 2, gridColumn: "1 / -1" }}
+                  onPointerDown={startRowResize(h)} />
+              ))
+              : null
+            const layouts: Array<{ key: string; cols: number; rows: number; icon: string; active: boolean }> = [
+              { key: "1x1", cols: 1, rows: 1, icon: "▢", active: desktopLayout.cols === 1 && desktopLayout.rows === 1 },
+              { key: "2x1", cols: 2, rows: 1, icon: "▥", active: desktopLayout.cols === 2 && desktopLayout.rows === 1 },
+              { key: "1x2", cols: 1, rows: 2, icon: "▤", active: desktopLayout.cols === 1 && desktopLayout.rows === 2 },
+              { key: "3x1", cols: 3, rows: 1, icon: "▦", active: desktopLayout.cols === 3 && desktopLayout.rows === 1 },
+              { key: "2x2", cols: 2, rows: 2, icon: "▧", active: desktopLayout.cols === 2 && desktopLayout.rows === 2 },
+            ]
+            const layoutTitle = (key: string) => key === "1x1" ? t('layout.single')
+              : key === "2x1" ? t('layout.twoCol')
+              : key === "1x2" ? t('layout.twoRow')
+              : key === "3x1" ? t('layout.threeCol')
+              : t('layout.grid2x2')
+            const maximizedIndex = maximizedPanel !== null && maximizedPanel < desktopLayout.cols * desktopLayout.rows
+              ? maximizedPanel : null
+            const maximizedSession = maximizedIndex !== null
+              ? sessions.find((s) => s.id === desktopLayout.sessions[maximizedIndex]) ?? null
+              : null
+            return (
+              <div className="desktop-layout-area">
+                <div className="desktop-layout-bar" role="toolbar" aria-label="Layouts">
+                  {layouts.map((l) => (
+                    <button key={l.key} type="button" className={`desktop-layout-btn${l.active ? " active" : ""}`}
+                      title={layoutTitle(l.key)} aria-label={layoutTitle(l.key)} aria-pressed={l.active}
+                      onClick={() => applyLayout(l.cols, l.rows)}>{l.icon}</button>
+                  ))}
+                </div>
+                {maximizedSession && maximizedIndex !== null ? (
+                  <div className="desktop-maximized">
+                    <SessionChatPanel
+                      session={maximizedSession}
+                      config={config!}
+                      dataMode={dataMode}
+                      baseProps={baseChatProps}
+                      active={activePanel === maximizedIndex}
+                      connectionState={connectionState}
+                      panelIndex={maximizedIndex}
+                      maximized
+                      onRestore={() => setMaximizedPanel(null)}
+                      onActivate={() => setActivePanel(maximizedIndex)}
+                      onSplitRight={() => splitPanel(maximizedIndex, "right")}
+                      onSplitBottom={() => splitPanel(maximizedIndex, "bottom")}
+                      onClose={() => { closePanel(maximizedIndex); setMaximizedPanel(null) }}
+                      onSettled={settleSession}
+                      onRefreshSessions={refreshSessions}
+                      onSetCommands={setCommands}
+                      onRecordPrompt={recordPrompt}
+                      onQueueAction={queueAction}
+                      onShellExecute={shellExecute}
+                      onChangeAgentGlobal={changeAgent}
+                      onOpenInThisPanel={(id) => openInPanel(maximizedIndex, id)}
+                      onToggleMaximize={toggleMaximize}
+                      onDropSession={handleDropSessionOnPanel}
+                      onSwapPanels={handleSwapPanels} />
+                  </div>
+                ) : (
+                  <div className="desktop-grid"
+                    style={{
+                      gridTemplateColumns: gridCols.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "1fr").join(" "),
+                      gridTemplateRows: gridRows.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "1fr").join(" "),
+                    }}>
+                    {cells}
+                    {colHandles}
+                    {rowHandles}
+                  </div>
+                )}
+              </div>
+            )
+          })()
+        )}
+
+        {view === "detail" && !isDesktop && detailView}
 
       {view === "settings" && (
         <SettingsPanel
@@ -1062,153 +1507,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onOpenShortcuts={() => setShowShortcuts(true)} />
       )}
 
-      {view === "sessions" && (
-        <>
-          <SessionList
-            projects={filteredProjects} projectSessions={filteredProjectSessions}
-            selectedProjectDir={selectedProjectDir}
-            sessions={sessions}
-            selectedID={selectedID}
-            refreshingSessions={refreshingSessions} creatingSession={creatingSession}
-            renamingSessionID={renamingSessionID} renameValue={renameValue}
-            connectionState={connectionState}
-            query={query} activeSessions={activeSessions} recentSessions={recentSessions}
-            favorites={favorites}
-            dataMode={dataMode}
-            onSelectProject={setSelectedProjectDir}
-            onQueryChange={setQuery}
-            onRefresh={refreshSessionsWithIndicator}
-            onNewSession={openNewSessionPicker}
-            onOpen={handleOpenSession}
-            onStartRename={startRename}
-            onRenameChange={setRenameValue}
-            onRenameConfirm={renameSession}
-            onRenameCancel={cancelRename}
-            onDelete={setSessionToDelete}
-            onToggleFavorite={toggleFavorite}
-            onArchive={flags.sessionArchive ? (id) => {
-              const s = sessions.find(s => s.id === id)
-              if (s) api.sendCommand(config, id, "/archive", "", s.directory).catch(() => {})
-            } : undefined}
-            onFork={(s) => handleCreateSession(s.directory)}
-            onDismissRecent={dismissRecent}
-            onNewSessionHere={(dir) => handleCreateSession(dir)} />
-          {showNewSessionPicker && (
-            <FolderPicker
-              pickerPath={pickerPath} pickerItems={pickerItems}
-              pickerLoading={pickerLoading} pickerError={pickerError}
-              creatingSession={creatingSession}
-              projects={sessions.map((s) => s.directory)}
-              onBrowse={browseNewSessionDirectory}
-              onCreate={handleCreateSession}
-              onCreateDefault={() => handleCreateSession("")}
-              onClose={() => setShowNewSessionPicker(false)} />
-          )}
-        </>
-      )}
-
-      {view === "detail" && (
-        <>
-          <ChatView
-            selectedSession={selectedSession}
-            revertID={localRevertID}
-            messages={renderedMessages} todos={todos}
-            todosExpanded={todosExpanded} composer={composer}
-            isWorking={isWorking} showTypingBubble={showTypingBubble}
-            loadingSessionID={loadingSessionID} selectedID={selectedID}
-            messageScrollSignature={messageScrollSignature} view={view}
-            dataMode={dataMode}
-            renamingSessionID={renamingSessionID} renameValue={renameValue}
-            showModelChip={showModelChip}
-            commands={commands}
-            activeAgent={activeAgent} activeAgentID={activeAgentID}
-            activeModelOption={activeModelOption}
-            primaryAgentOptions={primaryAgentOptions}
-            onChangeAgent={(id) => changeAgent(id, selectedSession?.directory)}
-            projectName={projectName}
-            onStartRename={startRename}
-            onRenameChange={setRenameValue}
-            onRenameConfirm={renameSession}
-            onRenameCancel={cancelRename}
-            onComposerChange={setComposer}
-            onSend={(imgs) => handleSend(imgs)}
-            onAbort={handleAbort}
-            onTodosToggle={() => setTodosExpanded((v) => !v)}
-            onBackToSessions={goBack}
-            onSheetOpen={setActiveDetailSheet}
-            recentSessions={recentSessions} activeSessions={activeSessions}
-            onOpenSession={handleOpenSession}
-            readingMode={readingMode} onToggleReadingMode={() => setReadingMode((v) => !v)}
-            onExportChat={handleExportChat} onExportMarkdown={handleExportMarkdown} onSnapshot={handleSnapshot}
-            onEditFile={(file) => setFileEditorPath(file)}
-            onOpenSettings={() => navigate("settings")}
-            onThemeCommand={() => setShowThemePicker(true)}
-            config={config}
-            agents={agentOptions}
-            onShellSend={(cmd) => {
-              if (selectedSession) {
-                if (connectionState === "offline") {
-                  queueAction({ type: "shell", sessionID: selectedSession.id, directory: selectedSession.directory, payload: cmd })
-                } else {
-                  shellExecute(cmd, selectedSession.id, selectedSession.directory)
-                }
-              }
-            }}
-            flags={flags}
-            onToggleFlag={toggleFlag}
-            onSetFlag={setFlag}
-            diffFiles={diffFiles}
-            projectDashboard={projectDashboard}
-            streamState={streamState}
-            compacting={compacting}
-            pendingQuestions={pendingQuestions}
-            permissionRequest={permissionRequest}
-            onQuestionReply={handleQuestionReply}
-            onQuestionReject={handleQuestionReject}
-            onPermissionApprove={handlePermissionApprove}
-            onPermissionReject={handlePermissionReject}
-            onDismissQuestion={handleDismissQuestion}
-            onDismissPermission={handleDismissPermission}
-            onRevertToMessage={handleRevertToMessage}
-            onEditMessage={handleEditMessage}
-            onUndo={handleUndo}
-            onRedo={handleRedo}
-            onCompact={handleCompact}
-            onForkSession={() => selectedSession && handleCreateSession(selectedSession.directory)}
-            onOpenFileBrowser={() => selectedSession && fb.open()}
-            fileBrowserPath={fb.currentPath}
-            onOpenTerminal={() => setShowTerminal(true)}
-            onOpenMCPBrowser={() => setShowMCPBrowser(true)}
-            showTodoButton={chatSettings.showTodoButton}
-            queuedPrompts={queuedPrompts}
-            onRemoveQueued={removeQueued}
-            onSendQueued={handleSendQueued} />
-          <BottomSheet
-            activeSheet={activeDetailSheet}
-            onClose={() => setActiveDetailSheet(null)}
-            modelOptions={modelOptions}
-            modelLoadError={modelLoadError}
-            activeModelOption={activeModelOption}
-            variantGroups={filteredVariantGroups}
-            modelQuery={modelQuery}
-            isWorking={isWorking}
-            onChangeModel={changeModel}
-            onModelQueryChange={setModelQuery}
-            selectedVariant={selectedVariant}
-            formatLimit={formatLimit}
-            projectName={projectName}
-            projectPath={projectPath}
-            vcsBranch={vcsBranch}
-            projectDashboard={projectDashboard}
-            diffFiles={diffFiles}
-            totalDiffAdditions={totalDiffAdditions}
-            totalDiffDeletions={totalDiffDeletions}
-            dashboardError={dashboardError}
-            config={config}
-            onVariantsChanged={() => loadModels(selectedSession?.directory).catch(() => undefined)} />
-        </>
-      )}
-
       {view === "help" && (
         <HelpPage
           helpPage={helpPage}
@@ -1217,6 +1515,31 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           commandFilter={commandFilter}
           onCommandFilterChange={setCommandFilter} />
       )}
+      </main>
+
+      <BottomSheet
+        activeSheet={activeDetailSheet}
+        onClose={() => setActiveDetailSheet(null)}
+        modelOptions={modelOptions}
+        modelLoadError={modelLoadError}
+        activeModelOption={activeModelOption}
+        variantGroups={filteredVariantGroups}
+        modelQuery={modelQuery}
+        isWorking={isWorking}
+        onChangeModel={changeModel}
+        onModelQueryChange={setModelQuery}
+        selectedVariant={selectedVariant}
+        formatLimit={formatLimit}
+        projectName={projectName}
+        projectPath={projectPath}
+        vcsBranch={vcsBranch}
+        projectDashboard={projectDashboard}
+        diffFiles={diffFiles}
+        totalDiffAdditions={totalDiffAdditions}
+        totalDiffDeletions={totalDiffDeletions}
+        dashboardError={dashboardError}
+        config={config}
+        onVariantsChanged={() => loadModels(selectedSession?.directory).catch(() => undefined)} />
 
       {sessionToDelete && (
         <ConfirmModal
@@ -1279,7 +1602,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         />
       )}
 
-      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+          {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} desktop={isDesktop} />}
 
       {showThemeCreator && <ThemeCreator onClose={() => setShowThemeCreator(false)} />}
 

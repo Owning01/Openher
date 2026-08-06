@@ -140,6 +140,7 @@ type TranslationKey =
   | 'sessions.projectDirectoryInvalid'
   | 'sessions.searchPlaceholder'
   | 'sessions.newHere'
+  | 'sessions.selectOne'
   | 'sessions.emptyTitle'
   | 'sessions.emptyHint'
   | 'sessions.noFileChanges'
@@ -148,6 +149,29 @@ type TranslationKey =
   | 'sessions.delete'
   | 'sessions.activeLabel'
   | 'sessions.recentLabel'
+  | 'layout.single'
+  | 'layout.twoCol'
+  | 'layout.twoRow'
+  | 'layout.threeCol'
+  | 'layout.grid2x2'
+  | 'panel.splitRight'
+  | 'panel.splitBottom'
+  | 'panel.close'
+  | 'panel.maximize'
+  | 'panel.restore'
+  | 'panel.busy'
+  | 'desktop.collapseSidebar'
+  | 'desktop.expandSidebar'
+  | 'desktop.resizeSidebar'
+  | 'chat.scrollToBottom'
+  | 'shortcuts.desktop'
+  | 'shortcuts.panelFocus'
+  | 'shortcuts.closeSplit'
+  | 'shortcuts.splitRight'
+  | 'shortcuts.splitBottom'
+  | 'shortcuts.maximize'
+  | 'shortcuts.toggleSidebar'
+  | 'shortcuts.newSession'
   | 'detail.backToSessions'
   | 'detail.selectSession'
   | 'detail.loading'
@@ -643,9 +667,33 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.folderPickerEmpty': 'No folders here.',
     'sessions.projectDirectoryInvalid': '{directory} is not an OpenCode project folder. Pick a project/worktree folder, or use the server default.',
     'sessions.searchPlaceholder': 'Search sessions by title or directory...',
+    'layout.single': 'Single panel',
+    'layout.twoCol': 'Two columns',
+    'layout.twoRow': 'Two rows',
+    'layout.threeCol': 'Three columns',
+    'layout.grid2x2': '2×2 grid',
+    'panel.splitRight': 'Split right',
+    'panel.splitBottom': 'Split bottom',
+    'panel.close': 'Close panel',
+    'panel.maximize': 'Maximize panel',
+    'panel.restore': 'Restore panel',
+    'panel.busy': 'Working…',
+    'desktop.collapseSidebar': 'Collapse sidebar',
+    'desktop.expandSidebar': 'Expand sidebar',
+    'desktop.resizeSidebar': 'Resize sidebar',
+    'chat.scrollToBottom': 'Scroll to bottom',
+    'shortcuts.desktop': 'Desktop',
+    'shortcuts.panelFocus': 'Focus panel',
+    'shortcuts.closeSplit': 'Close split',
+    'shortcuts.splitRight': 'Split right',
+    'shortcuts.splitBottom': 'Split bottom',
+    'shortcuts.maximize': 'Maximize / restore panel',
+    'shortcuts.toggleSidebar': 'Toggle sidebar',
+    'shortcuts.newSession': 'New session',
     'sessions.emptyTitle': 'No sessions found',
     'sessions.emptyHint': 'Create a new session to get started',
     'sessions.newHere': 'New session here',
+  'sessions.selectOne': 'Select a session to start',
     'sessions.loadingTitle': 'Connecting to OpenCode',
     'sessions.loadingHint': 'Loading sessions. This can take a few seconds on mobile or after the server wakes up.',
     'sessions.offlineHint': 'OpenCode is not reachable yet. Check Settings or try Refresh.',
@@ -1134,9 +1182,33 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.folderPickerEmpty': 'No hay carpetas aquí.',
     'sessions.projectDirectoryInvalid': '{directory} no es una carpeta de proyecto OpenCode. Elige una carpeta de proyecto/worktree, o usa el valor por defecto del servidor.',
     'sessions.searchPlaceholder': 'Buscar sesiones por título o carpeta...',
+    'layout.single': 'Panel único',
+    'layout.twoCol': 'Dos columnas',
+    'layout.twoRow': 'Dos filas',
+    'layout.threeCol': 'Tres columnas',
+    'layout.grid2x2': 'Cuadrícula 2×2',
+    'panel.splitRight': 'Dividir a la derecha',
+    'panel.splitBottom': 'Dividir hacia abajo',
+    'panel.close': 'Cerrar panel',
+    'panel.maximize': 'Maximizar panel',
+    'panel.restore': 'Restaurar panel',
+    'panel.busy': 'Trabajando…',
+    'desktop.collapseSidebar': 'Contraer barra lateral',
+    'desktop.expandSidebar': 'Expandir barra lateral',
+    'desktop.resizeSidebar': 'Redimensionar barra lateral',
+    'chat.scrollToBottom': 'Ir al final',
+    'shortcuts.desktop': 'Escritorio',
+    'shortcuts.panelFocus': 'Enfocar panel',
+    'shortcuts.closeSplit': 'Cerrar división',
+    'shortcuts.splitRight': 'Dividir a la derecha',
+    'shortcuts.splitBottom': 'Dividir hacia abajo',
+    'shortcuts.maximize': 'Maximizar / restaurar panel',
+    'shortcuts.toggleSidebar': 'Alternar barra lateral',
+    'shortcuts.newSession': 'Nueva sesión',
     'sessions.emptyTitle': 'No se encontraron sesiones',
     'sessions.emptyHint': 'Crea una nueva sesión para empezar',
     'sessions.newHere': 'Nueva sesión aquí',
+  'sessions.selectOne': 'Seleccioná una sesión para empezar',
     'sessions.loadingTitle': 'Conectando a OpenCode',
     'sessions.loadingHint': 'Cargando sesiones. Puede tomar unos segundos en móvil o después de que el servidor se active.',
     'sessions.offlineHint': 'OpenCode aún no está accesible. Revisa Configuración o pulsa Actualizar.',
@@ -1625,9 +1697,33 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.folderPickerEmpty': 'Nessuna cartella qui.',
     'sessions.projectDirectoryInvalid': '{directory} non è una cartella progetto OpenCode. Scegli una cartella progetto/worktree oppure usa il default del server.',
     'sessions.searchPlaceholder': 'Cerca sessioni per titolo o cartella...',
+    'layout.single': 'Pannello singolo',
+    'layout.twoCol': 'Due colonne',
+    'layout.twoRow': 'Due righe',
+    'layout.threeCol': 'Tre colonne',
+    'layout.grid2x2': 'Griglia 2×2',
+    'panel.splitRight': 'Dividi a destra',
+    'panel.splitBottom': 'Dividi in basso',
+    'panel.close': 'Chiudi pannello',
+    'panel.maximize': 'Massimizza pannello',
+    'panel.restore': 'Ripristina pannello',
+    'panel.busy': 'In lavorazione…',
+    'desktop.collapseSidebar': 'Comprimi barra laterale',
+    'desktop.expandSidebar': 'Espandi barra laterale',
+    'desktop.resizeSidebar': 'Ridimensiona barra laterale',
+    'chat.scrollToBottom': 'Vai in fondo',
+    'shortcuts.desktop': 'Desktop',
+    'shortcuts.panelFocus': 'Metti a fuoco pannello',
+    'shortcuts.closeSplit': 'Chiudi diviso',
+    'shortcuts.splitRight': 'Dividi a destra',
+    'shortcuts.splitBottom': 'Dividi in basso',
+    'shortcuts.maximize': 'Massimizza / ripristina pannello',
+    'shortcuts.toggleSidebar': 'Attiva/disattiva barra laterale',
+    'shortcuts.newSession': 'Nuova sessione',
     'sessions.emptyTitle': 'Nessuna sessione trovata',
     'sessions.emptyHint': 'Crea una nuova sessione per iniziare',
     'sessions.newHere': 'Nuova sessione qui',
+  'sessions.selectOne': 'Seleziona una sessione per iniziare',
     'sessions.loadingTitle': 'Connessione a OpenCode',
     'sessions.loadingHint': 'Carico le sessioni. Su mobile o dopo il risveglio del server può volerci qualche secondo.',
     'sessions.offlineHint': 'OpenCode non è ancora raggiungibile. Controlla Impostazioni o riprova con Aggiorna.',
@@ -2080,9 +2176,33 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'sessions.folderPickerEmpty': '這裡沒有資料夾。',
     'sessions.projectDirectoryInvalid': '{directory} 不是 OpenCode 專案資料夾。請選擇專案/worktree 資料夾，或使用伺服器預設。',
     'sessions.searchPlaceholder': '依標題或目錄搜尋工作階段...',
+    'layout.single': '單一面板',
+    'layout.twoCol': '兩欄',
+    'layout.twoRow': '兩列',
+    'layout.threeCol': '三欄',
+    'layout.grid2x2': '2×2 網格',
+    'panel.splitRight': '向右分割',
+    'panel.splitBottom': '向下分割',
+    'panel.close': '關閉面板',
+    'panel.maximize': '最大化面板',
+    'panel.restore': '還原面板',
+    'panel.busy': '處理中…',
+    'desktop.collapseSidebar': '收合側邊欄',
+    'desktop.expandSidebar': '展開側邊欄',
+    'desktop.resizeSidebar': '調整側邊欄大小',
+    'chat.scrollToBottom': '捲動至底部',
+    'shortcuts.desktop': '桌面',
+    'shortcuts.panelFocus': '聚焦面板',
+    'shortcuts.closeSplit': '關閉分割',
+    'shortcuts.splitRight': '向右分割',
+    'shortcuts.splitBottom': '向下分割',
+    'shortcuts.maximize': '最大化／還原面板',
+    'shortcuts.toggleSidebar': '切換側邊欄',
+    'shortcuts.newSession': '新增工作階段',
     'sessions.emptyTitle': '找不到工作階段',
     'sessions.emptyHint': '建立新的工作階段以開始',
     'sessions.newHere': '在此建立新工作階段',
+  'sessions.selectOne': '選擇一個工作階段以開始',
     'sessions.loadingTitle': '正在連線到 OpenCode',
     'sessions.loadingHint': '正在載入工作階段。行動裝置或伺服器剛喚醒時可能需要幾秒。',
     'sessions.offlineHint': '尚無法連線到 OpenCode。請檢查設定或重新整理。',

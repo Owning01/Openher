@@ -1,5 +1,5 @@
 import { memo } from "react"
-import { RefreshIcon, PlusIcon, LoadingIcon, SettingsIcon } from "../Icons"
+import { RefreshIcon, PlusIcon, LoadingIcon, SettingsIcon, SearchIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { DataMode } from "../types"
 
@@ -10,6 +10,8 @@ type SessionToolbarProps = {
   onNewSession: () => void
   onOpenSettings?: () => void
   dataMode: DataMode
+  onSearchToggle?: () => void
+  searchOpen?: boolean
 }
 
 function modeLabel(mode: DataMode, t: (key: string, params?: Record<string, string | number>) => string): string {
@@ -20,7 +22,7 @@ function modeLabel(mode: DataMode, t: (key: string, params?: Record<string, stri
 }
 
 export const SessionToolbar = memo(function SessionToolbar({
-  refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode
+  refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onSearchToggle, searchOpen
 }: SessionToolbarProps) {
   const t = useT()
 
@@ -29,6 +31,11 @@ export const SessionToolbar = memo(function SessionToolbar({
       <button onClick={onRefresh} className="btn-icon" disabled={refreshing} title={t('sessions.refresh')} aria-label={t('sessions.refresh')} style={{ flexShrink: 0, width: 40, height: 40, padding: 0, background: "transparent", border: "none" }}>
         {refreshing ? <LoadingIcon size={22} /> : <RefreshIcon size={22} />}
       </button>
+      {onSearchToggle && (
+        <button onClick={onSearchToggle} className="btn-icon btn-secondary compact session-search-toggle" title={t('sessions.searchPlaceholder')} aria-label={t('sessions.searchPlaceholder')} aria-expanded={searchOpen} style={{ flexShrink: 0, width: 32, height: 32, padding: 0 }}>
+          <SearchIcon size={14} />
+        </button>
+      )}
       <button onClick={onNewSession} className="btn-primary compact btn-new-session" disabled={creating} title={t('sessions.new')} style={{ flexShrink: 0, height: 32, padding: "0 0.65rem", display: "inline-flex", alignItems: "center", gap: 6 }}>
         {creating ? <LoadingIcon size={14} /> : <PlusIcon size={14} />}
         <span>{creating ? t('sessions.creating') : t('sessions.new')}</span>
