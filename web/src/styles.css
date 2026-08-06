@@ -4993,6 +4993,9 @@ button.compact {
     overflow: hidden;
     padding: 0;
     gap: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
   }
 
   .top-nav {
@@ -5199,6 +5202,12 @@ button.compact {
     font-weight: 700;
     color: var(--muted-strong);
     letter-spacing: 0.05em;
+  }
+
+  .desktop-sidebar-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
   }
 
   .desktop-sidebar-body {

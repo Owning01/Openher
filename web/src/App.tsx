@@ -836,6 +836,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [])
   const [activePanel, setActivePanel] = useState(0)
   const [maximizedPanel, setMaximizedPanel] = useState<number | null>(null)
+  // Refs para resize fluido: durante el drag se muta el DOM directamente
+  // (sin re-render), y el estado se commitea al soltar.
+  const gridRef = useRef<HTMLDivElement | null>(null)
+  const shellRef = useRef<HTMLDivElement | null>(null)
 
   // Persistencia del layout + sidebar (debounced)
   useEffect(() => {
@@ -924,22 +928,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (activePanel === index) setActivePanel(0)
   }, [activePanel])
 
-  const resizeCol = useCallback((colIndex: number, width: number) => {
-    setDesktopLayout((prev) => {
-      const colSizes = [...prev.colSizes]
-      colSizes[colIndex] = Math.max(220, Math.min(900, width))
-      return { ...prev, colSizes }
-    })
-  }, [])
-
-  const resizeRow = useCallback((rowIndex: number, height: number) => {
-    setDesktopLayout((prev) => {
-      const rowSizes = [...prev.rowSizes]
-      rowSizes[rowIndex] = Math.max(200, Math.min(800, height))
-      return { ...prev, rowSizes }
-    })
-  }, [])
-
   const toggleMaximize = useCallback((index: number) => {
     setMaximizedPanel((prev) => (prev === index ? null : index))
   }, [])
@@ -978,10 +966,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     e.preventDefault()
     const startX = e.clientX
     const startWidth = sidebarWidth
-    const onMove = (ev: PointerEvent) => setSidebarWidth(Math.max(200, Math.min(480, startWidth + (ev.clientX - startX))))
+    let lastW = sidebarWidth
+    const apply = (w: number) => {
+      if (shellRef.current) shellRef.current.style.gridTemplateColumns = `${w}px minmax(0, 1fr)`
+    }
+    const onMove = (ev: PointerEvent) => {
+      lastW = Math.max(200, Math.min(480, startWidth + (ev.clientX - startX)))
+      apply(lastW)
+    }
     const onUp = () => {
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
+      setSidebarWidth(lastW)
     }
     window.addEventListener("pointermove", onMove)
     window.addEventListener("pointerup", onUp)
@@ -1253,7 +1249,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const detailView = <ChatView {...baseChatProps} />
 
   return (
-    <div className="app-shell" data-navbar="header"
+    <div className="app-shell" data-navbar="header" ref={shellRef}
       style={isDesktop ? { gridTemplateColumns: sidebarCollapsed ? "48px minmax(0, 1fr)" : `${sidebarWidth}px minmax(0, 1fr)` } : undefined}>
       {!isDesktop && view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={handleNavigate}
@@ -1270,7 +1266,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <>
               <div className="desktop-sidebar-header">
                 <span className="desktop-sidebar-title">Opencode</span>
-                <button type="button" className="btn-icon compact" title={t('desktop.collapseSidebar')} aria-label={t('desktop.collapseSidebar')} onClick={() => setSidebarCollapsed(true)}>«</button>
+                <span className="desktop-sidebar-actions">
+                  <button type="button" className="btn-icon compact" title={t('nav.settings')} aria-label={t('nav.settings')} onClick={() => navigate("settings")}>⚙</button>
+                  <button type="button" className="btn-icon compact" title={t('desktop.collapseSidebar')} aria-label={t('desktop.collapseSidebar')} onClick={() => setSidebarCollapsed(true)}>«</button>
+                </span>
               </div>
               <div className="desktop-sidebar-body">
                 {sessionsView}
@@ -1301,10 +1300,21 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               const startX = e.clientX
               const startSize = desktopLayout.colSizes[colIndex]
                 ?? (e.currentTarget.parentElement!.getBoundingClientRect().width / desktopLayout.cols)
-              const onMove = (ev: PointerEvent) => resizeCol(colIndex, startSize + (ev.clientX - startX))
+              const sizes = [...desktopLayout.colSizes]
+              const apply = () => {
+                if (!gridRef.current) return
+                const cols: Array<number | null | "handle"> = []
+                sizes.forEach((s, i) => { if (i > 0) cols.push("handle"); cols.push(s) })
+                gridRef.current.style.gridTemplateColumns = cols.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "1fr").join(" ")
+              }
+              const onMove = (ev: PointerEvent) => {
+                sizes[colIndex] = Math.max(220, Math.min(900, startSize + (ev.clientX - startX)))
+                apply()
+              }
               const onUp = () => {
                 window.removeEventListener("pointermove", onMove)
                 window.removeEventListener("pointerup", onUp)
+                setDesktopLayout((prev) => ({ ...prev, colSizes: sizes }))
               }
               window.addEventListener("pointermove", onMove)
               window.addEventListener("pointerup", onUp)
@@ -1314,10 +1324,21 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               const startY = e.clientY
               const startSize = desktopLayout.rowSizes[rowIndex]
                 ?? (e.currentTarget.parentElement!.getBoundingClientRect().height / desktopLayout.rows)
-              const onMove = (ev: PointerEvent) => resizeRow(rowIndex, startSize + (ev.clientY - startY))
+              const sizes = [...desktopLayout.rowSizes]
+              const apply = () => {
+                if (!gridRef.current) return
+                const rows: Array<number | null | "handle"> = []
+                sizes.forEach((s, i) => { if (i > 0) rows.push("handle"); rows.push(s) })
+                gridRef.current.style.gridTemplateRows = rows.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "1fr").join(" ")
+              }
+              const onMove = (ev: PointerEvent) => {
+                sizes[rowIndex] = Math.max(200, Math.min(800, startSize + (ev.clientY - startY)))
+                apply()
+              }
               const onUp = () => {
                 window.removeEventListener("pointermove", onMove)
                 window.removeEventListener("pointerup", onUp)
+                setDesktopLayout((prev) => ({ ...prev, rowSizes: sizes }))
               }
               window.addEventListener("pointermove", onMove)
               window.addEventListener("pointerup", onUp)
@@ -1434,7 +1455,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onSwapPanels={handleSwapPanels} />
                   </div>
                 ) : (
-                  <div className="desktop-grid"
+                  <div className="desktop-grid" ref={gridRef}
                     style={{
                       gridTemplateColumns: gridCols.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "1fr").join(" "),
                       gridTemplateRows: gridRows.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "1fr").join(" "),

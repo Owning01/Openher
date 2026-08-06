@@ -36,9 +36,8 @@ export const SessionToolbar = memo(function SessionToolbar({
           <SearchIcon size={14} />
         </button>
       )}
-      <button onClick={onNewSession} className="btn-primary compact btn-new-session" disabled={creating} title={t('sessions.new')} style={{ flexShrink: 0, height: 32, padding: "0 0.65rem", display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <button onClick={onNewSession} className="btn-primary compact btn-new-session" disabled={creating} title={t('sessions.new')} aria-label={t('sessions.new')} style={{ flexShrink: 0, width: 32, height: 32, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
         {creating ? <LoadingIcon size={14} /> : <PlusIcon size={14} />}
-        <span>{creating ? t('sessions.creating') : t('sessions.new')}</span>
       </button>
       <span className="mode-indicator" title={t('settings.dataModeTitle')}>
         <span className="mode-btn-text">{modeLabel(dataMode, t)}</span>
