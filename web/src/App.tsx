@@ -336,7 +336,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (type === "server.connected" || type === "server.heartbeat") return
 
     if (type === "message.part.updated") {
-      const part = p.part as { id?: string; type?: string; messageID?: string; sessionID?: string } | undefined
+      const part = p.part as { id?: string; type?: string; messageID?: string; sessionID?: string; text?: string } | undefined
       if (part?.id && part.type) partTypeCacheRef.current.set(part.id, part.type)
       // El server a veces pone messageID/sessionID dentro de part (no en la raíz
       // de properties) — es el caso del tool `task` (subagente). Fallback a part.*
@@ -463,7 +463,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           || event.type === "session.next.tool.input.delta") return
       }
       handleSSEEvent(event)
-    }, [handleSSEEvent])
+    }, [handleSSEEvent]),
+    selectedSession?.directory
   )
 
   useEffect(() => {

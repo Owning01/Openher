@@ -2131,8 +2131,14 @@ p {
   padding: var(--space-1) 0 var(--space-1) var(--space-5);
   background: transparent;
 }
-.thinking-text {
-  font-size: 0.8rem;
+.thinking-streaming {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--primary);
+}
+
+.thinking-text {  font-size: 0.8rem;
   line-height: 1.5;
   color: var(--muted);
   white-space: pre-wrap;

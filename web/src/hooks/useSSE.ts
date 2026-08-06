@@ -5,7 +5,7 @@ import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
 
-export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void) {
+export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void, directory?: string) {
   const [streamState, setStreamState] = useState<StreamState>("polling")
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -15,6 +15,11 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   const mountedRef = useRef(true)
   const onEventRef = useRef(onEvent)
   onEventRef.current = onEvent
+
+  // El /event del server filtra por instance.directory: sin el directory de la
+  // sesión en el query, descarta todos los eventos (solo pasan heartbeats).
+  const directoryRef = useRef(directory)
+  directoryRef.current = directory
 
   const clearHeartbeat = useCallback(() => {
     if (heartbeatTimerRef.current) {
@@ -36,7 +41,11 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
     const scheme = schemeMatch ? schemeMatch[1] : "http"
     if (schemeMatch) host = host.slice(schemeMatch[0].length)
     if (host.includes(":") && !host.startsWith("[")) host = `[${host}]`
-    const url = `${scheme}://${host}:${config.port}/event`
+    let url = `${scheme}://${host}:${config.port}/event`
+    const dir = directoryRef.current
+    if (dir) {
+      url += `?directory=${encodeURIComponent(dir.replace(/\\/g, "/"))}`
+    }
 
     const headers: Record<string, string> = { Accept: "text/event-stream" }
     if (config.username && config.password) {
@@ -170,7 +179,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
       }
     }
     return () => { mountedRef.current = false }
-  }, [Boolean(config), config?.host, config?.port, config?.username, config?.password, clearHeartbeat, connect])
+  }, [Boolean(config), config?.host, config?.port, config?.username, config?.password, clearHeartbeat, connect, directoryRef.current])
 
   const reconnect = useCallback(() => {
     reconnectAttemptRef.current = 0

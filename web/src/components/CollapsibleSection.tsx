@@ -4,7 +4,7 @@ import { ChevronIcon } from "../Icons"
 type Props = {
   icon: ReactNode
   title: string
-  subtitle?: string
+  subtitle?: ReactNode
   filePath?: string
   defaultOpen?: boolean
   children: ReactNode

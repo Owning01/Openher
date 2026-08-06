@@ -138,13 +138,14 @@ export type MessageEnvelope = {
       duration?: number
       metadata?: Record<string, unknown>
     }
-    time?: { created?: number; completed?: number }
+    time?: { created?: number; completed?: number; start?: number; end?: number }
   }>
 }
 
 export type ThinkingPart = {
   id: string
   text: string
+  time?: { start?: number; end?: number }
 }
 
 type MessageTokens = {

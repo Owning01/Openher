@@ -187,6 +187,7 @@ type TranslationKey =
   | 'detail.refreshModels'
   | 'detail.modelSelectLabel'
   | 'detail.thought'
+  | 'detail.thinking'
   | 'detail.modelSearchPlaceholder'
   | 'detail.modelSearchEmpty'
   | 'detail.modelDefault'
@@ -697,6 +698,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelDefault': 'default',
     'detail.modelRecent': 'Recent',
     'detail.thought': 'Thought',
+  'detail.thinking': 'Thinking…',
     'detail.modelAll': 'All models',
     'detail.modelProvider': 'Provider: {provider}',
     'detail.modelContext': 'Context {context} · output {output}',
@@ -1187,6 +1189,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelDefault': 'defecto',
     'detail.modelRecent': 'Recientes',
     'detail.thought': 'Razonamiento',
+  'detail.thinking': 'Pensando…',
     'detail.modelAll': 'Todos los modelos',
     'detail.modelProvider': 'Proveedor: {provider}',
     'detail.thinkingLevel': 'Nivel de pensamiento',
@@ -1682,6 +1685,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.thinkingMedium': 'Medio',
     'detail.thinkingLow': 'Basso',
     'detail.thought': 'Ragionamento',
+  'detail.thinking': 'Pensando…',
     'detail.modelAll': 'Tutti i modelli',
     'detail.modelProvider': 'Provider: {provider}',
     'detail.modelContext': 'Contesto {context} · output {output}',
@@ -2136,6 +2140,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.thinkingMedium': '中',
     'detail.thinkingLow': '低',
     'detail.thought': '思考',
+  'detail.thinking': '思考中…',
     'detail.modelAll': '所有模型',
     'detail.modelProvider': '提供者：{provider}',
     'detail.modelContext': '上下文 {context} · 輸出 {output}',

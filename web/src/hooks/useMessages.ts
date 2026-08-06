@@ -93,7 +93,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
     for (const message of all) {
       let text = ""
       let hasCompaction = false
-      const thinkingParts: Array<{ id: string; text: string }> = []
+      const thinkingParts: Array<{ id: string; text: string; time?: { start?: number; end?: number } }> = []
       const toolParts: Array<{ id: string; type: string; text?: string; callID?: string; tool?: string; state?: MessageEnvelope["parts"][number]["state"] }> = []
       const textBlocks: string[] = []
       for (const part of message.parts) {
@@ -114,7 +114,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
             textBlocks.push(t)
             if (part.type === "compaction") hasCompaction = true
           } else if (part.type === "reasoning" || part.type === "thinking") {
-            thinkingParts.push({ id: part.id, text: t })
+            thinkingParts.push({ id: part.id, text: t, time: part.time })
           }
         }
       }
@@ -176,7 +176,12 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
         if (m.info.sessionID !== sessionID) continue
         const updated = msgMap.get(m.info.id)
         if (updated) {
-          merged.push(updated)
+          // Merge de parts por id: los parts streamed localmente (tools, etc.)
+          // que el fetch acotado no traiga se conservan — nunca se borran del chat.
+          const remoteIDs = new Set(updated.parts.map((p) => p.id))
+          const extraLocal = m.parts.filter((p) => !remoteIDs.has(p.id))
+          const parts = extraLocal.length > 0 ? [...updated.parts, ...extraLocal] : updated.parts
+          merged.push({ ...updated, parts })
           msgMap.delete(m.info.id)
           if (updated.info.time.completed !== m.info.time.completed) changed = true
         } else {
@@ -334,14 +339,14 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
 
   // Materializa un part emitido por `message.part.updated`: crea el mensaje/part
   // con el tipo correcto antes de que lleguen los deltas.
-  const applyPart = useCallback((sessionID: string, messageID: string, part: { id: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown }) => {
+  const applyPart = useCallback((sessionID: string, messageID: string, part: { id: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }) => {
     if (!part.id) return
     setMessages((prev) => {
       const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
       if (!existing) {
         return [...prev, {
           info: { id: messageID, role: "assistant", sessionID, time: { created: Date.now() } },
-          parts: [{ id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}) }]
+          parts: [{ id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}), ...(part.time ? { time: part.time } : {}) }]
         }]
       }
       let changed = false
@@ -350,7 +355,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
         const hasPart = m.parts.some((p) => p.id === part.id)
         if (!hasPart) {
           changed = true
-          return { ...m, parts: [...m.parts, { id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}) }] }
+          return { ...m, parts: [...m.parts, { id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}), ...(part.time ? { time: part.time } : {}) }] }
         }
         const nextParts = m.parts.map((p) => {
           if (p.id !== part.id) return p
@@ -360,8 +365,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
           const newState = part.state && typeof part.state === "object" ? part.state : undefined
           const stateChanged = newState !== undefined && JSON.stringify(p.state ?? null) !== JSON.stringify(newState)
           const toolChanged = part.tool !== undefined && part.tool !== p.tool
-          if (!incoming && p.text && !stateChanged && !toolChanged) return p
-          if (p.text === incoming && (part.type ?? p.type) === p.type && !stateChanged && !toolChanged) return p
+          // El time (start/end) también cambia sin tocar texto: p.ej. el
+          // reasoning final llega con time.end aunque el texto ya esté completo.
+          const timeChanged = part.time !== undefined && JSON.stringify(p.time ?? null) !== JSON.stringify(part.time)
+          if (!incoming && p.text && !stateChanged && !toolChanged && !timeChanged) return p
+          if (p.text === incoming && (part.type ?? p.type) === p.type && !stateChanged && !toolChanged && !timeChanged) return p
           changed = true
           return {
             ...p,
@@ -370,6 +378,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode) {
             ...(part.tool ? { tool: part.tool } : {}),
             ...(part.callID ? { callID: part.callID } : {}),
             ...(newState !== undefined ? { state: newState } : {}),
+            ...(part.time ? { time: part.time } : {}),
           }
         })
         return { ...m, parts: nextParts }
