@@ -2969,7 +2969,7 @@ p {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  background: #000;
+  background: var(--surface);
 
   overflow-y: auto;
   overflow-x: hidden;
@@ -2992,6 +2992,11 @@ p {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Fondo negro del chat solo en modo oscuro (el light usa --surface) */
+:root[data-theme="dark"] .messages {
+  background: #000;
 }
 
 .scroll-to-bottom {
