@@ -3,6 +3,7 @@ import { StarIcon, ChatIcon, CloseIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { formatTime } from "../utils"
 import type { SessionView } from "../types"
+import { GridSpinner } from "./GridSpinner"
 
 // Card compartida de los accesos rápidos (favoritos/activos/recientes).
 // Sin fondo de estado: el pill muestra busy/retry cuando corresponde, y la
@@ -19,7 +20,13 @@ export const QuickAccessCard = memo(function QuickAccessCard({
 }) {
   const t = useT()
   return (
-    <div className="quick-access-card" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+    <div className="quick-access-card" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onOpen(session.id, session.directory)
+        }
+      }}>
       {children}
       <button className="quick-access-star"
         onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}
@@ -31,7 +38,7 @@ export const QuickAccessCard = memo(function QuickAccessCard({
       <span className="quick-access-title">{session.title}</span>
       <span className="quick-access-time">{formatTime(session.updated)}</span>
       {session.status === "busy" && (
-        <span className="pixel-spinner" role="status" aria-label={t('session.statusBusy')} title={t('session.statusBusy')} />
+        <GridSpinner label={t('session.statusBusy')} title={t('session.statusBusy')} />
       )}
       {session.status === "retry" && <span className="pill retry">{t('session.statusRetry')}</span>}
       {onDismiss && (

@@ -18,7 +18,7 @@ import { PermissionPrompt } from "./PermissionPrompt"
 import { api } from "../api"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { formatCompact, formatCost } from "../utils"
-import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, StreamState, Question, PermissionRequest } from "../types"
+import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, Question, PermissionRequest } from "../types"
 
 export type ChatViewProps = {
   selectedSession: SessionView | null
@@ -35,7 +35,6 @@ export type ChatViewProps = {
   dataMode: DataMode
   renamingSessionID: string | null
   renameValue: string
-  showModelChip: boolean
   commands: CommandInfo[]
   activeAgent: AgentOption | null
   activeAgentID: string
@@ -80,7 +79,6 @@ export type ChatViewProps = {
   onSetFlag: <K extends keyof FeatureFlags>(key: K, value: FeatureFlags[K]) => void
   diffFiles: DiffFile[]
   projectDashboard: ProjectDashboard | null
-  streamState?: StreamState
   pendingQuestions?: Question[]
   permissionRequest?: PermissionRequest | null
   onQuestionReply?: (requestID: string, answers: string[][]) => void
@@ -110,7 +108,7 @@ export const ChatView = memo(function ChatView({
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, activeSessions, onOpenSession, onOpenSettings, onShellSend, onThemeCommand,
   flags, onToggleFlag: _onToggleFlag, onSetFlag, diffFiles, projectDashboard,
-  streamState, pendingQuestions, permissionRequest,
+  pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
   onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser,
   todos, todosExpanded, onTodosToggle, showTodoButton,
@@ -252,15 +250,12 @@ export const ChatView = memo(function ChatView({
               <button className="btn-icon btn-ghost back-btn" onClick={onBackToSessions} aria-label={t('detail.backToSessions')} title={t('detail.backToSessions')}>
                 <ArrowLeftIcon size={20} />
               </button>
-              <img src="./img/apple-touch-icon-180x180.jpg" alt="OpenCode" className="app-icon header-logo" style={{ width: 22, height: 22, borderRadius: 4, objectFit: "cover" }} />
-              {renamingSessionID === selectedSession.id ? (
+              {renamingSessionID === selectedSession.id && (
                 <InlineRename value={renameValue} original={selectedSession.title}
                   onChange={onRenameChange}
                   onConfirm={() => onRenameConfirm(selectedSession.id, renameValue, selectedSession.directory)}
                   onCancel={onRenameCancel}
                   placeholder={t('session.renamePlaceholder')} />
-              ) : (
-                <span className="detail-title-text">{selectedSession.title}</span>
               )}
             </div>
           ) : (
@@ -270,22 +265,21 @@ export const ChatView = memo(function ChatView({
         {selectedSession && (
           <div className="detail-header-actions">
             {pendingCount > 0 && <span className="pending-badge" title={t('session.pendingCount', { count: pendingCount })}>{pendingCount}</span>}
-            {queuedPrompts && queuedPrompts.length > 0 && (
-              <button className="queued-badge" onClick={() => setShowQueued(true)} title={t('detail.queuedTitle')}>
-                {queuedPrompts.length} {t('detail.queuedBadge')}
-              </button>
-            )}
-              {streamState && streamState !== "polling" && (
-                <span className={`stream-indicator ${streamState}`} title={streamState === "streaming" ? t('session.realtime') : t('session.reconnecting')}>
-                  <span className="stream-dot" />
-                </span>
+              {queuedPrompts && queuedPrompts.length > 0 && (
+                <button className="queued-badge" onClick={() => setShowQueued(true)} title={t('detail.queuedTitle')}>
+                  {queuedPrompts.length} {t('detail.queuedBadge')}
+                </button>
               )}
-            {onOpenSettings && (
+            {activeModelOption && (
               <button
-                className="btn-icon compact"
-                onClick={onOpenSettings}
-                title={t('nav.settings') || "Settings"}>
-                <SettingsIcon size={16} />
+                type="button"
+                className="header-model-toggle"
+                onClick={() => onSheetOpen("ai")}
+                title={`${activeModelOption.modelName ?? t('detail.modelLoading')}${activeModelOption.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}>
+                <span className="header-model-name">
+                  {activeModelOption.modelName ?? t('detail.modelLoading')}
+                  {activeModelOption.variant ? <span className="header-model-variant"> · {activeModelOption.variant}</span> : ""}
+                </span>
               </button>
             )}
             <div className="overflow-wrap header-overflow" ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
@@ -295,7 +289,7 @@ export const ChatView = memo(function ChatView({
                   setShowOverflow((v) => !v)
                 }}
                 title={t('session.more')}
-                aria-pressed={showOverflow}>
+                aria-expanded={showOverflow}>
                 <MenuDotsIcon size={14} />
               </button>
               {showOverflow && (
@@ -320,6 +314,11 @@ export const ChatView = memo(function ChatView({
                   {renamingSessionID !== selectedSession.id && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onStartRename(selectedSession) }}>
                       <PencilIcon size={14} /> {t('session.rename')}
+                    </button>
+                  )}
+                  {onOpenSettings && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenSettings() }}>
+                      <SettingsIcon size={14} /> {t('nav.settings')}
                     </button>
                   )}
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSearch((v) => !v) }}>
@@ -532,8 +531,6 @@ export const ChatView = memo(function ChatView({
           activeAgentID={activeAgentID}
           primaryAgentOptions={primaryAgentOptions}
           onChangeAgent={onChangeAgent}
-          activeModelOption={activeModelOption}
-          onSheetOpen={onSheetOpen}
           contextLabel={contextDisplay?.label || null}
           onShellSend={onShellSend}
           config={config}

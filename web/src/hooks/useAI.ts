@@ -123,8 +123,6 @@ export function useAI(config: ServerConfig) {
     return { recentModels, allGroups }
   }, [filteredModelOptions, recentModels])
 
-  const showModelChip = modelOptions.length > 1 || Boolean(activeModelOption) || primaryAgentOptions.length > 0
-
   const loadAgents = useCallback(async (directory?: string) => {
     if (!config.host || config.port <= 0) return
     try {
@@ -216,6 +214,6 @@ export function useAI(config: ServerConfig) {
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
     groupedModelOptions, variantGroups, recentModels,
     selectedVariant, changeVariant,
-    showModelChip, loadAgents, loadModels, changeModel, changeAgent
+    loadAgents, loadModels, changeModel, changeAgent
   }
 }

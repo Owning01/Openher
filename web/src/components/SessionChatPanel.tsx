@@ -267,7 +267,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     loadingSessionID: null,
     selectedID: session.id,
     messageScrollSignature: msgs.messageScrollSignature,
-    streamState,
     compacting: msgs.compacting,
     pendingQuestions,
     permissionRequest,

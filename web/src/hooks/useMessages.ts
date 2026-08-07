@@ -183,7 +183,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           const parts = extraLocal.length > 0 ? [...updated.parts, ...extraLocal] : updated.parts
           merged.push({ ...updated, parts })
           msgMap.delete(m.info.id)
-          if (updated.info.time.completed !== m.info.time.completed) changed = true
+          if (updated.info.time.completed !== m.info.time.completed || updated.info.role !== m.info.role) changed = true
         } else {
           merged.push(m)
         }
@@ -211,10 +211,15 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [])
 
   // Sincroniza los ids optimistas en un ref para poder consultarlos desde
-  // callbacks asíncronos (confirmación del envío).
+  // callbacks asíncronos (confirmación del envío). El texto del ÚLTIMO optimista
+  // permite reconocer el echo del user message en el SSE (que llega con role
+  // "assistant") sin arriesgar falsos positivos con respuestas del modelo.
   const optimisticIDsRef = useRef<Set<string>>(new Set())
+  const latestOptimisticTextRef = useRef("")
   useEffect(() => {
     optimisticIDsRef.current = new Set(optimisticUserMessages.map((m) => m.info.id))
+    const last = optimisticUserMessages[optimisticUserMessages.length - 1]
+    latestOptimisticTextRef.current = last ? extractText(last).trim() : ""
   }, [optimisticUserMessages])
 
   const abortSession = useCallback(async (sessionID: string, directory: string) => {
@@ -310,10 +315,16 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     setMessages((prev) => {
       const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
       if (!existing) {
+        // El SSE etiqueta todo como "assistant"; si el texto coincide con el
+        // último optimista pendiente es el user message confirmado: con role
+        // "user" el bubble conserva su borde/fondo.
+        const isUserText = partType === "text" && replace && latestOptimisticTextRef.current
+          ? text.trim() === latestOptimisticTextRef.current
+          : false
         return [...prev, {
           info: {
             id: messageID,
-            role: "assistant",
+            role: isUserText ? "user" : "assistant",
             sessionID,
             time: { created: Date.now() },
           },
@@ -354,8 +365,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     setMessages((prev) => {
       const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
       if (!existing) {
+        const isUserText = part.type === "text" && part.text && latestOptimisticTextRef.current
+          ? part.text.trim() === latestOptimisticTextRef.current
+          : false
         return [...prev, {
-          info: { id: messageID, role: "assistant", sessionID, time: { created: Date.now() } },
+          info: { id: messageID, role: isUserText ? "user" : "assistant", sessionID, time: { created: Date.now() } },
           parts: [{ id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}), ...(part.time ? { time: part.time } : {}) }]
         }]
       }

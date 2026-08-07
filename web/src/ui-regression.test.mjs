@@ -105,22 +105,31 @@ assert.ok(sessionList.includes('IntersectionObserver'), 'recent lazy loading sho
 assert.ok(sessionList.includes('setRecentLimit((n) => Math.min(n + 10'), 'recent lazy loading should add 10 sessions per batch')
 assert.ok(sessionList.includes('recentFiltered.slice(0, recentLimit)'), 'recent list should render up to the current lazy limit')
 
-// Spinner pixel-art en vez de la pill "Ocupado" para sesiones corriendo
+// Spinner de 9 cuadrados en vez de la pill "Ocupado" para sesiones corriendo
 const quickAccess = readFileSync(new URL('./components/QuickAccessCard.tsx', import.meta.url), 'utf8')
-assert.ok(quickAccess.includes('pixel-spinner'), 'busy sessions should render a pixel-art spinner')
+assert.ok(quickAccess.includes('GridSpinner'), 'busy sessions should render the 9-square spinner')
 assert.ok(!quickAccess.includes('pill ${session.status}'), 'busy/retry should not share a single pill class')
-assert.ok(styles.includes('.pixel-spinner') && styles.includes('steps(4)'), 'pixel spinner should rotate in 90° steps (8-bit)')
-assert.ok(styles.includes('conic-gradient'), 'pixel spinner should use a conic-gradient quadrant')
+const gridSpinner = readFileSync(new URL('./components/GridSpinner.tsx', import.meta.url), 'utf8')
+assert.ok(gridSpinner.includes('Array.from({ length: 9 })'), 'grid spinner should render 9 squares')
+assert.ok(/\.gs-4\s*\{[^}]*animation:\s*none/.test(styles), 'center square of the grid spinner must stay fixed')
+assert.ok(/\.gs-1\s*\{[^}]*animation-delay:\s*0\.15s/.test(styles) && /\.gs-6\s*\{[^}]*animation-delay:\s*0\.9s/.test(styles), 'edge squares should pulse in sequence')
+assert.ok(/@keyframes gs-pulse[\s\S]*?0%, 100% \{ opacity: 1; \}[\s\S]*?12%, 40% \{ opacity: 0\.15; \}/.test(styles), 'gs-pulse should keep the traveling dot bright and dim the rest of the ring')
+assert.ok(!styles.includes('pixel-spinner') && !styles.includes('.composer-cost') && !styles.includes('.stream-dot'), 'removed spinners and chat cost label should not reappear')
+assert.ok(!styles.includes('image-rendering: pixelated'), 'pixelated image rendering on the spinner should not reappear')
+assert.ok(msgList.includes('GridSpinner'), 'session loading state should show the grid spinner')
+assert.ok(msgList.includes('aria-hidden="true"'), 'loading text should not duplicate the spinner live region')
 
 // Mensaje optimista: confirmación por reintento + orden estable por time.created
 assert.ok(useMessages.includes('optimisticIDsRef'), 'send flow should track optimistic ids in a ref for async confirmation')
+assert.ok(useMessages.includes('latestOptimisticTextRef'), 'send flow should track the latest optimistic text to recognize the SSE echo')
+assert.ok(useMessages.includes('part.type === "text"'), 'SSE echo must be a text part to be matched as a user message')
 assert.ok(useMessages.includes('deadline = Date.now() + 10000'), 'optimistic confirmation should retry loadSelected with a deadline')
 assert.ok(useMessages.includes('merged.sort((a, b) => (a.info.time.created'), 'message merge should sort by time.created so confirmed user messages land in position')
 
-// Touch: hit targets de 44px en pantallas táctiles (WCAG 2.5.8)
+// Touch: hit targets táctiles (WCAG 2.5.8); excepción: composer compacto (36px) por pedido
 assert.ok(styles.includes('@media (pointer: coarse), (max-width: 780px)'), 'touch targets should scale up on coarse pointers')
 assert.ok(/@media \(pointer: coarse\), \(max-width: 780px\)[\s\S]*?min-width: 44px[\s\S]*?min-height: 44px/.test(styles), 'btn-icon should be at least 44px on touch')
-assert.ok(styles.includes('.composer-bar-btn') && styles.includes('min-height: 44px'), 'composer send/stop buttons should be 44px on touch')
+assert.ok(/\.composer-bar-btn\s*\{[^}]*min-height:\s*36px/.test(styles), 'composer send/stop buttons stay compact (36px) by explicit request')
 
 // A11y: labels localizados en composer y nav
 assert.ok(composer.includes("aria-label={t('composer.inputLabel')}"), 'composer textarea should have a localized aria-label')

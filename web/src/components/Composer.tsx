@@ -1,9 +1,9 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
-import { SendIcon, StopCircleIcon, SettingsIcon, MicIcon, CloseIcon, AttachmentIcon, LayersIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, LayersIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
-import type { AgentOption, ModelOption, CommandInfo, ServerConfig } from "../types"
+import type { AgentOption, CommandInfo, ServerConfig } from "../types"
 
 type ImageAttachment = { id: string; base64: string; mime: string; name: string }
 
@@ -36,8 +36,6 @@ type ComposerProps = {
   activeAgentID: string
   primaryAgentOptions: AgentOption[]
   onChangeAgent: (id: string) => void
-  activeModelOption: ModelOption | null
-  onSheetOpen: (sheet: "ai" | "details") => void
   contextLabel?: string | null
   config?: ServerConfig
   directory?: string
@@ -57,10 +55,9 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "theme", description: "Open theme picker", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, activeModelOption, onSheetOpen, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
-  const slashItemsRef = useRef<HTMLDivElement | null>(null)
   const [showAtMenu, setShowAtMenu] = useState(false)
   const [atQuery, setAtQuery] = useState("")
   const [atIndex, setAtIndex] = useState(0)
@@ -68,7 +65,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const promptHistoryRef = useRef<string[]>(loadHistory())
   const historyIndexRef = useRef(-1)
   const [historyDraft, setHistoryDraft] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   const visibleAgents = useMemo(
     () => primaryAgentOptions.filter((a) => !a.hidden),
@@ -99,7 +95,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
 
       const mcpFetch = config ? api.listMCPResources(config).then((resources) =>
-        resources.filter((r) => !atQuery || r.name.toLowerCase().includes(atQuery))
+        resources.filter((r) => !atQuery || r.name.toLowerCase().includes(q))
           .map((r) => ({ id: r.id, name: r.name, description: r.description, source: "mcp" as const }))
       ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
 
@@ -252,7 +248,10 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       const files = input.files; if (!files) return
       for (const f of Array.from(files)) {
         const reader = new FileReader()
-        reader.onload = () => addImage(reader.result as string, f.type || "application/octet-stream", f.name)
+        reader.onload = () => {
+          const result = reader.result
+          if (typeof result === "string") addImage(result, f.type || "application/octet-stream", f.name)
+        }
         reader.readAsDataURL(f)
       }
     }
@@ -339,7 +338,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   return (
     <div className={`composer${isCommandValid ? " composer-command-mode" : ""}${isShellMode ? " composer-shell-mode" : ""}`} ref={composerRef} style={{ borderColor: `var(--agent-${agentColorIdx})` } as React.CSSProperties}>
       {showSlashMenu && slashFiltered.length > 0 && (
-        <div className="slash-menu" ref={slashItemsRef}>
+        <div className="slash-menu">
           {slashFiltered.map((cmd, i) => (
             <div
               key={cmd.name}
@@ -411,7 +410,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           <AttachmentIcon size={18} />
         </button>
         <textarea
-          ref={textareaRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={shellPlaceholder}
@@ -434,22 +432,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
-          {primaryAgentOptions.filter((a) => !a.hidden).length > 1 && (
+          {visibleAgents.length > 1 && (
             <button onClick={handleToggleAgent} disabled={disabled}
               className="agent-toggle"
-              style={{ borderColor: `var(--agent-${agentColorIdx})`, color: `var(--agent-${agentColorIdx})` } as React.CSSProperties}
-              aria-pressed={activeAgentID === primaryAgentOptions.filter((a) => !a.hidden)[0]?.id}>
-              <span>{primaryAgentOptions.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
+              style={{ borderColor: `var(--agent-${agentColorIdx})`, color: `var(--agent-${agentColorIdx})` } as React.CSSProperties}>
+              <span>{visibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
             </button>
           )}
-          <button onClick={() => onSheetOpen("ai")} className="model-toggle"
-            title={`${activeModelOption?.modelName ?? t('detail.modelLoading')}${activeModelOption?.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}>
-            <SettingsIcon size={10} />
-            <span className="model-toggle-name">
-              {activeModelOption?.modelName ?? t('detail.modelLoading')}
-              {activeModelOption?.variant ? <span className="model-toggle-variant"> · {activeModelOption.variant}</span> : ""}
-            </span>
-          </button>
           {contextLabel && <span className="context-usage-label">{contextLabel}</span>}
         </div>
         <div className="composer-bar-right">

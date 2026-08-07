@@ -139,7 +139,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const { agentOptions, modelOptions, modelLoadError,
     modelQuery, setModelQuery, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel,
-    variantGroups, selectedModelKey, selectedVariant, showModelChip, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
+    variantGroups, selectedModelKey, selectedVariant, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
   const blockedModels = useBlockedModels(modelOptions)
   const { flags, toggleFlag, setFlag } = useFeatureFlags()
 
@@ -1182,7 +1182,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     messageScrollSignature, view,
     dataMode,
     renamingSessionID, renameValue,
-    showModelChip,
     commands,
     activeAgent, activeAgentID,
     activeModelOption,
@@ -1250,7 +1249,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }), [
     selectedSession, localRevertID, renderedMessages, todos, todosExpanded, composer,
     isWorking, showTypingBubble, loadingSessionID, selectedID, messageScrollSignature,
-    view, dataMode, renamingSessionID, renameValue, showModelChip, commands,
+    view, dataMode, renamingSessionID, renameValue, commands,
     activeAgent, activeAgentID, activeModelOption, primaryAgentOptions, changeAgent,
     projectName, startRename, setRenameValue, renameSession, cancelRename, setComposer,
     handleSend, handleAbort, setTodosExpanded, goBack, setActiveDetailSheet,

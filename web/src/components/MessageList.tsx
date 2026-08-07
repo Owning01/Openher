@@ -1,8 +1,9 @@
 import { memo, useRef, useEffect, useState, Fragment, useMemo } from "react"
-import { LoadingIcon, ChatIcon, ScrollDownIcon, CompressIcon } from "../Icons"
+import { ChatIcon, ScrollDownIcon, CompressIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
 import { MessageBubble } from "./MessageBubble"
+import { GridSpinner } from "./GridSpinner"
 
 type MessageListProps = {
   messages: RenderedMessage[]
@@ -133,8 +134,8 @@ export const MessageList = memo(function MessageList({
       <div className="messages" ref={messagesRef}>
         {loadingSessionID === selectedID ? (
           <div className="empty-state compact">
-            <LoadingIcon size={32} />
-            <p>{t('detail.loading')}</p>
+            <GridSpinner label={t('detail.loading')} />
+            <p aria-hidden="true">{t('detail.loading')}</p>
           </div>
         ) : messages.length === 0 && !showTypingBubble ? (
           <div className="empty-state compact">

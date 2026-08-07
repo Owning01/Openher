@@ -193,10 +193,12 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
           <FileDiffs diffs={message.summaryDiffs} />
         )}
 
-        {isAssistant && showModelInfo && (
+        {isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || activeVariant || duration || message.info.finish === "aborted") && (
           <div className="message-footer">
             <span className="msg-agent-dot" style={{ color: `var(--agent-${agentIdx})` }}>▣</span>
-            <span className="msg-footer-mode">{message.turnMode ?? message.info.mode ?? "chat"}</span>
+            {(message.turnMode || message.info.mode) && (
+              <span className="msg-footer-mode">{message.turnMode || message.info.mode}</span>
+            )}
             {message.info.modelID && <span className="msg-footer-model"> · {message.info.modelID}</span>}
             {activeVariant && <span className="msg-footer-variant"> · {activeVariant}</span>}
             {duration && <span className="msg-footer-duration"> · {duration}</span>}

@@ -2291,33 +2291,46 @@ p {
   white-space: nowrap;
 }
 
-.pill.busy,
 .pill.retry {
   color: var(--warning);
   background: var(--warning-soft);
 }
 
-/* Spinner pixel-art (8-bit): cuadrante naranja que rota en saltos de 90° */
-.pixel-spinner {
+/* Spinner de 9 cuadrados (3×3): recorre los 8 del borde, el centro fijo */
+.grid-spinner {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  border: 1px solid var(--warning);
-  background: conic-gradient(
-    from 0deg,
-    var(--warning) 0 25%,
-    transparent 25% 50%,
-    var(--warning) 50% 75%,
-    transparent 75% 100%
-  );
-  image-rendering: pixelated;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
-  animation: pixel-spin 0.9s steps(4) infinite;
+  display: grid;
+  grid-template-columns: repeat(3, 6px);
+  grid-template-rows: repeat(3, 6px);
+  gap: 2px;
+  width: 22px;
+  height: 22px;
 }
 
-@keyframes pixel-spin {
-  to { transform: rotate(360deg); }
+.gs {
+  background: var(--warning);
+  opacity: 0.15;
+  animation: gs-pulse 1.2s steps(1) infinite;
 }
+
+.gs-4 {
+  animation: none;
+  opacity: 0.12;
+}
+
+@keyframes gs-pulse {
+  0%, 100% { opacity: 1; }
+  12%, 40% { opacity: 0.15; }
+}
+
+.gs-0 { animation-delay: 0s; }
+.gs-1 { animation-delay: 0.15s; }
+.gs-2 { animation-delay: 0.3s; }
+.gs-5 { animation-delay: 0.45s; }
+.gs-8 { animation-delay: 0.6s; }
+.gs-7 { animation-delay: 0.75s; }
+.gs-6 { animation-delay: 0.9s; }
+.gs-3 { animation-delay: 1.05s; }
 
 
 /* ===== Detail View Layout ===== */
@@ -2390,16 +2403,6 @@ p {
   max-width: 100%;
   overflow: hidden;
   flex-wrap: nowrap;
-}
-
-.detail-title-text {
-  font-size: 0.88rem;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  max-width: 100%;
 }
 
 .detail-header-actions {
@@ -3055,6 +3058,8 @@ p {
 }
 .message-footer .msg-footer-duration,
 .message-footer .msg-footer-model,
+.message-footer .msg-footer-mode,
+.message-footer .msg-footer-variant,
 .message header small {
   display: var(--chat-time-vis, inline);
 }
@@ -4511,8 +4516,8 @@ p {
 }
 
 
-/* ===== Mic Toggle & Model Toggle ===== */
-.model-toggle {
+/* ===== Model Toggle (header del chat) ===== */
+.header-model-toggle {
   min-height: 26px;
   display: inline-flex;
   align-items: center;
@@ -4530,22 +4535,24 @@ p {
   flex-shrink: 0;
 }
 
-.model-toggle:hover {
+.header-model-toggle:hover {
   border-color: var(--primary);
   color: var(--primary);
 }
 
-.model-toggle-name {
+.header-model-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100px;
+  max-width: 110px;
 }
-.model-toggle-variant {
+
+.header-model-variant {
   opacity: 0.6;
   font-weight: 400;
   font-size: 0.65rem;
 }
+
 
 
 
@@ -5676,8 +5683,10 @@ button.compact {
   padding: 0.25rem;
 }
 
-/* Touch: hit targets de 44px en pantallas táctiles (WCAG 2.5.8).
-   Desktop (mouse) conserva la densidad de 24px. */
+/* Touch: hit targets táctiles en pantallas touch (WCAG 2.5.8).
+   Desktop (mouse) conserva la densidad de 24px.
+   Excepción intencional: model/agent toggle y composer-bar-btn (build/enviar)
+   quedan en 36px por pedido explícito de layout compacto. */
 @media (pointer: coarse), (max-width: 780px) {
   .btn-icon,
   .btn-icon.compact {
@@ -5703,14 +5712,14 @@ button.compact {
     min-height: 44px;
   }
 
-  .model-toggle,
+  .header-model-toggle,
   .agent-toggle {
-    min-height: 44px;
+    min-height: 36px;
   }
 
   .composer-bar-btn {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: 40px;
+    min-height: 36px;
   }
 
   .session-toolbar-wrap .btn-primary {
@@ -6194,29 +6203,6 @@ button.compact {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-}
-
-/* ===== Streaming indicator ===== */
-.stream-indicator {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-}
-.stream-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #22c55e;
-  animation: stream-pulse 2s ease-in-out infinite;
-}
-.stream-indicator.reconnecting .stream-dot {
-  background: #f59e0b;
-  animation: stream-pulse 0.8s ease-in-out infinite;
-}
-@keyframes stream-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
 }
 
 /* ===== Question Prompt Modal (auto) ===== */
