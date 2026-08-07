@@ -1,4 +1,4 @@
-import type { ModelSelection } from "../types"
+import type { ModelOption, ModelSelection } from "../types"
 
 export function modelKey(m: ModelSelection | { providerID: string; modelID: string }): string {
   return `${m.providerID}:${m.modelID}`
@@ -13,4 +13,25 @@ export function modelFromKey(key: string): { providerID: string; modelID: string
 export function sameModel(a?: ModelSelection | null, b?: ModelSelection | null): boolean {
   if (!a || !b) return false
   return a.providerID === b.providerID && a.modelID === b.modelID
+}
+
+export type VariantGroup = { base: ModelOption; variants: ModelOption[] }
+
+// Variantes de un modelo: SOLO las que el server reporta (model.variants),
+// filtradas desde una lista de ModelOption. Fuente única usada por el menú
+// del chat, el model sheet y las preferencias (DRY).
+export function variantsOf(models: ModelOption[], base: ModelOption | ModelSelection | null | undefined): ModelOption[] {
+  if (!base) return []
+  return models.filter((m) => sameModel(m, base) && m.variant)
+}
+
+// Agrupa modelos por provider:modelID, con el base (sin variant) y sus variantes.
+export function groupModels(models: ModelOption[]): Map<string, VariantGroup> {
+  const groups = new Map<string, VariantGroup>()
+  for (const opt of models) {
+    const key = modelKey(opt)
+    if (!groups.has(key)) groups.set(key, { base: opt, variants: [] })
+    if (opt.variant) groups.get(key)!.variants.push(opt)
+  }
+  return groups
 }

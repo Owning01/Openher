@@ -1,7 +1,7 @@
 import { memo, useRef, useMemo, useState } from "react"
 import { useT } from "../i18n-context"
 import { useFocusTrap } from "../hooks/useFocusTrap"
-import { modelKey, sameModel } from "../utils/model-utils"
+import { modelKey, sameModel, groupModels } from "../utils/model-utils"
 import { ThinkingLevels } from "./ThinkingLevels"
 import type { ModelOption, ServerConfig } from "../types"
 import type { VariantGroup } from "../hooks/useAI"
@@ -88,12 +88,7 @@ function renderGroupedModels(
   t: ReturnType<typeof useT>,
   providerID: string
 ) {
-  const groups = new Map<string, VariantGroup>()
-  for (const opt of options) {
-    const k = mk(opt)
-    if (!groups.has(k)) groups.set(k, { base: opt, variants: [] })
-    if (opt.variant) groups.get(k)!.variants.push(opt)
-  }
+  const groups = groupModels(options)
 
   if (providerID !== "opencode") {
     return Array.from(groups.values()).map((g) => {

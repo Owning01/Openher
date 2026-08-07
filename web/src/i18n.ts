@@ -235,6 +235,8 @@ type TranslationKey =
   | 'detail.thinkingHigh'
   | 'detail.thinkingMedium'
   | 'detail.thinkingLow'
+  | 'detail.changeModel'
+  | 'detail.noThinkingLevels'
   | 'detail.modelLoading'
   | 'detail.modelLoadError'
   | 'detail.contextStripLabel'
@@ -772,6 +774,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.thinkingHigh': 'High',
     'detail.thinkingMedium': 'Medium',
     'detail.thinkingLow': 'Low',
+    'detail.changeModel': 'Change model…',
+    'detail.noThinkingLevels': 'No thinking levels for this model',
     'detail.modelLoading': 'Loading configured models...',
     'detail.modelLoadError': 'Cannot load models: {message}',
     'detail.contextStripLabel': 'Session context shortcuts',
@@ -1290,6 +1294,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.thinkingHigh': 'Alto',
     'detail.thinkingMedium': 'Medio',
     'detail.thinkingLow': 'Bajo',
+    'detail.changeModel': 'Cambiar modelo…',
+    'detail.noThinkingLevels': 'Este modelo no tiene niveles de pensamiento',
     'detail.modelContext': 'Contexto {context} · salida {output}',
     'detail.modelToolsYes': 'Herramientas activadas',
     'detail.modelToolsNo': 'Sin herramientas',
@@ -1808,6 +1814,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.thinkingHigh': 'Alto',
     'detail.thinkingMedium': 'Medio',
     'detail.thinkingLow': 'Basso',
+    'detail.changeModel': 'Cambia modello…',
+    'detail.noThinkingLevels': 'Nessun livello di ragionamento per questo modello',
     'detail.thought': 'Ragionamento',
   'detail.thinking': 'Pensando…',
     'detail.modelAll': 'Tutti i modelli',
@@ -2294,6 +2302,8 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.thinkingHigh': '高',
     'detail.thinkingMedium': '中',
     'detail.thinkingLow': '低',
+    'detail.changeModel': '更換模型…',
+    'detail.noThinkingLevels': '此模型沒有思考等級',
     'detail.thought': '思考',
   'detail.thinking': '思考中…',
     'detail.modelAll': '所有模型',

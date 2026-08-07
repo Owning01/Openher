@@ -9,6 +9,7 @@ const sessionCard = readFileSync(new URL('./components/SessionCard.tsx', import.
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
 const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
 const useMessages = readFileSync(new URL('./hooks/useMessages.ts', import.meta.url), 'utf8')
+const useAI = readFileSync(new URL('./hooks/useAI.ts', import.meta.url), 'utf8')
 const useSessions = readFileSync(new URL('./hooks/useSessions.ts', import.meta.url), 'utf8')
 const useConfig = readFileSync(new URL('./hooks/useConfig.ts', import.meta.url), 'utf8')
 const icons = readFileSync(new URL('./Icons.tsx', import.meta.url), 'utf8')
@@ -72,6 +73,10 @@ const folderPicker = readFileSync(new URL('./components/FolderPicker.tsx', impor
 const folderPickerHook = readFileSync(new URL('./hooks/useFolderPicker.ts', import.meta.url), 'utf8')
 assert.ok(folderPicker.includes("t('sessions.newSessionTitle')"), 'folder picker should be localized')
 assert.ok(folderPickerHook.includes('CURSOR_STORAGE_KEY'), 'last new-session folder should persist separately from connection settings')
+assert.ok(folderPickerHook.includes('export function dirParent'), 'folder picker should navigate absolute paths up through drive roots')
+assert.ok(folderPickerHook.includes('api.loadPath(config)'), 'folder picker should start from the server directory when nothing is saved')
+assert.ok(folderPickerHook.includes('api.listFiles(config, "", dir || undefined)'), 'folder picker should list the root of any absolute directory via ?directory=')
+assert.ok(folderPicker.includes('onBrowse(item.absolute)'), 'folder picker should jump into folders by their absolute path')
 assert.ok(app.includes('api.createSession(config, "Mobile session", activeModel, directory)') || useSessions.includes('api.createSession(config, "Mobile session"'), 'new sessions should pass only the picked directory to OpenCode')
 assert.ok(app.includes('isProjectDirectory(pathInfo)') || useSessions.includes('isProjectDirectory(pathInfo)'), 'new session creation should reject folders that OpenCode resolves to the global project')
 assert.ok(useSessions.includes('.some((s) => s.id === created.id)'), 'newly created sessions should be inserted before any refresh')
@@ -139,5 +144,21 @@ assert.ok(navBar.includes("t('nav.lightMode')") && navBar.includes("t('nav.darkM
 
 // Memo de props del chat: sin objetos literales por render
 assert.ok(app.includes('const baseChatProps: ChatViewProps = useMemo'), 'chat props should be memoized to avoid cascading re-renders')
+
+// Menú de niveles de pensamiento en el toggle del modelo del header
+const chatView = readFileSync(new URL('./components/ChatView.tsx', import.meta.url), 'utf8')
+const modelUtils = readFileSync(new URL('./utils/model-utils.ts', import.meta.url), 'utf8')
+assert.ok(chatView.includes('ThinkingLevels'), 'model toggle should open a menu with thinking levels')
+assert.ok(chatView.includes('onChangeVariant'), 'model toggle menu should switch the thinking level directly')
+assert.ok(chatView.includes("t('detail.changeModel')"), 'model toggle menu should offer changing the model')
+assert.ok(useAI.includes('activeModelVariants'), 'active model variants should come from useAI')
+assert.ok(useAI.includes('variantsOf(modelOptions, activeModelOption)'), 'active model variants must be computed over the full model list (recent models included)')
+assert.ok(!app.includes('variantGroups.groups.get(modelKey(activeModelOption))'), 'active model variants must not come from variantGroups (excludes recent models)')
+assert.ok(modelUtils.includes('export function variantsOf') && modelUtils.includes('export function groupModels'), 'model variants should be computed by shared helpers (DRY)')
+const settingsPanel = readFileSync(new URL('./components/SettingsPanel.tsx', import.meta.url), 'utf8')
+assert.ok(settingsPanel.includes('variantsOf(modelOptions, selected)'), 'settings should reuse the shared variants helper')
+const bottomSheet = readFileSync(new URL('./components/BottomSheet.tsx', import.meta.url), 'utf8')
+assert.ok(bottomSheet.includes('groupModels(options)'), 'model sheet should reuse the shared grouping helper')
+assert.ok(styles.includes('.header-model-menu'), 'model toggle menu should have its own styles')
 
 console.log('ui regression tests passed')

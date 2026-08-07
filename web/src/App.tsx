@@ -139,7 +139,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const { agentOptions, modelOptions, modelLoadError,
     modelQuery, setModelQuery, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel,
-    variantGroups, selectedModelKey, selectedVariant, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
+    variantGroups, selectedModelKey, selectedVariant, changeVariant, activeModelVariants, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
   const blockedModels = useBlockedModels(modelOptions)
   const { flags, toggleFlag, setFlag } = useFeatureFlags()
 
@@ -206,8 +206,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [selectedSession?.id])
 
   const {
-    showNewSessionPicker, pickerPath,
-    pickerItems, pickerLoading, pickerError,
+    showNewSessionPicker, pickerDir,
+    pickerItems, pickerLoading, pickerError, setPickerError,
     browseNewSessionDirectory, openNewSessionPicker,
     setShowNewSessionPicker, persistDirectory
   } = useFolderPicker(config)
@@ -1157,12 +1157,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       {showNewSessionPicker && (
         <Suspense fallback={null}>
           <FolderPicker
-            pickerPath={pickerPath} pickerItems={pickerItems}
+            pickerDir={pickerDir} pickerItems={pickerItems}
             pickerLoading={pickerLoading} pickerError={pickerError}
             creatingSession={creatingSession}
             projects={sessions.map((s) => s.directory)}
             onBrowse={browseNewSessionDirectory}
-            onCreate={handleCreateSession}
+            onCreate={async (dir) => {
+              try {
+                await handleCreateSession(dir)
+              } catch (err) {
+                setPickerError((err as Error).message)
+              }
+            }}
             onCreateDefault={() => handleCreateSession("")}
             onClose={() => setShowNewSessionPicker(false)} />
           </Suspense>
@@ -1185,6 +1191,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     commands,
     activeAgent, activeAgentID,
     activeModelOption,
+    activeModelVariants,
+    selectedVariant,
+    onChangeVariant: (variant: string | null) => changeVariant(variant),
     primaryAgentOptions,
     onChangeAgent: (id) => changeAgent(id, selectedSession?.directory),
     projectName,
@@ -1250,7 +1259,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     selectedSession, localRevertID, renderedMessages, todos, todosExpanded, composer,
     isWorking, showTypingBubble, loadingSessionID, selectedID, messageScrollSignature,
     view, dataMode, renamingSessionID, renameValue, commands,
-    activeAgent, activeAgentID, activeModelOption, primaryAgentOptions, changeAgent,
+    activeAgent, activeAgentID, activeModelOption, activeModelVariants, selectedVariant, changeVariant, primaryAgentOptions, changeAgent,
     projectName, startRename, setRenameValue, renameSession, cancelRename, setComposer,
     handleSend, handleAbort, setTodosExpanded, goBack, setActiveDetailSheet,
     recentSessions, activeSessions, handleOpenSession, readingMode, setReadingMode,

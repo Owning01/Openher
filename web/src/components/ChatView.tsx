@@ -4,6 +4,7 @@ import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
+import { ThinkingLevels } from "./ThinkingLevels"
 import { InlineRename } from "./InlineRename"
 import { SubagentFooter } from "./SubagentFooter"
 import { SkillBrowser } from "./SkillBrowser"
@@ -39,6 +40,9 @@ export type ChatViewProps = {
   activeAgent: AgentOption | null
   activeAgentID: string
   activeModelOption: ModelOption | null
+  activeModelVariants: ModelOption[]
+  selectedVariant: string | null
+  onChangeVariant: (variant: string | null) => void
   primaryAgentOptions: AgentOption[]
   onChangeAgent: (id: string) => void
   projectName: string | null
@@ -103,6 +107,7 @@ export const ChatView = memo(function ChatView({
   dataMode: _dataMode,
   renamingSessionID, renameValue,
   activeModelOption, activeAgentID, primaryAgentOptions, onChangeAgent,
+  activeModelVariants, selectedVariant, onChangeVariant,
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
@@ -120,6 +125,9 @@ export const ChatView = memo(function ChatView({
   const [showSearch, setShowSearch] = useState(false)
   const [searchPos, setSearchPos] = useState(0)
   const [showOverflow, setShowOverflow] = useState(false)
+  const [showModelMenu, setShowModelMenu] = useState(false)
+  const modelMenuRef = useRef<HTMLDivElement | null>(null)
+  useOutsideClick(modelMenuRef, () => setShowModelMenu(false), showModelMenu)
   const [showSkills, setShowSkills] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
@@ -271,16 +279,40 @@ export const ChatView = memo(function ChatView({
                 </button>
               )}
             {activeModelOption && (
-              <button
-                type="button"
-                className="header-model-toggle"
-                onClick={() => onSheetOpen("ai")}
-                title={`${activeModelOption.modelName ?? t('detail.modelLoading')}${activeModelOption.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}>
-                <span className="header-model-name">
-                  {activeModelOption.modelName ?? t('detail.modelLoading')}
-                  {activeModelOption.variant ? <span className="header-model-variant"> · {activeModelOption.variant}</span> : ""}
-                </span>
-              </button>
+              <div className="header-model-wrap" ref={modelMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+                <button
+                  type="button"
+                  className="header-model-toggle"
+                  onClick={(e) => { e.stopPropagation(); setShowModelMenu((v) => !v) }}
+                  aria-expanded={showModelMenu}
+                  title={`${activeModelOption.modelName ?? t('detail.modelLoading')}${activeModelOption.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}>
+                  <span className="header-model-name">
+                    {activeModelOption.modelName ?? t('detail.modelLoading')}
+                    {activeModelOption.variant ? <span className="header-model-variant"> · {activeModelOption.variant}</span> : ""}
+                  </span>
+                </button>
+                {showModelMenu && (
+                  <div className="header-model-menu fade-in" role="menu" aria-label={t('detail.thinkingLevel')}>
+                    <div className="hmm-title">
+                      <strong>{activeModelOption.modelName ?? t('detail.modelLoading')}</strong>
+                      {activeModelOption.providerName && <small>{activeModelOption.providerName}</small>}
+                    </div>
+                    {activeModelVariants.length > 0 ? (
+                      <ThinkingLevels
+                        base={activeModelOption}
+                        variants={activeModelVariants}
+                        activeVariant={selectedVariant}
+                        onChange={(_key, variant) => { onChangeVariant(variant ?? null); setShowModelMenu(false) }} />
+                    ) : (
+                      <span className="hmm-none">{t('detail.noThinkingLevels')}</span>
+                    )}
+                    <button type="button" className="hmm-change"
+                      onClick={() => { setShowModelMenu(false); onSheetOpen("ai") }}>
+                      {t('detail.changeModel')}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             <div className="overflow-wrap header-overflow" ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
               <button className="btn-icon compact"
@@ -527,7 +559,6 @@ export const ChatView = memo(function ChatView({
           onAbort={onAbort}
           disabled={!selectedSession}
           isWorking={isWorking}
-          placeholder={t('detail.composerPlaceholder')}
           activeAgentID={activeAgentID}
           primaryAgentOptions={primaryAgentOptions}
           onChangeAgent={onChangeAgent}

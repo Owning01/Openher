@@ -1,9 +1,11 @@
 import { useState, useCallback, useMemo } from "react"
 import type { ServerConfig, AgentOption, ModelOption } from "../types"
 import { api } from "../api"
-import { modelKey, sameModel, modelFromKey } from "../utils/model-utils"
+import { modelKey, sameModel, modelFromKey, groupModels, variantsOf } from "../utils/model-utils"
 import { STORAGE_KEYS } from "../constants"
 import { useLocalStorage } from "./useLocalStorage"
+
+export type { VariantGroup } from "../utils/model-utils"
 
 export const MODEL_STORAGE_KEY = "opencode.remote.model"
 export const AGENT_STORAGE_KEY = "opencode.remote.agent"
@@ -25,8 +27,6 @@ function agentStorageKey(directory?: string): string {
 function filterPrimary(agents: AgentOption[]): AgentOption[] {
   return agents.filter((agent) => agent.mode === "primary" || agent.mode === "all")
 }
-
-export type VariantGroup = { base: ModelOption; variants: ModelOption[] }
 
 export function useAI(config: ServerConfig) {
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([])
@@ -98,18 +98,15 @@ export function useAI(config: ServerConfig) {
     const hasQuery = modelQuery.trim().length > 0
     const recentKeys = new Set(recentModels.map(modelKey))
     const allModels = hasQuery ? filteredModelOptions : filteredModelOptions.filter((m) => !recentKeys.has(modelKey(m)))
-    const groups = new Map<string, VariantGroup>()
-    for (const opt of allModels) {
-      const key = modelKey(opt)
-      if (!groups.has(key)) {
-        groups.set(key, { base: opt, variants: [] })
-      }
-      if (opt.variant) {
-        groups.get(key)!.variants.push(opt)
-      }
-    }
-    return { recentModels, groups }
+    return { recentModels, groups: groupModels(allModels) }
   }, [filteredModelOptions, recentModels])
+
+  // Variantes del modelo ACTIVO sobre la lista completa (sin excluir recientes):
+  // el menú del header debe mostrar los niveles aunque el modelo esté en recientes.
+  const activeModelVariants = useMemo(
+    () => variantsOf(modelOptions, activeModelOption),
+    [modelOptions, activeModelOption],
+  )
 
   const groupedModelOptions = useMemo(() => {
     const recentKeys = new Set(recentModels.map(modelKey))
@@ -212,7 +209,7 @@ export function useAI(config: ServerConfig) {
     agentOptions, agentLoadError, selectedAgentID, modelOptions, modelLoadError,
     selectedModelKey, modelQuery, setModelQuery, selectedModel, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
-    groupedModelOptions, variantGroups, recentModels,
+    groupedModelOptions, variantGroups, recentModels, activeModelVariants,
     selectedVariant, changeVariant,
     loadAgents, loadModels, changeModel, changeAgent
   }

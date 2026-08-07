@@ -10,6 +10,7 @@ import { SettingsSection } from "./SettingsSection"
 import { DataUsageModal } from "./DataUsageModal"
 import { ThinkingLevels } from "./ThinkingLevels"
 import { getDataUsage, formatBytes } from "../utils/dataUsage"
+import { variantsOf } from "../utils/model-utils"
 
 type UsageStats = {
   promptsSent: number
@@ -392,7 +393,7 @@ export const SettingsPanel = memo(function SettingsPanel({
             if (!selectedModelKey) return null
             const selected = uniqueModels.find((opt) => mk(opt) === selectedModelKey)
             if (!selected) return null
-            const vars = modelOptions.filter((opt) => mk(opt) === selectedModelKey && opt.variant)
+            const vars = variantsOf(modelOptions, selected)
             return (
               <div className="form-field">
                 <span className="settings-model-selected">

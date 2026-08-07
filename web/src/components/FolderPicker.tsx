@@ -3,9 +3,10 @@ import { PlusIcon, FolderIcon, LoadingIcon, CloseIcon, PencilIcon } from "../Ico
 import { useT } from "../i18n-context"
 import type { FileEntry } from "../types"
 import { Modal } from "./Modal"
+import { dirParent, dirParts, partsToDir } from "../hooks/useFolderPicker"
 
 type FolderPickerProps = {
-  pickerPath: string
+  pickerDir: string
   pickerItems: FileEntry[]
   pickerLoading: boolean
   pickerError: string | null
@@ -17,19 +18,10 @@ type FolderPickerProps = {
   onClose: () => void
 }
 
-// Navegación relativa al project directory del server ("" = raíz).
-function parentDirectory(path: string): string | null {
-  if (!path) return null
-  const index = path.lastIndexOf("/")
-  return index <= 0 ? "" : path.slice(0, index)
-}
-
-function pathSegments(path: string): string[] {
-  return path ? path.split("/").filter(Boolean) : []
-}
-
+// Navegación por rutas ABSOLUTAS: el server lista cualquier directorio de la
+// máquina (path relativo "" = raíz de ese directorio).
 export const FolderPicker = memo(function FolderPicker({
-  pickerPath, pickerItems, pickerLoading, pickerError, creatingSession, projects,
+  pickerDir, pickerItems, pickerLoading, pickerError, creatingSession, projects,
   onBrowse, onCreate, onCreateDefault, onClose
 }: FolderPickerProps) {
   const t = useT()
@@ -40,19 +32,29 @@ export const FolderPicker = memo(function FolderPicker({
 
   const handleManualGo = useCallback(() => {
     if (manualPath.trim()) {
-      onBrowse(manualPath.trim().replace(/^[A-Za-z]:[/\\]?/, "").replace(/\\/g, "/").replace(/^\/+/, ""))
+      onBrowse(toAbsoluteDir(manualPath))
       setShowManual(false)
       setManualPath("")
     }
   }, [manualPath, onBrowse])
 
-  useEffect(() => {
-    if (showManual) setManualPath(pickerPath)
-  }, [pickerPath, showManual])
+  function toAbsoluteDir(manual: string): string {
+    const m = manual.trim().replace(/[\\/]+$/, "")
+    if (!m) return pickerDir
+    if (/^[A-Za-z]:[\\/]?/i.test(m)) return /^[A-Za-z]:$/i.test(m) ? `${m}\\` : m.replace(/\//g, "\\")
+    if (m.startsWith("/")) return m
+    if (!pickerDir) return m.replace(/\\/g, "/")
+    const windows = pickerDir.includes("\\")
+    const joined = `${pickerDir.replace(/\\/g, "/").replace(/\/+$/, "")}/${m.replace(/\\/g, "/").replace(/^\/+/, "")}`
+    return windows ? joined.replace(/\//g, "\\") : joined
+  }
 
-  const parent = parentDirectory(pickerPath)
-  const segs = pathSegments(pickerPath)
-  const isRoot = !pickerPath
+  useEffect(() => {
+    if (showManual) setManualPath(pickerDir)
+  }, [pickerDir, showManual])
+
+  const parent = dirParent(pickerDir)
+  const segs = dirParts(pickerDir)
 
   return (
     <Modal onClose={onClose} className="folder-picker" aria-labelledby="new-session-title">
@@ -89,10 +91,10 @@ export const FolderPicker = memo(function FolderPicker({
             <span className="fp-path-root">Proyecto (raíz)</span>
           ) : (
             segs.map((seg, i) => (
-              <span key={seg} className="fp-path-seg">
+              <span key={`${seg}-${i}`} className="fp-path-seg">
                 {i > 0 && <span className="fp-path-sep">›</span>}
                 {i < segs.length - 1 ? (
-                  <button className="fp-path-link" onClick={() => onBrowse(segs.slice(0, i + 1).join("/"))}>
+                  <button className="fp-path-link" onClick={() => onBrowse(partsToDir(segs.slice(0, i + 1)))}>
                     {seg}
                   </button>
                 ) : (
@@ -102,14 +104,14 @@ export const FolderPicker = memo(function FolderPicker({
             ))
           )}
         </div>
-        <button className="btn-icon btn-ghost fp-path-edit" onClick={() => { setShowManual((v) => !v); setManualPath(pickerPath) }} title="Editar ruta" aria-label="Editar ruta">
+        <button className="btn-icon btn-ghost fp-path-edit" onClick={() => { setShowManual((v) => !v); setManualPath(pickerDir) }} title="Editar ruta" aria-label="Editar ruta">
           <PencilIcon size={14} />
         </button>
       </div>
 
       {showManual && (
         <div className="fp-manual-row">
-          <input type="text" className="search" placeholder="Escribí la ruta (relativa al proyecto)" value={manualPath} onChange={(e) => setManualPath(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleManualGo() }} autoFocus />
+          <input type="text" className="search" placeholder="Escribí una ruta absoluta (C:\Users\...) o relativa al directorio actual" value={manualPath} onChange={(e) => setManualPath(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleManualGo() }} autoFocus />
           <button className="btn-primary compact" disabled={!manualPath.trim()} onClick={handleManualGo}>Ir</button>
         </div>
       )}
@@ -124,7 +126,7 @@ export const FolderPicker = memo(function FolderPicker({
         <button type="button" className="btn-secondary" onClick={onCreateDefault} disabled={creatingSession}>
           Usar default
         </button>
-        <button type="button" className="btn-primary" onClick={() => onCreate(pickerPath)} disabled={creatingSession}>
+        <button type="button" className="btn-primary" onClick={() => onCreate(pickerDir)} disabled={creatingSession}>
           {creatingSession ? <LoadingIcon size={16} /> : <PlusIcon size={16} />}
           Crear aquí
         </button>
@@ -138,7 +140,7 @@ export const FolderPicker = memo(function FolderPicker({
           </div>
         ) : (
           <>
-            {!isRoot && parent !== null && (
+            {parent !== null && (
               <button type="button" className="fp-row" onClick={() => onBrowse(parent)}>
                 <span className="fp-row-icon">📂</span>
                 <span className="fp-row-name">..</span>
@@ -151,7 +153,7 @@ export const FolderPicker = memo(function FolderPicker({
               </span>
             ) : pickerItems.map((item) => (
               <button key={item.absolute} type="button" className="fp-row"
-                onClick={() => onBrowse(pickerPath ? `${pickerPath}/${item.name}` : item.name)}>
+                onClick={() => onBrowse(item.absolute)}>
                 <span className="fp-row-icon">📁</span>
                 <span className="fp-row-name">{item.name}</span>
               </button>

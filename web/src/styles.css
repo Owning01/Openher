@@ -2331,6 +2331,7 @@ p {
 .gs-7 { animation-delay: 0.75s; }
 .gs-6 { animation-delay: 0.9s; }
 .gs-3 { animation-delay: 1.05s; }
+.gs-3 { animation-delay: 1.05s; }
 
 
 /* ===== Detail View Layout ===== */
@@ -4378,18 +4379,29 @@ p {
 }
 
 .composer-queue-btn {
-  left: 2.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  min-width: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  padding: 0.15rem 0.35rem;
 }
 
 .composer-queue-btn[aria-pressed="true"] {
   color: var(--primary);
+  border-color: var(--primary);
   background: var(--primary-soft);
-  border-radius: var(--radius-md);
 }
 
-.composer-queue-btn:hover {
-  color: var(--muted-strong);
+.composer-queue-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .composer-mic-btn {
@@ -4551,6 +4563,77 @@ p {
   opacity: 0.6;
   font-weight: 400;
   font-size: 0.65rem;
+}
+
+/* Menú de niveles de pensamiento del toggle del modelo */
+.header-model-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 210px;
+  max-width: 260px;
+  padding: 0.6rem;
+  background: var(--surface-strong, #1a1a20);
+  border: 1px solid var(--border-strong, #444);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.header-model-menu .hmm-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border, #333);
+}
+
+.header-model-menu .hmm-title strong {
+  font-size: 0.78rem;
+  color: var(--text, #eee);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-model-menu .hmm-title small {
+  font-size: 0.65rem;
+  color: var(--muted, #999);
+}
+
+.header-model-menu .thinking-levels-label {
+  margin-top: 0.2rem;
+}
+
+.header-model-menu .hmm-none {
+  font-size: 0.7rem;
+  color: var(--muted, #999);
+  padding: 0.2rem 0;
+}
+
+.header-model-menu .hmm-change {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border, #333);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text, #eee);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.header-model-menu .hmm-change:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 
@@ -5713,8 +5796,10 @@ button.compact {
   }
 
   .header-model-toggle,
-  .agent-toggle {
+  .agent-toggle,
+  .composer-queue-btn {
     min-height: 36px;
+    min-width: 36px;
   }
 
   .composer-bar-btn {
@@ -5747,6 +5832,13 @@ button.compact {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* El grid-spinner es un indicador de estado (busy): debe seguir girando
+     aunque el sistema pida reducir animaciones. */
+  .grid-spinner .gs {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 

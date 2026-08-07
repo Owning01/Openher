@@ -32,7 +32,6 @@ type ComposerProps = {
   onAbort: () => void
   disabled: boolean
   isWorking: boolean
-  placeholder: string
   activeAgentID: string
   primaryAgentOptions: AgentOption[]
   onChangeAgent: (id: string) => void
@@ -55,7 +54,7 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "theme", description: "Open theme picker", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, placeholder, activeAgentID, primaryAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, activeAgentID, primaryAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const [showAtMenu, setShowAtMenu] = useState(false)
@@ -157,7 +156,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [slashFiltered.length])
 
   const isShellMode = value.startsWith("!")
-  const shellPlaceholder = isShellMode ? "Enter shell command..." : placeholder
 
   const pushHistory = useCallback((text: string) => {
     const h = promptHistoryRef.current
@@ -395,15 +393,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         </div>
       )}
       <div className="composer-input-wrap">
-        {onToggleQueue && (
-          <button onClick={onToggleQueue} disabled={disabled}
-            className="composer-inline-btn composer-queue-btn"
-            aria-pressed={queueEnabled}
-            title={queueEnabled ? t('session.queueToggleOn') : t('session.queueToggleOff')}
-            tabIndex={-1}>
-            <LayersIcon size={18} />
-          </button>
-        )}
         <button onClick={handleFilePick} disabled={disabled}
           className="composer-inline-btn composer-img-btn" title="Attach file"
           tabIndex={-1}>
@@ -412,7 +401,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         <textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={shellPlaceholder}
           aria-label={t('composer.inputLabel')}
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
@@ -432,6 +420,14 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
+          {onToggleQueue && (
+            <button onClick={onToggleQueue} disabled={disabled}
+              className="composer-queue-btn"
+              aria-pressed={queueEnabled}
+              title={queueEnabled ? t('session.queueToggleOn') : t('session.queueToggleOff')}>
+              <LayersIcon size={16} />
+            </button>
+          )}
           {visibleAgents.length > 1 && (
             <button onClick={handleToggleAgent} disabled={disabled}
               className="agent-toggle"
