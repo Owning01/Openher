@@ -126,7 +126,7 @@ assert.ok(msgList.includes('aria-hidden="true"'), 'loading text should not dupli
 
 // Mensaje optimista: confirmación por reintento + orden estable por time.created
 assert.ok(useMessages.includes('optimisticIDsRef'), 'send flow should track optimistic ids in a ref for async confirmation')
-assert.ok(useMessages.includes('latestOptimisticTextRef'), 'send flow should track the latest optimistic text to recognize the SSE echo')
+assert.ok(useMessages.includes('optimisticTextsRef'), 'send flow should track optimistic texts to recognize the SSE echo')
 assert.ok(useMessages.includes('part.type === "text"'), 'SSE echo must be a text part to be matched as a user message')
 assert.ok(useMessages.includes('deadline = Date.now() + 10000'), 'optimistic confirmation should retry loadSelected with a deadline')
 assert.ok(useMessages.includes('merged.sort((a, b) => (a.info.time.created'), 'message merge should sort by time.created so confirmed user messages land in position')
@@ -135,6 +135,8 @@ assert.ok(useMessages.includes('merged.sort((a, b) => (a.info.time.created'), 'm
 assert.ok(styles.includes('@media (pointer: coarse), (max-width: 780px)'), 'touch targets should scale up on coarse pointers')
 assert.ok(/@media \(pointer: coarse\), \(max-width: 780px\)[\s\S]*?min-width: 44px[\s\S]*?min-height: 44px/.test(styles), 'btn-icon should be at least 44px on touch')
 assert.ok(/\.composer-bar-btn\s*\{[^}]*min-height:\s*36px/.test(styles), 'composer send/stop buttons stay compact (36px) by explicit request')
+assert.equal((styles.match(/\.gs-3\s*\{/g) || []).length, 1, 'grid spinner gs-3 step should be defined exactly once')
+assert.ok(/\.composer-input-wrap textarea[\s\S]*?padding: 0\.5rem 2\.5rem 0\.5rem 2\.4rem/.test(styles), 'composer textarea padding should match the inline buttons (no dead 4.4rem)')
 
 // A11y: labels localizados en composer y nav
 assert.ok(composer.includes("aria-label={t('composer.inputLabel')}"), 'composer textarea should have a localized aria-label')
@@ -153,12 +155,51 @@ assert.ok(chatView.includes('onChangeVariant'), 'model toggle menu should switch
 assert.ok(chatView.includes("t('detail.changeModel')"), 'model toggle menu should offer changing the model')
 assert.ok(useAI.includes('activeModelVariants'), 'active model variants should come from useAI')
 assert.ok(useAI.includes('variantsOf(modelOptions, activeModelOption)'), 'active model variants must be computed over the full model list (recent models included)')
+assert.ok(useAI.includes('activeModelOption?.variant'), 'active model variant should derive from the resolved option, not stale state')
 assert.ok(!app.includes('variantGroups.groups.get(modelKey(activeModelOption))'), 'active model variants must not come from variantGroups (excludes recent models)')
 assert.ok(modelUtils.includes('export function variantsOf') && modelUtils.includes('export function groupModels'), 'model variants should be computed by shared helpers (DRY)')
 const settingsPanel = readFileSync(new URL('./components/SettingsPanel.tsx', import.meta.url), 'utf8')
 assert.ok(settingsPanel.includes('variantsOf(modelOptions, selected)'), 'settings should reuse the shared variants helper')
 const bottomSheet = readFileSync(new URL('./components/BottomSheet.tsx', import.meta.url), 'utf8')
 assert.ok(bottomSheet.includes('groupModels(options)'), 'model sheet should reuse the shared grouping helper')
+assert.ok(bottomSheet.includes('push(group.base, ...group.variants)'), 'model sheet should render variants so thinking levels can be picked')
 assert.ok(styles.includes('.header-model-menu'), 'model toggle menu should have its own styles')
+
+// Botón Reiniciar PC (Extras de Settings) con confirmación
+assert.ok(settingsPanel.includes("t('extras.restartHost')") && settingsPanel.includes('RefreshIcon'), 'settings extras should offer a restart action')
+assert.ok(settingsPanel.includes('onRestartHost'), 'settings restart should call the host restart handler')
+assert.ok(app.includes('handleRestartHost') && app.includes("shutdown /r /t 10"), 'host restart should run through the server shell with a delay')
+assert.ok(app.includes("shutdown /s /t 0"), 'host shutdown should still run through the server shell')
+
+// Envío: una falla de confirmación/refresh NO debe parecer una falla de envío
+assert.ok(useMessages.includes('let sendFailed = false'), 'send flow should track whether the POST itself failed')
+assert.ok(useMessages.includes('!confirmed && sendFailed'), 'optimistic message should only be rolled back when the send truly failed')
+assert.ok(!chatView.includes('shutdown /r'), 'chat overflow should not duplicate the host restart (it lives in Settings extras)')
+
+// Cola de prompts ELIMINADA por completo: el envío es directo y el server
+// gestiona la concurrencia (encolar en la app causaba mensajes perdidos).
+const featureFlags = readFileSync(new URL('./hooks/useFeatureFlags.ts', import.meta.url), 'utf8')
+assert.ok(!featureFlags.includes('promptQueue'), 'prompt queue should be removed entirely')
+assert.ok(!useMessages.includes('queuedPrompts'), 'useMessages should not hold queued prompts')
+assert.ok(!useMessages.includes('queuePrompt'), 'useMessages should not expose queuePrompt')
+assert.ok(!chatView.includes('queuedPrompts'), 'ChatView should not render a queued prompt badge or panel')
+
+// Modo híbrido v1/v2: el server opencode v2 (beta) usa /api + { data } y el
+// v1 rutas raíz. Auto-detección en health + toggle forzado en Settings.
+const apiSource = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+assert.ok(apiSource.includes('resolveApiVersion'), 'API should resolve v1 vs v2 dialect')
+assert.ok(apiSource.includes('rememberApiVersion'), 'API should cache the detected version per server')
+assert.ok(apiSource.includes('unwrapData'), 'v2 responses wrapped in { data } should be unwrapped')
+assert.ok(apiSource.includes('toMessageEnvelopeV1'), 'v2 messages should be mapped to v1 envelopes')
+assert.ok(apiSource.includes('toSessionV1'), 'v2 sessions should be mapped to v1 sessions')
+const useSSESource = readFileSync(new URL('./hooks/useSSE.ts', import.meta.url), 'utf8')
+assert.ok(useSSESource.includes('resolveApiVersion(config) === "v2"'), 'SSE should be skipped on v2 (no /event endpoint)')
+assert.ok(settingsPanel.includes('settings.apiVersion'), 'Settings should expose the API version selector')
+assert.ok(useConfig.includes('apiVersion: "auto"'), 'default config should auto-detect API version')
+
+// Polling: en no-full el fetch de mensajes NO se saltea si el SSE está caído
+// (túnel móvil) — si no, la respuesta del modelo nunca llega hasta el final.
+assert.ok(app.includes('const sseLive = streamState === "streaming"'), 'message fetch skip should require a live SSE stream')
+assert.ok(app.includes('!skip)'), 'message fetch should still run when the SSE is down')
 
 console.log('ui regression tests passed')

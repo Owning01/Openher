@@ -5,6 +5,28 @@ App Android (Capacitor) + web (React 19 + Vite + TypeScript) que controla un ser
 señalización (Cloudflare) en `signaling-worker/` y un servidor de estadísticas Python
 en `G:\Proyectos\opencode-stats`.
 
+## REGLAS CRÍTICAS (NO violar)
+
+1. **NO levantar servers ni procesos de larga duración desde el chat.** El usuario
+   usa este chat conectado al MISMO server que administramos. Levantar `opencode2
+   service start`, `python -m http.server`, gradle daemons, etc. en primer plano
+   bloquea o traba el chat. Si hace falta levantar algo: usar `Start-Process`
+   (detached) o scripts `.bat` que corren por fuera (`start-opencode-v2.bat`), NUNCA
+   en la terminal del chat. Comandos bloqueantes (gradle assemble, cap sync, npm
+   install largos, `Invoke-RestMethod` sin timeout) van con timeout explícito y en
+   pasos separados — si un comando tarda más de ~30s, correrlo detached o dividirlo.
+2. **El server opencode v1 corre en `0.0.0.0:4096`** (Basic auth `opencode`/`octavio`).
+   El **v2 beta (`opencode2`) corre como servicio en `0.0.0.0:4097`** con username FIJO
+   `opencode` (no configurable) y password `octavio`; config en `opencode2 service set`.
+   V2 usa rutas `/api/*` y envuelve respuestas en `{data:...}` (la app lo auto-detecta
+   en `api.ts` via `resolveApiVersion`/`rememberApiVersion`).
+3. **El APK se compila con gradle** (`web/android`): copiar `web/dist` a
+   `android/app/src/main/assets/public/` con `python scripts/copy-dist.py` (el
+   `npx cap sync/copy` falla con EPERM — trampa conocida) y correr `gradlew
+   assembleDebug` aparte, con timeout grande.
+4. **Tests**: `npm run build` + `npm run test:ui` + `test:i18n` + `test:settings` +
+   `test:model` después de tocar `web/src`. Todos deben quedar verdes.
+
 ## Comandos (todo en `web/`)
 
 - `npm run build` — `tsc -b && vite build` → `dist/` (el APK embebe este dist)
@@ -40,6 +62,13 @@ en `G:\Proyectos\opencode-stats`.
 - **`src/hooks/useOfflineCache.ts`** — IndexedDB `opencode-mobile` (stores
   sessions/messages, `DB_VERSION = 2` — NO bajar la versión; el bump migra DBs viejas
   sin stores).
+- **Soporte v2 (beta)** — `api.ts` detecta el dialecto del server (rutas `/api/*` +
+  `{data:...}` en v2 vs raíz en v1): `resolveApiVersion`/`rememberApiVersion` cachean
+  por host:port; en modo "auto" un 404 en ruta v1 dispara retry con `/api` (y el
+  health prueba `/global/health` vs `/api/health`). Mappers: `toSessionV1`,
+  `toMessageEnvelopeV1` (content[] → parts[]). El SSE se salta en v2 (no existe
+  `/event`; el polling cubre la recepción). Prompt v2: POST `/api/session/:id/prompt`
+  con `{text}`. El toggle está en Settings → Preferencias → API version (Auto/v1/v2).
 
 ## Persistencia de datos (garantías)
 

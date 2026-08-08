@@ -3,6 +3,7 @@ export type ServerConfig = {
   port: number
   username: string
   password: string
+  apiVersion?: "auto" | "v1" | "v2"
 }
 
 export type HealthResponse = {
@@ -221,13 +222,6 @@ export type FileStatusEntry = {
   [key: string]: unknown
 }
 
-export type QueuedPrompt = {
-  id: string
-  text: string
-  timestamp: number
-  images?: Array<{ base64: string; mime: string }>
-}
-
 export type FeatureFlags = {
   fileBrowser: boolean
   inlineDiff: boolean
@@ -240,8 +234,6 @@ export type FeatureFlags = {
   offlineCache: boolean
   questionAuto: boolean
   permissionUI: boolean
-  promptQueue: boolean
-  promptQueueMode: "manual" | "auto"
 }
 
 export type FileEntry = {
@@ -396,6 +388,7 @@ export type TunnelConfig = {
 export type ServerProfile = {
   id: string
   name: string
+  kind: "http" | "pair"
   config: ServerConfig
 }
 

@@ -795,6 +795,164 @@ p {
   box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
+.pair-service-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+}
+
+.api-version-field {
+  margin-bottom: var(--space-3);
+}
+
+.pair-service-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-profile-kind.pair {
+  background: color-mix(in srgb, var(--warning) 20%, transparent);
+  color: var(--warning);
+}
+
+.pair-scanner {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-3);
+}
+
+.pair-scan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.8rem 1.2rem;
+}
+
+.pair-scan-live {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: #000;
+}
+
+.pair-scan-live video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pair-scan-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pair-scan-frame {
+  position: absolute;
+  inset: 18%;
+  border: 3px solid var(--primary);
+  border-radius: var(--radius-md);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.pair-scan-loading {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.pair-camera-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.pair-or {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.pair-or::before,
+.pair-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.pair-paste {
+  width: 100%;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  color: var(--text);
+  margin-bottom: var(--space-3);
+}
+
+.pair-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-bottom: var(--space-2);
+}
+
+.pair-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pair-parsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--success);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.pair-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  flex-wrap: wrap;
+}
+
+.pair-preview code {
+  color: var(--text);
+}
+
 .settings-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2330,7 +2488,6 @@ p {
 .gs-8 { animation-delay: 0.6s; }
 .gs-7 { animation-delay: 0.75s; }
 .gs-6 { animation-delay: 0.9s; }
-.gs-3 { animation-delay: 1.05s; }
 .gs-3 { animation-delay: 1.05s; }
 
 
@@ -4340,7 +4497,7 @@ p {
   width: 100%;
   min-height: 42px;
   max-height: 120px;
-  padding: 0.5rem 2.5rem 0.5rem 4.4rem;
+  padding: 0.5rem 2.5rem 0.5rem 2.4rem;
   border: none;
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
@@ -4571,7 +4728,7 @@ p {
   top: calc(100% + 6px);
   right: 0;
   left: auto;
-  z-index: 99999;
+  z-index: var(--z-dropdown, 100);
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -4603,6 +4760,16 @@ p {
 .header-model-menu .hmm-title small {
   font-size: 0.65rem;
   color: var(--muted, #999);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 400px) {
+  .header-model-menu {
+    min-width: 160px;
+    max-width: 180px;
+  }
 }
 
 .header-model-menu .thinking-levels-label {
@@ -6004,6 +6171,26 @@ button.compact {
 .overflow-item:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.overflow-item-danger {
+  color: var(--danger);
+}
+
+.overflow-item-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.reboot-modal h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 1rem;
+}
+
+.reboot-modal p {
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 

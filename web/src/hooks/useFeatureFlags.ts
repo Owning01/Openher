@@ -15,8 +15,6 @@ const DEFAULT_FLAGS: FeatureFlags = {
   offlineCache: true,
   questionAuto: true,
   permissionUI: true,
-  promptQueue: true,
-  promptQueueMode: "auto",
 }
 
 export function useFeatureFlags() {
@@ -29,7 +27,7 @@ export function useFeatureFlags() {
   const BOOL_FLAGS: ReadonlySet<keyof FeatureFlags> = new Set([
     "fileBrowser", "inlineDiff", "contextMenu", "planBreakdown",
     "gitOps", "mcpConfig", "sessionArchive", "streamingFull",
-    "offlineCache", "questionAuto", "permissionUI", "promptQueue"
+    "offlineCache", "questionAuto", "permissionUI"
   ])
 
   const toggleFlag = useCallback((key: keyof FeatureFlags) => {

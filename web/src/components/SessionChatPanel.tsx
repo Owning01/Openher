@@ -170,11 +170,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       msgs.setRuntimeError("Prompt queued - will send when connection is restored")
       return
     }
-    if (baseProps.flags.promptQueue && msgs.awaitingAssistantReply) {
-      msgs.queuePrompt(msgs.composer, images)
-      msgs.setComposer("")
-      return
-    }
     onRecordPrompt(msgs.composer)
     stopGenerationRef.current = false
     setLocalRevertID(null)
@@ -183,7 +178,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
       onSetCommands, msgs.setRuntimeError, images)
       .catch(() => undefined)
-  }, [msgs, session, connectionState, onQueueAction, baseProps.flags.promptQueue, baseProps.activeModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt])
+  }, [msgs, session, connectionState, onQueueAction, baseProps.activeModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt])
 
   const handleAbort = useCallback(async () => {
     stopGenerationRef.current = true
@@ -241,20 +236,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     }
   }, [msgs, session, baseProps.activeModelOption, refresh])
 
-  const handleSendQueued = useCallback((id: string) => {
-    const qp = msgs.queuedPrompts.find((p) => p.id === id)
-    if (!qp) return
-    msgs.removeQueued(id)
-    onRecordPrompt(qp.text)
-    stopGenerationRef.current = false
-    setLocalRevertID(null)
-    msgs.send(session, baseProps.activeModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
-      refresh,
-      () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
-      onSetCommands, msgs.setRuntimeError, qp.images, qp.text)
-      .catch(() => undefined)
-  }, [msgs, session, baseProps.activeModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt])
-
   const chatProps: ChatViewProps = useMemo(() => ({
     ...baseProps,
     view: "detail",
@@ -270,9 +251,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     compacting: msgs.compacting,
     pendingQuestions,
     permissionRequest,
-    queuedPrompts: msgs.queuedPrompts,
-    onRemoveQueued: msgs.removeQueued,
-    onSendQueued: handleSendQueued,
     onComposerChange: msgs.setComposer,
     onSend: handleSend,
     onAbort: handleAbort,
@@ -294,7 +272,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     baseProps, session, localRevertID, msgs, streamState, pendingQuestions,
-    permissionRequest, handleSendQueued, handleSend, handleAbort, handleUndo,
+    permissionRequest, handleSend, handleAbort, handleUndo,
     handleRedo, handleCompact, handleRevertToMessage, handleEditMessage,
     handleQuestionReply, handleQuestionReject, handleDismissQuestion,
     handlePermissionApprove, handlePermissionReject, onShellExecute,

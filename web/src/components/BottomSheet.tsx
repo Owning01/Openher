@@ -1,4 +1,4 @@
-import { memo, useRef, useMemo, useState } from "react"
+import { memo, useEffect, useRef, useMemo, useState } from "react"
 import { useT } from "../i18n-context"
 import { useFocusTrap } from "../hooks/useFocusTrap"
 import { modelKey, sameModel, groupModels } from "../utils/model-utils"
@@ -60,11 +60,17 @@ function ModelGroupRow({
   const activeVariant = isActive ? selectedVariant : null
   const [expanded, setExpanded] = useState(isActive)
 
+  // El grupo activo debe quedar expandido si se vuelve activo por otra vía
+  useEffect(() => { setExpanded(isActive) }, [isActive])
+
   return (
     <div key={baseKey} className={`model-group${isActive ? " active" : ""}${expanded ? " expanded" : ""}`}>
       <button type="button" className="model-group-row"
         aria-expanded={expanded}
-        onClick={() => { setExpanded((v) => !v); onChangeModel(baseKey, activeVariant) }}
+        onClick={() => {
+          setExpanded((v) => !v)
+          if (!isActive) onChangeModel(baseKey, activeVariant)
+        }}
         role="option" aria-selected={isActive}>
         <strong>{base.modelName}</strong>
         <small>{base.providerName}</small>
@@ -171,7 +177,7 @@ export const BottomSheet = memo(function BottomSheet({
     for (const [, group] of variantGroups.groups) {
       const pid = group.base.providerID || group.base.providerName || "other"
       if (!byProvider.has(pid)) byProvider.set(pid, [])
-      byProvider.get(pid)!.push(group.base)
+      byProvider.get(pid)!.push(group.base, ...group.variants)
     }
     return Array.from(byProvider.entries())
   }, [variantGroups])

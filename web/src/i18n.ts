@@ -93,6 +93,23 @@ type TranslationKey =
   | 'settings.serverRemove'
   | 'settings.serverSaveHttp'
   | 'settings.serverUse'
+  | 'settings.pairTitle'
+  | 'settings.pairDesc'
+  | 'settings.pairScanQr'
+  | 'settings.pairPaste'
+  | 'settings.pairPasteHint'
+  | 'settings.pairParse'
+  | 'settings.pairParsed'
+  | 'settings.pairParseError'
+  | 'settings.pairCameraUnavailable'
+  | 'settings.pairSave'
+  | 'settings.pairNamePlaceholder'
+  | 'settings.pairKind'
+  | 'settings.apiVersion'
+  | 'settings.apiVersionDesc'
+  | 'settings.apiVersionAuto'
+  | 'settings.apiVersionV1'
+  | 'settings.apiVersionV2'
   | 'settings.sectionPreferences'
   | 'settings.dataModeTitle'
   | 'settings.dataModeDesc'
@@ -184,7 +201,6 @@ type TranslationKey =
   | 'detail.loading'
   | 'detail.emptyTitle'
   | 'detail.emptyHint'
-  | 'detail.composerPlaceholder'
   | 'detail.waiting'
   | 'detail.send'
   | 'detail.abort'
@@ -356,12 +372,6 @@ type TranslationKey =
   | 'settings.questionAutoDesc'
   | 'settings.permissionUI'
   | 'settings.permissionUIDesc'
-  | 'settings.promptQueue'
-  | 'settings.promptQueueDesc'
-  | 'settings.promptQueueMode'
-  | 'settings.promptQueueModeDesc'
-  | 'settings.promptQueueModeAuto'
-  | 'settings.promptQueueModeManual'
   | 'settings.permissionRequest'
   | 'settings.permissionAllow'
   | 'settings.permissionDeny'
@@ -382,6 +392,10 @@ type TranslationKey =
   | 'session.files'
   | 'session.skills'
   | 'session.terminal'
+  | 'session.reboot'
+  | 'session.rebootConfirm'
+  | 'session.rebootAction'
+  | 'session.rebootCancel'
   | 'session.mcpBrowser'
   | 'session.shortcuts'
   | 'session.pendingCount'
@@ -467,6 +481,14 @@ type TranslationKey =
   | 'extras.shutdownSent'
   | 'extras.shutdownFailed'
   | 'extras.shutdownNoSession'
+  | 'extras.restartHost'
+  | 'extras.restartHostDesc'
+  | 'extras.restartConfirmTitle'
+  | 'extras.restartConfirmBody'
+  | 'extras.restartConfirm'
+  | 'extras.restartCancel'
+  | 'extras.restartSent'
+  | 'extras.restartFailed'
   | 'extras.github'
   | 'extras.dataUsage'
   | 'settings.serverCurrent'
@@ -542,6 +564,23 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.serverRemove': 'Remove server',
       'settings.serverSaveHttp': 'Save current as HTTP',
       'settings.serverUse': 'Use',
+      'settings.pairTitle': 'OpenCode v2 Pair (BETA)',
+      'settings.pairDesc': 'Scan the QR code shown by `opencode service pair` (beta) to connect automatically.',
+      'settings.pairScanQr': 'Scan QR code',
+      'settings.pairPaste': 'Or paste the payload',
+      'settings.pairPasteHint': 'Paste the QR content (URL + credentials) here',
+      'settings.pairParse': 'Parse',
+      'settings.pairParsed': 'Pairing data detected. Save it as a server.',
+      'settings.pairParseError': 'Could not read pairing data. Check the QR content.',
+      'settings.pairCameraUnavailable': 'Camera not available. Paste the payload below instead.',
+      'settings.pairSave': 'Save as server',
+      'settings.pairNamePlaceholder': 'Profile name (e.g. v2 beta PC)',
+      'settings.pairKind': 'BETA v2',
+      'settings.apiVersion': 'API version',
+      'settings.apiVersionDesc': 'Server API dialect. Auto detects v1 vs v2 (beta) on connect.',
+      'settings.apiVersionAuto': 'Auto (detect)',
+      'settings.apiVersionV1': 'v1 (classic)',
+      'settings.apiVersionV2': 'v2 (beta)',
       'settings.sectionPreferences': 'Preferences',
       'settings.dataModeTitle': 'Data mode',
       'settings.dataModeDesc': 'Controls network polling frequency and automatic data loading.',
@@ -598,12 +637,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.questionAutoDesc': 'Automatically show question prompts from the AI',
     'settings.permissionUI': 'Permission requests',
     'settings.permissionUIDesc': 'Show permission request dialogs for tool access',
-    'settings.promptQueue': 'Prompt queue',
-    'settings.promptQueueDesc': 'Queue prompts while assistant is replying',
-    'settings.promptQueueMode': 'Queue mode',
-    'settings.promptQueueModeDesc': 'How queued prompts are sent',
-    'settings.promptQueueModeAuto': 'Auto',
-    'settings.promptQueueModeManual': 'Manual',
     'settings.permissionRequest': 'Permission Request',
     'settings.permissionAllow': 'Allow',
     'settings.permissionDeny': 'Deny',
@@ -724,7 +757,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.loading': 'Loading session...',
     'detail.emptyTitle': 'No messages yet',
     'detail.emptyHint': 'Start a conversation below',
-    'detail.composerPlaceholder': 'Type a prompt or command (start with / for slash commands)...',
     'detail.waiting': 'Waiting...',
     'detail.send': 'Send',
     'detail.abort': 'Abort',
@@ -872,6 +904,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'session.files': 'Files',
     'session.skills': 'Skills',
     'session.terminal': 'Terminal',
+    'session.reboot': 'Reboot PC',
+    'session.rebootConfirm': 'The PC will restart in 10 seconds. Continue?',
+    'session.rebootAction': 'Restart now',
+    'session.rebootCancel': 'Cancel',
     'session.mcpBrowser': 'MCP Browser',
     'session.shortcuts': 'Shortcuts',
     'session.pendingCount': '{count} pending',
@@ -959,6 +995,14 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'extras.shutdownSent': 'Shutdown command sent',
     'extras.shutdownFailed': 'Shutdown command failed: {error}',
     'extras.shutdownNoSession': 'You need an active session to shut down the host',
+'extras.restartHost': 'Restart host computer',
+'extras.restartHostDesc': 'Restarts the computer running the OpenCode server',
+'extras.restartConfirmTitle': 'Restart host?',
+'extras.restartConfirmBody': 'The computer running the OpenCode server will restart in 10 seconds. This action cannot be undone.',
+'extras.restartConfirm': 'Restart now',
+'extras.restartCancel': 'Cancel',
+'extras.restartSent': 'Restart command sent',
+'extras.restartFailed': 'Restart command failed: {error}',
     'extras.github': 'Project GitHub',
     'extras.dataUsage': 'Data usage',
     'settings.serverCurrent': 'Current server',
@@ -1066,6 +1110,23 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.serverRemove': 'Quitar servidor',
       'settings.serverSaveHttp': 'Guardar actual como HTTP',
       'settings.serverUse': 'Usar',
+      'settings.pairTitle': 'OpenCode v2 Pair (BETA)',
+      'settings.pairDesc': 'Escaneá el QR que muestra `opencode service pair` (beta) para conectar automáticamente.',
+      'settings.pairScanQr': 'Escanear QR',
+      'settings.pairPaste': 'O pegar el payload',
+      'settings.pairPasteHint': 'Pegá aquí el contenido del QR (URL + credenciales)',
+      'settings.pairParse': 'Analizar',
+      'settings.pairParsed': 'Datos de pairing detectados. Guardalos como servidor.',
+      'settings.pairParseError': 'No se pudieron leer los datos de pairing. Revisá el contenido del QR.',
+      'settings.pairCameraUnavailable': 'Cámara no disponible. Pegá el payload abajo.',
+      'settings.pairSave': 'Guardar como servidor',
+      'settings.pairNamePlaceholder': 'Nombre del perfil (ej. PC beta v2)',
+      'settings.pairKind': 'BETA v2',
+      'settings.apiVersion': 'Versión de API',
+      'settings.apiVersionDesc': 'Dialecto de la API del server. Auto detecta v1 vs v2 (beta) al conectar.',
+      'settings.apiVersionAuto': 'Auto (detectar)',
+      'settings.apiVersionV1': 'v1 (clásica)',
+      'settings.apiVersionV2': 'v2 (beta)',
       'settings.sectionPreferences': 'Preferencias',
       'settings.dataModeTitle': 'Modo de datos',
       'settings.dataModeDesc': 'Controla la frecuencia de consulta de red y la carga automática de datos.',
@@ -1122,12 +1183,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.questionAutoDesc': 'Mostrar automáticamente preguntas de la IA',
     'settings.permissionUI': 'Solicitudes de permiso',
     'settings.permissionUIDesc': 'Mostrar diálogos de permiso para acceso a herramientas',
-    'settings.promptQueue': 'Cola de mensajes',
-    'settings.promptQueueDesc': 'Encolar mensajes mientras el asistente responde',
-    'settings.promptQueueMode': 'Modo de cola',
-    'settings.promptQueueModeDesc': 'Cómo se envían los mensajes encolados',
-    'settings.promptQueueModeAuto': 'Automático',
-    'settings.promptQueueModeManual': 'Manual',
     'settings.permissionRequest': 'Solicitud de permiso',
     'settings.permissionAllow': 'Permitir',
     'settings.permissionDeny': 'Denegar',
@@ -1248,7 +1303,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.loading': 'Cargando sesión...',
     'detail.emptyTitle': 'Aún no hay mensajes',
     'detail.emptyHint': 'Inicia una conversación abajo',
-    'detail.composerPlaceholder': 'Escribe un prompt o comando (empieza con / para comandos slash)...',
     'detail.waiting': 'Esperando...',
     'detail.send': 'Enviar',
     'detail.abort': 'Abortar',
@@ -1396,6 +1450,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'session.files': 'Archivos',
     'session.skills': 'Habilidades',
     'session.terminal': 'Terminal',
+    'session.reboot': 'Reiniciar PC',
+    'session.rebootConfirm': 'La PC se reiniciará en 10 segundos. ¿Continuar?',
+    'session.rebootAction': 'Reiniciar ahora',
+    'session.rebootCancel': 'Cancelar',
     'session.mcpBrowser': 'Explorador MCP',
     'session.shortcuts': 'Atajos',
     'session.pendingCount': '{count} pendientes',
@@ -1482,6 +1540,14 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'extras.shutdownSent': 'Comando de apagado enviado',
     'extras.shutdownFailed': 'Error al enviar el comando de apagado: {error}',
     'extras.shutdownNoSession': 'Necesitás una sesión activa para apagar la computadora',
+'extras.restartHost': 'Reiniciar computadora huesped',
+'extras.restartHostDesc': 'Reinicia la computadora que ejecuta el servidor OpenCode',
+'extras.restartConfirmTitle': '¿Reiniciar la computadora huesped?',
+'extras.restartConfirmBody': 'La computadora que ejecuta el servidor OpenCode se reiniciará en 10 segundos. Esta acción no se puede deshacer.',
+'extras.restartConfirm': 'Reiniciar ahora',
+'extras.restartCancel': 'Cancelar',
+'extras.restartSent': 'Comando de reinicio enviado',
+'extras.restartFailed': 'Error al enviar el comando de reinicio: {error}',
     'extras.github': 'Ir al GitHub del proyecto',
     'extras.dataUsage': 'Consumo de datos',
     'settings.serverCurrent': 'Servidor actual',
@@ -1590,6 +1656,23 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.serverRemove': 'Rimuovi server',
       'settings.serverSaveHttp': 'Salva attuale come HTTP',
       'settings.serverUse': 'Usa',
+      'settings.pairTitle': 'OpenCode v2 Pair (BETA)',
+      'settings.pairDesc': 'Scansiona il QR mostrato da `opencode service pair` (beta) per connetterti automaticamente.',
+      'settings.pairScanQr': 'Scansiona QR',
+      'settings.pairPaste': 'Oppure incolla il payload',
+      'settings.pairPasteHint': 'Incolla qui il contenuto del QR (URL + credenziali)',
+      'settings.pairParse': 'Analizza',
+      'settings.pairParsed': 'Dati di pairing rilevati. Salvali come server.',
+      'settings.pairParseError': 'Impossibile leggere i dati di pairing. Controlla il contenuto del QR.',
+      'settings.pairCameraUnavailable': 'Fotocamera non disponibile. Incolla il payload qui sotto.',
+      'settings.pairSave': 'Salva come server',
+      'settings.pairNamePlaceholder': 'Nome profilo (es. PC beta v2)',
+      'settings.pairKind': 'BETA v2',
+      'settings.apiVersion': 'Versione API',
+      'settings.apiVersionDesc': 'Dialetto API del server. Auto rileva v1 vs v2 (beta) alla connessione.',
+      'settings.apiVersionAuto': 'Auto (rileva)',
+      'settings.apiVersionV1': 'v1 (classica)',
+      'settings.apiVersionV2': 'v2 (beta)',
       'settings.sectionPreferences': 'Preferenze',
       'settings.dataModeTitle': 'Modalità dati',
       'settings.dataModeDesc': 'Controlla la frequenza di polling di rete e il caricamento automatico dei dati.',
@@ -1646,12 +1729,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.questionAutoDesc': 'Mostra automaticamente le domande dell\'IA',
     'settings.permissionUI': 'Richiesta permessi',
     'settings.permissionUIDesc': 'Mostra finestre di permesso per accesso strumenti',
-    'settings.promptQueue': 'Coda prompt',
-    'settings.promptQueueDesc': 'Accoda i prompt mentre l\'assistente risponde',
-    'settings.promptQueueMode': 'Modalità coda',
-    'settings.promptQueueModeDesc': 'Come vengono inviati i prompt in coda',
-    'settings.promptQueueModeAuto': 'Auto',
-    'settings.promptQueueModeManual': 'Manuale',
     'settings.permissionRequest': 'Richiesta di permesso',
     'settings.permissionAllow': 'Consenti',
     'settings.permissionDeny': 'Nega',
@@ -1772,7 +1849,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.loading': 'Caricamento sessione...',
     'detail.emptyTitle': 'Ancora nessun messaggio',
     'detail.emptyHint': 'Inizia una conversazione qui sotto',
-    'detail.composerPlaceholder': 'Scrivi un prompt o comando (inizia con / per gli slash command)...',
     'detail.waiting': 'Attesa...',
     'detail.send': 'Invia',
     'detail.abort': 'Interrompi',
@@ -1884,6 +1960,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'session.files': 'File',
     'session.skills': 'Competenze',
     'session.terminal': 'Terminale',
+    'session.reboot': 'Riavvia il PC',
+    'session.rebootConfirm': 'Il PC si riavvierà tra 10 secondi. Continuare?',
+    'session.rebootAction': 'Riavvia ora',
+    'session.rebootCancel': 'Annulla',
     'session.mcpBrowser': 'Browser MCP',
     'session.shortcuts': 'Scorciatoie',
     'session.pendingCount': '{count} in attesa',
@@ -1970,6 +2050,14 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'extras.shutdownSent': 'Comando di spegnimento inviato',
     'extras.shutdownFailed': 'Invio del comando di spegnimento fallito: {error}',
     'extras.shutdownNoSession': 'Serve una sessione attiva per spegnere il computer host',
+'extras.restartHost': 'Riavvia computer host',
+'extras.restartHostDesc': 'Riavvia il computer che esegue il server OpenCode',
+'extras.restartConfirmTitle': 'Riavviare il computer host?',
+'extras.restartConfirmBody': 'Il computer che esegue il server OpenCode si riavvierà tra 10 secondi. Questa azione non può essere annullata.',
+'extras.restartConfirm': 'Riavvia ora',
+'extras.restartCancel': 'Annulla',
+'extras.restartSent': 'Comando di riavvio inviato',
+'extras.restartFailed': 'Invio del comando di riavvio fallito: {error}',
     'extras.github': 'GitHub del progetto',
     'extras.dataUsage': 'Consumo dati',
     'settings.serverCurrent': 'Server attuale',
@@ -2078,6 +2166,23 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.serverRemove': '移除伺服器',
       'settings.serverSaveHttp': '將目前儲存為 HTTP',
       'settings.serverUse': '使用',
+      'settings.pairTitle': 'OpenCode v2 Pair（BETA）',
+      'settings.pairDesc': '掃描 `opencode service pair`（beta）顯示的 QR 碼，自動連接。',
+      'settings.pairScanQr': '掃描 QR 碼',
+      'settings.pairPaste': '或貼上 payload',
+      'settings.pairPasteHint': '在此貼上 QR 內容（URL + 憑證）',
+      'settings.pairParse': '解析',
+      'settings.pairParsed': '已偵測到配對資料。儲存為伺服器。',
+      'settings.pairParseError': '無法讀取配對資料。請檢查 QR 內容。',
+      'settings.pairCameraUnavailable': '無法使用相機。請改為在下方貼上 payload。',
+      'settings.pairSave': '儲存為伺服器',
+      'settings.pairNamePlaceholder': '設定檔名稱（例如 v2 beta PC）',
+      'settings.pairKind': 'BETA v2',
+      'settings.apiVersion': 'API 版本',
+      'settings.apiVersionDesc': '伺服器 API 方言。連線時自動偵測 v1 或 v2（beta）。',
+      'settings.apiVersionAuto': '自動（偵測）',
+      'settings.apiVersionV1': 'v1（傳統）',
+      'settings.apiVersionV2': 'v2（beta）',
       'settings.sectionPreferences': '偏好設定',
       'settings.dataModeTitle': '資料模式',
       'settings.dataModeDesc': '控制網路輪詢頻率和自動資料載入。',
@@ -2134,12 +2239,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.questionAutoDesc': '自動顯示 AI 的提問',
     'settings.permissionUI': '權限請求',
     'settings.permissionUIDesc': '顯示工具訪問權限請求對話框',
-    'settings.promptQueue': '提示佇列',
-    'settings.promptQueueDesc': '在助理回覆時將提示加入佇列',
-    'settings.promptQueueMode': '佇列模式',
-    'settings.promptQueueModeDesc': '如何發送佇列中的提示',
-    'settings.promptQueueModeAuto': '自動',
-    'settings.promptQueueModeManual': '手動',
     'settings.permissionRequest': '權限請求',
     'settings.permissionAllow': '允許',
     'settings.permissionDeny': '拒絕',
@@ -2260,7 +2359,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.loading': '載入工作階段...',
     'detail.emptyTitle': '尚無訊息',
     'detail.emptyHint': '在下方開始對話',
-    'detail.composerPlaceholder': '輸入提示或命令（以 / 開頭使用斜線命令）...',
     'detail.waiting': '等待中...',
     'detail.send': '傳送',
     'detail.abort': '中止',
@@ -2372,6 +2470,10 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'session.files': '檔案',
     'session.skills': '技能',
     'session.terminal': '終端機',
+    'session.reboot': '重新啟動電腦',
+    'session.rebootConfirm': '電腦將在 10 秒後重新啟動。繼續？',
+    'session.rebootAction': '立即重新啟動',
+    'session.rebootCancel': '取消',
     'session.mcpBrowser': 'MCP 瀏覽器',
     'session.shortcuts': '快捷鍵',
     'session.pendingCount': '{count} 待處理',
@@ -2458,6 +2560,14 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'extras.shutdownSent': '已發送關機指令',
     'extras.shutdownFailed': '發送關機指令失敗：{error}',
     'extras.shutdownNoSession': '需要一個有效的工作階段才能關閉主機',
+'extras.restartHost': '重新啟動主機電腦',
+'extras.restartHostDesc': '重新啟動執行 OpenCode 伺服器的電腦',
+'extras.restartConfirmTitle': '重新啟動主機電腦？',
+'extras.restartConfirmBody': '執行 OpenCode 伺服器的電腦將在 10 秒後重新啟動。此操作無法復原。',
+'extras.restartConfirm': '立即重新啟動',
+'extras.restartCancel': '取消',
+'extras.restartSent': '已發送重新啟動指令',
+'extras.restartFailed': '發送重新啟動指令失敗：{error}',
     'extras.github': '專案 GitHub',
     'extras.dataUsage': '資料使用量',
     'settings.serverCurrent': '目前伺服器',

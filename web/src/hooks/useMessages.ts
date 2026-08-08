@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
-import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView, QueuedPrompt } from "../types"
+import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
 import { api } from "../api"
 import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "../utils/parseCommand"
 
@@ -44,7 +44,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const [composer, setComposer] = useState(() => localStorage.getItem(storageKey) ?? "")
   const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
-  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
   const [compacting, setCompacting] = useState(false)
 
   const composerRef = useRef(composer)
@@ -211,15 +210,14 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [])
 
   // Sincroniza los ids optimistas en un ref para poder consultarlos desde
-  // callbacks asíncronos (confirmación del envío). El texto del ÚLTIMO optimista
-  // permite reconocer el echo del user message en el SSE (que llega con role
-  // "assistant") sin arriesgar falsos positivos con respuestas del modelo.
+  // callbacks asíncronos (confirmación del envío). Los TEXTOS de los optimistas
+  // pendientes permiten reconocer el echo del user message en el SSE (que llega
+  // con role "assistant") — matchea cualquier envío en vuelo, no solo el último.
   const optimisticIDsRef = useRef<Set<string>>(new Set())
-  const latestOptimisticTextRef = useRef("")
+  const optimisticTextsRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     optimisticIDsRef.current = new Set(optimisticUserMessages.map((m) => m.info.id))
-    const last = optimisticUserMessages[optimisticUserMessages.length - 1]
-    latestOptimisticTextRef.current = last ? extractText(last).trim() : ""
+    optimisticTextsRef.current = new Set(optimisticUserMessages.map(extractText).map((t) => t.trim()).filter(Boolean))
   }, [optimisticUserMessages])
 
   const abortSession = useCallback(async (sessionID: string, directory: string) => {
@@ -315,11 +313,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     setMessages((prev) => {
       const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
       if (!existing) {
-        // El SSE etiqueta todo como "assistant"; si el texto coincide con el
-        // último optimista pendiente es el user message confirmado: con role
+        // El SSE etiqueta todo como "assistant"; si el texto coincide con un
+        // optimista pendiente es el user message confirmado: con role
         // "user" el bubble conserva su borde/fondo.
-        const isUserText = partType === "text" && replace && latestOptimisticTextRef.current
-          ? text.trim() === latestOptimisticTextRef.current
+        const isUserText = partType === "text" && replace && optimisticTextsRef.current.size > 0
+          ? optimisticTextsRef.current.has(text.trim())
           : false
         return [...prev, {
           info: {
@@ -365,8 +363,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     setMessages((prev) => {
       const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
       if (!existing) {
-        const isUserText = part.type === "text" && part.text && latestOptimisticTextRef.current
-          ? part.text.trim() === latestOptimisticTextRef.current
+        const isUserText = part.type === "text" && part.text && optimisticTextsRef.current.size > 0
+          ? optimisticTextsRef.current.has(part.text.trim())
           : false
         return [...prev, {
           info: { id: messageID, role: isUserText ? "user" : "assistant", sessionID, time: { created: Date.now() } },
@@ -411,20 +409,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     })
   }, [])
 
-  const queuePrompt = useCallback((text: string, images?: Array<{ base64: string; mime: string }>) => {
-    const qp: QueuedPrompt = {
-      id: `queued-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      text,
-      timestamp: Date.now(),
-      images,
-    }
-    setQueuedPrompts((prev) => [...prev, qp])
-  }, [])
-
-  const removeQueued = useCallback((id: string) => {
-    setQueuedPrompts((prev) => prev.filter((p) => p.id !== id))
-  }, [])
-
   const updateSend = useCallback(async (
     selectedSession: SessionView,
     activeModel: ModelSelection | undefined,
@@ -452,24 +436,61 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       completionShouldPlayRef.current = true
       setAwaitingAssistantReply(true)
       onSetRuntimeError(null)
+
+      let sendFailed = false
       try {
         await sendFn()
-        // El server persiste el user message de forma asíncrona: loadSelected
-        // (match por texto) confirma el optimista. Reintentar hasta que
-        // desaparezca, para que el prompt no quede pegado al final del chat.
+      } catch (err) {
+        sendFailed = true
+        const isNetwork = err instanceof TypeError || (err as Error).name === "AbortError" || /failed to fetch|network error|timeout/i.test((err as Error).message)
+        if (isNetwork) {
+          // El server pudo haber recibido el prompt aunque el fetch fallara
+          // localmente (red móvil/túnel): no remover el optimista ni restaurar
+          // el texto — el retry de confirmación decide qué pasó.
+          onSetRuntimeError((err as Error).message)
+        } else {
+          // El server respondió con un error: el prompt NO se procesó.
+          completionShouldPlayRef.current = false
+          setAwaitingAssistantReply(false)
+          removeOptimistic(optimisticMessage.info.id)
+          setComposer((current) => current || text)
+          onSetRuntimeError((err as Error).message)
+        }
+      }
+
+      // Confirmación: el server persiste el user message de forma asíncrona;
+      // loadSelected (match por texto) confirma el optimista. Una falla de red
+      // AQUÍ no significa que el envío falló — el merge por id del próximo
+      // fetch confirmará el optimista.
+      let confirmed = false
+      try {
         const deadline = Date.now() + 10000
         while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
           await then()
           if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
           await new Promise((r) => setTimeout(r, 700))
         }
-        await onRefreshSessions()
-      } catch (err) {
+        confirmed = !optimisticIDsRef.current.has(optimisticMessage.info.id)
+      } catch {
+        // nunca tratar una falla de confirmación como falla de envío
+      }
+
+      // Si el envío dudó por red pero el server confirmó el mensaje, el error
+      // mostrado era falso: limpiarlo.
+      if (sendFailed && confirmed) onSetRuntimeError(null)
+
+      if (!confirmed && sendFailed) {
+        // El prompt no llegó al server: limpiar el optimista y devolver el texto.
         completionShouldPlayRef.current = false
         setAwaitingAssistantReply(false)
         removeOptimistic(optimisticMessage.info.id)
         setComposer((current) => current || text)
-        onSetRuntimeError((err as Error).message)
+      }
+
+      try {
+        await onRefreshSessions()
+      } catch {
+        // una falla del refresh no debe parecer una falla de envío
       }
     }
 
@@ -541,7 +562,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     composer, setComposer,
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
-    queuedPrompts, setQueuedPrompts, queuePrompt, removeQueued,
     compacting, setCompacting,
     renderedMessages, messageScrollSignature, assistantResponseSignature,
     toolMessage, completionShouldPlayRef,

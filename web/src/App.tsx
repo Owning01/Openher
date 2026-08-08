@@ -155,7 +155,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     composer, setComposer,
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
-    queuedPrompts, setQueuedPrompts, queuePrompt, removeQueued,
     renderedMessages, messageScrollSignature,
     toolMessage: _toolMessage, completionShouldPlayRef,
     clearSession, loadSelected, send, abortSession,
@@ -642,7 +641,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (!selectedSession) return
     if (dataMode === "full" || dataMode === "saver" || isSessionActive(selectedSession)) {
       const prevUpdated = lastMsgFetchUpdatedRef.current[selectedSession.id]
-      const skip = dataMode !== "full" && prevUpdated !== undefined && selectedSession.updated <= prevUpdated
+      // El skip solo es seguro si el SSE está streamando en vivo: si está
+      // caído/polling (túnel móvil), hay que fetchear siempre o la respuesta
+      // del modelo nunca llega hasta que el turno termina.
+      const sseLive = streamState === "streaming"
+      const skip = dataMode !== "full" && sseLive && prevUpdated !== undefined && selectedSession.updated <= prevUpdated
       if (!skip) {
         await loadSelected(selectedSession.id, selectedSession.directory)
         lastMsgFetchUpdatedRef.current[selectedSession.id] = selectedSession.updated
@@ -709,25 +712,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     loadDashboard(selectedSession.directory)
   }, [activeDetailSheet, selectedSession?.id, selectedSession?.directory])
 
-  // Auto-drain queue when assistant finishes replying
-  const prevAwaitingRef = useRef(awaitingAssistantReply)
-  useEffect(() => {
-    if (!flags.promptQueue || flags.promptQueueMode !== "auto") {
-      prevAwaitingRef.current = awaitingAssistantReply
-      return
-    }
-    if (!awaitingAssistantReply && prevAwaitingRef.current && queuedPrompts.length > 0 && selectedSession) {
-      const next = queuedPrompts[0]
-      recordPrompt(next.text)
-      send(selectedSession, activeModel, activeAgentID, commands,
-        () => refreshSessions(),
-        () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-        setCommands, setRuntimeError, next.images, next.text)
-        .then(() => setQueuedPrompts((prev) => prev.filter((p) => p.id !== next.id)))
-        .catch(() => setQueuedPrompts((prev) => prev.filter((p) => p.id !== next.id)))
-    }
-    prevAwaitingRef.current = awaitingAssistantReply
-  }, [awaitingAssistantReply])
+  // La cola de prompts fue eliminada: el envío es directo y el server
+  // gestiona la concurrencia (el servidor encola los turnos por sí solo).
 
   useBackButton({
     view, showNewSessionPicker, activeDetailSheet,
@@ -762,11 +748,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setRuntimeError("Prompt queued - will send when connection is restored")
       return
     }
-    if (flags.promptQueue && awaitingAssistantReply) {
-      queuePrompt(composer, images)
-      setComposer("")
-      return
-    }
     recordPrompt(composer)
     stopGenerationRef.current = false
     setLocalRevertID(null)
@@ -776,20 +757,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
       setCommands, setRuntimeError, images)
     if (result === "help") { setHelpPage("commands"); navigate("help") }
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, flags.promptQueue, awaitingAssistantReply, queuePrompt])
-
-  const handleSendQueued = useCallback((id: string) => {
-    const qp = queuedPrompts.find((p) => p.id === id)
-    if (!qp || !selectedSession) return
-    removeQueued(id)
-    recordPrompt(qp.text)
-    stopGenerationRef.current = false
-    setLocalRevertID(null)
-    send(selectedSession, activeModel, activeAgentID, commands,
-      () => refreshSessions(),
-      () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-      setCommands, setRuntimeError, qp.images, qp.text).catch(() => {})
-  }, [queuedPrompts, selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, removeQueued, recordPrompt, setCommands, setRuntimeError])
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer])
 
   const handleAbort = useCallback(async () => {
     if (!selectedSession) return
@@ -1056,6 +1024,21 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       })
   }, [selectedSession, config, t, setSettingsNotice])
 
+  const handleRestartHost = useCallback(() => {
+    if (!selectedSession || !config) {
+      setSettingsNotice({ type: "error", text: t('extras.shutdownNoSession') })
+      return
+    }
+    // Windows: shutdown /r /t 10 (delay para que responda el request) · Linux: fallback
+    api.sendShell(config, selectedSession.id, 'shutdown /r /t 10 /c "OpenCode Mobile: reinicio programado" || shutdown -r +1', selectedSession.directory)
+      .then(() => {
+        setSettingsNotice({ type: "success", text: t('extras.restartSent') })
+      })
+      .catch((err: Error) => {
+        setSettingsNotice({ type: "error", text: t('extras.restartFailed', { error: err.message }) })
+      })
+  }, [selectedSession, config, t, setSettingsNotice])
+
   const handleOpenGitHub = useCallback(() => {
     window.open("https://github.com/Owning01/Opencode-Mobile", "_system")
   }, [])
@@ -1251,10 +1234,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     onOpenTerminal: () => setShowTerminal(true),
     onOpenMCPBrowser: () => setShowMCPBrowser(true),
     showTodoButton: chatSettings.showTodoButton,
-    queuedPrompts,
-    onRemoveQueued: removeQueued,
-    onSendQueued: handleSendQueued,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     selectedSession, localRevertID, renderedMessages, todos, todosExpanded, composer,
     isWorking, showTypingBubble, loadingSessionID, selectedID, messageScrollSignature,
@@ -1270,7 +1249,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     handlePermissionApprove, handlePermissionReject, handleDismissQuestion,
     handleDismissPermission, handleRevertToMessage, handleEditMessage, handleUndo,
     handleRedo, handleCompact, handleCreateSession, fb, setShowTerminal,
-    setShowMCPBrowser, chatSettings, queuedPrompts, removeQueued, handleSendQueued,
+    setShowMCPBrowser, chatSettings,
   ])
 
   const detailView = <ChatView {...baseChatProps} />
@@ -1539,6 +1518,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               localStorage.setItem("opencode.mobile.activeServer", profile.id)
             }
           }}
+          onAddPairServer={(name, config) => {
+            const profile = addProfile(name, { config, kind: "pair" })
+            if (profile) {
+              setActiveServerProfileID(profile.id)
+              localStorage.setItem("opencode.mobile.activeServer", profile.id)
+              setDraftConfig(config)
+              saveConfig(t)
+            }
+          }}
           onRemoveServerProfile={(id) => {
             removeProfile(id)
             if (activeServerProfileID === id) {
@@ -1553,6 +1541,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onChatSettingChange={setChatSetting}
           onResetChatSettings={resetChatSettings}
           onShutdownHost={handleShutdownHost}
+          onRestartHost={handleRestartHost}
           onOpenGitHub={handleOpenGitHub}
           onOpenFavoritesManager={() => setShowFavoritesManager(true)}
           onOpenArchivedView={() => setShowArchivedView(true)}

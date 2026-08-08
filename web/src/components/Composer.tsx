@@ -405,7 +405,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          className={isShellMode ? "shell-input" : ""}
         />
         {supported && (
           <button onClick={handleMicClick}
@@ -424,6 +423,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
             <button onClick={onToggleQueue} disabled={disabled}
               className="composer-queue-btn"
               aria-pressed={queueEnabled}
+              aria-label={queueEnabled ? t('session.queueToggleOn') : t('session.queueToggleOff')}
               title={queueEnabled ? t('session.queueToggleOn') : t('session.queueToggleOff')}>
               <LayersIcon size={16} />
             </button>

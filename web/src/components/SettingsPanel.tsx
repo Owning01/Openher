@@ -1,14 +1,15 @@
 import { memo, useState, useCallback, useMemo } from "react"
-import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon } from "../Icons"
+import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo, ServerProfile, ChatSettings } from "../types"
 import type { LanguageCode } from "../i18n"
-import { describeProfile } from "../hooks/useServers"
+import { describeProfile, isPairProfile } from "../hooks/useServers"
 import { ProviderManager } from "./ProviderManager"
 import { ChatCustomizer } from "./ChatCustomizer"
 import { SettingsSection } from "./SettingsSection"
 import { DataUsageModal } from "./DataUsageModal"
 import { ThinkingLevels } from "./ThinkingLevels"
+import { PairModal } from "./PairModal"
 import { getDataUsage, formatBytes } from "../utils/dataUsage"
 import { variantsOf } from "../utils/model-utils"
 
@@ -60,11 +61,13 @@ type SettingsPanelProps = {
   onRemoveServerProfile: (id: string) => void
   onUpdateServerProfile: (id: string, name: string, config: ServerConfig) => void
   onApplyServerProfile: (profile: ServerProfile) => void
+  onAddPairServer: (name: string, config: ServerConfig) => void
   activeServerProfileID: string | null
   chatSettings: ChatSettings
   onChatSettingChange: <K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => void
   onResetChatSettings: () => void
   onShutdownHost: () => void
+  onRestartHost: () => void
   onOpenGitHub: () => void
   onOpenFavoritesManager?: () => void
   onOpenArchivedView?: () => void
@@ -82,17 +85,19 @@ export const SettingsPanel = memo(function SettingsPanel({
   stats, onResetStats,
   activeModelOption, blockedModels, onOpenThemePicker,
   onOpenThemeCreator,
-  flags, onToggleFlag, onSetFlag,
+  flags, onToggleFlag,
   providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider,
-  serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile, onApplyServerProfile, activeServerProfileID,
+  serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile, onApplyServerProfile, onAddPairServer, activeServerProfileID,
   chatSettings, onChatSettingChange, onResetChatSettings,
-  onShutdownHost, onOpenGitHub, onOpenFavoritesManager, onOpenArchivedView, onOpenShortcuts
+  onShutdownHost, onRestartHost, onOpenGitHub, onOpenFavoritesManager, onOpenArchivedView, onOpenShortcuts
 }: SettingsPanelProps) {
   const t = useT()
   const [showPassword, setShowPassword] = useState(false)
   const [modelQuery, setModelQuery] = useState("")
   const [showShutdownConfirm, setShowShutdownConfirm] = useState(false)
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   const [showDataUsage, setShowDataUsage] = useState(false)
+  const [showPairModal, setShowPairModal] = useState(false)
 
   const uniqueModels = useMemo(() => {
     return Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values())
@@ -162,7 +167,6 @@ export const SettingsPanel = memo(function SettingsPanel({
     { key: "offlineCache" as const, label: t('settings.offlineCache'), desc: t('settings.offlineCacheDesc') },
     { key: "questionAuto" as const, label: t('settings.questionAuto'), desc: t('settings.questionAutoDesc') },
     { key: "permissionUI" as const, label: t('settings.permissionUI'), desc: t('settings.permissionUIDesc') },
-    { key: "promptQueue" as const, label: t('settings.promptQueue'), desc: t('settings.promptQueueDesc') },
   ]
 
   return (
@@ -187,13 +191,24 @@ export const SettingsPanel = memo(function SettingsPanel({
       <SettingsSection title={t('settings.sectionServers')} icon={<ServerIcon size={14} />}>
         <p className="subtle">{t('settings.sectionServersDesc')}</p>
 
+        <label className="form-field api-version-field">
+          <span>{t('settings.apiVersion')}</span>
+          <select name="apiVersion" value={draftConfig.apiVersion ?? "auto"}
+            onChange={(e) => setField("apiVersion", e.target.value as "auto" | "v1" | "v2")}>
+            <option value="auto">{t('settings.apiVersionAuto')}</option>
+            <option value="v1">{t('settings.apiVersionV1')}</option>
+            <option value="v2">{t('settings.apiVersionV2')}</option>
+          </select>
+          <small className="subtle">{t('settings.apiVersionDesc')}</small>
+        </label>
+
         {/* Current server (active, not saved as profile) */}
         <div className={`server-profile${expandedCurrent ? " expanded" : ""}`}>
           <button type="button" className="server-profile-row" onClick={() => setExpandedCurrent((v) => !v)}
             aria-expanded={expandedCurrent}>
             <span className="server-profile-kind http">HTTP</span>
             <span className="server-profile-name">{t('settings.serverCurrent')}</span>
-            <span className="server-profile-desc">{describeProfile({ id: "current", name: "", config: draftConfig })}</span>
+            <span className="server-profile-desc">{describeProfile({ id: "current", name: "", kind: "http", config: draftConfig })}</span>
             <span className="settings-chevron" aria-hidden="true">▾</span>
           </button>
           {expandedCurrent && (
@@ -231,7 +246,9 @@ export const SettingsPanel = memo(function SettingsPanel({
               <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}${expandedProfileId === profile.id ? " expanded" : ""}`}>
                 <button type="button" className="server-profile-row" onClick={() => toggleProfile(profile)}
                   aria-expanded={expandedProfileId === profile.id}>
-                  <span className="server-profile-kind http">HTTP</span>
+                  <span className={`server-profile-kind${isPairProfile(profile) ? " pair" : " http"}`}>
+                    {isPairProfile(profile) ? t('settings.pairKind') : "HTTP"}
+                  </span>
                   <span className="server-profile-name">{profile.name}</span>
                   <span className="server-profile-desc">{describeProfile(profile)}</span>
                   {activeServerProfileID === profile.id ? (
@@ -299,6 +316,14 @@ export const SettingsPanel = memo(function SettingsPanel({
             disabled={!newProfileName.trim()}
             onClick={() => { onAddServerProfile(newProfileName.trim(), "http"); setNewProfileName("") }}>
             <PlusIcon size={14} /> {t('settings.serverSaveHttp')}
+          </button>
+        </div>
+        <div className="pair-service-row">
+          <span className="server-profile-kind pair">{t('settings.pairKind')}</span>
+          <span className="pair-service-label">{t('settings.pairTitle')}</span>
+          <button type="button" className="btn-secondary compact"
+            onClick={() => setShowPairModal(true)}>
+            <CameraIcon size={14} /> {t('settings.pairScanQr')}
           </button>
         </div>
       </SettingsSection>
@@ -443,20 +468,6 @@ export const SettingsPanel = memo(function SettingsPanel({
               </button>
             </label>
           ))}
-          {flags.promptQueue && (
-            <label className="switch-row">
-              <span className="switch-label">
-                <strong>{t('settings.promptQueueMode')}</strong>
-                <small>{t('settings.promptQueueModeDesc')}</small>
-              </span>
-              <select name="promptQueueMode" value={flags.promptQueueMode}
-                onChange={(e) => onSetFlag("promptQueueMode", e.target.value as "manual" | "auto")}
-                className="switch-input" style={{ width: "auto", minWidth: 100 }}>
-                <option value="auto">{t('settings.promptQueueModeAuto')}</option>
-                <option value="manual">{t('settings.promptQueueModeManual')}</option>
-              </select>
-            </label>
-          )}
         </div>
       </SettingsSection>
 
@@ -549,6 +560,13 @@ export const SettingsPanel = memo(function SettingsPanel({
               <small>{t('extras.shutdownHostDesc')}</small>
             </span>
           </button>
+          <button type="button" className="btn-secondary extras-btn" onClick={() => setShowRestartConfirm(true)}>
+            <RefreshIcon size={16} />
+            <span>
+              <strong>{t('extras.restartHost')}</strong>
+              <small>{t('extras.restartHostDesc')}</small>
+            </span>
+          </button>
           <button type="button" className="btn-secondary extras-btn" onClick={onOpenGitHub}>
             <GithubIcon size={16} />
             <span>
@@ -631,9 +649,37 @@ export const SettingsPanel = memo(function SettingsPanel({
         </div>
       )}
 
+      {showRestartConfirm && (
+        <div className="modal-backdrop" onClick={() => setShowRestartConfirm(false)}>
+          <div className="modal-card fade-in" role="dialog" aria-modal="true"
+            onClick={(e) => e.stopPropagation()}>
+            <h2>{t('extras.restartConfirmTitle')}</h2>
+            <p>{t('extras.restartConfirmBody')}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowRestartConfirm(false)}>
+                {t('extras.restartCancel')}
+              </button>
+              <button className="btn-danger" onClick={() => { setShowRestartConfirm(false); onRestartHost() }}>
+                <RefreshIcon size={16} />
+                {t('extras.restartConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDataUsage && (
         <DataUsageModal
           onClose={() => setShowDataUsage(false)} />
+      )}
+
+      {showPairModal && (
+        <PairModal
+          onSave={(name, config) => {
+            onAddPairServer(name, config)
+            setShowPairModal(false)
+          }}
+          onClose={() => setShowPairModal(false)} />
       )}
     </section>
   )

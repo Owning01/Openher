@@ -14,6 +14,7 @@ const CURSOR_STORAGE_KEY = STORAGE_KEYS.CURSOR
 export function dirParent(dir: string): string | null {
   if (!dir || dir === "/") return null
   if (/^[A-Za-z]:[\\/]?$/i.test(dir)) return null
+  if (!dir.includes("\\") && !dir.startsWith("/")) return null
   const windows = dir.includes("\\")
   const norm = dir.replace(/\\/g, "/").replace(/\/+$/, "")
   const idx = norm.lastIndexOf("/")
@@ -33,6 +34,7 @@ export function dirParts(dir: string): string[] {
 
 export function partsToDir(parts: string[]): string {
   if (parts.length === 0) return ""
+  if (parts.length === 1 && parts[0] === "/") return "/"
   const [head, ...tail] = parts
   if (/^[A-Za-z]:$/i.test(head)) {
     return tail.length > 0 ? `${head}\\${tail.join("\\")}` : `${head}\\`
@@ -40,15 +42,48 @@ export function partsToDir(parts: string[]): string {
   return `/${parts.join("/")}`
 }
 
-function toAbsolute(dir: string, manual: string): string {
+// Resuelve ".." y "." contra el path absoluto (el server rechaza ".." con 500).
+function resolveDots(path: string): string {
+  const windows = path.includes("\\")
+  const parts = path.replace(/\\/g, "/").split("/")
+  const out: string[] = []
+  for (const p of parts) {
+    if (p === "..") {
+      const prev = out[out.length - 1]
+      if (prev && !/^[A-Za-z]:$/i.test(prev)) { out.pop(); continue }
+      continue
+    }
+    if (p && p !== ".") out.push(p)
+  }
+  if (out.length === 0) return windows ? "C:\\" : "/"
+  const joined = out.join("/")
+  const driveHead = /^[A-Za-z]:$/i.test(out[0])
+  if (windows || driveHead) {
+    return out.length === 1 && driveHead ? `${joined}\\` : joined.replace(/\//g, "\\")
+  }
+  return `/${joined}`
+}
+
+// Convierte una entrada manual (absoluta o relativa) en un directorio absoluto.
+// Los ".." se resuelven client-side; el server /file los rechaza (500).
+export function toAbsolute(dir: string, manual: string): string {
   const m = manual.trim().replace(/[\\/]+$/, "")
   if (!m) return dir
-  if (/^[A-Za-z]:[\\/]?/i.test(m)) return /^[A-Za-z]:$/i.test(m) ? `${m}\\` : m.replace(/\//g, "\\")
-  if (m.startsWith("/")) return m
-  if (!dir) return m.replace(/\\/g, "/")
-  const windows = dir.includes("\\")
-  const joined = `${dir.replace(/\\/g, "/").replace(/\/+$/, "")}/${m.replace(/\\/g, "/").replace(/^\/+/, "")}`
-  return windows ? joined.replace(/\//g, "\\") : joined
+  let absolute: string
+  if (/^[A-Za-z]:$/i.test(m)) {
+    absolute = `${m}\\`
+  } else if (/^[A-Za-z]:[\\/]/.test(m)) {
+    absolute = m.replace(/\//g, "\\")
+  } else if (m.startsWith("/")) {
+    absolute = m
+  } else if (!dir) {
+    absolute = m.replace(/\\/g, "/")
+  } else if (dir.includes("\\")) {
+    absolute = `${dir.replace(/[\\/]+$/, "")}\\${m.replace(/\\/g, "/").replace(/^\/+/, "")}`.replace(/\//g, "\\")
+  } else {
+    absolute = `${dir.replace(/\/+$/, "")}/${m.replace(/\\/g, "/").replace(/^\/+/, "")}`
+  }
+  return resolveDots(absolute)
 }
 
 // El FolderPicker navega por TODO el filesystem del server: el estado es un
@@ -64,6 +99,7 @@ export function useFolderPicker(config: ServerConfig) {
   const normalizedDirectory = newSessionDirectory.trim() || undefined
 
   const loadDir = useCallback(async (dir: string) => {
+    const prevDir = pickerDir
     setPickerLoading(true)
     setPickerError(null)
     setPickerDir(dir)
@@ -73,10 +109,11 @@ export function useFolderPicker(config: ServerConfig) {
     } catch (err) {
       setPickerError((err as Error).message)
       setPickerItems([])
+      setPickerDir(prevDir)
     } finally {
       setPickerLoading(false)
     }
-  }, [config])
+  }, [config, pickerDir])
 
   const browseNewSessionDirectory = useCallback(async (dir: string) => {
     await loadDir(dir)
@@ -117,8 +154,6 @@ export function useFolderPicker(config: ServerConfig) {
     normalizedDirectory,
     browseNewSessionDirectory,
     openNewSessionPicker,
-    persistDirectory,
-    toAbsolute,
-    partsToDir
+    persistDirectory
   }
 }

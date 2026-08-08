@@ -12,7 +12,8 @@ const defaultConfig: ServerConfig = {
   host: "",
   port: 4096,
   username: "opencode",
-  password: ""
+  password: "",
+  apiVersion: "auto"
 }
 
 export function configKey(config: ServerConfig): string {
@@ -20,7 +21,8 @@ export function configKey(config: ServerConfig): string {
     host: config.host.trim(),
     port: config.port,
     username: config.username.trim(),
-    password: config.password
+    password: config.password,
+    apiVersion: config.apiVersion ?? "auto"
   })
 }
 

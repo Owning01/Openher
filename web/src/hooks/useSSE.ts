@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
-import { toBase64 } from "../api"
+import { toBase64, resolveApiVersion } from "../api"
 import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
@@ -167,7 +167,10 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   useEffect(() => {
     mountedRef.current = true
     const enabled = Boolean(config)
-    if (enabled) {
+    // v2 (beta) no expone /event (usa WebSocket): queda en "polling" y el
+    // polling de mensajes cubre la recepción.
+    const v2 = config ? resolveApiVersion(config) === "v2" : false
+    if (enabled && !v2) {
       const timeout = setTimeout(() => connect(), 500)
       return () => {
         mountedRef.current = false

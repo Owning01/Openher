@@ -74,14 +74,15 @@ export function useAI(config: ServerConfig) {
   }, [modelOptions, selectedModel, selectedVariant])
 
   const activeModel = useMemo(() => {
+    const variant = activeModelOption?.variant || undefined
     if (selectedModel) {
-      return { providerID: selectedModel.providerID, modelID: selectedModel.modelID, variant: selectedVariant || undefined }
+      return { providerID: selectedModel.providerID, modelID: selectedModel.modelID, variant }
     }
     if (activeModelOption) {
-      return { providerID: activeModelOption.providerID, modelID: activeModelOption.modelID, variant: selectedVariant || undefined }
+      return { providerID: activeModelOption.providerID, modelID: activeModelOption.modelID, variant }
     }
     return undefined
-  }, [selectedModel, activeModelOption, selectedVariant])
+  }, [selectedModel, activeModelOption])
 
   const filteredModelOptions = useMemo(() => {
     const text = modelQuery.trim().toLowerCase()
@@ -148,7 +149,13 @@ export function useAI(config: ServerConfig) {
       setModelOptions(list)
       setModelLoadError(null)
       const saved = selectedModelKey ? modelFromKey(selectedModelKey) : null
-      if (saved && list.some((option) => sameModel(option, saved))) return
+      if (saved && list.some((option) => sameModel(option, saved))) {
+        if (selectedVariant && !list.some((option) => sameModel(option, saved) && option.variant === selectedVariant)) {
+          setSelectedVariant(null)
+          localStorage.removeItem(STORAGE_KEYS.MODEL_VARIANT)
+        }
+        return
+      }
       const fallback = list.find((option) => option.isDefault) ?? list[0]
       if (fallback) {
         const nextKey = modelKey(fallback)
@@ -158,7 +165,7 @@ export function useAI(config: ServerConfig) {
     } catch (err) {
       setModelLoadError((err as Error).message)
     }
-  }, [config, selectedModelKey])
+  }, [config, selectedModelKey, selectedVariant])
 
   const changeModel = useCallback((nextKey: string, variant?: string | null) => {
     setSelectedModelKey(nextKey)

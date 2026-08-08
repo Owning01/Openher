@@ -10,8 +10,6 @@ import { SubagentFooter } from "./SubagentFooter"
 import { SkillBrowser } from "./SkillBrowser"
 import { ContextMenu } from "./ContextMenu"
 import { DiffViewer } from "./DiffViewer"
-import { QueuedPrompts } from "./QueuedPrompts"
-import type { QueuedPrompt } from "../types"
 import { GitToolbar } from "./GitToolbar"
 import { AutoQuestionPrompt } from "./AutoQuestionPrompt"
 import { PermissionPrompt } from "./PermissionPrompt"
@@ -95,9 +93,6 @@ export type ChatViewProps = {
   onOpenTerminal?: () => void
   onOpenMCPBrowser?: () => void
   showTodoButton?: boolean
-  queuedPrompts?: QueuedPrompt[]
-  onRemoveQueued?: (id: string) => void
-  onSendQueued?: (id: string) => void
   compacting?: boolean
 }
 
@@ -112,12 +107,12 @@ export const ChatView = memo(function ChatView({
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, activeSessions, onOpenSession, onOpenSettings, onShellSend, onThemeCommand,
-  flags, onToggleFlag: _onToggleFlag, onSetFlag, diffFiles, projectDashboard,
+  flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
   pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
   onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser,
   todos, todosExpanded, onTodosToggle, showTodoButton,
-  queuedPrompts, onRemoveQueued, onSendQueued, compacting, revertID,
+  compacting, revertID,
   onExportMarkdown, onEditFile
 }: ChatViewProps) {
   const t = useT()
@@ -127,7 +122,20 @@ export const ChatView = memo(function ChatView({
   const [showOverflow, setShowOverflow] = useState(false)
   const [showModelMenu, setShowModelMenu] = useState(false)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
+  const modelToggleRef = useRef<HTMLButtonElement | null>(null)
   useOutsideClick(modelMenuRef, () => setShowModelMenu(false), showModelMenu)
+  useEffect(() => {
+    if (!showModelMenu) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowModelMenu(false)
+        modelToggleRef.current?.focus()
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    modelMenuRef.current?.querySelector<HTMLButtonElement>("button")?.focus()
+    return () => window.removeEventListener("keydown", onKey)
+  }, [showModelMenu])
   const [showSkills, setShowSkills] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
@@ -181,9 +189,7 @@ export const ChatView = memo(function ChatView({
       document.removeEventListener("scroll", hide, true)
     }
   }, [])
-  const [showQueued, setShowQueued] = useState(false)
   const overflowRef = useRef<HTMLDivElement | null>(null)
-
   const handleViewSubagents = useCallback(() => {
     const subagentSession = activeSessions.find((s) => s.parentID === selectedSession?.id)
     if (subagentSession) onOpenSession(subagentSession.id, subagentSession.directory)
@@ -273,18 +279,16 @@ export const ChatView = memo(function ChatView({
         {selectedSession && (
           <div className="detail-header-actions">
             {pendingCount > 0 && <span className="pending-badge" title={t('session.pendingCount', { count: pendingCount })}>{pendingCount}</span>}
-              {queuedPrompts && queuedPrompts.length > 0 && (
-                <button className="queued-badge" onClick={() => setShowQueued(true)} title={t('detail.queuedTitle')}>
-                  {queuedPrompts.length} {t('detail.queuedBadge')}
-                </button>
-              )}
             {activeModelOption && (
               <div className="header-model-wrap" ref={modelMenuRef} style={{ position: "relative", flexShrink: 0 }}>
                 <button
+                  ref={modelToggleRef}
                   type="button"
                   className="header-model-toggle"
                   onClick={(e) => { e.stopPropagation(); setShowModelMenu((v) => !v) }}
                   aria-expanded={showModelMenu}
+                  aria-haspopup="true"
+                  aria-controls="header-model-menu"
                   title={`${activeModelOption.modelName ?? t('detail.modelLoading')}${activeModelOption.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}>
                   <span className="header-model-name">
                     {activeModelOption.modelName ?? t('detail.modelLoading')}
@@ -292,8 +296,8 @@ export const ChatView = memo(function ChatView({
                   </span>
                 </button>
                 {showModelMenu && (
-                  <div className="header-model-menu fade-in" role="menu" aria-label={t('detail.thinkingLevel')}>
-                    <div className="hmm-title">
+                  <div id="header-model-menu" className="header-model-menu fade-in" aria-labelledby="hmm-title">
+                    <div className="hmm-title" id="hmm-title">
                       <strong>{activeModelOption.modelName ?? t('detail.modelLoading')}</strong>
                       {activeModelOption.providerName && <small>{activeModelOption.providerName}</small>}
                     </div>
@@ -302,12 +306,17 @@ export const ChatView = memo(function ChatView({
                         base={activeModelOption}
                         variants={activeModelVariants}
                         activeVariant={selectedVariant}
-                        onChange={(_key, variant) => { onChangeVariant(variant ?? null); setShowModelMenu(false) }} />
+                        onChange={(_key, variant) => {
+                          const next = variant ?? null
+                          if (next !== selectedVariant) onChangeVariant(next)
+                          setShowModelMenu(false)
+                          modelToggleRef.current?.focus()
+                        }} />
                     ) : (
                       <span className="hmm-none">{t('detail.noThinkingLevels')}</span>
                     )}
                     <button type="button" className="hmm-change"
-                      onClick={() => { setShowModelMenu(false); onSheetOpen("ai") }}>
+                      onClick={() => { setShowModelMenu(false); modelToggleRef.current?.focus(); onSheetOpen("ai") }}>
                       {t('detail.changeModel')}
                     </button>
                   </div>
@@ -382,12 +391,6 @@ export const ChatView = memo(function ChatView({
                     <LayersIcon size={14} />
                     {t('session.skills')}
                   </button>
-                  {queuedPrompts && queuedPrompts.length > 0 && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowQueued(true) }}>
-                      <LayersIcon size={14} />
-                      {t('detail.queuedTitle')} ({queuedPrompts.length})
-                    </button>
-                  )}
                   {onOpenTerminal && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenTerminal() }}>
                       <TerminalIcon size={14} />
@@ -567,15 +570,6 @@ export const ChatView = memo(function ChatView({
           config={config}
           directory={selectedSession?.directory}
           onThemeCommand={onThemeCommand}
-          queueEnabled={flags.promptQueue}
-          onToggleQueue={() => {
-            if (flags.promptQueue) {
-              onSetFlag("promptQueue", false)
-            } else {
-              onSetFlag("promptQueue", true)
-              onSetFlag("promptQueueMode", "auto")
-            }
-          }}
         />
       )}
 
@@ -586,15 +580,6 @@ export const ChatView = memo(function ChatView({
           onSelect={(name) => onComposerChange(`/skill ${name} `)}
         />,
         document.body
-      )}
-
-      {showQueued && queuedPrompts && onRemoveQueued && (
-        <QueuedPrompts
-          prompts={queuedPrompts}
-          onSend={(id) => { onSendQueued?.(id); setShowQueued(false) }}
-          onRemove={onRemoveQueued}
-          onClose={() => setShowQueued(false)}
-        />
       )}
 
       {flags.questionAuto && pendingQuestions && pendingQuestions.length > 0 && onQuestionReply && onDismissQuestion && (

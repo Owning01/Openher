@@ -22,7 +22,7 @@ export type VariantGroup = { base: ModelOption; variants: ModelOption[] }
 // del chat, el model sheet y las preferencias (DRY).
 export function variantsOf(models: ModelOption[], base: ModelOption | ModelSelection | null | undefined): ModelOption[] {
   if (!base) return []
-  return models.filter((m) => sameModel(m, base) && m.variant)
+  return models.filter((m) => sameModel(m, base) && m.variant && m.variant !== base.variant)
 }
 
 // Agrupa modelos por provider:modelID, con el base (sin variant) y sus variantes.
@@ -30,8 +30,12 @@ export function groupModels(models: ModelOption[]): Map<string, VariantGroup> {
   const groups = new Map<string, VariantGroup>()
   for (const opt of models) {
     const key = modelKey(opt)
-    if (!groups.has(key)) groups.set(key, { base: opt, variants: [] })
-    if (opt.variant) groups.get(key)!.variants.push(opt)
+    if (!groups.has(key)) {
+      const plain = models.find((m) => m !== opt && sameModel(m, opt) && !m.variant)
+      groups.set(key, { base: plain ?? opt, variants: [] })
+    }
+    const group = groups.get(key)!
+    if (opt.variant && opt !== group.base) group.variants.push(opt)
   }
   return groups
 }

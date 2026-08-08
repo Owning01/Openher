@@ -3,7 +3,7 @@ import { PlusIcon, FolderIcon, LoadingIcon, CloseIcon, PencilIcon } from "../Ico
 import { useT } from "../i18n-context"
 import type { FileEntry } from "../types"
 import { Modal } from "./Modal"
-import { dirParent, dirParts, partsToDir } from "../hooks/useFolderPicker"
+import { dirParent, dirParts, partsToDir, toAbsolute } from "../hooks/useFolderPicker"
 
 type FolderPickerProps = {
   pickerDir: string
@@ -32,22 +32,11 @@ export const FolderPicker = memo(function FolderPicker({
 
   const handleManualGo = useCallback(() => {
     if (manualPath.trim()) {
-      onBrowse(toAbsoluteDir(manualPath))
+      onBrowse(toAbsolute(pickerDir, manualPath))
       setShowManual(false)
       setManualPath("")
     }
-  }, [manualPath, onBrowse])
-
-  function toAbsoluteDir(manual: string): string {
-    const m = manual.trim().replace(/[\\/]+$/, "")
-    if (!m) return pickerDir
-    if (/^[A-Za-z]:[\\/]?/i.test(m)) return /^[A-Za-z]:$/i.test(m) ? `${m}\\` : m.replace(/\//g, "\\")
-    if (m.startsWith("/")) return m
-    if (!pickerDir) return m.replace(/\\/g, "/")
-    const windows = pickerDir.includes("\\")
-    const joined = `${pickerDir.replace(/\\/g, "/").replace(/\/+$/, "")}/${m.replace(/\\/g, "/").replace(/^\/+/, "")}`
-    return windows ? joined.replace(/\//g, "\\") : joined
-  }
+  }, [manualPath, pickerDir, onBrowse])
 
   useEffect(() => {
     if (showManual) setManualPath(pickerDir)
