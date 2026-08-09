@@ -8288,3 +8288,47 @@ mark {
     gap: var(--space-2);
   }
 }
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-section-toggle {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-section-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (pointer: coarse), (max-width: 780px) {
+  .settings-section-actions .server-add-btn {
+    min-height: 44px;
+  }
+}
+
+/* El panel de Settings volvía transparentes a los btn-primary (texto
+   on-primary invisible sobre fondo claro): restaurar el fondo para los
+   botones de acción reales (+ agregar, guardar, conectar). */
+.panel.settings .btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+  box-shadow: none;
+}
+
+.panel.settings .btn-primary:hover:not(:disabled) {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+}
+
+.panel.settings .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

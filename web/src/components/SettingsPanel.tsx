@@ -99,6 +99,8 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   const [showDataUsage, setShowDataUsage] = useState(false)
   const [showPairModal, setShowPairModal] = useState(false)
+  // Sección de servidores abierta por defecto: el botón + y los servers visibles.
+  const [serversOpen, setServersOpen] = useState(true)
 
   // ===== Remote desktop (agente en la PC, puerto default 5901) =====
   const [desktopCfg, setDesktopCfg] = useState<DesktopConfig>(() =>
@@ -256,7 +258,15 @@ export const SettingsPanel = memo(function SettingsPanel({
       </div>
 
       {/* Saved servers + per-server config */}
-      <SettingsSection title={t('settings.sectionServers')} icon={<ServerIcon size={14} />}>
+      <SettingsSection title={t('settings.sectionServers')} icon={<ServerIcon size={14} />}
+        open={serversOpen} onToggle={() => setServersOpen((v) => !v)}
+        actions={
+          <button type="button" className="btn-primary compact server-add-btn"
+            onClick={() => { setServersOpen(true); startDraft() }}
+            aria-label={t('settings.serverAdd')}>
+            <PlusIcon size={14} /> <span>{t('settings.serverAdd')}</span>
+          </button>
+        }>
         <div className="server-section-header">
           {draftConfig.host && draftConfig.port > 0 ? (
             <p className="server-current-status">
@@ -266,11 +276,6 @@ export const SettingsPanel = memo(function SettingsPanel({
           ) : (
             <p className="server-current-status">{t('settings.serverNoActive')}</p>
           )}
-          <button type="button" className="btn-primary compact server-add-btn"
-            onClick={startDraft}
-            aria-label={t('settings.serverAdd')}>
-            <PlusIcon size={14} /> <span>{t('settings.serverAdd')}</span>
-          </button>
         </div>
 
         <label className="form-field api-version-field">
