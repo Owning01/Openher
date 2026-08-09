@@ -402,6 +402,9 @@ type TranslationKey =
   | 'detail.diff.viewFile'
   | 'detail.diff.noChanges'
   | 'settings.blockedModelsSearch'
+  | 'settings.blockedCount'
+  | 'settings.blockedShowAll'
+  | 'settings.blockedHideAll'
   | 'settings.providers'
   | 'settings.providersDesc'
   | 'settings.connect'
@@ -717,6 +720,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': 'Blocked models',
     'settings.blockedModelsHint': 'Blocked models are hidden from the model picker.',
     'settings.blockedModelsSearch': 'Filter models...',
+    'settings.blockedCount': '{blocked}/{total} hidden',
+    'settings.blockedShowAll': 'Show all',
+    'settings.blockedHideAll': 'Hide all',
     'settings.providers': 'AI Providers',
     'settings.providersDesc': 'Connect or disconnect AI providers',
     'settings.connect': 'Connect',
@@ -1313,6 +1319,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': 'Modelos bloqueados',
     'settings.blockedModelsHint': 'Los modelos bloqueados se ocultan del selector.',
     'settings.blockedModelsSearch': 'Filtrar modelos...',
+    'settings.blockedCount': '{blocked}/{total} ocultos',
+    'settings.blockedShowAll': 'Mostrar todos',
+    'settings.blockedHideAll': 'Ocultar todos',
     'settings.providers': 'Proveedores de IA',
     'settings.providersDesc': 'Conecta o desconecta proveedores de IA',
     'settings.connect': 'Conectar',
@@ -1909,6 +1918,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': 'Modelli bloccati',
     'settings.blockedModelsHint': 'I modelli bloccati sono nascosti dal selettore.',
     'settings.blockedModelsSearch': 'Filtra modelli...',
+    'settings.blockedCount': '{blocked}/{total} nascosti',
+    'settings.blockedShowAll': 'Mostra tutti',
+    'settings.blockedHideAll': 'Nascondi tutti',
     'settings.providers': 'Provider IA',
     'settings.providersDesc': 'Connetti o disconnetti provider IA',
     'settings.connect': 'Connetti',
@@ -2469,6 +2481,9 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.blockedModels': '已封鎖的模型',
     'settings.blockedModelsHint': '已封鎖的模型將從選擇器中隱藏。',
     'settings.blockedModelsSearch': '篩選模型...',
+    'settings.blockedCount': '隱藏 {blocked}/{total}',
+    'settings.blockedShowAll': '顯示全部',
+    'settings.blockedHideAll': '隱藏全部',
     'settings.providers': 'AI 提供商',
     'settings.providersDesc': '連接或斷開 AI 提供商',
     'settings.connect': '連接',

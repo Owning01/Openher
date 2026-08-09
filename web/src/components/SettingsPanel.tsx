@@ -617,12 +617,14 @@ export const SettingsPanel = memo(function SettingsPanel({
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProvider(providerID) } }}>
                     <span className="blocked-chevron">{isExpanded ? "▼" : "▶"}</span>
                     <strong>{providerID}</strong>
-                    <small className="subtle">{blockedCount}/{total} ocultos</small>
+                    <small className="subtle">{t('settings.blockedCount', { blocked: blockedCount, total })}</small>
                     <button type="button" className="btn-link" onClick={(e) => { e.stopPropagation(); blockedModels.toggleAllForProvider(providerID, !allBlocked) }}>
-                      {allBlocked ? "Mostrar todos" : "Ocultar todos"}
+                      {allBlocked ? t('settings.blockedShowAll') : t('settings.blockedHideAll')}
                     </button>
                   </div>
-                  {isExpanded && filtered.map((opt) => {
+                  {isExpanded && (
+                    <div className="blocked-items">
+                    {filtered.map((opt) => {
                     const key = mk(opt)
                     const blocked = blockedModels.isBlocked(key)
                     return (
@@ -639,6 +641,8 @@ export const SettingsPanel = memo(function SettingsPanel({
                       </label>
                     )
                   })}
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -765,11 +769,16 @@ export const SettingsPanel = memo(function SettingsPanel({
           </label>
           <label className="field-label">
             {t('settings.password')}
-            <input
-              type={showDesktopPass ? "text" : "password"}
-              value={desktopCfg.password}
-              onChange={(e) => setDesktopCfg((c) => ({ ...c, password: e.target.value }))}
-            />
+            <div className="password-wrapper">
+              <input
+                type={showDesktopPass ? "text" : "password"}
+                value={desktopCfg.password}
+                onChange={(e) => setDesktopCfg((c) => ({ ...c, password: e.target.value }))}
+              />
+              <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowDesktopPass((v) => !v)} tabIndex={-1}>
+                {showDesktopPass ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+              </button>
+            </div>
           </label>
         </div>
         <div className="settings-actions">
@@ -781,9 +790,6 @@ export const SettingsPanel = memo(function SettingsPanel({
           >
             {desktopTesting ? <LoadingIcon size={14} /> : <TestIcon size={14} />}
             {t('settings.desktopTest')}
-          </button>
-          <button type="button" className="btn-secondary compact" onClick={() => setShowDesktopPass((v) => !v)}>
-            {showDesktopPass ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
           </button>
           {desktopSaved && <span className="desktop-saved-hint">{t('settings.desktopSaved')}</span>}
         </div>

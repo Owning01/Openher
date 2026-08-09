@@ -33,49 +33,6 @@
 
 ---
 
-## ✨ Features
-
-<div class="features-grid">
-
-| | |
-|---|---|
-| **⚡ Real-time streaming** | SSE events via `/event` — typing indicators, instant delivery |
-| **🔄 Adaptive polling** | 4 modes: Full (3.5s), Balance (15s), Reduced (30s), Miser (60s). Auto-switches on mobile data |
-| **📦 Offline cache** | IndexedDB — browse sessions and messages without a connection |
-| **💬 Full chat** | Send prompts, commands, shell. Abort, revert, undo/redo |
-| **📋 Diff viewer** | Per-file expandable diffs with inline content loading |
-| **📁 Session management** | Create, rename, delete, favorites, archive, export snapshots |
-| **🤖 AI agent control** | Select and switch between agents/models per session |
-| **🧠 Thinking level** | Choose reasoning effort (None/High/Medium/Low) per model — variants are created on the server via `PATCH /config` |
-| **🎨 Theme creator** | Visual color editor with JSON export |
-| **🔌 Multi-provider** | Connect external providers (OpenAI, Anthropic, etc.) via API key |
-| **📂 File browser** | Browse the remote project's files |
-| **🌿 Git toolbar** | Stage, commit, branch state (ahead/behind) |
-| **🎤 Voice input** | Speech-to-text with Web Speech API + native Capacitor plugin |
-| **🔐 Permissions & Questions** | Automatic modals for AI questions and tool permissions |
-| **🎨 30+ themes** | Dark, light, system and scheduled modes; variant picker with preview |
-| **🌍 i18n** | Español, English, Italiano, 繁體中文 |
-| **📉 Auto-summarize** | Automatic compaction when the context grows |
-| **📋 Plan breakdown** | Task visualization for AI orchestration flows |
-| **⌨️ Keyboard shortcuts** | Tab + actions for power users |
-| **🚀 Quick deploy** | 1-command scripts for LAN (same WiFi) or remote via Tailscale |
-| **🌐 Remote access (Tailscale)** | Free private mesh VPN — connect from any network without opening ports |
-| **📝 File editor** | Read, edit and save project files |
-| **🔗 Deep links** | `opencode://connect` and `opencode://session/<id>` |
-| **📤 Share to OpenCode** | Android share sheet → text/image becomes a prompt |
-| **⬇️ Export chat** | Copy as Markdown or share a `.md` file via the system share sheet |
-| **🔧 Edit from diff** | Open any changed file directly in the editor from the diff view |
-| **🖼️ Image lightbox** | Full view with zoom and drag |
-| **🧩 MCP Browser** | Explore connected MCP resources |
-| **📦 Offline queue** | Actions are queued and resent on reconnect |
-| **🎨 Theme creator** | Visual color editor with JSON export |
-| **⭐ Reorderable favorites** | Drag and drop to sort |
-| **🗄️ Saved servers** | Multiple server profiles (host/port/user/password) with edit modal — tap a profile to edit before applying |
-
-</div>
-
----
-
 ## 🕸️ Dependency graphs
 
 <details>

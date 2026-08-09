@@ -33,46 +33,6 @@
 
 ---
 
-## ✨ Características
-
-<div class="features-grid">
-
-| | |
-|---|---|
-| **⚡ Streaming en tiempo real** | Eventos SSE via `/event` — indicadores de escritura, entrega instantánea |
-| **🔄 Polling adaptativo** | 4 modos: Full (3.5s), Balance (15s), Reducido (30s), Mínimo (60s). Cambio automático en datos móviles |
-| **📦 Cache offline** | IndexedDB — navegá sesiones y mensajes sin conexión |
-| **💬 Chat completo** | Enviá prompts, comandos, shell. Abortá, revertí, undo/redo |
-| **📋 Diff viewer** | Diffs expandibles por archivo con carga inline de contenido |
-| **📁 Gestión de sesiones** | Crear, renombrar, eliminar, favoritos, archivar, exportar snapshots |
-| **🤖 Control de agentes AI** | Seleccioná y cambiá entre agentes/modelos por sesión |
-| **🔌 Multi-proveedor** | Conectá proveedores externos (OpenAI, Anthropic, etc.) via API key |
-| **📂 File browser** | Navegá archivos remotos del proyecto |
-| **🌿 Git toolbar** | Stage, commit, estado de rama (ahead/behind) |
-| **🎤 Entrada por voz** | Speech-to-text con Web Speech API + plugin nativo Capacitor |
-| **🔐 Permisos y Preguntas** | Modales automáticos para preguntas del AI y permisos de herramientas |
-| **🎨 30+ temas** | Modos oscuro, claro, sistema y programado; selector de variantes con preview |
-| **🌍 i18n** | Español, English, Italiano, 繁體中文 |
-| **📉 Auto-summarize** | Compactación automática cuando el contexto crece |
-| **📋 Plan breakdown** | Visualización de tareas para flujos de orquestación AI |
-| **⌨️ Atajos de teclado** | Tab + acciones para usuarios avanzados |
-| **🚀 Deploy rápido** | Scripts de 1 comando para LAN (misma WiFi) o remoto vía Tailscale |
-| **🌐 Acceso remoto (Tailscale)** | VPN mesh privada gratuita — conectate desde cualquier red sin abrir puertos |
-| **📝 Editor de archivos** | Leer, editar y guardar archivos del proyecto |
-| **🔗 Deep links** | `opencode://connect` y `opencode://session/<id>` |
-| **📤 Compartir a OpenCode** | Share sheet de Android → texto/imagen se convierte en prompt |
-| **⬇️ Exportar chat** | Copiar como Markdown o compartir archivo `.md` con el share sheet del sistema |
-| **🔧 Editar desde diff** | Abrí cualquier archivo modificado directo en el editor desde el diff |
-| **🖼️ Lightbox de imágenes** | Vista completa con zoom y arrastre |
-| **🧩 MCP Browser** | Explorá recursos MCP conectados |
-| **📦 Cola offline** | Las acciones se encolan y reenvían al reconectar |
-| **🎨 Creador de temas** | Editor visual de colores con exportación JSON |
-| **⭐ Favoritos reordenables** | Arrastrá y soltá para ordenar |
-
-</div>
-
----
-
 ## 🕸️ Grafos de dependencias
 
 <details>
