@@ -33,6 +33,7 @@ en `G:\Proyectos\opencode-stats`.
 - `npm run test:i18n` / `test:ui` / `test:settings` / `test:model` — tests de regresión
 - `.\deploy-quick.ps1` (en `web/`) — build + cap copy + gradle assembleDebug + servidor/túnel
 - `npx cap copy` — copia `dist/` a `android/app/src/main/assets/public/`
+- `.\deploy-apk.ps1` (raíz) — build + copy-dist + gradle + subida a tmpfiles.org; imprime el LINK (`-SkipBuild` = solo subir el APK ya compilado)
 
 ## Arquitectura clave
 
@@ -68,7 +69,30 @@ en `G:\Proyectos\opencode-stats`.
   health prueba `/global/health` vs `/api/health`). Mappers: `toSessionV1`,
   `toMessageEnvelopeV1` (content[] → parts[]). El SSE se salta en v2 (no existe
   `/event`; el polling cubre la recepción). Prompt v2: POST `/api/session/:id/prompt`
-  con `{text}`. El toggle está en Settings → Preferencias → API version (Auto/v1/v2).
+  con `{text}` (model/agent NO van en el body — v2 los rechaza con 400; por-sesión).
+  v2 renames: abort→`/interrupt`, revert→`/revert/stage`+`/commit`, unrevert→
+  `/revert/clear`, summarize→`/compact`, status→`/session/active` (running→busy).
+  El toggle está en Settings → Preferencias → API version (Auto/v1/v2).
+- **Escritorio remoto** — agente Go standalone en `desktop-agent/` (sin cgo, stdlib
+  + syscall; puerto 5901, Basic auth, config `desktop-agent.json`, `start-desktop-agent.bat`):
+  `/health`, `/info` (monitores+ventanas), `/stream` (MJPEG `?mode=screen|window&hwnd=&w=&q=&fps=`,
+  frames SOLO cuando cambia el contenido, escala server-side al ancho pedido),
+  `/thumb` (frame único para miniaturas), `/input` (mouse normalizado 0..1, scroll,
+  teclas, texto UNICODE). Captura: GDI BitBlt (pantalla virtual) + `PrintWindow`
+  `PW_RENDERFULLCONTENT` (ventanas, funciona con Chrome/GPU y ventanas tapadas);
+  `SetProcessDPIAware` + cursor dibujado vía DrawIconEx; `SendInput` para input real.
+  Vista en la app: `RemoteDesktop.tsx` + `useRemoteDesktop.ts` (reader MJPEG por
+  fetch+blob — NO `<img>` con credenciales en URL: Chromium no envía el header
+  Authorization), config en Settings → Escritorio remoto (key `opencode.remote.desktop`,
+  auto-save debounced), entrada por overflow del chat. Gestos: tap=click, double-tap=doble
+  click, long-press=click derecho, arrastrar=mover, 2 dedos=scroll/pinch zoom (anclado),
+  modo arrastre y modo scroll, botón de mouse segmentado (izq/der/medio), mods Ctrl/Alt/
+  Shift/Win + ESC/TAB/WIN/CAD + d-pad. Fit-to-screen por defecto con captura a factor
+  del stage medido en vivo (Baja ×1.0 q40 5fps / Media ×1.75 q55 10fps / Alta ×2.5 cap
+  1440 q75 15fps); zoom pan acotado; stats en chip ocultable; selector de fuente como
+  bottom sheet con miniaturas (endpoint /thumb). En datos móviles (ultra/miser) pide
+  consentimiento antes de streamear (Baja). Cero tráfico si la vista no está abierta:
+  el stream vive solo dentro del modal (abort + revoke de blobs al cerrar).
 
 ## Persistencia de datos (garantías)
 

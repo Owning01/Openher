@@ -35,9 +35,35 @@ export function toBase64(input: string): string {
 export type ApiVersion = "auto" | "v1" | "v2"
 
 const detectedVersionCache = new Map<string, "v1" | "v2">()
+const detectionPromises = new Map<string, Promise<"v1" | "v2">>()
 
 function versionKey(config: ServerConfig): string {
   return `${config.host.trim()}:${config.port}`
+}
+
+// En modo "auto", resuelve el dialecto del server ANTES del primer request
+// (probe memoizado por host). Evita el patrón v1-404 → retry /api en cada
+// request contra un server v2 (ruido en consola) y el /event en loop.
+async function ensureVersionDetected(config: ServerConfig): Promise<"v1" | "v2"> {
+  if (config.apiVersion === "v1" || config.apiVersion === "v2") return config.apiVersion
+  const key = versionKey(config)
+  const cached = detectedVersionCache.get(key)
+  if (cached) return cached
+  let promise = detectionPromises.get(key)
+  if (!promise) {
+    promise = (async () => {
+      try {
+        await api.health(config)
+      } catch {
+        // server caído: el error real lo reporta el request que sigue
+      } finally {
+        detectionPromises.delete(key)
+      }
+      return detectedVersionCache.get(key) ?? "v1"
+    })()
+    detectionPromises.set(key, promise)
+  }
+  return promise
 }
 
 export function resolveApiVersion(config: ServerConfig): "v1" | "v2" {
@@ -45,8 +71,26 @@ export function resolveApiVersion(config: ServerConfig): "v1" | "v2" {
   return detectedVersionCache.get(versionKey(config)) ?? "v1"
 }
 
+// Versión resuelta con espera: para las branches de api methods. resolveApiVersion
+// devuelve "v1" con el cache vacío (arranque) y las rutas v1 quedarían rotas
+// aunque requestWithHeaders sí detecte v2 (404 con prefijo /api).
+export function getApiVersion(config: ServerConfig): Promise<"v1" | "v2"> {
+  return ensureVersionDetected(config)
+}
+
 export function rememberApiVersion(config: ServerConfig, version: "v1" | "v2") {
-  detectedVersionCache.set(versionKey(config), version)
+  const key = versionKey(config)
+  if (detectedVersionCache.get(key) === version) return
+  detectedVersionCache.set(key, version)
+  versionListeners.forEach((fn) => fn())
+}
+
+// Hooks que dependen del dialecto (p.ej. useSSE) se suscriben para re-evaluarse
+// cuando la detección de health() resuelve la versión del server.
+const versionListeners = new Set<() => void>()
+export function onApiVersionChange(listener: () => void): () => void {
+  versionListeners.add(listener)
+  return () => { versionListeners.delete(listener) }
 }
 
 function apiPath(config: ServerConfig, path: string): string {
@@ -99,6 +143,13 @@ function withDirectory(path: string, directory?: string): string {
   if (!directory) return path
   const separator = path.includes("?") ? "&" : "?"
   return `${path}${separator}directory=${encodeURIComponent(normalizeSlashes(directory))}`
+}
+
+// v2 scopea por location (deepObject): ?location[directory]=...
+function withLocationDirectory(path: string, directory?: string): string {
+  if (!directory) return path
+  const separator = path.includes("?") ? "&" : "?"
+  return `${path}${separator}location[directory]=${encodeURIComponent(normalizeSlashes(directory))}`
 }
 
 type RequestOptions = {
@@ -180,10 +231,43 @@ type AgentResponse = Array<{
   hidden?: boolean
 }>
 
+function mapProviderModels(response: ConfigProvidersResponse): ModelOption[] {
+  return response.providers.flatMap((provider) => {
+    const defaultModel = response.default?.[provider.id]
+    return Object.entries(provider.models).flatMap(([modelID, model]) => {
+      const base: ModelOption = {
+        providerID: provider.id,
+        providerName: provider.name || provider.id,
+        modelID: model.id || modelID,
+        modelName: model.name || model.id || modelID,
+        status: model.status,
+        contextLimit: model.limit?.context,
+        outputLimit: model.limit?.output,
+        tools: Boolean(model.capabilities?.toolcall || model.capabilities?.tools),
+        attachments: Boolean(model.capabilities?.attachment),
+        isDefault: defaultModel === modelID
+      }
+      const variantIDs = Object.keys(model.variants ?? {})
+      return [
+        base,
+        ...variantIDs.map((variant) => ({ ...base, variant, isDefault: false }))
+      ]
+    })
+  })
+}
+
 async function requestWithHeaders<T>(config: ServerConfig, path: string, options: RequestOptions = {}): Promise<ResponseWithHeaders<T>> {
+  const autoV2 = !options.rawPath && config.apiVersion !== "v1" && config.apiVersion !== "v2"
+  if (autoV2) {
+    const version = await ensureVersionDetected(config)
+    if (version === "v2") {
+      return requestRaw<T>(config, `${baseUrl(config)}/api${path}`, options)
+    }
+    // v1 confirmado: sin retry con /api ante un 404 real.
+    return requestRaw<T>(config, `${baseUrl(config)}${path}`, options)
+  }
   // En modo auto, si el server es v2 (todavía no detectado) el primer intento
   // con ruta v1 da 404: reintentamos con el prefijo /api y cacheamos el dialecto.
-  const autoV2 = !options.rawPath && config.apiVersion !== "v1" && config.apiVersion !== "v2"
   const attempt = (withPrefix: boolean): Promise<ResponseWithHeaders<T>> => {
     const target = `${baseUrl(config)}${withPrefix ? `/api${path}` : options.rawPath ? path : apiPath(config, path)}`
     return requestRaw<T>(config, target, options).catch((err) => {
@@ -399,6 +483,7 @@ function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
     },
     parts: content.map((c, index) => ({
       id: c.id ?? `${raw.id}_part_${index}`,
+      sessionID: raw.sessionID,
       type: c.type ?? "text",
       text: c.text,
       data: c.data,
@@ -406,7 +491,9 @@ function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
       callID: c.id,
       tool: c.name,
       state: c.state as MessageEnvelope["parts"][number]["state"],
-      time: c.time
+      // v2 usa {created, completed}; el app espera {start, end} — sin end el
+      // ThinkingBlock cree que el reasoning sigue streamando (spinner eterno).
+      time: c.time ? { start: c.time.created, end: c.time.completed } : undefined
     }))
   }
 }
@@ -438,13 +525,17 @@ export const api = {
 
   async listSessions(config: ServerConfig, directory?: string) {
     const raw = await request<Session[] | V2Session[]>(config, withDirectory("/session", directory))
-    if (resolveApiVersion(config) === "v2") {
+    if ((await getApiVersion(config)) === "v2") {
       return (raw as V2Session[]).map(toSessionV1)
     }
     return raw as Session[]
   },
 
   async listGlobalSessions(config: ServerConfig) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2 no tiene /experimental/session: /api/session YA es el listado global.
+      return api.listSessions(config)
+    }
     const sessions: Session[] = []
     let cursor: string | undefined
     let pages = 0
@@ -462,7 +553,17 @@ export const api = {
     return sessions
   },
 
-  listStatuses(config: ServerConfig, directory?: string) {
+  async listStatuses(config: ServerConfig, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /session/active devuelve { sesID: { type: "running" } } — los
+      // ausentes están idle. Busy = corriendo.
+      const raw = await request<Record<string, { type?: string }>>(config, withDirectory("/session/active", directory))
+      const out: Record<string, SessionStatus> = {}
+      for (const [id, st] of Object.entries(raw)) {
+        out[id] = { type: st?.type === "running" ? "busy" : "idle" }
+      }
+      return out
+    }
     return request<Record<string, SessionStatus>>(config, withDirectory("/session/status", directory))
   },
 
@@ -487,36 +588,64 @@ export const api = {
   },
 
   async listModels(config: ServerConfig, directory?: string) {
-    const response = await request<ConfigProvidersResponse>(config, withDirectory("/config/providers", directory))
-    return response.providers.flatMap((provider) => {
-      const defaultModel = response.default?.[provider.id]
-      return Object.entries(provider.models).flatMap(([modelID, model]) => {
-        const base: ModelOption = {
-          providerID: provider.id,
-          providerName: provider.name || provider.id,
-          modelID: model.id || modelID,
-          modelName: model.name || model.id || modelID,
-          status: model.status,
-          contextLimit: model.limit?.context,
-          outputLimit: model.limit?.output,
-          tools: Boolean(model.capabilities?.toolcall || model.capabilities?.tools),
-          attachments: Boolean(model.capabilities?.attachment),
-          isDefault: defaultModel === modelID
+    if ((await getApiVersion(config)) === "v2") {
+      // v2 no tiene /config/providers: /model devuelve Model.Info[] (plano)
+      // + /model/default. Se reagrupa por provider para el mapping común.
+      const [raw, def] = await Promise.all([
+        request<unknown>(config, withLocationDirectory("/model", directory)),
+        request<unknown>(config, withLocationDirectory("/model/default", directory)).catch(() => null),
+      ])
+      const models = Array.isArray(raw) ? raw as Array<{
+        id?: string
+        modelID?: string
+        providerID?: string
+        name?: string
+        status?: string
+        enabled?: boolean
+        capabilities?: { tools?: boolean; input?: string[] }
+        limit?: { context?: number; output?: number }
+        variants?: Array<{ id?: string }>
+      }> : []
+      const defaultModel = (def ?? null) as { providerID?: string; modelID?: string; id?: string } | null
+      const providers = new Map<string, ConfigProvidersResponse["providers"][number]>()
+      for (const m of models) {
+        if (m.enabled === false || m.status === "deprecated" || !m.providerID || !m.modelID) continue
+        let provider = providers.get(m.providerID)
+        if (!provider) {
+          provider = { id: m.providerID, name: m.providerID, models: {} }
+          providers.set(m.providerID, provider)
         }
-        const variantIDs = Object.keys(model.variants ?? {})
-        return [
-          base,
-          ...variantIDs.map((variant) => ({ ...base, variant, isDefault: false }))
-        ]
+        provider.models[m.modelID] = {
+          id: m.id ?? m.modelID,
+          name: m.name ?? m.modelID,
+          status: m.status,
+          capabilities: {
+            tools: m.capabilities?.tools,
+            toolcall: m.capabilities?.tools,
+            attachment: m.capabilities?.input?.includes("image"),
+          },
+          limit: m.limit ? { context: m.limit.context, output: m.limit.output } : undefined,
+          variants: Object.fromEntries((m.variants ?? []).map((v) => [v.id ?? "", { id: v.id }])),
+        }
+      }
+      return mapProviderModels({
+        providers: [...providers.values()],
+        default: defaultModel ? { [defaultModel.providerID ?? ""]: defaultModel.modelID ?? defaultModel.id ?? "" } : {},
       })
-    })
+    }
+    const response = await request<ConfigProvidersResponse>(config, withDirectory("/config/providers", directory))
+    return mapProviderModels(response)
   },
 
   createSession(config: ServerConfig, title?: string, model?: ModelSelection, directory?: string) {
     return request<Session>(config, withDirectory("/session", directory), { method: "POST", body: { title, model: toCreateSessionModel(model) } })
   },
 
-  renameSession(config: ServerConfig, id: string, title: string, directory?: string) {
+  async renameSession(config: ServerConfig, id: string, title: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: POST /session/{id}/rename con { title } (no acepta PATCH).
+      return request<Session>(config, withDirectory(`/session/${id}/rename`, directory), { method: "POST", body: { title } })
+    }
     return request<Session>(config, withDirectory(`/session/${id}`, directory), { method: "PATCH", body: { title } })
   },
 
@@ -526,13 +655,17 @@ export const api = {
 
   async loadMessages(config: ServerConfig, sessionID: string, directory?: string, limit = 100) {
     const raw = await request<MessageEnvelope[] | V2Message[]>(config, withDirectory(`/session/${sessionID}/message?limit=${limit}`, directory))
-    if (resolveApiVersion(config) === "v2") {
+    if ((await getApiVersion(config)) === "v2") {
       return (raw as V2Message[]).map(toMessageEnvelopeV1)
     }
     return raw as MessageEnvelope[]
   },
 
-  loadTodo(config: ServerConfig, sessionID: string, directory?: string) {
+  async loadTodo(config: ServerConfig, sessionID: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2 no expone /todo todavía: degradar vacío (sin 404 por poll).
+      return []
+    }
     return request<TodoItem[]>(config, withDirectory(`/session/${sessionID}/todo`, directory))
   },
 
@@ -552,15 +685,14 @@ export const api = {
     return request<FileStatusEntry[] | Record<string, FileStatusEntry>>(config, withDirectory("/file/status", directory))
   },
 
-  sendPrompt(config: ServerConfig, sessionID: string, text: string, directory?: string, model?: ModelSelection, agentID?: string, images?: Array<{ base64: string; mime: string }>) {
-    if (resolveApiVersion(config) === "v2") {
-      // v2 (beta): prompt directo { text }; las imágenes aún no están mapeadas.
-      const body: Record<string, unknown> = { text }
-      if (model) body.model = { providerID: model.providerID, id: model.modelID, variant: model.variant || undefined }
-      if (agentID) body.agent = agentID
+  async sendPrompt(config: ServerConfig, sessionID: string, text: string, directory?: string, model?: ModelSelection, agentID?: string, images?: Array<{ base64: string; mime: string }>) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2 (beta): el payload es SOLO { text } — model/agent son por-sesión y el
+      // server rechaza campos extra (additionalProperties:false → 400). Las
+      // imágenes aún no están mapeadas en v2.
       return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt`, directory), {
         method: "POST",
-        body
+        body: { text }
       })
     }
     const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string }> = []
@@ -576,7 +708,18 @@ export const api = {
     })
   },
 
-  sendCommand(config: ServerConfig, sessionID: string, command: string, argumentsText: string, directory?: string, model?: ModelSelection, agentID?: string) {
+  async sendCommand(config: ServerConfig, sessionID: string, command: string, argumentsText: string, directory?: string, model?: ModelSelection, agentID?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: model va como Model.Ref {id, providerID, variant} — sin variant suelto.
+      const body: Record<string, unknown> = { command, arguments: argumentsText }
+      if (agentID) body.agent = agentID
+      if (model) body.model = { id: model.modelID, providerID: model.providerID, variant: model.variant || undefined }
+      return request<MessageEnvelope>(config, withDirectory(`/session/${sessionID}/command`, directory), {
+        method: "POST",
+        body,
+        readTimeout: 300_000
+      })
+    }
     return request<MessageEnvelope>(config, withDirectory(`/session/${sessionID}/command`, directory), {
       method: "POST",
       body: { command, arguments: argumentsText, agent: agentID, model: modelWireName(model), variant: model?.variant || undefined },
@@ -591,28 +734,54 @@ export const api = {
     })
   },
 
-  abort(config: ServerConfig, sessionID: string, directory?: string) {
-    return request<boolean>(config, withDirectory(`/session/${sessionID}/abort`, directory), {
+  async abort(config: ServerConfig, sessionID: string, directory?: string) {
+    // v2 no expone /abort: usa /interrupt.
+    const path = (await getApiVersion(config)) === "v2"
+      ? `/session/${sessionID}/interrupt`
+      : `/session/${sessionID}/abort`
+    return request<boolean>(config, withDirectory(path, directory), {
       method: "POST",
       body: {}
     })
   },
 
-  revert(config: ServerConfig, sessionID: string, messageID: string, directory?: string) {
+  async revert(config: ServerConfig, sessionID: string, messageID: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: revert en dos pasos — stage (mueve el boundary y aplica files) + commit.
+      await request<unknown>(config, withDirectory(`/session/${sessionID}/revert/stage`, directory), {
+        method: "POST",
+        body: { messageID, files: true }
+      })
+      return request<Session>(config, withDirectory(`/session/${sessionID}/revert/commit`, directory), {
+        method: "POST",
+        body: {}
+      })
+    }
     return request<Session>(config, withDirectory(`/session/${sessionID}/revert`, directory), {
       method: "POST",
       body: { messageID }
     })
   },
 
-  unrevert(config: ServerConfig, sessionID: string, directory?: string) {
-    return request<Session>(config, withDirectory(`/session/${sessionID}/unrevert`, directory), {
+  async unrevert(config: ServerConfig, sessionID: string, directory?: string) {
+    const path = (await getApiVersion(config)) === "v2"
+      ? `/session/${sessionID}/revert/clear`
+      : `/session/${sessionID}/unrevert`
+    return request<Session>(config, withDirectory(path, directory), {
       method: "POST",
       body: {}
     })
   },
 
-  summarize(config: ServerConfig, sessionID: string, providerID: string, modelID: string, directory?: string, auto = false, readTimeout = 300_000) {
+  async summarize(config: ServerConfig, sessionID: string, providerID: string, modelID: string, directory?: string, auto = false, readTimeout = 300_000) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /compact sin payload (usa el modelo de la sesión).
+      return request<boolean>(config, withDirectory(`/session/${sessionID}/compact`, directory), {
+        method: "POST",
+        body: {},
+        readTimeout
+      })
+    }
     return request<boolean>(config, withDirectory(`/session/${sessionID}/summarize`, directory), {
       method: "POST",
       body: { providerID, modelID, auto },
@@ -620,14 +789,29 @@ export const api = {
     })
   },
 
-  questionReply(config: ServerConfig, requestID: string, answers: string[][], directory?: string) {
+  async questionReply(config: ServerConfig, requestID: string, answers: string[][], directory?: string, sessionID?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: reply por-sesión; sin sessionID no hay path válido.
+      if (!sessionID) throw new Error("v2 question reply requires sessionID")
+      return request<boolean>(config, withDirectory(`/session/${sessionID}/question/${encodeURIComponent(requestID)}/reply`, directory), {
+        method: "POST",
+        body: { answers }
+      })
+    }
     return request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reply`, directory), {
       method: "POST",
       body: { answers }
     })
   },
 
-  questionReject(config: ServerConfig, requestID: string, directory?: string) {
+  async questionReject(config: ServerConfig, requestID: string, directory?: string, sessionID?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      if (!sessionID) throw new Error("v2 question reject requires sessionID")
+      return request<boolean>(config, withDirectory(`/session/${sessionID}/question/${encodeURIComponent(requestID)}/reject`, directory), {
+        method: "POST",
+        body: {}
+      })
+    }
     return request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reject`, directory), {
       method: "POST",
       body: {}
@@ -672,7 +856,25 @@ export const api = {
     return request<{ id: string; name: string; description?: string }[]>(config, "/skill")
   },
 
-  listPendingQuestions(config: ServerConfig, directory?: string) {
+  async listPendingQuestions(config: ServerConfig, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /question/request devuelve { location, data: Question.Request[] } —
+      // el unwrap de {data} lo hace request(); acá mapeamos a la forma v1.
+      return request<unknown>(config, withLocationDirectory("/question/request", directory)).then((raw) => {
+        if (!Array.isArray(raw)) return []
+        return raw.map((q) => {
+          const item = q as { id: string; sessionID?: string; questions?: unknown[]; tool?: { messageID: string; id: string } }
+          return {
+            id: item.id,
+            sessionID: item.sessionID,
+            questions: Array.isArray(item.questions)
+              ? (item.questions as { question: string; header?: string; options: QuestionOption[]; multiple?: boolean; custom?: boolean }[])
+              : [],
+            tool: item.tool ? { messageID: item.tool.messageID, callID: item.tool.id } : undefined,
+          }
+        })
+      })
+    }
     // El server moderno devuelve QuestionRequest[]: { id, sessionID, questions:
     // [{ question, header, options, multiple, custom }], tool }. Servers viejos
     // mandaban { id, question, status } — parseo tolerante.
@@ -698,11 +900,30 @@ export const api = {
     })
   },
 
-  listPermissions(config: ServerConfig, directory?: string) {
+  async listPermissions(config: ServerConfig, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /permission/request → Permission.Request[] { id, sessionID, action,
+      // resources, ... } — todos los listados son "pending".
+      return request<unknown>(config, withLocationDirectory("/permission/request", directory)).then((raw) => {
+        if (!Array.isArray(raw)) return []
+        return raw.map((p) => {
+          const item = p as { id: string; sessionID?: string; action: string }
+          return { requestID: item.id, permission: item.action, status: "pending", sessionID: item.sessionID }
+        })
+      })
+    }
     return request<{ requestID: string; permission: string; status: string }[]>(config, withDirectory("/permission", directory))
   },
 
-  permissionReply(config: ServerConfig, requestID: string, approve: boolean, directory?: string) {
+  async permissionReply(config: ServerConfig, requestID: string, approve: boolean, directory?: string, sessionID?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: reply por-sesión con { reply: "once" | "always" | "reject" }.
+      if (!sessionID) throw new Error("v2 permission reply requires sessionID")
+      return request<boolean>(config, withDirectory(`/session/${sessionID}/permission/${encodeURIComponent(requestID)}/reply`, directory), {
+        method: "POST",
+        body: { reply: approve ? "once" : "reject" }
+      })
+    }
     return request<boolean>(config, withDirectory(`/permission/${encodeURIComponent(requestID)}/reply`, directory), {
       method: "POST",
       body: { approve }

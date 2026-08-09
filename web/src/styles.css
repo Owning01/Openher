@@ -142,6 +142,7 @@
 html {
   background: var(--bg);
   overscroll-behavior: none;
+  overflow: hidden;
 }
 
 body {
@@ -155,6 +156,9 @@ body {
   text-rendering: optimizeLegibility;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
+  /* La ventana nunca scrollea: todo el scroll vive dentro de contenedores
+     (evita que scrollIntoView / el teclado muevan la página entera). */
+  overflow: hidden;
 }
 
 button,
@@ -652,9 +656,27 @@ p {
 
 /* ===== Saved Servers (multi-machine profiles) ===== */
 .server-profile-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: var(--space-2);
+}
+
+.server-profile.draft {
+  border-style: dashed;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.server-profile-kind.new {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+}
+
+/* Escritorio: los servidores en grilla de 2 columnas (mobile: 1). */
+@media (min-width: 781px) {
+  .server-profile-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .server-profile {
@@ -703,6 +725,56 @@ p {
 }
 
 .server-profile-remove {
+  flex-shrink: 0;
+}
+
+.server-profile-row {
+  border-radius: var(--radius-sm);
+}
+
+.server-use-btn {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+.server-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.server-add-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.server-current-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-current-status code {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.server-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
   flex-shrink: 0;
 }
 
@@ -770,29 +842,6 @@ p {
   font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;
-}
-
-.server-profile-add {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.server-profile-add input {
-  flex: 1;
-  min-width: 160px;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-subtle);
-  color: var(--text);
-  font-size: 0.85rem;
-}
-
-.server-profile-add input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
 .pair-service-row {
@@ -4487,6 +4536,17 @@ p {
   font-family: var(--font-mono) !important;
 }
 
+.composer-notice {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.6rem;
+  animation: fade-in 0.2s ease;
+}
+
 .composer-input-wrap {
   position: relative;
   display: flex;
@@ -4506,6 +4566,7 @@ p {
   font-size: 0.88rem;
   line-height: 1.45;
   resize: none;
+  overflow-y: auto;
   outline: none;
 }
 
@@ -5804,6 +5865,18 @@ button.compact {
     box-shadow: none !important;
   }
 
+  /* En móvil el input (min-width:140px) + botones rebasan el header y el
+     overflow:hidden de .detail-title-row clipea los botones de guardar/
+     cancelar: el input debe poder encogerse y la fila envolverse. */
+  .detail-title-row {
+    flex-wrap: wrap;
+  }
+
+  .rename-input {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
   .messages {
     flex: 1;
     min-height: 0;
@@ -5943,6 +6016,11 @@ button.compact {
     min-width: 44px;
     min-height: 44px;
     padding: 0.5rem;
+  }
+
+  .server-profile-row,
+  .server-add-btn {
+    min-height: 44px;
   }
 
   .star-btn,
@@ -6194,6 +6272,444 @@ button.compact {
 }
 
 
+/* ===== Remote Desktop ===== */
+.modal-overlay.desktop-overlay {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.desktop-modal {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* Toolbars: glass compacto, 2 filas */
+.desktop-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--nav-bg);
+  backdrop-filter: blur(14px);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.desktop-toolbar-row2 {
+  border-bottom: 1px solid var(--border);
+}
+
+.desktop-toolbar .btn-secondary.compact,
+.desktop-toolbar .btn-icon.compact {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.4rem 0.6rem;
+}
+
+.desktop-source-btn {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 0.4rem 0.7rem;
+}
+
+.desktop-status {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.desktop-status.ok { color: var(--success, #4caf50); }
+.desktop-status.error { color: var(--danger); }
+
+.desktop-toolbar-spacer { flex: 1; }
+
+.desktop-mods-active {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--primary);
+  font-family: var(--font-mono);
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-toggle.active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.desktop-preset {
+  width: auto;
+  min-height: 44px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+/* Selector de botón de mouse (segmentado) */
+.desktop-segment {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.desktop-seg-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.3rem 0.6rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.desktop-seg-btn + .desktop-seg-btn {
+  border-left: 1px solid var(--border);
+}
+
+.desktop-seg-btn.active {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-bottom: 3px solid var(--primary);
+  font-weight: 800;
+}
+
+/* Teclado + mods + dpad */
+.desktop-kb-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-subtle);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.desktop-mod {
+  min-height: 44px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.desktop-mod.active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.desktop-kb-input {
+  flex: 1;
+  min-width: 120px;
+  min-height: 44px;
+  font-size: 0.85rem;
+}
+
+.desktop-dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  grid-template-rows: repeat(2, 36px);
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.desktop-dpad-btn {
+  min-height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+.desktop-dpad-btn:nth-child(1) { grid-column: 2; grid-row: 1; }
+.desktop-dpad-btn:nth-child(2) { grid-column: 1; grid-row: 2; }
+.desktop-dpad-btn:nth-child(3) { grid-column: 2; grid-row: 2; }
+.desktop-dpad-btn:nth-child(4) { grid-column: 3; grid-row: 2; }
+
+/* Stage: pantalla completa, imagen rellena el ancho */
+.desktop-stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.desktop-frame {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.desktop-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  color: var(--text);
+  font-weight: 700;
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.desktop-error-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.desktop-rotate-hint {
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.35rem 0.7rem;
+  background: var(--nav-bg);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+.desktop-stats-chip {
+  position: absolute;
+  bottom: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 0.3rem 0.7rem;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: var(--muted-strong);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+/* Consentimiento en datos móviles */
+.desktop-consent {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  padding: var(--space-4);
+}
+
+.desktop-consent-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 360px;
+  width: 100%;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.desktop-consent-title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.desktop-consent-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  margin-top: var(--space-1);
+}
+
+/* Selector de fuente: bottom sheet */
+.desktop-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 72%;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  background: var(--nav-bg);
+  border-top: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(16px);
+}
+
+.desktop-picker-handle {
+  width: 44px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--border-strong);
+  margin: 0 auto var(--space-1);
+  flex-shrink: 0;
+}
+
+.desktop-picker-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.desktop-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.desktop-picker-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 52px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  text-align: left;
+}
+
+.desktop-picker-item:active {
+  border-color: var(--primary);
+}
+
+.desktop-picker-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.desktop-thumb {
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: #000;
+  flex-shrink: 0;
+}
+
+.desktop-picker-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.desktop-picker-name strong {
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-picker-name small {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.desktop-picker-close {
+  align-self: center;
+  min-width: 120px;
+}
+
+/* Config faltante */
+.desktop-missing-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.desktop-missing-title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Settings del escritorio */
+.desktop-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.desktop-settings-notice {
+  margin-top: var(--space-2);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.desktop-settings-notice.ok { color: var(--success, #4caf50); }
+.desktop-settings-notice.fail { color: var(--danger); }
+
+.desktop-saved-hint {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--success, #4caf50);
+  align-self: center;
+}
 /* ===== Modal Overlay v2 ===== */
 .modal-overlay {
   position: fixed;
@@ -7540,9 +8056,6 @@ mark {
     flex-wrap: wrap;
   }
 
-  .server-profile-add {
-    flex-wrap: nowrap;
-  }
 }
 
 /* ===== Mode indicator (toolbar) ===== */

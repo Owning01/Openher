@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from "react"
-import { StarIcon, ChatIcon, CloseIcon } from "../Icons"
+import { StarIcon, CloseIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { formatTime } from "../utils"
 import type { SessionView } from "../types"
@@ -34,7 +34,6 @@ export const QuickAccessCard = memo(function QuickAccessCard({
         title={isFavorite ? t('favorites.remove') : t('favorites.add')}>
         <StarIcon size={12} className={isFavorite ? "star-filled" : "star-empty"} />
       </button>
-      <ChatIcon size={14} />
       <span className="quick-access-title">{session.title}</span>
       <span className="quick-access-time">{formatTime(session.updated)}</span>
       {session.status === "busy" && (

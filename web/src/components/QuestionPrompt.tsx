@@ -16,10 +16,11 @@ type Props = {
   requestID: string
   config: ServerConfig
   directory?: string
+  sessionID?: string
   onDone: () => void
 }
 
-export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestID, config, directory, onDone }: Props) {
+export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestID, config, directory, sessionID, onDone }: Props) {
   const t = useT()
   const [selected, setSelected] = useState<Record<number, string[]>>({})
   const [customs, setCustoms] = useState<Record<number, string>>({})
@@ -50,22 +51,22 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
       return custom ? [...sel, custom] : sel
     })
     try {
-      await api.questionReply(config, requestID, answers, directory)
+      await api.questionReply(config, requestID, answers, directory, sessionID)
       onDone()
     } catch {
       setSending(false)
     }
-  }, [questions, selected, customs, config, requestID, directory, onDone])
+  }, [questions, selected, customs, config, requestID, directory, sessionID, onDone])
 
   const handleSkip = useCallback(async () => {
     setSending(true)
     try {
-      await api.questionReject(config, requestID, directory)
+      await api.questionReject(config, requestID, directory, sessionID)
       onDone()
     } catch {
       setSending(false)
     }
-  }, [config, requestID, directory, onDone])
+  }, [config, requestID, directory, sessionID, onDone])
 
   return (
     <div className="question-inline">

@@ -126,6 +126,7 @@ export type MessageEnvelope = {
   parts: Array<{
     id: string
     type: string
+    sessionID?: string
     text?: string
     data?: string
     mimeType?: string
@@ -342,6 +343,7 @@ export type PermissionRequest = {
   permission: string
   status: string
   directory?: string
+  sessionID?: string
 }
 
 export type DiffContent = {

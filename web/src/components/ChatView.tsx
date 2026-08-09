@@ -92,6 +92,7 @@ export type ChatViewProps = {
   onForkSession?: () => void
   onOpenTerminal?: () => void
   onOpenMCPBrowser?: () => void
+  onOpenRemoteDesktop?: () => void
   showTodoButton?: boolean
   compacting?: boolean
 }
@@ -107,6 +108,7 @@ export const ChatView = memo(function ChatView({
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, activeSessions, onOpenSession, onOpenSettings, onShellSend, onThemeCommand,
+  onOpenRemoteDesktop,
   flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
   pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
@@ -395,6 +397,12 @@ export const ChatView = memo(function ChatView({
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenTerminal() }}>
                       <TerminalIcon size={14} />
                       {t('session.terminal')}
+                    </button>
+                  )}
+                  {onOpenRemoteDesktop && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenRemoteDesktop() }}>
+                      <GlobeIcon size={14} />
+                      {t('session.remoteDesktop')}
                     </button>
                   )}
                   {onOpenMCPBrowser && (

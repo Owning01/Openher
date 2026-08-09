@@ -32,7 +32,12 @@ export function useSpeechRecognition(language?: LanguageCode) {
 
   useEffect(() => {
     if (isNative) {
-      CapSpeechRecognition.available().then(({ available }) => setSupported(available))
+      // Optimista: el botón se muestra SIEMPRE en nativo (si available() falla
+      // o el servicio no está, se ve el error al tocar — nunca un botón oculto).
+      setSupported(true)
+      CapSpeechRecognition.available()
+        .then(({ available }) => { if (!available) setSupported(false) })
+        .catch(() => { /* mantener optimista */ })
       return
     }
 
@@ -116,7 +121,6 @@ export function useSpeechRecognition(language?: LanguageCode) {
       setIsListening(true)
       return
     }
-
     const rec = recognitionRef.current
     if (!rec) return
     try {

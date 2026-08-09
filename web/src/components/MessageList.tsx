@@ -93,11 +93,9 @@ export const MessageList = memo(function MessageList({
     setIsAtBottom(true)
     requestAnimationFrame(() => {
       const container = messagesRef.current
-      const end = messagesEndRef.current
       if (container) {
         container.scrollTo({ top: container.scrollHeight, behavior })
       }
-      end?.scrollIntoView({ block: "end", behavior })
     })
   }
 

@@ -52,6 +52,7 @@ import { Share } from "@capacitor/share"
 import { useShareReceiver } from "./hooks/useShareReceiver"
 import { usePushNotifications } from "./hooks/usePushNotifications"
 import { useServers } from "./hooks/useServers"
+import { loadDesktopConfig } from "./desktop"
 import type { ServerProfile } from "./types"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
@@ -62,6 +63,7 @@ const MCPBrowser = lazy(() => import("./components/MCPBrowser").then((m) => ({ d
 const ArchivedList = lazy(() => import("./components/ArchivedList").then((m) => ({ default: m.ArchivedList })))
 const FileEditor = lazy(() => import("./components/FileEditor").then((m) => ({ default: m.FileEditor })))
 const TerminalView = lazy(() => import("./components/TerminalView").then((m) => ({ default: m.TerminalView })))
+const RemoteDesktop = lazy(() => import("./components/RemoteDesktop").then((m) => ({ default: m.RemoteDesktop })))
 const ThemeCreator = lazy(() => import("./components/ThemeCreator").then((m) => ({ default: m.ThemeCreator })))
 const FavoritesManager = lazy(() => import("./components/FavoritesManager").then((m) => ({ default: m.FavoritesManager })))
 const FileBrowser = lazy(() => import("./components/FileBrowser").then((m) => ({ default: m.FileBrowser })))
@@ -229,6 +231,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   // ===== Feature: Terminal =====
   const { lines: shellLines, running: shellRunning, execute: shellExecute, clear: shellClear, history: shellHistory } = useShell(config)
   const [showTerminal, setShowTerminal] = useState(false)
+  const [showRemoteDesktop, setShowRemoteDesktop] = useState(false)
+  const [desktopCfg, setDesktopCfg] = useState(() => loadDesktopConfig())
 
   // ===== Feature: Shortcuts =====
   const [showShortcuts, setShowShortcuts] = useState(false)
@@ -445,20 +449,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const handleQuestionReply = useCallback(async (requestID: string, answers: string[][]) => {
     if (!config) return
     try {
-      await api.questionReply(config, requestID, answers, selectedSession?.directory)
+      await api.questionReply(config, requestID, answers, selectedSession?.directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID)
       setDismissedQuestions((prev) => new Set(prev).add(requestID))
       setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
     } catch { /* ignore */ }
-  }, [config, selectedSession?.directory])
+  }, [config, selectedSession?.directory, pendingQuestions])
 
   const handleQuestionReject = useCallback(async (requestID: string) => {
     if (!config) return
     try {
-      await api.questionReject(config, requestID, selectedSession?.directory)
+      await api.questionReject(config, requestID, selectedSession?.directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID)
       setDismissedQuestions((prev) => new Set(prev).add(requestID))
       setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
     } catch { /* ignore */ }
-  }, [config, selectedSession?.directory])
+  }, [config, selectedSession?.directory, pendingQuestions])
 
   const handleDismissQuestion = useCallback(() => {
     setPendingQuestions((prev) => prev.slice(1))
@@ -484,18 +488,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const handlePermissionApprove = useCallback(async (requestID: string) => {
     if (!config) return
     try {
-      await api.permissionReply(config, requestID, true, selectedSession?.directory)
+      await api.permissionReply(config, requestID, true, selectedSession?.directory, permissionRequest?.sessionID)
       setPermissionRequest(null)
     } catch { /* ignore */ }
-  }, [config, selectedSession?.directory])
+  }, [config, selectedSession?.directory, permissionRequest])
 
   const handlePermissionReject = useCallback(async (requestID: string) => {
     if (!config) return
     try {
-      await api.permissionReply(config, requestID, false, selectedSession?.directory)
+      await api.permissionReply(config, requestID, false, selectedSession?.directory, permissionRequest?.sessionID)
       setPermissionRequest(null)
     } catch { /* ignore */ }
-  }, [config, selectedSession?.directory])
+  }, [config, selectedSession?.directory, permissionRequest])
 
   const handleDismissPermission = useCallback(() => {
     setPermissionRequest(null)
@@ -691,6 +695,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
     loadFromCache()
 
+    // El dialecto v1/v2 se resuelve solo en el primer request (api.ts
+    // ensureVersionDetected): aquí no hace falta probe extra.
     refreshSessions(true).catch(() => undefined)
     loadAgents()
     loadModels()
@@ -1233,6 +1239,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     fileBrowserPath: fb.currentPath,
     onOpenTerminal: () => setShowTerminal(true),
     onOpenMCPBrowser: () => setShowMCPBrowser(true),
+    onOpenRemoteDesktop: () => {
+      setDesktopCfg(loadDesktopConfig())
+      setShowRemoteDesktop(true)
+    },
     showTodoButton: chatSettings.showTodoButton,
   }), [
     selectedSession, localRevertID, renderedMessages, todos, todosExpanded, composer,
@@ -1249,7 +1259,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     handlePermissionApprove, handlePermissionReject, handleDismissQuestion,
     handleDismissPermission, handleRevertToMessage, handleEditMessage, handleUndo,
     handleRedo, handleCompact, handleCreateSession, fb, setShowTerminal,
-    setShowMCPBrowser, chatSettings,
+    setShowMCPBrowser, setShowRemoteDesktop, chatSettings,
   ])
 
   const detailView = <ChatView {...baseChatProps} />
@@ -1511,13 +1521,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           }}
           onDisconnectProvider={disconnectProvider}
           serverProfiles={serverProfiles}
-          onAddServerProfile={(name, _kind) => {
-            const profile = addProfile(name, { config: draftConfig })
-            if (profile) {
-              setActiveServerProfileID(profile.id)
-              localStorage.setItem("opencode.mobile.activeServer", profile.id)
-            }
-          }}
+          onAddServerProfile={(name, _kind, config) => addProfile(name, { config })}
           onAddPairServer={(name, config) => {
             const profile = addProfile(name, { config, kind: "pair" })
             if (profile) {
@@ -1651,6 +1655,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             onClear={shellClear}
             onClose={() => setShowTerminal(false)}
             history={shellHistory}
+          />
+        </Suspense>
+      )}
+
+      {showRemoteDesktop && (
+        <Suspense fallback={null}>
+          <RemoteDesktop
+            config={desktopCfg}
+            dataMode={dataMode}
+            onClose={() => setShowRemoteDesktop(false)}
+            onOpenSettings={() => navigate("settings")}
           />
         </Suspense>
       )}

@@ -107,20 +107,20 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const handleQuestionReply = useCallback(async (requestID: string, answers: string[][]) => {
     if (!config) return
     try {
-      await api.questionReply(config, requestID, answers, session.directory)
+      await api.questionReply(config, requestID, answers, session.directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID ?? session.id)
       setDismissedQuestions((prev) => new Set(prev).add(requestID))
       setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
     } catch { /* ignore */ }
-  }, [config, session.directory])
+  }, [config, session.directory, session.id, pendingQuestions])
 
   const handleQuestionReject = useCallback(async (requestID: string) => {
     if (!config) return
     try {
-      await api.questionReject(config, requestID, session.directory)
+      await api.questionReject(config, requestID, session.directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID ?? session.id)
       setDismissedQuestions((prev) => new Set(prev).add(requestID))
       setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
     } catch { /* ignore */ }
-  }, [config, session.directory])
+  }, [config, session.directory, session.id, pendingQuestions])
 
   const handleDismissQuestion = useCallback(() => {
     setPendingQuestions((prev) => prev.slice(1))
@@ -146,18 +146,18 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const handlePermissionApprove = useCallback(async (requestID: string) => {
     if (!config) return
     try {
-      await api.permissionReply(config, requestID, true, session.directory)
+      await api.permissionReply(config, requestID, true, session.directory, permissionRequest?.sessionID ?? session.id)
     } catch { /* ignore */ }
     setPermissionRequest(null)
-  }, [config, session.directory])
+  }, [config, session.directory, session.id, permissionRequest])
 
   const handlePermissionReject = useCallback(async (requestID: string) => {
     if (!config) return
     try {
-      await api.permissionReply(config, requestID, false, session.directory)
+      await api.permissionReply(config, requestID, false, session.directory, permissionRequest?.sessionID ?? session.id)
     } catch { /* ignore */ }
     setPermissionRequest(null)
-  }, [config, session.directory])
+  }, [config, session.directory, session.id, permissionRequest])
 
   // ===== Acciones =====
   const refresh = useCallback(() => Promise.resolve(onRefreshSessions()), [onRefreshSessions])

@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
-import { toBase64, resolveApiVersion } from "../api"
+import { toBase64, resolveApiVersion, getApiVersion, onApiVersionChange } from "../api"
 import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
 
 export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void, directory?: string) {
   const [streamState, setStreamState] = useState<StreamState>("polling")
+  // Re-ejecuta el efecto cuando health() resuelve el dialecto del server:
+  // si arrancamos antes de la detección (auto → v1 por default), el
+  // subscription evita que el /event de v2 se conecte en loop.
+  const [versionTick, setVersionTick] = useState(0)
+  useEffect(() => onApiVersionChange(() => setVersionTick((n) => n + 1)), [])
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const reconnectAttemptRef = useRef(0)
@@ -30,6 +35,13 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
 
   const connect = useCallback(async () => {
     if (!config || !mountedRef.current) return
+    // Espera la detección de dialecto: en auto el cache arranca vacío (v1) y
+    // un check sincrónico conectaría /event contra un server v2 (404 en loop).
+    if ((await getApiVersion(config)) === "v2") {
+      // v2 (beta) no expone /event: quedamos en polling, nunca conectar.
+      setStreamState("polling")
+      return
+    }
 
     abortRef.current?.abort()
     clearHeartbeat()
@@ -182,7 +194,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
       }
     }
     return () => { mountedRef.current = false }
-  }, [Boolean(config), config?.host, config?.port, config?.username, config?.password, clearHeartbeat, connect, directoryRef.current])
+  }, [Boolean(config), config?.host, config?.port, config?.username, config?.password, clearHeartbeat, connect, directoryRef.current, versionTick])
 
   const reconnect = useCallback(() => {
     reconnectAttemptRef.current = 0

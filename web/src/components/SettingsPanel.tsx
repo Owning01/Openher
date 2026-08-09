@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useMemo } from "react"
+import { memo, useState, useCallback, useMemo, useEffect } from "react"
 import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo, ServerProfile, ChatSettings } from "../types"
@@ -10,6 +10,7 @@ import { SettingsSection } from "./SettingsSection"
 import { DataUsageModal } from "./DataUsageModal"
 import { ThinkingLevels } from "./ThinkingLevels"
 import { PairModal } from "./PairModal"
+import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type DesktopConfig } from "../desktop"
 import { getDataUsage, formatBytes } from "../utils/dataUsage"
 import { variantsOf } from "../utils/model-utils"
 
@@ -57,7 +58,7 @@ type SettingsPanelProps = {
   onConnectProvider: (providerID: string, apiKey: string) => void
   onDisconnectProvider: (providerID: string) => void
   serverProfiles: ServerProfile[]
-  onAddServerProfile: (name: string, kind: "http") => void
+  onAddServerProfile: (name: string, kind: "http", config: ServerConfig) => ServerProfile | null
   onRemoveServerProfile: (id: string) => void
   onUpdateServerProfile: (id: string, name: string, config: ServerConfig) => void
   onApplyServerProfile: (profile: ServerProfile) => void
@@ -99,6 +100,43 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [showDataUsage, setShowDataUsage] = useState(false)
   const [showPairModal, setShowPairModal] = useState(false)
 
+  // ===== Remote desktop (agente en la PC, puerto default 5901) =====
+  const [desktopCfg, setDesktopCfg] = useState<DesktopConfig>(() =>
+    loadDesktopConfig() ?? { host: "", port: 5901, username: "opencode", password: "" }
+  )
+  const [desktopTesting, setDesktopTesting] = useState(false)
+  const [desktopNotice, setDesktopNotice] = useState<string | null>(null)
+  const [desktopNoticeType, setDesktopNoticeType] = useState<"ok" | "fail">("ok")
+  const [showDesktopPass, setShowDesktopPass] = useState(false)
+  const [desktopSaved, setDesktopSaved] = useState(false)
+
+  const testDesktop = useCallback(async () => {
+    setDesktopTesting(true)
+    setDesktopNotice(null)
+    try {
+      const ok = await desktopApi.health(desktopCfg)
+      setDesktopNoticeType(ok ? "ok" : "fail")
+      setDesktopNotice(ok ? t('settings.desktopTestOk') : t('settings.desktopTestFail'))
+    } catch {
+      setDesktopNoticeType("fail")
+      setDesktopNotice(t('settings.desktopTestFail'))
+    } finally {
+      setDesktopTesting(false)
+    }
+  }, [desktopCfg, t])
+
+  // Auto-save (debounced) como el server principal: al pausar la escritura
+  // con host+puerto válidos, se persiste solo.
+  useEffect(() => {
+    if (!canTestDesktop(desktopCfg)) return
+    const timer = setTimeout(() => {
+      saveDesktopConfig(desktopCfg)
+      setDesktopSaved(true)
+      setTimeout(() => setDesktopSaved(false), 2000)
+    }, 700)
+    return () => clearTimeout(timer)
+  }, [desktopCfg])
+
   const uniqueModels = useMemo(() => {
     return Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values())
   }, [modelOptions, mk])
@@ -118,15 +156,19 @@ export const SettingsPanel = memo(function SettingsPanel({
   }, [uniqueModels, modelQuery, blockedModels, selectedModelKey])
   const [blockedSearch, setBlockedSearch] = useState("")
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
-  const [newProfileName, setNewProfileName] = useState("")
+  // Draft de "nuevo server": no se persiste hasta Guardar/Conectar. El
+  // nombre del perfil expandido se edita aparte de su config.
+  const [draftProfile, setDraftProfile] = useState<{ name: string; config: ServerConfig } | null>(null)
+  const [draftOpen, setDraftOpen] = useState(false)
+  const [profileNameDraft, setProfileNameDraft] = useState("")
   const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null)
   const [profileDraft, setProfileDraft] = useState<ServerConfig | null>(null)
-  const [expandedCurrent, setExpandedCurrent] = useState(false)
 
   const toggleProfile = useCallback((profile: ServerProfile) => {
     setExpandedProfileId((cur) => {
       if (cur === profile.id) return null
       setProfileDraft(profile.config)
+      setProfileNameDraft(profile.name)
       return profile.id
     })
   }, [])
@@ -134,6 +176,32 @@ export const SettingsPanel = memo(function SettingsPanel({
   const profileField = useCallback(<K extends keyof ServerConfig>(key: K, value: ServerConfig[K]) => {
     setProfileDraft((prev) => (prev ? { ...prev, [key]: value } : prev))
   }, [])
+
+  const startDraft = useCallback(() => {
+    setDraftProfile({ name: "", config: { ...draftConfig } })
+    setDraftOpen(false)
+  }, [draftConfig])
+
+  const draftField = useCallback(<K extends keyof ServerConfig>(key: K, value: ServerConfig[K]) => {
+    setDraftProfile((d) => (d ? { ...d, config: { ...d.config, [key]: value } } : d))
+  }, [])
+
+  const saveDraft = useCallback(() => {
+    if (!draftProfile) return
+    const profile = onAddServerProfile(draftProfile.name.trim() || t('settings.serverUntitled'), "http", draftProfile.config)
+    if (profile) setDraftProfile(null)
+  }, [draftProfile, onAddServerProfile, t])
+
+  const connectDraft = useCallback(() => {
+    if (!draftProfile) return
+    const profile = onAddServerProfile(draftProfile.name.trim() || t('settings.serverUntitled'), "http", draftProfile.config)
+    if (profile) {
+      setDraftProfile(null)
+      onApplyServerProfile(profile)
+    }
+  }, [draftProfile, onAddServerProfile, onApplyServerProfile, t])
+
+  const discardDraft = useCallback(() => setDraftProfile(null), [])
 
   const toggleProvider = useCallback((providerID: string) => {
     setExpandedProviders((prev) => {
@@ -189,7 +257,21 @@ export const SettingsPanel = memo(function SettingsPanel({
 
       {/* Saved servers + per-server config */}
       <SettingsSection title={t('settings.sectionServers')} icon={<ServerIcon size={14} />}>
-        <p className="subtle">{t('settings.sectionServersDesc')}</p>
+        <div className="server-section-header">
+          {draftConfig.host && draftConfig.port > 0 ? (
+            <p className="server-current-status">
+              <span className="server-status-dot" aria-hidden="true" />
+              {t('settings.serverConnectedTo')} <code>{`${draftConfig.host}:${draftConfig.port}`}</code>
+            </p>
+          ) : (
+            <p className="server-current-status">{t('settings.serverNoActive')}</p>
+          )}
+          <button type="button" className="btn-primary compact server-add-btn"
+            onClick={startDraft}
+            aria-label={t('settings.serverAdd')}>
+            <PlusIcon size={14} /> <span>{t('settings.serverAdd')}</span>
+          </button>
+        </div>
 
         <label className="form-field api-version-field">
           <span>{t('settings.apiVersion')}</span>
@@ -202,121 +284,145 @@ export const SettingsPanel = memo(function SettingsPanel({
           <small className="subtle">{t('settings.apiVersionDesc')}</small>
         </label>
 
-        {/* Current server (active, not saved as profile) */}
-        <div className={`server-profile${expandedCurrent ? " expanded" : ""}`}>
-          <button type="button" className="server-profile-row" onClick={() => setExpandedCurrent((v) => !v)}
-            aria-expanded={expandedCurrent}>
-            <span className="server-profile-kind http">HTTP</span>
-            <span className="server-profile-name">{t('settings.serverCurrent')}</span>
-            <span className="server-profile-desc">{describeProfile({ id: "current", name: "", kind: "http", config: draftConfig })}</span>
-            <span className="settings-chevron" aria-hidden="true">▾</span>
-          </button>
-          {expandedCurrent && (
-            <div className="server-profile-config">
-              <div className="form-grid">
-                <label className="form-field">
-                  <span>{t('settings.host')}</span>
-                  <input name="host" value={draftConfig.host} onChange={(e) => setField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
-                </label>
-                <label className="form-field">
-                  <span>{t('settings.port')}</span>
-                  <input name="port" type="number" value={draftConfig.port || 4096} onChange={(e) => setField("port", Number(e.target.value || 4096))} placeholder="4096" />
-                </label>
-                <label className="form-field">
-                  <span>{t('settings.username')}</span>
-                  <input name="username" value={draftConfig.username} onChange={(e) => setField("username", e.target.value)} placeholder="opencode" />
-                </label>
-                <label className="form-field">
-                  <span>{t('settings.password')}</span>
-                  <div className="password-wrapper">
-                    <input name="password" type={showPassword ? "text" : "password"} value={draftConfig.password} onChange={(e) => setField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
-                    <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
-                      {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+        <div className="server-profile-list">
+          {draftProfile && (
+            <div className={`server-profile draft${draftOpen ? " expanded" : ""}`}>
+              <div className="server-profile-row" role="button" tabIndex={0}
+                onClick={() => setDraftOpen((v) => !v)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDraftOpen((v) => !v) } }}
+                aria-expanded={draftOpen} title={t('settings.editServer')}>
+                <span className="server-profile-kind http new">HTTP</span>
+                <span className="server-profile-name">{draftProfile.name.trim() || t('settings.serverUntitled')}</span>
+                <span className="server-profile-desc">{draftProfile.config.host ? `${draftProfile.config.host}:${draftProfile.config.port}` : t('settings.serverNotConfigured')}</span>
+                <span className="settings-chevron" aria-hidden="true">▾</span>
+              </div>
+              <button type="button" className="btn-icon btn-ghost server-profile-remove"
+                onClick={discardDraft}
+                aria-label={t('settings.serverRemove')} title={t('settings.serverRemove')}>
+                <TrashIcon size={14} />
+              </button>
+              {draftOpen && (
+                <div className="server-profile-config">
+                  <div className="form-grid">
+                    <label className="form-field">
+                      <span>{t('settings.serverName')}</span>
+                      <input name="name" value={draftProfile.name}
+                        onChange={(e) => setDraftProfile((d) => (d ? { ...d, name: e.target.value } : d))}
+                        placeholder={t('settings.serverNamePlaceholder')} />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.host')}</span>
+                      <input name="host" value={draftProfile.config.host} onChange={(e) => draftField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.port')}</span>
+                      <input name="port" type="number" value={draftProfile.config.port || 4096} onChange={(e) => draftField("port", Number(e.target.value || 4096))} placeholder="4096" />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.username')}</span>
+                      <input name="username" value={draftProfile.config.username} onChange={(e) => draftField("username", e.target.value)} placeholder="opencode" />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.password')}</span>
+                      <div className="password-wrapper">
+                        <input name="password" type={showPassword ? "text" : "password"} value={draftProfile.config.password} onChange={(e) => draftField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
+                        <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
+                          {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                        </button>
+                      </div>
+                    </label>
+                  </div>
+                  <div className="server-profile-actions">
+                    <button type="button" className="btn-primary compact"
+                      disabled={!draftProfile.config.host.trim() || draftProfile.config.port <= 0}
+                      onClick={saveDraft}>
+                      <CheckIcon size={14} /> {t('settings.serverAdd')}
+                    </button>
+                    <button type="button" className="btn-secondary compact"
+                      disabled={!draftProfile.config.host.trim() || draftProfile.config.port <= 0}
+                      onClick={connectDraft}>
+                      <CheckIcon size={14} /> {t('settings.serverAddAndConnect')}
                     </button>
                   </div>
-                </label>
-              </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
 
-        {serverProfiles.length > 0 && (
-          <div className="server-profile-list">
-            {serverProfiles.map((profile) => (
-              <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}${expandedProfileId === profile.id ? " expanded" : ""}`}>
-                <button type="button" className="server-profile-row" onClick={() => toggleProfile(profile)}
-                  aria-expanded={expandedProfileId === profile.id}>
-                  <span className={`server-profile-kind${isPairProfile(profile) ? " pair" : " http"}`}>
-                    {isPairProfile(profile) ? t('settings.pairKind') : "HTTP"}
-                  </span>
-                  <span className="server-profile-name">{profile.name}</span>
-                  <span className="server-profile-desc">{describeProfile(profile)}</span>
-                  {activeServerProfileID === profile.id ? (
-                    <span className="server-profile-active"><CheckIcon size={12} /> {t('settings.serverActive')}</span>
-                  ) : null}
-                  <span className="settings-chevron" aria-hidden="true">▾</span>
-                </button>
-                <button type="button" className="btn-icon btn-ghost server-profile-remove"
-                  onClick={() => onRemoveServerProfile(profile.id)}
-                  aria-label={t('settings.serverRemove')} title={t('settings.serverRemove')}>
-                  <TrashIcon size={14} />
-                </button>
-                {expandedProfileId === profile.id && profileDraft && (
-                  <div className="server-profile-config">
-                    <div className="form-grid">
-                      <label className="form-field">
-                        <span>{t('settings.host')}</span>
-                        <input name="host" value={profileDraft.host} onChange={(e) => profileField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
-                      </label>
-                      <label className="form-field">
-                        <span>{t('settings.port')}</span>
-                        <input name="port" type="number" value={profileDraft.port || 4096} onChange={(e) => profileField("port", Number(e.target.value || 4096))} placeholder="4096" />
-                      </label>
-                      <label className="form-field">
-                        <span>{t('settings.username')}</span>
-                        <input name="username" value={profileDraft.username} onChange={(e) => profileField("username", e.target.value)} placeholder="opencode" />
-                      </label>
-                      <label className="form-field">
-                        <span>{t('settings.password')}</span>
-                        <div className="password-wrapper">
-                          <input name="password" type={showPassword ? "text" : "password"} value={profileDraft.password} onChange={(e) => profileField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
-                          <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
-                            {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                          </button>
-                        </div>
-                      </label>
-                    </div>
-                    <div className="server-profile-actions">
-                      <button type="button" className="btn-primary compact"
-                        onClick={() => {
-                          onUpdateServerProfile(profile.id, profile.name, profileDraft)
-                          onApplyServerProfile({ ...profile, config: profileDraft })
-                          setExpandedProfileId(null)
-                        }}>
-                        <CheckIcon size={14} /> {t('settings.serverApplyAndSave')}
-                      </button>
-                      <button type="button" className="btn-secondary compact"
-                        onClick={() => { onUpdateServerProfile(profile.id, profile.name, profileDraft); setExpandedProfileId(null) }}>
-                        <SaveIcon size={14} /> {t('settings.serverSaveOnly')}
-                      </button>
-                    </div>
-                  </div>
+          {serverProfiles.map((profile) => (
+            <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}${expandedProfileId === profile.id ? " expanded" : ""}`}>
+              <div className="server-profile-row" role="button" tabIndex={0}
+                onClick={() => toggleProfile(profile)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProfile(profile) } }}
+                aria-expanded={expandedProfileId === profile.id} title={t('settings.editServer')}>
+                <span className={`server-profile-kind${isPairProfile(profile) ? " pair" : " http"}`}>
+                  {isPairProfile(profile) ? t('settings.pairKind') : "HTTP"}
+                </span>
+                <span className="server-profile-name">{profile.name}</span>
+                <span className="server-profile-desc">{describeProfile(profile)}</span>
+                {activeServerProfileID === profile.id ? (
+                  <span className="server-profile-active"><CheckIcon size={12} /> {t('settings.serverActive')}</span>
+                ) : (
+                  <button type="button" className="btn-secondary compact server-use-btn"
+                    onClick={(e) => { e.stopPropagation(); onApplyServerProfile(profile) }}
+                    title={t('settings.serverUse')}>
+                    {t('settings.serverUse')}
+                  </button>
                 )}
+                <span className="settings-chevron" aria-hidden="true">▾</span>
               </div>
-            ))}
-          </div>
-        )}
-        <div className="server-profile-add">
-          <input
-            value={newProfileName}
-            onChange={(e) => setNewProfileName(e.target.value)}
-            placeholder={t('settings.serverNamePlaceholder')}
-          />
-          <button type="button" className="btn-secondary compact"
-            disabled={!newProfileName.trim()}
-            onClick={() => { onAddServerProfile(newProfileName.trim(), "http"); setNewProfileName("") }}>
-            <PlusIcon size={14} /> {t('settings.serverSaveHttp')}
-          </button>
+              <button type="button" className="btn-icon btn-ghost server-profile-remove"
+                onClick={() => onRemoveServerProfile(profile.id)}
+                aria-label={t('settings.serverRemove')} title={t('settings.serverRemove')}>
+                <TrashIcon size={14} />
+              </button>
+              {expandedProfileId === profile.id && profileDraft && (
+                <div className="server-profile-config">
+                  <div className="form-grid">
+                    <label className="form-field">
+                      <span>{t('settings.serverName')}</span>
+                      <input name="name" value={profileNameDraft} onChange={(e) => setProfileNameDraft(e.target.value)} placeholder={t('settings.serverNamePlaceholder')} />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.host')}</span>
+                      <input name="host" value={profileDraft.host} onChange={(e) => profileField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.port')}</span>
+                      <input name="port" type="number" value={profileDraft.port || 4096} onChange={(e) => profileField("port", Number(e.target.value || 4096))} placeholder="4096" />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.username')}</span>
+                      <input name="username" value={profileDraft.username} onChange={(e) => profileField("username", e.target.value)} placeholder="opencode" />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.password')}</span>
+                      <div className="password-wrapper">
+                        <input name="password" type={showPassword ? "text" : "password"} value={profileDraft.password} onChange={(e) => profileField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
+                        <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
+                          {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                        </button>
+                      </div>
+                    </label>
+                  </div>
+                  <div className="server-profile-actions">
+                    <button type="button" className="btn-primary compact"
+                      onClick={() => {
+                        onUpdateServerProfile(profile.id, profileNameDraft, profileDraft)
+                        onApplyServerProfile({ ...profile, name: profileNameDraft, config: profileDraft })
+                        setExpandedProfileId(null)
+                      }}>
+                      <CheckIcon size={14} /> {t('settings.saveAndApply')}
+                    </button>
+                    <button type="button" className="btn-secondary compact"
+                      onClick={() => { onUpdateServerProfile(profile.id, profileNameDraft, profileDraft); setExpandedProfileId(null) }}>
+                      <SaveIcon size={14} /> {t('settings.serverSaveOnly')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
         <div className="pair-service-row">
           <span className="server-profile-kind pair">{t('settings.pairKind')}</span>
@@ -621,6 +727,67 @@ export const SettingsPanel = memo(function SettingsPanel({
             {t('settings.resetStats')}
           </button>
         </div>
+      </SettingsSection>
+
+      <SettingsSection title={t('settings.desktopTitle')}>
+        <p className="subtle">{t('settings.desktopHint')}</p>
+        <div className="desktop-settings-grid">
+          <label className="field-label">
+            {t('settings.host')}
+            <input
+              type="text"
+              value={desktopCfg.host}
+              onChange={(e) => setDesktopCfg((c) => ({ ...c, host: e.target.value }))}
+              placeholder="100.101.102.103"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </label>
+          <label className="field-label">
+            {t('settings.port')}
+            <input
+              type="number"
+              value={desktopCfg.port}
+              onChange={(e) => setDesktopCfg((c) => ({ ...c, port: Number(e.target.value) || 0 }))}
+              placeholder="5901"
+              inputMode="numeric"
+            />
+          </label>
+          <label className="field-label">
+            {t('settings.username')}
+            <input
+              type="text"
+              value={desktopCfg.username}
+              onChange={(e) => setDesktopCfg((c) => ({ ...c, username: e.target.value }))}
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </label>
+          <label className="field-label">
+            {t('settings.password')}
+            <input
+              type={showDesktopPass ? "text" : "password"}
+              value={desktopCfg.password}
+              onChange={(e) => setDesktopCfg((c) => ({ ...c, password: e.target.value }))}
+            />
+          </label>
+        </div>
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="btn-secondary compact"
+            onClick={testDesktop}
+            disabled={desktopTesting || !canTestDesktop(desktopCfg)}
+          >
+            {desktopTesting ? <LoadingIcon size={14} /> : <TestIcon size={14} />}
+            {t('settings.desktopTest')}
+          </button>
+          <button type="button" className="btn-secondary compact" onClick={() => setShowDesktopPass((v) => !v)}>
+            {showDesktopPass ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
+          </button>
+          {desktopSaved && <span className="desktop-saved-hint">{t('settings.desktopSaved')}</span>}
+        </div>
+        {desktopNotice && <p className={`desktop-settings-notice ${desktopNoticeType}`}>{desktopNotice}</p>}
       </SettingsSection>
 
       <div className="settings-footer">

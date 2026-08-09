@@ -91,7 +91,12 @@ type TranslationKey =
   | 'settings.editServer'
   | 'settings.saveAndApply'
   | 'settings.serverRemove'
-  | 'settings.serverSaveHttp'
+  | 'settings.serverAdd'
+  | 'settings.serverAddAndConnect'
+  | 'settings.serverConnectedTo'
+  | 'settings.serverNoActive'
+  | 'settings.serverUntitled'
+  | 'settings.serverNotConfigured'
   | 'settings.serverUse'
   | 'settings.pairTitle'
   | 'settings.pairDesc'
@@ -305,6 +310,52 @@ type TranslationKey =
   | 'settings.mode'
   | 'voice.input'
   | 'voice.listening'
+  | 'voice.permissionDenied'
+  | 'voice.unavailable'
+  | 'desktop.title'
+  | 'desktop.fullScreen'
+  | 'desktop.monitor'
+  | 'desktop.source'
+  | 'desktop.connecting'
+  | 'desktop.error'
+  | 'desktop.data'
+  | 'desktop.dragMode'
+  | 'desktop.fit'
+  | 'desktop.zoomIn'
+  | 'desktop.zoomOut'
+  | 'desktop.quality'
+  | 'desktop.preset_low'
+  | 'desktop.preset_med'
+  | 'desktop.preset_high'
+  | 'desktop.keyboard'
+  | 'desktop.kbPlaceholder'
+  | 'desktop.cancel'
+  | 'desktop.retry'
+  | 'desktop.oneToOne'
+  | 'desktop.scrollMode'
+  | 'desktop.mouse'
+  | 'desktop.mouse_left'
+  | 'desktop.mouse_right'
+  | 'desktop.mouse_middle'
+  | 'desktop.dpad'
+  | 'desktop.rotateHint'
+  | 'desktop.consentTitle'
+  | 'desktop.consentBody'
+  | 'desktop.consentContinue'
+  | 'desktop.consentCancel'
+  | 'desktop.disconnect'
+  | 'desktop.statsToggle'
+  | 'desktop.statsHide'
+  | 'desktop.statsShow'
+  | 'desktop.settings'
+  | 'session.remoteDesktop'
+  | 'settings.desktopTitle'
+  | 'settings.desktopHint'
+  | 'settings.desktopTest'
+  | 'settings.desktopTestOk'
+  | 'settings.desktopTestFail'
+  | 'settings.desktopSaved'
+  | 'settings.desktopMissing'
   | 'settings.navBarPosition'
   | 'settings.navBarBottom'
   | 'settings.navBarHeader'
@@ -491,7 +542,6 @@ type TranslationKey =
   | 'extras.restartFailed'
   | 'extras.github'
   | 'extras.dataUsage'
-  | 'settings.serverCurrent'
   | 'settings.serverApplyAndSave'
   | 'settings.serverSaveOnly'
   | 'favorites.manageDesc'
@@ -562,7 +612,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.editServer': 'Edit saved server',
       'settings.saveAndApply': 'Save and apply',
       'settings.serverRemove': 'Remove server',
-      'settings.serverSaveHttp': 'Save current as HTTP',
+      'settings.serverAdd': 'Add server',
+      'settings.serverAddAndConnect': 'Add & connect',
+      'settings.serverConnectedTo': 'Connected to',
+      'settings.serverNoActive': 'No server connected',
+      'settings.serverUntitled': 'Untitled',
+      'settings.serverNotConfigured': 'Not configured',
       'settings.serverUse': 'Use',
       'settings.pairTitle': 'OpenCode v2 Pair (BETA)',
       'settings.pairDesc': 'Scan the QR code shown by `opencode service pair` (beta) to connect automatically.',
@@ -610,6 +665,52 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.mode': 'Mode',
     'voice.input': 'Voice input',
     'voice.listening': 'Listening...',
+    'voice.permissionDenied': 'Microphone permission denied — enable it in system settings',
+    'voice.unavailable': 'Speech recognition is not available on this device',
+    'desktop.title': 'Remote desktop',
+    'desktop.fullScreen': 'Full screen',
+    'desktop.monitor': 'Monitor',
+    'desktop.source': 'Source',
+    'desktop.connecting': 'Connecting…',
+    'desktop.error': 'Connection failed',
+    'desktop.data': 'Data',
+    'desktop.dragMode': 'Drag',
+    'desktop.fit': 'Fit',
+    'desktop.zoomIn': 'Zoom in',
+    'desktop.zoomOut': 'Zoom out',
+    'desktop.quality': 'Quality',
+    'desktop.preset_low': 'Low',
+    'desktop.preset_med': 'Medium',
+    'desktop.preset_high': 'High',
+    'desktop.keyboard': 'Keyboard',
+    'desktop.kbPlaceholder': 'Type on the remote PC…',
+    'desktop.cancel': 'Cancel',
+    'desktop.retry': 'Retry',
+    'desktop.oneToOne': '1:1',
+    'desktop.scrollMode': 'Scroll',
+    'desktop.mouse': 'Mouse',
+    'desktop.mouse_left': 'L',
+    'desktop.mouse_right': 'R',
+    'desktop.mouse_middle': 'M',
+    'desktop.dpad': 'Arrows',
+    'desktop.rotateHint': 'Rotate the phone for a wider view',
+    'desktop.consentTitle': 'You are on mobile data',
+    'desktop.consentBody': 'Streaming can use ~1-2 MB/min while the screen changes. Continue in Low quality?',
+    'desktop.consentContinue': 'Continue (Low)',
+    'desktop.consentCancel': 'Cancel',
+    'desktop.disconnect': 'Disconnect',
+    'desktop.statsToggle': 'Stats',
+    'desktop.statsHide': 'Hide stats',
+    'desktop.statsShow': 'Show stats',
+    'desktop.settings': 'Settings',
+    'session.remoteDesktop': 'Remote desktop',
+    'settings.desktopTitle': 'Remote desktop',
+    'settings.desktopHint': 'OpenCode Desktop Agent on the PC (desktop-agent, port 5901). Same auth as the server.',
+    'settings.desktopTest': 'Test connection',
+    'settings.desktopTestOk': 'Desktop agent reachable',
+    'settings.desktopTestFail': 'Cannot reach desktop agent',
+    'settings.desktopSaved': 'Remote desktop saved',
+    'settings.desktopMissing': 'Set the desktop agent host/port to use remote desktop',
     'settings.navBarPosition': 'Navigation bar',
     'settings.navBarBottom': 'Bottom',
     'settings.navBarHeader': 'Header',
@@ -1005,7 +1106,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
 'extras.restartFailed': 'Restart command failed: {error}',
     'extras.github': 'Project GitHub',
     'extras.dataUsage': 'Data usage',
-    'settings.serverCurrent': 'Current server',
     'settings.serverApplyAndSave': 'Use & save',
     'settings.serverSaveOnly': 'Save only',
     'favorites.manageDesc': 'Reorder favorite sessions',
@@ -1108,7 +1208,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.editServer': 'Editar servidor guardado',
       'settings.saveAndApply': 'Guardar y aplicar',
       'settings.serverRemove': 'Quitar servidor',
-      'settings.serverSaveHttp': 'Guardar actual como HTTP',
+      'settings.serverAdd': 'Agregar servidor',
+      'settings.serverAddAndConnect': 'Agregar y conectar',
+      'settings.serverConnectedTo': 'Conectado a',
+      'settings.serverNoActive': 'Sin servidor conectado',
+      'settings.serverUntitled': 'Sin nombre',
+      'settings.serverNotConfigured': 'Sin configurar',
       'settings.serverUse': 'Usar',
       'settings.pairTitle': 'OpenCode v2 Pair (BETA)',
       'settings.pairDesc': 'Escaneá el QR que muestra `opencode service pair` (beta) para conectar automáticamente.',
@@ -1156,6 +1261,52 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.mode': 'Modo',
     'voice.input': 'Entrada por voz',
     'voice.listening': 'Escuchando...',
+    'voice.permissionDenied': 'Permiso de micrófono denegado — actívalo en los ajustes del sistema',
+    'voice.unavailable': 'El reconocimiento de voz no está disponible en este dispositivo',
+    'desktop.title': 'Escritorio remoto',
+    'desktop.fullScreen': 'Pantalla completa',
+    'desktop.monitor': 'Monitor',
+    'desktop.source': 'Fuente',
+    'desktop.connecting': 'Conectando…',
+    'desktop.error': 'Fallo de conexión',
+    'desktop.data': 'Datos',
+    'desktop.dragMode': 'Arrastrar',
+    'desktop.fit': 'Ajustar',
+    'desktop.zoomIn': 'Acercar',
+    'desktop.zoomOut': 'Alejar',
+    'desktop.quality': 'Calidad',
+    'desktop.preset_low': 'Baja',
+    'desktop.preset_med': 'Media',
+    'desktop.preset_high': 'Alta',
+    'desktop.keyboard': 'Teclado',
+    'desktop.kbPlaceholder': 'Escribí en la PC remota…',
+    'desktop.cancel': 'Cancelar',
+    'desktop.retry': 'Reintentar',
+    'desktop.oneToOne': '1:1',
+    'desktop.scrollMode': 'Scroll',
+    'desktop.mouse': 'Mouse',
+    'desktop.mouse_left': 'I',
+    'desktop.mouse_right': 'D',
+    'desktop.mouse_middle': 'M',
+    'desktop.dpad': 'Flechas',
+    'desktop.rotateHint': 'Girá el teléfono para una vista más amplia',
+    'desktop.consentTitle': 'Estás en datos móviles',
+    'desktop.consentBody': 'El stream puede consumir ~1-2 MB/min mientras la pantalla cambia. ¿Continuar en calidad Baja?',
+    'desktop.consentContinue': 'Continuar (Baja)',
+    'desktop.consentCancel': 'Cancelar',
+    'desktop.disconnect': 'Desconectar',
+    'desktop.statsToggle': 'Datos',
+    'desktop.statsHide': 'Ocultar datos',
+    'desktop.statsShow': 'Mostrar datos',
+    'desktop.settings': 'Configuración',
+    'session.remoteDesktop': 'Escritorio remoto',
+    'settings.desktopTitle': 'Escritorio remoto',
+    'settings.desktopHint': 'OpenCode Desktop Agent en la PC (desktop-agent, puerto 5901). Misma auth que el server.',
+    'settings.desktopTest': 'Probar conexión',
+    'settings.desktopTestOk': 'Agente de escritorio accesible',
+    'settings.desktopTestFail': 'No se pudo acceder al agente de escritorio',
+    'settings.desktopSaved': 'Escritorio remoto guardado',
+    'settings.desktopMissing': 'Configurá host/puerto del agente de escritorio para usar escritorio remoto',
     'settings.navBarPosition': 'Barra de navegación',
     'settings.navBarBottom': 'Abajo',
     'settings.navBarHeader': 'Arriba',
@@ -1339,7 +1490,7 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'detail.modelSearchEmpty': 'Ningún modelo coincide con la búsqueda.',
     'detail.modelDefault': 'defecto',
     'detail.modelRecent': 'Recientes',
-    'detail.thought': 'Razonamiento',
+    'detail.thought': 'Thinking',
   'detail.thinking': 'Pensando…',
     'detail.modelAll': 'Todos los modelos',
     'detail.modelProvider': 'Proveedor: {provider}',
@@ -1550,7 +1701,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
 'extras.restartFailed': 'Error al enviar el comando de reinicio: {error}',
     'extras.github': 'Ir al GitHub del proyecto',
     'extras.dataUsage': 'Consumo de datos',
-    'settings.serverCurrent': 'Servidor actual',
     'settings.serverApplyAndSave': 'Usar y guardar',
     'settings.serverSaveOnly': 'Solo guardar',
     'favorites.manageDesc': 'Reordenar sesiones favoritas',
@@ -1654,7 +1804,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.editServer': 'Modifica server salvato',
       'settings.saveAndApply': 'Salva e applica',
       'settings.serverRemove': 'Rimuovi server',
-      'settings.serverSaveHttp': 'Salva attuale come HTTP',
+      'settings.serverAdd': 'Aggiungi server',
+      'settings.serverAddAndConnect': 'Aggiungi e connetti',
+      'settings.serverConnectedTo': 'Connesso a',
+      'settings.serverNoActive': 'Nessun server connesso',
+      'settings.serverUntitled': 'Senza nome',
+      'settings.serverNotConfigured': 'Non configurato',
       'settings.serverUse': 'Usa',
       'settings.pairTitle': 'OpenCode v2 Pair (BETA)',
       'settings.pairDesc': 'Scansiona il QR mostrato da `opencode service pair` (beta) per connetterti automaticamente.',
@@ -1702,6 +1857,52 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.mode': 'Modalità',
     'voice.input': 'Input vocale',
     'voice.listening': 'Ascolto...',
+    'voice.permissionDenied': 'Permesso microfono negato — attivalo nelle impostazioni di sistema',
+    'voice.unavailable': 'Il riconoscimento vocale non è disponibile su questo dispositivo',
+    'desktop.title': 'Desktop remoto',
+    'desktop.fullScreen': 'Schermo intero',
+    'desktop.monitor': 'Monitor',
+    'desktop.source': 'Sorgente',
+    'desktop.connecting': 'Connessione…',
+    'desktop.error': 'Connessione fallita',
+    'desktop.data': 'Dati',
+    'desktop.dragMode': 'Trascina',
+    'desktop.fit': 'Adatta',
+    'desktop.zoomIn': 'Ingrandisci',
+    'desktop.zoomOut': 'Rimpicciolisci',
+    'desktop.quality': 'Qualità',
+    'desktop.preset_low': 'Bassa',
+    'desktop.preset_med': 'Media',
+    'desktop.preset_high': 'Alta',
+    'desktop.keyboard': 'Tastiera',
+    'desktop.kbPlaceholder': 'Scrivi sul PC remoto…',
+    'desktop.cancel': 'Annulla',
+    'desktop.retry': 'Riprova',
+    'desktop.oneToOne': '1:1',
+    'desktop.scrollMode': 'Scroll',
+    'desktop.mouse': 'Mouse',
+    'desktop.mouse_left': 'S',
+    'desktop.mouse_right': 'D',
+    'desktop.mouse_middle': 'M',
+    'desktop.dpad': 'Frecce',
+    'desktop.rotateHint': 'Ruota il telefono per una vista più ampia',
+    'desktop.consentTitle': 'Sei in dati mobili',
+    'desktop.consentBody': 'Lo streaming può consumare ~1-2 MB/min mentre lo schermo cambia. Continuare in qualità Bassa?',
+    'desktop.consentContinue': 'Continua (Bassa)',
+    'desktop.consentCancel': 'Annulla',
+    'desktop.disconnect': 'Disconnetti',
+    'desktop.statsToggle': 'Dati',
+    'desktop.statsHide': 'Nascondi dati',
+    'desktop.statsShow': 'Mostra dati',
+    'desktop.settings': 'Impostazioni',
+    'session.remoteDesktop': 'Desktop remoto',
+    'settings.desktopTitle': 'Desktop remoto',
+    'settings.desktopHint': 'OpenCode Desktop Agent sul PC (desktop-agent, porta 5901). Stessa auth del server.',
+    'settings.desktopTest': 'Test connessione',
+    'settings.desktopTestOk': 'Agente desktop raggiungibile',
+    'settings.desktopTestFail': 'Impossibile raggiungere l\'agente desktop',
+    'settings.desktopSaved': 'Desktop remoto salvato',
+    'settings.desktopMissing': 'Configura host/porta dell\'agente desktop per usare il desktop remoto',
     'settings.navBarPosition': 'Barra di navigazione',
     'settings.navBarBottom': 'In basso',
     'settings.navBarHeader': 'In alto',
@@ -2060,7 +2261,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
 'extras.restartFailed': 'Invio del comando di riavvio fallito: {error}',
     'extras.github': 'GitHub del progetto',
     'extras.dataUsage': 'Consumo dati',
-    'settings.serverCurrent': 'Server attuale',
     'settings.serverApplyAndSave': 'Usa e salva',
     'settings.serverSaveOnly': 'Solo salva',
     'favorites.manageDesc': 'Riordina sessioni preferite',
@@ -2164,7 +2364,12 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
       'settings.editServer': '編輯已儲存的伺服器',
       'settings.saveAndApply': '儲存並套用',
       'settings.serverRemove': '移除伺服器',
-      'settings.serverSaveHttp': '將目前儲存為 HTTP',
+      'settings.serverAdd': '新增伺服器',
+      'settings.serverAddAndConnect': '新增並連線',
+      'settings.serverConnectedTo': '已連線至',
+      'settings.serverNoActive': '尚未連線至伺服器',
+      'settings.serverUntitled': '未命名',
+      'settings.serverNotConfigured': '尚未設定',
       'settings.serverUse': '使用',
       'settings.pairTitle': 'OpenCode v2 Pair（BETA）',
       'settings.pairDesc': '掃描 `opencode service pair`（beta）顯示的 QR 碼，自動連接。',
@@ -2212,6 +2417,52 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.mode': '模式',
     'voice.input': '語音輸入',
     'voice.listening': '聆聽中...',
+    'voice.permissionDenied': '麥克風權限遭拒絕 — 請在系統設定中啟用',
+    'voice.unavailable': '此裝置不支援語音辨識',
+    'desktop.title': '遠端桌面',
+    'desktop.fullScreen': '全螢幕',
+    'desktop.monitor': '顯示器',
+    'desktop.source': '來源',
+    'desktop.connecting': '連線中…',
+    'desktop.error': '連線失敗',
+    'desktop.data': '資料',
+    'desktop.dragMode': '拖曳',
+    'desktop.fit': '適應',
+    'desktop.zoomIn': '放大',
+    'desktop.zoomOut': '縮小',
+    'desktop.quality': '畫質',
+    'desktop.preset_low': '低',
+    'desktop.preset_med': '中',
+    'desktop.preset_high': '高',
+    'desktop.keyboard': '鍵盤',
+    'desktop.kbPlaceholder': '在遠端電腦輸入…',
+    'desktop.cancel': '取消',
+    'desktop.retry': '重試',
+    'desktop.oneToOne': '1:1',
+    'desktop.scrollMode': '捲動',
+    'desktop.mouse': '滑鼠',
+    'desktop.mouse_left': '左',
+    'desktop.mouse_right': '右',
+    'desktop.mouse_middle': '中',
+    'desktop.dpad': '方向鍵',
+    'desktop.rotateHint': '旋轉手機以獲得更大視野',
+    'desktop.consentTitle': '你正在使用行動數據',
+    'desktop.consentBody': '畫面變化時串流約消耗 1-2 MB/分鐘。是否以低畫質繼續？',
+    'desktop.consentContinue': '繼續（低）',
+    'desktop.consentCancel': '取消',
+    'desktop.disconnect': '中斷連線',
+    'desktop.statsToggle': '數據',
+    'desktop.statsHide': '隱藏數據',
+    'desktop.statsShow': '顯示數據',
+    'desktop.settings': '設定',
+    'session.remoteDesktop': '遠端桌面',
+    'settings.desktopTitle': '遠端桌面',
+    'settings.desktopHint': 'PC 上的 OpenCode Desktop Agent（desktop-agent，連接埠 5901）。與伺服器相同的認證。',
+    'settings.desktopTest': '測試連線',
+    'settings.desktopTestOk': '可連線到桌面代理',
+    'settings.desktopTestFail': '無法連線到桌面代理',
+    'settings.desktopSaved': '遠端桌面已儲存',
+    'settings.desktopMissing': '請設定桌面代理的 host/port 以使用遠端桌面',
     'settings.navBarPosition': '導航欄位置',
     'settings.navBarBottom': '底部',
     'settings.navBarHeader': '頂部',
@@ -2570,7 +2821,6 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
 'extras.restartFailed': '發送重新啟動指令失敗：{error}',
     'extras.github': '專案 GitHub',
     'extras.dataUsage': '資料使用量',
-    'settings.serverCurrent': '目前伺服器',
     'settings.serverApplyAndSave': '使用並儲存',
     'settings.serverSaveOnly': '僅儲存',
     'favorites.manageDesc': '重新排序最愛工作階段',

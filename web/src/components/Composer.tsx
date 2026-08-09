@@ -204,33 +204,61 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const { isListening, supported, start, stop } = useSpeechRecognition(language)
   const prefixRef = useRef("")
   const composerRef = useRef<HTMLDivElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [images, setImages] = useState<ImageAttachment[]>([])
 
+  // Auto-grow: la caja crece mientras se escribe (hasta 120px) y vuelve a su
+  // alto mínimo cuando se vacía (al enviar/limpiar).
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    ta.style.height = "0px"
+    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
+  }, [value])
+
   const handleFocus = useCallback(() => {
+    // Scrollear SOLO el contenedor de mensajes de este panel (nunca
+    // scrollIntoView: scrollea también la ventana y con el teclado abierto
+    // en Android la página salta para arriba).
     setTimeout(() => {
-      const container = document.querySelector<HTMLElement>(".messages")
-      const end = document.querySelector<HTMLElement>(".messages-end")
+      const wrap = composerRef.current?.closest<HTMLElement>(".app-mobile-content, .session-panel")
+      const container = wrap?.querySelector<HTMLElement>(".messages")
       if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
-      end?.scrollIntoView({ block: "end", behavior: "smooth" })
     }, 400)
-    const onResize = () => {
-      const container = document.querySelector<HTMLElement>(".messages")
-      const end = document.querySelector<HTMLElement>(".messages-end")
-      if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
-      end?.scrollIntoView({ block: "end", behavior: "smooth" })
-    }
-    window.addEventListener("resize", onResize)
-    setTimeout(() => window.removeEventListener("resize", onResize), 2000)
+  }, [])
+
+  const [micNotice, setMicNotice] = useState<string | null>(null)
+  const micNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showMicNotice = useCallback((message: string) => {
+    setMicNotice(message)
+    if (micNoticeTimerRef.current) clearTimeout(micNoticeTimerRef.current)
+    micNoticeTimerRef.current = setTimeout(() => setMicNotice(null), 6000)
   }, [])
 
   const handleMicClick = useCallback(() => {
     if (isListening) {
       stop()
+    } else if (!supported) {
+      showMicNotice(t('voice.unavailable'))
     } else {
       prefixRef.current = value
       start((text) => onChange(prefixRef.current + (prefixRef.current && text ? " " : "") + text))
+        .catch((err: unknown) => {
+          stop()
+          const msg = (err as Error)?.message ?? ""
+          showMicNotice(/denied|denegado|permission/i.test(msg)
+            ? t('voice.permissionDenied')
+            : (err as Error)?.message ?? t('voice.unavailable'))
+        })
     }
-  }, [isListening, start, stop, onChange, value])
+  }, [isListening, stop, supported, start, onChange, value, showMicNotice, t])
+
+  useEffect(() => {
+    return () => {
+      if (micNoticeTimerRef.current) clearTimeout(micNoticeTimerRef.current)
+    }
+  }, [])
 
   const addImage = useCallback((base64: string, mime: string, name: string) => {
     setImages((prev) => [...prev, { id: `img-${++imgId}`, base64, mime, name }])
@@ -368,6 +396,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           ))}
         </div>
       )}
+      {micNotice && <div className="composer-notice" role="alert">{micNotice}</div>}
       {images.length > 0 && (
         <div className="image-strip">
           {images.map((img) => {
@@ -399,6 +428,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           <AttachmentIcon size={18} />
         </button>
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           aria-label={t('composer.inputLabel')}

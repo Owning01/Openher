@@ -10,6 +10,7 @@ import { CodeIcon, FileIcon, TerminalIcon, GlobeIcon, SearchIcon, ToolIcon } fro
 export type ToolPartData = {
   id: string
   type: string
+  sessionID?: string
   text?: string
   callID?: string
   tool?: string
@@ -254,6 +255,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
           requestID={callID}
           config={config!}
           directory={directory}
+          sessionID={part.sessionID}
           onDone={() => {}}
         />
       )

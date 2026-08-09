@@ -64,6 +64,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const renderedMessages: RenderedMessage[] = useMemo(() => {
     const all = [...messages, ...optimisticUserMessages]
     const out: RenderedMessage[] = []
+    // Auto-sana duplicados de id (ver loadSelected): nunca dos bubbles iguales.
+    const seenIds = new Set<string>()
     // Los diffs del turno (info.summary.diffs del user message) se muestran al
     // final del turno: en el ÚLTIMO mensaje assistant que le sigue.
     let pendingDiffs: import("../types").FileDiff[] | undefined
@@ -74,6 +76,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     const turnModeForUser = new Map<string, string>()
     let lastUserID: string | null = null
     for (const message of all) {
+      if (seenIds.has(message.info.id)) continue
+      seenIds.add(message.info.id)
       if (message.info.role === "user") {
         pendingDiffs = message.info.summary?.diffs
         lastAssistantId = null
@@ -93,13 +97,14 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       let text = ""
       let hasCompaction = false
       const thinkingParts: Array<{ id: string; text: string; time?: { start?: number; end?: number } }> = []
-      const toolParts: Array<{ id: string; type: string; text?: string; callID?: string; tool?: string; state?: MessageEnvelope["parts"][number]["state"] }> = []
+      const toolParts: Array<{ id: string; type: string; sessionID?: string; text?: string; callID?: string; tool?: string; state?: MessageEnvelope["parts"][number]["state"] }> = []
       const textBlocks: string[] = []
       for (const part of message.parts) {
         if (part.type === "tool" || toolPartTypes.has(part.type)) {
           toolParts.push({
             id: part.id,
             type: part.type,
+            sessionID: part.sessionID,
             text: part.text,
             callID: part.callID,
             tool: part.tool,
@@ -167,10 +172,18 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     setMessages((prev) => {
       // Merge por id: el historial local nunca se reemplaza ni se descarta por
       // una respuesta parcial o vacía — solo se agrega/actualiza lo nuevo.
-      const other = prev.filter((m) => m.info.sessionID !== sessionID)
+      // Además auto-sana duplicados de id (nunca dos entradas iguales).
+      const other: MessageEnvelope[] = []
+      const seen = new Set<string>()
+      let changed = false
+      for (const m of prev) {
+        if (m.info.sessionID === sessionID) continue
+        if (seen.has(m.info.id)) { changed = true; continue }
+        seen.add(m.info.id)
+        other.push(m)
+      }
       const msgMap = new Map(msg.map((m) => [m.info.id, m]))
       const merged = [...other]
-      let changed = false
       for (const m of prev) {
         if (m.info.sessionID !== sessionID) continue
         const updated = msgMap.get(m.info.id)
@@ -180,14 +193,20 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           const remoteIDs = new Set(updated.parts.map((p) => p.id))
           const extraLocal = m.parts.filter((p) => !remoteIDs.has(p.id))
           const parts = extraLocal.length > 0 ? [...updated.parts, ...extraLocal] : updated.parts
+          if (seen.has(m.info.id)) { changed = true; continue }
+          seen.add(m.info.id)
           merged.push({ ...updated, parts })
           msgMap.delete(m.info.id)
           if (updated.info.time.completed !== m.info.time.completed || updated.info.role !== m.info.role) changed = true
         } else {
+          if (seen.has(m.info.id)) { changed = true; continue }
+          seen.add(m.info.id)
           merged.push(m)
         }
       }
       for (const m of msgMap.values()) {
+        if (seen.has(m.info.id)) continue
+        seen.add(m.info.id)
         merged.push(m)
         changed = true
       }
