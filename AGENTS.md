@@ -64,14 +64,20 @@ en `G:\Proyectos\opencode-stats`.
   sessions/messages, `DB_VERSION = 2` — NO bajar la versión; el bump migra DBs viejas
   sin stores).
 - **Soporte v2 (beta)** — `api.ts` detecta el dialecto del server (rutas `/api/*` +
-  `{data:...}` en v2 vs raíz en v1): `resolveApiVersion`/`rememberApiVersion` cachean
-  por host:port; en modo "auto" un 404 en ruta v1 dispara retry con `/api` (y el
-  health prueba `/global/health` vs `/api/health`). Mappers: `toSessionV1`,
-  `toMessageEnvelopeV1` (content[] → parts[]). El SSE se salta en v2 (no existe
-  `/event`; el polling cubre la recepción). Prompt v2: POST `/api/session/:id/prompt`
-  con `{text}` (model/agent NO van en el body — v2 los rechaza con 400; por-sesión).
-  v2 renames: abort→`/interrupt`, revert→`/revert/stage`+`/commit`, unrevert→
-  `/revert/clear`, summarize→`/compact`, status→`/session/active` (running→busy).
+  `{data:...}` en v2 vs raíz en v1): `getApiVersion` (async, espera la detección
+  memoizada por host) + `resolveApiVersion` (sync, cache). Mappers: `toSessionV1`,
+  `toMessageEnvelopeV1` (content[] → parts[], time {created,completed}→{start,end}).
+  SSE en v2: `/api/event` (mismo formato SSE; los payloads `session.next.*` anidan
+  el body en `data` — useSSEHandler lee ambos niveles). Prompt v2: POST
+  `/api/session/:id/prompt` con `{text}` (model/agent NO van en el body — v2 los
+  rechaza con 400; por-sesión). v2 renames: abort→`/interrupt`, revert→
+  `/revert/stage`+`/commit`, unrevert→`/revert/clear`, summarize→`/compact`,
+  status→`/session/active` (running→busy), rename→POST `/session/:id/rename`,
+  modelos→`/model`+`/model/default`, pregunta/permiso→`/question/request` +
+  `/permission/request` (reply/reject por-sesión), files→`/fs/list`, `/fs/read/*`
+  (blob), `/fs/find`, status→`/vcs/status`, diff→`/vcs/diff`, path→`/location`,
+  MCP→`/mcp/resource`, todo→NO existe (degradar a `[]`), writeFile→NO existe
+  (error claro). Query de scoping v2: `location[directory]=` (deepObject).
   El toggle está en Settings → Preferencias → API version (Auto/v1/v2).
 - **Escritorio remoto** — agente Go standalone en `desktop-agent/` (sin cgo, stdlib
   + syscall; puerto 5901, Basic auth, config `desktop-agent.json`, `start-desktop-agent.bat`):

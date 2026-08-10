@@ -66,15 +66,18 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     if (type === "session.next.text.delta" || type === "session.next.reasoning.delta" ||
         type === "session.next.text.ended" || type === "session.next.reasoning.ended" ||
         type === "session.next.tool.input.delta") {
-      const sessionID = p.sessionID as string | undefined
+      // v2 anida el payload en `data` ({sessionID, assistantMessageID, textID,
+      // delta, ...}); v1 lo trae en la raíz de properties. Soportar ambos.
+      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       if (!sessionID || sessionID !== deps.sessionID) return
-      const assistantMessageID = p.assistantMessageID as string | undefined
-      const partID = (p.textID ?? p.reasoningID ?? p.callID) as string | undefined
+      const assistantMessageID = (d.assistantMessageID ?? p.assistantMessageID) as string | undefined
+      const partID = (d.textID ?? d.reasoningID ?? d.callID ?? p.textID ?? p.reasoningID ?? p.callID) as string | undefined
       const partType = type.startsWith("session.next.reasoning") ? "reasoning"
         : type === "session.next.tool.input.delta" ? "tool"
         : "text"
-      const hasDelta = typeof p.delta === "string"
-      const text = (hasDelta ? p.delta : p.text ?? "") as string
+      const hasDelta = typeof (d.delta ?? p.delta) === "string"
+      const text = (hasDelta ? (d.delta ?? p.delta) : (d.text ?? p.text ?? "")) as string
       if (assistantMessageID && partID && text) {
         deps.applyDelta(sessionID, assistantMessageID, partID, text, !hasDelta, partType)
       }
@@ -82,11 +85,12 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     }
 
     if (type === "session.next.compaction.delta" || type === "session.next.compaction.ended") {
-      const sessionID = p.sessionID as string | undefined
-      const messageID = p.messageID as string | undefined
+      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
+      const messageID = (d.messageID ?? p.messageID) as string | undefined
       if (sessionID && messageID && sessionID === deps.sessionID) {
         if (type === "session.next.compaction.delta") {
-          const text = p.text as string | undefined
+          const text = (d.text ?? p.text) as string | undefined
           if (text) deps.applyDelta(sessionID, messageID, messageID, text, true, "compaction")
         } else {
           deps.loadSelected(sessionID, deps.directory ?? "")

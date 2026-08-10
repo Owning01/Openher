@@ -193,7 +193,8 @@ assert.ok(apiSource.includes('unwrapData'), 'v2 responses wrapped in { data } sh
 assert.ok(apiSource.includes('toMessageEnvelopeV1'), 'v2 messages should be mapped to v1 envelopes')
 assert.ok(apiSource.includes('toSessionV1'), 'v2 sessions should be mapped to v1 sessions')
 const useSSESource = readFileSync(new URL('./hooks/useSSE.ts', import.meta.url), 'utf8')
-assert.ok(useSSESource.includes('resolveApiVersion(config) === "v2"'), 'SSE should be skipped on v2 (no /event endpoint)')
+assert.ok(useSSESource.includes('api/event'), 'SSE on v2 should connect to /api/event (the v2 server exposes it)')
+assert.ok(useSSESource.includes('getApiVersion'), 'SSE should await the dialect detection before choosing the endpoint')
 assert.ok(settingsPanel.includes('settings.apiVersion'), 'Settings should expose the API version selector')
 assert.ok(useConfig.includes('apiVersion: "auto"'), 'default config should auto-detect API version')
 

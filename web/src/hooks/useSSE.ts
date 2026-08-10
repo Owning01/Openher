@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
-import { toBase64, resolveApiVersion, getApiVersion, onApiVersionChange } from "../api"
+import { toBase64, getApiVersion, onApiVersionChange } from "../api"
 import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
@@ -35,13 +35,8 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
 
   const connect = useCallback(async () => {
     if (!config || !mountedRef.current) return
-    // Espera la detección de dialecto: en auto el cache arranca vacío (v1) y
-    // un check sincrónico conectaría /event contra un server v2 (404 en loop).
-    if ((await getApiVersion(config)) === "v2") {
-      // v2 (beta) no expone /event: quedamos en polling, nunca conectar.
-      setStreamState("polling")
-      return
-    }
+    // El dialecto resuelve el endpoint: v2 expone SSE en /api/event.
+    const v2 = (await getApiVersion(config)) === "v2"
 
     abortRef.current?.abort()
     clearHeartbeat()
@@ -53,7 +48,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
     const scheme = schemeMatch ? schemeMatch[1] : "http"
     if (schemeMatch) host = host.slice(schemeMatch[0].length)
     if (host.includes(":") && !host.startsWith("[")) host = `[${host}]`
-    let url = `${scheme}://${host}:${config.port}/event`
+    let url = `${scheme}://${host}:${config.port}/${v2 ? "api/event" : "event"}`
     const dir = directoryRef.current
     if (dir) {
       url += `?directory=${encodeURIComponent(dir.replace(/\\/g, "/"))}`
@@ -179,10 +174,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   useEffect(() => {
     mountedRef.current = true
     const enabled = Boolean(config)
-    // v2 (beta) no expone /event (usa WebSocket): queda en "polling" y el
-    // polling de mensajes cubre la recepción.
-    const v2 = config ? resolveApiVersion(config) === "v2" : false
-    if (enabled && !v2) {
+    if (enabled) {
       const timeout = setTimeout(() => connect(), 500)
       return () => {
         mountedRef.current = false

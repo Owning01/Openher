@@ -166,6 +166,39 @@ type ResponseWithHeaders<T> = {
   headers: Record<string, string>
 }
 
+// Lee bytes de un recurso binario (fs/read v2): fetch en web, CapacitorHttp
+// con responseType blob (base64) en nativo.
+async function fetchFileBytes(config: ServerConfig, target: string): Promise<Uint8Array> {
+  const headers: Record<string, string> = {}
+  if (config.username && config.password) headers.Authorization = authHeader(config)
+  if (Capacitor.isNativePlatform()) {
+    const res = await CapacitorHttp.request({
+      url: target, method: "GET", headers,
+      responseType: "blob",
+      connectTimeout: 12_000,
+      readTimeout: 30_000
+    })
+    if (res.status >= 400) throw new Error(`HTTP ${res.status}`)
+    const b64 = String(res.data ?? "").split(",").pop() ?? ""
+    const bin = atob(b64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    return bytes
+  }
+  const res = await fetch(target, { headers })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return new Uint8Array(await res.arrayBuffer())
+}
+
+function arrayBufferToBase64(bytes: Uint8Array): string {
+  let binary = ""
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
 function responseDetail(body: unknown): string | null {
   if (!body) return null
   if (typeof body === "string") {
@@ -567,11 +600,31 @@ export const api = {
     return request<Record<string, SessionStatus>>(config, withDirectory("/session/status", directory))
   },
 
-  loadPath(config: ServerConfig, directory?: string) {
+  async loadPath(config: ServerConfig, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /location → Location.Info { directory, workspaceID?, project }.
+      const loc = await request<{ directory?: string; workspaceID?: string; project?: { id?: string; directory?: string } }>(
+        config, withLocationDirectory("/location", directory))
+      const dir = loc.directory ?? loc.project?.directory ?? ""
+      return { home: dir, state: dir, config: dir, worktree: dir, directory: dir }
+    }
     return request<PathInfo>(config, withDirectory("/path", directory))
   },
 
-  listFiles(config: ServerConfig, path: string, directory?: string) {
+  async listFiles(config: ServerConfig, path: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /fs/list devuelve { location, data: FileSystemEntry[] } — sin
+      // name/absolute: se derivan del path relativo.
+      const rel = path.replace(/\\/g, "/").replace(/^[A-Za-z]:\/?/, "").replace(/^\/+/, "")
+      const raw = await request<Array<{ path?: string; type?: string }>>(config,
+        `${withLocationDirectory("/fs/list", directory)}${rel ? `&path=${encodeURIComponent(rel)}` : ""}`)
+      return raw.map((e) => ({
+        name: (e.path ?? "").split("/").pop() ?? "",
+        path: e.path ?? "",
+        absolute: e.path ?? "",
+        type: (e.type === "directory" ? "directory" : "file") as "file" | "directory",
+      }))
+    }
     // El server 1.18.12 usa RelativePath.make: SOLO acepta rutas relativas al
     // project directory ("" = raíz). Las absolutas de Windows fallan con 500.
     const rel = path.replace(/\\/g, "/").replace(/^[A-Za-z]:\/?/, "").replace(/^\/+/, "")
@@ -669,7 +722,16 @@ export const api = {
     return request<TodoItem[]>(config, withDirectory(`/session/${sessionID}/todo`, directory))
   },
 
-  loadDiff(config: ServerConfig, sessionID: string, directory?: string) {
+  async loadDiff(config: ServerConfig, sessionID: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /vcs/diff (diff del worktree) con VcsFileDiff[] {file,patch,additions,deletions}.
+      const raw = await request<unknown>(config, withLocationDirectory("/vcs/diff", directory))
+      if (!Array.isArray(raw)) return []
+      return raw.map((d) => {
+        const item = d as { file?: string; additions?: number; deletions?: number }
+        return { file: item.file ?? "", additions: item.additions ?? 0, deletions: item.deletions ?? 0 }
+      })
+    }
     return request<DiffFile[]>(config, withDirectory(`/session/${sessionID}/diff`, directory))
   },
 
@@ -681,7 +743,12 @@ export const api = {
     return request<VcsStatus>(config, withDirectory("/vcs", directory))
   },
 
-  loadFileStatus(config: ServerConfig, directory?: string) {
+  async loadFileStatus(config: ServerConfig, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /vcs/status con VcsFileStatus[] — misma forma tolerante que v1.
+      const raw = await request<unknown>(config, withLocationDirectory("/vcs/status", directory))
+      return (Array.isArray(raw) ? raw : []) as FileStatusEntry[]
+    }
     return request<FileStatusEntry[] | Record<string, FileStatusEntry>>(config, withDirectory("/file/status", directory))
   },
 
@@ -818,17 +885,25 @@ export const api = {
     })
   },
 
-  findFiles(config: ServerConfig, query: string, directory?: string, limit = 20) {
+  async findFiles(config: ServerConfig, query: string, directory?: string, limit = 20) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /fs/find devuelve FileSystemEntry[] ({path,type}) ya tipado.
+      const raw = await request<Array<{ path?: string; type?: string }>>(config,
+        `${withLocationDirectory("/fs/find", directory)}&query=${encodeURIComponent(query)}&type=file&limit=${limit}`)
+      return raw.map((e) => ({ path: e.path ?? "", type: (e.type === "directory" ? "directory" : "file") as "file" | "directory" }))
+    }
     // El server devuelve string[] (paths relativos), no {path,type}[].
     return request<string[]>(config,
       withDirectory(`/find/file?query=${encodeURIComponent(query)}&limit=${limit}`, directory))
       .then((paths) => paths.map((p) => ({ path: p, type: "file" as const })))
   },
 
-  listMCPResources(config: ServerConfig) {
-    // El server devuelve un RECORD { [key]: { name, uri, description?, client } };
-    // versiones viejas devuelven array o { resources: [...] } — parseo tolerante.
-    return request<unknown>(config, "/experimental/resource").then((raw) => {
+  async listMCPResources(config: ServerConfig) {
+    // v2: /mcp/resource; v1: /experimental/resource. Mismo parseo tolerante.
+    const path = (await getApiVersion(config)) === "v2" ? "/mcp/resource" : "/experimental/resource"
+    return request<unknown>(config, path).then((raw) => {
+      // El server devuelve un RECORD { [key]: { name, uri, description?, client } };
+      // versiones viejas devuelven array o { resources: [...] } — parseo tolerante.
       if (Array.isArray(raw)) return raw as { id: string; name: string; description?: string }[]
       if (raw && typeof raw === "object") {
         const entries = Object.entries(raw as Record<string, unknown>)
@@ -930,11 +1005,27 @@ export const api = {
     })
   },
 
-  fetchDiffContent(config: ServerConfig, sessionID: string, file: string, directory?: string) {
+  async fetchDiffContent(config: ServerConfig, sessionID: string, file: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2 no expone diff por archivo: probar /vcs/diff/raw y degradar a vacío.
+      const raw = await request<{ content?: string }>(config,
+        withLocationDirectory(`/vcs/diff/raw?file=${encodeURIComponent(file)}`, directory))
+        .catch(() => null)
+      return { content: raw?.content ?? "" }
+    }
     return request<{ content: string }>(config, withDirectory(`/session/${sessionID}/diff/${encodeURIComponent(file)}`, directory))
   },
 
-  readFile(config: ServerConfig, path: string, directory?: string) {
+  async readFile(config: ServerConfig, path: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: /fs/read/<path relativo> devuelve el archivo crudo (blob).
+      const rel = toServerRelative(path, directory).split("/").map(encodeURIComponent).join("/")
+      const target = `${baseUrl(config)}/api/fs/read/${rel}${withLocationDirectory("", directory)}`
+      const bytes = await fetchFileBytes(config, target)
+      const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes)
+      if (!text.includes("\uFFFD")) return { type: "text" as const, content: text }
+      return { type: "binary" as const, content: arrayBufferToBase64(bytes), encoding: "base64" }
+    }
     // El read real del server es /file/content (con path relativo al directory);
     // /file es el LIST y explota con paths absolutos (500).
     return request<{ type: "text" | "binary"; content: string; encoding?: string }>(config,
@@ -958,7 +1049,11 @@ export const api = {
     })
   },
 
-  writeFile(config: ServerConfig, path: string, content: string, directory?: string) {
+  async writeFile(config: ServerConfig, path: string, content: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2 no expone escritura de archivos (solo fs/list/read/find).
+      throw new Error("File writing is not supported on v2 servers yet")
+    }
     return request<boolean>(config, withDirectory("/file", directory), {
       method: "POST",
       body: { path: normalizeSlashes(path), content }
