@@ -390,7 +390,11 @@ async function requestRaw<T>(config: ServerConfig, target: string, options: Requ
       return { data: unwrapData(json), headers: responseHeaders }
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
-      if (attempt < maxRetries) {
+      // Reintentar SOLO errores de red/timeout: los HTTP (4xx/5xx) son
+      // determinísticos — reintentarlos duplica la latencia sin beneficio.
+      const retryable = lastError instanceof TypeError || lastError.name === "AbortError"
+        || /network|timeout|fetch failed|ERR_/i.test(lastError.message)
+      if (attempt < maxRetries && retryable) {
         await new Promise((r) => setTimeout(r, computeBackoff(1_000, 10_000, attempt)))
       }
     }
@@ -588,12 +592,14 @@ export const api = {
 
   async listStatuses(config: ServerConfig, directory?: string) {
     if ((await getApiVersion(config)) === "v2") {
-      // v2: /session/active devuelve { sesID: { type: "running" } } — los
-      // ausentes están idle. Busy = corriendo.
-      const raw = await request<Record<string, { type?: string }>>(config, withDirectory("/session/active", directory))
+      // v2: /session/active devuelve { sesID: SessionStatus.Info } con type
+      // "busy" | "idle" | "retry" directo (nightlies viejos usaban "running").
+      // Los ausentes están idle. Scoping con location (deepObject).
+      const raw = await request<Record<string, { type?: string }>>(config, withLocationDirectory("/session/active", directory))
       const out: Record<string, SessionStatus> = {}
       for (const [id, st] of Object.entries(raw)) {
-        out[id] = { type: st?.type === "running" ? "busy" : "idle" }
+        const t = st?.type
+        out[id] = { type: t === "running" || t === "busy" ? "busy" : t === "retry" ? "retry" : "idle" }
       }
       return out
     }
@@ -690,7 +696,17 @@ export const api = {
     return mapProviderModels(response)
   },
 
-  createSession(config: ServerConfig, title?: string, model?: ModelSelection, directory?: string) {
+  async createSession(config: ServerConfig, title?: string, model?: ModelSelection, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      // v2: body { id?, agent?, model: ModelRef, location: LocationRef } — sin
+      // title (el título lo pone el primer prompt) y el directory va en body.
+      const body: Record<string, unknown> = {}
+      const m = toCreateSessionModel(model)
+      if (m) body.model = m
+      if (directory) body.location = { directory }
+      const raw = await request<Session | V2Session>(config, "/session", { method: "POST", body })
+      return toSessionV1(raw as V2Session)
+    }
     return request<Session>(config, withDirectory("/session", directory), { method: "POST", body: { title, model: toCreateSessionModel(model) } })
   },
 
