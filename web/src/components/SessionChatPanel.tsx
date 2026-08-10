@@ -84,7 +84,8 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       }
       handleSSEEvent(event)
     }, [handleSSEEvent, stopGenerationRef]),
-    session.directory
+    session.directory,
+    session.id
   )
 
   // ===== Questions (por panel/directorio) =====

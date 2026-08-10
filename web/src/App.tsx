@@ -390,7 +390,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       }
       handleSSEEvent(event)
     }, [handleSSEEvent]),
-    selectedSession?.directory
+    selectedSession?.directory,
+    selectedSession?.id
   )
 
   useEffect(() => {

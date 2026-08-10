@@ -5,7 +5,7 @@ import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
 
-export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void, directory?: string) {
+export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void, directory?: string, sessionID?: string | null) {
   const [streamState, setStreamState] = useState<StreamState>("polling")
   // Re-ejecuta el efecto cuando health() resuelve el dialecto del server:
   // si arrancamos antes de la detección (auto → v1 por default), el
@@ -25,6 +25,13 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   // sesión en el query, descarta todos los eventos (solo pasan heartbeats).
   const directoryRef = useRef(directory)
   directoryRef.current = directory
+
+  // Filtro defensivo en el transporte: el server emite eventos de TODAS las
+  // sesiones del directorio. El handler (useSSEHandler) filtra por sessionID,
+  // pero su closure puede quedar stale ~1 frame al cambiar de sesión — aquí se
+  // descartan los eventos de otra sesión con el ref más reciente.
+  const sessionIDRef = useRef<string | null | undefined>(sessionID)
+  sessionIDRef.current = sessionID
 
   const clearHeartbeat = useCallback(() => {
     if (heartbeatTimerRef.current) {
@@ -94,6 +101,13 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
         if (event.type === "server.heartbeat") return
         if (event.properties) {
           const props = event.properties as Record<string, unknown>
+          const visible = sessionIDRef.current
+          if (visible) {
+            // v2 anida el payload en `data`; v1 en la raíz de properties.
+            const nested = (props.data && typeof props.data === "object" ? props.data : null) as Record<string, unknown> | null
+            const evtSession = (props.sessionID ?? nested?.sessionID) as string | undefined
+            if (typeof evtSession === "string" && evtSession !== visible) return
+          }
           onEventRef.current({
             id: String(event.id ?? props.id ?? ""),
             type: event.type as string,

@@ -60,6 +60,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const loadSelectedRequestRef = useRef(0)
   const awaitingAssistantBaselineRef = useRef("")
   const completionShouldPlayRef = useRef(false)
+  // Sesión que el estado `messages` representa. Guard contra races: los deltas
+  // de otra sesión (que el SSE puede entregar durante una transición de sesión)
+  // se rechazan si no coinciden con la sesión cargada.
+  const loadedSessionIDRef = useRef<string | null>(null)
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
     const all = [...messages, ...optimisticUserMessages]
@@ -155,6 +159,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [messages])
 
   const clearSession = useCallback(() => {
+    loadedSessionIDRef.current = null
     setMessages([])
     setOptimisticUserMessages([])
     setAwaitingAssistantReply(false)
@@ -163,6 +168,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
   const loadSelected = useCallback(async (sessionID: string, directory: string) => {
     const requestID = ++loadSelectedRequestRef.current
+    // Seteo ANTES del await: los deltas que lleguen durante el fetch de esta
+    // sesión ya se aplican (el merge por id conserva lo streamed local).
+    loadedSessionIDRef.current = sessionID
     const limit = dataMode === "ultra" ? 30 : dataMode === "miser" ? 20 : 100
 
     const raw = await api.loadMessages(config, sessionID, directory, limit)
@@ -170,22 +178,18 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     const msg = dataMode === "full" || dataMode === "saver" ? raw : raw.map((m) => stripNonEssential(m, dataMode))
 
     setMessages((prev) => {
-      // Merge por id: el historial local nunca se reemplaza ni se descarta por
-      // una respuesta parcial o vacía — solo se agrega/actualiza lo nuevo.
-      // Además auto-sana duplicados de id (nunca dos entradas iguales).
-      const other: MessageEnvelope[] = []
+      // Merge por id SOLO de la sesión cargada: el historial local de la sesión
+      // nunca se reemplaza ni se descarta por una respuesta parcial o vacía,
+      // pero los mensajes residuales de OTRAS sesiones (races de transición)
+      // se descartan — el array siempre contiene una sola conversación.
       const seen = new Set<string>()
-      let changed = false
-      for (const m of prev) {
-        if (m.info.sessionID === sessionID) continue
-        if (seen.has(m.info.id)) { changed = true; continue }
-        seen.add(m.info.id)
-        other.push(m)
-      }
+      let changed = prev.some((m) => m.info.sessionID !== sessionID)
       const msgMap = new Map(msg.map((m) => [m.info.id, m]))
-      const merged = [...other]
+      const merged: MessageEnvelope[] = []
       for (const m of prev) {
         if (m.info.sessionID !== sessionID) continue
+        if (seen.has(m.info.id)) { changed = true; continue }
+        seen.add(m.info.id)
         const updated = msgMap.get(m.info.id)
         if (updated) {
           // Merge de parts por id: los parts streamed localmente (tools, etc.)
@@ -193,14 +197,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           const remoteIDs = new Set(updated.parts.map((p) => p.id))
           const extraLocal = m.parts.filter((p) => !remoteIDs.has(p.id))
           const parts = extraLocal.length > 0 ? [...updated.parts, ...extraLocal] : updated.parts
-          if (seen.has(m.info.id)) { changed = true; continue }
-          seen.add(m.info.id)
           merged.push({ ...updated, parts })
           msgMap.delete(m.info.id)
           if (updated.info.time.completed !== m.info.time.completed || updated.info.role !== m.info.role) changed = true
         } else {
-          if (seen.has(m.info.id)) { changed = true; continue }
-          seen.add(m.info.id)
           merged.push(m)
         }
       }
@@ -329,6 +329,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [config, loadSelected])
 
   const applyDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace = false, partType = "text") => {
+    // Guard contra races: nunca aplicar deltas de una sesión distinta a la cargada.
+    if (loadedSessionIDRef.current !== sessionID) return
     setMessages((prev) => {
       const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
       if (!existing) {
@@ -379,6 +381,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // con el tipo correcto antes de que lleguen los deltas.
   const applyPart = useCallback((sessionID: string, messageID: string, part: { id: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }) => {
     if (!part.id) return
+    // Guard contra races: nunca materializar parts de una sesión distinta a la cargada.
+    if (loadedSessionIDRef.current !== sessionID) return
     setMessages((prev) => {
       const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
       if (!existing) {

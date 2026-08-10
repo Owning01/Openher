@@ -29,7 +29,12 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
 
     if (type === "message.part.updated") {
       const part = p.part as { id?: string; type?: string; messageID?: string; sessionID?: string; text?: string } | undefined
-      if (part?.id && part.type) partTypeCacheRef.current.set(part.id, part.type)
+      // El cache de tipos se alimenta SOLO con parts de la sesión visible (o sin
+      // sessionID, para v1) — un part de otra sesión no debe tipar uno de esta.
+      const partSessionID = (p.sessionID as string | undefined) ?? part?.sessionID
+      if (part?.id && part.type && (!partSessionID || partSessionID === deps.sessionID)) {
+        partTypeCacheRef.current.set(part.id, part.type)
+      }
       // El server a veces pone messageID/sessionID dentro de part (no en la raíz
       // de properties) — es el caso del tool `task` (subagente). Fallback a part.*
       const sessionID = (p.sessionID as string | undefined) ?? part?.sessionID
@@ -100,6 +105,10 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     }
 
     if (type === "session.next.step.failed" || type === "session.next.retried") {
+      // v2 anida el payload en `data`; filtrar por sesión si el evento la trae.
+      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
+      if (sessionID && sessionID !== deps.sessionID) return
       deps.setAwaitingAssistantReply(false)
       return
     }
@@ -143,6 +152,10 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     }
 
     if (type === "session.error") {
+      // Solo mostrar errores de la sesión visible: un error de otra sesión del
+      // mismo directorio no debe aparecer como error de este chat.
+      const sessionID = p.sessionID as string | undefined
+      if (sessionID && sessionID !== deps.sessionID) return
       const msg = (p.message ?? p.text ?? "") as string
       if (msg) deps.setRuntimeError(msg)
       deps.setAwaitingAssistantReply(false)
