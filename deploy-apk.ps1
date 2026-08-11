@@ -34,12 +34,18 @@ if (-not $SkipBuild) {
 
 if (-not (Test-Path $apk)) { throw "APK no encontrado: $apk" }
 $sizeMb = [math]::Round((Get-Item $apk).Length / 1MB, 1)
-Write-Host "APK: $apk ($sizeMb MB) — subiendo a tmpfiles.org..."
+
+# Nombre del asset: nombre de la app + versión (no "app-debug.apk").
+$appVersion = node -p "require('$($web -replace '\\','/')/package.json').version"
+if (-not $appVersion) { throw "No se pudo leer la versión de web/package.json" }
+$namedApk = Join-Path $env:TEMP "OpenCode-Mobile-v$appVersion.apk"
+Copy-Item $apk $namedApk -Force
+Write-Host "APK: $namedApk ($sizeMb MB) — subiendo a tmpfiles.org..."
 
 $form = [System.Net.Http.MultipartFormDataContent]::new()
-$bytes = [System.Net.Http.ByteArrayContent]::new([IO.File]::ReadAllBytes($apk))
+$bytes = [System.Net.Http.ByteArrayContent]::new([IO.File]::ReadAllBytes($namedApk))
 $bytes.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
-$form.Add($bytes, "file", [IO.Path]::GetFileName($apk))
+$form.Add($bytes, "file", [IO.Path]::GetFileName($namedApk))
 $client = [System.Net.Http.HttpClient]::new()
 $client.Timeout = [TimeSpan]::FromMinutes(10)
 try {
@@ -47,7 +53,7 @@ try {
   $resp.EnsureSuccessStatusCode() | Out-Null
   $json = $resp.Content.ReadAsStringAsync().Result | ConvertFrom-Json
   if ($json.status -ne "success") { throw "tmpfiles: $($json | ConvertTo-Json -Compress)" }
-  $name = [IO.Path]::GetFileName($apk)
+  $name = [IO.Path]::GetFileName($namedApk)
   $id = $null
   if ($json.data.id) { $id = $json.data.id }
   elseif ($json.data.url) { $id = ([regex]::Match($json.data.url, "tmpfiles\.org/([^/]+)/")).Groups[1].Value }

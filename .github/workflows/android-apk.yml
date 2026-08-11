@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -114,14 +116,18 @@ jobs:
         run: |
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose web/android/app/build/outputs/apk/release/app-release.apk
 
-      - name: Select APK (signed release or debug fallback)
+      - name: Select APK (signed release or debug fallback) and rename
         id: select_apk
         run: |
           if [ -f web/android/app/build/outputs/apk/release/app-release.apk ]; then
-            echo "apk_path=web/android/app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
+            SRC=web/android/app/build/outputs/apk/release/app-release.apk
           else
-            echo "apk_path=web/android/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+            SRC=web/android/app/build/outputs/apk/debug/app-debug.apk
           fi
+          # Nombre del asset: nombre de la app + versión (no "app-debug.apk").
+          DST="OpenCode-Mobile-v${{ steps.version.outputs.app_version }}.apk"
+          cp "$SRC" "$DST"
+          echo "apk_path=$DST" >> "$GITHUB_OUTPUT"
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
@@ -129,31 +135,29 @@ jobs:
           name: opencode-mobile-apk-v${{ steps.version.outputs.app_version }}
           path: ${{ steps.select_apk.outputs.apk_path }}
 
-      - name: Generate release notes
+      - name: Get previous version tag
+        id: prev_tag
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | sed -n '2p')
+          echo "prev_tag=${PREV_TAG:-}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes (changelog from commits since previous tag)
         id: release_body
         run: |
-          cat > /tmp/release-body.md << 'RELEASEEOF'
+          PREV_TAG="${{ steps.prev_tag.outputs.prev_tag }}"
+          if [ -n "$PREV_TAG" ]; then
+            git log --pretty=format:'- %s' "$PREV_TAG"..HEAD > /tmp/changelog.txt
+          else
+            git log --pretty=format:'- %s' > /tmp/changelog.txt
+          fi
+          if [ ! -s /tmp/changelog.txt ]; then
+            echo "- Sin cambios" > /tmp/changelog.txt
+          fi
+          cat > /tmp/release-body.md << RELEASEEOF
           ## OpenCode Mobile v${{ steps.version.outputs.app_version }}
 
-          ### ✨ Funcionalidades
-          - **Streaming SSE en tiempo real** — Eventos via `/event` con heartbeat y reconexión automática
-          - **Polling adaptativo** — 4 modos de datos (Full/Saver/Ultra/Miser) con backoff exponencial
-          - **Chat completo** — Prompts, comandos slash, shell, imágenes, undo/redo, revert
-          - **Cache offline** — IndexedDB para navegar sesiones y mensajes sin conexión
-          - **Cola offline** — Las acciones se encolan y reenvían al reconectar
-          - **47 componentes UI** — ChatView, MessageList, Composer, ThinkingBlock, ToolPart, DiffViewer, etc.
-          - **27 hooks React** — useSSE, usePolling, useMessages, useSessions, useAI, etc.
-          - **i18n** — 4 idiomas: español, english, italiano, 繁體中文
-          - **Temas dinámicos** — 30+ temas con creador visual y exportación JSON
-          - **Gestión de sesiones** — Crear, renombrar, eliminar, favoritos, archivar, fork
-          - **MCP Browser** — Explora recursos MCP del servidor
-          - **File Editor** — Lee y edita archivos del proyecto remoto
-          - **Terminal** — Shell integrado con historial
-          - **Image Lightbox** — Zoom, pan y drag en imágenes
-          - **Notificaciones** — Alertas al completar respuesta, preguntas o errores
-          - **Deep Links** — Conexión via `opencode://connect?host=...`
-          - **Atajos de teclado** — Referencia completa de shortcuts
-          - **Feature Flags** — 13 flags experimentales configurables
+          ### 🚀 Novedades de esta versión
+          $(cat /tmp/changelog.txt)
 
           ### 📦 Instalación
           1. Descargar el APK de esta release
