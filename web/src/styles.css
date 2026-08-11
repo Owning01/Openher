@@ -3212,14 +3212,16 @@ p {
   overflow: hidden;
 }
 
-/* Fondo negro del chat solo en modo oscuro (el light usa --surface) */
-:root[data-theme="dark"] .messages {
-  background: #000;
-}
-
-/* Fondo personalizable (ChatCustomizer): gradiente o color sólido */
+/* Fondo del chat: el modo oscuro usa negro puro por defecto; el color
+   personalizable (ChatCustomizer → fondo) lo sobrescribe cuando se elige.
+   La regla dark va DESPUÉS para no perder el #000 contra --surface. */
 .messages {
   background-color: var(--chat-bg-color, var(--surface));
+  background-image: var(--chat-bg-image, none);
+}
+
+:root[data-theme="dark"] .messages {
+  background-color: var(--chat-bg-color, #000);
   background-image: var(--chat-bg-image, none);
 }
 

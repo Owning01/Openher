@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef } from "react"
 import type { SSEEvent } from "../types"
 import type { MessageEnvelope } from "../types"
 
+// Diagnóstico del streaming de reasoning: inactivo por defecto (spam por
+// delta). Activación: localStorage.setItem("opencode.debug.sse", "1").
+const SSE_DIAG = typeof localStorage !== "undefined" && localStorage.getItem("opencode.debug.sse") === "1"
+
 type SSEHandlerDeps = {
   sessionID: string | null | undefined
   directory: string | undefined
@@ -29,9 +33,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
 
     if (type === "message.part.updated") {
       const part = p.part as { id?: string; type?: string; messageID?: string; sessionID?: string; text?: string } | undefined
-      // [SSE:diag] diagnóstico temporal: ¿el reasoning llega por part.updated
-      // (con el texto completo) o por deltas?
-      if (part?.type === "reasoning" || part?.type === "thinking") {
+      if (SSE_DIAG && (part?.type === "reasoning" || part?.type === "thinking")) {
         console.info("[SSE:diag] part.updated reasoning", { partID: part.id, type: part.type, textLen: part.text?.length ?? 0 })
       }
       // El cache de tipos se alimenta SOLO con parts de la sesión visible (o sin
@@ -39,12 +41,23 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const partSessionID = (p.sessionID as string | undefined) ?? part?.sessionID
       if (part?.id && part.type && (!partSessionID || partSessionID === deps.sessionID)) {
         partTypeCacheRef.current.set(part.id, part.type)
+        // Cache acotado: una sesión larga genera miles de partIDs y el tipo ya
+        // materializado (applyPart) no necesita más deltas tipados. Al pasar
+        // el tope se descarta el entry más viejo (el Map conserva inserción).
+        if (partTypeCacheRef.current.size > 500) {
+          const oldest = partTypeCacheRef.current.keys().next().value
+          if (oldest !== undefined) partTypeCacheRef.current.delete(oldest)
+        }
       }
       // El server a veces pone messageID/sessionID dentro de part (no en la raíz
       // de properties) — es el caso del tool `task` (subagente). Fallback a part.*
       const sessionID = (p.sessionID as string | undefined) ?? part?.sessionID
       const messageID = (p.messageID as string | undefined) ?? part?.messageID
-      if (sessionID && messageID && part?.id && sessionID === deps.sessionID) {
+      // Los tool parts del SUBAGENTE traen el sessionID de la sesión HIJA: su
+      // tarjeta pertenece al chat del padre — applyPart los ancla al mensaje
+      // del padre (Map partID→messageID en useMessages).
+      const isSubagentToolPart = (part?.type === "tool" || part?.type === "tool_use") && sessionID !== deps.sessionID
+      if (part?.id && sessionID && messageID && (sessionID === deps.sessionID || isSubagentToolPart)) {
         const fullPart = p.part as { id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } } | undefined
         deps.applyPart(sessionID, messageID, {
           id: fullPart?.id ?? "",
@@ -67,9 +80,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const text = (hasDelta ? p.delta : p.text ?? "") as string
       const cachedType = partID ? partTypeCacheRef.current.get(partID) : undefined
       const partType = cachedType ?? (p.type ?? p.partType ?? "text") as string
-      // [SSE:diag] diagnóstico temporal: ¿el server streamea el reasoning por
-      // deltas? Si partType es text sin cache, el part se tipa text (default).
-      if (partType === "reasoning" || partType === "thinking" || !cachedType) {
+      if (SSE_DIAG && (partType === "reasoning" || partType === "thinking" || !cachedType)) {
         console.info("[SSE:diag] part.delta", { partID, messageID, partType, cached: Boolean(cachedType), deltaLen: text.length })
       }
       if (sessionID && messageID && partID && text && sessionID === deps.sessionID) {

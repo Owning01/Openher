@@ -42,7 +42,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   activeVariant?: string
   config?: ServerConfig
   directory?: string
-  onViewSubagents?: () => void
+  onViewSubagents?: (subagentID?: string) => void
   onContextMenu?: (x: number, y: number, messageID: string) => void
   showTodoButton?: boolean
   onToggleTodos?: () => void
@@ -65,7 +65,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   const isAssistant = message.info.role === "assistant"
 
   const hasSubagentTasks = useMemo(
-    () => message.toolParts.some((tp) => !!(tp.type === "tool_use" && isTaskTool(tp.text ?? ""))),
+    () => message.toolParts.some((tp) => !!((tp.type === "tool_use" && isTaskTool(tp.text ?? "")) || tp.tool === "task")),
     [message.toolParts],
   )
 
@@ -262,7 +262,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
         )}
 
         {hasSubagentTasks && onViewSubagents && (
-          <button className="subagent-hint" onClick={onViewSubagents}>
+          <button className="subagent-hint" onClick={() => onViewSubagents?.()}>
             ↳ view subagents
           </button>
         )}

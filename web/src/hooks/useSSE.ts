@@ -105,14 +105,23 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
           if (visible) {
             // v2 anida el payload en `data`; v1 en la raíz de properties.
             const nested = (props.data && typeof props.data === "object" ? props.data : null) as Record<string, unknown> | null
-            const evtSession = (props.sessionID ?? nested?.sessionID) as string | undefined
-            if (typeof evtSession === "string" && evtSession !== visible) return
+            // v1: el sessionID puede vivir dentro de `part` (tool task/subagente).
+            const partObj = (props.part && typeof props.part === "object" ? props.part : null) as Record<string, unknown> | null
+            // El tool part del SUBAGENTE (task) trae el sessionID de la sesión
+            // HIJA en part.sessionID — su tarjeta pertenece al chat del padre,
+            // así que NO se filtra por sesión (el resto de eventos ajenos sí).
+            const isSubagentToolPart = event.type === "message.part.updated" &&
+              !!partObj && (partObj.type === "tool" || partObj.type === "tool_use")
+            if (!isSubagentToolPart) {
+              const evtSession = (props.sessionID ?? nested?.sessionID ?? partObj?.sessionID) as string | undefined
+              if (typeof evtSession === "string" && evtSession !== visible) return
+            }
+            onEventRef.current({
+              id: String(event.id ?? props.id ?? ""),
+              type: event.type as string,
+              properties: props,
+            })
           }
-          onEventRef.current({
-            id: String(event.id ?? props.id ?? ""),
-            type: event.type as string,
-            properties: props,
-          })
         }
       }
 
@@ -153,7 +162,11 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
         while (mountedRef.current && !abort.signal.aborted) {
           try {
             const { done, value } = await reader.read()
-            if (done) break
+            if (done) {
+              // El server cerró el stream: liberar el reader (fuga) antes de reconectar.
+              reader.cancel().catch(() => {})
+              break
+            }
             recordDataUsage(value.byteLength, "down")
             buffer += decoder.decode(value, { stream: true })
             processBuffer()
@@ -200,7 +213,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
       }
     }
     return () => { mountedRef.current = false }
-  }, [Boolean(config), config?.host, config?.port, config?.username, config?.password, clearHeartbeat, connect, directoryRef.current, versionTick])
+  }, [Boolean(config), config?.host, config?.port, config?.username, config?.password, clearHeartbeat, connect, directory, versionTick])
 
   const reconnect = useCallback(() => {
     reconnectAttemptRef.current = 0

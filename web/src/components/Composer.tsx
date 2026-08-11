@@ -232,12 +232,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   // doble requestAnimationFrame: en el mismo tick del cambio de value el DOM
   // todavía no hizo reflow (WebView/móvil) y scrollHeight devuelve el alto
   // anterior — el textarea quedaría crecido tras enviar un mensaje largo.
+  // height:auto primero deja que el navegador calcule el alto natural real.
   const resizeTextarea = useCallback(() => {
     const ta = textareaRef.current
     if (!ta) return
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        ta.style.height = "0px"
+        ta.style.height = "auto"
         ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
       })
     })

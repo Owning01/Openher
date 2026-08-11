@@ -111,7 +111,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   part: ToolPartData
   config?: ServerConfig
   directory?: string
-  onViewSubagents?: () => void
+  onViewSubagents?: (subagentID?: string) => void
   compact?: boolean
 }) {
   const t = useT()
@@ -213,6 +213,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
       ?? extractParam(text ?? "", "description")
     const sessionID = (part.state?.input as { sessionId?: string } | undefined)?.sessionId
       ?? extractParam(text ?? "", "sessionId")
+      ?? part.sessionID
     const isTaskDone = isDone
     const title = agentType.charAt(0).toUpperCase() + agentType.slice(1)
     const subtitle = description || undefined
@@ -226,7 +227,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
           </span>
           {!isTaskDone && <span className="tool-status-dot" />}
           {sessionID && isTaskDone && onViewSubagents && (
-            <button className="tool-part-nav-btn" onClick={(e) => { e.stopPropagation(); onViewSubagents() }}>
+            <button className="tool-part-nav-btn" onClick={(e) => { e.stopPropagation(); onViewSubagents(sessionID) }}>
               ↳ view
             </button>
           )}

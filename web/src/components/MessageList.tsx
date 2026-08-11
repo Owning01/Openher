@@ -19,7 +19,7 @@ type MessageListProps = {
   agents?: AgentOption[]
   config?: ServerConfig
   directory?: string
-  onViewSubagents?: () => void
+  onViewSubagents?: (subagentID?: string) => void
   onContextMenu?: (x: number, y: number, messageID: string) => void
   onEditMessage?: (messageID: string, text: string) => void
   showTodoButton?: boolean

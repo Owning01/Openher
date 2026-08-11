@@ -202,8 +202,11 @@ export const ChatView = memo(function ChatView({
     }
   }, [])
   const overflowRef = useRef<HTMLDivElement | null>(null)
-  const handleViewSubagents = useCallback(() => {
-    const subagentSession = activeSessions.find((s) => s.parentID === selectedSession?.id)
+  const handleViewSubagents = useCallback((subagentID?: string) => {
+    const parent = selectedSession?.id
+    const subagentSession = subagentID
+      ? activeSessions.find((s) => s.id === subagentID)
+      : activeSessions.find((s) => s.parentID === parent)
     if (subagentSession) onOpenSession(subagentSession.id, subagentSession.directory)
   }, [activeSessions, selectedSession?.id, onOpenSession])
 

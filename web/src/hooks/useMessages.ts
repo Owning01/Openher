@@ -64,6 +64,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // de otra sesión (que el SSE puede entregar durante una transición de sesión)
   // se rechazan si no coinciden con la sesión cargada.
   const loadedSessionIDRef = useRef<string | null>(null)
+  // Ancla partID → mensaje del PADRE para tool parts de subagentes (task): el
+  // server los emite con sessionID/messageID de la sesión HIJA; la tarjeta se
+  // materializa en el mensaje assistant del padre que los desplegó. El partID
+  // se conserva entre updates (running→completed), así el ancla es estable.
+  const subagentAnchorRef = useRef<Map<string, { sessionID: string; messageID: string }>>(new Map())
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
     const all = [...messages, ...optimisticUserMessages]
@@ -164,6 +169,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
   const clearSession = useCallback(() => {
     loadedSessionIDRef.current = null
+    subagentAnchorRef.current.clear()
     setMessages([])
     setOptimisticUserMessages([])
     setAwaitingAssistantReply(false)
@@ -223,8 +229,25 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     })
 
     setOptimisticUserMessages((current) => {
-      const confirmedTexts = new Set(msg.filter((m) => m.info.role === "user").map(extractText))
-      return current.filter((m) => m.info.sessionID !== sessionID || !confirmedTexts.has(extractText(m)))
+      const confirmedUsers = msg.filter((m) => m.info.role === "user")
+      // 1) Confirmación por id: el server devuelve el id real del mensaje.
+      const confirmedIDs = new Set(confirmedUsers.map((m) => m.info.id))
+      // 2) Fallback por texto (echo SSE con role assistant/id distinto): cada
+      //    fetch confirma a lo sumo el optimista MÁS VIEJO con ese texto — si
+      //    se envió "hola" dos veces, el segundo espera su propio echo en vez
+      //    de desaparecer junto con el primero.
+      const confirmedTexts = new Set(confirmedUsers.map((m) => extractText(m).trim()).filter(Boolean))
+      const removeIDs = new Set<string>(confirmedIDs)
+      const matchedTexts = new Set<string>()
+      for (const m of current) {
+        if (m.info.sessionID !== sessionID || confirmedIDs.has(m.info.id)) continue
+        const t = extractText(m).trim()
+        if (t && confirmedTexts.has(t) && !matchedTexts.has(t)) {
+          matchedTexts.add(t)
+          removeIDs.add(m.info.id)
+        }
+      }
+      return current.filter((m) => m.info.sessionID !== sessionID || !removeIDs.has(m.info.id))
     })
   }, [config, dataMode])
 
@@ -385,22 +408,43 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // con el tipo correcto antes de que lleguen los deltas.
   const applyPart = useCallback((sessionID: string, messageID: string, part: { id: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }) => {
     if (!part.id) return
-    // Guard contra races: nunca materializar parts de una sesión distinta a la cargada.
-    if (loadedSessionIDRef.current !== sessionID) return
+    const visible = loadedSessionIDRef.current
+    if (visible && visible !== sessionID) {
+      // Tool part de un subagente (task): el server manda la sesión/mensaje de
+      // la sesión HIJA, pero la tarjeta pertenece al chat del padre. Se ancla
+      // por partID al último mensaje assistant de la sesión visible (el turno
+      // en curso que desplegó al subagente).
+      if (part.type !== "tool" && part.type !== "tool_use") return
+      const anchor = subagentAnchorRef.current.get(part.id)
+      if (anchor) {
+        sessionID = anchor.sessionID
+        messageID = anchor.messageID
+      } else {
+        sessionID = visible
+        messageID = ""
+      }
+    }
     setMessages((prev) => {
-      const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
+      let targetMessageID = messageID
+      if (!targetMessageID) {
+        const anchorMsg = prev.filter((m) => m.info.sessionID === sessionID && m.info.role === "assistant").pop()
+        targetMessageID = anchorMsg?.info.id ?? ""
+        if (targetMessageID) subagentAnchorRef.current.set(part.id, { sessionID, messageID: targetMessageID })
+        else return prev
+      }
+      const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === targetMessageID)
       if (!existing) {
         const isUserText = part.type === "text" && part.text && optimisticTextsRef.current.size > 0
           ? optimisticTextsRef.current.has(part.text.trim())
           : false
         return [...prev, {
-          info: { id: messageID, role: isUserText ? "user" : "assistant", sessionID, time: { created: Date.now() } },
+          info: { id: targetMessageID, role: isUserText ? "user" : "assistant", sessionID, time: { created: Date.now() } },
           parts: [{ id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}), ...(part.time ? { time: part.time } : {}) }]
         }]
       }
       let changed = false
       const next = prev.map((m) => {
-        if (m.info.sessionID !== sessionID || m.info.id !== messageID) return m
+        if (m.info.sessionID !== sessionID || m.info.id !== targetMessageID) return m
         const hasPart = m.parts.some((p) => p.id === part.id)
         if (!hasPart) {
           changed = true
