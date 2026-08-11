@@ -4113,35 +4113,16 @@ p {
   font-weight: 700;
 }
 
-.tool-part-nav-btn {
-  flex: 0 0 auto;
-  font-size: 0.7rem;
-  font-family: var(--font-mono);
-  color: var(--primary);
-  border: 1px solid var(--primary-border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  padding: 0.1rem 0.45rem;
+.tool-task.clickable .tool-part-toggle {
   cursor: pointer;
-  transition: background 0.15s;
 }
 
-.tool-part-nav-btn:hover {
-  background: var(--primary-soft);
+.tool-task.clickable .tool-part-toggle:hover {
+  color: var(--primary);
 }
 
-.subagent-spinner {
-  display: inline-block;
-  width: 0.7rem;
-  height: 0.7rem;
-  border: 2px solid var(--accent);
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: subagent-spin 0.7s linear infinite;
-}
-
-@keyframes subagent-spin {
-  to { transform: rotate(360deg); }
+.tool-part-subagent-prefix {
+  color: var(--muted);
 }
 
 
@@ -7621,29 +7602,6 @@ button.compact {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-}
-
-
-/* ===== Subagent Hint ===== */
-.subagent-hint {
-  display: var(--chat-subagent-vis, block);
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  cursor: pointer;
-  margin-top: var(--space-1);
-  font-size: 0.7rem;
-  font-family: var(--font-mono);
-  color: var(--muted);
-  opacity: 0.65;
-  padding: var(--space-1) var(--space-3);
-  letter-spacing: 0.02em;
-  transition: color 0.15s;
-}
-
-.subagent-hint:hover {
-  color: var(--accent);
 }
 
 /* ===== Diff Viewer ===== */

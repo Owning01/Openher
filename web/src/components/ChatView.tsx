@@ -63,7 +63,7 @@ export type ChatViewProps = {
   onBackToSessions: () => void
   onSheetOpen: (sheet: "ai" | "details") => void
   recentSessions: SessionView[]
-  activeSessions: SessionView[]
+  sessions: SessionView[]
   onOpenSession: (id: string, dir: string) => void
   readingMode: boolean
   onToggleReadingMode: () => void
@@ -115,7 +115,7 @@ export const ChatView = memo(function ChatView({
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
-  agents, config, activeSessions, onOpenSession, onOpenSettings, onShellSend, onThemeCommand,
+  agents, config, sessions, onOpenSession, onOpenSettings, onShellSend, onThemeCommand,
   onOpenRemoteDesktop,
   flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
   pendingQuestions, permissionRequest,
@@ -204,11 +204,13 @@ export const ChatView = memo(function ChatView({
   const overflowRef = useRef<HTMLDivElement | null>(null)
   const handleViewSubagents = useCallback((subagentID?: string) => {
     const parent = selectedSession?.id
+    // La sesión del subagente puede ya no estar "active" (terminó): buscar en
+    // TODAS las sesiones, con fallback al primer hijo del directorio.
     const subagentSession = subagentID
-      ? activeSessions.find((s) => s.id === subagentID)
-      : activeSessions.find((s) => s.parentID === parent)
+      ? sessions.find((s) => s.id === subagentID) ?? sessions.find((s) => s.parentID === parent)
+      : sessions.find((s) => s.parentID === parent)
     if (subagentSession) onOpenSession(subagentSession.id, subagentSession.directory)
-  }, [activeSessions, selectedSession?.id, onOpenSession])
+  }, [sessions, selectedSession?.id, onOpenSession])
 
   useEffect(() => {
     if (!config) return

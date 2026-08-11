@@ -275,6 +275,8 @@ type TranslationKey =
   | 'toolpart.wrote'
   | 'toolpart.edited'
   | 'toolpart.patched'
+  | 'toolpart.subagent'
+  | 'toolpart.viewSubagent'
   | 'session.deleteTitle'
   | 'session.deleteBodyPrefix'
   | 'session.cancel'
@@ -1027,6 +1029,8 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
     'toolpart.wrote': 'wrote',
     'toolpart.edited': 'edited',
     'toolpart.patched': 'patched',
+    'toolpart.subagent': 'Subagent',
+    'toolpart.viewSubagent': 'View subagent',
     'session.deleteTitle': 'Delete session?',
     'session.deleteBodyPrefix': 'This will permanently delete',
     'session.cancel': 'Cancel',
@@ -1709,6 +1713,8 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
     'toolpart.wrote': 'escribió',
     'toolpart.edited': 'editó',
     'toolpart.patched': 'parcheó',
+    'toolpart.subagent': 'Subagente',
+    'toolpart.viewSubagent': 'Ver subagente',
     'session.deleteTitle': '¿Eliminar sesión?',
     'session.deleteBodyPrefix': 'Esto eliminará permanentemente',
     'session.cancel': 'Cancelar',

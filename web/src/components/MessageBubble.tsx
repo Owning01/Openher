@@ -8,7 +8,6 @@ import { FileDiffs } from "./FileDiffs"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { Markdown } from "./Markdown"
 import { ImageLightbox } from "./ImageLightbox"
-import { isTaskTool } from "../utils/toolMeta"
 
 function agentColorIndex(agentName: string | undefined, agents: AgentOption[]): number {
   if (!agentName) return 0
@@ -63,11 +62,6 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   const isRevertPoint = revert && message.info.id === revert.messageID
 
   const isAssistant = message.info.role === "assistant"
-
-  const hasSubagentTasks = useMemo(
-    () => message.toolParts.some((tp) => !!((tp.type === "tool_use" && isTaskTool(tp.text ?? "")) || tp.tool === "task")),
-    [message.toolParts],
-  )
 
   const agentIdx = useMemo(
     () => agentColorIndex(message.info.agent ?? message.info.providerID, agents ?? []),
@@ -259,12 +253,6 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
               )}
             </span>
           </div>
-        )}
-
-        {hasSubagentTasks && onViewSubagents && (
-          <button className="subagent-hint" onClick={() => onViewSubagents?.()}>
-            ↳ view subagents
-          </button>
         )}
 
         {showTodoButton && onToggleTodos && (

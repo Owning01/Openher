@@ -5,6 +5,8 @@ web/node_modules/
 web/dist/
 web/*.tsbuildinfo
 OPENCODE-REPO.md
+# Changelogs locales por versión (no se suben a GitHub)
+/CHANGELOG-v*.md
 # Android native project has its own .gitignore
 # web/android/ is NOT ignored — the Android .gitignore handles build artifacts
 

@@ -641,7 +641,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const pollInterval = dataMode === "full" ? (isStreamingActive ? 5000 : 3500) : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
 
-  usePolling(async () => {
+  const pollControl = usePolling(async () => {
     await refreshSessions()
     if (connectionStateRef.current === "offline") {
       throw new Error("offline")
@@ -700,8 +700,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     loadFromCache()
 
     // El dialecto v1/v2 se resuelve solo en el primer request (api.ts
-    // ensureVersionDetected): aquí no hace falta probe extra.
-    refreshSessions(true).catch(() => undefined)
+    // ensureVersionDetected): aquí no hace falta probe extra. Si el primer
+    // refresh falla (server lento en arrancar), el polling se re-programa a
+    // ~1s (fail) en vez de esperar el intervalo completo (15-60s).
+    refreshSessions(true).catch(() => pollControl.fail())
     loadAgents()
     loadModels()
     if (dataMode === "full") {
@@ -1266,7 +1268,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     onTodosToggle: () => setTodosExpanded((v) => !v),
     onBackToSessions: goBack,
     onSheetOpen: setActiveDetailSheet,
-    recentSessions, activeSessions,
+    recentSessions, sessions,
     onOpenSession: handleOpenSession,
     readingMode, onToggleReadingMode: () => setReadingMode((v) => !v),
     onExportChat: handleExportChat, onExportMarkdown: handleExportMarkdown, onSnapshot: handleSnapshot,
@@ -1327,7 +1329,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     activeAgent, activeAgentID, activeModelOption, activeModelVariants, selectedVariant, changeVariant, primaryAgentOptions, changeAgent,
     projectName, startRename, setRenameValue, renameSession, cancelRename, setComposer,
     handleSend, handleAbort, setTodosExpanded, goBack, setActiveDetailSheet,
-    recentSessions, activeSessions, handleOpenSession, readingMode, setReadingMode,
+    recentSessions, sessions, handleOpenSession, readingMode, setReadingMode,
     handleExportChat, handleExportMarkdown, handleSnapshot, setFileEditorPath, navigate,
     setShowThemePicker, config, agentOptions, connectionState, queueAction, shellExecute,
     flags, toggleFlag, setFlag, diffFiles, projectDashboard, streamState, compacting,

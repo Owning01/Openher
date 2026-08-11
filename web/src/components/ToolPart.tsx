@@ -3,6 +3,7 @@ import type { ServerConfig, FileDiff } from "../types"
 import { toolMeta, detectToolName, isTaskTool, isQuestionTool } from "../utils/toolMeta"
 import { QuestionPrompt } from "./QuestionPrompt"
 import { CollapsibleSection } from "./CollapsibleSection"
+import { GridSpinner } from "./GridSpinner"
 import { DiffView, parseDiffStat, synthesizeWritePatch } from "./DiffView"
 import { useT } from "../i18n-context"
 import { CodeIcon, FileIcon, TerminalIcon, GlobeIcon, SearchIcon, ToolIcon } from "../Icons"
@@ -217,21 +218,29 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     const isTaskDone = isDone
     const title = agentType.charAt(0).toUpperCase() + agentType.slice(1)
     const subtitle = description || undefined
+    // Al terminar, toda la tarjeta navega al subagente (una sola vía, sin
+    // botón separado): el sessionID del part puede no coincidir con el id de
+    // la lista — ChatView cae al primer hijo con parentID.
+    const canView = isTaskDone && !!sessionID && !!onViewSubagents
 
     return (
-      <div className={`tool-part tool-task${isTaskDone ? "" : " working"}`}>
-        <div className="tool-part-toggle" style={{ cursor: "default" }}>
-          <span className="tool-part-icon">{isTaskDone ? (isError ? "✗" : "✓") : <span className="subagent-spinner" />}</span>
+      <div className={`tool-part tool-task${isTaskDone ? "" : " working"}${canView ? " clickable" : ""}`}>
+        <button
+          type="button"
+          className="tool-part-toggle"
+          style={canView ? undefined : { cursor: "default" }}
+          onClick={() => { if (canView) onViewSubagents(sessionID) }}
+          disabled={!canView}
+          aria-label={canView ? t('toolpart.viewSubagent') : undefined}
+          title={canView ? t('toolpart.viewSubagent') : undefined}
+        >
+          <span className="tool-part-icon">{isTaskDone ? (isError ? "✗" : "✓") : <GridSpinner label={title} size={16} />}</span>
           <span className="tool-part-label" style={{ textTransform: "none" }}>
-            {title}{subtitle ? <span className="tool-part-arg"> · {subtitle}</span> : null}
+            <span className="tool-part-subagent-prefix">{t('toolpart.subagent')}:</span> {title}
+            {subtitle ? <span className="tool-part-arg"> · {subtitle}</span> : null}
           </span>
           {!isTaskDone && <span className="tool-status-dot" />}
-          {sessionID && isTaskDone && onViewSubagents && (
-            <button className="tool-part-nav-btn" onClick={(e) => { e.stopPropagation(); onViewSubagents(sessionID) }}>
-              ↳ view
-            </button>
-          )}
-        </div>
+        </button>
       </div>
     )
   }
@@ -268,7 +277,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
 
   const headerIcon = toolSvgIcon(toolName ?? null)
   const statusIcon = isWorking
-    ? <span className="subagent-spinner" />
+    ? <GridSpinner label={label} size={14} />
     : isError ? <span className="tool-status-icon tool-error-mark">✗</span>
     : isDone ? <span className="tool-status-icon tool-ok-mark">✓</span>
     : null

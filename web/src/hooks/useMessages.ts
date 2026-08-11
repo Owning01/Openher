@@ -195,6 +195,12 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       const seen = new Set<string>()
       let changed = prev.some((m) => m.info.sessionID !== sessionID)
       const msgMap = new Map(msg.map((m) => [m.info.id, m]))
+      // Ventana del fetch (ids msg_<hex> lexicográficos): sirve para distinguir
+      // el historial viejo (más allá del limit) del turno actual.
+      const hasRemote = msg.length > 0
+      const sortedIDs = hasRemote ? msg.map((m) => m.info.id).sort() : []
+      const firstRemoteID = sortedIDs[0] ?? ""
+      const lastRemoteID = sortedIDs[sortedIDs.length - 1] ?? ""
       const merged: MessageEnvelope[] = []
       for (const m of prev) {
         if (m.info.sessionID !== sessionID) continue
@@ -211,6 +217,19 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           msgMap.delete(m.info.id)
           if (updated.info.time.completed !== m.info.time.completed || updated.info.role !== m.info.role) changed = true
         } else {
+          // El server ya no devuelve este mensaje. Conservar SOLO:
+          // - el historial más viejo que la ventana del fetch (limit acotado);
+          // - el turno en curso streamed por SSE (incompleto / más nuevo que
+          //   lo último remoto — el próximo fetch lo confirma).
+          // Los completos DENTRO de la ventana que el server dejó de devolver
+          // fueron revertidos/compactados por el server: descartarlos. Antes
+          // se conservaban para siempre y reaparecían tras revert + envío
+          // (cuando el server resuelve el revert, el CSS revert-hidden se apaga).
+          const inWindow = m.info.id >= firstRemoteID && m.info.id <= lastRemoteID
+          if (hasRemote && inWindow && m.info.time?.completed) {
+            changed = true
+            continue
+          }
           merged.push(m)
         }
       }
