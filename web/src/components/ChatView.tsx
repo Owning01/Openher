@@ -4,6 +4,7 @@ import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
+import { PromptPresetSheet } from "./PromptPresetSheet"
 import { ThinkingLevels } from "./ThinkingLevels"
 import { InlineRename } from "./InlineRename"
 import { SubagentFooter } from "./SubagentFooter"
@@ -17,7 +18,8 @@ import { PermissionPrompt } from "./PermissionPrompt"
 import { api } from "../api"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { formatCompact, formatCost } from "../utils"
-import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo, ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, Question, PermissionRequest } from "../types"
+import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo,
+  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, Question, PermissionRequest, PromptSnippet } from "../types"
 
 export type ChatViewProps = {
   selectedSession: SessionView | null
@@ -95,6 +97,12 @@ export type ChatViewProps = {
   onOpenRemoteDesktop?: () => void
   showTodoButton?: boolean
   compacting?: boolean
+  snippets?: PromptSnippet[]
+  charLimit?: number
+  compactTools?: boolean
+  onRegenerate?: () => void
+  onInsertPrompt?: (text: string) => void
+  onSendPrompt?: (text: string) => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -115,7 +123,8 @@ export const ChatView = memo(function ChatView({
   onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser,
   todos, todosExpanded, onTodosToggle, showTodoButton,
   compacting, revertID,
-  onExportMarkdown, onEditFile
+  onExportMarkdown, onEditFile,
+  snippets, charLimit, compactTools, onRegenerate, onInsertPrompt, onSendPrompt
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -139,6 +148,7 @@ export const ChatView = memo(function ChatView({
     return () => window.removeEventListener("keydown", onKey)
   }, [showModelMenu])
   const [showSkills, setShowSkills] = useState(false)
+  const [showPrompts, setShowPrompts] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
   const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
@@ -411,6 +421,12 @@ export const ChatView = memo(function ChatView({
                       {t('session.mcpResources')}
                     </button>
                   )}
+                  {onInsertPrompt && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowPrompts(true) }}>
+                      <span style={{ fontSize: 13 }}>⚡</span>
+                      {t('chat.prompts')}
+                    </button>
+                  )}
                   {onForkSession && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onForkSession() }}>
                       <ForkIcon size={14} />
@@ -486,6 +502,8 @@ export const ChatView = memo(function ChatView({
           highlight={deferredQuery.trim() || undefined}
           scrollToMessageID={scrollToMessageID}
           activeVariant={activeModelOption?.variant}
+          compactTools={compactTools}
+          onRegenerate={onRegenerate}
         />
         {showDown && (
           <button type="button" className="float-down" onClick={scrollToBottom}
@@ -578,6 +596,8 @@ export const ChatView = memo(function ChatView({
           config={config}
           directory={selectedSession?.directory}
           onThemeCommand={onThemeCommand}
+          snippets={snippets ?? []}
+          charLimit={charLimit ?? 0}
         />
       )}
 
@@ -587,6 +607,14 @@ export const ChatView = memo(function ChatView({
           onClose={() => setShowSkills(false)}
           onSelect={(name) => onComposerChange(`/skill ${name} `)}
         />,
+        document.body
+      )}
+
+      {showPrompts && createPortal(
+        <PromptPresetSheet
+          onInsert={(text) => { onInsertPrompt?.(text); setShowPrompts(false) }}
+          onSend={(text) => { onSendPrompt?.(text); setShowPrompts(false) }}
+          onClose={() => setShowPrompts(false)} />,
         document.body
       )}
 

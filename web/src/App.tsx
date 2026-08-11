@@ -39,6 +39,7 @@ import { useProviderManager } from "./hooks/useProviderManager"
 import { ThemeVariantProvider } from "./context/themeVariant"
 import { useShell } from "./hooks/useShell"
 import { useChatSettings } from "./hooks/useChatSettings"
+import { usePromptSnippets } from "./hooks/usePromptSnippets"
 import { useFileBrowser } from "./hooks/useFileBrowser"
 import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
@@ -199,7 +200,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     selectedSession, sessionToDelete, renamingSessionID, renameValue, setRenameValue,
     openSession, refreshSessions, refreshSessionsWithIndicator, createSession,
     deleteSession, renameSession, startRename, cancelRename,
-    setSessionToDelete, setSessions, favorites, toggleFavorite
+    setSessionToDelete, setSessions, favorites, toggleFavorite,
+    setSelectedID
   } = useSessions(config, onLoadSelected, backgroundFailureCountRef, initialSessionLoadRef, setConnectionState, setConnectionMessage)
 
   useEffect(() => {
@@ -237,6 +239,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   // ===== Feature: Shortcuts =====
   const [showShortcuts, setShowShortcuts] = useState(false)
   const { settings: chatSettings, setSetting: setChatSetting, resetDefaults: resetChatSettings } = useChatSettings()
+  const { snippets: promptSnippets, addSnippet, removeSnippet } = usePromptSnippets()
 
   // ===== Feature: Theme Creator =====
   const [showThemeCreator, setShowThemeCreator] = useState(false)
@@ -668,7 +671,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, selectedSession?.id, selectedSession?.status, isStreamingActive], isStreamingActive)
 
-  useCompletionAudio(awaitingAssistantReply, completionShouldPlayRef, dataMode, () => {
+  useCompletionAudio(awaitingAssistantReply, completionShouldPlayRef, dataMode, chatSettings.completionSound, () => {
     if (selectedSession && dataMode !== "ultra" && dataMode !== "miser") {
       loadSelected(selectedSession.id, selectedSession.directory)
       refreshSessions(true)
@@ -757,6 +760,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
     recordPrompt(composer)
     stopGenerationRef.current = false
+    // Consumir un revert pendiente: el server elimina los mensajes revertidos
+    // al recibir el nuevo prompt — el estado local debe descartarlos YA (el
+    // merge por id de loadSelected los conservaría y reaparecerían sin revert).
+    const revertMsgId = localRevertID ?? selectedSession?.revert?.messageID
+    if (revertMsgId) {
+      setMessages((prev) => prev.filter((m) => !m.info.id || m.info.id <= revertMsgId))
+    }
     setLocalRevertID(null)
     setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "busy" } : s))
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
@@ -764,10 +774,48 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
       setCommands, setRuntimeError, images)
     if (result === "help") { setHelpPage("commands"); navigate("help") }
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer])
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, localRevertID, setMessages])
 
-  const handleAbort = useCallback(async () => {
+  const handleRegenerate = useCallback(async () => {
     if (!selectedSession) return
+    // Si hay un revert activo, regenerar el último mensaje user VISIBLE.
+    const revertMsgId = localRevertID ?? selectedSession?.revert?.messageID
+    if (revertMsgId) {
+      setMessages((prev) => prev.filter((m) => !m.info.id || m.info.id <= revertMsgId))
+      setLocalRevertID(null)
+    }
+    const visible = revertMsgId ? renderedMessages.filter((m) => m.info.id <= revertMsgId) : renderedMessages
+    const lastUser = [...visible].reverse().find((m) => m.info.role === "user")
+    if (!lastUser?.text) return
+    if (lastUser.parts.some((p) => p.type === "image")) return
+    if (awaitingAssistantReply) {
+      await abortSession(selectedSession.id, selectedSession.directory).catch(() => undefined)
+    }
+    setAwaitingAssistantReply(false)
+    await send(selectedSession, activeModel, activeAgentID, commands,
+      () => refreshSessions(),
+      () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
+      setCommands, setRuntimeError, undefined, lastUser.text)
+  }, [selectedSession, renderedMessages, localRevertID, awaitingAssistantReply, abortSession, send, activeModel, activeAgentID, commands, refreshSessions, loadSelected, setCommands, setRuntimeError, setMessages])
+
+  const handleInsertPrompt = useCallback((text: string) => {
+    setComposer(text)
+    navigate("detail")
+  }, [setComposer, navigate])
+
+  const handleSendPrompt = useCallback(async (text: string) => {
+    if (!selectedSession || !text.trim()) return
+    if (awaitingAssistantReply) {
+      await abortSession(selectedSession.id, selectedSession.directory).catch(() => undefined)
+    }
+    setAwaitingAssistantReply(false)
+    await send(selectedSession, activeModel, activeAgentID, commands,
+      () => refreshSessions(),
+      () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
+      setCommands, setRuntimeError, undefined, text)
+  }, [selectedSession, awaitingAssistantReply, abortSession, send, activeModel, activeAgentID, commands, refreshSessions, loadSelected, setCommands, setRuntimeError])
+
+  const handleAbort = useCallback(async () => {    if (!selectedSession) return
     stopGenerationRef.current = true
     setAwaitingAssistantReply(false)
     const sid = selectedSession.id
@@ -1112,6 +1160,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [selectedSession, activeModel, compactSession, refreshSessions, loadSelected, setCompacting, setAwaitingAssistantReply, completionShouldPlayRef])
 
+  const handleDeleteMany = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return
+    for (const id of ids) {
+      const s = sessions.find((x) => x.id === id)
+      await api.deleteSession(config, id, s?.directory).catch(() => undefined)
+    }
+    if (selectedID && ids.includes(selectedID)) setSelectedID(null)
+    await refreshSessions(true).catch(() => undefined)
+  }, [sessions, config, selectedID, refreshSessions, setSelectedID])
+
+  const handleArchiveMany = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return
+    for (const id of ids) {
+      const s = sessions.find((x) => x.id === id)
+      if (s) await api.sendCommand(config, id, "/archive", "", s.directory).catch(() => undefined)
+    }
+    await refreshSessions(true).catch(() => undefined)
+  }, [sessions, config, refreshSessions])
+
   const sessionsView = (
     <>
       <SessionList
@@ -1143,7 +1210,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         onFork={(s) => handleCreateSession(s.directory)}
         onDismissRecent={dismissRecent}
         onNewSessionHere={(dir) => handleCreateSession(dir)}
-        onDragStartSession={handleSessionDragStart} />
+        onDragStartSession={handleSessionDragStart}
+        onDeleteMany={handleDeleteMany}
+        onArchiveMany={flags.sessionArchive ? handleArchiveMany : undefined} />
       {showNewSessionPicker && (
         <Suspense fallback={null}>
           <FolderPicker
@@ -1245,6 +1314,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setShowRemoteDesktop(true)
     },
     showTodoButton: chatSettings.showTodoButton,
+    snippets: promptSnippets,
+    charLimit: chatSettings.composerCharLimit,
+    compactTools: chatSettings.compactTools,
+    onRegenerate: handleRegenerate,
+    onInsertPrompt: handleInsertPrompt,
+    onSendPrompt: handleSendPrompt,
   }), [
     selectedSession, localRevertID, renderedMessages, todos, todosExpanded, composer,
     isWorking, showTypingBubble, loadingSessionID, selectedID, messageScrollSignature,
@@ -1261,6 +1336,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     handleDismissPermission, handleRevertToMessage, handleEditMessage, handleUndo,
     handleRedo, handleCompact, handleCreateSession, fb, setShowTerminal,
     setShowMCPBrowser, setShowRemoteDesktop, chatSettings,
+    promptSnippets, handleRegenerate, handleInsertPrompt, handleSendPrompt,
   ])
 
   const detailView = <ChatView {...baseChatProps} />
@@ -1545,6 +1621,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           chatSettings={chatSettings}
           onChatSettingChange={setChatSetting}
           onResetChatSettings={resetChatSettings}
+          snippets={promptSnippets}
+          onAddSnippet={addSnippet}
+          onRemoveSnippet={removeSnippet}
           onShutdownHost={handleShutdownHost}
           onRestartHost={handleRestartHost}
           onOpenGitHub={handleOpenGitHub}

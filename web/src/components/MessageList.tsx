@@ -28,11 +28,13 @@ type MessageListProps = {
   highlight?: string
   scrollToMessageID?: string | null
   activeVariant?: string
+  compactTools?: boolean
+  onRegenerate?: () => void
 }
 
 export const MessageList = memo(function MessageList({
   messages, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, activeVariant
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, activeVariant, compactTools, onRegenerate
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -162,6 +164,8 @@ export const MessageList = memo(function MessageList({
                   onToggleTodos={onToggleTodos}
                   todosOpen={todosOpen}
                   highlight={highlight}
+                  compactTools={compactTools}
+                  onRegenerate={onRegenerate}
                 />
               </Fragment>
             ))}

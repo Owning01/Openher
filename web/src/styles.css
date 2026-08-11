@@ -1258,6 +1258,14 @@ p {
   left: 18px;
 }
 
+.switch-checkbox {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
 .switch-input {
   width: 100px;
   padding: 0.35rem 0.5rem;
@@ -3209,6 +3217,12 @@ p {
   background: #000;
 }
 
+/* Fondo personalizable (ChatCustomizer): gradiente o color sólido */
+.messages {
+  background-color: var(--chat-bg-color, var(--surface));
+  background-image: var(--chat-bg-image, none);
+}
+
 .scroll-to-bottom {
   position: absolute;
   bottom: 16px;
@@ -3244,7 +3258,7 @@ p {
 /* ===== Message Bubbles (User & Assistant) ===== */
 .message {
   width: 100%;
-  max-width: 100%;
+  max-width: var(--chat-max-width, 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
@@ -3256,9 +3270,70 @@ p {
 
 .message-content {
   font-size: var(--chat-font-size, 0.88rem);
+  font-family: var(--chat-font-family, inherit);
 }
 .message-content p {
   font-size: inherit;
+}
+
+.message-image {
+  display: var(--chat-image-vis, block);
+  max-width: min(280px, 100%);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-2);
+  object-fit: contain;
+}
+
+/* ===== Vista previa del ChatCustomizer ===== */
+.chat-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  padding: var(--space-3);
+  font-size: var(--chat-font-size, 0.88rem);
+  font-family: var(--chat-font-family, inherit);
+  max-width: var(--chat-max-width, 100%);
+}
+
+.chat-preview p {
+  font-size: inherit;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.chat-preview-user {
+  align-self: flex-end;
+  max-width: 85%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--chat-user-bubble-bg, var(--primary-soft));
+  border: 1px solid var(--chat-accent, var(--primary-border));
+  border-radius: var(--chat-bubble-radius, 12px);
+  padding: var(--space-2) var(--space-3);
+}
+
+.chat-preview-user small {
+  align-self: flex-end;
+  color: var(--muted);
+  font-size: 0.7em;
+}
+
+.chat-preview-assistant {
+  max-width: 85%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-preview-footer {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  opacity: 0.75;
 }
 .thinking-block {
   display: var(--chat-thinking-vis, block);
@@ -3272,8 +3347,9 @@ p {
 }
 
 .compaction-checkpoint {
+  display: var(--chat-compaction-vis, block);
   margin-top: var(--space-4);
-  border-top: 1px solid var(--primary);
+  border-top: 1px solid var(--chat-accent, var(--primary));
   text-align: center;
   position: relative;
 }
@@ -3284,7 +3360,7 @@ p {
   top: -0.65em;
   padding: 0 var(--space-2);
   background: inherit;
-  color: var(--primary);
+  color: var(--chat-accent, var(--primary));
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -3293,15 +3369,15 @@ p {
 
 .message.user {
   align-self: flex-end;
-  background: var(--primary-soft);
-  border-color: var(--primary-border);
-  border-radius: 2px;
+  background: var(--chat-user-bubble-bg, var(--primary-soft));
+  border-color: var(--chat-accent, var(--primary-border));
+  border-radius: var(--chat-bubble-radius, 2px);
 }
 
 /* Modo plan: la caja del mensaje y el indicador de modo usan el color del plan */
 .message.user[data-mode="plan"] {
-  background: var(--warning-soft);
-  border-left: 3px solid var(--warning);
+  background: var(--chat-user-bubble-bg, var(--warning-soft));
+  border-left: 3px solid var(--chat-accent, var(--warning));
 }
 
 .message[data-mode="plan"] .msg-footer-mode {
@@ -3317,7 +3393,7 @@ p {
 }
 
 .message-footer {
-  display: flex;
+  display: var(--chat-modelinfo-vis, flex);
   align-items: center;
   gap: 0.2rem;
   margin-top: var(--space-2);
@@ -3331,6 +3407,64 @@ p {
 .msg-agent-dot {
   font-size: 0.6rem;
   margin-right: 0.1rem;
+}
+
+.msg-footer-spacer {
+  flex: 1;
+}
+
+.msg-more-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.msg-more-btn {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  border: none;
+  opacity: 0.8;
+}
+
+.msg-more-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 4px;
+  gap: 2px;
+  background: var(--surface-strong, #1a1a20);
+  border: 1px solid var(--border-strong, #444);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+}
+
+.msg-more-dropdown .overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.msg-more-dropdown .overflow-item:hover:not(:disabled) {
+  background: var(--surface-subtle);
+}
+
+.msg-more-dropdown .overflow-item:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .msg-footer-interrupted {
@@ -3877,6 +4011,7 @@ p {
 
 /* ===== Resumen consolidado de diffs al final del turno ===== */
 .file-diffs {
+  display: var(--chat-diffs-vis, block);
   margin-top: 0.35rem;
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -4679,6 +4814,357 @@ p {
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   white-space: nowrap;
+}
+
+/* ===== Composer: snippets + contador ===== */
+.composer-snippet-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  min-width: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  padding: 0.15rem 0.35rem;
+}
+
+.composer-snippet-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.composer-char-count {
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  align-self: center;
+  margin-right: var(--space-1);
+}
+
+.composer-char-count.over {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.snippet-menu {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* ===== Snippet manager (Settings) ===== */
+.snippet-input,
+.snippet-textarea {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.snippet-input:focus,
+.snippet-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.snippet-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.snippet-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.snippet-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.snippet-info strong {
+  font-size: 0.85rem;
+}
+
+.snippet-info small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== Color pickers del ChatCustomizer ===== */
+.chat-color-input {
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+/* ===== Tool minimal (modo compacto) ===== */
+.tool-part-minimal .tool-part-toggle {
+  opacity: 0.9;
+}
+
+/* ===== Lightbox de imágenes ===== */
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.88);
+  padding: var(--space-4);
+  cursor: zoom-out;
+}
+
+.image-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  cursor: default;
+}
+
+.image-lightbox-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ===== Editor de imagen (crop + lápiz) ===== */
+.image-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  padding: var(--space-3);
+}
+
+.image-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(560px, 100%);
+  max-height: 92vh;
+  background: var(--surface-strong, #16161d);
+  border: 1px solid var(--border-strong, #444);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  overflow: hidden;
+}
+
+.image-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.image-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.image-editor-canvas {
+  width: 100%;
+  max-height: 55vh;
+  object-fit: contain;
+  background: #0a0a0f;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.image-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Botón editar sobre el preview de imagen del composer */
+.image-preview-edit {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.image-preview:hover .image-preview-edit {
+  opacity: 1;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .image-preview-edit {
+    opacity: 1;
+  }
+}
+
+/* ===== Prompt presets (pre-armados) ===== */
+.prompt-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: var(--space-3);
+}
+
+.prompt-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(520px, 100%);
+  max-height: 80vh;
+  background: var(--surface-strong, #16161d);
+  border: 1px solid var(--border-strong, #444);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  overflow: hidden;
+}
+
+.prompt-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.prompt-sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-y: auto;
+}
+
+.prompt-preset-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.prompt-preset-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.prompt-preset-info strong {
+  font-size: 0.85rem;
+}
+
+.prompt-preset-info small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.prompt-preset-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* ===== Multiselección de sesiones ===== */.session-card.select-mode {
+  cursor: pointer;
+}
+
+.session-checkbox {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 0.75rem;
+  margin-right: var(--space-1);
+}
+
+.session-checkbox.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.session-card.checked {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.session-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-md);
+  background: var(--primary-soft);
+}
+
+.session-selection-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.session-selection-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .agent-toggle:hover:not(:disabled) {
@@ -7138,7 +7624,7 @@ button.compact {
 
 /* ===== Subagent Hint ===== */
 .subagent-hint {
-  display: block;
+  display: var(--chat-subagent-vis, block);
   width: 100%;
   text-align: left;
   background: none;

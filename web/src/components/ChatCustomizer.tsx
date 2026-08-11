@@ -8,12 +8,46 @@ type Props = {
   onReset: () => void
 }
 
+type BoolKey = {
+  [K in keyof ChatSettings]: ChatSettings[K] extends boolean ? K : never
+}[keyof ChatSettings]
+
 export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSettingChange, onReset }: Props) {
   const t = useT()
   const SPACING_OPTIONS: Array<{ value: ChatSettings["messageSpacing"]; labelKey: string }> = [
     { value: "compact", labelKey: "settings.chatSpacingCompact" },
     { value: "normal", labelKey: "settings.chatSpacingNormal" },
     { value: "comfortable", labelKey: "settings.chatSpacingComfortable" },
+  ]
+  const WIDTH_OPTIONS: Array<{ value: ChatSettings["messageMaxWidth"]; labelKey: string }> = [
+    { value: "normal", labelKey: "settings.chatWidthNormal" },
+    { value: "wide", labelKey: "settings.chatWidthWide" },
+    { value: "full", labelKey: "settings.chatWidthFull" },
+  ]
+  const FONT_OPTIONS: Array<{ value: ChatSettings["fontFamily"]; labelKey: string }> = [
+    { value: "system", labelKey: "settings.chatFontSystem" },
+    { value: "serif", labelKey: "settings.chatFontSerif" },
+    { value: "mono", labelKey: "settings.chatFontMono" },
+  ]
+  const BG_OPTIONS: Array<{ value: ChatSettings["chatBackground"]; labelKey: string }> = [
+    { value: "default", labelKey: "settings.chatBgDefault" },
+    { value: "indigo", labelKey: "settings.chatBgIndigo" },
+    { value: "amber", labelKey: "settings.chatBgAmber" },
+    { value: "green", labelKey: "settings.chatBgGreen" },
+    { value: "solid", labelKey: "settings.chatBgSolid" },
+  ]
+  const CHECKBOXES: Array<{ key: BoolKey; labelKey: string }> = [
+    { key: "showThinking", labelKey: "settings.chatShowThinking" },
+    { key: "showToolCalls", labelKey: "settings.chatShowTools" },
+    { key: "showTimestamps", labelKey: "settings.chatShowTime" },
+    { key: "showTodoButton", labelKey: "settings.chatShowTodo" },
+    { key: "showModelInfo", labelKey: "settings.chatShowModelInfo" },
+    { key: "showDiffs", labelKey: "settings.chatShowDiffs" },
+    { key: "showSubagentHint", labelKey: "settings.chatShowSubagents" },
+    { key: "showCompactionCheckpoint", labelKey: "settings.chatShowCompaction" },
+    { key: "showImages", labelKey: "settings.chatShowImages" },
+    { key: "compactTools", labelKey: "settings.chatCompactTools" },
+    { key: "completionSound", labelKey: "settings.chatCompletionSound" },
   ]
 
   return (
@@ -30,6 +64,17 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
         </div>
       </label>
 
+      <div className="chat-preview" aria-hidden="true">
+        <div className="chat-preview-user">
+          <small>14:32</small>
+          <p>{t('settings.chatPreviewUser')}</p>
+        </div>
+        <div className="chat-preview-assistant">
+          <p>{t('settings.chatPreviewAssistant')}</p>
+          <span className="chat-preview-footer">▣ build · model · 12s</span>
+        </div>
+      </div>
+
       <label className="setting-row">
         <span>{t('settings.chatSpacing')}</span>
         <div className="toggle-row" style={{ gap: "var(--space-1)" }}>
@@ -44,39 +89,111 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
         </div>
       </label>
 
-      <div className="toggle-row" style={{ flexDirection: "column", gap: "var(--space-3)" }}>
-        <label className="toggle-row" style={{ width: "100%" }}>
-          <span>{t('settings.chatShowThinking')}</span>
-          <button type="button" className={`toggle-btn${settings.showThinking ? " active" : ""}`}
-            onClick={() => onSettingChange("showThinking", !settings.showThinking)}
-            aria-pressed={settings.showThinking}>
-            {settings.showThinking ? t('settings.enabled') : t('settings.disabled')}
-          </button>
-        </label>
-        <label className="toggle-row" style={{ width: "100%" }}>
-          <span>{t('settings.chatShowTools')}</span>
-          <button type="button" className={`toggle-btn${settings.showToolCalls ? " active" : ""}`}
-            onClick={() => onSettingChange("showToolCalls", !settings.showToolCalls)}
-            aria-pressed={settings.showToolCalls}>
-            {settings.showToolCalls ? t('settings.enabled') : t('settings.disabled')}
-          </button>
-        </label>
-        <label className="toggle-row" style={{ width: "100%" }}>
-          <span>{t('settings.chatShowTime')}</span>
-          <button type="button" className={`toggle-btn${settings.showTimestamps ? " active" : ""}`}
-            onClick={() => onSettingChange("showTimestamps", !settings.showTimestamps)}
-            aria-pressed={settings.showTimestamps}>
-            {settings.showTimestamps ? t('settings.enabled') : t('settings.disabled')}
-          </button>
-        </label>
-        <label className="toggle-row" style={{ width: "100%" }}>
-          <span>{t('settings.chatShowTodo')}</span>
-          <button type="button" className={`toggle-btn${settings.showTodoButton ? " active" : ""}`}
-            onClick={() => onSettingChange("showTodoButton", !settings.showTodoButton)}
-            aria-pressed={settings.showTodoButton}>
-            {settings.showTodoButton ? t('settings.enabled') : t('settings.disabled')}
-          </button>
-        </label>
+      <label className="setting-row">
+        <span>{t('settings.chatBubbleRadius')}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+          <input type="range" min={4} max={24} value={settings.bubbleRadius}
+            onChange={(e) => onSettingChange("bubbleRadius", Number(e.target.value))}
+            style={{ flex: 1 }} />
+          <span style={{ minWidth: "2em", textAlign: "center", fontSize: "0.85rem", fontFamily: "monospace" }}>
+            {settings.bubbleRadius}px
+          </span>
+        </div>
+      </label>
+
+      <label className="setting-row">
+        <span>{t('settings.chatMaxWidth')}</span>
+        <div className="toggle-row" style={{ gap: "var(--space-1)" }}>
+          {WIDTH_OPTIONS.map((opt) => (
+            <button key={opt.value} type="button"
+              className={`toggle-btn${settings.messageMaxWidth === opt.value ? " active" : ""}`}
+              onClick={() => onSettingChange("messageMaxWidth", opt.value)}
+              aria-pressed={settings.messageMaxWidth === opt.value}>
+              {t(opt.labelKey)}
+            </button>
+          ))}
+        </div>
+      </label>
+
+      <label className="setting-row">
+        <span>{t('settings.chatFontFamily')}</span>
+        <div className="toggle-row" style={{ gap: "var(--space-1)" }}>
+          {FONT_OPTIONS.map((opt) => (
+            <button key={opt.value} type="button"
+              className={`toggle-btn${settings.fontFamily === opt.value ? " active" : ""}`}
+              onClick={() => onSettingChange("fontFamily", opt.value)}
+              aria-pressed={settings.fontFamily === opt.value}>
+              {t(opt.labelKey)}
+            </button>
+          ))}
+        </div>
+      </label>
+
+      <label className="setting-row">
+        <span>{t('settings.chatBg')}</span>
+        <div className="toggle-row" style={{ gap: "var(--space-1)", flexWrap: "wrap" }}>
+          {BG_OPTIONS.map((opt) => (
+            <button key={opt.value} type="button"
+              className={`toggle-btn${settings.chatBackground === opt.value ? " active" : ""}`}
+              onClick={() => onSettingChange("chatBackground", opt.value)}
+              aria-pressed={settings.chatBackground === opt.value}>
+              {t(opt.labelKey)}
+            </button>
+          ))}
+        </div>
+      </label>
+
+      <div className="setting-row">
+        <span>{t('settings.chatUserBubble')}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+          <input type="color" className="chat-color-input"
+            value={settings.userBubbleColor || "#4f46e5"}
+            onChange={(e) => onSettingChange("userBubbleColor", e.target.value)} />
+          {settings.userBubbleColor && (
+            <button type="button" className="btn-icon btn-ghost compact"
+              onClick={() => onSettingChange("userBubbleColor", "")}
+              aria-label={t('settings.chatResetColor')} title={t('settings.chatResetColor')}>✕</button>
+          )}
+        </div>
+      </div>
+
+      <div className="setting-row">
+        <span>{t('settings.chatAccent')}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+          <input type="color" className="chat-color-input"
+            value={settings.agentAccent || "#22d3ee"}
+            onChange={(e) => onSettingChange("agentAccent", e.target.value)} />
+          {settings.agentAccent && (
+            <button type="button" className="btn-icon btn-ghost compact"
+              onClick={() => onSettingChange("agentAccent", "")}
+              aria-label={t('settings.chatResetColor')} title={t('settings.chatResetColor')}>✕</button>
+          )}
+        </div>
+      </div>
+
+      <label className="setting-row">
+        <span>{t('settings.chatCharLimit')}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+          <input type="range" min={0} max={4000} step={100} value={settings.composerCharLimit}
+            onChange={(e) => onSettingChange("composerCharLimit", Number(e.target.value))}
+            style={{ flex: 1 }} />
+          <span style={{ minWidth: "3em", textAlign: "center", fontSize: "0.85rem", fontFamily: "monospace" }}>
+            {settings.composerCharLimit === 0 ? t('settings.chatCharLimitOff') : settings.composerCharLimit}
+          </span>
+        </div>
+      </label>
+
+      <div className="switch-list" style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+        {CHECKBOXES.map(({ key, labelKey }) => (
+          <label key={key} className="switch-row">
+            <span className="switch-label">
+              <strong>{t(labelKey)}</strong>
+            </span>
+            <input type="checkbox" className="switch-checkbox"
+              checked={settings[key]}
+              onChange={() => onSettingChange(key, !settings[key])} />
+          </label>
+        ))}
       </div>
 
       <button type="button" className="btn-secondary compact" onClick={onReset}

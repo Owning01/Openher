@@ -521,6 +521,89 @@ type TranslationKey =
   | 'settings.chatShowTools'
   | 'settings.chatShowTime'
   | 'settings.chatShowTodo'
+  | 'settings.chatShowModelInfo'
+  | 'settings.chatShowDiffs'
+  | 'settings.chatShowSubagents'
+  | 'settings.chatShowCompaction'
+  | 'settings.chatShowImages'
+  | 'settings.chatBubbleRadius'
+  | 'settings.chatMaxWidth'
+  | 'settings.chatWidthNormal'
+  | 'settings.chatWidthWide'
+  | 'settings.chatWidthFull'
+  | 'settings.chatFontFamily'
+  | 'settings.chatFontSystem'
+  | 'settings.chatFontSerif'
+  | 'settings.chatFontMono'
+  | 'settings.chatPreviewUser'
+  | 'settings.chatPreviewAssistant'
+  | 'settings.chatCompactTools'
+  | 'settings.chatCompletionSound'
+  | 'settings.chatBg'
+  | 'settings.chatBgDefault'
+  | 'settings.chatBgIndigo'
+  | 'settings.chatBgAmber'
+  | 'settings.chatBgGreen'
+  | 'settings.chatBgSolid'
+  | 'settings.chatUserBubble'
+  | 'settings.chatAccent'
+  | 'settings.chatResetColor'
+  | 'settings.chatCharLimit'
+  | 'settings.chatCharLimitOff'
+  | 'settings.snippets'
+  | 'settings.snippetsDesc'
+  | 'settings.snippetsEmpty'
+  | 'settings.snippetName'
+  | 'settings.snippetText'
+  | 'settings.snippetAdd'
+  | 'settings.snippetRemove'
+  | 'composer.snippets'
+  | 'common.cancel'
+  | 'chat.moreActions'
+  | 'chat.copyText'
+  | 'chat.regenerate'
+  | 'image.editorTitle'
+  | 'image.crop'
+  | 'image.draw'
+  | 'image.undo'
+  | 'image.apply'
+  | 'image.close'
+  | 'image.brushColor'
+  | 'image.brushSize'
+  | 'sessions.select'
+  | 'sessions.cancelSelect'
+  | 'sessions.selectedCount'
+  | 'sessions.deleteSelected'
+  | 'sessions.deleteManyConfirm'
+  | 'settings.testAgain'
+  | 'settings.testAgainTitle'
+  | 'chat.prompts'
+  | 'chat.insertPrompt'
+  | 'chat.sendPrompt'
+  | 'prompts.explain'
+  | 'prompts.explainText'
+  | 'prompts.review'
+  | 'prompts.reviewText'
+  | 'prompts.bugs'
+  | 'prompts.bugsText'
+  | 'prompts.tests'
+  | 'prompts.testsText'
+  | 'prompts.optimize'
+  | 'prompts.optimizeText'
+  | 'prompts.refactor'
+  | 'prompts.refactorText'
+  | 'prompts.docs'
+  | 'prompts.docsText'
+  | 'prompts.commit'
+  | 'prompts.commitText'
+  | 'prompts.debug'
+  | 'prompts.debugText'
+  | 'prompts.explainSimple'
+  | 'prompts.explainSimpleText'
+  | 'prompts.summarize'
+  | 'prompts.summarizeText'
+  | 'prompts.security'
+  | 'prompts.securityText'
   | 'settings.enabled'
   | 'settings.disabled'
   | 'settings.chatReset'
@@ -564,7 +647,9 @@ type TranslationKey =
   | 'dataUsage.mobile'
   | 'dataUsage.wifi'
 
-const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
+// Partial: los idiomas pueden omitir keys — createTranslator cae al EN
+// (translations[lang][key] ?? translations.en[key] ?? key).
+const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>> = {
   en: {
     'app.title': 'OpenCode Mobile',
     'app.exitTitle': 'Close app?',
@@ -1088,6 +1173,89 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.chatShowTools': 'Show tools',
     'settings.chatShowTime': 'Show timestamps',
     'settings.chatShowTodo': 'Todo button',
+    'settings.chatShowModelInfo': 'Show model info',
+    'settings.chatShowDiffs': 'Show file diffs',
+    'settings.chatShowSubagents': 'Show subagent hint',
+    'settings.chatShowCompaction': 'Show compaction checkpoint',
+    'settings.chatShowImages': 'Show images',
+    'settings.chatBubbleRadius': 'Bubble radius',
+    'settings.chatMaxWidth': 'Message width',
+    'settings.chatWidthNormal': 'Normal',
+    'settings.chatWidthWide': 'Wide',
+    'settings.chatWidthFull': 'Full',
+    'settings.chatFontFamily': 'Font',
+    'settings.chatFontSystem': 'System',
+    'settings.chatFontSerif': 'Serif',
+    'settings.chatFontMono': 'Monospace',
+    'settings.chatPreviewUser': 'Your message with this font size',
+    'settings.chatPreviewAssistant': 'Assistant reply example showing how the text looks',
+    'settings.chatCompactTools': 'Compact tools (one line)',
+    'settings.chatCompletionSound': 'Completion sound',
+    'settings.chatBg': 'Chat background',
+    'settings.chatBgDefault': 'Default',
+    'settings.chatBgIndigo': 'Indigo',
+    'settings.chatBgAmber': 'Amber',
+    'settings.chatBgGreen': 'Green',
+    'settings.chatBgSolid': 'Solid',
+    'settings.chatUserBubble': 'Your bubble color',
+    'settings.chatAccent': 'Accent color',
+    'settings.chatResetColor': 'Reset to theme',
+    'settings.chatCharLimit': 'Prompt char limit',
+    'settings.chatCharLimitOff': 'Off',
+    'settings.snippets': 'Prompt snippets',
+    'settings.snippetsDesc': 'Reusable prompt templates, available from the composer',
+    'settings.snippetsEmpty': 'No snippets yet — add your first one above.',
+    'settings.snippetName': 'Name',
+    'settings.snippetText': 'Prompt text',
+    'settings.snippetAdd': 'Add snippet',
+    'settings.snippetRemove': 'Remove snippet',
+    'composer.snippets': 'Insert snippet',
+    'common.cancel': 'Cancel',
+    'chat.moreActions': 'Message actions',
+    'chat.copyText': 'Copy text',
+    'chat.regenerate': 'Regenerate reply',
+    'image.editorTitle': 'Edit image',
+    'image.crop': 'Crop',
+    'image.draw': 'Draw',
+    'image.undo': 'Undo',
+    'image.apply': 'Apply',
+    'image.close': 'Close',
+    'image.brushColor': 'Brush color',
+    'image.brushSize': 'Brush size',
+    'sessions.select': 'Select sessions',
+    'sessions.cancelSelect': 'Cancel',
+    'sessions.selectedCount': '{count} selected',
+    'sessions.deleteSelected': 'Delete',
+    'sessions.deleteManyConfirm': 'Delete {count} sessions? This cannot be undone.',
+    'settings.testAgain': 'Test again',
+    'settings.testAgainTitle': 'Connection already verified — test again',
+    'chat.prompts': 'Prompts',
+    'chat.insertPrompt': 'Insert in composer',
+    'chat.sendPrompt': 'Send now',
+    'prompts.explain': 'Explain code',
+    'prompts.explainText': 'Explain the code below in detail: what it does, how it works, and any potential issues.',
+    'prompts.review': 'Code review',
+    'prompts.reviewText': 'Review the recent changes in this project. Point out bugs, risks, and improvements. Be concise.',
+    'prompts.bugs': 'Find bugs',
+    'prompts.bugsText': 'Look for bugs, race conditions, and edge cases in this code. List each one with file and line, and a fix suggestion.',
+    'prompts.tests': 'Write tests',
+    'prompts.testsText': 'Write tests for the code in this file: happy path, edge cases, and error cases. Use the project test conventions.',
+    'prompts.optimize': 'Optimize performance',
+    'prompts.optimizeText': 'Find performance issues in this code (complexity, re-renders, allocations). Propose concrete optimizations.',
+    'prompts.refactor': 'Refactor',
+    'prompts.refactorText': 'Refactor this code following SRP and DRY without changing behavior. Keep the same public API.',
+    'prompts.docs': 'Document',
+    'prompts.docsText': 'Document this file: what it does, its main functions, and usage examples. Keep it short.',
+    'prompts.commit': 'Commit message',
+    'prompts.commitText': 'Write a concise git commit message for the current changes, following conventional commits style.',
+    'prompts.debug': 'Debug error',
+    'prompts.debugText': 'I have this error: [paste error]. Find the root cause and propose a fix. Show the relevant code path.',
+    'prompts.explainSimple': 'Explain simply',
+    'prompts.explainSimpleText': 'Explain this code in simple terms, as if to a junior developer. Use analogies.',
+    'prompts.summarize': 'Summarize conversation',
+    'prompts.summarizeText': 'Summarize this conversation: what was done, decisions taken, and pending tasks.',
+    'prompts.security': 'Security review',
+    'prompts.securityText': 'Check this code for security issues: secrets, injection, unsafe input handling. List findings with severity.',
     'settings.enabled': 'On',
     'settings.disabled': 'Off',
     'settings.chatReset': 'Reset to defaults',
@@ -1686,6 +1854,89 @@ const translations: Record<LanguageCode, Record<TranslationKey, string>> = {
     'settings.chatShowTools': 'Mostrar herramientas (tools)',
     'settings.chatShowTime': 'Mostrar hora',
     'settings.chatShowTodo': 'Botón de tareas',
+    'settings.chatShowModelInfo': 'Mostrar info del modelo',
+    'settings.chatShowDiffs': 'Mostrar diffs de archivos',
+    'settings.chatShowSubagents': 'Mostrar hint de subagentes',
+    'settings.chatShowCompaction': 'Mostrar checkpoint de compactación',
+    'settings.chatShowImages': 'Mostrar imágenes',
+    'settings.chatBubbleRadius': 'Radio de burbujas',
+    'settings.chatMaxWidth': 'Ancho del mensaje',
+    'settings.chatWidthNormal': 'Normal',
+    'settings.chatWidthWide': 'Ancho',
+    'settings.chatWidthFull': 'Completo',
+    'settings.chatFontFamily': 'Tipografía',
+    'settings.chatFontSystem': 'Sistema',
+    'settings.chatFontSerif': 'Serif',
+    'settings.chatFontMono': 'Monoespaciada',
+    'settings.chatPreviewUser': 'Tu mensaje con este tamaño de letra',
+    'settings.chatPreviewAssistant': 'Respuesta de ejemplo del asistente para ver cómo se ve el texto',
+    'settings.chatCompactTools': 'Tools compactos (una línea)',
+    'settings.chatCompletionSound': 'Sonido al completar',
+    'settings.chatBg': 'Fondo del chat',
+    'settings.chatBgDefault': 'Predeterminado',
+    'settings.chatBgIndigo': 'Índigo',
+    'settings.chatBgAmber': 'Ámbar',
+    'settings.chatBgGreen': 'Verde',
+    'settings.chatBgSolid': 'Sólido',
+    'settings.chatUserBubble': 'Color de tu burbuja',
+    'settings.chatAccent': 'Color de acento',
+    'settings.chatResetColor': 'Restaurar tema',
+    'settings.chatCharLimit': 'Límite de caracteres',
+    'settings.chatCharLimitOff': 'Sin límite',
+    'settings.snippets': 'Snippets de prompts',
+    'settings.snippetsDesc': 'Plantillas de prompts reutilizables, disponibles desde el composer',
+    'settings.snippetsEmpty': 'Todavía no hay snippets — agregá el primero arriba.',
+    'settings.snippetName': 'Nombre',
+    'settings.snippetText': 'Texto del prompt',
+    'settings.snippetAdd': 'Agregar snippet',
+    'settings.snippetRemove': 'Eliminar snippet',
+    'composer.snippets': 'Insertar snippet',
+    'common.cancel': 'Cancelar',
+    'chat.moreActions': 'Acciones del mensaje',
+    'chat.copyText': 'Copiar texto',
+    'chat.regenerate': 'Regenerar respuesta',
+    'image.editorTitle': 'Editar imagen',
+    'image.crop': 'Recortar',
+    'image.draw': 'Dibujar',
+    'image.undo': 'Deshacer',
+    'image.apply': 'Aplicar',
+    'image.close': 'Cerrar',
+    'image.brushColor': 'Color del pincel',
+    'image.brushSize': 'Grosor del pincel',
+    'sessions.select': 'Seleccionar sesiones',
+    'sessions.cancelSelect': 'Cancelar',
+    'sessions.selectedCount': '{count} seleccionadas',
+    'sessions.deleteSelected': 'Borrar',
+    'sessions.deleteManyConfirm': '¿Borrar {count} sesiones? Esta acción no se puede deshacer.',
+    'settings.testAgain': 'Probar de nuevo',
+    'settings.testAgainTitle': 'Conexión ya verificada — probar de nuevo',
+    'chat.prompts': 'Prompts',
+    'chat.insertPrompt': 'Insertar en el composer',
+    'chat.sendPrompt': 'Enviar ahora',
+    'prompts.explain': 'Explicar código',
+    'prompts.explainText': 'Explicá el código de abajo en detalle: qué hace, cómo funciona y posibles problemas.',
+    'prompts.review': 'Revisar cambios',
+    'prompts.reviewText': 'Revisá los cambios recientes de este proyecto. Señalá bugs, riesgos y mejoras. Sé conciso.',
+    'prompts.bugs': 'Buscar bugs',
+    'prompts.bugsText': 'Buscá bugs, condiciones de carrera y edge cases en este código. Listá cada uno con archivo y línea, y una sugerencia de fix.',
+    'prompts.tests': 'Escribir tests',
+    'prompts.testsText': 'Escribí tests para el código de este archivo: happy path, edge cases y casos de error. Usá las convenciones de tests del proyecto.',
+    'prompts.optimize': 'Optimizar rendimiento',
+    'prompts.optimizeText': 'Buscá problemas de rendimiento en este código (complejidad, re-renders, allocaciones). Proponé optimizaciones concretas.',
+    'prompts.refactor': 'Refactorizar',
+    'prompts.refactorText': 'Refactorizá este código siguiendo SRP y DRY sin cambiar el comportamiento. Mantené la misma API pública.',
+    'prompts.docs': 'Documentar',
+    'prompts.docsText': 'Documentá este archivo: qué hace, sus funciones principales y ejemplos de uso. Mantenelo corto.',
+    'prompts.commit': 'Mensaje de commit',
+    'prompts.commitText': 'Escribí un mensaje de commit conciso para los cambios actuales, siguiendo el estilo conventional commits.',
+    'prompts.debug': 'Debug de error',
+    'prompts.debugText': 'Tengo este error: [pegá el error]. Buscá la causa raíz y proponé un fix. Mostrá el camino de código relevante.',
+    'prompts.explainSimple': 'Explicar simple',
+    'prompts.explainSimpleText': 'Explicá este código en términos simples, como a un dev junior. Usá analogías.',
+    'prompts.summarize': 'Resumir conversación',
+    'prompts.summarizeText': 'Resumí esta conversación: qué se hizo, decisiones tomadas y tareas pendientes.',
+    'prompts.security': 'Revisión de seguridad',
+    'prompts.securityText': 'Revisá este código por problemas de seguridad: secrets, inyección, manejo inseguro de input. Listá hallazgos con severidad.',
     'settings.enabled': 'Activado',
     'settings.disabled': 'Desactivado',
     'settings.chatReset': 'Restaurar valores por defecto',

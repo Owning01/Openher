@@ -1,5 +1,5 @@
 import { memo, useRef, useLayoutEffect, useState, useCallback, useEffect, useMemo } from "react"
-import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon } from "../Icons"
+import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon, ArchiveIcon, TrashIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
@@ -42,6 +42,8 @@ type SessionListProps = {
   onDismissRecent?: (id: string) => void
   onNewSessionHere?: (directory: string) => void
   onDragStartSession?: (id: string, dir: string) => void
+  onDeleteMany?: (ids: string[]) => void
+  onArchiveMany?: (ids: string[]) => void
 }
 
 export const SessionList = memo(function SessionList({
@@ -54,13 +56,15 @@ export const SessionList = memo(function SessionList({
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
   onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive, onFork,
-  onDismissRecent, onNewSessionHere, onDragStartSession
+  onDismissRecent, onNewSessionHere, onDragStartSession, onDeleteMany, onArchiveMany
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
   const [recentLimit, setRecentLimit] = useState(5)
@@ -100,6 +104,62 @@ export const SessionList = memo(function SessionList({
   const toggleProject = useCallback((dir: string) => {
     setExpandedProject((prev) => prev === dir ? null : dir)
   }, [])
+
+  const toggleSelectMode = useCallback(() => {
+    setSelectMode((v) => {
+      if (v) setSelectedIds(new Set())
+      return !v
+    })
+  }, [])
+
+  const toggleCheck = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const handleDeleteMany = useCallback(() => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    if (!window.confirm(t('sessions.deleteManyConfirm', { count: ids.length }))) return
+    onDeleteMany?.(ids)
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }, [selectedIds, onDeleteMany, t])
+
+  const handleArchiveMany = useCallback(() => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    onArchiveMany?.(ids)
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }, [selectedIds, onArchiveMany])
+
+  const selectionBar = selectMode && (
+    <div className="session-selection-bar">
+      <span className="session-selection-count">{t('sessions.selectedCount', { count: selectedIds.size })}</span>
+      <div className="session-selection-actions">
+        {onArchiveMany && (
+          <button type="button" className="btn-secondary compact" onClick={handleArchiveMany}
+            disabled={selectedIds.size === 0} title={t('detail.archive')}>
+            <ArchiveIcon size={14} /> {t('detail.archive')}
+          </button>
+        )}
+        {onDeleteMany && (
+          <button type="button" className="btn-danger compact" onClick={handleDeleteMany}
+            disabled={selectedIds.size === 0}>
+            <TrashIcon size={14} /> {t('sessions.deleteSelected')}
+          </button>
+        )}
+        <button type="button" className="btn-secondary compact" onClick={toggleSelectMode}>
+          {t('sessions.cancelSelect')}
+        </button>
+      </div>
+    </div>
+  )
 
   const prevProjectDir = useRef(selectedProjectDir)
   useLayoutEffect(() => {
@@ -148,7 +208,8 @@ export const SessionList = memo(function SessionList({
         onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
         onToggleFavorite={onToggleFavorite}
         onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} onFork={onFork}
-        onDragStartSession={onDragStartSession} />
+        onDragStartSession={onDragStartSession}
+        selectMode={selectMode} isChecked={selectedIds.has(session.id)} onToggleCheck={() => toggleCheck(session.id)} />
     ))
   )
 
@@ -171,7 +232,8 @@ export const SessionList = memo(function SessionList({
             )}
             <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
               onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-              dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen} />
+              dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen}
+              selecting={selectMode} onToggleSelect={toggleSelectMode} />
           </div>
         </div>
         <div className={`toolbar${searchOpen ? " search-open" : ""}`}>
@@ -179,6 +241,7 @@ export const SessionList = memo(function SessionList({
 onChange={(e) => onQueryChange(e.target.value)} className="search" />
         </div>
         {notices}
+        {selectionBar}
         <div className="session-list">{sessionCards}</div>
       </section>
     )
@@ -191,12 +254,14 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
-        dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen} />
+        dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen}
+        selecting={selectMode} onToggleSelect={toggleSelectMode} />
       <div className={`toolbar${searchOpen ? " search-open" : ""}`}>
         <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
       {notices}
+      {selectionBar}
 
       {!selectedProjectDir && !query.trim() && (favorites.size > 0 || activeSessions.length > 0 || recentSessions.length > 0) && (
         <div className="quick-access">
@@ -323,7 +388,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                         onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
                         onToggleFavorite={onToggleFavorite}
                         onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} onFork={onFork}
-                        onDragStartSession={onDragStartSession} />
+                        onDragStartSession={onDragStartSession}
+                        selectMode={selectMode} isChecked={selectedIds.has(session.id)} onToggleCheck={() => toggleCheck(session.id)} />
                     ))}
                   </div>
                 )}

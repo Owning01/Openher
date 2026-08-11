@@ -29,6 +29,7 @@ export function useSpeechRecognition(language?: LanguageCode) {
   const manuallyStoppedRef = useRef(false)
 
   const isNative = Capacitor.isNativePlatform()
+  const availableRef = useRef<boolean | null>(null)
 
   useEffect(() => {
     if (isNative) {
@@ -36,7 +37,10 @@ export function useSpeechRecognition(language?: LanguageCode) {
       // o el servicio no está, se ve el error al tocar — nunca un botón oculto).
       setSupported(true)
       CapSpeechRecognition.available()
-        .then(({ available }) => { if (!available) setSupported(false) })
+        .then(({ available }) => {
+          availableRef.current = available
+          if (!available) setSupported(false)
+        })
         .catch(() => { /* mantener optimista */ })
       return
     }
@@ -98,28 +102,43 @@ export function useSpeechRecognition(language?: LanguageCode) {
     currentTranscript.current = ""
 
     if (isNative) {
-      const partialHandler = await CapSpeechRecognition.addListener("partialResults", (data) => {
-        const text = data.matches?.[0] ?? ""
-        currentTranscript.current = text
-        onResultRef.current?.(text)
-      })
-      const stateHandler = await CapSpeechRecognition.addListener("listeningState", (data) => {
-        setIsListening(data.status === "started")
-      })
-      cleanupListenersRef.current = () => {
-        partialHandler.remove()
-        stateHandler.remove()
+      if (availableRef.current === false) {
+        throw new Error("Speech service is not available on this device")
       }
+      try {
+        const partialHandler = await CapSpeechRecognition.addListener("partialResults", (data) => {
+          const text = data.matches?.[0] ?? ""
+          currentTranscript.current = text
+          onResultRef.current?.(text)
+        })
+        const stateHandler = await CapSpeechRecognition.addListener("listeningState", (data) => {
+          setIsListening(data.status === "started")
+        })
+        cleanupListenersRef.current = () => {
+          partialHandler.remove()
+          stateHandler.remove()
+        }
 
-      await CapSpeechRecognition.requestPermissions()
-      await CapSpeechRecognition.start({
-        language: getLanguage(language),
-        partialResults: true,
-        popup: false,
-        maxResults: 5,
-      })
-      setIsListening(true)
-      return
+        const perm = await CapSpeechRecognition.requestPermissions()
+        const status = (perm as { speechRecognition?: string }).speechRecognition ?? (perm as { status?: string }).status
+        if (status && status !== "granted") {
+          cleanupListenersRef.current?.()
+          cleanupListenersRef.current = null
+          throw new Error("Microphone permission denied — enable it in system settings")
+        }
+        await CapSpeechRecognition.start({
+          language: getLanguage(language),
+          partialResults: true,
+          popup: false,
+          maxResults: 5,
+        })
+        setIsListening(true)
+        return
+      } catch (err) {
+        cleanupListenersRef.current?.()
+        cleanupListenersRef.current = null
+        throw err
+      }
     }
     const rec = recognitionRef.current
     if (!rec) return

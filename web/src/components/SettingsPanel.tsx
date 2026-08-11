@@ -1,11 +1,13 @@
 import { memo, useState, useCallback, useMemo, useEffect } from "react"
 import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo, ServerProfile, ChatSettings } from "../types"
+import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo,
+  ServerProfile, ChatSettings, PromptSnippet } from "../types"
 import type { LanguageCode } from "../i18n"
 import { describeProfile, isPairProfile } from "../hooks/useServers"
 import { ProviderManager } from "./ProviderManager"
 import { ChatCustomizer } from "./ChatCustomizer"
+import { SnippetManager } from "./SnippetManager"
 import { SettingsSection } from "./SettingsSection"
 import { DataUsageModal } from "./DataUsageModal"
 import { ThinkingLevels } from "./ThinkingLevels"
@@ -67,6 +69,9 @@ type SettingsPanelProps = {
   chatSettings: ChatSettings
   onChatSettingChange: <K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => void
   onResetChatSettings: () => void
+  snippets: PromptSnippet[]
+  onAddSnippet: (name: string, text: string) => void
+  onRemoveSnippet: (id: string) => void
   onShutdownHost: () => void
   onRestartHost: () => void
   onOpenGitHub: () => void
@@ -90,6 +95,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider,
   serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile, onApplyServerProfile, onAddPairServer, activeServerProfileID,
   chatSettings, onChatSettingChange, onResetChatSettings,
+  snippets, onAddSnippet, onRemoveSnippet,
   onShutdownHost, onRestartHost, onOpenGitHub, onOpenFavoritesManager, onOpenArchivedView, onOpenShortcuts
 }: SettingsPanelProps) {
   const t = useT()
@@ -246,12 +252,12 @@ export const SettingsPanel = memo(function SettingsPanel({
         <p className="subtle">
           {draftConfig.host && draftConfig.port > 0 ? `${draftConfig.host}:${draftConfig.port}` : t('settings.hostPlaceholder')}
         </p>
-        <button onClick={onTest} className="btn-secondary settings-test-btn" disabled={testingConnection || !canTestDraft || testAlreadyPassedForDraft}
-          title={!canTestDraft ? t('settings.testNeedsFields') : testAlreadyPassedForDraft ? t('settings.testAlreadyPassed') : undefined}>
+        <button onClick={onTest} className="btn-secondary settings-test-btn" disabled={testingConnection || !canTestDraft}
+          title={!canTestDraft ? t('settings.testNeedsFields') : testAlreadyPassedForDraft ? t('settings.testAgainTitle') : undefined}>
           {testingConnection ? (
             <><LoadingIcon size={18} />{t('settings.testing')}</>
           ) : (
-            <><TestIcon size={18} />{testAlreadyPassedForDraft ? t('settings.testOk') : t('settings.test')}</>
+            <><TestIcon size={18} />{testAlreadyPassedForDraft ? t('settings.testAgain') : t('settings.test')}</>
           )}
         </button>
         <p className="subtle">{t('settings.draftHint')}</p>
@@ -570,13 +576,9 @@ export const SettingsPanel = memo(function SettingsPanel({
                 <strong>{label}</strong>
                 <small>{desc}</small>
               </span>
-              <button type="button"
-                className={`switch-track${flags[key] ? " active" : ""}`}
-                onClick={() => onToggleFlag(key)}
-                aria-checked={flags[key]}
-                role="switch">
-                <span className="switch-thumb" />
-              </button>
+              <input type="checkbox" className="switch-checkbox"
+                checked={flags[key]}
+                onChange={() => onToggleFlag(key)} />
             </label>
           ))}
         </div>
@@ -662,6 +664,12 @@ export const SettingsPanel = memo(function SettingsPanel({
           settings={chatSettings}
           onSettingChange={onChatSettingChange}
           onReset={onResetChatSettings} />
+      </SettingsSection>
+
+      {/* Prompt snippets */}
+      <SettingsSection title={t('settings.snippets')}>
+        <p className="subtle">{t('settings.snippetsDesc')}</p>
+        <SnippetManager snippets={snippets} onAdd={onAddSnippet} onRemove={onRemoveSnippet} />
       </SettingsSection>
 
       {/* Extras */}

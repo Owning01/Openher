@@ -29,6 +29,11 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
 
     if (type === "message.part.updated") {
       const part = p.part as { id?: string; type?: string; messageID?: string; sessionID?: string; text?: string } | undefined
+      // [SSE:diag] diagnóstico temporal: ¿el reasoning llega por part.updated
+      // (con el texto completo) o por deltas?
+      if (part?.type === "reasoning" || part?.type === "thinking") {
+        console.info("[SSE:diag] part.updated reasoning", { partID: part.id, type: part.type, textLen: part.text?.length ?? 0 })
+      }
       // El cache de tipos se alimenta SOLO con parts de la sesión visible (o sin
       // sessionID, para v1) — un part de otra sesión no debe tipar uno de esta.
       const partSessionID = (p.sessionID as string | undefined) ?? part?.sessionID
@@ -62,6 +67,11 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const text = (hasDelta ? p.delta : p.text ?? "") as string
       const cachedType = partID ? partTypeCacheRef.current.get(partID) : undefined
       const partType = cachedType ?? (p.type ?? p.partType ?? "text") as string
+      // [SSE:diag] diagnóstico temporal: ¿el server streamea el reasoning por
+      // deltas? Si partType es text sin cache, el part se tipa text (default).
+      if (partType === "reasoning" || partType === "thinking" || !cachedType) {
+        console.info("[SSE:diag] part.delta", { partID, messageID, partType, cached: Boolean(cachedType), deltaLen: text.length })
+      }
       if (sessionID && messageID && partID && text && sessionID === deps.sessionID) {
         deps.applyDelta(sessionID, messageID, partID, text, !hasDelta, partType)
       }

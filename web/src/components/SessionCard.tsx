@@ -23,12 +23,16 @@ type SessionCardProps = {
   onArchive?: (id: string) => void
   onFork?: (session: SessionView) => void
   onDragStartSession?: (id: string, dir: string) => void
+  selectMode?: boolean
+  isChecked?: boolean
+  onToggleCheck?: () => void
 }
 
 export const SessionCard = memo(function SessionCard({
   session, isSelected, isRenaming, renameValue, isFavorite,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
-  onToggleFavorite, onExportChat, onSnapshot, onArchive, onFork, onDragStartSession
+  onToggleFavorite, onExportChat, onSnapshot, onArchive, onFork, onDragStartSession,
+  selectMode = false, isChecked = false, onToggleCheck
 }: SessionCardProps) {
   const t = useT()
   const [actionsOpen, setActionsOpen] = useState(false)
@@ -41,24 +45,31 @@ export const SessionCard = memo(function SessionCard({
     onToggleFavorite(session.id)
   }, [session.id, onToggleFavorite])
 
-  const toggleActions = useCallback((e: React.MouseEvent) => {
+  const handleCardClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    setActionsOpen((v) => !v)
-  }, [])
+    if (selectMode) onToggleCheck?.()
+    else setActionsOpen((v) => !v)
+  }, [selectMode, onToggleCheck])
 
   return (
-    <article className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${actionsOpen ? "actions-open" : ""} fade-in`}
-      draggable={!!onDragStartSession}
+    <article className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${actionsOpen ? "actions-open" : ""} ${selectMode ? "select-mode" : ""} ${isChecked ? "checked" : ""} fade-in`}
+      draggable={!!onDragStartSession && !selectMode}
       onDragStart={() => { if (onDragStartSession) onDragStartSession(session.id, session.directory) }}>
-      <div className="session-card-header" onClick={toggleActions} role="button" tabIndex={0}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActionsOpen((v) => !v) } }}>
+      <div className="session-card-header" onClick={handleCardClick} role="button" tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleCardClick(e as never) } }}>
         <div className="session-card-title-group">
-          <button className="star-btn" onClick={handleToggleFavorite}
-            aria-pressed={isFavorite}
-            aria-label={isFavorite ? t('favorites.remove') : t('favorites.add')}
-            title={isFavorite ? t('favorites.remove') : t('favorites.add')}>
-            <StarIcon size={15} className={isFavorite ? "star-filled" : "star-empty"} />
-          </button>
+          {selectMode ? (
+            <span className={`session-checkbox${isChecked ? " checked" : ""}`} aria-hidden="true">
+              {isChecked && <span>✓</span>}
+            </span>
+          ) : (
+            <button className="star-btn" onClick={handleToggleFavorite}
+              aria-pressed={isFavorite}
+              aria-label={isFavorite ? t('favorites.remove') : t('favorites.add')}
+              title={isFavorite ? t('favorites.remove') : t('favorites.add')}>
+              <StarIcon size={15} className={isFavorite ? "star-filled" : "star-empty"} />
+            </button>
+          )}
           {isRenaming ? (
             <InlineRename value={renameValue} original={session.title}
               onChange={onRenameChange}
@@ -72,10 +83,10 @@ export const SessionCard = memo(function SessionCard({
         <ChevronIcon size={14} className={`session-card-chevron${actionsOpen ? " open" : ""}`} />
       </div>
 
-      <div className="session-card-body" onClick={toggleActions}>
+      <div className="session-card-body" onClick={handleCardClick}>
       </div>
 
-      {actionsOpen && (
+      {!selectMode && actionsOpen && (
         <div className="session-card-meta">
           <div className="session-stats">
             <span className="subtle time-label">{t('sessions.updated', { time: formatTime(session.updated) })}</span>
@@ -83,7 +94,7 @@ export const SessionCard = memo(function SessionCard({
         </div>
       )}
 
-      {actionsOpen && (
+      {!selectMode && actionsOpen && (
       <div className="session-actions">
         <button onClick={(e) => { e.stopPropagation(); handleOpen() }} className="btn-primary session-open-btn">
           <PlayIcon size={15} />

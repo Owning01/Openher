@@ -6,12 +6,15 @@ export function useCompletionAudio(
   awaitingAssistantReply: boolean,
   completionShouldPlayRef: MutableRefObject<boolean>,
   dataMode: DataMode,
+  enabled: boolean,
   onComplete?: () => void
 ) {
   const completionAudioRef = useRef<HTMLAudioElement | null>(null)
   const wasAwaitingRef = useRef(false)
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
+  const enabledRef = useRef(enabled)
+  enabledRef.current = enabled
 
   useEffect(() => {
     if (dataMode === "ultra" || dataMode === "miser") {
@@ -30,7 +33,7 @@ export function useCompletionAudio(
     if (justFinished && completionShouldPlayRef.current) {
       completionShouldPlayRef.current = false
       const audio = completionAudioRef.current
-      if (audio) {
+      if (audio && enabledRef.current) {
         audio.currentTime = 0
         audio.play().catch(() => undefined)
       }

@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useMemo, useRef } from "react"
-import { PencilIcon, UndoIcon } from "../Icons"
+import { PencilIcon, UndoIcon, MenuDotsIcon } from "../Icons"
 import { formatTime } from "../utils"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
 import { useT } from "../i18n-context"
@@ -7,6 +7,7 @@ import ToolPart from "./ToolPart"
 import { FileDiffs } from "./FileDiffs"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { Markdown } from "./Markdown"
+import { ImageLightbox } from "./ImageLightbox"
 import { isTaskTool } from "../utils/toolMeta"
 
 function agentColorIndex(agentName: string | undefined, agents: AgentOption[]): number {
@@ -30,7 +31,7 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): str
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight }: {
+export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, onRegenerate }: {
   message: RenderedMessage
   revert?: SessionView["revert"]
   onRevertToMessage?: (messageID: string) => void
@@ -47,9 +48,13 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   onToggleTodos?: () => void
   todosOpen?: boolean
   highlight?: string
+  compactTools?: boolean
+  onRegenerate?: () => void
 }) {
   const t = useT()
   const [showConfirm, setShowConfirm] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Los IDs del server son msg_<hexTimestamp+counter> (monotónicos): la
@@ -98,6 +103,27 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
     e.preventDefault()
     onContextMenu(e.clientX, e.clientY, message.info.id)
   }, [onContextMenu, message.info.id])
+
+  const handleCopyText = useCallback(async () => {
+    const text = message.text
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement("textarea")
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand("copy")
+      document.body.removeChild(ta)
+    }
+    setMoreOpen(false)
+  }, [message.text])
+
+  const handleRegenerate = useCallback(() => {
+    setMoreOpen(false)
+    onRegenerate?.()
+  }, [onRegenerate])
 
   const isUserClickable = message.info.role === "user" && onRevertToMessage && !showConfirm
 
@@ -159,6 +185,11 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
           </div>
         )}
 
+        {message.parts.filter((p) => p.type === "image" && p.data).map((p) => (
+          <img key={p.id} src={p.data} alt="" className="message-image" loading="lazy"
+            onClick={() => setLightboxSrc(p.data ?? null)} />
+        ))}
+
         {showConfirm && (
           <div className="undo-confirm">
             <span className="undo-confirm-text">Undo this message?</span>
@@ -183,7 +214,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
                 config={config}
                 directory={directory}
                 onViewSubagents={onViewSubagents}
-                compact={message.dataMode === "ultra" || message.dataMode === "miser"}
+                compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
               />
             ))}
           </div>
@@ -205,6 +236,28 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
             {message.info.finish === "aborted" && (
               <span className="msg-footer-interrupted"> · interrupted</span>
             )}
+            <span className="msg-footer-spacer" />
+            <span className="msg-more-wrap">
+              <button type="button" className="btn-icon btn-ghost msg-more-btn"
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-expanded={moreOpen}
+                aria-label={t('chat.moreActions')}
+                title={t('chat.moreActions')}>
+                <MenuDotsIcon size={13} />
+              </button>
+              {moreOpen && (
+                <div className="msg-more-dropdown fade-in">
+                  <button type="button" className="overflow-item" onClick={handleCopyText} disabled={!message.text}>
+                    <span>📋</span> {t('chat.copyText')}
+                  </button>
+                  {onRegenerate && (
+                    <button type="button" className="overflow-item" onClick={handleRegenerate}>
+                      <span>↻</span> {t('chat.regenerate')}
+                    </button>
+                  )}
+                </div>
+              )}
+            </span>
           </div>
         )}
 
@@ -230,6 +283,10 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
 
         {message.hasCompaction && <div className="compaction-checkpoint" />}
       </article>
+
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
     </>
   )
 })

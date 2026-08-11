@@ -150,8 +150,12 @@ en `G:\Proyectos\opencode-stats`.
 ## Convenciones
 
 - named exports, `import type` para tipos, React 19 + Vite + TS.
-- i18n: TODAS las strings visibles van a `src/i18n.ts` (4 idiomas: en/es/it/zh-TW;
-   el test `test:i18n` valida paridad de claves).
-- Switches con `role="switch"` usan `aria-checked` (no `aria-pressed`).
+- i18n: TODAS las strings visibles van a `src/i18n.ts` — las keys nuevas se
+   traducen SOLO a en/es; it/zh-TW omiten keys y caen al inglés vía fallback de
+   `createTranslator` (`translations[lang][key] ?? translations.en[key] ?? key`;
+   el mapa es `Partial<Record<TranslationKey, string>>`).
+- Switches con `role="switch"` usan `aria-checked` (no `aria-pressed`). Las
+   opciones mostrar/ocultar en Settings usan `<input type="checkbox">` nativo
+   (`.switch-checkbox`).
 - Toques en móvil: elementos que aparecen solo en `:hover` llevan fallback
    `@media (hover: none), (pointer: coarse)`.

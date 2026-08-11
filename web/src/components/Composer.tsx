@@ -1,9 +1,10 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
-import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, LayersIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, LayersIcon, PencilIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
-import type { AgentOption, CommandInfo, ServerConfig } from "../types"
+import type { AgentOption, CommandInfo, PromptSnippet, ServerConfig } from "../types"
+import { ImageEditor } from "./ImageEditor"
 
 type ImageAttachment = { id: string; base64: string; mime: string; name: string }
 
@@ -41,6 +42,8 @@ type ComposerProps = {
   onThemeCommand?: () => void
   queueEnabled?: boolean
   onToggleQueue?: () => void
+  snippets?: PromptSnippet[]
+  charLimit?: number
 }
 
 let imgId = 0
@@ -54,12 +57,22 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "theme", description: "Open theme picker", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, activeAgentID, primaryAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, activeAgentID, primaryAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue, snippets = [], charLimit = 0 }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const [showAtMenu, setShowAtMenu] = useState(false)
   const [atQuery, setAtQuery] = useState("")
   const [atIndex, setAtIndex] = useState(0)
+  const [showSnippetMenu, setShowSnippetMenu] = useState(false)
+  const snippetMenuRef = useRef<HTMLDivElement | null>(null)
+  const snippetToggleRef = useRef<HTMLButtonElement | null>(null)
+  const [editingImage, setEditingImage] = useState<ImageAttachment | null>(null)
+
+  // En móvil (táctil) Enter = nueva línea; en desktop Enter envía.
+  const isMobileInput = useMemo(
+    () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches,
+    [],
+  )
 
   const promptHistoryRef = useRef<string[]>(loadHistory())
   const historyIndexRef = useRef(-1)
@@ -157,6 +170,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
   const isShellMode = value.startsWith("!")
 
+  const insertSnippet = useCallback((s: PromptSnippet) => {
+    const prefix = value && !value.endsWith("\n") ? `${value}\n` : value
+    onChange(prefix + s.text)
+    setShowSnippetMenu(false)
+    if (composerRef.current) composerRef.current.querySelector("textarea")?.focus()
+  }, [value, onChange])
+
   const pushHistory = useCallback((text: string) => {
     const h = promptHistoryRef.current
     if (h[0] === text) return
@@ -208,13 +228,24 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const [images, setImages] = useState<ImageAttachment[]>([])
 
   // Auto-grow: la caja crece mientras se escribe (hasta 120px) y vuelve a su
-  // alto mínimo cuando se vacía (al enviar/limpiar).
-  useEffect(() => {
+  // alto mínimo cuando se vacía (al enviar/limpiar). La medición corre en
+  // doble requestAnimationFrame: en el mismo tick del cambio de value el DOM
+  // todavía no hizo reflow (WebView/móvil) y scrollHeight devuelve el alto
+  // anterior — el textarea quedaría crecido tras enviar un mensaje largo.
+  const resizeTextarea = useCallback(() => {
     const ta = textareaRef.current
     if (!ta) return
-    ta.style.height = "0px"
-    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
-  }, [value])
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ta.style.height = "0px"
+        ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
+      })
+    })
+  }, [])
+
+  useEffect(() => {
+    resizeTextarea()
+  }, [value, resizeTextarea])
 
   const handleFocus = useCallback(() => {
     // Scrollear SOLO el contenedor de mensajes de este panel (nunca
@@ -291,7 +322,8 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const handleSendWithImages = useCallback(() => {
     onSend(images.length > 0 ? images : undefined)
     setImages([])
-  }, [onSend, images])
+    resizeTextarea()
+  }, [onSend, images, resizeTextarea])
 
   const isCommandValid = useMemo(() => {
     if (!value.startsWith("/")) return false
@@ -337,6 +369,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
     if (isShellMode) {
       if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu) {
+        if (isMobileInput) return
         e.preventDefault()
         const cmd = value.slice(1).trim()
         if (cmd && onShellSend) { pushHistory(value); historyIndexRef.current = -1; setHistoryDraft(null); onShellSend(cmd) }
@@ -345,6 +378,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     }
 
     if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu && value.trim().startsWith("/theme")) {
+      if (isMobileInput) return
       e.preventDefault()
       onChange("")
       pushHistory(value)
@@ -354,12 +388,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     }
 
     if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu) {
+      if (isMobileInput) return
       e.preventDefault()
       if (value.trim()) pushHistory(value)
       historyIndexRef.current = -1; setHistoryDraft(null)
       handleSendWithImages()
     }
-  }, [value, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, onChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand])
+  }, [value, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, onChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput])
 
   return (
     <div className={`composer${isCommandValid ? " composer-command-mode" : ""}${isShellMode ? " composer-shell-mode" : ""}`} ref={composerRef} style={{ borderColor: `var(--agent-${agentColorIdx})` } as React.CSSProperties}>
@@ -397,6 +432,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         </div>
       )}
       {micNotice && <div className="composer-notice" role="alert">{micNotice}</div>}
+      {showSnippetMenu && snippets.length > 0 && (
+        <div className="slash-menu snippet-menu" ref={snippetMenuRef}>
+          {snippets.map((s) => (
+            <div key={s.id} className="slash-menu-item"
+              onPointerDown={(e) => { e.preventDefault(); insertSnippet(s) }}>
+              <span className="slash-menu-name">{s.name}</span>
+              <span className="slash-menu-desc">{s.text.slice(0, 60)}{s.text.length > 60 ? "…" : ""}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {images.length > 0 && (
         <div className="image-strip">
           {images.map((img) => {
@@ -408,7 +454,15 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               "attach-icon-other"
             return (
               <div key={img.id} className="image-preview" title={img.name}>
-                {isImage ? <img src={img.base64} alt={img.name} /> : (
+                {isImage ? (
+                  <>
+                    <img src={img.base64} alt={img.name} />
+                    <button className="image-preview-edit" onClick={() => setEditingImage(img)}
+                      aria-label={t('image.editorTitle')} title={t('image.editorTitle')}>
+                      <PencilIcon size={13} />
+                    </button>
+                  </>
+                ) : (
                   <div className={`image-preview-placeholder ${iconClass}`}>
                     <span>.{ext}</span>
                   </div>
@@ -435,6 +489,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
           disabled={disabled}
+          maxLength={charLimit > 0 ? charLimit : undefined}
         />
         {supported && (
           <button onClick={handleMicClick}
@@ -449,6 +504,19 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
+          {snippets.length > 0 && (
+            <button onClick={() => setShowSnippetMenu((v) => !v)} disabled={disabled}
+              ref={snippetToggleRef}
+              className="composer-snippet-btn"
+              aria-expanded={showSnippetMenu}
+              aria-label={t('composer.snippets')}
+              title={t('composer.snippets')}>
+              <svg width="15" height="15" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <rect x="2" y="2.5" width="8" height="2.2" rx="0.8" />
+                <rect x="2" y="6.5" width="8" height="2.2" rx="0.8" />
+              </svg>
+            </button>
+          )}
           {onToggleQueue && (
             <button onClick={onToggleQueue} disabled={disabled}
               className="composer-queue-btn"
@@ -468,6 +536,11 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           {contextLabel && <span className="context-usage-label">{contextLabel}</span>}
         </div>
         <div className="composer-bar-right">
+          {value.length > 0 && (            <span className={`composer-char-count${charLimit > 0 && value.length >= charLimit ? " over" : ""}`}
+              title={charLimit > 0 ? `${value.length}/${charLimit}` : `${value.length} chars`}>
+              {charLimit > 0 ? `${value.length}/${charLimit}` : value.length}
+            </span>
+          )}
           {isWorking && (
             <button onClick={onAbort} className="btn-danger composer-bar-btn" title={t('composer.stop')} aria-label={t('composer.stop')}>
               <StopCircleIcon size={16} />
@@ -478,6 +551,16 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           </button>
         </div>
       </div>
+      {editingImage && (
+        <ImageEditor
+          src={editingImage.base64}
+          mime={editingImage.mime}
+          onApply={(base64) => {
+            setImages((prev) => prev.map((img) => img.id === editingImage.id ? { ...img, base64 } : img))
+            setEditingImage(null)
+          }}
+          onClose={() => setEditingImage(null)} />
+      )}
     </div>
   )
 })

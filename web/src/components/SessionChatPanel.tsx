@@ -173,13 +173,17 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     }
     onRecordPrompt(msgs.composer)
     stopGenerationRef.current = false
+    const revertMsgId = localRevertID ?? session?.revert?.messageID
+    if (revertMsgId) {
+      msgs.setMessages((prev) => prev.filter((m) => !m.info.id || m.info.id <= revertMsgId))
+    }
     setLocalRevertID(null)
     msgs.send(session, baseProps.activeModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
       refresh,
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
       onSetCommands, msgs.setRuntimeError, images)
       .catch(() => undefined)
-  }, [msgs, session, connectionState, onQueueAction, baseProps.activeModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt])
+  }, [msgs, session, connectionState, onQueueAction, baseProps.activeModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID])
 
   const handleAbort = useCallback(async () => {
     stopGenerationRef.current = true

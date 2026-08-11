@@ -128,7 +128,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       }
       text = textBlocks.join("\n\n").trim()
       const hasImages = message.parts.some((p) => p.type === "image")
-      if (text || toolParts.length > 0 || hasImages) {
+      // thinkingParts cuenta como contenido visible: durante el streaming del
+      // reasoning el mensaje NO tiene texto aún — si se filtra aquí, el thinking
+      // solo aparece cuando llega el primer pedazo de texto (bug: "el thinking
+      // llega completo al final").
+      if (text || thinkingParts.length > 0 || toolParts.length > 0 || hasImages) {
         const turnMode = message.info.mode ?? (message.info.role === "user" ? turnModeForUser.get(message.info.id) : undefined)
         out.push({ ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffForMessage.get(message.info.id), dataMode, turnMode })
       }

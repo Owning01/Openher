@@ -378,6 +378,26 @@ export type ChatSettings = {
   showToolCalls: boolean
   showTimestamps: boolean
   showTodoButton: boolean
+  showModelInfo: boolean
+  showDiffs: boolean
+  showSubagentHint: boolean
+  showCompactionCheckpoint: boolean
+  showImages: boolean
+  bubbleRadius: number
+  messageMaxWidth: "normal" | "wide" | "full"
+  fontFamily: "system" | "serif" | "mono"
+  userBubbleColor: string
+  chatBackground: "default" | "indigo" | "amber" | "green" | "solid"
+  agentAccent: string
+  compactTools: boolean
+  completionSound: boolean
+  composerCharLimit: number
+}
+
+export type PromptSnippet = {
+  id: string
+  name: string
+  text: string
 }
 
 export type TunnelConfig = {

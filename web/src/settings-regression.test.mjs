@@ -19,7 +19,8 @@ assert.equal(settingsPanel.includes("t('settings.draftHint')"), true, 'SettingsP
 assert.equal(i18n.includes("'settings.testedNotSaved'"), true, 'Test success should explicitly say it did not save')
 assert.equal(useConfig.includes('function canTestConfig'), true, 'canTestConfig should be a standalone function')
 
-assert.equal(settingsPanel.includes('disabled={testingConnection || !canTestDraft || testAlreadyPassedForDraft}'), true, 'Test button should be disabled when fields are missing, testing is active, or the unchanged draft already passed')
+assert.equal(settingsPanel.includes('disabled={testingConnection || !canTestDraft}'), true, 'Test button should be disabled when fields are missing or testing is active')
+assert.equal(settingsPanel.includes('testAlreadyPassedForDraft'), true, 'Test button should stay enabled after a successful test (re-test allowed)')
 assert.equal(settingsPanel.includes('settings-test-btn'), true, 'Test button should live in the settings header (top of config)')
 assert.equal(settingsPanel.includes('settings.savedButton'), false, 'Manual Save button should be removed (auto-save only)')
 assert.equal(settingsPanel.includes("t('settings.draftHint')"), true, 'Settings should explain ready-to-test and unsaved/saved state')

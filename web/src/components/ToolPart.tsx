@@ -275,6 +275,24 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   const title = toolName ? shortToolLabel(toolName) : label
   const body = (isDone && outputText) ? outputText : inputText
 
+  // Modo compacto (toggle "tools compactos" o dataMode ultra/miser): una sola
+  // línea con icono + nombre + estado, sin botón de expandir.
+  if (compact) {
+    return (
+      <div className={`tool-part tool-part-minimal tool-${toolName ?? "unknown"}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
+        <div className="tool-part-toggle" style={{ cursor: "default" }}>
+          <span className="tool-part-icon">{headerIcon}</span>
+          <span className="tool-part-label">
+            {title}
+            {subtitle && !bashCommand ? <span className="tool-part-arg"> · {subtitle}</span> : null}
+            {bashCommand ? <span className="tool-part-arg"> · {bashCommand}</span> : null}
+          </span>
+          {statusIcon}
+        </div>
+      </div>
+    )
+  }
+
   if (part.type === "tool" || part.tool) {
     if (isFileTool && fileDiff) {
       const showBody = !compact

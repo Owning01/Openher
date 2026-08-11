@@ -12,6 +12,8 @@ type SessionToolbarProps = {
   dataMode: DataMode
   onSearchToggle?: () => void
   searchOpen?: boolean
+  selecting?: boolean
+  onToggleSelect?: () => void
 }
 
 function modeLabel(mode: DataMode, t: (key: string, params?: Record<string, string | number>) => string): string {
@@ -21,8 +23,17 @@ function modeLabel(mode: DataMode, t: (key: string, params?: Record<string, stri
   return t('settings.modeMiser')
 }
 
+function CheckboxIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="2.5" width="11" height="11" rx="2.5" />
+      <path d="M5.5 8.2l2 2 3.2-4" />
+    </svg>
+  )
+}
+
 export const SessionToolbar = memo(function SessionToolbar({
-  refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onSearchToggle, searchOpen
+  refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onSearchToggle, searchOpen, selecting = false, onToggleSelect
 }: SessionToolbarProps) {
   const t = useT()
 
@@ -34,6 +45,13 @@ export const SessionToolbar = memo(function SessionToolbar({
       {onSearchToggle && (
         <button onClick={onSearchToggle} className="btn-icon btn-secondary compact session-search-toggle" title={t('sessions.searchPlaceholder')} aria-label={t('sessions.searchPlaceholder')} aria-expanded={searchOpen} style={{ flexShrink: 0, width: 32, height: 32, padding: 0 }}>
           <SearchIcon size={14} />
+        </button>
+      )}
+      {onToggleSelect && (
+        <button onClick={onToggleSelect} className={`btn-icon btn-secondary compact${selecting ? " active" : ""}`}
+          title={t('sessions.select')} aria-label={t('sessions.select')} aria-pressed={selecting}
+          style={{ flexShrink: 0, width: 32, height: 32, padding: 0 }}>
+          <CheckboxIcon size={14} />
         </button>
       )}
       <button onClick={onNewSession} className="btn-primary compact btn-new-session" disabled={creating} title={t('sessions.new')} aria-label={t('sessions.new')} style={{ flexShrink: 0, width: 32, height: 32, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
