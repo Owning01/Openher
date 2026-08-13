@@ -23,14 +23,6 @@
 
 </div>
 
-> # ⚠️ BETA — App in active development
->
-> **OpenCode Mobile is in BETA and under active development.** It may contain bugs,
-> unannounced changes, and incomplete features. It is not recommended for critical
-> or production use. Use it at your own risk.
->
-> Found an issue? Report it in [Issues](https://github.com/Owning01/Opencode-Mobile/issues).
-
 ---
 
 <div align="center">
