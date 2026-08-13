@@ -33,108 +33,33 @@
 
 ---
 
-## 🕸️ Dependency graphs
+## 📸 Preview
+
+<div align="center">
+
+**Your AI coding assistant, from your phone** — streaming responses, real-time tools, terminal, remote desktop and full settings control.
+
+</div>
+
+| Sessions | One-tap access | Live chat | Connect server |
+| :---: | :---: | :---: | :---: |
+| [![Sessions](./marketing/github/thumbs/01-hero.png)](./marketing/iphone/1320x2868/en/01-hero.png) | [![One tap](./marketing/github/thumbs/02-device-top.png)](./marketing/iphone/1320x2868/en/02-device-top.png) | [![Live chat](./marketing/github/thumbs/03-device-top.png)](./marketing/iphone/1320x2868/en/03-device-top.png) | [![Connect](./marketing/github/thumbs/04-device-bottom.png)](./marketing/iphone/1320x2868/en/04-device-bottom.png) |
+| **Preferences** | **Full control** | **Data modes** | **Get it now** |
+| [![Preferences](./marketing/github/thumbs/05-device-top.png)](./marketing/iphone/1320x2868/en/05-device-top.png) | [![Full control](./marketing/github/thumbs/06-device-bottom.png)](./marketing/iphone/1320x2868/en/06-device-bottom.png) | [![Data modes](./marketing/github/thumbs/07-hero.png)](./marketing/iphone/1320x2868/en/07-hero.png) | [![Get it](./marketing/github/thumbs/08-no-device.png)](./marketing/iphone/1320x2868/en/08-no-device.png) |
 
 <details>
-<summary><b>📡 Transport</b> — SSE, polling, cache and offline queue</summary>
+<summary><b>All export sizes</b> — iPhone 6.1″ to Pro Max (click to expand)</summary>
 
-```mermaid
-flowchart LR
-    classDef infra fill:#1a1a2e,stroke:#6c8cff,color:#eee
-    classDef core fill:#1e3a5f,stroke:#5ba3e6,color:#eee
-    S(["🖥️ Server"]) --> A["🌐 api.ts"]
-    A --> SSE["useSSE.ts<br/>SSE streaming"]
-    A --> Poll["usePolling.ts<br/>Backoff 1s→60s"]
-    A --> Cache["useOfflineCache.ts<br/>IndexedDB"]
-    A --> Queue["useOfflineQueue.ts<br/>Offline queue"]
-    Poll -->|pause/resume| SSE
-    Queue -.->|replay| A
-    class S infra
-    class A,SSE,Poll,Cache,Queue core
-```
+| Resolution | Slides |
+|------------|--------|
+| 1125×2436 | [`marketing/iphone/1125x2436/en/`](./marketing/iphone/1125x2436/en/) |
+| 1206×2622 | [`marketing/iphone/1206x2622/en/`](./marketing/iphone/1206x2622/en/) |
+| 1284×2778 | [`marketing/iphone/1284x2778/en/`](./marketing/iphone/1284x2778/en/) |
+| 1320×2868 | [`marketing/iphone/1320x2868/en/`](./marketing/iphone/1320x2868/en/) |
+
 </details>
 
-<details>
-<summary><b>🧠 State</b> — main hooks and their relationships</summary>
-
-```mermaid
-flowchart LR
-    classDef hook fill:#2d1b4e,stroke:#a78bfa,color:#eee
-    classDef core fill:#1e3a5f,stroke:#5ba3e6,color:#eee
-    C["useConfig"] --> S["useSessions<br/>CRUD + favorites"]
-    C --> M["useMessages<br/>send + undo"]
-    C --> A["useAI<br/>agents/models"]
-    C --> Si["useSessionSidecar<br/>todos/diffs"]
-    M -->|optimistic| S
-    S -->|selectedID| M
-    A -->|activeModel| M
-    F["useFeatureFlags"] -.->|toggle| M
-    N["useNetworkMode"] -.->|data mode| C
-    Shell["useShell"] -->|terminal| M
-    Speech["useSpeechRecognition"] -->|voice| M
-    class C,S,M,A,Si,F,N,Shell,Speech hook
-```
-</details>
-
-<details>
-<summary><b>🖥️ UI</b> — App, main views and modals</summary>
-
-```mermaid
-flowchart LR
-    classDef ui fill:#3b1f3b,stroke:#f0c060,color:#eee
-    classDef modal fill:#4a2040,stroke:#d08050,color:#eee
-    App["App.tsx<br/>Orchestrator"] --> CV["ChatView"]
-    App --> SL["SessionList"]
-    App --> SP["SettingsPanel"]
-    App --> HP["HelpPage"]
-    App --> Mod["15 modals<br/>⬇"]
-    CV --> MB["MessageBubble"]
-    CV --> C["Composer"]
-    CV --> ML["MessageList"]
-    CV --> TB["ThinkingBlock"]
-    CV --> TP["ToolPart"]
-    SL --> SC["SessionCard"]
-    SL --> AL["ArchivedList"]
-    SP --> PM["ProviderManager"]
-    SP --> TPk["ThemePicker"]
-    subgraph Modals[" "]
-        DIFF["DiffViewer"]
-        FE["FileEditor"]
-        TV["TerminalView"]
-        MCP["MCPBrowser"]
-        TC["ThemeCreator"]
-        IL["ImageLightbox"]
-        FM["FavoritesManager"]
-        QP["QuestionPrompt"]
-        PP["PermissionPrompt"]
-        SB["SkillBrowser"]
-    end
-    class App,CV,SL,SP,HP ui
-    class DIFF,FE,TV,MCP,TC,IL,FM,QP,PP,SB,AL,PM,TPk modal
-```
-</details>
-
-<details>
-<summary><b>🔧 Cross-cutting</b> — shared services</summary>
-
-```mermaid
-flowchart LR
-    classDef cross fill:#1b3b2b,stroke:#4caf7d,color:#eee
-    I18N["🌍 i18n.ts<br/>4 languages"]
-    Theme["🎨 resolveTheme.ts<br/>30+ themes"]
-    Styles["📄 styles.css<br/>~5000 lines"]
-    Types["📐 types.ts<br/>38 types"]
-    Icons["🖼️ Icons.tsx<br/>31 SVGs"]
-    Bench["📊 benchmarks/<br/>212 tests"]
-    I18N --> App
-    Theme --> ThemePicker
-    Styles --> App
-    Types --> App
-    Icons --> UI
-    Bench -.-> API
-    class I18N,Theme,Styles,Types,Icons,Bench cross
-```
-</details>
+---
 
 ## 🚀 Get started in 2 steps
 

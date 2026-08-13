@@ -52,6 +52,17 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
   zoomRef.current = zoom
   panRef.current = pan
 
+  // Blob del frame ANTERIOR al que el <img> terminó de decodificar: se revoca
+  // en el onLoad del frame nuevo (el reader ya no revoca — revocar un blob a
+  // medio decodificar produce artefactos de color al parpadear).
+  const loadedFrameUrlRef = useRef<string | null>(null)
+  useEffect(() => {
+    return () => {
+      if (loadedFrameUrlRef.current) URL.revokeObjectURL(loadedFrameUrlRef.current)
+      loadedFrameUrlRef.current = null
+    }
+  }, [])
+
   // Stage real en vivo (rotación / split / resize del teclado).
   useEffect(() => {
     const el = stageRef.current
@@ -575,6 +586,14 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
               className="desktop-frame"
               style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0" }}
               draggable={false}
+              onLoad={() => {
+                // Este frame ya está decodificado y visible: recién ahora se
+                // puede revocar el blob del anterior sin riesgo de parpadeos.
+                if (loadedFrameUrlRef.current && loadedFrameUrlRef.current !== imageUrl) {
+                  URL.revokeObjectURL(loadedFrameUrlRef.current)
+                }
+                loadedFrameUrlRef.current = imageUrl
+              }}
             />
           ) : (
             status !== "error" && !needsConsent() && <div className="desktop-error"><p>{t('desktop.connecting')}</p></div>

@@ -13,6 +13,7 @@ import { DataUsageModal } from "./DataUsageModal"
 import { ThinkingLevels } from "./ThinkingLevels"
 import { PairModal } from "./PairModal"
 import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type DesktopConfig } from "../desktop"
+import { fetchGoUsage, loadGoAccounts, saveGoAccounts, type GoUsage } from "../goUsage"
 import { getDataUsage, formatBytes } from "../utils/dataUsage"
 import { variantsOf } from "../utils/model-utils"
 
@@ -21,6 +22,13 @@ type UsageStats = {
   sessionsCreated: number
   totalTokens?: number
   firstUsed: number
+}
+
+// Formatea el instante de reset de una cuota (ISO) a fecha/hora local.
+function formatGoReset(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
 }
 
 type SettingsPanelProps = {
@@ -117,6 +125,66 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [desktopNoticeType, setDesktopNoticeType] = useState<"ok" | "fail">("ok")
   const [showDesktopPass, setShowDesktopPass] = useState(false)
   const [desktopSaved, setDesktopSaved] = useState(false)
+
+  // ===== OpenCode Go (uso vía API pública, varias cuentas) =====
+  const [goKeys, setGoKeys] = useState<string[]>(() => loadGoAccounts())
+  const [goUsageMap, setGoUsageMap] = useState<Record<string, GoUsage | null>>({})
+  const [goLoadingMap, setGoLoadingMap] = useState<Record<string, boolean>>({})
+  const [goErrorMap, setGoErrorMap] = useState<Record<string, string | null>>({})
+  const [goSaved, setGoSaved] = useState(false)
+  const [showGoKey, setShowGoKey] = useState<Record<number, boolean>>({})
+
+  const checkGo = useCallback(async (key: string) => {
+    const trimmed = key.trim()
+    if (!trimmed) return
+    const proxy = canTestDesktop(desktopCfg)
+      ? { host: desktopCfg.host, port: desktopCfg.port, username: desktopCfg.username, password: desktopCfg.password }
+      : null
+    setGoLoadingMap((m) => ({ ...m, [trimmed]: true }))
+    setGoErrorMap((m) => ({ ...m, [trimmed]: null }))
+    try {
+      const usage = await fetchGoUsage(trimmed, proxy)
+      setGoUsageMap((m) => ({ ...m, [trimmed]: usage }))
+    } catch (err) {
+      setGoUsageMap((m) => ({ ...m, [trimmed]: null }))
+      setGoErrorMap((m) => ({ ...m, [trimmed]: (err as Error).message === "invalid_key" ? t('settings.goErrorKey') : t('settings.goError') }))
+    } finally {
+      setGoLoadingMap((m) => ({ ...m, [trimmed]: false }))
+    }
+  }, [desktopCfg, t])
+
+  const updateGoKey = (index: number, value: string) => {
+    setGoKeys((ks) => ks.map((k, i) => (i === index ? value : k)))
+    setGoUsageMap((m) => {
+      const next = { ...m }
+      for (const saved of Object.keys(m)) if (saved !== value.trim()) delete next[saved]
+      return next
+    })
+    setGoErrorMap((m) => {
+      const next = { ...m }
+      for (const saved of Object.keys(m)) if (saved !== value.trim()) delete next[saved]
+      return next
+    })
+  }
+
+  const removeGoKey = (index: number) => {
+    setGoKeys((ks) => ks.filter((_, i) => i !== index))
+  }
+
+  // Auto-save (debounced) de las API keys; auto-consulta al abrir si ya hay keys.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveGoAccounts(goKeys)
+      setGoSaved(true)
+      setTimeout(() => setGoSaved(false), 2000)
+    }, 700)
+    return () => clearTimeout(timer)
+  }, [goKeys])
+
+  useEffect(() => {
+    for (const key of loadGoAccounts()) if (key.trim()) void checkGo(key)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const testDesktop = useCallback(async () => {
     setDesktopTesting(true)
@@ -807,6 +875,94 @@ export const SettingsPanel = memo(function SettingsPanel({
           {desktopSaved && <span className="desktop-saved-hint">{t('settings.desktopSaved')}</span>}
         </div>
         {desktopNotice && <p className={`desktop-settings-notice ${desktopNoticeType}`}>{desktopNotice}</p>}
+      </SettingsSection>
+
+      <SettingsSection title={t('settings.goTitle')}>
+        <p className="subtle">{t('settings.goHint')}</p>
+        {goKeys.map((key, i) => {
+          const trimmed = key.trim()
+          const usage = trimmed ? goUsageMap[trimmed] : null
+          const loading = trimmed ? goLoadingMap[trimmed] : false
+          const error = trimmed ? goErrorMap[trimmed] : null
+          return (
+            <div key={i} className="go-account">
+              <div className="go-account-head">
+                <span className="go-account-label">{t('settings.goAccount')} {i + 1}</span>
+                {goSaved && i === 0 && <span className="desktop-saved-hint">{t('settings.goSaved')}</span>}
+              </div>
+              <div className="go-account-row">
+                <div className="password-wrapper">
+                  <input
+                    type={showGoKey[i] ? "text" : "password"}
+                    value={key}
+                    onChange={(e) => updateGoKey(i, e.target.value)}
+                    placeholder={t('settings.goApiKeyPlaceholder')}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    autoComplete="off"
+                  />
+                  <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowGoKey((m) => ({ ...m, [i]: !m[i] }))} tabIndex={-1}>
+                    {showGoKey[i] ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                  </button>
+                </div>
+                <div className="go-account-btns">
+                  <button
+                    type="button"
+                    className="btn-secondary compact"
+                    onClick={() => void checkGo(key)}
+                    disabled={loading || !trimmed}
+                    title={t('settings.goCheck')}
+                  >
+                    {loading ? <LoadingIcon size={14} /> : <TestIcon size={14} />}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-icon btn-ghost go-remove"
+                    onClick={() => removeGoKey(i)}
+                    title={t('settings.goRemove')}
+                    aria-label={t('settings.goRemove')}
+                  >
+                    <TrashIcon size={16} />
+                  </button>
+                </div>
+              </div>
+              {error && <p className="desktop-settings-notice fail">{error}</p>}
+              {usage && (
+                <div className="go-usage">
+                  {(["rolling", "weekly", "monthly"] as const).map((k) => {
+                    const period = usage[k]
+                    if (!period) return null
+                    const pct = Math.min(100, Math.max(0, period.percent))
+                    const tone = pct >= 80 ? "danger" : pct >= 50 ? "warning" : "ok"
+                    return (
+                      <div key={k} className="go-period">
+                        <div className="go-period-head">
+                          <span className="go-period-label">{t(`settings.goPeriod_${k}`)}</span>
+                          <span className="go-period-pct">{period.percent}%</span>
+                        </div>
+                        <div className="go-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={t(`settings.goPeriod_${k}`)}>
+                          <div className={`go-bar-fill ${tone}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        {period.resetsAt && <small className="subtle">{t('settings.goResetsAt')}: {formatGoReset(period.resetsAt)}</small>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="btn-secondary compact"
+            onClick={() => setGoKeys((ks) => [...ks, ""])}
+          >
+            <PlusIcon size={14} />
+            {t('settings.goAddAccount')}
+          </button>
+          {goSaved && goKeys.length > 1 && <span className="desktop-saved-hint">{t('settings.goSaved')}</span>}
+        </div>
       </SettingsSection>
 
       <div className="settings-footer">

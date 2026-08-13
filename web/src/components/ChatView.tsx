@@ -100,6 +100,7 @@ export type ChatViewProps = {
   snippets?: PromptSnippet[]
   charLimit?: number
   compactTools?: boolean
+  thinkingDefault?: "auto" | "expanded" | "collapsed"
   onRegenerate?: () => void
   onInsertPrompt?: (text: string) => void
   onSendPrompt?: (text: string) => void
@@ -124,7 +125,7 @@ export const ChatView = memo(function ChatView({
   todos, todosExpanded, onTodosToggle, showTodoButton,
   compacting, revertID,
   onExportMarkdown, onEditFile,
-  snippets, charLimit, compactTools, onRegenerate, onInsertPrompt, onSendPrompt
+  snippets, charLimit, compactTools, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -508,6 +509,7 @@ export const ChatView = memo(function ChatView({
           scrollToMessageID={scrollToMessageID}
           activeVariant={activeModelOption?.variant}
           compactTools={compactTools}
+          thinkingDefault={thinkingDefault}
           onRegenerate={onRegenerate}
         />
         {showDown && (

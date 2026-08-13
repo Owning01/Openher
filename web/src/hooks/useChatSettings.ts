@@ -7,6 +7,7 @@ const DEFAULTS: ChatSettings = {
   fontSize: 14,
   messageSpacing: "normal",
   showThinking: true,
+  thinkingDefault: "auto",
   showToolCalls: true,
   showTimestamps: true,
   showTodoButton: true,
@@ -18,9 +19,6 @@ const DEFAULTS: ChatSettings = {
   bubbleRadius: 12,
   messageMaxWidth: "full",
   fontFamily: "system",
-  userBubbleColor: "",
-  chatBackground: "default",
-  agentAccent: "",
   compactTools: false,
   completionSound: true,
   composerCharLimit: 0,
@@ -44,19 +42,6 @@ const FONT_MAP: Record<ChatSettings["fontFamily"], string> = {
   mono: "var(--font-mono)",
 }
 
-const BG_MAP: Record<ChatSettings["chatBackground"], { image?: string; color?: string }> = {
-  default: {},
-  indigo: { image: "linear-gradient(160deg, rgba(79,70,229,0.14), rgba(6,182,212,0.07))", color: "transparent" },
-  amber: { image: "linear-gradient(160deg, rgba(245,158,11,0.12), rgba(239,68,68,0.05))", color: "transparent" },
-  green: { image: "linear-gradient(160deg, rgba(16,185,129,0.12), rgba(6,95,70,0.10))", color: "transparent" },
-  solid: { image: "none", color: "#0d0d14" },
-}
-
-function setVar(root: HTMLElement, name: string, value: string | undefined) {
-  if (value) root.style.setProperty(name, value)
-  else root.style.removeProperty(name)
-}
-
 function applyCSSVars(s: ChatSettings) {
   const root = document.documentElement
   root.style.setProperty("--chat-font-size", `${s.fontSize}px`)
@@ -72,11 +57,6 @@ function applyCSSVars(s: ChatSettings) {
   root.style.setProperty("--chat-bubble-radius", `${s.bubbleRadius}px`)
   root.style.setProperty("--chat-max-width", MAX_WIDTH_MAP[s.messageMaxWidth])
   root.style.setProperty("--chat-font-family", FONT_MAP[s.fontFamily])
-  setVar(root, "--chat-user-bubble-bg", s.userBubbleColor || undefined)
-  setVar(root, "--chat-accent", s.agentAccent || undefined)
-  const bg = BG_MAP[s.chatBackground]
-  setVar(root, "--chat-bg-image", bg.image)
-  setVar(root, "--chat-bg-color", bg.color)
 }
 
 export function useChatSettings() {

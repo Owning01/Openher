@@ -7,9 +7,10 @@ import type { ThinkingPart } from "../types"
 type Props = {
   parts: ThinkingPart[]
   duration?: string
+  defaultOpen?: boolean
 }
 
-export const ThinkingBlock = memo(function ThinkingBlock({ parts, duration }: Props) {
+export const ThinkingBlock = memo(function ThinkingBlock({ parts, duration, defaultOpen = false }: Props) {
   const t = useT()
   if (parts.length === 0) return null
 
@@ -23,6 +24,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({ parts, duration }: Pr
       subtitle={isStreaming
         ? <span className="thinking-streaming"><LoadingIcon size={12} className="animate-spin" />{t('detail.thinking')}</span>
         : (duration ? `· ${duration}` : undefined)}
+      defaultOpen={defaultOpen}
     >
       <pre className="thinking-text">{text}</pre>
     </CollapsibleSection>

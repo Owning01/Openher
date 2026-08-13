@@ -115,6 +115,21 @@ type TranslationKey =
   | 'settings.apiVersionAuto'
   | 'settings.apiVersionV1'
   | 'settings.apiVersionV2'
+  | 'settings.goTitle'
+  | 'settings.goHint'
+  | 'settings.goApiKey'
+  | 'settings.goApiKeyPlaceholder'
+  | 'settings.goCheck'
+  | 'settings.goSaved'
+  | 'settings.goError'
+  | 'settings.goErrorKey'
+  | 'settings.goPeriod_rolling'
+  | 'settings.goPeriod_weekly'
+  | 'settings.goPeriod_monthly'
+  | 'settings.goResetsAt'
+  | 'settings.goAccount'
+  | 'settings.goAddAccount'
+  | 'settings.goRemove'
   | 'settings.sectionPreferences'
   | 'settings.dataModeTitle'
   | 'settings.dataModeDesc'
@@ -492,6 +507,7 @@ type TranslationKey =
   | 'notification.completionBody'
   | 'notification.questionTitle'
   | 'notification.questionBody'
+  | 'notification.permissionTitle'
   | 'notification.errorBody'
   | 'mcpBrowser.title'
   | 'mcpBrowser.empty'
@@ -520,6 +536,10 @@ type TranslationKey =
   | 'settings.chatSpacingNormal'
   | 'settings.chatSpacingComfortable'
   | 'settings.chatShowThinking'
+  | 'settings.chatThinkingDefault'
+  | 'settings.chatThinkingAuto'
+  | 'settings.chatThinkingExpanded'
+  | 'settings.chatThinkingCollapsed'
   | 'settings.chatShowTools'
   | 'settings.chatShowTime'
   | 'settings.chatShowTodo'
@@ -541,15 +561,6 @@ type TranslationKey =
   | 'settings.chatPreviewAssistant'
   | 'settings.chatCompactTools'
   | 'settings.chatCompletionSound'
-  | 'settings.chatBg'
-  | 'settings.chatBgDefault'
-  | 'settings.chatBgIndigo'
-  | 'settings.chatBgAmber'
-  | 'settings.chatBgGreen'
-  | 'settings.chatBgSolid'
-  | 'settings.chatUserBubble'
-  | 'settings.chatAccent'
-  | 'settings.chatResetColor'
   | 'settings.chatCharLimit'
   | 'settings.chatCharLimitOff'
   | 'settings.snippets'
@@ -726,6 +737,21 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
       'settings.apiVersionAuto': 'Auto (detect)',
       'settings.apiVersionV1': 'v1 (classic)',
       'settings.apiVersionV2': 'v2 (beta)',
+      'settings.goTitle': 'OpenCode Go usage',
+      'settings.goHint': 'Query your OpenCode Go quota (rolling, weekly, monthly) via the public API.',
+      'settings.goApiKey': 'API key',
+      'settings.goApiKeyPlaceholder': 'opencode-go-…',
+      'settings.goCheck': 'Check usage',
+      'settings.goSaved': 'Saved',
+      'settings.goError': "Couldn't fetch usage. Check the connection and try again.",
+      'settings.goErrorKey': 'Invalid API key (401/403).',
+      'settings.goPeriod_rolling': 'Rolling',
+      'settings.goPeriod_weekly': 'Weekly',
+      'settings.goPeriod_monthly': 'Monthly',
+      'settings.goResetsAt': 'Resets',
+      'settings.goAccount': 'Account',
+      'settings.goAddAccount': 'Add account',
+      'settings.goRemove': 'Remove account',
       'settings.sectionPreferences': 'Preferences',
       'settings.dataModeTitle': 'Data mode',
       'settings.dataModeDesc': 'Controls network polling frequency and automatic data loading.',
@@ -1144,8 +1170,9 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
     'session.archiveView': 'Archived sessions',
     'notification.completionTitle': 'OpenCode Complete',
     'notification.completionBody': 'Assistant finished replying',
-    'notification.questionTitle': 'Question from AI',
-    'notification.questionBody': 'The AI has a question for you',
+      'notification.questionTitle': 'Question from AI',
+      'notification.questionBody': 'The AI has a question for you',
+      'notification.permissionTitle': 'Permission requested',
     'notification.errorBody': 'An error occurred',
     'mcpBrowser.title': 'MCP Resources',
     'mcpBrowser.empty': 'No MCP resources available',
@@ -1173,7 +1200,11 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
     'settings.chatSpacingCompact': 'Compact',
     'settings.chatSpacingNormal': 'Normal',
     'settings.chatSpacingComfortable': 'Comfortable',
-    'settings.chatShowThinking': 'Show reasoning',
+      'settings.chatShowThinking': 'Show reasoning',
+      'settings.chatThinkingDefault': 'Reasoning default state',
+      'settings.chatThinkingAuto': 'Auto',
+      'settings.chatThinkingExpanded': 'Always open',
+      'settings.chatThinkingCollapsed': 'Always collapsed',
     'settings.chatShowTools': 'Show tools',
     'settings.chatShowTime': 'Show timestamps',
     'settings.chatShowTodo': 'Todo button',
@@ -1195,15 +1226,6 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
     'settings.chatPreviewAssistant': 'Assistant reply example showing how the text looks',
     'settings.chatCompactTools': 'Compact tools (one line)',
     'settings.chatCompletionSound': 'Completion sound',
-    'settings.chatBg': 'Chat background',
-    'settings.chatBgDefault': 'Default',
-    'settings.chatBgIndigo': 'Indigo',
-    'settings.chatBgAmber': 'Amber',
-    'settings.chatBgGreen': 'Green',
-    'settings.chatBgSolid': 'Solid',
-    'settings.chatUserBubble': 'Your bubble color',
-    'settings.chatAccent': 'Accent color',
-    'settings.chatResetColor': 'Reset to theme',
     'settings.chatCharLimit': 'Prompt char limit',
     'settings.chatCharLimitOff': 'Off',
     'settings.snippets': 'Prompt snippets',
@@ -1410,6 +1432,21 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
       'settings.apiVersionAuto': 'Auto (detectar)',
       'settings.apiVersionV1': 'v1 (clásica)',
       'settings.apiVersionV2': 'v2 (beta)',
+      'settings.goTitle': 'Uso de OpenCode Go',
+      'settings.goHint': 'Consultá tu cuota de OpenCode Go (rolling, semanal, mensual) vía la API pública.',
+      'settings.goApiKey': 'API key',
+      'settings.goApiKeyPlaceholder': 'opencode-go-…',
+      'settings.goCheck': 'Consultar uso',
+      'settings.goSaved': 'Guardado',
+      'settings.goError': 'No se pudo consultar el uso. Verificá la conexión e intentá de nuevo.',
+      'settings.goErrorKey': 'API key inválida (401/403).',
+      'settings.goPeriod_rolling': 'Rolling',
+      'settings.goPeriod_weekly': 'Semanal',
+      'settings.goPeriod_monthly': 'Mensual',
+      'settings.goResetsAt': 'Resetea',
+      'settings.goAccount': 'Cuenta',
+      'settings.goAddAccount': 'Agregar cuenta',
+      'settings.goRemove': 'Quitar cuenta',
       'settings.sectionPreferences': 'Preferencias',
       'settings.dataModeTitle': 'Modo de datos',
       'settings.dataModeDesc': 'Controla la frecuencia de consulta de red y la carga automática de datos.',
@@ -1828,8 +1865,9 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
     'session.archiveView': 'Sesiones archivadas',
     'notification.completionTitle': 'OpenCode Completado',
     'notification.completionBody': 'El asistente terminó de responder',
-    'notification.questionTitle': 'Pregunta del AI',
-    'notification.questionBody': 'El AI tiene una pregunta para ti',
+      'notification.questionTitle': 'Pregunta del AI',
+      'notification.questionBody': 'El AI tiene una pregunta para ti',
+      'notification.permissionTitle': 'Permiso solicitado',
     'notification.errorBody': 'Ocurrió un error',
     'mcpBrowser.title': 'Recursos MCP',
     'mcpBrowser.empty': 'No hay recursos MCP disponibles',
@@ -1856,7 +1894,11 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
     'settings.chatSpacingCompact': 'Compacto',
     'settings.chatSpacingNormal': 'Normal',
     'settings.chatSpacingComfortable': 'Cómodo',
-    'settings.chatShowThinking': 'Mostrar razonamiento',
+      'settings.chatShowThinking': 'Mostrar razonamiento',
+      'settings.chatThinkingDefault': 'Estado inicial del razonamiento',
+      'settings.chatThinkingAuto': 'Auto',
+      'settings.chatThinkingExpanded': 'Siempre abierto',
+      'settings.chatThinkingCollapsed': 'Siempre plegado',
     'settings.chatShowTools': 'Mostrar herramientas (tools)',
     'settings.chatShowTime': 'Mostrar hora',
     'settings.chatShowTodo': 'Botón de tareas',
@@ -1878,15 +1920,6 @@ const translations: Record<LanguageCode, Partial<Record<TranslationKey, string>>
     'settings.chatPreviewAssistant': 'Respuesta de ejemplo del asistente para ver cómo se ve el texto',
     'settings.chatCompactTools': 'Tools compactos (una línea)',
     'settings.chatCompletionSound': 'Sonido al completar',
-    'settings.chatBg': 'Fondo del chat',
-    'settings.chatBgDefault': 'Predeterminado',
-    'settings.chatBgIndigo': 'Índigo',
-    'settings.chatBgAmber': 'Ámbar',
-    'settings.chatBgGreen': 'Verde',
-    'settings.chatBgSolid': 'Sólido',
-    'settings.chatUserBubble': 'Color de tu burbuja',
-    'settings.chatAccent': 'Color de acento',
-    'settings.chatResetColor': 'Restaurar tema',
     'settings.chatCharLimit': 'Límite de caracteres',
     'settings.chatCharLimitOff': 'Sin límite',
     'settings.snippets': 'Snippets de prompts',

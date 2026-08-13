@@ -375,6 +375,7 @@ export type ChatSettings = {
   fontSize: number
   messageSpacing: "compact" | "normal" | "comfortable"
   showThinking: boolean
+  thinkingDefault: "auto" | "expanded" | "collapsed"
   showToolCalls: boolean
   showTimestamps: boolean
   showTodoButton: boolean
@@ -386,9 +387,6 @@ export type ChatSettings = {
   bubbleRadius: number
   messageMaxWidth: "normal" | "wide" | "full"
   fontFamily: "system" | "serif" | "mono"
-  userBubbleColor: string
-  chatBackground: "default" | "indigo" | "amber" | "green" | "solid"
-  agentAccent: string
   compactTools: boolean
   completionSound: boolean
   composerCharLimit: number

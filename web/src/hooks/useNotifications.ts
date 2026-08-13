@@ -1,5 +1,6 @@
-import { useCallback } from "react"
+import { useCallback, useEffect } from "react"
 import { useLocalStorage } from "./useLocalStorage"
+import { sendNotification, requestNotificationPermission } from "../utils/notifications"
 
 export type NotificationFlags = {
   onCompletion: boolean
@@ -16,16 +17,7 @@ const DEFAULT_FLAGS: NotificationFlags = {
 }
 
 export function notify(title: string, body: string) {
-  if (!("Notification" in window)) return
-  if (Notification.permission === "granted") {
-    new Notification(title, { body, icon: "/img/opencode-logo-dark.jpg" })
-  } else if (Notification.permission !== "denied") {
-    Notification.requestPermission().then((permission) => {
-      if (permission === "granted") {
-new Notification(title, { body, icon: "/img/apple-touch-icon-180x180.jpg" })
-      }
-    })
-  }
+  sendNotification(title, body, "/img/opencode-logo-dark.jpg")
 }
 
 export function useNotifications() {
@@ -34,6 +26,11 @@ export function useNotifications() {
   const showNotification = useCallback((title: string, body: string) => {
     notify(title, body)
   }, [])
+
+  useEffect(() => {
+    if (!flags.onCompletion && !flags.onQuestion && !flags.onError) return
+    void requestNotificationPermission()
+  }, [flags.onCompletion, flags.onQuestion, flags.onError])
 
   return { notify: showNotification, flags, setFlags, DEFAULT_FLAGS }
 }

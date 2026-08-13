@@ -30,7 +30,7 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): str
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, onRegenerate }: {
+export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate }: {
   message: RenderedMessage
   revert?: SessionView["revert"]
   onRevertToMessage?: (messageID: string) => void
@@ -48,6 +48,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   todosOpen?: boolean
   highlight?: string
   compactTools?: boolean
+  thinkingDefault?: "auto" | "expanded" | "collapsed"
   onRegenerate?: () => void
 }) {
   const t = useT()
@@ -196,7 +197,12 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
 
         {message.thinkingParts && message.thinkingParts.length > 0 && !showConfirm && (
           <div className="thinking-block">
-            <ThinkingBlock parts={message.thinkingParts} duration={duration} />
+            <ThinkingBlock
+              key={thinkingDefault}
+              parts={message.thinkingParts}
+              duration={duration}
+              defaultOpen={thinkingDefault === "expanded"}
+            />
           </div>
         )}
         {message.toolParts.length > 0 && !showConfirm && (

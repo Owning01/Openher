@@ -26,7 +26,7 @@ import { BottomSheet } from "./components/BottomSheet"
 import { ConfirmModal } from "./components/ConfirmModal"
 import { ErrorModal } from "./components/ErrorModal"
 import { ShortcutsModal } from "./components/ShortcutsModal"
-import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, Question, PermissionRequest } from "./types"
+import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, Question, PermissionRequest, QuestionInfo } from "./types"
 import type { LanguageCode } from "./i18n"
 import { formatLimit, extractPath, extractName, extractBranch, isSessionActive, filterByQuery } from "./utils"
 import { STORAGE_KEYS, QUESTION_POLL_INTERVAL_MS } from "./constants"
@@ -436,19 +436,28 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   // ===== Questions =====
   const [pendingQuestions, setPendingQuestions] = useState<Question[]>([])
   const [dismissedQuestions, setDismissedQuestions] = useState<Set<string>>(new Set())
+  const notifiedQuestionIDs = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!config || !flags.questionAuto) return
     const poll = async () => {
       try {
         const qs = await api.listPendingQuestions(config, selectedSession?.directory)
-        setPendingQuestions(qs.filter((q) => !dismissedQuestions.has(q.id)))
+        const fresh = qs.filter((q) => !dismissedQuestions.has(q.id))
+        setPendingQuestions(fresh)
+        if (notifFlags.onQuestion) {
+          for (const q of fresh) {
+            if (notifiedQuestionIDs.current.has(q.id)) continue
+            notifiedQuestionIDs.current.add(q.id)
+            notify(t('notification.questionTitle'), (q as { question?: string }).question ?? (q as { questions?: QuestionInfo[] }).questions?.[0]?.question ?? "")
+          }
+        }
       } catch { /* ignore */ }
     }
     poll()
     const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [config, flags.questionAuto, selectedSession?.directory, dismissedQuestions])
+  }, [config, flags.questionAuto, selectedSession?.directory, dismissedQuestions, notifFlags.onQuestion, notify, t])
 
   const handleQuestionReply = useCallback(async (requestID: string, answers: string[][]) => {
     if (!config) return
@@ -474,6 +483,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // ===== Permissions =====
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null)
+  const notifiedPermissionIDs = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!config || !flags.permissionUI) return
@@ -482,12 +492,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         const perms = await api.listPermissions(config, selectedSession?.directory)
         const pending = perms.find((p) => p.status === "pending")
         if (pending) setPermissionRequest(pending)
+        if (pending && notifFlags.onQuestion && !notifiedPermissionIDs.current.has(pending.requestID)) {
+          notifiedPermissionIDs.current.add(pending.requestID)
+          notify(t('notification.permissionTitle'), pending.permission ?? "")
+        }
       } catch { /* ignore */ }
     }
     poll()
     const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [config, flags.permissionUI, selectedSession?.directory])
+  }, [config, flags.permissionUI, selectedSession?.directory, notifFlags.onQuestion, notify, t])
 
   const handlePermissionApprove = useCallback(async (requestID: string) => {
     if (!config) return
@@ -1319,6 +1333,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     snippets: promptSnippets,
     charLimit: chatSettings.composerCharLimit,
     compactTools: chatSettings.compactTools,
+    thinkingDefault: chatSettings.thinkingDefault,
     onRegenerate: handleRegenerate,
     onInsertPrompt: handleInsertPrompt,
     onSendPrompt: handleSendPrompt,

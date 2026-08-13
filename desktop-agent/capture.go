@@ -10,6 +10,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"math"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -113,7 +114,14 @@ func drawCursorInto(hdc uintptr, region rect) {
 		cx -= ii.XHotspot
 		cy -= ii.YHotspot
 	}
-	if cx < region.Left || cy < region.Top || cx >= region.Right || cy >= region.Bottom {
+	// El HDC destino es un bitmap con origen local (0,0): convertir las
+	// coordenadas ABSOLUTAS de pantalla a locales de la región capturada.
+	// Sin esta resta el cursor se dibuja desplazado dentro del frame (y en
+	// captureWindow, con la región {0,0,w,h}, el check de abajo dejaba pasar
+	// cursors que están FUERA de la ventana → se dibujaban en cualquier lado).
+	cx -= region.Left
+	cy -= region.Top
+	if cx < 0 || cy < 0 || cx >= region.width() || cy >= region.height() {
 		return
 	}
 	procDrawIconEx.Call(hdc, uintptr(cx), uintptr(cy), ci.HCursor, 0, 0, 0, 0, 0x0003 /* DI_NORMAL */)
@@ -181,14 +189,58 @@ func captureWindow(hwnd uintptr) (*frame, error) {
 		deleteObject(hbm)
 		return captureRect(wr)
 	}
-	drawCursorInto(memDC, rect{0, 0, w, h})
+	drawCursorInto(memDC, wr)
 
 	buf, err := dibBits(memDC, hbm, w, h)
 	if err != nil {
 		return nil, err
 	}
+	// PrintWindow puede devolver ÉXITO con contenido basura en ventanas
+	// aceleradas por GPU (superficie DXGI que no cooperó: frame plano de un
+	// solo color). Detectar el frame casi uniforme y volver al recorte real
+	// del escritorio — mismo camino del fallback por error.
+	if isUniformFrame(buf, int(w), int(h)) {
+		deleteDC(memDC)
+		deleteObject(hbm)
+		return captureRect(wr)
+	}
 	rgba := bgraToRGBA(buf, int(w), int(h))
 	return &frame{RGBA: rgba, Rect: wr}, nil
+}
+
+// isUniformFrame detecta un frame prácticamente plano (varianza por canal
+// casi nula): señal de captura fallida (PrintWindow con GPU) o contenido
+// vacío. Devuelve true cuando el contenido no aporta información.
+func isUniformFrame(buf []byte, w, h int) bool {
+	step := 32
+	if w <= 0 || h <= 0 || len(buf) < w*h*4 {
+		return true
+	}
+	var sr, sg, sb, count float64
+	for y := 0; y < h; y += step {
+		for x := 0; x < w; x += step {
+			i := (y*w + x) * 4
+			sr += float64(buf[i+2])
+			sg += float64(buf[i+1])
+			sb += float64(buf[i])
+			count++
+		}
+	}
+	if count == 0 {
+		return true
+	}
+	ar, ag, ab := sr/count, sg/count, sb/count
+	var dev float64
+	for y := 0; y < h; y += step {
+		for x := 0; x < w; x += step {
+			i := (y*w + x) * 4
+			dev += math.Abs(float64(buf[i+2]) - ar)
+			dev += math.Abs(float64(buf[i+1]) - ag)
+			dev += math.Abs(float64(buf[i]) - ab)
+		}
+	}
+	// Desviación media por muestra (<1 por canal, promedio): contenido plano.
+	return dev/count < 3.0
 }
 
 func bgraToRGBA(b []byte, w, h int) *image.RGBA {

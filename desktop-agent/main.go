@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -404,6 +405,39 @@ func enumMonitors() []monitorInfoOut {
 	return out
 }
 
+// Proxy de la API pública de OpenCode Go (https://opencode.ai/zen/go/v1/usage):
+// el navegador/WebView no puede consultarla directo por CORS, el agente sí
+// (Go no aplica CORS). GET /gousage?key=<api key> → JSON de uso tal cual.
+func (s *server) handleGoUsage(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		http.Error(w, `{"error":"missing key"}`, http.StatusBadRequest)
+		return
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, "https://opencode.ai/zen/go/v1/usage", nil)
+	if err != nil {
+		http.Error(w, `{"error":"bad request"}`, http.StatusBadGateway)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, `{"error":"upstream"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, `{"error":"read"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(body)
+}
+
 func main() {
 	procSetProcessDPIAware.Call()
 	cfg := loadConfig(defaultConfigFile)
@@ -415,6 +449,7 @@ func main() {
 	mux.HandleFunc("/stream", s.wrap(s.handleStream))
 	mux.HandleFunc("/thumb", s.wrap(s.handleThumb))
 	mux.HandleFunc("/input", s.wrap(s.handleInput))
+	mux.HandleFunc("/gousage", s.wrap(s.handleGoUsage))
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("opencode desktop agent 0.1.0 — http://0.0.0.0:%d (auth: %s)", cfg.Port, map[bool]string{true: "basic", false: "none"}[cfg.Password != ""])

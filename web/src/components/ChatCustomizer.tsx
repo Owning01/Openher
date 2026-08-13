@@ -29,12 +29,10 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
     { value: "serif", labelKey: "settings.chatFontSerif" },
     { value: "mono", labelKey: "settings.chatFontMono" },
   ]
-  const BG_OPTIONS: Array<{ value: ChatSettings["chatBackground"]; labelKey: string }> = [
-    { value: "default", labelKey: "settings.chatBgDefault" },
-    { value: "indigo", labelKey: "settings.chatBgIndigo" },
-    { value: "amber", labelKey: "settings.chatBgAmber" },
-    { value: "green", labelKey: "settings.chatBgGreen" },
-    { value: "solid", labelKey: "settings.chatBgSolid" },
+  const THINKING_DEFAULT_OPTIONS: Array<{ value: ChatSettings["thinkingDefault"]; labelKey: string }> = [
+    { value: "auto", labelKey: "settings.chatThinkingAuto" },
+    { value: "expanded", labelKey: "settings.chatThinkingExpanded" },
+    { value: "collapsed", labelKey: "settings.chatThinkingCollapsed" },
   ]
   const CHECKBOXES: Array<{ key: BoolKey; labelKey: string }> = [
     { key: "showThinking", labelKey: "settings.chatShowThinking" },
@@ -130,48 +128,6 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
       </label>
 
       <label className="setting-row">
-        <span>{t('settings.chatBg')}</span>
-        <div className="toggle-row" style={{ gap: "var(--space-1)", flexWrap: "wrap" }}>
-          {BG_OPTIONS.map((opt) => (
-            <button key={opt.value} type="button"
-              className={`toggle-btn${settings.chatBackground === opt.value ? " active" : ""}`}
-              onClick={() => onSettingChange("chatBackground", opt.value)}
-              aria-pressed={settings.chatBackground === opt.value}>
-              {t(opt.labelKey)}
-            </button>
-          ))}
-        </div>
-      </label>
-
-      <div className="setting-row">
-        <span>{t('settings.chatUserBubble')}</span>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-          <input type="color" className="chat-color-input"
-            value={settings.userBubbleColor || "#4f46e5"}
-            onChange={(e) => onSettingChange("userBubbleColor", e.target.value)} />
-          {settings.userBubbleColor && (
-            <button type="button" className="btn-icon btn-ghost compact"
-              onClick={() => onSettingChange("userBubbleColor", "")}
-              aria-label={t('settings.chatResetColor')} title={t('settings.chatResetColor')}>✕</button>
-          )}
-        </div>
-      </div>
-
-      <div className="setting-row">
-        <span>{t('settings.chatAccent')}</span>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-          <input type="color" className="chat-color-input"
-            value={settings.agentAccent || "#22d3ee"}
-            onChange={(e) => onSettingChange("agentAccent", e.target.value)} />
-          {settings.agentAccent && (
-            <button type="button" className="btn-icon btn-ghost compact"
-              onClick={() => onSettingChange("agentAccent", "")}
-              aria-label={t('settings.chatResetColor')} title={t('settings.chatResetColor')}>✕</button>
-          )}
-        </div>
-      </div>
-
-      <label className="setting-row">
         <span>{t('settings.chatCharLimit')}</span>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
           <input type="range" min={0} max={4000} step={100} value={settings.composerCharLimit}
@@ -195,6 +151,20 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
           </label>
         ))}
       </div>
+
+      <label className="setting-row">
+        <span>{t('settings.chatThinkingDefault')}</span>
+        <div className="toggle-row" style={{ gap: "var(--space-1)" }}>
+          {THINKING_DEFAULT_OPTIONS.map((opt) => (
+            <button key={opt.value} type="button"
+              className={`toggle-btn${settings.thinkingDefault === opt.value ? " active" : ""}`}
+              onClick={() => onSettingChange("thinkingDefault", opt.value)}
+              aria-pressed={settings.thinkingDefault === opt.value}>
+              {t(opt.labelKey)}
+            </button>
+          ))}
+        </div>
+      </label>
 
       <button type="button" className="btn-secondary compact" onClick={onReset}
         style={{ width: "100%", justifyContent: "center" }}>

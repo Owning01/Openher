@@ -170,6 +170,13 @@ const BOUNDARY_BYTES = new TextEncoder().encode(`--${BOUNDARY}`)
 /**
  * Consume el stream MJPEG del agente y entrega blob URLs por frame.
  * Resuelve cuando la conexión termina (abort/error/EOF).
+ *
+ * IMPORTANTE: aquí NO se revoca el blob del frame anterior. Revocar un blob
+ * cuyo <img> todavía está decodificando (o a medio decodificar) produce un
+ * JPEG truncado a nivel de decodificación → artefactos de color (magenta/
+ * morado) al parpadear entre frames. La revocación la hace el componente
+ * cuando el <img> termina de cargar el frame SIGUIENTE (onLoad) — nunca se
+ * revoca un blob en uso.
  */
 export async function readMJPEGStream(
   cfg: DesktopConfig,
@@ -186,7 +193,6 @@ export async function readMJPEGStream(
 
   const reader = res.body.getReader()
   let buffer = new Uint8Array(0)
-  let prevUrl: string | null = null
 
   for (;;) {
     const { done, value } = await reader.read()
@@ -209,10 +215,7 @@ export async function readMJPEGStream(
       const frameBytes = buffer.slice(frameStart, frameStart + len)
       buffer = buffer.slice(frameStart + len)
 
-      const url = URL.createObjectURL(new Blob([frameBytes.slice()], { type: "image/jpeg" }))
-      if (prevUrl) URL.revokeObjectURL(prevUrl)
-      prevUrl = url
-      onFrame(url, frameBytes.length)
+      onFrame(URL.createObjectURL(new Blob([frameBytes.slice()], { type: "image/jpeg" })), frameBytes.length)
 
       // Descartar el "\r\n" y el siguiente "--ocd-frame" para quedar en el header nuevo.
       const nextBoundary = indexOfBytes(buffer, BOUNDARY_BYTES)
@@ -223,6 +226,4 @@ export async function readMJPEGStream(
       buffer = buffer.slice(nextBoundary + BOUNDARY_BYTES.length)
     }
   }
-
-  if (prevUrl) URL.revokeObjectURL(prevUrl)
 }
