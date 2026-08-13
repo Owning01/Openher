@@ -33,31 +33,17 @@
 
 ---
 
-## 📸 Preview
-
 <div align="center">
 
 **Your AI coding assistant, from your phone** — streaming responses, real-time tools, terminal, remote desktop and full settings control.
 
 </div>
 
-| Sessions | One-tap access | Live chat | Connect server |
-| :---: | :---: | :---: | :---: |
-| [![Sessions](./marketing/github/thumbs/01-hero.png)](./marketing/iphone/1320x2868/en/01-hero.png) | [![One tap](./marketing/github/thumbs/02-device-top.png)](./marketing/iphone/1320x2868/en/02-device-top.png) | [![Live chat](./marketing/github/thumbs/03-device-top.png)](./marketing/iphone/1320x2868/en/03-device-top.png) | [![Connect](./marketing/github/thumbs/04-device-bottom.png)](./marketing/iphone/1320x2868/en/04-device-bottom.png) |
-| **Preferences** | **Full control** | **Data modes** | **Get it now** |
-| [![Preferences](./marketing/github/thumbs/05-device-top.png)](./marketing/iphone/1320x2868/en/05-device-top.png) | [![Full control](./marketing/github/thumbs/06-device-bottom.png)](./marketing/iphone/1320x2868/en/06-device-bottom.png) | [![Data modes](./marketing/github/thumbs/07-hero.png)](./marketing/iphone/1320x2868/en/07-hero.png) | [![Get it](./marketing/github/thumbs/08-no-device.png)](./marketing/iphone/1320x2868/en/08-no-device.png) |
-
-<details>
-<summary><b>All export sizes</b> — iPhone 6.1″ to Pro Max (click to expand)</summary>
-
-| Resolution | Slides |
-|------------|--------|
-| 1125×2436 | [`marketing/iphone/1125x2436/en/`](./marketing/iphone/1125x2436/en/) |
-| 1206×2622 | [`marketing/iphone/1206x2622/en/`](./marketing/iphone/1206x2622/en/) |
-| 1284×2778 | [`marketing/iphone/1284x2778/en/`](./marketing/iphone/1284x2778/en/) |
-| 1320×2868 | [`marketing/iphone/1320x2868/en/`](./marketing/iphone/1320x2868/en/) |
-
-</details>
+| Live chat | Sessions | Connect server |
+| :---: | :---: | :---: |
+| [![Live chat](./marketing/github/thumbs/03-device-top.png)](./marketing/iphone/1320x2868/en/03-device-top.png) | [![Sessions](./marketing/github/thumbs/01-hero.png)](./marketing/iphone/1320x2868/en/01-hero.png) | [![Connect server](./marketing/github/thumbs/04-device-bottom.png)](./marketing/iphone/1320x2868/en/04-device-bottom.png) |
+| **Data modes** | **Full control** | **Get it now** |
+| [![Data modes](./marketing/github/thumbs/07-hero.png)](./marketing/iphone/1320x2868/en/07-hero.png) | [![Full control](./marketing/github/thumbs/06-device-bottom.png)](./marketing/iphone/1320x2868/en/06-device-bottom.png) | [![Get it now](./marketing/github/thumbs/08-no-device.png)](./marketing/iphone/1320x2868/en/08-no-device.png) |
 
 ---
 
@@ -76,6 +62,18 @@ Or build it yourself (see [development](#-development)).
 ### 🖥️ 2 — Install Tailscale on your PC (for remote access)
 
 OpenCode Mobile connects to your OpenCode server over plain HTTP. For **remote access from any network** (not just your WiFi), use [**Tailscale**](https://tailscale.com) — a free, zero-config private mesh VPN.
+
+```
+ 📱 Phone (OpenCode Mobile)
+   │
+   │  ① Tailscale — private VPN mesh, no open ports
+   ▼
+ 🖥️ PC — Tailscale node (e.g. 100.101.102.103)
+   │
+   │  ② localhost:4096 — OpenCode server
+   ▼
+ 🤖 OpenCode server — your code, your tools
+```
 
 #### Step A — Install Tailscale on the PC (server)
 
