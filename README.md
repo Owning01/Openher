@@ -34,20 +34,20 @@
 | Live chat | Sessions | Connect server |
 | :---: | :---: | :---: |
 | [![Live chat](./marketing/github/thumbs/live-chat.png)](./screenshots/chat+thinking.png) | [![Sessions](./marketing/github/thumbs/sessions.png)](./screenshots/home-1.png) | [![Connect server](./marketing/github/thumbs/connect-server.png)](./screenshots/settings-1.png) |
-| **Data modes** | **Full control** | **Get it now** |
-| [![Data modes](./marketing/github/thumbs/data-modes.png)](./screenshots/settings-4.png) | [![Full control](./marketing/github/thumbs/full-control.png)](./screenshots/Settings-3.png) | [![Get it now](./marketing/github/thumbs/get-it-now.png)](./screenshots/Settingsdentrodelchat.png) |
+| **Data modes** | **Full control** | **Chat settings and more** |
+| [![Data modes](./marketing/github/thumbs/data-modes.png)](./screenshots/settings-4.png) | [![Full control](./marketing/github/thumbs/full-control.png)](./screenshots/Settings-3.png) | [![Chat settings and more](./marketing/github/thumbs/get-it-now.png)](./screenshots/Settingsdentrodelchat.png) |
 
 ```
 ┌──────────────────────────────────────────────┐
-│              📱 TU CELULAR                    │
-│          OpenCode Mobile (la app)            │
+│              📱 YOUR PHONE                    │
+│          OpenCode Mobile (the app)           │
 └──────────────────────┬───────────────────────┘
                        │
-                       │  ① Tailscale — VPN privada
-                       │     sin abrir puertos en tu router
+                       │  ① Tailscale — private VPN
+                       │     no open ports on your router
                        ▼
 ┌──────────────────────────────────────────────┐
-│                🖥️ TU PC                       │
+│                🖥️ YOUR PC                     │
 │           Tailscale node                      │
 └──────────────────────┬───────────────────────┘
                        │
@@ -55,7 +55,7 @@
                        ▼
 ┌──────────────────────────────────────────────┐
 │               🤖 OPENCODE                     │
-│     el servidor con tu código y tus tools    │
+│     the server with your code and tools      │
 └──────────────────────────────────────────────┘
 ```
 

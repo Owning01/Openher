@@ -11,10 +11,10 @@
   <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
   <img src="https://img.shields.io/badge/Vite-8.0-646CFF?logo=vite&logoColor=white" alt="Vite"/>
   <img src="https://img.shields.io/badge/Capacitor-8.0-119EFF?logo=capacitor&logoColor=white" alt="Capacitor"/>
-  <img src="https://img.shields.io/badge/212%20tests-%E2%9C%85%20passing-4caf7d" alt="Benchmarks"/>
+  <img src="https://img.shields.io/badge/4%20suites%20de%20tests-%E2%9C%85%20passing-4caf7d" alt="Tests"/>
   <br/>
   <img src="https://img.shields.io/badge/SSE%20streaming-%E2%9C%85-6c8cff" alt="SSE"/>
-  <img src="https://img.shields.io/badge/Offline%20cache-%E2%9C%85-6c8cff" alt="Offline"/>
+  <img src="https://img.shields.io/badge/Cache%20offline-%E2%9C%85-6c8cff" alt="Offline"/>
   <img src="https://img.shields.io/badge/i18n-4%20idiomas-6c8cff" alt="i18n"/>
   <img src="https://img.shields.io/badge/30%2B%20temas-%E2%9C%85-6c8cff" alt="Themes"/>
 </p>
@@ -23,118 +23,43 @@
 
 </div>
 
-> # ⚠️ BETA — App en desarrollo
->
-> **OpenCode Mobile está en fase BETA y desarrollo activo.** Puede contener errores,
-> cambios sin aviso, y funcionalidades incompletas. No está recomendada para uso
-> crítico o de producción. Usala bajo tu propio riesgo.
->
-> Si encontrás un problema, reportalo en [Issues](https://github.com/Owning01/Opencode-Mobile/issues).
-
 ---
 
-## 🕸️ Grafos de dependencias
+<div align="center">
 
-<details>
-<summary><b>📡 Transporte</b> — SSE, polling, cache y cola offline</summary>
+**Tu asistente de codificación AI, desde el celular** — respuestas en streaming, herramientas en tiempo real, terminal, escritorio remoto y control total de la configuración.
 
-```mermaid
-flowchart LR
-    classDef infra fill:#1a1a2e,stroke:#6c8cff,color:#eee
-    classDef core fill:#1e3a5f,stroke:#5ba3e6,color:#eee
-    S(["🖥️ Servidor"]) --> A["🌐 api.ts"]
-    A --> SSE["useSSE.ts<br/>SSE streaming"]
-    A --> Poll["usePolling.ts<br/>Backoff 1s→60s"]
-    A --> Cache["useOfflineCache.ts<br/>IndexedDB"]
-    A --> Queue["useOfflineQueue.ts<br/>Cola offline"]
-    Poll -->|pausa/reanuda| SSE
-    Queue -.->|replay| A
-    class S infra
-    class A,SSE,Poll,Cache,Queue core
+</div>
+
+| Chat en vivo | Sesiones | Conectar servidor |
+| :---: | :---: | :---: |
+| [![Chat en vivo](./marketing/github/thumbs/live-chat.png)](./screenshots/chat+thinking.png) | [![Sesiones](./marketing/github/thumbs/sessions.png)](./screenshots/home-1.png) | [![Conectar servidor](./marketing/github/thumbs/connect-server.png)](./screenshots/settings-1.png) |
+| **Modos de datos** | **Control total** | **Configuración del chat y más** |
+| [![Modos de datos](./marketing/github/thumbs/data-modes.png)](./screenshots/settings-4.png) | [![Control total](./marketing/github/thumbs/full-control.png)](./screenshots/Settings-3.png) | [![Configuración del chat y más](./marketing/github/thumbs/get-it-now.png)](./screenshots/Settingsdentrodelchat.png) |
+
 ```
-</details>
-
-<details>
-<summary><b>🧠 Estado</b> — hooks principales y sus relaciones</summary>
-
-```mermaid
-flowchart LR
-    classDef hook fill:#2d1b4e,stroke:#a78bfa,color:#eee
-    classDef core fill:#1e3a5f,stroke:#5ba3e6,color:#eee
-    C["useConfig"] --> S["useSessions<br/>CRUD + favs"]
-    C --> M["useMessages<br/>send + undo"]
-    C --> A["useAI<br/>agentes/modelos"]
-    C --> Si["useSessionSidecar<br/>todos/diffs"]
-    M -->|optimistic| S
-    S -->|selectedID| M
-    A -->|activeModel| M
-    F["useFeatureFlags"] -.->|toggle| M
-    N["useNetworkMode"] -.->|modo datos| C
-    Shell["useShell"] -->|terminal| M
-    Speech["useSpeechRecognition"] -->|voz| M
-    class C,S,M,A,Si,F,N,Shell,Speech hook
+┌──────────────────────────────────────────────┐
+│              📱 TU CELULAR                    │
+│          OpenCode Mobile (la app)            │
+└──────────────────────┬───────────────────────┘
+                       │
+                       │  ① Tailscale — VPN privada
+                       │     sin abrir puertos en tu router
+                       ▼
+┌──────────────────────────────────────────────┐
+│                🖥️ TU PC                       │
+│           Tailscale node                      │
+└──────────────────────┬───────────────────────┘
+                       │
+                       │  ② localhost:4096
+                       ▼
+┌──────────────────────────────────────────────┐
+│               🤖 OPENCODE                     │
+│     el servidor con tu código y tus tools    │
+└──────────────────────────────────────────────┘
 ```
-</details>
 
-<details>
-<summary><b>🖥️ UI</b> — App, vistas principales y modales</summary>
-
-```mermaid
-flowchart LR
-    classDef ui fill:#3b1f3b,stroke:#f0c060,color:#eee
-    classDef modal fill:#4a2040,stroke:#d08050,color:#eee
-    App["App.tsx<br/>Orquestador"] --> CV["ChatView"]
-    App --> SL["SessionList"]
-    App --> SP["SettingsPanel"]
-    App --> HP["HelpPage"]
-    App --> Mod["15 modales<br/>⬇"]
-    CV --> MB["MessageBubble"]
-    CV --> C["Composer"]
-    CV --> ML["MessageList"]
-    CV --> TB["ThinkingBlock"]
-    CV --> TP["ToolPart"]
-    SL --> SC["SessionCard"]
-    SL --> AL["ArchivedList"]
-    SP --> PM["ProviderManager"]
-    SP --> TPk["ThemePicker"]
-    subgraph Modales[" "]
-        DIFF["DiffViewer"]
-        FE["FileEditor"]
-        TV["TerminalView"]
-        MCP["MCPBrowser"]
-        TC["ThemeCreator"]
-        IL["ImageLightbox"]
-        FM["FavoritesManager"]
-        QP["QuestionPrompt"]
-        PP["PermissionPrompt"]
-        SB["SkillBrowser"]
-    end
-    class App,CV,SL,SP,HP ui
-    class DIFF,FE,TV,MCP,TC,IL,FM,QP,PP,SB,AL,PM,TPk modal
-```
-</details>
-
-<details>
-<summary><b>🔧 Transversal</b> — servicios compartidos</summary>
-
-```mermaid
-flowchart LR
-    classDef cross fill:#1b3b2b,stroke:#4caf7d,color:#eee
-    I18N["🌍 i18n.ts<br/>4 idiomas"]
-    Theme["🎨 resolveTheme.ts<br/>30+ temas"]
-    Styles["📄 styles.css<br/>~5000 líneas"]
-    Types["📐 types.ts<br/>38 tipos"]
-    Icons["🖼️ Icons.tsx<br/>31 SVGs"]
-    Bench["📊 benchmarks/<br/>212 tests"]
-    I18N --> App
-    Theme --> ThemePicker
-    Styles --> App
-    Types --> App
-    Icons --> UI
-    Bench -.-> API
-    class I18N,Theme,Styles,Types,Icons,Bench cross
-```
-</details>
+---
 
 ## 🚀 Empezar en 2 pasos
 
@@ -217,7 +142,7 @@ Si siempre estás en la misma red:
 
 ---
 
-## 📱 Datos móviles / Mobile Data
+## 📱 Datos móviles
 
 <details>
 <summary><b>Datos móviles — modos de consumo</b> (clic para expandir)</summary>
@@ -239,7 +164,7 @@ Cifras estimadas sobre HTTP/2 comprimido con ~10 sesiones en el servidor.
 
 ---
 
-> 📖 **Catálogo completo**: [`CATALOGO.md`](CATALOGO.md) — 47 componentes, 27 hooks, 35 endpoints, grafos, guía para LLM.
+> 📖 **Catálogo completo**: [`CATALOGO.md`](CATALOGO.md) — 57 componentes, 32 hooks, 36 endpoints, grafos, guía para LLM.
 
 ## 📁 Estructura del proyecto
 
@@ -249,9 +174,9 @@ Cifras estimadas sobre HTTP/2 comprimido con ~10 sesiones en el servidor.
 ```
 web/
 ├── src/
-│   ├── components/       # 43 componentes UI
-│   ├── hooks/            # 26 hooks React
-│   ├── api.ts            # Cliente HTTP (30 endpoints)
+│   ├── components/       # 57 componentes UI
+│   ├── hooks/            # 32 hooks React
+│   ├── api.ts            # Cliente HTTP (36 endpoints)
 │   ├── App.tsx           # Orquestador principal
 │   ├── types.ts          # Tipos TypeScript
 │   ├── i18n.ts           # 4 idiomas
