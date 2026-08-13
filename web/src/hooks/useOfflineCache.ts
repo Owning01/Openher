@@ -13,16 +13,6 @@ function isEncoded(val: unknown): boolean {
   return typeof val === "string" && val.startsWith(ENC_PREFIX)
 }
 
-async function encryptMessages(messages: MessageEnvelope[]): Promise<MessageEnvelope[]> {
-  return Promise.all(messages.map(async (msg) => ({
-    ...msg,
-    parts: await Promise.all((msg.parts || []).map(async (part) => ({
-      ...part,
-      text: part.text ? ENC_PREFIX + await encrypt(part.text) : part.text,
-    }))),
-  })))
-}
-
 async function decryptMessages(messages: MessageEnvelope[]): Promise<MessageEnvelope[]> {
   return Promise.all(messages.map(async (msg) => ({
     ...msg,
@@ -31,6 +21,14 @@ async function decryptMessages(messages: MessageEnvelope[]): Promise<MessageEnve
       text: part.text && isEncoded(part.text) ? await decrypt(part.text.slice(4)) : part.text,
     }))),
   })))
+}
+
+// Hash barato (sin crypto) de un part para detectar cambios de texto: los
+// appends cambian length; los replaces cambian el prefijo. Permite reusar el
+// ciphertext guardado de los parts intactos sin desencriptar el historial.
+function partHash(part: { id: string; text?: string }): string {
+  const t = part.text ?? ""
+  return `${part.id}|${t.length}|${t.slice(0, 8)}`
 }
 
 function deleteDBWithRetry(attempts = 8): Promise<void> {
@@ -122,7 +120,7 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
     try {
       const tx = db.transaction(DB_STORES.messages, "readwrite")
       const store = tx.objectStore(DB_STORES.messages)
-      const existing = await new Promise<{ sessionID: string; messages: MessageEnvelope[]; cachedAt: number } | null>((resolve) => {
+      const existing = await new Promise<{ sessionID: string; messages: MessageEnvelope[]; hashes?: Record<string, string>; cachedAt: number } | null>((resolve) => {
         const req = store.get(sessionID)
         req.onsuccess = () => resolve(req.result ?? null)
         req.onerror = () => resolve(null)
@@ -130,23 +128,63 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
 
       // Merge por id: la caché NUNCA se encoge — solo agrega/actualiza con lo nuevo.
       let merged = messages
+      let prevHashes: Record<string, string> | undefined
       if (existing?.messages?.length) {
+        // Los textos de la caché están CIFRADOS: no se puede comparar contenido
+        // contra lo nuevo sin descifrar. Se reusa el ciphertext por part cuando
+        // el hash (length + prefijo) coincide — así los parts streamed nuevos se
+        // encriptan SOLOS (O(deltas)) en vez de re-encriptar todo el historial.
         try {
-          const decrypted = await decryptMessages(existing.messages)
           const map = new Map<string, MessageEnvelope>()
-          for (const m of decrypted) map.set(m.info.id, m)
+          for (const m of existing.messages) map.set(m.info.id, m)
           for (const m of messages) map.set(m.info.id, m)
           merged = [...map.values()].sort((a, b) => (b.info.time.created || 0) - (a.info.time.created || 0))
+          prevHashes = existing.hashes
         } catch {
-          // si la decriptación falla, conservamos solo lo nuevo
+          // si el merge falla, conservamos solo lo nuevo
         }
       }
       if (merged.length > CACHE_MAX_MESSAGES_PER_SESSION) {
         merged = merged.slice(0, CACHE_MAX_MESSAGES_PER_SESSION)
       }
 
-      const encrypted = await encryptMessages(merged)
-      store.put({ sessionID, messages: encrypted, cachedAt: Date.now() })
+      // Encriptado incremental: cifra SOLO los parts cuyo hash cambió (o que no
+      // tienen ciphertext previo); el resto reusa el texto cifrado guardado.
+      // Los hashes guardados se calcularon sobre el PLAINTEXT al escribir —
+      // comparar siempre contra ellos (nunca re-hashear el ciphertext).
+      const prevByPartID = new Map<string, { text: string; hash: string }>()
+      if (existing?.messages && prevHashes) {
+        for (const m of existing.messages) {
+          for (const p of m.parts) {
+            const savedHash = prevHashes[p.id]
+            if (typeof p.text === "string" && isEncoded(p.text) && savedHash) {
+              prevByPartID.set(p.id, { text: p.text, hash: savedHash })
+            }
+          }
+        }
+      }
+      const encrypted = await Promise.all(merged.map(async (msg) => ({
+        ...msg,
+        parts: await Promise.all((msg.parts || []).map(async (part) => {
+          const prev = prevByPartID.get(part.id)
+          const hash = partHash(part)
+          if (prev && prev.hash === hash && typeof part.text === "string") {
+            return { ...part, text: prev.text }
+          }
+          // Part conservado de la caché (fila vieja sin hashes): ya es ciphertext.
+          if (typeof part.text === "string" && isEncoded(part.text)) return part
+          if (!part.text) return part
+          return { ...part, text: ENC_PREFIX + await encrypt(part.text) }
+        })),
+      })))
+      // hashes solo para parts con texto: guarda el hash del texto NUEVO.
+      const hashes: Record<string, string> = {}
+      for (const m of merged) {
+        for (const p of m.parts) {
+          if (p.text) hashes[p.id] = partHash(p)
+        }
+      }
+      store.put({ sessionID, messages: encrypted, hashes, cachedAt: Date.now() })
     } catch (err) { console.error("[OfflineCache] cacheMessages:", err) }
   }, [flags.offlineCache])
 

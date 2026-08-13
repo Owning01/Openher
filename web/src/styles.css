@@ -8867,3 +8867,43 @@ mark {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+
+/* ===== WCAG 2.3.3 — prefers-reduced-motion =====
+   Usuarios que piden menos movimiento: las animaciones/transiciones se
+   congelan (0.01ms) y el scroll suave se vuelve instantáneo. Excepción:
+   los spinners de carga (grid-spinner, spin) siguen animando porque son
+   feedback de progreso esencial, no decoración. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .gs,
+  .gs-pulse,
+  .spin,
+  .loading-spinner,
+  [class*="spinner"] {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+
+/* Texto plano durante el streaming de mensajes largos (evita re-parsear
+   markdown por delta; el parseo completo ocurre al completar el turno). */
+.md-plain-stream {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--md-text, var(--text));
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}

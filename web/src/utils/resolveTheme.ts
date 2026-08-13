@@ -104,7 +104,94 @@ export function themeToCSSVars(resolved: Record<string, string>): Record<string,
   vars["--md-list-num"] ??= resolved["info"] ?? resolved["primary"] ?? "#888"
   vars["--md-image"] ??= resolved["primary"] ?? "#888"
   vars["--md-image-text"] ??= resolved["info"] ?? resolved["primary"] ?? "#888"
+
+  // Clamp WCAG: los colores de texto/acento que no llegan al contraste mínimo
+  // contra su fondo real se mezclan hacia negro/blanco (preserva el matiz del
+  // tema, ajusta solo la luminosidad). El texto sobre botones usa --on-primary
+  // (var propia) — clampear --primary no afecta el contraste del botón.
+  const bg = vars["--bg"] ?? "#000"
+  const surface = vars["--surface-strong"] ?? bg
+  // El texto principal se clamp contra el fondo que le da PEOR contraste.
+  const textFg = vars["--text"] ?? "#fff"
+  const textBg = contrast(textFg, bg) <= contrast(textFg, surface) ? bg : surface
+  clampVar(vars, "--text", textBg, 4.5)
+  clampVar(vars, "--md-text", textBg, 4.5)
+  clampVar(vars, "--muted", bg, 4.5)
+  clampVar(vars, "--muted-strong", bg, 4.5)
+  clampVar(vars, "--primary", bg, 3)
+  clampVar(vars, "--warning", bg, 3)
+  clampVar(vars, "--success", bg, 3)
+  clampVar(vars, "--danger", bg, 3)
+  clampVar(vars, "--info", bg, 3)
+  clampVar(vars, "--md-heading", bg, 4.5)
+  clampVar(vars, "--md-link", bg, 3)
+  clampVar(vars, "--md-link-text", bg, 4.5)
+  clampVar(vars, "--md-quote", bg, 4.5)
+  clampVar(vars, "--md-emph", bg, 4.5)
+  clampVar(vars, "--md-strong", bg, 4.5)
+  clampVar(vars, "--md-list-item", bg, 4.5)
+  clampVar(vars, "--md-list-num", bg, 4.5)
+  clampVar(vars, "--md-image", bg, 3)
+  clampVar(vars, "--md-image-text", bg, 4.5)
+  // Código: el fondo real de inline/bloques es --surface-strong.
+  clampVar(vars, "--md-code", surface, 4.5)
+  for (const name of ["--code-comment", "--code-keyword", "--code-function", "--code-string", "--code-builtin", "--code-attr", "--code-text"]) {
+    clampVar(vars, name, surface, 4.5)
+  }
   return vars
+}
+
+function clampVar(vars: Record<string, string>, name: string, bg: string, min: number) {
+  const fg = vars[name]
+  if (!fg || !/^#[0-9a-fA-F]{3,8}$/.test(fg)) return
+  const fixed = ensureContrast(fg, bg, min)
+  if (fixed !== fg) vars[name] = fixed
+}
+
+// Mezcla `fg` hacia negro/blanco hasta alcanzar contraste >= min contra `bg`.
+// Búsqueda por muestreo (20 pasos x 2 direcciones): barata, corre 1 vez por tema.
+function ensureContrast(fg: string, bg: string, min: number): string {
+  if (contrast(fg, bg) >= min) return fg
+  for (let i = 1; i <= 20; i++) {
+    const t = i / 20
+    for (const target of ["#000000", "#ffffff"]) {
+      const mixed = mixHex(fg, target, t)
+      if (contrast(mixed, bg) >= min) return mixed
+    }
+  }
+  return fg
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const m = hex.replace("#", "")
+  const full = m.length === 3 ? m.split("").map((c) => c + c).join("") : m
+  return [parseInt(full.slice(0, 2), 16), parseInt(full.slice(2, 4), 16), parseInt(full.slice(4, 6), 16)]
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const c = (v: number) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, "0")
+  return `#${c(r)}${c(g)}${c(b)}`
+}
+
+function mixHex(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = hexToRgb(a)
+  const [br, bg, bb] = hexToRgb(b)
+  return rgbToHex(ar + (br - ar) * t, ag + (bg - ag) * t, ab + (bb - ab) * t)
+}
+
+function luminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex).map((v) => {
+    const s = v / 255
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+export function contrast(a: string, b: string): number {
+  const l1 = luminance(a)
+  const l2 = luminance(b)
+  const [hi, lo] = l1 >= l2 ? [l1, l2] : [l2, l1]
+  return (hi + 0.05) / (lo + 0.05)
 }
 
 export function applyThemeVars(vars: Record<string, string>) {

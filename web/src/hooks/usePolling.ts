@@ -19,6 +19,7 @@ export function usePolling(
   savedCallback.current = callback
   const failCountRef = useRef(0)
   const pausedRef = useRef(false)
+  const busyRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const onVisibilityRef = useRef<(() => void) | null>(null)
   const controlRef = useRef<PollingControl>({ pause: () => {}, resume: () => {}, fail: () => {}, succeed: () => {} })
@@ -27,6 +28,7 @@ export function usePolling(
     let mounted = true
     pausedRef.current = false
     failCountRef.current = 0
+    busyRef.current = false
 
     function isPageVisible() {
       return document.visibilityState === "visible"
@@ -37,7 +39,11 @@ export function usePolling(
     }
 
     async function tick() {
-      if (!mounted || !isPageVisible() || pausedRef.current) return
+      // Anti-solapamiento: si el tick anterior (fetch de sesiones + mensajes)
+      // sigue en vuelo, descartar este — evita 2-3 fetches concurrentes
+      // cuando el server tarda más que el intervalo.
+      if (!mounted || !isPageVisible() || pausedRef.current || busyRef.current) return
+      busyRef.current = true
       try {
         await savedCallback.current()
         if (streamActive) failCountRef.current = 0
@@ -45,6 +51,8 @@ export function usePolling(
       } catch (e) {
         failCountRef.current++
         console.warn("poll error", failCountRef.current, e)
+      } finally {
+        busyRef.current = false
       }
     }
 

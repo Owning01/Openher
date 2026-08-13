@@ -16,7 +16,6 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   const abortRef = useRef<AbortController | null>(null)
   const reconnectAttemptRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const heartbeatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
   const onEventRef = useRef(onEvent)
   onEventRef.current = onEvent
@@ -33,15 +32,26 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   const sessionIDRef = useRef<string | null | undefined>(sessionID)
   sessionIDRef.current = sessionID
 
-  const clearHeartbeat = useCallback(() => {
-    if (heartbeatTimerRef.current) {
-      clearTimeout(heartbeatTimerRef.current)
-      heartbeatTimerRef.current = null
-    }
-  }, [])
+    // Watchdog de heartbeat: 1 SOLO timer permanente por conexión (startHeartbeat
+    // abajo, junto a scheduleReconnect). Cada evento solo actualiza un timestamp
+    // (touch) — sin clearTimeout/setTimeout por evento (10-30/s durante streaming
+    // = GC churn evitable). Si pasa el timeout sin eventos, fuerza reconexión.
+    const lastEventAtRef = useRef(0)
+    const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const connect = useCallback(async () => {
-    if (!config || !mountedRef.current) return
+    const clearHeartbeat = useCallback(() => {
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current)
+        heartbeatTimerRef.current = null
+      }
+    }, [])
+
+    const touch = useCallback(() => {
+      lastEventAtRef.current = Date.now()
+    }, [])
+
+    const connect = useCallback(async () => {
+      if (!config || !mountedRef.current) return
     // El dialecto resuelve el endpoint: v2 expone SSE en /api/event.
     const v2 = (await getApiVersion(config)) === "v2"
 
@@ -66,18 +76,6 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
       headers.Authorization = `Basic ${toBase64(`${config.username}:${config.password}`)}`
     }
 
-    // Refresca el watchdog con cualquier evento; el timeout fuerza reconexión.
-    const resetHeartbeat = (reader: ReadableStreamDefaultReader<Uint8Array>) => {
-      clearHeartbeat()
-      heartbeatTimerRef.current = setTimeout(() => {
-        if (!mountedRef.current) return
-        abortRef.current?.abort()
-        reader.cancel().catch(() => {})
-        setStreamState("reconnecting")
-        scheduleReconnect()
-      }, SSE_HEARTBEAT_TIMEOUT_MS)
-    }
-
     try {
       setStreamState("reconnecting")
       const response = await fetch(url, {
@@ -94,6 +92,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
 
       const reader = response.body.getReader()
       readerRef.current = reader
+      startHeartbeat(reader)
       const decoder = new TextDecoder()
       let buffer = ""
 
@@ -147,13 +146,13 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
               currentEvent.properties = { raw: line.slice(6) }
             }
           } else if (line === "" && currentEvent.type) {
-            resetHeartbeat(reader)
+            touch()
             dispatch(currentEvent)
             currentEvent = {}
           }
         }
         if (currentEvent.type) {
-          resetHeartbeat(reader)
+          touch()
           dispatch(currentEvent)
         }
       }
@@ -197,6 +196,21 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
       if (mountedRef.current) connect()
     }, delay)
   }, [connect])
+
+  // Heartbeat: 1 timer por conexión que verifica el timestamp del último evento.
+  // Cada 5s checa; si no hubo eventos en SSE_HEARTBEAT_TIMEOUT_MS, reconecta.
+  const startHeartbeat = useCallback((reader: ReadableStreamDefaultReader<Uint8Array>) => {
+    lastEventAtRef.current = Date.now()
+    clearHeartbeat()
+    heartbeatTimerRef.current = setInterval(() => {
+      if (!mountedRef.current) return
+      if (Date.now() - lastEventAtRef.current < SSE_HEARTBEAT_TIMEOUT_MS) return
+      abortRef.current?.abort()
+      reader.cancel().catch(() => {})
+      setStreamState("reconnecting")
+      scheduleReconnect()
+    }, 5000)
+  }, [clearHeartbeat, scheduleReconnect])
 
   useEffect(() => {
     mountedRef.current = true

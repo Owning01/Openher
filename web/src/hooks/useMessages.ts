@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
 import { api } from "../api"
 import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "../utils/parseCommand"
+import { computeRenderedMessages } from "../utils/rendered"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
@@ -69,79 +70,16 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // materializa en el mensaje assistant del padre que los desplegó. El partID
   // se conserva entre updates (running→completed), así el ancla es estable.
   const subagentAnchorRef = useRef<Map<string, { sessionID: string; messageID: string }>>(new Map())
+  // Caché de RenderedMessage por id de mensaje fuente (ver renderedMessages):
+  // los deltas solo invalidan el mensaje tocado; el resto reusa su objeto y
+  // las bubbles memoizadas no re-renderizan.
+  const renderedCacheRef = useRef<Map<string, { src: MessageEnvelope; rendered: RenderedMessage; diffs?: import("../types").FileDiff[]; turnMode?: string; dataMode?: DataMode }>>(new Map())
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
-    const all = [...messages, ...optimisticUserMessages]
-    const out: RenderedMessage[] = []
-    // Auto-sana duplicados de id (ver loadSelected): nunca dos bubbles iguales.
-    const seenIds = new Set<string>()
-    // Los diffs del turno (info.summary.diffs del user message) se muestran al
-    // final del turno: en el ÚLTIMO mensaje assistant que le sigue.
-    let pendingDiffs: import("../types").FileDiff[] | undefined
-    let lastAssistantId: string | null = null
-    const diffForMessage = new Map<string, import("../types").FileDiff[]>()
-    // El user message no trae mode del server (solo el assistant): el modo del
-    // turno (plan/build) se toma del primer assistant que le sigue.
-    const turnModeForUser = new Map<string, string>()
-    let lastUserID: string | null = null
-    for (const message of all) {
-      if (seenIds.has(message.info.id)) continue
-      seenIds.add(message.info.id)
-      if (message.info.role === "user") {
-        pendingDiffs = message.info.summary?.diffs
-        lastAssistantId = null
-        lastUserID = message.info.id
-      } else {
-        if (pendingDiffs && pendingDiffs.length > 0) {
-          if (lastAssistantId) diffForMessage.delete(lastAssistantId)
-          diffForMessage.set(message.info.id, pendingDiffs)
-          lastAssistantId = message.info.id
-        }
-        if (lastUserID && message.info.mode && !turnModeForUser.has(lastUserID)) {
-          turnModeForUser.set(lastUserID, message.info.mode)
-        }
-      }
-    }
-    for (const message of all) {
-      let text = ""
-      let hasCompaction = false
-      const thinkingParts: Array<{ id: string; text: string; time?: { start?: number; end?: number } }> = []
-      const toolParts: Array<{ id: string; type: string; sessionID?: string; text?: string; callID?: string; tool?: string; state?: MessageEnvelope["parts"][number]["state"] }> = []
-      const textBlocks: string[] = []
-      for (const part of message.parts) {
-        if (part.type === "tool" || toolPartTypes.has(part.type)) {
-          toolParts.push({
-            id: part.id,
-            type: part.type,
-            sessionID: part.sessionID,
-            text: part.text,
-            callID: part.callID,
-            tool: part.tool,
-            state: part.state
-          })
-          continue
-        }
-        const t = part.text
-        if (t) {
-          if (part.type === "text" || part.type === "compaction") {
-            textBlocks.push(t)
-            if (part.type === "compaction") hasCompaction = true
-          } else if (part.type === "reasoning" || part.type === "thinking") {
-            thinkingParts.push({ id: part.id, text: t, time: part.time })
-          }
-        }
-      }
-      text = textBlocks.join("\n\n").trim()
-      const hasImages = message.parts.some((p) => p.type === "image")
-      // thinkingParts cuenta como contenido visible: durante el streaming del
-      // reasoning el mensaje NO tiene texto aún — si se filtra aquí, el thinking
-      // solo aparece cuando llega el primer pedazo de texto (bug: "el thinking
-      // llega completo al final").
-      if (text || thinkingParts.length > 0 || toolParts.length > 0 || hasImages) {
-        const turnMode = message.info.mode ?? (message.info.role === "user" ? turnModeForUser.get(message.info.id) : undefined)
-        out.push({ ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffForMessage.get(message.info.id), dataMode, turnMode })
-      }
-    }
+    // Los deltas solo invalidan el mensaje tocado; el resto reusa su objeto
+    // RenderedMessage (referencia estable → bubbles memoizadas no re-renderizan).
+    const { out, cache } = computeRenderedMessages([...messages, ...optimisticUserMessages], dataMode, renderedCacheRef.current)
+    renderedCacheRef.current = cache
     return out
   }, [messages, optimisticUserMessages, dataMode])
 
@@ -474,12 +412,19 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           const incoming = part.text ?? ""
           // Los tool parts (task/subagent) suelen llegar SIN texto: solo traen
           // state.status (running→completed) y tool. Mergear siempre esos campos.
+          // Compare shallow por campo (evita JSON.stringify en el hot path).
           const newState = part.state && typeof part.state === "object" ? part.state : undefined
-          const stateChanged = newState !== undefined && JSON.stringify(p.state ?? null) !== JSON.stringify(newState)
+          const prevState = p.state && typeof p.state === "object" ? p.state : undefined
+          const stateChanged = newState !== undefined
+            ? newState !== prevState &&
+              ((newState as { status?: string }).status ?? "") !== ((prevState as { status?: string }).status ?? "")
+            : false
           const toolChanged = part.tool !== undefined && part.tool !== p.tool
           // El time (start/end) también cambia sin tocar texto: p.ej. el
           // reasoning final llega con time.end aunque el texto ya esté completo.
-          const timeChanged = part.time !== undefined && JSON.stringify(p.time ?? null) !== JSON.stringify(part.time)
+          const timeChanged = part.time !== undefined && p.time !== undefined
+            ? part.time.start !== p.time.start || part.time.end !== p.time.end
+            : part.time !== undefined && p.time === undefined
           if (!incoming && p.text && !stateChanged && !toolChanged && !timeChanged) return p
           if (p.text === incoming && (part.type ?? p.type) === p.type && !stateChanged && !toolChanged && !timeChanged) return p
           changed = true

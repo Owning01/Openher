@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict'
-import { createTranslator, languageOptions, normalizeLanguage } from './i18n.ts'
+import { createTranslator, languageOptions, normalizeLanguage, loadLanguage } from './i18n.ts'
+
+// Los chunks por idioma se cargan bajo demanda: cargar antes de usar.
+await loadLanguage('en')
+await loadLanguage('es')
+await loadLanguage('it')
+await loadLanguage('zh-TW')
 
 assert.equal(normalizeLanguage('es'), 'es')
 assert.equal(normalizeLanguage('it'), 'it')

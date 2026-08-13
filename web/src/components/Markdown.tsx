@@ -1,4 +1,4 @@
-import { memo, type ComponentProps } from "react"
+import { memo, type ComponentProps, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { createLowlight } from "lowlight"
@@ -160,14 +160,30 @@ function remarkHighlight(query?: string) {
 
 const components = { table: Table, a: Link }
 
+// Caché del árbol renderizado por (texto, highlight): reusar el elemento evita
+// re-parsear react-markdown + lowlight en re-renders sin cambio de texto
+// (scrolls, tab switches, remounts). LRU acotado a 16 mensajes.
+const mdCache = new Map<string, ReactNode>()
+const MD_CACHE_MAX = 16
+
 export const Markdown = memo(function Markdown({ text, highlight }: { text: string; highlight?: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkHighlight(highlight)]}
-      rehypePlugins={[rehypeHighlightLocal]}
-      components={components}
-    >
-      {text}
-    </ReactMarkdown>
-  )
+  const key = `${highlight ?? ""}\u0000${text}`
+  let el = mdCache.get(key)
+  if (!el) {
+    el = (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkHighlight(highlight)]}
+        rehypePlugins={[rehypeHighlightLocal]}
+        components={components}
+      >
+        {text}
+      </ReactMarkdown>
+    )
+    if (mdCache.size >= MD_CACHE_MAX) {
+      const oldest = mdCache.keys().next().value
+      if (oldest !== undefined) mdCache.delete(oldest)
+    }
+    mdCache.set(key, el)
+  }
+  return el
 })

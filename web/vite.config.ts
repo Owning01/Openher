@@ -1,9 +1,15 @@
 import { defineConfig } from "vite"
-import react from "@vitejs/plugin-react"
+import react, { reactCompilerPreset } from "@vitejs/plugin-react"
+import babel from "@rolldown/plugin-babel"
 
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  plugins: [
+    react(),
+    // React Compiler: memoización automática. target "18" → usa
+    // react-compiler-runtime (React 18 no trae react/compiler-runtime).
+    babel({ presets: [reactCompilerPreset({ target: "18" })] }),
+  ],
   build: {
     rollupOptions: {
       output: {
