@@ -127,12 +127,14 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [desktopSaved, setDesktopSaved] = useState(false)
 
   // ===== OpenCode Go (uso vía API pública, varias cuentas) =====
-  const [goKeys, setGoKeys] = useState<string[]>(() => loadGoAccounts())
+  // Las keys se cargan cifradas (AES-GCM) y nunca se muestran: el input es
+  // password sin toggle, no seleccionable, y fuera de foco muestra "••••••••".
+  const [goKeys, setGoKeys] = useState<string[]>([])
+  const [goEditing, setGoEditing] = useState<Record<number, boolean>>({})
   const [goUsageMap, setGoUsageMap] = useState<Record<string, GoUsage | null>>({})
   const [goLoadingMap, setGoLoadingMap] = useState<Record<string, boolean>>({})
   const [goErrorMap, setGoErrorMap] = useState<Record<string, string | null>>({})
   const [goSaved, setGoSaved] = useState(false)
-  const [showGoKey, setShowGoKey] = useState<Record<number, boolean>>({})
 
   const checkGo = useCallback(async (key: string) => {
     const trimmed = key.trim()
@@ -174,7 +176,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   // Auto-save (debounced) de las API keys; auto-consulta al abrir si ya hay keys.
   useEffect(() => {
     const timer = setTimeout(() => {
-      saveGoAccounts(goKeys)
+      void saveGoAccounts(goKeys)
       setGoSaved(true)
       setTimeout(() => setGoSaved(false), 2000)
     }, 700)
@@ -182,7 +184,13 @@ export const SettingsPanel = memo(function SettingsPanel({
   }, [goKeys])
 
   useEffect(() => {
-    for (const key of loadGoAccounts()) if (key.trim()) void checkGo(key)
+    let cancelled = false
+    void loadGoAccounts().then((keys) => {
+      if (cancelled) return
+      setGoKeys(keys)
+      for (const k of keys) if (k.trim()) void checkGo(k)
+    })
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -893,17 +901,20 @@ export const SettingsPanel = memo(function SettingsPanel({
               <div className="go-account-row">
                 <div className="password-wrapper">
                   <input
-                    type={showGoKey[i] ? "text" : "password"}
-                    value={key}
+                    type="password"
+                    value={goEditing[i] ? key : (key ? "••••••••" : "")}
                     onChange={(e) => updateGoKey(i, e.target.value)}
+                    onFocus={() => setGoEditing((m) => ({ ...m, [i]: true }))}
+                    onBlur={() => setGoEditing((m) => ({ ...m, [i]: false }))}
+                    onCopy={(e) => e.preventDefault()}
                     placeholder={t('settings.goApiKeyPlaceholder')}
                     autoCapitalize="none"
                     autoCorrect="off"
                     autoComplete="off"
+                    spellCheck={false}
+                    className="go-key-input"
+                    aria-label={t('settings.goAccount')}
                   />
-                  <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowGoKey((m) => ({ ...m, [i]: !m[i] }))} tabIndex={-1}>
-                    {showGoKey[i] ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                  </button>
                 </div>
                 <div className="go-account-btns">
                   <button

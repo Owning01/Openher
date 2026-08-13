@@ -407,9 +407,22 @@ func enumMonitors() []monitorInfoOut {
 
 // Proxy de la API pública de OpenCode Go (https://opencode.ai/zen/go/v1/usage):
 // el navegador/WebView no puede consultarla directo por CORS, el agente sí
-// (Go no aplica CORS). GET /gousage?key=<api key> → JSON de uso tal cual.
+// (Go no aplica CORS). La key va en el BODY (POST {"key": "..."}) — nunca en
+// la URL: un query string quedaría en logs/proxies/historial. Se acepta GET
+// ?key= solo por compatibilidad con clientes viejos.
 func (s *server) handleGoUsage(w http.ResponseWriter, r *http.Request) {
-	key := r.URL.Query().Get("key")
+	var key string
+	if r.Method == http.MethodPost {
+		var payload struct {
+			Key string `json:"key"`
+		}
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		if err := json.Unmarshal(body, &payload); err == nil {
+			key = payload.Key
+		}
+	} else {
+		key = r.URL.Query().Get("key")
+	}
 	if key == "" {
 		http.Error(w, `{"error":"missing key"}`, http.StatusBadRequest)
 		return

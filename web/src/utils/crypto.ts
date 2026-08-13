@@ -8,13 +8,14 @@ function keyToBase64(key: CryptoKey): Promise<string> {
 
 function base64ToKey(b64: string): Promise<CryptoKey> {
   const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-  return crypto.subtle.importKey("raw", raw, ALGO, false, ["encrypt", "decrypt"])
+  return crypto.subtle.importKey("raw", raw, ALGO, true, ["encrypt", "decrypt"])
 }
 
 async function getOrCreateKey(): Promise<CryptoKey> {
   const stored = sessionStorage.getItem(KEY_STORAGE)
   if (stored) return base64ToKey(stored)
-  const key = await crypto.subtle.generateKey({ name: ALGO, length: KEY_LEN }, false, ["encrypt", "decrypt"])
+  // extractable: true es OBLIGATORIO — exportKey falla con keys no extraíbles.
+  const key = await crypto.subtle.generateKey({ name: ALGO, length: KEY_LEN }, true, ["encrypt", "decrypt"])
   const b64 = await keyToBase64(key)
   sessionStorage.setItem(KEY_STORAGE, b64)
   return key

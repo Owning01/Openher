@@ -67,8 +67,11 @@ export const SessionList = memo(function SessionList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
-  const [recentLimit, setRecentLimit] = useState(5)
+  // Recientes: arranca en 6 y carga +10 con scroll infinito (desktop scrollea
+  // la lista con barra propia; móvil crece hasta el final).
+  const [recentLimit, setRecentLimit] = useState(6)
   const recentSentinelRef = useRef<HTMLDivElement | null>(null)
+  const recentListRef = useRef<HTMLDivElement | null>(null)
 
   const recentFiltered = useMemo(
     () => recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)),
@@ -170,6 +173,7 @@ export const SessionList = memo(function SessionList({
   }, [selectedProjectDir])
 
   // Lazy loading de recientes: al llegar al final del scroll se cargan +10.
+  // root = la lista scrolleable (desktop): el sentinel intersecta al scrollear.
   useEffect(() => {
     if (recentLimit >= recentFiltered.length) return
     const el = recentSentinelRef.current
@@ -180,16 +184,25 @@ export const SessionList = memo(function SessionList({
           setRecentLimit((n) => Math.min(n + 10, recentFiltered.length))
         }
       },
-      { root: containerRef.current, rootMargin: "120px" }
+      { root: recentListRef.current ?? containerRef.current, rootMargin: "120px" }
     )
     io.observe(el)
     return () => io.disconnect()
   }, [recentLimit, recentFiltered.length, collapsedSections.recent])
 
-  // Si cambia el set de recientes (o se reabre la sección), volver al tope.
+  // Reset al REABRIR la sección (volver al tope). No se dispara por los polls:
+  // el contenido real se detecta por firma de ids (el array cambia de identidad
+  // en cada refresh — resetear por length causaba el salto del scroll arriba).
+  const recentSigRef = useRef("")
   useEffect(() => {
-    setRecentLimit(5)
-  }, [recentSessions.length, collapsedSections.recent])
+    setRecentLimit((n) => Math.min(Math.max(n, 6), recentFiltered.length || 1))
+  }, [collapsedSections.recent])
+  useEffect(() => {
+    const sig = recentFiltered.map((s) => s.id).join(",")
+    if (sig === recentSigRef.current) return
+    recentSigRef.current = sig
+    setRecentLimit((n) => Math.min(Math.max(n, 6), recentFiltered.length || 1))
+  }, [recentFiltered])
 
   const notices = <ConnectionNotices connectionState={connectionState} />
 
@@ -297,7 +310,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
             if (favoriteSessions.length === 0) return null
             return (
               <div className="quick-access-list" id="quick-favorites" role="tabpanel">
-                {favoriteSessions.slice(0, 5).map((session) => (
+                {favoriteSessions.map((session) => (
                   <QuickAccessCard key={session.id} session={session} isFavorite
                     onOpen={onOpen} onToggleFavorite={onToggleFavorite} />
                 ))}
@@ -314,7 +327,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
             </div>
           )}
           {!collapsedSections.recent && (
-            <div className="quick-access-list" id="quick-recent" role="tabpanel">
+            <div className="quick-access-list" id="quick-recent" role="tabpanel" ref={recentListRef}>
               {recentFiltered.slice(0, recentLimit).map((session) => (
                 confirmingDismissId === session.id ? (
                   <div key={session.id} className="quick-access-card confirming-dismiss" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
