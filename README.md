@@ -37,6 +37,28 @@
 | **Data modes** | **Full control** | **Get it now** |
 | [![Data modes](./marketing/github/thumbs/07-hero.png)](./marketing/iphone/1320x2868/en/07-hero.png) | [![Full control](./marketing/github/thumbs/06-device-bottom.png)](./marketing/iphone/1320x2868/en/06-device-bottom.png) | [![Get it now](./marketing/github/thumbs/08-no-device.png)](./marketing/iphone/1320x2868/en/08-no-device.png) |
 
+```
+┌──────────────────────────────────────────────┐
+│              📱 TU CELULAR                    │
+│          OpenCode Mobile (la app)            │
+└──────────────────────┬───────────────────────┘
+                       │
+                       │  ① Tailscale — VPN privada
+                       │     sin abrir puertos en tu router
+                       ▼
+┌──────────────────────────────────────────────┐
+│                🖥️ TU PC                       │
+│           Tailscale node                      │
+└──────────────────────┬───────────────────────┘
+                       │
+                       │  ② localhost:4096
+                       ▼
+┌──────────────────────────────────────────────┐
+│               🤖 OPENCODE                     │
+│     el servidor con tu código y tus tools    │
+└──────────────────────────────────────────────┘
+```
+
 ---
 
 ## 🚀 Get started in 2 steps
@@ -54,18 +76,6 @@ Or build it yourself (see [development](#-development)).
 ### 🖥️ 2 — Install Tailscale on your PC (for remote access)
 
 OpenCode Mobile connects to your OpenCode server over plain HTTP. For **remote access from any network** (not just your WiFi), use [**Tailscale**](https://tailscale.com) — a free, zero-config private mesh VPN.
-
-```
- 📱 Phone (OpenCode Mobile)
-   │
-   │  ① Tailscale — private VPN mesh, no open ports
-   ▼
- 🖥️ PC — Tailscale node (e.g. 100.101.102.103)
-   │
-   │  ② localhost:4096 — OpenCode server
-   ▼
- 🤖 OpenCode server — your code, your tools
-```
 
 #### Step A — Install Tailscale on the PC (server)
 
