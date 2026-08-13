@@ -33,9 +33,9 @@
 
 | Live chat | Sessions | Connect server |
 | :---: | :---: | :---: |
-| [![Live chat](./marketing/github/thumbs/03-device-top.png)](./marketing/iphone/1320x2868/en/03-device-top.png) | [![Sessions](./marketing/github/thumbs/01-hero.png)](./marketing/iphone/1320x2868/en/01-hero.png) | [![Connect server](./marketing/github/thumbs/04-device-bottom.png)](./marketing/iphone/1320x2868/en/04-device-bottom.png) |
+| [![Live chat](./marketing/github/thumbs/live-chat.png)](./screenshots/chat+thinking.png) | [![Sessions](./marketing/github/thumbs/sessions.png)](./screenshots/home-1.png) | [![Connect server](./marketing/github/thumbs/connect-server.png)](./screenshots/settings-1.png) |
 | **Data modes** | **Full control** | **Get it now** |
-| [![Data modes](./marketing/github/thumbs/07-hero.png)](./marketing/iphone/1320x2868/en/07-hero.png) | [![Full control](./marketing/github/thumbs/06-device-bottom.png)](./marketing/iphone/1320x2868/en/06-device-bottom.png) | [![Get it now](./marketing/github/thumbs/08-no-device.png)](./marketing/iphone/1320x2868/en/08-no-device.png) |
+| [![Data modes](./marketing/github/thumbs/data-modes.png)](./screenshots/settings-4.png) | [![Full control](./marketing/github/thumbs/full-control.png)](./screenshots/Settings-3.png) | [![Get it now](./marketing/github/thumbs/get-it-now.png)](./screenshots/Settingsdentrodelchat.png) |
 
 ```
 ┌──────────────────────────────────────────────┐
