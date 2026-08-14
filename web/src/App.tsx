@@ -51,7 +51,6 @@ import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
 import { useShareReceiver } from "./hooks/useShareReceiver"
-import { usePushNotifications } from "./hooks/usePushNotifications"
 import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
 import type { ServerProfile } from "./types"
@@ -287,7 +286,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // ===== Feature: Notifications =====
   const { notify, flags: notifFlags } = useNotifications()
-  usePushNotifications(notifFlags.onCompletion)
 
   // ===== Feature: Deep Link =====
   useDeepLink((action) => {

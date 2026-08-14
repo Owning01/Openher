@@ -32,7 +32,6 @@
     "@capacitor/ios": "8.3.4",
     "@capacitor/local-notifications": "8.0.1",
     "@capacitor/network": "8.0.1",
-    "@capacitor/push-notifications": "8.0.1",
     "@capacitor/share": "8.0.1",
     "@tanstack/react-virtual": "^3.14.7",
     "highlight.js": "^11.11.1",
