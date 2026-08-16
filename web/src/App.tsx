@@ -987,16 +987,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setMaximizedPanel((prev) => (prev === index ? null : index))
   }, [])
 
-  const applyLayout = useCallback((cols: number, rows: number) => {
-    setMaximizedPanel(null)
-    setDesktopLayout((prev) => {
-      const total = cols * rows
-      const sessions: Array<string | null> = []
-      for (let i = 0; i < total; i++) sessions.push(prev.sessions[i] ?? null)
-      return { cols, rows, sessions, colSizes: new Array(cols).fill(null), rowSizes: new Array(rows).fill(null) }
-    })
-  }, [setDesktopLayout])
-
   // Drag & drop de sesiones (sidebar → panel) e intercambio de paneles
   const draggedSessionRef = useRef<{ id: string; dir: string } | null>(null)
   const handleSessionDragStart = useCallback((id: string, dir: string) => {
@@ -1547,18 +1537,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   onPointerDown={startRowResize(h)} />
               ))
               : null
-            const layouts: Array<{ key: string; cols: number; rows: number; icon: string; active: boolean }> = [
-              { key: "1x1", cols: 1, rows: 1, icon: "▢", active: desktopLayout.cols === 1 && desktopLayout.rows === 1 },
-              { key: "2x1", cols: 2, rows: 1, icon: "▥", active: desktopLayout.cols === 2 && desktopLayout.rows === 1 },
-              { key: "1x2", cols: 1, rows: 2, icon: "▤", active: desktopLayout.cols === 1 && desktopLayout.rows === 2 },
-              { key: "3x1", cols: 3, rows: 1, icon: "▦", active: desktopLayout.cols === 3 && desktopLayout.rows === 1 },
-              { key: "2x2", cols: 2, rows: 2, icon: "▧", active: desktopLayout.cols === 2 && desktopLayout.rows === 2 },
-            ]
-            const layoutTitle = (key: string) => key === "1x1" ? t('layout.single')
-              : key === "2x1" ? t('layout.twoCol')
-              : key === "1x2" ? t('layout.twoRow')
-              : key === "3x1" ? t('layout.threeCol')
-              : t('layout.grid2x2')
             const maximizedIndex = maximizedPanel !== null && maximizedPanel < desktopLayout.cols * desktopLayout.rows
               ? maximizedPanel : null
             const maximizedSession = maximizedIndex !== null
@@ -1566,13 +1544,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               : null
             return (
               <div className="desktop-layout-area">
-                <div className="desktop-layout-bar" role="toolbar" aria-label="Layouts">
-                  {layouts.map((l) => (
-                    <button key={l.key} type="button" className={`desktop-layout-btn${l.active ? " active" : ""}`}
-                      title={layoutTitle(l.key)} aria-label={layoutTitle(l.key)} aria-pressed={l.active}
-                      onClick={() => applyLayout(l.cols, l.rows)}>{l.icon}</button>
-                  ))}
-                </div>
                 {maximizedSession && maximizedIndex !== null ? (
                   <div className="desktop-maximized">
                     <SessionChatPanel

@@ -69,7 +69,13 @@
   margin-bottom: var(--space-3);
   flex-shrink: 0;
   position: relative;
-  background: var(--bg);
+  /* Mismo fondo que el chat (--chat-bg-color): la franja del safe-area /
+     barra del sistema queda del color del chat, sin cortes visuales. */
+  background-color: var(--chat-bg-color, var(--surface));
+}
+
+:root[data-theme="dark"] .detail-header {
+  background-color: var(--chat-bg-color, #000);
 }
 
 .header-overflow {

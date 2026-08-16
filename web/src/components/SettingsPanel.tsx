@@ -436,7 +436,7 @@ export const SettingsPanel = memo(function SettingsPanel({
             </div>
           )}
 
-          {serverProfiles.map((profile) => (
+          {serverProfiles.filter((p): p is ServerProfile => !!p && !!p.config).map((profile) => (
             <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}${expandedProfileId === profile.id ? " expanded" : ""}`}>
               <div className="server-profile-row" role="button" tabIndex={0}
                 onClick={() => toggleProfile(profile)}

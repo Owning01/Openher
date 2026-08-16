@@ -1,3 +1,6 @@
+// @react-compiler-skip: el compiler memoiza el effect [settings] y las CSS
+// vars (--chat-desktop-gutter, etc.) quedan con el valor del primer mount.
+"use no memo"
 import { useCallback, useEffect, useMemo } from "react"
 import { STORAGE_KEYS } from "../constants"
 import type { ChatSettings } from "../types"
