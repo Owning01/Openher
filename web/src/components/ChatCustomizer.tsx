@@ -19,11 +19,6 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
     { value: "normal", labelKey: "settings.chatSpacingNormal" },
     { value: "comfortable", labelKey: "settings.chatSpacingComfortable" },
   ]
-  const WIDTH_OPTIONS: Array<{ value: ChatSettings["messageMaxWidth"]; labelKey: string }> = [
-    { value: "normal", labelKey: "settings.chatWidthNormal" },
-    { value: "wide", labelKey: "settings.chatWidthWide" },
-    { value: "full", labelKey: "settings.chatWidthFull" },
-  ]
   const FONT_OPTIONS: Array<{ value: ChatSettings["fontFamily"]; labelKey: string }> = [
     { value: "system", labelKey: "settings.chatFontSystem" },
     { value: "serif", labelKey: "settings.chatFontSerif" },
@@ -99,30 +94,16 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
         </div>
       </label>
 
+      {/* Ancho del texto: 0 = el mensaje ocupa todo el ancho del chat; el
+          valor suma margen a CADA lado del texto (calc(100% - 2*Npx)). */}
       <label className="setting-row">
-        <span>{t('settings.chatMaxWidth')}</span>
-        <div className="toggle-row" style={{ gap: "var(--space-1)" }}>
-          {WIDTH_OPTIONS.map((opt) => (
-            <button key={opt.value} type="button"
-              className={`toggle-btn${settings.messageMaxWidth === opt.value ? " active" : ""}`}
-              onClick={() => onSettingChange("messageMaxWidth", opt.value)}
-              aria-pressed={settings.messageMaxWidth === opt.value}>
-              {t(opt.labelKey)}
-            </button>
-          ))}
-        </div>
-      </label>
-
-      {/* Margen del chat: SOLO se aplica en la vista escritorio (la MQ del
-          CSS lo usa únicamente ≥781px; en móvil estas vars se ignoran). */}
-      <label className="setting-row">
-        <span>{t('settings.chatDesktopGutter')}</span>
+        <span>{t('settings.chatTextWidth')}</span>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
                   <input type="range" min={0} max={64} step={1} value={settings.desktopGutter}
             onChange={(e) => onSettingChange("desktopGutter", Number(e.target.value))}
             style={{ flex: 1 }} />
           <span style={{ minWidth: "2.4em", textAlign: "center", fontSize: "0.85rem", fontFamily: "monospace" }}>
-            {settings.desktopGutter}px
+            {settings.desktopGutter === 0 ? "full" : `${settings.desktopGutter}px`}
           </span>
         </div>
       </label>

@@ -555,6 +555,9 @@
 .message {
   width: 100%;
   max-width: var(--chat-max-width, 100%);
+  /* Centrado cuando el ancho del texto es menor al del chat (el slider de
+     ancho reduce el max-width); con 100% el margen auto es 0. */
+  margin-inline: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-4);

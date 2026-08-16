@@ -34,23 +34,17 @@ const SPACING_MAP: Record<ChatSettings["messageSpacing"], string> = {
   comfortable: "var(--space-5)",
 }
 
-const MAX_WIDTH_MAP: Record<ChatSettings["messageMaxWidth"], string> = {
-  normal: "680px",
-  wide: "900px",
-  full: "100%",
-}
-
 const FONT_MAP: Record<ChatSettings["fontFamily"], string> = {
   system: "inherit",
   serif: "Georgia, 'Times New Roman', serif",
   mono: "var(--font-mono)",
 }
 
-// Margen del chat (px): padding del contenedor (gutter) y del bubble (.message).
-// El CSS los usa en todos los tamaños. El padding del mensaje acompaña al
-// gutter pero nunca baja de 6px ni supera 48px.
-function desktopMessagePad(gutterPx: number): number {
-  return Math.max(6, Math.min(48, gutterPx + 4))
+// Ancho del texto del chat (px de margen a CADA lado del mensaje): el bubble
+// pasa de ocupar todo el ancho (0) a quedar centrado con Npx libres por lado
+// (calc(100% - 2*Npx)). Se aplica en todos los tamaños.
+function textMaxWidth(gutterPx: number): string {
+  return `calc(100% - ${Math.max(0, Math.min(64, gutterPx)) * 2}px)`
 }
 
 function applyCSSVars(s: ChatSettings) {
@@ -66,10 +60,8 @@ function applyCSSVars(s: ChatSettings) {
   root.style.setProperty("--chat-compaction-vis", s.showCompactionCheckpoint ? "block" : "none")
   root.style.setProperty("--chat-image-vis", s.showImages ? "block" : "none")
   root.style.setProperty("--chat-bubble-radius", `${s.bubbleRadius}px`)
-  root.style.setProperty("--chat-max-width", MAX_WIDTH_MAP[s.messageMaxWidth])
+  root.style.setProperty("--chat-max-width", textMaxWidth(s.desktopGutter))
   root.style.setProperty("--chat-font-family", FONT_MAP[s.fontFamily])
-  root.style.setProperty("--chat-desktop-gutter", `${s.desktopGutter}px`)
-  root.style.setProperty("--chat-desktop-msg-pad", `${desktopMessagePad(s.desktopGutter)}px`)
 }
 
 export function useChatSettings() {
