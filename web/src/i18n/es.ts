@@ -304,6 +304,7 @@ export default {
   'sessions.activeLabel': 'Activas',
   'sessions.recentLabel': 'Recientes',
   'detail.backToSessions': '← Sesiones',
+  'detail.customizeChat': 'Personalizar chat',
   'detail.selectSession': 'Selecciona una sesión',
   'detail.loading': 'Cargando sesión...',
   'detail.emptyTitle': 'Aún no hay mensajes',

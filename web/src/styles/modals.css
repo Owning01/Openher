@@ -518,6 +518,11 @@ button.compact {
 .skill-item .skill-name { color: var(--accent, #fab283); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--accent, #fab283) 55%, transparent); white-space: nowrap; flex-shrink: 0; font-size: 0.85rem; }
 .skill-item .skill-blurb { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 
+/* ===== Chat customizer (desde el propio chat) ===== */
+.chat-customizer-modal { max-width: 480px; max-height: 82vh; display: flex; flex-direction: column; }
+.chat-customizer-scroll { flex: 1; overflow-y: auto; padding-right: var(--space-1); }
+.chat-customize-btn { margin-right: 2px; }
+
 /* ===== Shortcuts Modal ===== */
 .shortcuts-modal { max-width: 420px; }
 .shortcuts-table { width: 100%; border-collapse: collapse; }

@@ -212,6 +212,7 @@ type TranslationKey =
   | 'shortcuts.newSession'
   | 'shortcuts.shortcut'
   | 'shortcuts.action'
+  | 'detail.customizeChat'
   | 'detail.backToSessions'
   | 'detail.selectSession'
   | 'detail.loading'

@@ -46,11 +46,11 @@ const FONT_MAP: Record<ChatSettings["fontFamily"], string> = {
   mono: "var(--font-mono)",
 }
 
-// Margen del chat SOLO en escritorio (px): padding del contenedor (gutter)
-// y del bubble (.message). El CSS los usa únicamente dentro de la MQ desktop.
-// El padding del mensaje acompaña al gutter pero nunca baja de 6px ni supera 20px.
+// Margen del chat (px): padding del contenedor (gutter) y del bubble (.message).
+// El CSS los usa en todos los tamaños. El padding del mensaje acompaña al
+// gutter pero nunca baja de 6px ni supera 48px.
 function desktopMessagePad(gutterPx: number): number {
-  return Math.max(6, Math.min(20, gutterPx + 4))
+  return Math.max(6, Math.min(48, gutterPx + 4))
 }
 
 function applyCSSVars(s: ChatSettings) {

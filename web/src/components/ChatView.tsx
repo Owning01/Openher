@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -14,11 +14,12 @@ import { DiffViewer } from "./DiffViewer"
 import { GitToolbar } from "./GitToolbar"
 import { AutoQuestionPrompt } from "./AutoQuestionPrompt"
 import { PermissionPrompt } from "./PermissionPrompt"
+import { ChatCustomizerModal } from "./ChatCustomizerModal"
 
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo,
-  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, Question, PermissionRequest, PromptSnippet } from "../types"
+  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, Question, PermissionRequest, PromptSnippet, ChatSettings } from "../types"
 
 export type ChatViewProps = {
   selectedSession: SessionView | null
@@ -103,6 +104,9 @@ export type ChatViewProps = {
   onRegenerate?: () => void
   onInsertPrompt?: (text: string) => void
   onSendPrompt?: (text: string) => void
+  chatSettings?: ChatSettings
+  onChatSettingChange?: <K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => void
+  onResetChatSettings?: () => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -124,7 +128,8 @@ export const ChatView = memo(function ChatView({
   todos, todosExpanded, onTodosToggle, showTodoButton,
   compacting, revertID,
   onExportMarkdown, onEditFile,
-  snippets, charLimit, compactTools, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt
+  snippets, charLimit, compactTools, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt,
+  chatSettings, onChatSettingChange, onResetChatSettings
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -149,6 +154,7 @@ export const ChatView = memo(function ChatView({
   }, [showModelMenu])
   const [showSkills, setShowSkills] = useState(false)
   const [showPrompts, setShowPrompts] = useState(false)
+  const [showChatCustomizer, setShowChatCustomizer] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
   const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
@@ -327,6 +333,14 @@ export const ChatView = memo(function ChatView({
               </div>
             )}
             <div className="overflow-wrap header-overflow" ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
+              {chatSettings && onChatSettingChange && (
+                <button className="btn-icon compact chat-customize-btn"
+                  onClick={(e) => { e.stopPropagation(); setShowChatCustomizer(true) }}
+                  title={t('detail.customizeChat')}
+                  aria-label={t('detail.customizeChat')}>
+                  <PaintIcon size={14} />
+                </button>
+              )}
               <button className="btn-icon compact"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -603,6 +617,15 @@ export const ChatView = memo(function ChatView({
           onInsert={(text) => { onInsertPrompt?.(text); setShowPrompts(false) }}
           onSend={(text) => { onSendPrompt?.(text); setShowPrompts(false) }}
           onClose={() => setShowPrompts(false)} />,
+        document.body
+      )}
+
+      {showChatCustomizer && chatSettings && onChatSettingChange && createPortal(
+        <ChatCustomizerModal
+          settings={chatSettings}
+          onSettingChange={onChatSettingChange}
+          onReset={onResetChatSettings ?? (() => {})}
+          onClose={() => setShowChatCustomizer(false)} />,
         document.body
       )}
 

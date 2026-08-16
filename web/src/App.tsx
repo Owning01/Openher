@@ -1367,6 +1367,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     onRegenerate: handleRegenerate,
     onInsertPrompt: handleInsertPrompt,
     onSendPrompt: handleSendPrompt,
+    chatSettings,
+    onChatSettingChange: setChatSetting,
+    onResetChatSettings: resetChatSettings,
   }), [
     selectedSession, localRevertID, renderedMessages, todos, todosExpanded, composer,
     isWorking, showTypingBubble, loadingSessionID, selectedID, messageScrollSignature,
@@ -1382,7 +1385,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     handlePermissionApprove, handlePermissionReject, handleDismissQuestion,
     handleDismissPermission, handleRevertToMessage, handleEditMessage, handleUndo,
     handleRedo, handleCompact, handleCreateSession, fb, setShowTerminal,
-    setShowMCPBrowser, setShowRemoteDesktop, chatSettings,
+    setShowMCPBrowser, setShowRemoteDesktop, chatSettings, setChatSetting, resetChatSettings,
     promptSnippets, handleRegenerate, handleInsertPrompt, handleSendPrompt,
   ])
 
