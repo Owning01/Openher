@@ -113,6 +113,20 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
         </div>
       </label>
 
+      {/* Margen del chat: SOLO se aplica en la vista escritorio (la MQ del
+          CSS lo usa únicamente ≥781px; en móvil estas vars se ignoran). */}
+      <label className="setting-row">
+        <span>{t('settings.chatDesktopGutter')}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+          <input type="range" min={0} max={24} step={1} value={settings.desktopGutter}
+            onChange={(e) => onSettingChange("desktopGutter", Number(e.target.value))}
+            style={{ flex: 1 }} />
+          <span style={{ minWidth: "2.4em", textAlign: "center", fontSize: "0.85rem", fontFamily: "monospace" }}>
+            {settings.desktopGutter}px
+          </span>
+        </div>
+      </label>
+
       <label className="setting-row">
         <span>{t('settings.chatFontFamily')}</span>
         <div className="toggle-row" style={{ gap: "var(--space-1)" }}>

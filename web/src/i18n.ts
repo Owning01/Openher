@@ -558,6 +558,7 @@ type TranslationKey =
   | 'settings.chatFontSystem'
   | 'settings.chatFontSerif'
   | 'settings.chatFontMono'
+  | 'settings.chatDesktopGutter'
   | 'settings.chatPreviewUser'
   | 'settings.chatPreviewAssistant'
   | 'settings.chatCompactTools'

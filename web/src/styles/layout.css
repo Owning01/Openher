@@ -321,7 +321,9 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: var(--space-3);
+    /* Gutter configurable (Settings → Chat → Margen en escritorio):
+       --chat-desktop-gutter solo se usa acá (≥781px) — en móvil se ignora. */
+    padding: var(--chat-desktop-gutter, var(--space-3));
     gap: var(--space-3);
   }
 
@@ -330,8 +332,35 @@
     min-height: 0;
   }
 
-  .app-desktop-content > .panel.detail {
+  .app-desktop-content > .panel.detail,
+  .app-desktop-content .panel.detail {
     border-radius: var(--radius-lg);
+    /* Fondo igual al del chat (incluye el fondo personalizado del
+       ChatCustomizer): el panel y el header no deben tener otro color. */
+    background-color: var(--chat-bg-color, var(--surface));
+  }
+
+  :root[data-theme="dark"] .app-desktop-content > .panel.detail,
+  :root[data-theme="dark"] .app-desktop-content .panel.detail {
+    background-color: var(--chat-bg-color, #000);
+  }
+
+  .app-desktop-content .detail-header {
+    background-color: var(--chat-bg-color, var(--surface));
+  }
+
+  :root[data-theme="dark"] .app-desktop-content .detail-header {
+    background-color: var(--chat-bg-color, #000);
+  }
+
+  /* Padding del panel del chat y del bubble solo en desktop (mismo control
+     de margen: Settings → Chat → Margen en escritorio). */
+  .app-desktop-content .panel.detail {
+    padding: var(--chat-desktop-gutter, var(--space-3));
+  }
+
+  .app-desktop-content .message {
+    padding: var(--chat-desktop-msg-pad, var(--space-4));
   }
 
   .app-desktop-placeholder {
@@ -456,7 +485,13 @@
     padding: 0.25rem var(--space-2);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    background: var(--surface-subtle);
+    /* Fondo igual al del chat (incluye el fondo personalizado del
+       ChatCustomizer): el header no debe tener otro color que el chat. */
+    background-color: var(--chat-bg-color, var(--surface));
+  }
+
+  :root[data-theme="dark"] .session-panel-header {
+    background-color: var(--chat-bg-color, #000);
   }
 
   .session-panel-title {

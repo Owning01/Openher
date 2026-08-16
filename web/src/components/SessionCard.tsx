@@ -54,7 +54,14 @@ export const SessionCard = memo(function SessionCard({
   return (
     <article className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${actionsOpen ? "actions-open" : ""} ${selectMode ? "select-mode" : ""} ${isChecked ? "checked" : ""} fade-in`}
       draggable={!!onDragStartSession && !selectMode}
-      onDragStart={() => { if (onDragStartSession) onDragStartSession(session.id, session.directory) }}>
+      onDragStart={(e) => {
+        if (!onDragStartSession) return
+        // Sin setData el drag no arranca en Chromium. Prefijo "session:" para
+        // no chocar con el swap numérico de paneles (header de session-panel).
+        e.dataTransfer.setData("text/plain", `session:${session.id}`)
+        e.dataTransfer.effectAllowed = "move"
+        onDragStartSession(session.id, session.directory)
+      }}>
       <div className="session-card-header" onClick={handleCardClick} role="button" tabIndex={0}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleCardClick(e as never) } }}>
         <div className="session-card-title-group">

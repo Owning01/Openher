@@ -1002,12 +1002,36 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const handleSessionDragStart = useCallback((id: string, dir: string) => {
     draggedSessionRef.current = { id, dir }
   }, [])
-  const handleDropSessionOnPanel = useCallback((index: number) => {
+
+  // Soltar una sesión (arrastrada desde la lista) sobre un panel: split lateral
+  // autodetectado — la sesión se abre en el panel NUEVO (izquierda o derecha
+  // según la mitad del panel donde se soltó).
+  const handleSplitSessionOnSide = useCallback((index: number, dir: "left" | "right") => {
     const drag = draggedSessionRef.current
     if (!drag) return
     draggedSessionRef.current = null
-    openInPanel(index, drag.id)
-  }, [openInPanel])
+    setDesktopLayout((prev) => {
+      const cols = prev.cols + 1
+      const col = index % prev.cols
+      const sessions: Array<string | null> = []
+      for (let r = 0; r < prev.rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (dir === "right") {
+            if (c <= col) sessions.push(prev.sessions[r * prev.cols + c] ?? null)
+            else sessions.push(c === col + 1 ? drag.id : prev.sessions[r * prev.cols + (c - 1)] ?? null)
+          } else {
+            if (c === col) sessions.push(drag.id)
+            else if (c < col) sessions.push(prev.sessions[r * prev.cols + c] ?? null)
+            else sessions.push(prev.sessions[r * prev.cols + (c - 1)] ?? null)
+          }
+        }
+      }
+      const colSizes = [...prev.colSizes]
+      colSizes.splice(dir === "right" ? col + 1 : col, 0, null)
+      return { ...prev, cols, sessions, colSizes }
+    })
+    setActivePanel(dir === "right" ? index + 1 : index)
+  }, [])
   const handleSwapPanels = useCallback((from: number, to: number) => {
     if (from === to) return
     setDesktopLayout((prev) => {
@@ -1497,9 +1521,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     connectionState={connectionState}
                     panelIndex={i}
                     onActivate={() => setActivePanel(i)}
-                    onSplitRight={() => splitPanel(i, "right")}
-                    onSplitBottom={() => splitPanel(i, "bottom")}
                     onClose={() => { closePanel(i); if (maximizedPanel === i) setMaximizedPanel(null) }}
+                    onSplitSession={handleSplitSessionOnSide}
                     onSettled={settleSession}
                     onRefreshSessions={refreshSessions}
                     onSetCommands={setCommands}
@@ -1508,8 +1531,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     onShellExecute={shellExecute}
                     onChangeAgentGlobal={changeAgent}
                     onOpenInThisPanel={(id) => openInPanel(i, id)}
-                    onToggleMaximize={toggleMaximize}
-                    onDropSession={handleDropSessionOnPanel}
                     onSwapPanels={handleSwapPanels} />
                 </div>
               )
@@ -1562,12 +1583,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       active={activePanel === maximizedIndex}
                       connectionState={connectionState}
                       panelIndex={maximizedIndex}
-                      maximized
-                      onRestore={() => setMaximizedPanel(null)}
                       onActivate={() => setActivePanel(maximizedIndex)}
-                      onSplitRight={() => splitPanel(maximizedIndex, "right")}
-                      onSplitBottom={() => splitPanel(maximizedIndex, "bottom")}
                       onClose={() => { closePanel(maximizedIndex); setMaximizedPanel(null) }}
+                      onSplitSession={handleSplitSessionOnSide}
                       onSettled={settleSession}
                       onRefreshSessions={refreshSessions}
                       onSetCommands={setCommands}
@@ -1576,8 +1594,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onShellExecute={shellExecute}
                       onChangeAgentGlobal={changeAgent}
                       onOpenInThisPanel={(id) => openInPanel(maximizedIndex, id)}
-                      onToggleMaximize={toggleMaximize}
-                      onDropSession={handleDropSessionOnPanel}
                       onSwapPanels={handleSwapPanels} />
                   </div>
                 ) : (

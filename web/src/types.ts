@@ -390,6 +390,8 @@ export type ChatSettings = {
   compactTools: boolean
   completionSound: boolean
   composerCharLimit: number
+  /** Margen lateral del chat en vista escritorio en px (solo aplica en desktop). */
+  desktopGutter: number
 }
 
 export type PromptSnippet = {

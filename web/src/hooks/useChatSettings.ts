@@ -22,6 +22,7 @@ const DEFAULTS: ChatSettings = {
   compactTools: false,
   completionSound: true,
   composerCharLimit: 0,
+  desktopGutter: 12,
 }
 
 const SPACING_MAP: Record<ChatSettings["messageSpacing"], string> = {
@@ -42,6 +43,13 @@ const FONT_MAP: Record<ChatSettings["fontFamily"], string> = {
   mono: "var(--font-mono)",
 }
 
+// Margen del chat SOLO en escritorio (px): padding del contenedor (gutter)
+// y del bubble (.message). El CSS los usa únicamente dentro de la MQ desktop.
+// El padding del mensaje acompaña al gutter pero nunca baja de 6px ni supera 20px.
+function desktopMessagePad(gutterPx: number): number {
+  return Math.max(6, Math.min(20, gutterPx + 4))
+}
+
 function applyCSSVars(s: ChatSettings) {
   const root = document.documentElement
   root.style.setProperty("--chat-font-size", `${s.fontSize}px`)
@@ -57,12 +65,21 @@ function applyCSSVars(s: ChatSettings) {
   root.style.setProperty("--chat-bubble-radius", `${s.bubbleRadius}px`)
   root.style.setProperty("--chat-max-width", MAX_WIDTH_MAP[s.messageMaxWidth])
   root.style.setProperty("--chat-font-family", FONT_MAP[s.fontFamily])
+  root.style.setProperty("--chat-desktop-gutter", `${s.desktopGutter}px`)
+  root.style.setProperty("--chat-desktop-msg-pad", `${desktopMessagePad(s.desktopGutter)}px`)
 }
 
 export function useChatSettings() {
   const [stored, setSettings] = useLocalStorage<ChatSettings>(STORAGE_KEYS.CHAT_SETTINGS, DEFAULTS)
   // Normaliza el storage viejo (sin los campos nuevos): merge con DEFAULTS.
-  const settings = useMemo<ChatSettings>(() => ({ ...DEFAULTS, ...stored }), [stored])
+  // desktopGutter era "normal"|"compact"|"minimal" (string) — migra a px.
+  const settings = useMemo<ChatSettings>(() => {
+    const merged = { ...DEFAULTS, ...stored }
+    if (typeof merged.desktopGutter !== "number" || !Number.isFinite(merged.desktopGutter)) {
+      merged.desktopGutter = DEFAULTS.desktopGutter
+    }
+    return merged
+  }, [stored])
 
   useEffect(() => { applyCSSVars(settings) }, [settings])
 

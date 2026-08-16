@@ -19,12 +19,11 @@ type Props = {
   active: boolean
   connectionState: string
   panelIndex: number
-  maximized?: boolean
-  onRestore?: () => void
   onActivate: () => void
-  onSplitRight: () => void
-  onSplitBottom: () => void
   onClose: () => void
+  /** Soltar una sesión (arrastrada desde la lista) sobre este panel: splitea
+      a la izquierda o derecha según la mitad donde se suelte. */
+  onSplitSession: (index: number, dir: "left" | "right") => void
   onSettled: (sessionID: string, directory: string) => void
   onRefreshSessions: () => Promise<void> | void
   onSetCommands: (commands: CommandInfo[]) => void
@@ -33,18 +32,14 @@ type Props = {
   onShellExecute: (cmd: string, sessionID: string, directory: string) => void
   onChangeAgentGlobal: (agentID: string, directory?: string) => void
   onOpenInThisPanel: (sessionID: string, directory: string) => void
-  onToggleMaximize: (index: number) => void
-  onDropSession: (index: number) => void
   onSwapPanels: (from: number, to: number) => void
 }
 
 export const SessionChatPanel = memo(function SessionChatPanel({
   session, config, dataMode, baseProps, active, connectionState, panelIndex,
-  maximized, onRestore,
-  onActivate, onSplitRight, onSplitBottom, onClose, onSettled,
+  onActivate, onClose, onSplitSession, onSettled,
   onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
-  onShellExecute, onChangeAgentGlobal, onOpenInThisPanel,
-  onToggleMaximize, onDropSession, onSwapPanels
+  onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels
 }: Props) {
   const t = useT()
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
@@ -287,7 +282,14 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   return (
     <div className={`session-panel${active ? " active" : ""}`} onClick={onActivate}
       onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => { e.preventDefault(); onDropSession(panelIndex) }}>
+      onDrop={(e) => {
+        e.preventDefault()
+        // Autodetección del lado: mitad izquierda → split a la izquierda,
+        // mitad derecha → split a la derecha.
+        const rect = e.currentTarget.getBoundingClientRect()
+        const dir = e.clientX < rect.left + rect.width / 2 ? "left" : "right"
+        onSplitSession(panelIndex, dir)
+      }}>
       <div className="session-panel-header" draggable
         onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(panelIndex)); e.dataTransfer.effectAllowed = "move" }}
         onDragOver={(e) => e.preventDefault()}
@@ -295,22 +297,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           e.preventDefault(); e.stopPropagation()
           const raw = e.dataTransfer.getData("text/plain")
           if (/^\d+$/.test(raw)) onSwapPanels(Number(raw), panelIndex)
-        }}
-        onDoubleClick={() => onToggleMaximize(panelIndex)}>
+        }}>
         <span className="session-panel-title" title={session.directory}>
           {basename(session.directory)}
         </span>
         {busy && !active && <span className="session-panel-busy-dot" title={t('panel.busy')} aria-label={t('panel.busy')} />}
         <span className="session-panel-actions">
-          {maximized ? (
-            <button type="button" className="btn-icon compact" title={t('panel.restore')} aria-label={t('panel.restore')} onClick={(e) => { e.stopPropagation(); onRestore?.() }}>⤢</button>
-          ) : (
-            <>
-              <button type="button" className="btn-icon compact" title={t('panel.splitRight')} aria-label={t('panel.splitRight')} onClick={(e) => { e.stopPropagation(); onSplitRight() }}>⫸</button>
-              <button type="button" className="btn-icon compact" title={t('panel.splitBottom')} aria-label={t('panel.splitBottom')} onClick={(e) => { e.stopPropagation(); onSplitBottom() }}>⫯</button>
-              <button type="button" className="btn-icon compact" title={t('panel.maximize')} aria-label={t('panel.maximize')} onClick={(e) => { e.stopPropagation(); onToggleMaximize(panelIndex) }}>⛶</button>
-            </>
-          )}
           <button type="button" className="btn-icon compact" title={t('panel.close')} aria-label={t('panel.close')} onClick={(e) => { e.stopPropagation(); onClose() }}>×</button>
         </span>
       </div>

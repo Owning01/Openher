@@ -148,6 +148,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     const raw = await api.loadMessages(config, sessionID, directory, limit)
     if (requestID !== loadSelectedRequestRef.current) return
     const msg = dataMode === "full" || dataMode === "saver" ? raw : raw.map((m) => stripNonEssential(m, dataMode))
+    // Defensivo: un item null/corrupto del server no debe tumbar el render
+    // (msg.map(m => m.info.id) con m undefined = TypeError).
+    const safe = msg.filter((m): m is MessageEnvelope => !!m && !!m.info?.id)
 
     setMessages((prev) => {
       // Merge por id SOLO de la sesión cargada: el historial local de la sesión
@@ -156,11 +159,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       // se descartan — el array siempre contiene una sola conversación.
       const seen = new Set<string>()
       let changed = prev.some((m) => m.info.sessionID !== sessionID)
-      const msgMap = new Map(msg.map((m) => [m.info.id, m]))
+      const msgMap = new Map(safe.map((m) => [m.info.id, m]))
       // Ventana del fetch (ids msg_<hex> lexicográficos): sirve para distinguir
       // el historial viejo (más allá del limit) del turno actual.
-      const hasRemote = msg.length > 0
-      const sortedIDs = hasRemote ? msg.map((m) => m.info.id).sort() : []
+      const hasRemote = safe.length > 0
+      const sortedIDs = hasRemote ? safe.map((m) => m.info.id).sort() : []
       const firstRemoteID = sortedIDs[0] ?? ""
       const lastRemoteID = sortedIDs[sortedIDs.length - 1] ?? ""
       const merged: MessageEnvelope[] = []
@@ -217,7 +220,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     })
 
     setOptimisticUserMessages((current) => {
-      const confirmedUsers = msg.filter((m) => m.info.role === "user")
+      const confirmedUsers = safe.filter((m) => m.info.role === "user")
       // 1) Confirmación por id: el server devuelve el id real del mensaje.
       const confirmedIDs = new Set(confirmedUsers.map((m) => m.info.id))
       // 2) Fallback por texto (echo SSE con role assistant/id distinto): cada
