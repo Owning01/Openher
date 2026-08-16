@@ -11,7 +11,7 @@ import { useT } from "../i18n-context"
 
 // ============================================================== Terminal
 
-const TerminalPanel = memo(function TerminalPanel({ cwd }: { cwd?: string }) {
+export const TerminalPanel = memo(function TerminalPanel({ cwd }: { cwd?: string }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Terminal | null>(null)
   const ptyIdRef = useRef<string | null>(null)
@@ -99,7 +99,7 @@ const TerminalPanel = memo(function TerminalPanel({ cwd }: { cwd?: string }) {
 
 // ============================================================== Explorador
 
-const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir }: { onOpenSessionDir: (dir: string) => void }) {
+export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir }: { onOpenSessionDir: (dir: string) => void }) {
   const t = useT()
   const [drives, setDrives] = useState<string[]>([])
   const [cwd, setCwd] = useState<string | null>(null)
@@ -206,7 +206,7 @@ const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir }: { onOpen
 
 // ============================================================== Kanban
 
-const KanbanPanel = memo(function KanbanPanel() {
+export const KanbanPanel = memo(function KanbanPanel() {
   const t = useT()
   const [boards, setBoards] = useState<KanbanBoard[]>([])
   const [active, setActive] = useState<string | null>(null)
@@ -329,7 +329,7 @@ function renderMarkdown(src: string): string {
   return out.join("\n")
 }
 
-const DocsPanel = memo(function DocsPanel() {
+export const DocsPanel = memo(function DocsPanel() {
   const t = useT()
   const [root, setRoot] = useState<string>("")
   const [files, setFiles] = useState<{ name: string; path: string; size: number }[]>([])
@@ -375,7 +375,7 @@ const DocsPanel = memo(function DocsPanel() {
 
 // ============================================================== Updates (GitHub + X)
 
-const UpdatesPanel = memo(function UpdatesPanel() {
+export const UpdatesPanel = memo(function UpdatesPanel() {
   const t = useT()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
@@ -429,7 +429,7 @@ const UpdatesPanel = memo(function UpdatesPanel() {
 
 // ============================================================== Stats
 
-const StatsPanel = memo(function StatsPanel() {
+export const StatsPanel = memo(function StatsPanel() {
   const t = useT()
   const [status, setStatus] = useState<{ running: boolean; port: number; url: string } | null>(null)
 
@@ -458,7 +458,7 @@ const StatsPanel = memo(function StatsPanel() {
 
 // ============================================================== Labs + Config
 
-const LabsPanel = memo(function LabsPanel() {
+export const LabsPanel = memo(function LabsPanel() {
   const t = useT()
   const [apps, setApps] = useState<any[]>([])
   const [server, setServer] = useState<any>(null)
@@ -521,7 +521,7 @@ const LabsPanel = memo(function LabsPanel() {
   )
 })
 
-const ConfigPanel = memo(function ConfigPanel() {
+export const ConfigPanel = memo(function ConfigPanel() {
   const t = useT()
   const [raw, setRaw] = useState("")
   const [msg, setMsg] = useState("")

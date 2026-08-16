@@ -275,6 +275,9 @@ fn main() {
         None => println!("opencode-desktop: AVISO - web/dist no encontrado; la app estará vacía"),
     }
 
+    // Stats server arranca con la app (botón del panel izquierdo lo abre).
+    statsx::ensure(&app_state);
+
     {
         let spawn = app_state.clone();
         thread::Builder::new()

@@ -305,7 +305,7 @@
 
   .app-desktop-sidebar {
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden;
     background: var(--surface);
     border-right: 1px solid var(--border);
   }
@@ -314,6 +314,60 @@
     height: 100%;
     border: none;
     border-radius: 0;
+  }
+
+  /* ===== Activity bar estilo VS Code ===== */
+  .app-desktop-activity {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: var(--surface-strong);
+    border-right: 1px solid var(--border);
+    padding: 4px 0;
+    overflow-y: auto;
+  }
+
+  .app-desktop-activity-top,
+  .app-desktop-activity-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .activity-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    border-radius: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .activity-btn:hover {
+    color: var(--text);
+  }
+
+  .activity-btn.active {
+    color: var(--primary);
+    border-left-color: var(--primary);
+  }
+
+  /* Paneles shell dentro del sidebar: llenan la altura del body */
+  .desktop-sidebar-body > .shell-explorer,
+  .desktop-sidebar-body > .shell-kanban,
+  .desktop-sidebar-body > .shell-docs,
+  .desktop-sidebar-body > .shell-updates,
+  .desktop-sidebar-body > .shell-stats,
+  .desktop-sidebar-body > .shell-labs,
+  .desktop-sidebar-body > .shell-config {
+    height: 100%;
   }
 
   .app-desktop-content {
@@ -553,6 +607,8 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
   }
 
   .app-desktop-sidebar .panel.sessions {

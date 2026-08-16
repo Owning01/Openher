@@ -46,7 +46,7 @@ import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
 import { useSSEHandler } from "./hooks/useSSEHandler"
-import { FolderIcon, SettingsIcon, TerminalIcon, LayersIcon, HelpIcon, GithubIcon, StatsIcon, TestIcon, PlusIcon } from "./Icons"
+import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, HelpIcon, GithubIcon, StatsIcon, TestIcon, PlusIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -54,7 +54,7 @@ import { useShareReceiver } from "./hooks/useShareReceiver"
 import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
-import { ShellPanel } from "./components/shellPanels"
+import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, DocsPanel, UpdatesPanel, LabsPanel, ConfigPanel } from "./components/shellPanels"
 import type { ServerProfile } from "./types"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
@@ -72,16 +72,19 @@ const FileBrowser = lazy(() => import("./components/FileBrowser").then((m) => ({
 const HelpPage = lazy(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const FolderPicker = lazy(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
 
+type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "docs" | "updates" | "labs" | "config"
+
 type DesktopLayout = { cols: number; rows: number; sessions: Array<string | null>; panelKinds: Array<ShellPanelKind>; colSizes: Array<number | null>; rowSizes: Array<number | null> }
 
-function loadDesktopState(fallbackSessionID: string | null): { layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean } {
+function loadDesktopState(fallbackSessionID: string | null): { layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean; activity: DesktopActivity } {
   const fallback = {
     layout: { cols: 1, rows: 1, sessions: [fallbackSessionID], panelKinds: ["session"], colSizes: [null], rowSizes: [null] } as DesktopLayout,
     sidebarWidth: 340,
     sidebarCollapsed: false,
+    activity: "sessions" as DesktopActivity,
   }
   try {
-    const raw = JSON.parse(localStorage.getItem(DESKTOP_STATE_KEY) ?? "null") as Partial<{ layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean }> | null
+    const raw = JSON.parse(localStorage.getItem(DESKTOP_STATE_KEY) ?? "null") as Partial<{ layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean; activity: DesktopActivity }> | null
     const layout = raw?.layout
     if (layout && layout.cols >= 1 && layout.rows >= 1 && Array.isArray(layout.sessions) && layout.sessions.length === layout.cols * layout.rows) {
       const total = layout.cols * layout.rows
@@ -100,6 +103,7 @@ function loadDesktopState(fallbackSessionID: string | null): { layout: DesktopLa
         },
         sidebarWidth: Math.max(200, Math.min(480, raw.sidebarWidth ?? 340)),
         sidebarCollapsed: !!raw.sidebarCollapsed,
+        activity: (["sessions", "explorer", "stats", "kanban", "docs", "updates", "labs", "config"].includes(raw.activity ?? "") ? raw.activity! : "sessions") as DesktopActivity,
       }
     }
   } catch { /* ignore */ }
@@ -893,6 +897,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [])
   const sidebarWidth = desktopState.sidebarWidth
   const sidebarCollapsed = desktopState.sidebarCollapsed
+  const activity = desktopState.activity
+  const setActivity = useCallback((a: DesktopActivity) => setDesktopState((prev) => ({ ...prev, activity: a })), [])
   const setSidebarWidth = useCallback((w: number) => setDesktopState((prev) => ({ ...prev, sidebarWidth: w })), [])
   const setSidebarCollapsed = useCallback((collapsed: boolean | ((v: boolean) => boolean)) => {
     setDesktopState((prev) => ({ ...prev, sidebarCollapsed: typeof collapsed === "function" ? collapsed(prev.sidebarCollapsed) : collapsed }))
@@ -1485,10 +1491,45 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   return (
     <div className="app-shell" data-navbar="header" ref={shellRef}
-      style={isDesktop ? { gridTemplateColumns: sidebarCollapsed ? "48px minmax(0, 1fr)" : `${sidebarWidth}px minmax(0, 1fr)` } : undefined}>
+      style={isDesktop ? { gridTemplateColumns: `48px ${sidebarCollapsed ? "0px" : `${sidebarWidth}px`} minmax(0, 1fr)` } : undefined}>
       {!isDesktop && view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={handleNavigate}
           onToggleLightMode={handleToggleLightMode} />
+      )}
+
+      {isDesktop && (
+        <nav className="app-desktop-activity" aria-label="Actividades">
+          <div className="app-desktop-activity-top">
+            <button type="button" className={`activity-btn${activity === "sessions" ? " active" : ""}`} title={t('shell.kindSession')} aria-label={t('shell.kindSession')}
+              onClick={() => { if (activity === "sessions") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("sessions"); setSidebarCollapsed(false) } }}>
+              <ChatIcon size={18} /></button>
+            <button type="button" className={`activity-btn${activity === "explorer" ? " active" : ""}`} title={t('shell.kindExplorer')} aria-label={t('shell.kindExplorer')}
+              onClick={() => { if (activity === "explorer") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("explorer"); setSidebarCollapsed(false) } }}>
+              <FolderIcon size={18} /></button>
+            <button type="button" className={`activity-btn${activity === "stats" ? " active" : ""}`} title={t('shell.kindStats')} aria-label={t('shell.kindStats')}
+              onClick={() => { if (activity === "stats") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("stats"); setSidebarCollapsed(false) } }}>
+              <StatsIcon size={18} /></button>
+            <button type="button" className={`activity-btn${activity === "kanban" ? " active" : ""}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
+              onClick={() => { if (activity === "kanban") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("kanban"); setSidebarCollapsed(false) } }}>
+              <LayersIcon size={18} /></button>
+            <button type="button" className={`activity-btn${activity === "docs" ? " active" : ""}`} title={t('shell.kindDocs')} aria-label={t('shell.kindDocs')}
+              onClick={() => { if (activity === "docs") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("docs"); setSidebarCollapsed(false) } }}>
+              <HelpIcon size={18} /></button>
+            <button type="button" className={`activity-btn${activity === "updates" ? " active" : ""}`} title={t('shell.kindUpdates')} aria-label={t('shell.kindUpdates')}
+              onClick={() => { if (activity === "updates") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("updates"); setSidebarCollapsed(false) } }}>
+              <GithubIcon size={18} /></button>
+            <button type="button" className={`activity-btn${activity === "labs" ? " active" : ""}`} title={t('shell.kindLabs')} aria-label={t('shell.kindLabs')}
+              onClick={() => { if (activity === "labs") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("labs"); setSidebarCollapsed(false) } }}>
+              <TestIcon size={18} /></button>
+          </div>
+          <div className="app-desktop-activity-bottom">
+            <button type="button" className={`activity-btn${activity === "config" ? " active" : ""}`} title={t('shell.kindConfig')} aria-label={t('shell.kindConfig')}
+              onClick={() => { if (activity === "config") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("config"); setSidebarCollapsed(false) } }}>
+              <SettingsIcon size={18} /></button>
+            <button type="button" className="activity-btn" title={t('desktop.collapseSidebar')} aria-label={t('desktop.collapseSidebar')}
+              onClick={() => setSidebarCollapsed(true)}>«</button>
+          </div>
+        </nav>
       )}
 
       {isDesktop && (
@@ -1500,14 +1541,29 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           ) : (
             <>
               <div className="desktop-sidebar-header">
-                <span className="desktop-sidebar-title">Opencode</span>
+                <span className="desktop-sidebar-title">
+                  {activity === "sessions" ? "Opencode"
+                    : activity === "explorer" ? t('shell.kindExplorer')
+                    : activity === "stats" ? t('shell.kindStats')
+                    : activity === "kanban" ? t('shell.kindKanban')
+                    : activity === "docs" ? t('shell.kindDocs')
+                    : activity === "updates" ? t('shell.kindUpdates')
+                    : activity === "labs" ? t('shell.kindLabs')
+                    : t('shell.kindConfig')}
+                </span>
                 <span className="desktop-sidebar-actions">
-                  <button type="button" className="btn-icon compact" title={t('nav.settings')} aria-label={t('nav.settings')} onClick={() => navigate("settings")}><SettingsIcon size={16} /></button>
                   <button type="button" className="btn-icon compact" title={t('desktop.collapseSidebar')} aria-label={t('desktop.collapseSidebar')} onClick={() => setSidebarCollapsed(true)}>«</button>
                 </span>
               </div>
               <div className="desktop-sidebar-body">
-                {sessionsView}
+                {activity === "sessions" ? sessionsView
+                  : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} />
+                  : activity === "stats" ? <StatsPanel />
+                  : activity === "kanban" ? <KanbanPanel />
+                  : activity === "docs" ? <DocsPanel />
+                  : activity === "updates" ? <UpdatesPanel />
+                  : activity === "labs" ? <LabsPanel />
+                  : <ConfigPanel />}
               </div>
               <div className="desktop-sidebar-resizer" onPointerDown={startSidebarResize} title={t('desktop.resizeSidebar')} />
             </>
