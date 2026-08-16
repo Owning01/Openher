@@ -72,11 +72,19 @@ export const SessionList = memo(function SessionList({
   const [recentLimit, setRecentLimit] = useState(6)
   const recentSentinelRef = useRef<HTMLDivElement | null>(null)
   const recentListRef = useRef<HTMLDivElement | null>(null)
+  const [favoritesLimit, setFavoritesLimit] = useState(6)
+  const favoritesListRef = useRef<HTMLDivElement | null>(null)
 
   const recentFiltered = useMemo(
     () => recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)),
     [recentSessions, activeSessions]
   )
+
+  const favoriteSessions = useMemo(
+    () => sessions.filter((s) => favorites.has(s.id)),
+    [sessions, favorites]
+  )
+  const favoritesSentinelRef = useRef<HTMLDivElement | null>(null)
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
     // Normaliza el estado guardado: exactamente un panel abierto (recientes
@@ -172,23 +180,31 @@ export const SessionList = memo(function SessionList({
     prevProjectDir.current = selectedProjectDir
   }, [selectedProjectDir])
 
-  // Lazy loading de recientes: al llegar al final del scroll se cargan +10.
-  // root = la lista scrolleable (desktop): el sentinel intersecta al scrollear.
+  // Lazy loading (scroll infinito) de recientes y favoritos: al llegar al
+  // final del scroll se cargan +10. root = la lista scrolleable (desktop);
+  // en móvil la lista crece naturalmente y el sentinel queda visible →
+  // el IO dispara y se carga todo (que es el comportamiento esperado).
+  const recentObserverRef = useRef<IntersectionObserver | null>(null)
+  const favoritesObserverRef = useRef<IntersectionObserver | null>(null)
   useEffect(() => {
-    if (recentLimit >= recentFiltered.length) return
-    const el = recentSentinelRef.current
-    if (!el) return
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setRecentLimit((n) => Math.min(n + 10, recentFiltered.length))
-        }
-      },
-      { root: recentListRef.current ?? containerRef.current, rootMargin: "120px" }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [recentLimit, recentFiltered.length, collapsedSections.recent])
+    recentObserverRef.current?.disconnect()
+    favoritesObserverRef.current?.disconnect()
+    if (recentLimit < recentFiltered.length && recentSentinelRef.current && !collapsedSections.recent) {
+      recentObserverRef.current = new IntersectionObserver(
+        (entries) => { if (entries.some((e) => e.isIntersecting)) setRecentLimit((n) => Math.min(n + 10, recentFiltered.length)) },
+        { root: recentListRef.current ?? containerRef.current, rootMargin: "120px" }
+      )
+      recentObserverRef.current.observe(recentSentinelRef.current)
+    }
+    if (favoritesLimit < favoriteSessions.length && favoritesSentinelRef.current && !collapsedSections.favorites) {
+      favoritesObserverRef.current = new IntersectionObserver(
+        (entries) => { if (entries.some((e) => e.isIntersecting)) setFavoritesLimit((n) => Math.min(n + 10, favoriteSessions.length)) },
+        { root: favoritesListRef.current ?? containerRef.current, rootMargin: "120px" }
+      )
+      favoritesObserverRef.current.observe(favoritesSentinelRef.current)
+    }
+    return () => { recentObserverRef.current?.disconnect(); favoritesObserverRef.current?.disconnect() }
+  }, [recentLimit, recentFiltered.length, collapsedSections.recent, favoritesLimit, favoriteSessions.length, collapsedSections.favorites, favoriteSessions])
 
   // Reset al REABRIR la sección (volver al tope). No se dispara por los polls:
   // el contenido real se detecta por firma de ids (el array cambia de identidad
@@ -203,6 +219,13 @@ export const SessionList = memo(function SessionList({
     recentSigRef.current = sig
     setRecentLimit((n) => Math.min(Math.max(n, 6), recentFiltered.length || 1))
   }, [recentFiltered])
+  const favoritesSigRef = useRef("")
+  useEffect(() => {
+    const sig = favoriteSessions.map((s) => s.id).join(",")
+    if (sig === favoritesSigRef.current) return
+    favoritesSigRef.current = sig
+    setFavoritesLimit((n) => Math.min(Math.max(n, 6), favoriteSessions.length || 1))
+  }, [favoriteSessions])
 
   const notices = <ConnectionNotices connectionState={connectionState} />
 
@@ -305,18 +328,17 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
               </button>
             )}
           </div>
-          {favorites.size > 0 && !collapsedSections.favorites && (() => {
-            const favoriteSessions = sessions.filter((s) => favorites.has(s.id))
-            if (favoriteSessions.length === 0) return null
-            return (
-              <div className="quick-access-list" id="quick-favorites" role="tabpanel">
-                {favoriteSessions.map((session) => (
-                  <QuickAccessCard key={session.id} session={session} isFavorite
-                    onOpen={onOpen} onToggleFavorite={onToggleFavorite} />
-                ))}
-              </div>
-            )
-          })()}
+          {favorites.size > 0 && !collapsedSections.favorites && favoriteSessions.length > 0 && (
+            <div className="quick-access-list" id="quick-favorites" role="tabpanel" ref={favoritesListRef}>
+              {favoriteSessions.slice(0, favoritesLimit).map((session) => (
+                <QuickAccessCard key={session.id} session={session} isFavorite
+                  onOpen={onOpen} onToggleFavorite={onToggleFavorite} />
+              ))}
+              {favoritesLimit < favoriteSessions.length && (
+                <div ref={favoritesSentinelRef} className="recent-sentinel" aria-hidden="true" />
+              )}
+            </div>
+          )}
           {!collapsedSections.active && (
             <div className="quick-access-list" id="quick-active" role="tabpanel">
               {activeSessions.map((session) => (

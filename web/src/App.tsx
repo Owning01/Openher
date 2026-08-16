@@ -637,8 +637,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     })
   }, [])
 
+  // Todos los recientes (ordenados, sin dismiss): el lazy loading (scroll
+  // infinito) vive en SessionList — no limitar acá, o el scroll nunca ve más.
   const recentSessions = useMemo(
-    () => [...sessions].sort((a, b) => (b.updated || 0) - (a.updated || 0)).filter((s) => !dismissedRecentIds.has(s.id)).slice(0, 5),
+    () => [...sessions].sort((a, b) => (b.updated || 0) - (a.updated || 0)).filter((s) => !dismissedRecentIds.has(s.id)),
     [sessions, dismissedRecentIds]
   )
 

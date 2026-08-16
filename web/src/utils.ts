@@ -56,8 +56,11 @@ export function extractPath(dashboard: ProjectDashboard | null): string | null {
   return pickString(project.path) ?? pickString(project.directory) ?? pickString(project.root) ?? null
 }
 
-// Último segmento de una ruta (file.ts, src/main.go...).
-export function basename(path: string): string {
+// Último segmento de una ruta (file.ts, src/main.go...). Nunca crashea:
+// entradas vacías/undefined devuelven "" (los sessions pueden llegar sin
+// directory y los paneles del desktop grid lo renderizan directo).
+export function basename(path: string | undefined | null): string {
+  if (!path) return ""
   const clean = path.replace(/\\/g, "/")
   return clean.split("/").filter(Boolean).pop() ?? path
 }

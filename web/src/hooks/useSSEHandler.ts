@@ -138,7 +138,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       if (type === "message.updated") {
         const sessionID = p.sessionID as string | undefined
         if (sessionID && sessionID === deps.sessionID) {
-          const rawMsg = p.message as { info?: { id?: string; time?: { completed?: number } }; parts?: Array<{ id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }> } | undefined
+          const rawMsg = p.message as { id?: string; info?: { id?: string; time?: { completed?: number } }; parts?: Array<{ id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }>; content?: Array<{ id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }> } | undefined
           // Streaming del reasoning en vivo (v1): `message.part.delta` no trae
           // el type del part, así que los deltas de reasoning sin `part.updated`
           // previo caen como texto. El mensaje persistido SÍ trae los parts
@@ -146,9 +146,12 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
           // tipos alimenta los deltas siguientes → el texto del razonamiento
           // stream dentro del ThinkingBlock. Solo reasoning/thinking (el texto
           // del assistant ya stream por deltas; tool outputs no se copian).
-          const updatedMessageID = (p.messageID as string | undefined) ?? rawMsg?.info?.id
-          if (rawMsg?.parts && updatedMessageID) {
-            for (const part of rawMsg.parts) {
+          // Ojo: el server manda los parts en `content` (formato V2), no en
+          // `parts` — soportar ambos.
+          const rawParts = rawMsg?.content ?? rawMsg?.parts ?? []
+          const updatedMessageID = (p.messageID as string | undefined) ?? rawMsg?.info?.id ?? rawMsg?.id
+          if (rawParts.length > 0 && updatedMessageID) {
+            for (const part of rawParts) {
               if (part?.id && (part.type === "reasoning" || part.type === "thinking")) {
                 partTypeCacheRef.current.set(part.id, part.type)
                 deps.applyPart(sessionID, updatedMessageID, {
