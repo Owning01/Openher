@@ -53,6 +53,8 @@ import { Share } from "@capacitor/share"
 import { useShareReceiver } from "./hooks/useShareReceiver"
 import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
+import type { ShellPanelKind } from "./shell"
+import { ShellPanel } from "./components/shellPanels"
 import type { ServerProfile } from "./types"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
@@ -70,11 +72,11 @@ const FileBrowser = lazy(() => import("./components/FileBrowser").then((m) => ({
 const HelpPage = lazy(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const FolderPicker = lazy(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
 
-type DesktopLayout = { cols: number; rows: number; sessions: Array<string | null>; colSizes: Array<number | null>; rowSizes: Array<number | null> }
+type DesktopLayout = { cols: number; rows: number; sessions: Array<string | null>; panelKinds: Array<ShellPanelKind>; colSizes: Array<number | null>; rowSizes: Array<number | null> }
 
 function loadDesktopState(fallbackSessionID: string | null): { layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean } {
   const fallback = {
-    layout: { cols: 1, rows: 1, sessions: [fallbackSessionID], colSizes: [null], rowSizes: [null] } as DesktopLayout,
+    layout: { cols: 1, rows: 1, sessions: [fallbackSessionID], panelKinds: ["session"], colSizes: [null], rowSizes: [null] } as DesktopLayout,
     sidebarWidth: 340,
     sidebarCollapsed: false,
   }
@@ -82,11 +84,17 @@ function loadDesktopState(fallbackSessionID: string | null): { layout: DesktopLa
     const raw = JSON.parse(localStorage.getItem(DESKTOP_STATE_KEY) ?? "null") as Partial<{ layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean }> | null
     const layout = raw?.layout
     if (layout && layout.cols >= 1 && layout.rows >= 1 && Array.isArray(layout.sessions) && layout.sessions.length === layout.cols * layout.rows) {
+      const total = layout.cols * layout.rows
+      const kinds: Array<ShellPanelKind> =
+        Array.isArray(layout.panelKinds) && layout.panelKinds.length === total
+          ? layout.panelKinds.map((k) => (k === "session" || k === "terminal" || k === "explorer" || k === "kanban" || k === "docs" || k === "updates" || k === "stats" || k === "labs" || k === "config" ? k : "session"))
+          : new Array(total).fill("session")
       return {
         layout: {
           cols: layout.cols,
           rows: layout.rows,
           sessions: layout.sessions.map((s) => (typeof s === "string" ? s : null)),
+          panelKinds: kinds,
           colSizes: Array.isArray(layout.colSizes) && layout.colSizes.length === layout.cols ? layout.colSizes : new Array(layout.cols).fill(null),
           rowSizes: Array.isArray(layout.rowSizes) && layout.rowSizes.length === layout.rows ? layout.rowSizes : new Array(layout.rows).fill(null),
         },
@@ -910,56 +918,135 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const openInPanel = useCallback((index: number, id: string) => {
     setDesktopLayout((prev) => {
       const sessions = [...prev.sessions]
+      const panelKinds = [...prev.panelKinds]
       sessions[index] = id
-      return { ...prev, sessions }
+      panelKinds[index] = "session"
+      return { ...prev, sessions, panelKinds }
     })
     setActivePanel(index)
   }, [])
 
   const splitPanel = useCallback((index: number, dir: "right" | "bottom") => {
     setDesktopLayout((prev) => {
+      const kindsOf = (r: number, c: number) => prev.panelKinds[r * prev.cols + c] ?? "session"
       if (dir === "right") {
         const cols = prev.cols + 1
         const col = index % prev.cols
         const sessions: Array<string | null> = []
+        const panelKinds: Array<ShellPanelKind> = []
         for (let r = 0; r < prev.rows; r++) {
           for (let c = 0; c < cols; c++) {
-            if (c <= col) sessions.push(prev.sessions[r * prev.cols + c] ?? null)
-            else sessions.push(c === col + 1 ? null : prev.sessions[r * prev.cols + (c - 1)] ?? null)
+            if (c <= col) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(kindsOf(r, c)) }
+            else if (c === col + 1) { sessions.push(null); panelKinds.push("session") }
+            else { sessions.push(prev.sessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(kindsOf(r, c - 1)) }
           }
         }
         const colSizes = [...prev.colSizes]
         colSizes.splice(col + 1, 0, null)
-        return { ...prev, cols, sessions, colSizes }
+        return { ...prev, cols, sessions, panelKinds, colSizes }
       }
       const rows = prev.rows + 1
       const row = Math.floor(index / prev.cols)
       const sessions: Array<string | null> = []
+      const panelKinds: Array<ShellPanelKind> = []
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < prev.cols; c++) {
-          if (r <= row) sessions.push(prev.sessions[r * prev.cols + c] ?? null)
-          else sessions.push(r === row + 1 ? null : prev.sessions[(r - 1) * prev.cols + c] ?? null)
+          if (r <= row) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(kindsOf(r, c)) }
+          else if (r === row + 1) { sessions.push(null); panelKinds.push("session") }
+          else { sessions.push(prev.sessions[(r - 1) * prev.cols + c] ?? null); panelKinds.push(kindsOf(r - 1, c)) }
         }
       }
       const rowSizes = [...prev.rowSizes]
       rowSizes.splice(row + 1, 0, null)
-      return { ...prev, rows, sessions, rowSizes }
+      return { ...prev, rows, sessions, panelKinds, rowSizes }
     })
   }, [])
+
+  // Cambia el tipo de un panel (chat/terminal/explorador/...) sin cerrarlo.
+  const setPanelKind = useCallback((index: number, kind: ShellPanelKind) => {
+    setDesktopLayout((prev) => {
+      const sessions = [...prev.sessions]
+      const panelKinds = [...prev.panelKinds]
+      sessions[index] = kind === "session" ? sessions[index] : null
+      panelKinds[index] = kind
+      return { ...prev, sessions, panelKinds }
+    })
+    setActivePanel(index)
+  }, [])
+
+  // Agrega un panel nuevo (de cualquier tipo) al grid, expandiendo si está lleno.
+  const addPanel = useCallback((kind: ShellPanelKind) => {
+    setDesktopLayout((prev) => {
+      const total = prev.cols * prev.rows
+      const emptySlot = prev.sessions.findIndex((s, i) => s === null && prev.panelKinds[i] === "session")
+      if (emptySlot >= 0) {
+        const sessions = [...prev.sessions]
+        const panelKinds = [...prev.panelKinds]
+        panelKinds[emptySlot] = kind
+        return { ...prev, sessions, panelKinds }
+      }
+      let cols = prev.cols
+      let rows = prev.rows
+      if (cols < 3) cols += 1
+      else if (rows < 2) rows += 1
+      else cols = 2, rows = 2 // reset visual de 3x1 -> 2x2
+      const sessions: Array<string | null> = new Array(cols * rows).fill(null)
+      const panelKinds: Array<ShellPanelKind> = new Array(cols * rows).fill("session")
+      for (let i = 0; i < Math.min(total, cols * rows); i++) {
+        sessions[i] = prev.sessions[i]
+        panelKinds[i] = prev.panelKinds[i]
+      }
+      panelKinds[sessions.length - 1] = kind
+      const colSizes = new Array(cols).fill(null)
+      const rowSizes = new Array(rows).fill(null)
+      prev.colSizes.forEach((s, i) => { if (i < cols) colSizes[i] = s })
+      prev.rowSizes.forEach((s, i) => { if (i < rows) rowSizes[i] = s })
+      return { ...prev, cols, rows, sessions, panelKinds, colSizes, rowSizes }
+    })
+    setActivePanel(0)
+  }, [])
+
+  // "Abrir sesión aquí" desde el explorador: crea la sesión en el directorio
+  // y la abre en el panel activo (como panel de chat).
+  const openSessionInDir = useCallback(async (directory: string) => {
+    try {
+      const created = await createSession(directory, activeModel)
+      if (created) {
+        recordSessionCreated()
+        persistDirectory(directory)
+        navigate("detail")
+        setDesktopLayout((prev) => {
+          const sessions = [...prev.sessions]
+          const panelKinds = [...prev.panelKinds]
+          const i = Math.min(activePanel, prev.sessions.length - 1)
+          sessions[i] = created.id
+          panelKinds[i] = "session"
+          return { ...prev, sessions, panelKinds }
+        })
+        await onLoadSelected(created.id, created.directory)
+        await refreshSessions()
+      }
+    } catch { /* ignore */ }
+  }, [createSession, activeModel, recordSessionCreated, persistDirectory, navigate, setDesktopLayout, activePanel, onLoadSelected, refreshSessions])
 
   const closePanel = useCallback((index: number) => {
     setDesktopLayout((prev) => {
       let sessions = [...prev.sessions]
+      let panelKinds = [...prev.panelKinds]
       sessions[index] = null
+      panelKinds[index] = "session"
       let { cols, rows, colSizes, rowSizes } = prev
-      // Colapsar filas/columnas enteras vacías
+      // Un panel es "vacío" solo si es tipo session sin sesión: los paneles
+      // de herramientas (terminal, kanban...) nunca colapsan por vacío.
+      const isEmpty = (i: number) => sessions[i] === null && panelKinds[i] === "session"
       let changed = true
       while (changed) {
         changed = false
         for (let r = 0; r < rows; r++) {
-          const rowEmpty = sessions.slice(r * cols, r * cols + cols).every((s) => s === null)
+          const rowEmpty = sessions.slice(r * cols, r * cols + cols).every((_, i) => isEmpty(r * cols + i))
           if (rowEmpty && rows > 1) {
             sessions = sessions.filter((_, i) => Math.floor(i / cols) !== r)
+            panelKinds = panelKinds.filter((_, i) => Math.floor(i / cols) !== r)
             rows -= 1
             rowSizes = rowSizes.filter((_, i) => i !== r)
             changed = true
@@ -968,9 +1055,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         }
         if (changed) continue
         for (let c = 0; c < cols; c++) {
-          const colEmpty = sessions.filter((_, i) => i % cols === c).every((s) => s === null)
+          const colEmpty = sessions.filter((_, i) => i % cols === c).every((_, i) => isEmpty(i * cols + c))
           if (colEmpty && cols > 1) {
             sessions = sessions.filter((_, i) => i % cols !== c)
+            panelKinds = panelKinds.filter((_, i) => i % cols !== c)
             cols -= 1
             colSizes = colSizes.filter((_, i) => i !== c)
             changed = true
@@ -978,7 +1066,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           }
         }
       }
-      return { ...prev, cols, rows, sessions, colSizes, rowSizes }
+      return { ...prev, cols, rows, sessions, panelKinds, colSizes, rowSizes }
     })
     if (activePanel === index) setActivePanel(0)
   }, [activePanel])
@@ -1004,21 +1092,23 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       const cols = prev.cols + 1
       const col = index % prev.cols
       const sessions: Array<string | null> = []
+      const panelKinds: Array<ShellPanelKind> = []
       for (let r = 0; r < prev.rows; r++) {
         for (let c = 0; c < cols; c++) {
           if (dir === "right") {
-            if (c <= col) sessions.push(prev.sessions[r * prev.cols + c] ?? null)
-            else sessions.push(c === col + 1 ? drag.id : prev.sessions[r * prev.cols + (c - 1)] ?? null)
+            if (c <= col) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
+            else if (c === col + 1) { sessions.push(drag.id); panelKinds.push("session") }
+            else { sessions.push(prev.sessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + (c - 1)] ?? "session") }
           } else {
-            if (c === col) sessions.push(drag.id)
-            else if (c < col) sessions.push(prev.sessions[r * prev.cols + c] ?? null)
-            else sessions.push(prev.sessions[r * prev.cols + (c - 1)] ?? null)
+            if (c === col) { sessions.push(drag.id); panelKinds.push("session") }
+            else if (c < col) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
+            else { sessions.push(prev.sessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + (c - 1)] ?? "session") }
           }
         }
       }
       const colSizes = [...prev.colSizes]
       colSizes.splice(dir === "right" ? col + 1 : col, 0, null)
-      return { ...prev, cols, sessions, colSizes }
+      return { ...prev, cols, sessions, panelKinds, colSizes }
     })
     setActivePanel(dir === "right" ? index + 1 : index)
   }, [])
@@ -1026,8 +1116,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (from === to) return
     setDesktopLayout((prev) => {
       const sessions = [...prev.sessions]
+      const panelKinds = [...prev.panelKinds]
       ;[sessions[from], sessions[to]] = [sessions[to], sessions[from]]
-      return { ...prev, sessions }
+      ;[panelKinds[from], panelKinds[to]] = [panelKinds[to], panelKinds[from]]
+      return { ...prev, sessions, panelKinds }
     })
   }, [setDesktopLayout])
 
@@ -1487,44 +1579,74 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               window.addEventListener("pointerup", onUp)
             }
             const cells = Array.from({ length: desktopLayout.cols * desktopLayout.rows }).map((_, i) => {
+              const kind = desktopLayout.panelKinds[i] ?? "session"
               const sid = desktopLayout.sessions[i]
               const session = sid ? sessions.find((s) => s.id === sid) ?? null : null
               const col = i % desktopLayout.cols
               const row = Math.floor(i / desktopLayout.cols)
               const placement = { gridColumn: col * 2 + 1, gridRow: row * 2 + 1 }
-              if (!session) {
+              if (kind === "session") {
+                if (!session) {
+                  return (
+                    <div key={`ph-${i}`} className="desktop-cell-placeholder" style={placement} onClick={() => setActivePanel(i)}>
+                      <button type="button" className="btn-icon compact desktop-cell-close"
+                        title="Close split" aria-label="Close split"
+                        onClick={(e) => { e.stopPropagation(); closePanel(i) }}>×</button>
+                      <FolderIcon size={48} className="icon-empty-state" />
+                      <p>{t('sessions.selectOne')}</p>
+                    </div>
+                  )
+                }
                 return (
-                  <div key={`ph-${i}`} className="desktop-cell-placeholder" style={placement} onClick={() => setActivePanel(i)}>
-                    <button type="button" className="btn-icon compact desktop-cell-close"
-                      title="Close split" aria-label="Close split"
-                      onClick={(e) => { e.stopPropagation(); closePanel(i) }}>×</button>
-                    <FolderIcon size={48} className="icon-empty-state" />
-                    <p>{t('sessions.selectOne')}</p>
+                  <div key={`panel-${i}`} style={placement} className="desktop-cell">
+                    <SessionChatPanel
+                      session={session}
+                      config={config!}
+                      dataMode={dataMode}
+                      baseProps={baseChatProps}
+                      active={activePanel === i}
+                      connectionState={connectionState}
+                      panelIndex={i}
+                      onActivate={() => setActivePanel(i)}
+                      onClose={() => { closePanel(i); if (maximizedPanel === i) setMaximizedPanel(null) }}
+                      onSplitSession={handleSplitSessionOnSide}
+                      onSettled={settleSession}
+                      onRefreshSessions={refreshSessions}
+                      onSetCommands={setCommands}
+                      onRecordPrompt={recordPrompt}
+                      onQueueAction={queueAction}
+                      onShellExecute={shellExecute}
+                      onChangeAgentGlobal={changeAgent}
+                      onOpenInThisPanel={(id) => openInPanel(i, id)}
+                      onSwapPanels={handleSwapPanels} />
                   </div>
                 )
               }
+              // Paneles de la shell (terminal, explorador, kanban, docs...)
               return (
-                <div key={`panel-${i}`} style={placement} className="desktop-cell">
-                  <SessionChatPanel
-                    session={session}
-                    config={config!}
-                    dataMode={dataMode}
-                    baseProps={baseChatProps}
-                    active={activePanel === i}
-                    connectionState={connectionState}
-                    panelIndex={i}
-                    onActivate={() => setActivePanel(i)}
-                    onClose={() => { closePanel(i); if (maximizedPanel === i) setMaximizedPanel(null) }}
-                    onSplitSession={handleSplitSessionOnSide}
-                    onSettled={settleSession}
-                    onRefreshSessions={refreshSessions}
-                    onSetCommands={setCommands}
-                    onRecordPrompt={recordPrompt}
-                    onQueueAction={queueAction}
-                    onShellExecute={shellExecute}
-                    onChangeAgentGlobal={changeAgent}
-                    onOpenInThisPanel={(id) => openInPanel(i, id)}
-                    onSwapPanels={handleSwapPanels} />
+                <div key={`panel-${i}`} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
+                  <div className="shell-panel-header">
+                    <select className="shell-panel-kind" value={kind}
+                      onChange={(e) => setPanelKind(i, e.target.value as ShellPanelKind)}
+                      onClick={(e) => e.stopPropagation()}>
+                      <option value="session">💬 {t('shell.kindSession')}</option>
+                      <option value="terminal">▸ {t('shell.kindTerminal')}</option>
+                      <option value="explorer">🗂 {t('shell.kindExplorer')}</option>
+                      <option value="kanban">📋 {t('shell.kindKanban')}</option>
+                      <option value="docs">📚 {t('shell.kindDocs')}</option>
+                      <option value="updates">🆕 {t('shell.kindUpdates')}</option>
+                      <option value="stats">📊 {t('shell.kindStats')}</option>
+                      <option value="labs">🧪 {t('shell.kindLabs')}</option>
+                      <option value="config">⚙ {t('shell.kindConfig')}</option>
+                    </select>
+                    <span className="shell-panel-spacer" />
+                    <button type="button" className="btn-icon compact" title={t('panel.close')} aria-label={t('panel.close')}
+                      onClick={(e) => { e.stopPropagation(); closePanel(i) }}>×</button>
+                  </div>
+                  <ShellPanel
+                    kind={kind}
+                    cwd={session?.directory ?? undefined}
+                    onOpenSessionDir={openSessionInDir} />
                 </div>
               )
             })
@@ -1547,6 +1669,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               : null
             return (
               <div className="desktop-layout-area">
+                <div className="desktop-add-bar" role="toolbar" aria-label="Paneles">
+                  <span className="desktop-add-label" title={t('shell.addPanel')}>+</span>
+                  <button type="button" className="desktop-add-btn" title={t('shell.kindTerminal')} aria-label={t('shell.kindTerminal')}
+                    onClick={() => addPanel("terminal")}>▸</button>
+                  <button type="button" className="desktop-add-btn" title={t('shell.kindExplorer')} aria-label={t('shell.kindExplorer')}
+                    onClick={() => addPanel("explorer")}>🗂</button>
+                  <button type="button" className="desktop-add-btn" title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
+                    onClick={() => addPanel("kanban")}>📋</button>
+                  <button type="button" className="desktop-add-btn" title={t('shell.kindDocs')} aria-label={t('shell.kindDocs')}
+                    onClick={() => addPanel("docs")}>📚</button>
+                  <button type="button" className="desktop-add-btn" title={t('shell.kindUpdates')} aria-label={t('shell.kindUpdates')}
+                    onClick={() => addPanel("updates")}>🆕</button>
+                  <button type="button" className="desktop-add-btn" title={t('shell.kindStats')} aria-label={t('shell.kindStats')}
+                    onClick={() => addPanel("stats")}>📊</button>
+                  <button type="button" className="desktop-add-btn" title={t('shell.kindLabs')} aria-label={t('shell.kindLabs')}
+                    onClick={() => addPanel("labs")}>🧪</button>
+                  <button type="button" className="desktop-add-btn" title={t('shell.kindConfig')} aria-label={t('shell.kindConfig')}
+                    onClick={() => addPanel("config")}>⚙</button>
+                </div>
                 {maximizedSession && maximizedIndex !== null ? (
                   <div className="desktop-maximized">
                     <SessionChatPanel
