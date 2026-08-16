@@ -353,6 +353,23 @@
     background-color: var(--chat-bg-color, #000);
   }
 
+  /* El chat (mensajes + composer) ocupa el MISMO ancho que el texto:
+     --chat-max-width = calc(100% - 2*Npx) (Settings → Chat → Ancho del
+     texto). Centrado, igual que los bubbles. */
+  .app-desktop-content .messages-wrap,
+  .app-desktop-content .composer {
+    max-width: var(--chat-max-width, 100%);
+    margin-inline: auto;
+    width: 100%;
+  }
+
+  /* El bubble ya no necesita su propia reducción: el contenedor
+     (messages-wrap) limita el ancho. Evita la doble reducción
+     (bubble calc(100% - 2N) dentro de wrap calc(100% - 2N)). */
+  .app-desktop-content .message {
+    max-width: 100%;
+  }
+
   .app-desktop-placeholder {
     flex: 1;
     min-height: 0;
