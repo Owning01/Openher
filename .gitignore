@@ -69,3 +69,6 @@ signaling-worker/node_modules/
 signaling-worker/.wrangler/
 "web/scripts/copy-dist.py"  
 ".playwright-mcp/"  
+
+desktop-app/target/
+desktop-app/data/

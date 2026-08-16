@@ -1,0 +1,28 @@
+[package]
+name = "opencode-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "OpenCode Desktop - shell Rust portable que embebe la web app, stats, terminales, explorador y plugins"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
+wry = "0.51"
+winit = "0.30"
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+] }
+tray-icon = "0.19"
+embed-resource = "2"
+
+[build-dependencies]
+embed-resource = "2"
+
+[profile.release]
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1
