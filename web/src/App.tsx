@@ -158,7 +158,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
     renderedMessages, messageScrollSignature,
-    toolMessage: _toolMessage, completionShouldPlayRef,
+    completionShouldPlayRef,
     clearSession, loadSelected, send, abortSession,
     setMessages, undoMessage, redoMessage, compactSession,
     applyDelta, applyPart, compacting, setCompacting, messages
@@ -385,9 +385,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     (dataMode === "full" && flags.streamingFull) ? config : null,
     useCallback((event: SSEEvent) => {
       if (stopGenerationRef.current) {
-        if (event.type === "message.part.delta" || event.type === "message.updated" || event.type === "message.part.updated"
+        // Descartar deltas solo hasta que el server confirme el fin del turno
+        // (idle/settled) — entonces se reanuda el streaming de inmediato en vez
+        // de esperar el timeout ciego.
+        const isSettled = event.type === "session.status" || event.type === "session.idle"
+          || (event.type === "message.updated" &&
+            (event.properties as Record<string, unknown>)?.message &&
+            ((event.properties as Record<string, unknown>).message as { info?: { time?: { completed?: number } } })?.info?.time?.completed)
+        if (isSettled) {
+          stopGenerationRef.current = false
+        } else if (event.type === "message.part.delta" || event.type === "message.updated" || event.type === "message.part.updated"
           || event.type === "session.next.text.delta" || event.type === "session.next.reasoning.delta"
-          || event.type === "session.next.tool.input.delta") return
+          || event.type === "session.next.tool.input.delta") {
+          return
+        }
       }
       handleSSEEvent(event)
     }, [handleSSEEvent]),
@@ -779,7 +790,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     // merge por id de loadSelected los conservaría y reaparecerían sin revert).
     const revertMsgId = localRevertID ?? selectedSession?.revert?.messageID
     if (revertMsgId) {
-      setMessages((prev) => prev.filter((m) => !m.info.id || m.info.id <= revertMsgId))
+      // Filtrar SOLO los mensajes de la sesión activa (nunca tocar el estado
+      // de otra sesión que pueda coexistir en el array).
+      const sid = selectedSession.id
+      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id <= revertMsgId))
     }
     setLocalRevertID(null)
     setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "busy" } : s))
@@ -788,14 +802,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
       setCommands, setRuntimeError, images)
     if (result === "help") { setHelpPage("commands"); navigate("help") }
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, localRevertID, setMessages])
+    if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker])
 
   const handleRegenerate = useCallback(async () => {
     if (!selectedSession) return
     // Si hay un revert activo, regenerar el último mensaje user VISIBLE.
     const revertMsgId = localRevertID ?? selectedSession?.revert?.messageID
     if (revertMsgId) {
-      setMessages((prev) => prev.filter((m) => !m.info.id || m.info.id <= revertMsgId))
+      const sid = selectedSession.id
+      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id <= revertMsgId))
       setLocalRevertID(null)
     }
     const visible = revertMsgId ? renderedMessages.filter((m) => m.info.id <= revertMsgId) : renderedMessages
@@ -842,7 +858,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     } catch { /* ignore */ }
     await loadSelected(sid, dir).catch(() => undefined)
     await settleSession(sid, dir).catch(() => undefined)
-    setTimeout(() => { stopGenerationRef.current = false }, 2000)
+    setTimeout(() => { stopGenerationRef.current = false }, 800)
   }, [selectedSession, abortSession, loadSelected, settleSession])
 
   const handleCreateSession = useCallback(async (directory?: string) => {

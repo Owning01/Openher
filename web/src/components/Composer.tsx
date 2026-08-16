@@ -485,7 +485,14 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            // Edición manual: cancela la navegación por historial (↑/↓) en curso.
+            if (historyIndexRef.current !== -1) {
+              historyIndexRef.current = -1
+              setHistoryDraft(null)
+            }
+            onChange(event.target.value)
+          }}
           aria-label={t('composer.inputLabel')}
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
@@ -547,7 +554,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               <StopCircleIcon size={16} />
             </button>
           )}
-          <button onClick={handleSendWithImages} disabled={disabled} className="btn-primary composer-bar-btn" title={t('composer.send')} aria-label={t('composer.send')}>
+          <button onClick={handleSendWithImages} disabled={disabled || isWorking} className="btn-primary composer-bar-btn" title={t('composer.send')} aria-label={t('composer.send')}>
             <SendIcon size={16} />
           </button>
         </div>

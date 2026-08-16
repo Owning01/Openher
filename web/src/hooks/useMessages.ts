@@ -25,12 +25,6 @@ function extractText(msg: MessageEnvelope): string {
   return blocks.join("\n\n").trim()
 }
 
-export function assistantPayloadLength(items: MessageEnvelope[]): number {
-  return items
-    .filter((message) => message.info.role !== "user")
-    .reduce((sum, message) => sum + extractText(message).length, 0)
-}
-
 function stripNonEssential(msg: MessageEnvelope, dataMode?: DataMode): MessageEnvelope {
   if (dataMode === "full" || dataMode === "saver") return msg
   const keep = (p: MessageEnvelope["parts"][number]) =>
@@ -94,17 +88,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       .join("|")
   }, [renderedMessages])
 
-  const toolMessage = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i]
-      if (m.info.role === "assistant") {
-        const toolParts = m.parts.filter((p) => p.type === "tool" || toolPartTypes.has(p.type))
-        if (toolParts.length > 0) return toolParts
-      }
-    }
-    return null
-  }, [messages])
-
   const clearSession = useCallback(() => {
     loadedSessionIDRef.current = null
     subagentAnchorRef.current.clear()
@@ -150,7 +133,14 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           // que el fetch acotado no traiga se conservan — nunca se borran del chat.
           const remoteIDs = new Set(updated.parts.map((p) => p.id))
           const extraLocal = m.parts.filter((p) => !remoteIDs.has(p.id))
-          const parts = extraLocal.length > 0 ? [...updated.parts, ...extraLocal] : updated.parts
+          const parts = extraLocal.length > 0
+            ? [...updated.parts, ...extraLocal].sort((a, b) => {
+                // ids part_<hex> monotónicos: el sort restaura el orden original
+                // cuando los parts locales (streamed) van al final del array.
+                if (!a.id || !b.id) return 0
+                return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+              })
+            : updated.parts
           merged.push({ ...updated, parts })
           msgMap.delete(m.info.id)
           if (updated.info.time.completed !== m.info.time.completed || updated.info.role !== m.info.role) changed = true
@@ -458,6 +448,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   ) => {
     const text = (textOverride ?? composer).trim()
     if ((!text || !selectedSession) && (!images || images.length === 0)) return
+    // Guard anti doble-envío: mientras hay un turno en curso se ignora el
+    // envío (el server encola igual, pero evita prompts duplicados por
+    // doble-tap del botón Send en móvil).
+    if (awaitingAssistantReply) return
 
     const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
 
@@ -499,11 +493,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       // fetch confirmará el optimista.
       let confirmed = false
       try {
-        const deadline = Date.now() + 10000
+        const deadline = Date.now() + 8000
         while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
           await then()
           if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
-          await new Promise((r) => setTimeout(r, 700))
+          await new Promise((r) => setTimeout(r, 1500))
         }
         confirmed = !optimisticIDsRef.current.has(optimisticMessage.info.id)
       } catch {
@@ -599,7 +593,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     runtimeError, setRuntimeError,
     compacting, setCompacting,
     renderedMessages, messageScrollSignature, assistantResponseSignature,
-    toolMessage, completionShouldPlayRef,
+    completionShouldPlayRef,
     clearSession, loadSelected, send: updateSend, abortSession,
     undoMessage, redoMessage, compactSession, sendShell: sendShellCallback,
     applyDelta, applyPart

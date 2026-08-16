@@ -3,11 +3,27 @@ import { PencilIcon, UndoIcon, MenuDotsIcon } from "../Icons"
 import { formatTime } from "../utils"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
 import { useT } from "../i18n-context"
+import { useOutsideClick } from "../hooks/useOutsideClick"
 import ToolPart from "./ToolPart"
 import { FileDiffs } from "./FileDiffs"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { Markdown } from "./Markdown"
 import { ImageLightbox } from "./ImageLightbox"
+
+// Compara ids de mensaje (msg_<hexTimestamp+counter>): lexicográfica por
+// defecto, con fallback numérico si el server cambia el formato del id.
+function messageIdGt(a: string, b: string): boolean {
+  const num = (id: string): number | null => {
+    const m = id.match(/^msg_([0-9a-f]+)/)
+    if (!m) return null
+    const n = parseInt(m[1].slice(0, 13), 16)
+    return Number.isFinite(n) ? n : null
+  }
+  const na = num(a)
+  const nb = num(b)
+  if (na !== null && nb !== null) return na > nb
+  return a > b
+}
 
 function agentColorIndex(agentName: string | undefined, agents: AgentOption[]): number {
   if (!agentName) return 0
@@ -56,10 +72,12 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   const [moreOpen, setMoreOpen] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const moreWrapRef = useRef<HTMLSpanElement | null>(null)
+  useOutsideClick(moreWrapRef, () => setMoreOpen(false), moreOpen)
 
   // Los IDs del server son msg_<hexTimestamp+counter> (monotónicos): la
   // comparación lexicográfica es equivalente a la de orden temporal.
-  const isReverted = revert ? message.info.id > revert.messageID : false
+  const isReverted = revert ? messageIdGt(message.info.id, revert.messageID) : false
   const isRevertPoint = revert && message.info.id === revert.messageID
 
   const isAssistant = message.info.role === "assistant"
@@ -209,7 +227,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
               key={thinkingDefault}
               parts={message.thinkingParts}
               duration={duration}
-              defaultOpen={thinkingDefault === "expanded"}
+              defaultOpen={thinkingDefault === "expanded" || (thinkingDefault === "auto" && message.thinkingParts.some((p) => !p.time?.end))}
             />
           </div>
         )}
@@ -245,7 +263,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
               <span className="msg-footer-interrupted"> · interrupted</span>
             )}
             <span className="msg-footer-spacer" />
-            <span className="msg-more-wrap">
+            <span className="msg-more-wrap" ref={moreWrapRef}>
               <button type="button" className="btn-icon btn-ghost msg-more-btn"
                 onClick={() => setMoreOpen((v) => !v)}
                 aria-expanded={moreOpen}

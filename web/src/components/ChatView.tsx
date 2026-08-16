@@ -15,7 +15,6 @@ import { GitToolbar } from "./GitToolbar"
 import { AutoQuestionPrompt } from "./AutoQuestionPrompt"
 import { PermissionPrompt } from "./PermissionPrompt"
 
-import { api } from "../api"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo,
@@ -213,13 +212,12 @@ export const ChatView = memo(function ChatView({
     if (subagentSession) onOpenSession(subagentSession.id, subagentSession.directory)
   }, [sessions, selectedSession?.id, onOpenSession])
 
+  useOutsideClick(overflowRef, () => setShowOverflow(false), showOverflow)
+  // El badge de preguntas pendientes usa el poll de App.tsx (pendingQuestions
+  // llega por prop) — sin intervalo duplicado aquí.
   useEffect(() => {
-    if (!config) return
-    const id = setInterval(() => {
-      api.listPendingQuestions(config, selectedSession?.directory).then((q) => setPendingCount(q.length)).catch(() => {})
-    }, 15000)
-    return () => clearInterval(id)
-  }, [config, selectedSession?.directory])
+    setPendingCount(pendingQuestions?.length ?? 0)
+  }, [pendingQuestions])
 
   useOutsideClick(overflowRef, () => setShowOverflow(false), showOverflow)
 
