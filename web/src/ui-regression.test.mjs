@@ -16,10 +16,12 @@ const useConfig = readFileSync(new URL('./hooks/useConfig.ts', import.meta.url),
 const icons = readFileSync(new URL('./Icons.tsx', import.meta.url), 'utf8')
 const styles = cssBundle()
 
-const refreshButton = sessionToolbar.match(/<button onClick=\{onRefresh\}[\s\S]*?<LoadingIcon[\s\S]*?<\/button>/)
+const refreshButton = sessionToolbar.match(/<button onClick=\{handleRefresh\}[\s\S]*?<LoadingIcon[\s\S]*?<\/button>/)
 assert.ok(refreshButton, 'sessions refresh button should call refreshSessionsWithIndicator')
 assert.ok(refreshButton[0].includes('RefreshIcon'), 'idle sessions refresh button should render a non-spinning RefreshIcon')
 assert.ok(refreshButton[0].includes('refreshing ? <LoadingIcon'), 'refresh button should spin only during an active manual refresh')
+assert.ok(sessionToolbar.includes('setRefreshFeedback(ok ? "ok" : "fail")'), 'refresh button should show ok/fail feedback based on the refresh result')
+assert.ok(sessionToolbar.includes('onRefresh: () => Promise<boolean>'), 'refresh should resolve whether it succeeded')
 
 assert.ok(useMessages.includes('messageScrollSignature'), 'conversation auto-scroll should react to message content changes, not only message count')
 assert.ok(msgList.includes('scrollToBottom("auto")'), 'auto-scroll should re-anchor the conversation at the bottom on new messages')

@@ -69,6 +69,47 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // las bubbles memoizadas no re-renderizan.
   const renderedCacheRef = useRef<Map<string, { src: MessageEnvelope; rendered: RenderedMessage; diffs?: import("../types").FileDiff[]; turnMode?: string; dataMode?: DataMode }>>(new Map())
 
+  // ---- Batch de deltas SSE por frame ----
+  // Cada `message.part.delta` llega por separado y hoy disparaba un
+  // setMessages (y un re-render de la lista) por delta. El server puede
+  // emitir decenas de deltas/segundo; se encolan y se aplican con UN solo
+  // setMessages por requestAnimationFrame (máx. 60 renders/s, agrupando el
+  // trabajo). Al desmontar se drena lo pendiente de forma síncrona para no
+  // perder el último tramo del stream.
+  const messageBatchRef = useRef<Array<(prev: MessageEnvelope[]) => MessageEnvelope[]>>([])
+  const batchFrameRef = useRef<number | null>(null)
+  const batchMountedRef = useRef(true)
+
+  const flushMessageBatch = useCallback(() => {
+    batchFrameRef.current = null
+    if (messageBatchRef.current.length === 0) return
+    const batch = messageBatchRef.current
+    messageBatchRef.current = []
+    setMessages((prev) => batch.reduce((acc, patch) => patch(acc), prev))
+  }, [])
+
+  const queueMessageUpdate = useCallback((patch: (prev: MessageEnvelope[]) => MessageEnvelope[]) => {
+    messageBatchRef.current.push(patch)
+    if (batchFrameRef.current === null && batchMountedRef.current) {
+      batchFrameRef.current = requestAnimationFrame(flushMessageBatch)
+    }
+  }, [flushMessageBatch])
+
+  useEffect(() => {
+    batchMountedRef.current = true
+    return () => {
+      batchMountedRef.current = false
+      if (batchFrameRef.current !== null) cancelAnimationFrame(batchFrameRef.current)
+      batchFrameRef.current = null
+      // Drenar pendientes síncronamente: el desmontaje no pierde el stream.
+      if (messageBatchRef.current.length > 0) {
+        const batch = messageBatchRef.current
+        messageBatchRef.current = []
+        setMessages((prev) => batch.reduce((acc, patch) => patch(acc), prev))
+      }
+    }
+  }, [])
+
   const renderedMessages: RenderedMessage[] = useMemo(() => {
     // Los deltas solo invalidan el mensaje tocado; el resto reusa su objeto
     // RenderedMessage (referencia estable → bubbles memoizadas no re-renderizan).
@@ -305,7 +346,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const applyDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace = false, partType = "text") => {
     // Guard contra races: nunca aplicar deltas de una sesión distinta a la cargada.
     if (loadedSessionIDRef.current !== sessionID) return
-    setMessages((prev) => {
+    queueMessageUpdate((prev) => {
       const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
       if (!existing) {
         // El SSE etiqueta todo como "assistant"; si el texto coincide con un
@@ -349,7 +390,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       })
       return changed ? next : prev
     })
-  }, [])
+  }, [queueMessageUpdate])
 
   // Materializa un part emitido por `message.part.updated`: crea el mensaje/part
   // con el tipo correcto antes de que lleguen los deltas.
@@ -371,7 +412,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         messageID = ""
       }
     }
-    setMessages((prev) => {
+    queueMessageUpdate((prev) => {
       let targetMessageID = messageID
       if (!targetMessageID) {
         const anchorMsg = prev.filter((m) => m.info.sessionID === sessionID && m.info.role === "assistant").pop()
@@ -399,8 +440,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         }
         const nextParts = m.parts.map((p) => {
           if (p.id !== part.id) return p
-          const incoming = part.text ?? ""
-          // Los tool parts (task/subagent) suelen llegar SIN texto: solo traen
+          const incoming = part.text ?? ""          // Los tool parts (task/subagent) suelen llegar SIN texto: solo traen
           // state.status (running→completed) y tool. Mergear siempre esos campos.
           // Compare shallow por campo (evita JSON.stringify en el hot path).
           const newState = part.state && typeof part.state === "object" ? part.state : undefined
@@ -432,7 +472,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       })
       return changed ? next : prev
     })
-  }, [])
+  }, [queueMessageUpdate])
 
   const updateSend = useCallback(async (
     selectedSession: SessionView,

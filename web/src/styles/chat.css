@@ -556,6 +556,37 @@
   box-shadow: var(--shadow-sm);
   transition: border-color 0.15s;
   margin-bottom: var(--chat-message-gap, var(--space-3));
+  /* Entrada suave al montar (nuevos mensajes / carga de la sesión). La
+     animación corre una sola vez por montaje — los mensajes en vivo no
+     se remontan, así que no re-anima en cada delta. */
+  animation: chat-message-in 0.28s ease-out;
+}
+
+@keyframes chat-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Entrada de la vista del chat (al abrir una sesión). */
+.panel.detail {
+  animation: chat-view-in 0.22s ease-out;
+}
+
+@keyframes chat-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.998);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .message-content {

@@ -25,7 +25,7 @@ type SessionListProps = {
   dataMode: DataMode
   onSelectProject: (dir: string | null) => void
   onQueryChange: (query: string) => void
-  onRefresh: () => void
+  onRefresh: () => Promise<boolean>
   onNewSession: () => void
   onOpen: (id: string, dir: string) => void
   onStartRename: (session: SessionView) => void
@@ -268,7 +268,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
         dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen}
-        selecting={selectMode} onToggleSelect={toggleSelectMode} />
+        selecting={selectMode} onToggleSelect={toggleSelectMode} connected={connectionState === "connected"} />
       <div className={`toolbar${searchOpen ? " search-open" : ""}`}>
         <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />

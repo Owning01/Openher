@@ -138,7 +138,31 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       if (type === "message.updated") {
         const sessionID = p.sessionID as string | undefined
         if (sessionID && sessionID === deps.sessionID) {
-          const rawMsg = p.message as { info?: { time?: { completed?: number } } } | undefined
+          const rawMsg = p.message as { info?: { id?: string; time?: { completed?: number } }; parts?: Array<{ id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }> } | undefined
+          // Streaming del reasoning en vivo (v1): `message.part.delta` no trae
+          // el type del part, así que los deltas de reasoning sin `part.updated`
+          // previo caen como texto. El mensaje persistido SÍ trae los parts
+          // tipados: al materializarlos acá, el part se re-tipea y el cache de
+          // tipos alimenta los deltas siguientes → el texto del razonamiento
+          // stream dentro del ThinkingBlock. Solo reasoning/thinking (el texto
+          // del assistant ya stream por deltas; tool outputs no se copian).
+          const updatedMessageID = (p.messageID as string | undefined) ?? rawMsg?.info?.id
+          if (rawMsg?.parts && updatedMessageID) {
+            for (const part of rawMsg.parts) {
+              if (part?.id && (part.type === "reasoning" || part.type === "thinking")) {
+                partTypeCacheRef.current.set(part.id, part.type)
+                deps.applyPart(sessionID, updatedMessageID, {
+                  id: part.id,
+                  type: part.type,
+                  text: part.text,
+                  tool: part.tool,
+                  callID: part.callID,
+                  state: part.state,
+                  time: part.time,
+                })
+              }
+            }
+          }
           if (rawMsg?.info?.time?.completed && deps.awaitingRef()) {
             deps.setAwaitingAssistantReply(false)
             deps.onSettled(sessionID, deps.directory ?? "")

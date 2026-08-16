@@ -41,7 +41,7 @@ export type SessionsActions = {
   renameValue: string
   openSession: (id: string, dir: string) => Promise<void>
   refreshSessions: (silent?: boolean) => Promise<void>
-  refreshSessionsWithIndicator: () => Promise<void>
+  refreshSessionsWithIndicator: () => Promise<boolean>
   createSession: (directory?: string, model?: ModelSelection) => Promise<SessionView | null>
   deleteSession: (id: string) => Promise<void>
   renameSession: (id: string, title: string, directory: string) => Promise<void>
@@ -170,10 +170,13 @@ export function useSessions(
   }, [config, selectedID, backgroundFailureCountRef, initialSessionLoadRef])
 
   const refreshSessionsWithIndicator = useCallback(async () => {
-    if (refreshingSessions) return
+    if (refreshingSessions) return false
     setRefreshingSessions(true)
     try {
       await refreshSessions(true)
+      return true
+    } catch {
+      return false
     } finally {
       setRefreshingSessions(false)
     }
