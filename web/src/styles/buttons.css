@@ -105,7 +105,7 @@
 }
 .btn-sm.btn-primary {
   background: var(--primary);
-  color: var(--bg);
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 .btn-sm.btn-danger {

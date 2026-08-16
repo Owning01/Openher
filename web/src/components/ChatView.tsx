@@ -153,19 +153,6 @@ export const ChatView = memo(function ChatView({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
   const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
   const messagesWrapRef = useRef<HTMLDivElement | null>(null)
-  const [showDown, setShowDown] = useState(false)
-
-  const handleWrapScroll = useCallback(() => {
-    const wrap = messagesWrapRef.current
-    if (!wrap) return
-    setShowDown(wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight > 200)
-  }, [])
-
-  const scrollToBottom = useCallback(() => {
-    const wrap = messagesWrapRef.current
-    if (!wrap) return
-    wrap.scrollTo({ top: wrap.scrollHeight, behavior: "smooth" })
-  }, [])
 
   // Copiar selección: aparece solo cuando hay texto seleccionado dentro del chat;
   // cualquier scroll lo oculta.
@@ -482,7 +469,7 @@ export const ChatView = memo(function ChatView({
         </div>
       )}
 
-      <div className="messages-wrap" ref={messagesWrapRef} onScroll={handleWrapScroll}>
+      <div className="messages-wrap" ref={messagesWrapRef}>
         <MessageList
           messages={messages}
           loadingSessionID={loadingSessionID}
@@ -510,10 +497,6 @@ export const ChatView = memo(function ChatView({
           thinkingDefault={thinkingDefault}
           onRegenerate={onRegenerate}
         />
-        {showDown && (
-          <button type="button" className="float-down" onClick={scrollToBottom}
-            title={t('chat.scrollToBottom')} aria-label={t('chat.scrollToBottom')}>↓</button>
-        )}
       </div>
 
       {selectedSession?.parentID && (

@@ -1,5 +1,16 @@
 /* styles/responsive.css - MQ globales: 780/430/coarse/tablet/900
-   Extraido de styles.css (305 lineas) - move puro, cascada preservada. */
+   Extraido de styles.css (305 lineas) - move puro, cascada preservada.
+
+   BREAKPOINTS DEL APP (no se pueden tokenizar: las media queries no aceptan
+   var()):
+     400px — menús compactos (header-model-menu)
+     430px — shell móvil compacto (tipografía, brand)
+     480px — grillas a 1 columna (form-grid, data-mode, stats-filters)
+     780px — mobile-first: shell, panel, chat, composer, bottom-nav
+     781px — desktop: sidebar + grid de splits (layout.css) + bottom-nav flotante
+     900px — quick-access con scroll propio (solo pointer: fine)
+     1024px — tablet (máx. 781-1024)
+   El MQ coarse (pointer: coarse) suma targets táctiles sin importar el ancho. */
 
 /* ===== Responsive: max-width 780px ===== */
 @media (max-width: 780px) {
@@ -17,17 +28,17 @@
     position: sticky;
     top: 0;
     z-index: var(--z-sticky);
-    padding-top: var(--safe-top-boundary) !important;
+    padding-top: var(--safe-top-boundary);
     padding-bottom: var(--space-3);
     padding-left: var(--space-3);
     padding-right: var(--space-3);
     background: var(--nav-bg);
-    border: none !important;
-    border-bottom: none !important;
+    border: none;
+    border-bottom: none;
   }
 
   .desktop-nav {
-    display: flex !important;
+    display: flex;
     gap: var(--space-2);
   }
 
@@ -39,8 +50,8 @@
   }
 
   .panel.detail {
-    border: none !important;
-    box-shadow: none !important;
+    border: none;
+    box-shadow: none;
     padding: 0 var(--space-2);
   }
 
@@ -57,15 +68,15 @@
   }
 
   .detail-header {
-    flex-direction: row !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    gap: var(--space-2) !important;
-    padding-top: var(--safe-top-boundary) !important;
-    padding-bottom: 0.5rem !important;
-    border: none !important;
-    border-bottom: 1px solid var(--border-subtle) !important;
-    box-shadow: none !important;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding-top: var(--safe-top-boundary);
+    padding-bottom: 0.5rem;
+    border: none;
+    border-bottom: 1px solid var(--border-subtle);
+    box-shadow: none;
   }
 
   /* En móvil el input (min-width:140px) + botones rebasan el header y el
@@ -83,17 +94,16 @@
   .messages {
     flex: 1;
     min-height: 0;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y !important;
+    overflow-y: auto;
+    touch-action: pan-y;
   }
 
   .composer {
     position: relative;
     bottom: 0;
     margin: 0;
-    border: none !important;
-    box-shadow: none !important;
+    border: none;
+    box-shadow: none;
   }
 
   .bottom-nav {
@@ -142,8 +152,9 @@
     font-size: 1.08rem;
   }
 
+  /* Jerarquía tipográfica: h2 nunca más grande que h1. */
   h2 {
-    font-size: 1.14rem;
+    font-size: 1.08rem;
   }
 
   .top-nav {
@@ -170,6 +181,28 @@
     min-width: 44px;
     min-height: 44px;
     padding: 0.5rem;
+  }
+
+  /* Botones del toolbar de sesiones: los estilos inline del componente
+     (32px) pisan la regla táctil — el !important es el único que gana a un
+     style inline. */
+  .session-toolbar-row .btn-icon {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+
+  /* Filas de carpetas del file browser: target táctil completo. */
+  .folder-row {
+    min-height: 44px;
+  }
+
+  /* Botones img/mic del composer: crecen a 44px — el textarea debe dejarles
+     espacio (padding lateral) para no tapar el texto. */
+  .composer-input-wrap textarea {
+    padding-left: 3rem;
+    padding-right: 3rem;
   }
 
   .server-profile-row,

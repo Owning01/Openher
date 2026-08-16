@@ -5,7 +5,7 @@
 .image-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 100000;
+  z-index: var(--z-lightbox);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -380,7 +380,7 @@ button.compact {
 
 .theme-picker-apply {
   background: var(--primary);
-  color: var(--bg);
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 
@@ -463,7 +463,7 @@ button.compact {
 
 .queued-badge:hover {
   background: var(--primary);
-  color: var(--surface);
+  color: var(--on-primary);
 }
 
 .queued-list {
@@ -518,11 +518,6 @@ button.compact {
 .skill-item .skill-name { color: var(--accent, #fab283); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--accent, #fab283) 55%, transparent); white-space: nowrap; flex-shrink: 0; font-size: 0.85rem; }
 .skill-item .skill-blurb { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 
-/* ===== Image Lightbox ===== */
-.image-lightbox-overlay { background: rgba(0,0,0,0.92); z-index: var(--z-lightbox); display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
-.lightbox-close { position: absolute; top: var(--space-4); right: var(--space-4); z-index: calc(var(--z-lightbox) + 1); }
-.image-lightbox-container { display: flex; align-items: center; justify-content: center; cursor: grab; user-select: none; }
-
 /* ===== Shortcuts Modal ===== */
 .shortcuts-modal { max-width: 420px; }
 .shortcuts-table { width: 100%; border-collapse: collapse; }
@@ -560,12 +555,12 @@ button.compact {
   padding: 0.2rem 0.5rem;
 }
 .file-editor-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.file-editor-textarea { flex: 1; width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-3); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem; line-height: 1.5; resize: none; tab-size: 2; }
+.file-editor-textarea { flex: 1; width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-3); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; resize: none; tab-size: 2; }
 
 /* ===== Terminal ===== */
 .terminal-modal { max-width: 700px; width: 90vw; height: 70vh; display: flex; flex-direction: column; }
 .terminal-body { flex: 1; display: flex; flex-direction: column; min-height: 0; background: #0a0a0f; border-radius: 0 0 var(--radius-md) var(--radius-md); }
-.terminal-output { flex: 1; overflow-y: auto; padding: var(--space-3); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem; line-height: 1.5; }
+.terminal-output { flex: 1; overflow-y: auto; padding: var(--space-3); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; }
 .terminal-line { white-space: pre-wrap; word-break: break-all; }
 .terminal-line pre { margin: 0; }
 .terminal-input { color: var(--success); }
@@ -573,8 +568,8 @@ button.compact {
 .terminal-error { color: var(--danger); }
 .terminal-welcome { color: var(--muted); font-style: italic; }
 .terminal-input-row { display: flex; align-items: stretch; border-top: 1px solid #222; background: #0d0d14; }
-.terminal-prompt { padding: var(--space-2) var(--space-2); color: var(--success); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5; flex-shrink: 0; }
-.terminal-input { flex: 1; background: transparent; border: none; color: #eee; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; padding: var(--space-2) 0; outline: none; resize: none; line-height: 1.5; }
+.terminal-prompt { padding: var(--space-2) var(--space-2); color: var(--success); font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.5; flex-shrink: 0; }
+.terminal-input { flex: 1; background: transparent; border: none; color: #eee; font-family: var(--font-mono); font-size: 0.85rem; padding: var(--space-2) 0; outline: none; resize: none; line-height: 1.5; }
 
 /* ===== Diff Apply/Reject Actions ===== */
 .diff-actions { display: flex; gap: var(--space-2); padding: var(--space-2); border-top: 1px solid var(--border); }

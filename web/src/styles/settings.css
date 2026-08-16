@@ -689,7 +689,7 @@
 
 .go-account {
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   padding: var(--space-3);
   margin-top: var(--space-3);
   background: var(--surface-2, var(--surface));
@@ -1067,7 +1067,7 @@
 .theme-color-item span { flex-shrink: 0; min-width: 80px; font-size: 0.85rem; }
 .theme-color-input-row { display: flex; align-items: center; gap: var(--space-2); }
 .theme-color-input-row input[type="color"] { width: 36px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: none; }
-.theme-color-hex { width: 90px; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; }
+.theme-color-hex { width: 90px; font-size: 0.8rem; font-family: var(--font-mono); }
 
 /* ===== Favorites Manager ===== */
 .favorites-manager { max-width: 500px; }
@@ -1118,7 +1118,6 @@
   max-height: 240px;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-1);
@@ -1347,10 +1346,5 @@
   user-select: none;
   -webkit-touch-callout: none;
   letter-spacing: 0.15em;
-}
-
-.go-key-input:focus {
-  -webkit-user-select: none;
-  user-select: none;
 }
 

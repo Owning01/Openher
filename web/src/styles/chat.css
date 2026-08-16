@@ -386,7 +386,6 @@
   max-height: 42vh;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
 }
 
 .model-option {
@@ -466,43 +465,25 @@
   overflow: hidden;
 }
 
-.float-down {
-  position: absolute;
-  right: var(--space-3);
-  bottom: var(--space-3);
-  z-index: 5;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 50%;
-  background: var(--primary);
-  color: var(--on-primary);
-  font-size: 1rem;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-}
-
-.float-down:hover {
-  filter: brightness(1.1);
-}
-
 .messages {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 0;
 
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--space-2) var(--space-1);
   scroll-padding-bottom: var(--space-2);
   overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
+}
+
+/* La separación entre mensajes la controla --chat-message-gap (ChatCustomizer)
+   vía el margin-bottom de .message — el gap del flex no debe sumarse. El
+   último mensaje no cuelga margin. */
+.messages > :last-child {
+  margin-bottom: 0;
 }
 
 .messages-end {
@@ -537,7 +518,7 @@
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 100;
+  z-index: var(--z-dropdown);
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -680,7 +661,7 @@
   align-self: flex-end;
   background: var(--chat-user-bubble-bg, var(--primary-soft));
   border-color: var(--chat-accent, var(--primary-border));
-  border-radius: var(--chat-bubble-radius, 2px);
+  border-radius: var(--chat-bubble-radius, 12px);
 }
 
 /* Modo plan: la caja del mensaje y el indicador de modo usan el color del plan */
@@ -740,7 +721,7 @@
   position: absolute;
   bottom: calc(100% + 6px);
   right: 0;
-  z-index: 999;
+  z-index: var(--z-dropdown);
   display: flex;
   flex-direction: column;
   min-width: 150px;
@@ -887,7 +868,7 @@
 
 .selection-copy-btn {
   position: fixed;
-  z-index: 99999;
+  z-index: calc(var(--z-lightbox) + 1);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1572,7 +1553,7 @@
   border: 1px solid var(--primary);
   border-radius: var(--radius-sm);
   background: var(--primary);
-  color: var(--bg);
+  color: var(--on-primary);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -1714,7 +1695,7 @@
 
 .question-btn-primary {
   background: var(--primary);
-  color: var(--bg);
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 
@@ -1773,7 +1754,7 @@
 
 /* ===== Undo Confirmation ===== */
 .confirming-undo {
-  border-color: var(--accent) !important;
+  border-color: var(--accent);
 }
 
 .undo-confirm {
@@ -1921,9 +1902,9 @@
   text-transform: uppercase;
   flex-shrink: 0;
 }
-.todo-status-badge.pending { background: rgba(250, 178, 131, 0.15); color: #fab283; }
-.todo-status-badge.done { background: rgba(76, 175, 80, 0.15); color: #4caf50; }
-.todo-status-badge.error { background: rgba(244, 67, 54, 0.15); color: #f44336; }
+.todo-status-badge.pending { background: var(--warning-soft); color: var(--warning); }
+.todo-status-badge.done { background: var(--success-soft); color: var(--success); }
+.todo-status-badge.error { background: var(--danger-soft); color: var(--danger); }
 
 /* ===== Tool minimal (modo compacto) ===== */
 .tool-part-minimal .tool-part-toggle {
@@ -2037,15 +2018,14 @@
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: var(--z-dropdown, 100);
+  z-index: var(--z-dropdown);
   min-width: 180px;
   margin-top: var(--space-1);
   padding: var(--space-1);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  background: rgba(0, 0, 0, 0.92);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(16px);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -2064,7 +2044,7 @@
   color: var(--text);
   font-size: 0.8rem;
   cursor: pointer;
-  text-align: left !important;
+  text-align: left;
   transition: background 0.1s;
 }
 

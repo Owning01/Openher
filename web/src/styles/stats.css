@@ -155,7 +155,7 @@
 .stats-tab.active {
   border-color: var(--primary);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .stats-cards {
