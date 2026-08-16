@@ -99,7 +99,7 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
       <label className="setting-row">
         <span>{t('settings.chatTextWidth')}</span>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-                  <input type="range" min={0} max={64} step={1} value={settings.desktopGutter}
+                  <input type="range" min={0} max={120} step={1} value={settings.desktopGutter}
             onChange={(e) => onSettingChange("desktopGutter", Number(e.target.value))}
             style={{ flex: 1 }} />
           <span style={{ minWidth: "2.4em", textAlign: "center", fontSize: "0.85rem", fontFamily: "monospace" }}>

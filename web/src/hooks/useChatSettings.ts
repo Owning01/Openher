@@ -44,7 +44,7 @@ const FONT_MAP: Record<ChatSettings["fontFamily"], string> = {
 // pasa de ocupar todo el ancho (0) a quedar centrado con Npx libres por lado
 // (calc(100% - 2*Npx)). Se aplica en todos los tamaños.
 function textMaxWidth(gutterPx: number): string {
-  return `calc(100% - ${Math.max(0, Math.min(64, gutterPx)) * 2}px)`
+  return `calc(100% - ${Math.max(0, Math.min(120, gutterPx)) * 2}px)`
 }
 
 function applyCSSVars(s: ChatSettings) {
