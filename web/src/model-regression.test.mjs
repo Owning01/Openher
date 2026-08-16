@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { cssBundle } from './css-bundle.mjs'
 
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
 const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
@@ -7,7 +8,7 @@ const useAI = readFileSync(new URL('./hooks/useAI.ts', import.meta.url), 'utf8')
 const useMessages = readFileSync(new URL('./hooks/useMessages.ts', import.meta.url), 'utf8')
 const useSessions = readFileSync(new URL('./hooks/useSessions.ts', import.meta.url), 'utf8')
 const i18n = readFileSync(new URL('./i18n.ts', import.meta.url), 'utf8')
-const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+const styles = cssBundle()
 const sheet = readFileSync(new URL('./components/BottomSheet.tsx', import.meta.url), 'utf8')
 const helpPage = readFileSync(new URL('./components/HelpPage.tsx', import.meta.url), 'utf8')
 

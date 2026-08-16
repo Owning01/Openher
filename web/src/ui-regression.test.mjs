@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { cssBundle } from './css-bundle.mjs'
 
 const sessionList = readFileSync(new URL('./components/SessionList.tsx', import.meta.url), 'utf8')
 const sessionToolbar = readFileSync(new URL('./components/SessionToolbar.tsx', import.meta.url), 'utf8')
@@ -13,7 +14,7 @@ const useAI = readFileSync(new URL('./hooks/useAI.ts', import.meta.url), 'utf8')
 const useSessions = readFileSync(new URL('./hooks/useSessions.ts', import.meta.url), 'utf8')
 const useConfig = readFileSync(new URL('./hooks/useConfig.ts', import.meta.url), 'utf8')
 const icons = readFileSync(new URL('./Icons.tsx', import.meta.url), 'utf8')
-const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+const styles = cssBundle()
 
 const refreshButton = sessionToolbar.match(/<button onClick=\{onRefresh\}[\s\S]*?<LoadingIcon[\s\S]*?<\/button>/)
 assert.ok(refreshButton, 'sessions refresh button should call refreshSessionsWithIndicator')

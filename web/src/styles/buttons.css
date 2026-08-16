@@ -1,0 +1,118 @@
+/* styles/buttons.css - variants btn-*, btn-link, btn-icon, btn-sm, acciones
+   Extraido de styles.css (115 lineas) - move puro, cascada preservada. */
+
+/* ===== Button Variants (Primary, Secondary, Danger) ===== */
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--surface-subtle);
+  border-color: var(--border);
+  color: var(--muted-strong);
+}
+
+.btn-danger {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--primary);
+  padding: 0;
+  min-height: auto;
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.btn-link:hover {
+  color: var(--primary-strong);
+}
+/* ===== Back Button & Icon Heading ===== */
+.back-btn {
+  padding: 0.2rem;
+  min-height: 32px;
+  width: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-inline-heading {
+  flex: 0 0 auto;
+}
+
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: var(--radius-md);
+  line-height: 1;
+  background: transparent;
+  border: none;
+}
+
+.btn-icon.compact {
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0.25rem;
+}
+
+.btn-sm {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: border-color 0.15s;
+}
+.btn-sm:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.btn-sm.btn-primary {
+  background: var(--primary);
+  color: var(--bg);
+  border-color: var(--primary);
+}
+.btn-sm.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.btn-sm.btn-danger:hover {
+  background: var(--danger-soft);
+}
+

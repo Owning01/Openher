@@ -1,0 +1,143 @@
+/* styles/utilities.css - spinners, keyframes, reduced-motion, utilidades
+   Extraido de styles.css (152 lineas) - move puro, cascada preservada. */
+
+/* Spinner de 9 cuadrados (3×3): recorre los 8 del borde, el centro fijo */
+.grid-spinner {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 6px);
+  grid-template-rows: repeat(3, 6px);
+  gap: 2px;
+  width: 22px;
+  height: 22px;
+}
+
+.gs {
+  background: var(--warning);
+  opacity: 0.15;
+  animation: gs-pulse 1.2s steps(1) infinite;
+}
+
+.gs-4 {
+  animation: none;
+  opacity: 0.12;
+}
+
+@keyframes gs-pulse {
+  0%, 100% { opacity: 1; }
+  12%, 40% { opacity: 0.15; }
+}
+
+.gs-0 { animation-delay: 0s; }
+.gs-1 { animation-delay: 0.15s; }
+.gs-2 { animation-delay: 0.3s; }
+.gs-5 { animation-delay: 0.45s; }
+.gs-8 { animation-delay: 0.6s; }
+.gs-7 { animation-delay: 0.75s; }
+.gs-6 { animation-delay: 0.9s; }
+.gs-3 { animation-delay: 1.05s; }
+
+/* Keyframe global (antes duplicado en chat.css y layout.css; el de layout
+   ganaba con opacity 0.35 — unificado acá). */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+
+/* ===== Utilities & Keyframe Animations ===== */
+.fade-in {
+  animation: fade-in 120ms ease-out;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+/* ===== WCAG 2.3.3 — prefers-reduced-motion =====
+   Usuarios que piden menos movimiento: las animaciones/transiciones se
+   congelan (0.01ms) y el scroll suave se vuelve instantáneo. Excepción:
+   los spinners de carga (grid-spinner, spin) siguen animando porque son
+   feedback de progreso esencial, no decoración. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .gs,
+  .gs-pulse,
+  .spin,
+  .loading-spinner,
+  [class*="spinner"] {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+
+/* Texto plano durante el streaming de mensajes largos (evita re-parsear
+   markdown por delta; el parseo completo ocurre al completar el turno). */
+.md-plain-stream {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--md-text, var(--text));
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+

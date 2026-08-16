@@ -1,0 +1,308 @@
+/* styles/responsive.css - MQ globales: 780/430/coarse/tablet/900
+   Extraido de styles.css (305 lineas) - move puro, cascada preservada. */
+
+/* ===== Responsive: max-width 780px ===== */
+@media (max-width: 780px) {
+  .app-shell {
+    height: 100dvh;
+    overflow: hidden;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: var(--safe-bottom-boundary);
+    width: 100%;
+  }
+
+  .top-nav {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    padding-top: var(--safe-top-boundary) !important;
+    padding-bottom: var(--space-3);
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+    background: var(--nav-bg);
+    border: none !important;
+    border-bottom: none !important;
+  }
+
+  .desktop-nav {
+    display: flex !important;
+    gap: var(--space-2);
+  }
+
+  .panel {
+    padding: var(--space-3) var(--space-2);
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .panel.detail {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 var(--space-2);
+  }
+
+  .section-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .header-row:not(.detail-header) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .detail-header {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: var(--space-2) !important;
+    padding-top: var(--safe-top-boundary) !important;
+    padding-bottom: 0.5rem !important;
+    border: none !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    box-shadow: none !important;
+  }
+
+  /* En móvil el input (min-width:140px) + botones rebasan el header y el
+     overflow:hidden de .detail-title-row clipea los botones de guardar/
+     cancelar: el input debe poder encogerse y la fila envolverse. */
+  .detail-title-row {
+    flex-wrap: wrap;
+  }
+
+  .rename-input {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+  }
+
+  .composer {
+    position: relative;
+    bottom: 0;
+    margin: 0;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .bottom-nav {
+    position: fixed;
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+    z-index: var(--z-sticky);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bottom-nav-bg);
+    box-shadow: var(--shadow-md);
+    padding: 0;
+    backdrop-filter: blur(14px);
+  }
+
+  .bottom-nav button {
+    min-height: 48px;
+    gap: 0;
+    padding: 0.3rem;
+    font-size: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .bottom-nav button:first-child {
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  }
+
+  .bottom-nav button:last-child {
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  }
+
+  .bottom-nav button.active {
+    background: transparent;
+  }
+}
+
+
+/* ===== Responsive: max-width 430px ===== */
+@media (max-width: 430px) {
+  h1 {
+    font-size: 1.08rem;
+  }
+
+  h2 {
+    font-size: 1.14rem;
+  }
+
+  .top-nav {
+    padding: var(--space-2);
+  }
+
+  .brand-title {
+    gap: var(--space-2);
+  }
+
+  .app-icon {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* Touch: hit targets táctiles en pantallas touch (WCAG 2.5.8).
+   Desktop (mouse) conserva la densidad de 24px.
+   Excepción intencional: model/agent toggle y composer-bar-btn (build/enviar)
+   quedan en 36px por pedido explícito de layout compacto. */
+@media (pointer: coarse), (max-width: 780px) {
+  .btn-icon,
+  .btn-icon.compact {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.5rem;
+  }
+
+  .server-profile-row,
+  .server-add-btn {
+    min-height: 44px;
+  }
+
+  .star-btn,
+  .quick-access-star,
+  .quick-access-dismiss {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .tool-part-toggle {
+    min-height: 44px;
+  }
+
+  .composer-inline-btn,
+  .composer-mic-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .header-model-toggle,
+  .agent-toggle,
+  .composer-queue-btn {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  .composer-bar-btn {
+    min-width: 40px;
+    min-height: 36px;
+  }
+
+  .session-toolbar-wrap .btn-primary {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* ===== Tablet: 781-1024px ===== */
+@media (min-width: 781px) and (max-width: 1024px) {
+  .app-shell {
+    padding: var(--space-3);
+    width: 100%;
+    max-width: none;
+  }
+
+  .settings {
+    max-width: 760px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .data-mode-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .settings-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .quick-access-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .session-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .messages-wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .composer {
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .detail-header {
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .project-dashboard {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .blocked-group-header {
+    flex-wrap: wrap;
+  }
+
+}
+
+/* ===== Quick access (favoritos/recientes): scroll propio en desktop =====
+   Listas largas con altura acotada y barra de scroll visible en vez de
+   renderizar todo el viewport. Móvil conserva el crecimiento natural. */
+@media (min-width: 900px) and (pointer: fine) {
+  .quick-access-list {
+    max-height: min(44vh, 440px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+    padding-right: var(--space-2);
+  }
+
+  .quick-access-list::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .quick-access-list::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 4px;
+  }
+
+  .quick-access-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .recent-sentinel {
+    flex-shrink: 0;
+  }
+}
+
+
