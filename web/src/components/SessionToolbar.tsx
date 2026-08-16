@@ -15,8 +15,6 @@ type SessionToolbarProps = {
   searchOpen?: boolean
   selecting?: boolean
   onToggleSelect?: () => void
-  /** Muestra la tilde "Conectado" cuando la conexión está OK. */
-  connected?: boolean
 }
 
 function modeLabel(mode: DataMode, t: (key: string, params?: Record<string, string | number>) => string): string {
@@ -36,7 +34,7 @@ function CheckboxIcon({ size = 14 }: { size?: number }) {
 }
 
 export const SessionToolbar = memo(function SessionToolbar({
-  refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onSearchToggle, searchOpen, selecting = false, onToggleSelect, connected = false
+  refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onSearchToggle, searchOpen, selecting = false, onToggleSelect
 }: SessionToolbarProps) {
   const t = useT()
   const [refreshFeedback, setRefreshFeedback] = useState<"ok" | "fail" | null>(null)
@@ -57,9 +55,9 @@ export const SessionToolbar = memo(function SessionToolbar({
   return (
     <div className="session-toolbar-wrap session-toolbar-row" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "10px", flexWrap: "nowrap", width: "100%", margin: "0.25rem 0" }}>
       <button onClick={handleRefresh} className="btn-icon" disabled={refreshing} title={t('sessions.refresh')} aria-label={t('sessions.refresh')} style={{ ...btnStyle, background: "transparent", border: "none" }}>
-        {refreshing ? <LoadingIcon size={20} /> : refreshFeedback === "ok" ? <CheckIcon size={18} className="toolbar-refresh-ok" /> : refreshFeedback === "fail" ? <CloseIcon size={16} className="toolbar-refresh-fail" /> : <RefreshIcon size={20} />}
+        {refreshing ? <LoadingIcon size={20} /> : refreshFeedback === "fail" ? <CloseIcon size={16} className="toolbar-refresh-fail" /> : <RefreshIcon size={20} />}
       </button>
-      {connected && (
+      {refreshFeedback === "ok" && (
         <span className="conn-ok" title={t('connection.connected')}>
           <CheckIcon size={14} />
           <span>{t('connection.connected')}</span>

@@ -268,7 +268,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
         dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen}
-        selecting={selectMode} onToggleSelect={toggleSelectMode} connected={connectionState === "connected"} />
+        selecting={selectMode} onToggleSelect={toggleSelectMode} />
       <div className={`toolbar${searchOpen ? " search-open" : ""}`}>
         <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />

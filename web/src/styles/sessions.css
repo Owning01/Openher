@@ -424,12 +424,8 @@
   padding: 0;
 }
 
-/* Feedback del refresh: el icono salta a ✓ (ok) o ✗ (fallo) por ~1.6s. */
-.toolbar-refresh-ok {
-  color: var(--success);
-  animation: refresh-pop 0.3s ease-out;
-}
-
+/* Feedback del refresh: el botón muestra ✗ (fallo) por ~1.6s; el ✓ pasa al
+   chip "Conectado" (conn-ok) cuando el refresh fue exitoso. */
 .toolbar-refresh-fail {
   color: var(--danger);
   animation: refresh-pop 0.3s ease-out;
@@ -441,18 +437,15 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* Tilde "Conectado": chip verde del toolbar del home */
+/* "Conectado" tras refrescar: tilde + texto, sin borde ni fondo.
+   Solo aparece durante el feedback post-refresh del toolbar del home. */
 .conn-ok {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--success);
-  border-radius: 999px;
-  background: var(--success-soft);
   color: var(--success);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 800;
   white-space: nowrap;
   animation: fade-in 0.25s ease-out;
