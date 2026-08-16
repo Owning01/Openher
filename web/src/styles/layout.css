@@ -592,6 +592,17 @@
     background: var(--primary);
   }
 
+  /* ===== Área del grid de splits =====
+     Contenedor del grid desktop (NO es la barra de layouts, que ya no existe):
+     crece en el eje principal y deja que el grid scrollee internamente. */
+  .desktop-layout-area {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
   /* ===== Panel maximizado ===== */
   .desktop-maximized {
     flex: 1;
