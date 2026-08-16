@@ -5,6 +5,9 @@
 //! docs, stats, plugins, labs, config, autostart, sesiones). Portable:
 //! data/ junto al exe, sin escrituras en C:.
 
+// App GUI de Windows: sin ventana de terminal.
+#![windows_subsystem = "windows"]
+
 mod api;
 mod docsx;
 mod fsx;

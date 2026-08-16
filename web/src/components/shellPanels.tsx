@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import "@xterm/xterm/css/xterm.css"
+import { FolderIcon, RefreshIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type ShellPanelKind } from "../shell"
 import { useT } from "../i18n-context"
 
@@ -158,10 +159,10 @@ const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir }: { onOpen
       <div className="shell-tree">
         {favorites.length > 0 && (
           <div className="shell-tree-group">
-            <div className="shell-tree-title">★ Favoritos</div>
+            <div className="shell-tree-title">Favoritos</div>
             {favorites.map((f) => (
               <div key={f} className="shell-row" onDoubleClick={() => load(f)}>
-                <span className="shell-glyph" style={{ color: "#e8b04b" }}>▸</span>
+                <FolderIcon size={13} className="shell-glyph" />
                 <span className="shell-name">{f}</span>
                 <button className="btn-icon compact" title={t('shell.removeFav')} onClick={() => fav(f, false)}>×</button>
               </div>
@@ -170,7 +171,7 @@ const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir }: { onOpen
         )}
         {dirs.map((d) => (
           <div key={d.path} className="shell-row shell-dir" onClick={() => nav(d.path)} onDoubleClick={() => fav(d.path, true)} title={d.path}>
-            <span className="shell-glyph" style={{ color: "#e8b04b" }}>▸</span>
+            <FolderIcon size={13} className="shell-glyph" />
             <span className="shell-name">{d.name}</span>
             {cwd && (
               <button className="btn-icon compact shell-star" title={t('shell.fav')} onClick={(e) => { e.stopPropagation(); fav(d.path, true) }}>☆</button>
@@ -415,7 +416,7 @@ const UpdatesPanel = memo(function UpdatesPanel() {
         ))}
         {data?.x?.map((x: any) => (
           <div key={x.handle} className="shell-updates-section">
-            <div className="shell-updates-title">𝕏 @{x.handle}</div>
+            <div className="shell-updates-title">X @{x.handle}</div>
             {x.error && <small>{x.error}</small>}
             <div className="shell-x-lines">{x.lines?.slice(0, 15).map((l: string, i: number) => <div key={i}>{l}</div>)}</div>
           </div>
@@ -490,7 +491,7 @@ const LabsPanel = memo(function LabsPanel() {
     <div className="shell-labs">
       <div className="shell-updates-head">
         <strong>{t('shell.labs')}</strong>
-        <button className="btn-secondary compact" onClick={load}>⟳</button>
+        <button className="btn-secondary compact" onClick={load} title="refresh"><RefreshIcon size={12} /></button>
       </div>
       <div className="shell-labs-section">
         <div className="shell-updates-title">Server opencode</div>

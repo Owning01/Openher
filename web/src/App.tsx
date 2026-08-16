@@ -46,7 +46,7 @@ import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
 import { useSSEHandler } from "./hooks/useSSEHandler"
-import { FolderIcon, SettingsIcon } from "./Icons"
+import { FolderIcon, SettingsIcon, TerminalIcon, LayersIcon, HelpIcon, GithubIcon, StatsIcon, TestIcon, PlusIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -1629,15 +1629,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     <select className="shell-panel-kind" value={kind}
                       onChange={(e) => setPanelKind(i, e.target.value as ShellPanelKind)}
                       onClick={(e) => e.stopPropagation()}>
-                      <option value="session">💬 {t('shell.kindSession')}</option>
-                      <option value="terminal">▸ {t('shell.kindTerminal')}</option>
-                      <option value="explorer">🗂 {t('shell.kindExplorer')}</option>
-                      <option value="kanban">📋 {t('shell.kindKanban')}</option>
-                      <option value="docs">📚 {t('shell.kindDocs')}</option>
-                      <option value="updates">🆕 {t('shell.kindUpdates')}</option>
-                      <option value="stats">📊 {t('shell.kindStats')}</option>
-                      <option value="labs">🧪 {t('shell.kindLabs')}</option>
-                      <option value="config">⚙ {t('shell.kindConfig')}</option>
+                      <option value="session">{t('shell.kindSession')}</option>
+                      <option value="terminal">{t('shell.kindTerminal')}</option>
+                      <option value="explorer">{t('shell.kindExplorer')}</option>
+                      <option value="kanban">{t('shell.kindKanban')}</option>
+                      <option value="docs">{t('shell.kindDocs')}</option>
+                      <option value="updates">{t('shell.kindUpdates')}</option>
+                      <option value="stats">{t('shell.kindStats')}</option>
+                      <option value="labs">{t('shell.kindLabs')}</option>
+                      <option value="config">{t('shell.kindConfig')}</option>
                     </select>
                     <span className="shell-panel-spacer" />
                     <button type="button" className="btn-icon compact" title={t('panel.close')} aria-label={t('panel.close')}
@@ -1670,23 +1670,23 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             return (
               <div className="desktop-layout-area">
                 <div className="desktop-add-bar" role="toolbar" aria-label="Paneles">
-                  <span className="desktop-add-label" title={t('shell.addPanel')}>+</span>
+                  <PlusIcon size={12} className="desktop-add-label" />
                   <button type="button" className="desktop-add-btn" title={t('shell.kindTerminal')} aria-label={t('shell.kindTerminal')}
-                    onClick={() => addPanel("terminal")}>▸</button>
+                    onClick={() => addPanel("terminal")}><TerminalIcon size={14} /></button>
                   <button type="button" className="desktop-add-btn" title={t('shell.kindExplorer')} aria-label={t('shell.kindExplorer')}
-                    onClick={() => addPanel("explorer")}>🗂</button>
+                    onClick={() => addPanel("explorer")}><FolderIcon size={14} /></button>
                   <button type="button" className="desktop-add-btn" title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
-                    onClick={() => addPanel("kanban")}>📋</button>
+                    onClick={() => addPanel("kanban")}><LayersIcon size={14} /></button>
                   <button type="button" className="desktop-add-btn" title={t('shell.kindDocs')} aria-label={t('shell.kindDocs')}
-                    onClick={() => addPanel("docs")}>📚</button>
+                    onClick={() => addPanel("docs")}><HelpIcon size={14} /></button>
                   <button type="button" className="desktop-add-btn" title={t('shell.kindUpdates')} aria-label={t('shell.kindUpdates')}
-                    onClick={() => addPanel("updates")}>🆕</button>
+                    onClick={() => addPanel("updates")}><GithubIcon size={14} /></button>
                   <button type="button" className="desktop-add-btn" title={t('shell.kindStats')} aria-label={t('shell.kindStats')}
-                    onClick={() => addPanel("stats")}>📊</button>
+                    onClick={() => addPanel("stats")}><StatsIcon size={14} /></button>
                   <button type="button" className="desktop-add-btn" title={t('shell.kindLabs')} aria-label={t('shell.kindLabs')}
-                    onClick={() => addPanel("labs")}>🧪</button>
+                    onClick={() => addPanel("labs")}><TestIcon size={14} /></button>
                   <button type="button" className="desktop-add-btn" title={t('shell.kindConfig')} aria-label={t('shell.kindConfig')}
-                    onClick={() => addPanel("config")}>⚙</button>
+                    onClick={() => addPanel("config")}><SettingsIcon size={14} /></button>
                 </div>
                 {maximizedSession && maximizedIndex !== null ? (
                   <div className="desktop-maximized">
