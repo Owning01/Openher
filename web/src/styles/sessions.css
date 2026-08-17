@@ -723,11 +723,13 @@
 }
 
 /* ===== Session List & Card ===== */
-.session-list {
-  display: flex;
-  flex-direction: column;
+.session-list,
+.quick-access-list {
+  display: flex !important;
+  flex-direction: column !important;
   gap: var(--space-3);
   overflow-anchor: none;
+  width: 100%;
 }
 
 /* Centinela del lazy loading de sesiones recientes */

@@ -285,7 +285,7 @@ const ShellPanelCell = memo(function ShellPanelCell({
       >
         ×
       </button>
-      <ShellPanel kind={kind} cwd={cwd} sessionID={sessionID} onOpenSessionDir={onOpenSessionDir} onOpenFile={(p) => onOpenFile?.(p, index, "center")} />
+      <ShellPanel kind={kind} cwd={cwd} sessionID={sessionID} onOpenSessionDir={onOpenSessionDir} onOpenFile={(p) => onOpenFile?.(p, index, "center")} panelIndex={index} />
     </div>
   )
 })
@@ -637,11 +637,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setStreamState(sseState)
   }, [sseState])
 
-  // Watchdog: si el SSE cae (polling/reconnecting) y awaitingAssistantReply
+  // Watchdog: si el SSE cae (reconnecting) y awaitingAssistantReply
   // sigue true después de 30s, limpiar el indicador de typing (el server no
   // emitió session.idle, probablemente murió mid-stream).
+  // BUG 2 fix: solo armar cuando SSE está en "reconnecting" (no en "polling"
+  // que es el estado por defecto en modos saver/ultra donde SSE no está
+  // habilitado — el watchdog se disparaba a los 30s aunque el server siga
+  // generando, causando "se cancela automáticamente").
   useEffect(() => {
-    if (!awaitingAssistantReply || sseState === "streaming") return
+    if (!awaitingAssistantReply || sseState !== "reconnecting") return
     const t = setTimeout(() => {
       if (awaitingAssistantReply) setAwaitingAssistantReply(false)
     }, 30_000)
@@ -1061,14 +1065,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (!lastUser?.text) return
     if (lastUser.parts.some((p) => p.type === "image")) return
     if (awaitingAssistantReply) {
-      await abortSession(selectedSession.id, selectedSession.directory).catch(() => undefined)
+      // BUG 4 fix: abortSession tiene un race de 4s que puede dejar el HTTP
+      // abort en vuelo cuando ya se envió el nuevo prompt → el server cancela
+      // el mensaje recién enviado. Llamamos api.abort directamente.
+      completionShouldPlayRef.current = false
+      await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => undefined)
     }
     setAwaitingAssistantReply(false)
     await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
       setCommands, setRuntimeError, undefined, lastUser.text)
-  }, [selectedSession, renderedMessages, localRevertID, awaitingAssistantReply, abortSession, send, activeModel, activeAgentID, commands, refreshSessions, loadSelected, setCommands, setRuntimeError, setMessages])
+  }, [selectedSession, renderedMessages, localRevertID, awaitingAssistantReply, config, send, activeModel, activeAgentID, commands, refreshSessions, loadSelected, setCommands, setRuntimeError, setMessages])
 
   const handleInsertPrompt = useCallback((text: string) => {
     setComposer(text)
@@ -1078,14 +1086,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const handleSendPrompt = useCallback(async (text: string) => {
     if (!selectedSession || !text.trim()) return
     if (awaitingAssistantReply) {
-      await abortSession(selectedSession.id, selectedSession.directory).catch(() => undefined)
+      completionShouldPlayRef.current = false
+      await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => undefined)
     }
     setAwaitingAssistantReply(false)
     await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
       setCommands, setRuntimeError, undefined, text)
-  }, [selectedSession, awaitingAssistantReply, abortSession, send, activeModel, activeAgentID, commands, refreshSessions, loadSelected, setCommands, setRuntimeError])
+  }, [selectedSession, awaitingAssistantReply, config, send, activeModel, activeAgentID, commands, refreshSessions, loadSelected, setCommands, setRuntimeError])
 
   const handleAbort = useCallback(async () => {    if (!selectedSession) return
     stopGenerationRef.current = true
@@ -2441,7 +2450,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   <ShellPanelCell
                     index={i}
                     kind={kind}
-                    cwd={kind === "terminal" ? activeDir : session?.directory ?? undefined}
+                    cwd={kind === "terminal" ? (activeDir || activeSessionDir || selectedSession?.directory || sessions[0]?.directory) : (session?.directory || activeSessionDir || selectedSession?.directory || sessions[0]?.directory)}
                     sessionID={session?.id}
                     active={activePanel === i}
                     onActivate={() => setActivePanel(i)}

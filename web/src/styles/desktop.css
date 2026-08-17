@@ -1204,8 +1204,13 @@
 }
 
 .terminal-tab-close-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #f85149;
+  background: transparent !important;
+  color: #f85149 !important;
+}
+
+.terminal-trash-btn:hover {
+  background: transparent !important;
+  color: #f85149 !important;
 }
 
 

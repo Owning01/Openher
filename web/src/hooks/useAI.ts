@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useRef } from "react"
 import type { ServerConfig, AgentOption, ModelOption } from "../types"
 import { api } from "../api"
 import { modelKey, sameModel, modelFromKey, groupModels, variantsOf } from "../utils/model-utils"
@@ -41,6 +41,11 @@ export function useAI(config: ServerConfig) {
   })
   const [modelQuery, setModelQuery] = useState("")
   const [recentModelsArr, setRecentModelsArr] = useLocalStorage<ModelOption[]>(RECENT_MODELS_KEY, [])
+  // Track whether models have been loaded at least once. On the first load,
+  // if the saved model isn't in the list, we fall back to the default.
+  // On subsequent loads (session switch, provider connect), we preserve the
+  // user's choice — otherwise changing models gets silently overwritten.
+  const modelsLoadedRef = useRef(false)
 
   const [sessionModels, setSessionModels] = useState<Record<string, { modelKey: string; variant?: string | null }>>(() => {
     const map: Record<string, { modelKey: string; variant?: string | null }> = {}
@@ -212,14 +217,22 @@ export function useAI(config: ServerConfig) {
           setSelectedVariant(null)
           localStorage.removeItem(STORAGE_KEYS.MODEL_VARIANT)
         }
+        modelsLoadedRef.current = true
         return
       }
-      const fallback = list.find((option) => option.isDefault) ?? list[0]
-      if (fallback) {
-        const nextKey = modelKey(fallback)
-        setSelectedModelKey(nextKey)
-        localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
+      // BUG fix: solo caer al default en la primera carga. En cargas
+      // posteriores (session switch, provider connect), preservar la
+      // selección del usuario — si no, cambiar de modelo se sobreescribe
+      // silenciosamente cuando loadModels se llama de nuevo.
+      if (!modelsLoadedRef.current) {
+        const fallback = list.find((option) => option.isDefault) ?? list[0]
+        if (fallback) {
+          const nextKey = modelKey(fallback)
+          setSelectedModelKey(nextKey)
+          localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
+        }
       }
+      modelsLoadedRef.current = true
     } catch (err) {
       setModelLoadError((err as Error).message)
     }

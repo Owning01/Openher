@@ -531,10 +531,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     textOverride?: string,
   ) => {
     const text = (textOverride ?? composer).trim()
-    if ((!text || !selectedSession) && (!images || images.length === 0)) return
-    // Guard anti doble-envío: evita peticiones HTTP concurrentes por doble tap
-    if (isSendingRef.current) return
-    isSendingRef.current = true
+    if ((!text || !selectedSession) && (!images || images.length === 0)) return false
+    try {
 
     const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
 
@@ -542,6 +540,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       sendFn: () => Promise<unknown>,
       then: () => Promise<void>
     ): Promise<boolean> => {
+      // Guard anti doble-envío: SOLO bloquea la fase de HTTP POST, no la
+      // confirmación posterior. Antes estaba en el body de updateSend y se
+      // pisaba con los returns tempranos de slash commands (help/status/etc),
+      // quedando permanentemente en true y bloqueando TODOS los envíos
+      // posteriores.
+      if (isSendingRef.current) return false
+      isSendingRef.current = true
       let ok = false
       try {
         setComposer("")
@@ -564,33 +569,36 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           setComposer((current) => current || text)
           onSetRuntimeError((err as Error).message)
         }
-
-        if (ok) {
-          // Send OK: esperar confirmación. El server puede tardar (payloads
-          // de imagen grandes) — poll hasta que el optimistic desaparezca
-          // (merge por id de loadSelected / echo SSE) o expire el deadline.
-          try {
-            const hasImages = Boolean(images && images.length > 0)
-            const deadline = Date.now() + 8000 + (hasImages ? 12000 : 0)
-            while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
-              await then()
-              if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
-              await new Promise((r) => setTimeout(r, 1500))
-            }
-          } catch {
-            // nunca tratar una falla de confirmación como falla de envío
-          }
-          // Si no confirmó (timeout): conservar el optimistic — el server lo
-          // entregará con el próximo fetch (merge por id nunca se encoge).
-        }
-
-        try {
-          await onRefreshSessions()
-        } catch {
-          // ignore
-        }
       } finally {
+        // Reset inmediato después del POST — la confirmación posterior no
+        // bloquea nuevos envíos (isSendingRef queda false durante el poll).
         isSendingRef.current = false
+      }
+
+      if (ok) {
+        // Send OK: esperar confirmación. El server puede tardar (payloads
+        // de imagen grandes) — poll hasta que el optimistic desaparezca
+        // (merge por id de loadSelected / echo SSE) o expire el deadline.
+        // NOTA: isSendingRef ya es false aquí — no bloquea envíos rápidos.
+        try {
+          const hasImages = Boolean(images && images.length > 0)
+          const deadline = Date.now() + 8000 + (hasImages ? 12000 : 0)
+          while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
+            await then()
+            if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
+            await new Promise((r) => setTimeout(r, 1500))
+          }
+        } catch {
+          // nunca tratar una falla de confirmación como falla de envío
+        }
+        // Si no confirmó (timeout): conservar el optimistic — el server lo
+        // entregará con el próximo fetch (merge por id nunca se encoge).
+      }
+
+      try {
+        await onRefreshSessions()
+      } catch {
+        // ignore
       }
       return ok
     }
@@ -670,6 +678,12 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       () => api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID, images),
       () => onLoadSelected()
     )
+    } finally {
+      // BUG 1+6: isSendingRef siempre se resetea, incluso si el slash
+      // command hace return temprano. Antes esto faltaba y el ref quedaba
+      // pegado en true bloqueando TODOS los envíos posteriores.
+      isSendingRef.current = false
+    }
   }, [composer, config, assistantResponseSignature, removeOptimistic, undoMessage, redoMessage, compactSession])
 
   return {

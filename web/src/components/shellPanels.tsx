@@ -17,6 +17,8 @@ import { Markdown } from "./Markdown"
 
 const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: string; shellName?: string }) {
   const ref = useRef<HTMLDivElement | null>(null)
+  const initialCwdRef = useRef(cwd)
+  const initialShellRef = useRef(shellName)
 
   useEffect(() => {
     const el = ref.current
@@ -104,7 +106,7 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
       }
     })
 
-    shell.pty.create(cwd, shellName).then((res) => {
+    shell.pty.create(initialCwdRef.current, initialShellRef.current).then((res) => {
       if (disposed) {
         shell.pty.kill(res.id)
         return
@@ -184,12 +186,12 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
       if (ptyId) shell.pty.kill(ptyId)
       term.dispose()
     }
-  }, [cwd, shellName])
+  }, [])
 
   return <div ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6 }} />
 })
 
-export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName, hideHeader = false }: { cwd?: string; shellName?: string; hideHeader?: boolean }) {
+export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName, hideHeader = false, panelIndex }: { cwd?: string; shellName?: string; hideHeader?: boolean; panelIndex?: number }) {
   const [activeMainTab, setActiveMainTab] = useState<"problems" | "output" | "debug" | "terminal" | "ports">("terminal")
   const [currentShell, setCurrentShell] = useState<string>(shellName || "pwsh")
   const [termTabs, setTermTabs] = useState<Array<{ id: string; title: string; shell: string }>>([
@@ -220,8 +222,11 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName, hideH
       {!hideHeader && (
         <div className="terminal-header-bar"
           draggable
+          style={{ cursor: "grab" }}
           onDragStart={(e) => {
-            e.dataTransfer.setData("text/plain", "kind:terminal")
+            const dragPayload = panelIndex !== undefined ? `panel:${panelIndex}:kind:terminal` : "kind:terminal"
+            e.dataTransfer.setData("text/plain", dragPayload)
+            e.dataTransfer.setData("application/x-opencode-path", dragPayload)
             e.dataTransfer.effectAllowed = "move"
           }}
         >
@@ -284,7 +289,7 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName, hideH
 
             <button
               type="button"
-              className="terminal-action-btn"
+              className="terminal-action-btn terminal-trash-btn"
               onClick={() => handleCloseTab(activeTabId)}
               title="Eliminar terminal"
               aria-label="Eliminar terminal"
@@ -327,43 +332,59 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName, hideH
             </div>
 
             {/* Columna lateral de terminales activas estilo VS Code */}
-            {termTabs.length > 1 && (
-              <div className="terminal-tabs-column">
-                <div className="terminal-tabs-column-head">
-                  <span>TERMINALS ({termTabs.length})</span>
-                  <button
-                    type="button"
-                    onClick={handleAddTab}
-                    style={{ background: "transparent", border: "none", color: "#8b949e", cursor: "pointer", padding: 0 }}
-                    title="Nueva terminal"
-                  >
-                    <PlusIcon size={11} />
-                  </button>
-                </div>
-                {termTabs.map((tab) => (
-                  <div
-                    key={tab.id}
-                    className={`terminal-tab-item${tab.id === activeTabId ? " active" : ""}`}
-                    onClick={() => setActiveTabId(tab.id)}
-                  >
-                    <div className="terminal-tab-item-left">
-                      <TerminalIcon size={12} />
-                      <span>{tab.title}</span>
-                    </div>
-                    {termTabs.length > 1 && (
-                      <button
-                        type="button"
-                        className="terminal-tab-close-btn"
-                        onClick={(e) => handleCloseTab(tab.id, e)}
-                        title="Cerrar terminal"
-                      >
-                        <TrashIcon size={11} />
-                      </button>
-                    )}
-                  </div>
-                ))}
+            <div className="terminal-tabs-column">
+              <div
+                className="terminal-tabs-column-head"
+                draggable
+                style={{ cursor: "grab" }}
+                onDragStart={(e) => {
+                  const dragPayload = panelIndex !== undefined ? `panel:${panelIndex}:kind:terminal` : "kind:terminal"
+                  e.dataTransfer.setData("text/plain", dragPayload)
+                  e.dataTransfer.setData("application/x-opencode-path", dragPayload)
+                  e.dataTransfer.effectAllowed = "move"
+                }}
+              >
+                <span>TERMINALS ({termTabs.length})</span>
+                <button
+                  type="button"
+                  onClick={handleAddTab}
+                  style={{ background: "transparent", border: "none", color: "#8b949e", cursor: "pointer", padding: 0 }}
+                  title="Nueva terminal"
+                >
+                  <PlusIcon size={11} />
+                </button>
               </div>
-            )}
+              {termTabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  className={`terminal-tab-item${tab.id === activeTabId ? " active" : ""}`}
+                  onClick={() => setActiveTabId(tab.id)}
+                  draggable
+                  style={{ cursor: "grab" }}
+                  onDragStart={(e) => {
+                    const dragPayload = panelIndex !== undefined ? `panel:${panelIndex}:kind:terminal` : "kind:terminal"
+                    e.dataTransfer.setData("text/plain", dragPayload)
+                    e.dataTransfer.setData("application/x-opencode-path", dragPayload)
+                    e.dataTransfer.effectAllowed = "move"
+                  }}
+                >
+                  <div className="terminal-tab-item-left">
+                    <TerminalIcon size={12} />
+                    <span>{tab.title}</span>
+                  </div>
+                  {termTabs.length > 1 && (
+                    <button
+                      type="button"
+                      className="terminal-tab-close-btn"
+                      onClick={(e) => handleCloseTab(tab.id, e)}
+                      title="Cerrar terminal"
+                    >
+                      <TrashIcon size={11} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </>
         ) : (
           <div style={{ padding: "16px", color: "#8b949e", fontSize: "12px", fontFamily: "monospace" }}>
@@ -1667,6 +1688,7 @@ export type ShellPanelProps = {
   onOpenSessionDir: (dir: string) => void
   sessionID?: string | null
   onOpenFile?: (path: string) => void
+  panelIndex?: number
 }
 
 // ============================================================== Session Stats (compacto)
@@ -1781,10 +1803,10 @@ export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID, on
   )
 })
 
-export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir, sessionID: _sessionID, onOpenFile }: ShellPanelProps) {
+export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir, sessionID: _sessionID, onOpenFile, panelIndex }: ShellPanelProps) {
   switch (kind) {
     case "terminal":
-      return <TerminalPanel cwd={cwd} />
+      return <TerminalPanel cwd={cwd} panelIndex={panelIndex} />
     case "explorer":
       return <ExplorerPanel onOpenSessionDir={onOpenSessionDir} initialCwd={cwd} onOpenFile={onOpenFile} />
     case "kanban":
