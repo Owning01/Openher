@@ -2672,14 +2672,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       )}
 
       {showConnectSheet && config && (
-        <ConnectProviderSheet
-          config={config}
-          onClose={() => setShowConnectSheet(false)}
-          onConnect={connectProvider}
-          onDisconnect={disconnectProvider}
-          onAddCustom={addCustomProvider}
-          onConnected={() => loadModels().catch(() => undefined)}
-        />
+        <Suspense fallback={null}>
+          <ConnectProviderSheet
+            config={config}
+            onClose={() => setShowConnectSheet(false)}
+            onConnect={connectProvider}
+            onDisconnect={disconnectProvider}
+            onAddCustom={addCustomProvider}
+            onConnected={() => loadModels().catch(() => undefined)}
+          />
+        </Suspense>
       )}
 
       {showMCPBrowser && config && <Suspense fallback={null}><MCPBrowser config={config} onClose={() => setShowMCPBrowser(false)} /></Suspense>}
