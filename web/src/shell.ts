@@ -57,6 +57,7 @@ export const shell = {
     copy: (src: string, dest: string) => post<{ ok: boolean; path: string }>("/shell/fs/copy", { src, dest }),
     write: (path: string, dataBase64: string) => post("/shell/fs/write", { path, data: dataBase64 }),
     mkdir: (path: string) => post("/shell/fs/mkdir", { path }),
+    reveal: (path: string) => post<{ ok: boolean; path: string; is_dir: boolean }>("/shell/fs/reveal", { path }),
   },
   pty: {
     create: (cwd?: string, shellName?: string) => {

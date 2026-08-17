@@ -111,6 +111,24 @@ pub fn resolve(path: &str) -> serde_json::Value {
     })
 }
 
+/// Abre el Explorador de Windows mostrando el archivo seleccionado (o la
+/// carpeta directamente). Best-effort: si explorer no arranca, no falla.
+pub fn reveal_in_explorer(path: &str) -> serde_json::Value {
+    let p = PathBuf::from(path);
+    let is_dir = p.is_dir();
+    let arg = if is_dir { crate::state::pstring(&p) } else { crate::state::pstring(&p) };
+    // Para archivos: /select,<path> abre la carpeta con el archivo seleccionado.
+    let select = if is_dir { String::new() } else { format!("/select,{}", arg) };
+    let mut cmd = std::process::Command::new("explorer.exe");
+    if !select.is_empty() {
+        cmd.arg(&select);
+    } else {
+        cmd.arg(&arg);
+    }
+    let ok = cmd.spawn().is_ok();
+    serde_json::json!({ "ok": ok, "path": arg, "is_dir": is_dir })
+}
+
 /// Abre una sesión opencode en el directorio: el frontend usa este path para
 /// crear la sesión (el server opencode lo toma como directory).
 pub fn session_for_dir(path: &str) -> serde_json::Value {

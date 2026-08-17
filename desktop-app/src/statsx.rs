@@ -63,6 +63,7 @@ pub fn ensure(state: &Arc<AppState>) {
         .ok();
 }
 
+#[allow(dead_code)]
 pub fn arc() -> Arc<StatsManager> {
     static STATS: std::sync::OnceLock<Arc<StatsManager>> = std::sync::OnceLock::new();
     STATS.get_or_init(|| Arc::new(StatsManager::new())).clone()

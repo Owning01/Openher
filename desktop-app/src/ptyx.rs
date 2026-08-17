@@ -135,7 +135,7 @@ impl PtyRegistry {
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
         let map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get(id).ok_or("pty no existe")?;
-        let mut m = s.master.lock().unwrap_or_else(|e| e.into_inner());
+        let m = s.master.lock().unwrap_or_else(|e| e.into_inner());
         m.resize(PtySize {
             rows,
             cols,
@@ -329,7 +329,7 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                             }
                         }
                     };
-                    let mut data = match out.data.lock() { Ok(d) => d, Err(_) => return };
+                    let data = match out.data.lock() { Ok(d) => d, Err(_) => return };
                     if consumed < data.len() {
                         let delta = data[consumed..].to_vec();
                         consumed = data.len();
@@ -344,7 +344,7 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                     }
                     let res = out.cv.wait_timeout(data, Duration::from_millis(1000));
                     match res {
-                        Ok((g, _)) => data = g,
+                        Ok((g, _)) => drop(g),
                         Err(_) => return,
                     }
                 }

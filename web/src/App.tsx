@@ -1622,6 +1622,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleOpenFileFromExplorer = useCallback((filePath: string) => {
     if (isDesktop) {
+      const existingEditorIdx = desktopLayout.panelKinds.findIndex((k) => k === "editor")
+      if (existingEditorIdx >= 0) {
+        setDesktopLayout((prev) => ({
+          ...prev,
+          panelEditorPaths: { ...(prev.panelEditorPaths ?? {}), [existingEditorIdx]: filePath },
+        }))
+        setActivePanel(existingEditorIdx)
+        return
+      }
+
       const hasActiveSession = desktopLayout.sessions.some(Boolean)
       if (hasActiveSession) {
         if (desktopLayout.cols === 1) {

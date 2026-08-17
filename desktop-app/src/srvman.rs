@@ -80,6 +80,7 @@ impl ServerManager {
 }
 
 /// Estado del server opencode (v1/v2) para el tray y la UI.
+#[allow(dead_code)]
 pub fn probe_all(ports: &[u16]) -> serde_json::Value {
     let mut up = Vec::new();
     for port in ports {

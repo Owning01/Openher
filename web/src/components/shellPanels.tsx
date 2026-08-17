@@ -32,13 +32,17 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { c
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
-    // Renderer WebGL (aceleración por GPU); fallback a DOM si no hay GPU.
-    try {
-      term.loadAddon(new WebglAddon())
-    } catch {
-      /* renderer DOM por defecto */
-    }
     term.open(el)
+
+    // Renderer WebGL (aceleración directa por GPU de xterm al estilo Terax)
+    try {
+      const webgl = new WebglAddon()
+      webgl.onContextLoss(() => webgl.dispose())
+      term.loadAddon(webgl)
+    } catch {
+      /* renderer DOM por defecto si no hay soporte WebGL */
+    }
+
     try {
       fit.fit()
     } catch {
@@ -261,8 +265,10 @@ export const ExplorerPanel = memo(function ExplorerPanel({
   const handleContextMenu = (e: React.MouseEvent, entry: FsEntry | null, isDir: boolean) => {
     e.preventDefault()
     e.stopPropagation()
-    const x = Math.min(e.clientX, window.innerWidth - 200)
-    const y = Math.min(e.clientY, window.innerHeight - 250)
+    const menuW = 210
+    const menuH = 260
+    const x = e.clientX + menuW > window.innerWidth ? Math.max(10, e.clientX - menuW) : e.clientX
+    const y = e.clientY + menuH > window.innerHeight ? Math.max(10, e.clientY - menuH) : e.clientY
     setContextMenu({ x, y, entry, isDir })
   }
 
@@ -456,7 +462,6 @@ export const ExplorerPanel = memo(function ExplorerPanel({
               e.dataTransfer.setData("application/x-opencode-path", d.path)
               e.dataTransfer.setData("application/x-opencode-is-image", "0")
             }}
-            title={d.path}
           >
             <FolderIcon size={13} className="shell-glyph" />
             <span className="shell-name">{d.name}</span>
@@ -480,7 +485,6 @@ export const ExplorerPanel = memo(function ExplorerPanel({
                 e.dataTransfer.setData("application/x-opencode-path", f.path)
                 e.dataTransfer.setData("application/x-opencode-is-image", isImg ? "1" : "0")
               }}
-              title={f.path}
             >
               <span className="shell-glyph" style={{ color: ic.color }}>{ic.glyph}</span>
               <span className="shell-name">{f.name}</span>
@@ -500,13 +504,15 @@ export const ExplorerPanel = memo(function ExplorerPanel({
             position: "fixed",
             left: `${contextMenu.x}px`,
             top: `${contextMenu.y}px`,
-            zIndex: 99999,
+            zIndex: 100000,
             background: "var(--surface)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-sm)",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
             padding: "4px 0",
             minWidth: "190px",
+            maxHeight: "calc(100vh - 40px)",
+            overflowY: "auto",
           }}
         >
           {contextMenu.entry && (
@@ -552,6 +558,19 @@ export const ExplorerPanel = memo(function ExplorerPanel({
                 onClick={() => handleCopyItem(contextMenu.entry!, contextMenu.isDir)}
               >
                 <span>📋</span> Copiar {contextMenu.isDir ? "carpeta" : "archivo"}
+              </button>
+              <button
+                type="button"
+                className="overflow-item"
+                onClick={() => {
+                  const p = contextMenu.entry!.path
+                  setContextMenu(null)
+                  shell.fs.reveal(p).then((r) => {
+                    if (r.ok) showNotice(`Abierto en el Explorador`)
+                  }).catch(() => showNotice(`No se pudo abrir el Explorador`))
+                }}
+              >
+                <span>🖥️</span> Abrir en el Explorador
               </button>
               <button
                 type="button"
@@ -607,83 +626,178 @@ export const ExplorerPanel = memo(function ExplorerPanel({
   )
 })
 
-// ============================================================== Editor de Archivos (Pestaña / Panel)
+// ============================================================== Editor de Archivos Multi-Pestaña
 
 export const FileEditorPanel = memo(function FileEditorPanel({
-  path,
+  path: initialPath,
+  openPaths,
   onClose,
   initialCwd,
+  onSelectFile,
 }: {
   path: string
+  openPaths?: string[]
   onClose?: () => void
   initialCwd?: string
+  onSelectFile?: (path: string) => void
 }) {
-  const [content, setContent] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [dirty, setDirty] = useState(false)
+  const [tabs, setTabs] = useState<string[]>(() => {
+    if (openPaths && openPaths.length > 0) {
+      return openPaths.includes(initialPath) ? openPaths : [...openPaths, initialPath]
+    }
+    return initialPath ? [initialPath] : []
+  })
+  const [activeTab, setActiveTab] = useState<string>(initialPath || "")
+  const [filesState, setFilesState] = useState<Record<string, { content: string; dirty: boolean; loading: boolean; error: string | null }>>({})
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
+  // Si cambia la prop inicial desde fuera (ej: clic en otro archivo)
   useEffect(() => {
+    if (!initialPath) return
+    setTabs((prev) => (prev.includes(initialPath) ? prev : [...prev, initialPath]))
+    setActiveTab(initialPath)
+  }, [initialPath])
+
+  // Cargar contenido de la pestaña activa si no fue cargada aún
+  useEffect(() => {
+    if (!activeTab || filesState[activeTab]) return
     let cancelled = false
-    setLoading(true)
-    setError(null)
-    shell.fs.read(path).then((r) => {
+    setFilesState((prev) => ({
+      ...prev,
+      [activeTab]: { content: "", dirty: false, loading: true, error: null },
+    }))
+    shell.fs.read(activeTab).then((r) => {
       if (cancelled) return
-      setContent(r.content)
-      setLoading(false)
-      setDirty(false)
+      setFilesState((prev) => ({
+        ...prev,
+        [activeTab]: { content: r.content, dirty: false, loading: false, error: null },
+      }))
     }).catch((err) => {
       if (cancelled) return
-      setError(err instanceof Error ? err.message : "Error al abrir archivo")
-      setLoading(false)
+      setFilesState((prev) => ({
+        ...prev,
+        [activeTab]: { content: "", dirty: false, loading: false, error: err instanceof Error ? err.message : "Error al abrir archivo" },
+      }))
     })
     return () => { cancelled = true }
-  }, [path])
+  }, [activeTab, filesState])
+
+  const activeFile = filesState[activeTab]
 
   const handleSave = async () => {
-    if (saving) return
+    if (!activeTab || !activeFile || saving) return
     setSaving(true)
     try {
-      const b64 = btoa(unescape(encodeURIComponent(content)))
-      await shell.fs.write(path, b64)
-      setDirty(false)
+      const b64 = btoa(unescape(encodeURIComponent(activeFile.content)))
+      await shell.fs.write(activeTab, b64)
+      setFilesState((prev) => ({
+        ...prev,
+        [activeTab]: { ...prev[activeTab], dirty: false },
+      }))
     } catch {
-      setError("Error al guardar archivo")
+      setFilesState((prev) => ({
+        ...prev,
+        [activeTab]: { ...prev[activeTab], error: "Error al guardar archivo" },
+      }))
     } finally {
       setSaving(false)
     }
   }
 
-  const fileName = path.split(/[/\\]/).pop() || path
-  const relPath = initialCwd && path.startsWith(initialCwd) ? path.slice(initialCwd.length).replace(/^[/\\]+/, "") : path
+  const handleCloseTab = (tabToClose: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const nextTabs = tabs.filter((t) => t !== tabToClose)
+    setTabs(nextTabs)
+    if (nextTabs.length === 0) {
+      if (onClose) onClose()
+    } else if (activeTab === tabToClose) {
+      const idx = tabs.indexOf(tabToClose)
+      const newActive = nextTabs[Math.max(0, idx - 1)]
+      setActiveTab(newActive)
+      if (onSelectFile) onSelectFile(newActive)
+    }
+  }
+
+  const handleSelectTab = (tabPath: string) => {
+    setActiveTab(tabPath)
+    if (onSelectFile) onSelectFile(tabPath)
+  }
+
+  if (tabs.length === 0) {
+    return null
+  }
+
+  const relPath = initialCwd && activeTab.startsWith(initialCwd) ? activeTab.slice(initialCwd.length).replace(/^[/\\]+/, "") : activeTab
 
   return (
     <div className="file-editor-panel" style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
-      <div className="file-editor-tab-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
-          <span style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--text)" }}>{fileName}</span>
-          <span style={{ fontSize: "0.75rem", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{relPath}</span>
-          {dirty && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)" }} title="Cambios sin guardar" />}
+      {/* Barra de pestañas tipo VS Code */}
+      <div className="file-editor-tab-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)", overflowX: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "2px", minWidth: 0 }}>
+          {tabs.map((tab) => {
+            const name = tab.split(/[/\\]/).pop() || tab
+            const isActive = tab === activeTab
+            const isDirty = filesState[tab]?.dirty
+            const ic = fileIcon(name, false)
+            return (
+              <div
+                key={tab}
+                onClick={() => handleSelectTab(tab)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 10px",
+                  cursor: "pointer",
+                  fontSize: "0.82rem",
+                  background: isActive ? "var(--surface)" : "transparent",
+                  borderBottom: isActive ? "2px solid var(--primary)" : "2px solid transparent",
+                  borderRight: "1px solid var(--border-subtle)",
+                  color: isActive ? "var(--text)" : "var(--muted)",
+                  fontWeight: isActive ? 600 : 400,
+                  maxWidth: "180px",
+                  minWidth: "80px",
+                }}
+              >
+                <span style={{ color: ic.color, fontSize: "0.9rem" }}>{ic.glyph}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{name}</span>
+                {isDirty && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--primary)" }} title="Cambios sin guardar" />}
+                <button
+                  type="button"
+                  className="btn-icon compact"
+                  onClick={(e) => handleCloseTab(tab, e)}
+                  title="Cerrar pestaña"
+                  style={{ padding: "0 3px", fontSize: "11px", opacity: 0.7 }}
+                >
+                  ×
+                </button>
+              </div>
+            )
+          })}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {dirty && (
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "0 6px" }}>
+          {activeFile?.dirty && (
             <button type="button" className="btn-primary compact" onClick={handleSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
             </button>
           )}
           {onClose && (
-            <button type="button" className="btn-icon compact" onClick={onClose} title="Cerrar pestaña">
+            <button type="button" className="btn-icon compact" onClick={onClose} title="Cerrar panel de editor">
               ×
             </button>
           )}
         </div>
       </div>
-      <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
-        {loading ? (
+
+      {/* Cuerpo del editor de código */}
+      <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "2px 10px", fontSize: "0.72rem", color: "var(--muted)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)" }}>
+          {relPath}
+        </div>
+        {activeFile?.loading ? (
           <div style={{ padding: 16, color: "var(--muted)" }}>Cargando archivo...</div>
-        ) : error ? (
-          <div style={{ padding: 16, color: "var(--danger)" }}>{error}</div>
+        ) : activeFile?.error ? (
+          <div style={{ padding: 16, color: "var(--danger)" }}>{activeFile.error}</div>
         ) : (
           <textarea
             style={{
@@ -701,8 +815,14 @@ export const FileEditorPanel = memo(function FileEditorPanel({
               padding: "10px",
               tabSize: 2,
             }}
-            value={content}
-            onChange={(e) => { setContent(e.target.value); setDirty(true) }}
+            value={activeFile?.content ?? ""}
+            onChange={(e) => {
+              const val = e.target.value
+              setFilesState((prev) => ({
+                ...prev,
+                [activeTab]: { ...(prev[activeTab] || { loading: false, error: null }), content: val, dirty: true },
+              }))
+            }}
             onKeyDown={(e) => {
               if ((e.ctrlKey || e.metaKey) && e.key === "s") {
                 e.preventDefault()

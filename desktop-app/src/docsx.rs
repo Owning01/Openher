@@ -66,6 +66,7 @@ pub fn read(state: &AppState, rel: &str) -> Result<serde_json::Value, String> {
     }))
 }
 
+#[allow(dead_code)]
 pub fn open_official() -> serde_json::Value {
     serde_json::json!({ "url": "https://opencode.ai/docs" })
 }

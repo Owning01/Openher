@@ -97,6 +97,7 @@ pub struct AppState {
     pub plugins: crate::plugins::PluginRegistry,
     pub servers: crate::srvman::ServerManager,
     pub stats: crate::statsx::StatsManager,
+    #[allow(dead_code)]
     pub cache: RwLock<std::collections::HashMap<String, String>>,
     pub dist: Option<PathBuf>,
 }

@@ -272,6 +272,18 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         }
         return;
     }
+    if path == "/shell/fs/reveal" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                let _ = req.respond(json_ok(&crate::fsx::reveal_in_explorer(p)));
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
 
     // ============================== Terminales (pty)
     if path == "/shell/pty" && method == Method::Get {
