@@ -122,6 +122,9 @@ export const DataIcon = (p: { className?: string; size?: number }) => (
 export const CameraIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Scan QR"><path d="M23 19a2 2 0 0 1-2 2h-3v-2h3v-3h2v3z"/><path d="M1 5a2 2 0 0 1 2-2h3v2H3v3H1V5z"/><path d="M23 5v3h-2V5h-3V3h3a2 2 0 0 1 2 2z"/><path d="M1 19v-3h2v3h3v2H3a2 2 0 0 1-2-2z"/><rect x="7" y="7" width="10" height="10" rx="1"/></Svg>)
 
+export const CopyIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Copy"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Svg>)
+
 export const LogoIcon = ({ className = "", size = 32 }: { className?: string; size?: number }) => {
   return (
     <img src="./img/apple-touch-icon-180x180.jpg" alt="OpenCode"

@@ -2,7 +2,7 @@
 //! autostart, ayuda JSON).
 
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +14,8 @@ pub struct ShellConfig {
     pub server: ServerConfigFile,
     pub port: u16,
     pub start_minimized: bool,
+    /// Shell para terminales (cmd.exe, powershell.exe, etc.).
+    pub shell: String,
     /// Comando para arrancar el server opencode (bat/exe). Vacío = no arranca.
     pub start_command: String,
     /// Puertos que se sondean para el estado del server.
@@ -53,6 +55,7 @@ impl Default for ShellConfig {
             server: ServerConfigFile::default(),
             port: DEFAULT_PORT,
             start_minimized: false,
+            shell: crate::ptyx::default_shell(),
             start_command: String::new(),
             server_ports: vec![4096, 4097],
             docs_root: String::new(),
@@ -88,7 +91,8 @@ pub struct PersistedState {
 pub struct AppState {
     pub config: RwLock<ShellConfig>,
     pub persisted: RwLock<PersistedState>,
-    pub pty: crate::ptyx::PtyRegistry,
+    pub port: u16,
+    pub pty: Arc<crate::ptyx::PtyRegistry>,
     pub kanban: crate::kanban::KanbanStore,
     pub plugins: crate::plugins::PluginRegistry,
     pub servers: crate::srvman::ServerManager,
@@ -239,7 +243,6 @@ pub fn json_err(code: u16, msg: &str) -> tiny_http::Response<std::io::Cursor<Vec
 }
 
 pub fn read_body(req: &mut tiny_http::Request) -> Result<serde_json::Value, String> {
-    use std::io::Read;
     let mut buf = Vec::new();
     let _ = req.as_reader().read_to_end(&mut buf);
     let s = String::from_utf8_lossy(&buf);
@@ -249,4 +252,21 @@ pub fn read_body(req: &mut tiny_http::Request) -> Result<serde_json::Value, Stri
 /// Escapa un path para salida JSON sin romper backslashes.
 pub fn pstring(p: &Path) -> String {
     p.to_string_lossy().to_string()
+}
+
+/// Base64 estándar (con padding) para bytes arbitrarios.
+pub fn base64_encode(data: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
+        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(T[(n >> 18) as usize & 63] as char);
+        out.push(T[(n >> 12) as usize & 63] as char);
+        out.push(if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
+    }
+    out
 }

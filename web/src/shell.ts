@@ -55,7 +55,7 @@ export const shell = {
     sessionFor: (path: string) => get<{ ok: boolean; directory?: string }>(`/shell/fs/session?path=${encodeURIComponent(path)}`),
   },
   pty: {
-    create: (cwd?: string) => post<{ id: string }>(`/shell/pty${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`),
+    create: (cwd?: string) => post<{ id: string; ws_port: number }>(`/shell/pty${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`),
     write: (id: string, data: string) => post(`/shell/pty/${id}/write`, { data }),
     resize: (id: string, cols: number, rows: number) => post(`/shell/pty/${id}/resize`, { cols, rows }),
     kill: (id: string) => fetch(`/shell/pty/${id}`, { method: "DELETE" }).then(() => undefined),

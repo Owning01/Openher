@@ -26,7 +26,7 @@ use std::time::Duration;
 
 use state::AppState;
 use tiny_http::Server;
-use wry::{Rect, WebContext, WebView, WebViewBuilder};
+use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::WindowEvent;
@@ -61,6 +61,7 @@ struct App {
     window: Option<Window>,
     webview: Option<WebView>,
     web_context: Option<WebContext>,
+    browser_mode: bool,
 }
 
 enum AppEvent {
@@ -68,9 +69,70 @@ enum AppEvent {
     Restore,
 }
 
+/// ¿Está instalado el runtime de WebView2 (Evergreen)? En Windows 10 no
+/// viene por defecto; la shell lo detecta y lo instala si falta.
+fn webview2_runtime_installed() -> bool {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+    use winreg::RegKey;
+    for root in [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER] {
+        for sub in [
+            r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{EB1C19B2-1D18-41B8-89DB-6F77C8958A5C}",
+            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{EB1C19B2-1D18-41B8-89DB-6F77C8958A5C}",
+        ] {
+            if let Ok(key) = RegKey::predef(root).open_subkey(sub) {
+                if key.get_value::<String, _>("pv").is_ok() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Descarga el bootstrapper de WebView2 (Evergreen, ~2MB) a data/ y lo
+/// instala en silencio. Best-effort: no bloquea y no pide admin.
+fn install_webview2_runtime_bg() {
+    std::thread::Builder::new()
+        .name("webview2-setup".into())
+        .spawn(|| {
+            let target = state::data_dir().join("webview2-setup.exe");
+            let url = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
+            let resp = match ureq::get(url)
+                .timeout(std::time::Duration::from_secs(90))
+                .call()
+            {
+                Ok(r) => r,
+                Err(_) => return,
+            };
+            let mut reader = resp.into_reader();
+            let mut file = match std::fs::File::create(&target) {
+                Ok(f) => f,
+                Err(_) => return,
+            };
+            if std::io::copy(&mut reader, &mut file).is_err() {
+                let _ = std::fs::remove_file(&target);
+                return;
+            }
+            drop(file);
+            let _ = std::process::Command::new(&target)
+                .args(["/silent", "/install"])
+                .spawn();
+        })
+        .ok();
+}
+
+/// Abre la URL en el navegador por defecto (fallback si WebView2 no existe).
+fn open_browser_mode(url: &str) {
+    let _ = std::process::Command::new("cmd")
+        .args(["/c", "start", "", url])
+        .spawn();
+}
+
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_some() {
+        if self.window.is_some() || self.browser_mode {
             return;
         }
         let mut attributes = Window::default_attributes();
@@ -89,15 +151,28 @@ impl ApplicationHandler<AppEvent> for App {
         let _ = std::fs::create_dir_all(data.join("webview"));
         let context = WebContext::new(Some(data.join("webview")));
         let ctx: &mut WebContext = self.web_context.get_or_insert(context);
-        let builder = WebViewBuilder::with_web_context(ctx).with_url(&self.url);
-        match builder.build_as_child(&window) {
+        let builder = WebViewBuilder::with_web_context(ctx)
+            .with_url(&self.url)
+            // Aceleración por GPU: fuerza D3D11/compositor GPU (NVIDIA/AMD/Intel).
+            .with_additional_browser_args(
+                "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-accelerated-video-decode",
+            );        match builder.build_as_child(&window) {
             Ok(wv) => {
                 self.webview = Some(wv);
                 self.window = Some(window);
             }
             Err(e) => {
                 eprintln!("opencode-desktop: webview error: {e}");
-                event_loop.exit();
+                // Windows 10 sin runtime WebView2: instalar en background y
+                // abrir en el navegador por defecto mientras tanto.
+                if !webview2_runtime_installed() {
+                    eprintln!("opencode-desktop: WebView2 runtime no encontrado; instalando...");
+                    install_webview2_runtime_bg();
+                }
+                open_browser_mode(&self.url);
+                self.browser_mode = true;
+                // El server/tray siguen vivos: la app funciona en el browser.
+                drop(window);
             }
         }
     }
@@ -133,10 +208,10 @@ impl ApplicationHandler<AppEvent> for App {
     }
 }
 
-/// Icono de la ventana: decodifica el 32x32 (BMP 32bpp) del .ico.
-fn load_window_icon() -> Result<winit::window::Icon, Box<dyn std::error::Error>> {
-    let icon_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/icon.ico");
-    let bytes = std::fs::read(icon_path)?;
+/// Icono embebido del logo de opencode (resources/icon.ico, 32x32 BMP).
+/// Decodificado en runtime: ventana + tray, sin sección de recursos.
+fn icon_rgba32() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let bytes = include_bytes!("../resources/icon.ico");
     if bytes.len() < 6 {
         return Err("short ico".into());
     }
@@ -166,10 +241,16 @@ fn load_window_icon() -> Result<winit::window::Icon, Box<dyn std::error::Error>>
                     rgba[dst + 3] = data[src + 3];
                 }
             }
-            return Ok(winit::window::Icon::from_rgba(rgba, 32, 32)?);
+            return Ok(rgba);
         }
     }
     Err("no 32x32 bmp in ico".into())
+}
+
+/// Icono de la ventana: el logo embebido decodificado a RGBA.
+fn load_window_icon() -> Result<winit::window::Icon, Box<dyn std::error::Error>> {
+    let rgba = icon_rgba32()?;
+    Ok(winit::window::Icon::from_rgba(rgba, 32, 32)?)
 }
 
 // ================================================================ Tray icon
@@ -183,10 +264,10 @@ fn setup_tray(proxy: EventLoopProxy<AppEvent>) -> Result<(), Box<dyn std::error:
     let menu = Menu::new();
     menu.append(&open)?;
     menu.append(&quit)?;
-    let icon = tray_icon::Icon::from_path(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/icon.ico"),
-        Some((32, 32)),
-    )?;
+    let icon = {
+        let rgba = icon_rgba32()?;
+        tray_icon::Icon::from_rgba(rgba, 32, 32)?
+    };
     let tray = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_tooltip("OpenCode Desktop")
@@ -257,7 +338,8 @@ fn main() {
     let app_state = Arc::new(AppState {
         config: std::sync::RwLock::new(config.clone()),
         persisted: std::sync::RwLock::new(persisted),
-        pty: ptyx::PtyRegistry::new(),
+        port: chosen,
+        pty: Arc::new(ptyx::PtyRegistry::new()),
         kanban: kanban::KanbanStore::load(),
         plugins: plugins::PluginRegistry::new(),
         servers: srvman::ServerManager::new(),
@@ -277,6 +359,11 @@ fn main() {
 
     // Stats server arranca con la app (botón del panel izquierdo lo abre).
     statsx::ensure(&app_state);
+
+    // WebSocket para terminales en tiempo real (puerto del shell + 1).
+    if let Err(e) = ptyx::start_ws_server(app_state.pty.clone(), chosen + 1) {
+        eprintln!("opencode-desktop: ws pty no disponible: {e}");
+    }
 
     {
         let spawn = app_state.clone();
@@ -307,6 +394,7 @@ fn main() {
         window: None,
         webview: None,
         web_context: None,
+        browser_mode: false,
     };
     event_loop.run_app(&mut app).unwrap();
 }

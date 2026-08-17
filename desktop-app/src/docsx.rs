@@ -1,6 +1,6 @@
 //! Documentación de opencode: browse + read (markdown) desde el checkout local.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::state::AppState;
 

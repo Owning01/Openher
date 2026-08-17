@@ -6,21 +6,47 @@ import { DiffStatBadge } from "./ToolPart"
 import { FileTypeIcon } from "./FileTypeIcon"
 import { ChevronIcon } from "../Icons"
 
-export const FileDiffs = memo(function FileDiffs({ diffs }: { diffs: FileDiff[] }) {
+export const FileDiffs = memo(function FileDiffs({
+  diffs, onOpenADEDiff
+}: {
+  diffs: FileDiff[]
+  onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
+}) {
   const t = useT()
   const [open, setOpen] = useState(false)
   const [openFile, setOpenFile] = useState<Record<string, boolean>>({})
   if (!diffs || diffs.length === 0) return null
   const total = sumDiffStat(diffs)
 
+  const handleToggle = () => {
+    if (onOpenADEDiff && window.innerWidth > 780) {
+      onOpenADEDiff(diffs)
+      return
+    }
+    setOpen((v) => !v)
+  }
+
   return (
     <div className={`file-diffs${open ? " open" : ""}`}>
-      <button type="button" className="file-diffs-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <button type="button" className="file-diffs-toggle" onClick={handleToggle} aria-expanded={open}>
         <span className="tool-part-icon"><ChevronIcon size={12} /></span>
         <span className="tool-part-label">
           {t('diff.filesModified', { count: diffs.length })}
         </span>
         <DiffStatBadge add={total.add} del={total.del} />
+        {onOpenADEDiff && (
+          <span
+            className="file-diffs-ade-link"
+            role="button"
+            title="Abrir en A.D.E Diff Viewer"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenADEDiff(diffs)
+            }}
+          >
+            A.D.E ↗
+          </span>
+        )}
         <span className="tool-part-chevron">{open ? "▾" : "▸"}</span>
       </button>
       {open && (

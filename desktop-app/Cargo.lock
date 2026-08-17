@@ -2096,11 +2096,11 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 name = "opencode-desktop"
 version = "0.1.0"
 dependencies = [
- "embed-resource",
  "opencode-stats",
  "portable-pty",
  "serde",
  "serde_json",
+ "sha1",
  "tiny_http",
  "tray-icon",
  "ureq",
@@ -2928,6 +2928,17 @@ checksum = "d98238b800e0d1576d8b6e3de32827c2d74bee68bb97748dcf5071fb53965432"
 dependencies = [
  "nodrop",
  "stable_deref_trait",
+]
+
+[[package]]
+name = "sha1"
+version = "0.10.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a978451301f4db1d02937a4ab3ccce137717b81826e79b7d49ffe3244a13c3b8"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
 ]
 
 [[package]]

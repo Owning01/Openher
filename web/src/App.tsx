@@ -23,13 +23,14 @@ import { ChatView } from "./components/ChatView"
 import type { ChatViewProps } from "./components/ChatView"
 import { SessionChatPanel } from "./components/SessionChatPanel"
 import { BottomSheet } from "./components/BottomSheet"
+import { ADEDiffPanel } from "./components/ADEDiffPanel"
 import { ConfirmModal } from "./components/ConfirmModal"
 import { ErrorModal } from "./components/ErrorModal"
 import { ShortcutsModal } from "./components/ShortcutsModal"
-import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, Question, PermissionRequest, QuestionInfo } from "./types"
+import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, Question, PermissionRequest, QuestionInfo, FileDiff } from "./types"
 import type { LanguageCode } from "./i18n"
 import { formatLimit, extractPath, extractName, extractBranch, isSessionActive, filterByQuery } from "./utils"
-import { STORAGE_KEYS, QUESTION_POLL_INTERVAL_MS } from "./constants"
+import { STORAGE_KEYS, QUESTION_POLL_INTERVAL_MS, DEFAULT_STATS_PORT } from "./constants"
 import { useBackButton } from "./hooks/useBackButton"
 import { useNetworkMode } from "./hooks/useNetworkMode"
 import { useMemoryCleanup } from "./hooks/useMemoryCleanup"
@@ -54,6 +55,7 @@ import { useShareReceiver } from "./hooks/useShareReceiver"
 import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
+import { shell } from "./shell"
 import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, DocsPanel, UpdatesPanel, LabsPanel, ConfigPanel } from "./components/shellPanels"
 import type { ServerProfile } from "./types"
 
@@ -74,36 +76,71 @@ const FolderPicker = lazy(() => import("./components/FolderPicker").then((m) => 
 
 type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "docs" | "updates" | "labs" | "config"
 
-type DesktopLayout = { cols: number; rows: number; sessions: Array<string | null>; panelKinds: Array<ShellPanelKind>; colSizes: Array<number | null>; rowSizes: Array<number | null> }
+type DesktopLayout = {
+  cols: number
+  rows: number
+  sessions: Array<string | null>
+  panelKinds: Array<ShellPanelKind>
+  colSizes: Array<number | null>
+  rowSizes: Array<number | null>
+}
 
-function loadDesktopState(fallbackSessionID: string | null): { layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean; activity: DesktopActivity } {
-  const fallback = {
+type DesktopState = {
+  layout: DesktopLayout
+  sidebarWidth: number
+  sidebarCollapsed: boolean
+  activity: DesktopActivity
+  activePanel?: number
+  desktopDiffOpen?: boolean
+  desktopDiffWidth?: number
+  showTerminal?: boolean
+  terminalDocked?: boolean
+  terminalHeight?: number
+  lastClosedPanel?: { index: number; kind: ShellPanelKind; sessionId: string | null } | null
+}
+
+function loadDesktopState(fallbackSessionID: string | null): DesktopState {
+  const fallback: DesktopState = {
     layout: { cols: 1, rows: 1, sessions: [fallbackSessionID], panelKinds: ["session"], colSizes: [null], rowSizes: [null] } as DesktopLayout,
     sidebarWidth: 340,
     sidebarCollapsed: false,
     activity: "sessions" as DesktopActivity,
+    activePanel: 0,
+    desktopDiffOpen: false,
+    desktopDiffWidth: 440,
+    showTerminal: false,
+    terminalDocked: true,
+    terminalHeight: 280,
+    lastClosedPanel: null
   }
   try {
-    const raw = JSON.parse(localStorage.getItem(DESKTOP_STATE_KEY) ?? "null") as Partial<{ layout: DesktopLayout; sidebarWidth: number; sidebarCollapsed: boolean; activity: DesktopActivity }> | null
+    const raw = JSON.parse(localStorage.getItem(DESKTOP_STATE_KEY) ?? "null") as Partial<DesktopState> | null
     const layout = raw?.layout
     if (layout && layout.cols >= 1 && layout.rows >= 1 && Array.isArray(layout.sessions) && layout.sessions.length === layout.cols * layout.rows) {
       const total = layout.cols * layout.rows
       const kinds: Array<ShellPanelKind> =
         Array.isArray(layout.panelKinds) && layout.panelKinds.length === total
-          ? layout.panelKinds.map((k) => (k === "session" || k === "terminal" || k === "explorer" || k === "kanban" || k === "docs" || k === "updates" || k === "stats" || k === "labs" || k === "config" ? k : "session"))
+          ? layout.panelKinds.map((k: any) => (k === "session" || k === "terminal" || k === "explorer" || k === "kanban" || k === "docs" || k === "updates" || k === "stats" || k === "labs" || k === "config" ? k : "session"))
           : new Array(total).fill("session")
       return {
         layout: {
           cols: layout.cols,
           rows: layout.rows,
-          sessions: layout.sessions.map((s) => (typeof s === "string" ? s : null)),
+          sessions: layout.sessions.map((s: any) => (typeof s === "string" ? s : null)),
           panelKinds: kinds,
-          colSizes: Array.isArray(layout.colSizes) && layout.colSizes.length === layout.cols ? layout.colSizes : new Array(layout.cols).fill(null),
-          rowSizes: Array.isArray(layout.rowSizes) && layout.rowSizes.length === layout.rows ? layout.rowSizes : new Array(layout.rows).fill(null),
+          colSizes: layout.cols === 1 ? [null] : (Array.isArray(layout.colSizes) && layout.colSizes.length === layout.cols ? layout.colSizes : new Array(layout.cols).fill(null)),
+          rowSizes: layout.rows === 1 ? [null] : (Array.isArray(layout.rowSizes) && layout.rowSizes.length === layout.rows ? layout.rowSizes : new Array(layout.rows).fill(null)),
         },
-        sidebarWidth: Math.max(200, Math.min(480, raw.sidebarWidth ?? 340)),
-        sidebarCollapsed: !!raw.sidebarCollapsed,
-        activity: (["sessions", "explorer", "stats", "kanban", "docs", "updates", "labs", "config"].includes(raw.activity ?? "") ? raw.activity! : "sessions") as DesktopActivity,
+        sidebarWidth: Math.max(200, Math.min(480, raw?.sidebarWidth ?? 340)),
+        sidebarCollapsed: !!raw?.sidebarCollapsed,
+        activity: (["sessions", "explorer", "stats", "kanban", "docs", "updates", "labs", "config"].includes(raw?.activity ?? "") ? raw!.activity! : "sessions") as DesktopActivity,
+        activePanel: typeof raw?.activePanel === "number" ? raw.activePanel : 0,
+        desktopDiffOpen: !!raw?.desktopDiffOpen,
+        desktopDiffWidth: Math.max(280, Math.min(800, raw?.desktopDiffWidth ?? 440)),
+        showTerminal: !!raw?.showTerminal,
+        terminalDocked: raw?.terminalDocked !== false,
+        terminalHeight: Math.max(140, Math.min(650, raw?.terminalHeight ?? 280)),
+        lastClosedPanel: raw?.lastClosedPanel ?? null
       }
     }
   } catch { /* ignore */ }
@@ -152,8 +189,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const { agentOptions, modelOptions, modelLoadError,
     modelQuery, setModelQuery, primaryAgentOptions,
-    activeAgent, activeAgentID, activeModelOption, activeModel,
-    variantGroups, selectedModelKey, selectedVariant, changeVariant, activeModelVariants, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
+    activeAgent, activeAgentID, activeModelOption: globalActiveModelOption, activeModel: globalActiveModel,
+    variantGroups, selectedModelKey, selectedVariant: globalSelectedVariant, changeVariant, activeModelVariants: globalActiveModelVariants, getModelForSession, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
   const blockedModels = useBlockedModels(modelOptions)
   const { flags, toggleFlag, setFlag } = useFeatureFlags()
 
@@ -215,6 +252,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setSelectedID
   } = useSessions(config, onLoadSelected, backgroundFailureCountRef, initialSessionLoadRef, setConnectionState, setConnectionMessage)
 
+  const currentSessionAI = useMemo(() => {
+    return getModelForSession(selectedSession?.id)
+  }, [getModelForSession, selectedSession?.id])
+
+  const activeModelOption = currentSessionAI.activeModelOption ?? globalActiveModelOption
+  const activeModel = currentSessionAI.activeModel ?? globalActiveModel
+  const activeModelVariants = currentSessionAI.activeModelVariants ?? globalActiveModelVariants
+  const selectedVariant = currentSessionAI.selectedVariant ?? globalSelectedVariant
+
   useEffect(() => {
     setLocalRevertID(null)
   }, [selectedSession?.id])
@@ -241,11 +287,36 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   // ===== Feature: File Editor =====
   const [fileEditorPath, setFileEditorPath] = useState<string | null>(null)
 
+  // ===== Feature: ADE Diff Panel (Desktop) =====
+  const [desktopDiffOpen, setDesktopDiffOpen] = useState(false)
+  const [desktopDiffData, setDesktopDiffData] = useState<{ diffs?: FileDiff[]; selectedFile?: string } | null>(null)
+  const [desktopDiffWidth, setDesktopDiffWidth] = useState(520)
+
+  const handleOpenADEDiff = useCallback((diffs?: FileDiff[], file?: string) => {
+    setDesktopDiffData({ diffs, selectedFile: file })
+    setDesktopDiffOpen(true)
+  }, [])
+
   // ===== Feature: Terminal =====
-  const { lines: shellLines, running: shellRunning, execute: shellExecute, clear: shellClear, history: shellHistory } = useShell(config)
+  const { lines: shellLines, running: shellRunning, execute: shellExecute, clear: shellClear, history: shellHistory, shell: terminalShell, setShell: setTerminalShell } = useShell(config, selectedSession?.directory)
   const [showTerminal, setShowTerminal] = useState(false)
+  const [terminalDocked, setTerminalDocked] = useState(true)
+  const [terminalHeight, setTerminalHeight] = useState(280)
   const [showRemoteDesktop, setShowRemoteDesktop] = useState(false)
   const [desktopCfg, setDesktopCfg] = useState(() => loadDesktopConfig())
+
+  // ===== Auto-conectar y pre-cargar base de datos de OpenCode Stats =====
+  useEffect(() => {
+    // 1. Iniciar stats en desktop shell si está disponible
+    void shell.stats.status().then((s) => {
+      if (!s.running) void shell.stats.start().catch(() => {})
+    }).catch(() => {})
+
+    // 2. Pre-cargar datos del servidor de stats si hay config
+    if (config?.host) {
+      void api.fetchStats(config, DEFAULT_STATS_PORT).catch(() => {})
+    }
+  }, [config?.host])
 
   // ===== Feature: Shortcuts =====
   const [showShortcuts, setShowShortcuts] = useState(false)
@@ -421,6 +492,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   useEffect(() => {
     setStreamState(sseState)
   }, [sseState])
+
+  // Watchdog: si el SSE cae (polling/reconnecting) y awaitingAssistantReply
+  // sigue true después de 30s, limpiar el indicador de typing (el server no
+  // emitió session.idle, probablemente murió mid-stream).
+  useEffect(() => {
+    if (!awaitingAssistantReply || sseState === "streaming") return
+    const t = setTimeout(() => {
+      if (awaitingAssistantReply) setAwaitingAssistantReply(false)
+    }, 30_000)
+    return () => clearTimeout(t)
+  }, [awaitingAssistantReply, sseState])
 
   // ===== Offline cache =====
   const { cacheSessions, getCachedSessions, cacheMessages, getCachedMessages } = useOfflineCache(flags)
@@ -679,7 +761,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const pollInterval = dataMode === "full" ? (isStreamingActive ? 5000 : 3500) : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
 
   const pollControl = usePolling(async () => {
-    await refreshSessions()
+    await refreshSessions(true)
     if (connectionStateRef.current === "offline") {
       throw new Error("offline")
     }
@@ -910,16 +992,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const gridRef = useRef<HTMLDivElement | null>(null)
   const shellRef = useRef<HTMLDivElement | null>(null)
 
-  // Persistencia del layout + sidebar (debounced)
+  // Persistencia del layout + sidebar + paneles (debounced)
   useEffect(() => {
     if (!isDesktop) return
     const id = setTimeout(() => {
       try {
-        localStorage.setItem(DESKTOP_STATE_KEY, JSON.stringify(desktopState))
+        const fullState: DesktopState = {
+          ...desktopState,
+          activePanel,
+          desktopDiffOpen,
+          desktopDiffWidth,
+          showTerminal,
+          terminalDocked,
+          terminalHeight
+        }
+        localStorage.setItem(DESKTOP_STATE_KEY, JSON.stringify(fullState))
       } catch { /* ignore */ }
     }, 300)
     return () => clearTimeout(id)
-  }, [desktopState, isDesktop])
+  }, [desktopState, isDesktop, activePanel, desktopDiffOpen, desktopDiffWidth, showTerminal, terminalDocked, terminalHeight])
 
   const openInPanel = useCallback((index: number, id: string) => {
     setDesktopLayout((prev) => {
@@ -1036,7 +1127,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [createSession, activeModel, recordSessionCreated, persistDirectory, navigate, setDesktopLayout, activePanel, onLoadSelected, refreshSessions])
 
   const closePanel = useCallback((index: number) => {
-    setDesktopLayout((prev) => {
+    setDesktopState((prevState) => {
+      const prev = prevState.layout
+      const closedInfo = {
+        index,
+        kind: prev.panelKinds[index] ?? "session",
+        sessionId: prev.sessions[index] ?? null
+      }
       let sessions = [...prev.sessions]
       let panelKinds = [...prev.panelKinds]
       sessions[index] = null
@@ -1071,8 +1168,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             break
           }
         }
+        if (cols === 1) colSizes = [null]
+        if (rows === 1) rowSizes = [null]
       }
-      return { ...prev, cols, rows, sessions, panelKinds, colSizes, rowSizes }
+      return {
+        ...prevState,
+        lastClosedPanel: closedInfo,
+        layout: { ...prev, cols, rows, sessions, panelKinds, colSizes, rowSizes }
+      }
     })
     if (activePanel === index) setActivePanel(0)
   }, [activePanel])
@@ -1135,7 +1238,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const startWidth = sidebarWidth
     let lastW = sidebarWidth
     const apply = (w: number) => {
-      if (shellRef.current) shellRef.current.style.gridTemplateColumns = `${w}px minmax(0, 1fr)`
+      if (shellRef.current) shellRef.current.style.gridTemplateColumns = `48px ${w}px minmax(0, 1fr)${desktopDiffOpen ? ` ${desktopDiffWidth}px` : ""}`
     }
     const onMove = (ev: PointerEvent) => {
       lastW = Math.max(200, Math.min(480, startWidth + (ev.clientX - startX)))
@@ -1396,7 +1499,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     activeModelOption,
     activeModelVariants,
     selectedVariant,
-    onChangeVariant: (variant: string | null) => changeVariant(variant),
+    onChangeVariant: (variant: string | null, sessionID?: string) => changeVariant(variant, sessionID ?? selectedSession?.id),
+    getModelForSession,
     primaryAgentOptions,
     onChangeAgent: (id) => changeAgent(id, selectedSession?.directory),
     projectName,
@@ -1432,6 +1536,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     onToggleFlag: toggleFlag,
     onSetFlag: setFlag,
     diffFiles,
+    onOpenADEDiff: handleOpenADEDiff,
     projectDashboard,
     streamState,
     compacting,
@@ -1491,7 +1596,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   return (
     <div className="app-shell" data-navbar="header" ref={shellRef}
-      style={isDesktop ? { gridTemplateColumns: `48px ${sidebarCollapsed ? "0px" : `${sidebarWidth}px`} minmax(0, 1fr)` } : undefined}>
+      style={isDesktop ? { gridTemplateColumns: `48px ${sidebarCollapsed ? "0px" : `${sidebarWidth}px`} minmax(0, 1fr)${desktopDiffOpen ? ` ${desktopDiffWidth}px` : ""}` } : undefined}>
       {!isDesktop && view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={handleNavigate}
           onToggleLightMode={handleToggleLightMode} />
@@ -1506,8 +1611,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <button type="button" className={`activity-btn${activity === "explorer" ? " active" : ""}`} title={t('shell.kindExplorer')} aria-label={t('shell.kindExplorer')}
               onClick={() => { if (activity === "explorer") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("explorer"); setSidebarCollapsed(false) } }}>
               <FolderIcon size={18} /></button>
+            <button type="button" className={`activity-btn${showTerminal ? " active" : ""}`} title={t('session.terminal')} aria-label={t('session.terminal')}
+              onClick={() => setShowTerminal((v) => !v)}>
+              <TerminalIcon size={18} /></button>
             <button type="button" className={`activity-btn${activity === "stats" ? " active" : ""}`} title={t('shell.kindStats')} aria-label={t('shell.kindStats')}
-              onClick={() => { if (activity === "stats") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("stats"); setSidebarCollapsed(false) } }}>
+              onClick={() => {
+                addPanel("stats")
+              }}>
               <StatsIcon size={18} /></button>
             <button type="button" className={`activity-btn${activity === "kanban" ? " active" : ""}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
               onClick={() => { if (activity === "kanban") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("kanban"); setSidebarCollapsed(false) } }}>
@@ -1557,7 +1667,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               </div>
               <div className="desktop-sidebar-body">
                 {activity === "sessions" ? sessionsView
-                  : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} />
+                  : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={selectedSession?.directory} />
                   : activity === "stats" ? <StatsPanel />
                   : activity === "kanban" ? <KanbanPanel />
                   : activity === "docs" ? <DocsPanel />
@@ -1577,15 +1687,23 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         {isDesktop && (view === "sessions" || view === "detail") && (
           (() => {
             const gridCols: Array<number | null | "handle"> = []
-            desktopLayout.colSizes.forEach((s, i) => {
-              if (i > 0) gridCols.push("handle")
-              gridCols.push(s)
-            })
+            if (desktopLayout.cols === 1) {
+              gridCols.push(null)
+            } else {
+              desktopLayout.colSizes.forEach((s, i) => {
+                if (i > 0) gridCols.push("handle")
+                gridCols.push(s)
+              })
+            }
             const gridRows: Array<number | null | "handle"> = []
-            desktopLayout.rowSizes.forEach((s, i) => {
-              if (i > 0) gridRows.push("handle")
-              gridRows.push(s)
-            })
+            if (desktopLayout.rows === 1) {
+              gridRows.push(null)
+            } else {
+              desktopLayout.rowSizes.forEach((s, i) => {
+                if (i > 0) gridRows.push("handle")
+                gridRows.push(s)
+              })
+            }
             const startColResize = (colIndex: number) => (e: React.PointerEvent<HTMLDivElement>) => {
               e.preventDefault()
               const startX = e.clientX
@@ -1641,6 +1759,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               const col = i % desktopLayout.cols
               const row = Math.floor(i / desktopLayout.cols)
               const placement = { gridColumn: col * 2 + 1, gridRow: row * 2 + 1 }
+              // Terminales: arrancan en la ruta de la sesión del panel activo
+              // (selectedSession no se setea en desktop; cada panel gestiona
+              // su propia sesión).
+              const activeSid = desktopLayout.sessions[Math.min(activePanel, desktopLayout.sessions.length - 1)]
+              const activeDir = activeSid ? sessions.find((s) => s.id === activeSid)?.directory ?? undefined : undefined
               if (kind === "session") {
                 if (!session) {
                   return (
@@ -1682,9 +1805,28 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               return (
                 <div key={`panel-${i}`} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
                   <div className="shell-panel-header">
+                    <div className="shell-tab-pills">
+                      <button type="button" className="shell-tab-pill"
+                        onClick={(e) => { e.stopPropagation(); setPanelKind(i, "session") }}>
+                        💬 {t('shell.kindSession')}
+                      </button>
+                      <button type="button" className={`shell-tab-pill${(kind as string) === "stats" ? " active" : ""}`}
+                        onClick={(e) => { e.stopPropagation(); setPanelKind(i, "stats") }}>
+                        📊 {t('shell.kindStats')}
+                      </button>
+                      <button type="button" className={`shell-tab-pill${kind === "terminal" ? " active" : ""}`}
+                        onClick={(e) => { e.stopPropagation(); setPanelKind(i, "terminal") }}>
+                        ⚡ {t('shell.kindTerminal')}
+                      </button>
+                      <button type="button" className={`shell-tab-pill${kind === "explorer" ? " active" : ""}`}
+                        onClick={(e) => { e.stopPropagation(); setPanelKind(i, "explorer") }}>
+                        📂 {t('shell.kindExplorer')}
+                      </button>
+                    </div>
                     <select className="shell-panel-kind" value={kind}
                       onChange={(e) => setPanelKind(i, e.target.value as ShellPanelKind)}
-                      onClick={(e) => e.stopPropagation()}>
+                      onClick={(e) => e.stopPropagation()}
+                      title="Más herramientas">
                       <option value="session">{t('shell.kindSession')}</option>
                       <option value="terminal">{t('shell.kindTerminal')}</option>
                       <option value="explorer">{t('shell.kindExplorer')}</option>
@@ -1695,13 +1837,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       <option value="labs">{t('shell.kindLabs')}</option>
                       <option value="config">{t('shell.kindConfig')}</option>
                     </select>
-                    <span className="shell-panel-spacer" />
+                    {desktopLayout.sessions.length > 1 && (
+                      <button type="button" className="btn-icon compact" title="Mover al otro bloque" aria-label="Mover"
+                        onClick={(e) => { e.stopPropagation(); handleSwapPanels(i, (i + 1) % desktopLayout.sessions.length) }}>⇄</button>
+                    )}
                     <button type="button" className="btn-icon compact" title={t('panel.close')} aria-label={t('panel.close')}
                       onClick={(e) => { e.stopPropagation(); closePanel(i) }}>×</button>
                   </div>
+                  {/* Terminales: arrancan en la ruta de la sesión activa
+                      (se congela al montar el panel). */}
                   <ShellPanel
                     kind={kind}
-                    cwd={session?.directory ?? undefined}
+                    cwd={kind === "terminal" ? activeDir : session?.directory ?? undefined}
                     onOpenSessionDir={openSessionInDir} />
                 </div>
               )
@@ -1860,9 +2007,44 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             commands={commands}
             commandFilter={commandFilter}
             onCommandFilterChange={setCommandFilter} />
-          </Suspense>
+        </Suspense>
       )}
+
+        {isDesktop && showTerminal && terminalDocked && selectedSession && (
+          <Suspense fallback={null}>
+            <TerminalView
+              lines={shellLines}
+              running={shellRunning}
+              sessionID={selectedSession.id}
+              directory={selectedSession.directory}
+              shell={terminalShell}
+              onShellChange={setTerminalShell}
+              onExecute={shellExecute}
+              onClear={shellClear}
+              onClose={() => setShowTerminal(false)}
+              history={shellHistory}
+              isDocked={true}
+              onToggleDock={() => setTerminalDocked(false)}
+              height={terminalHeight}
+              onResizeHeight={setTerminalHeight}
+            />
+          </Suspense>
+        )}
       </main>
+
+      {isDesktop && desktopDiffOpen && (
+        <ADEDiffPanel
+          diffs={desktopDiffData?.diffs ?? (diffFiles.length > 0 ? diffFiles.map((d) => ({ file: d.file, patch: "", additions: d.additions, deletions: d.deletions })) : [])}
+          files={diffFiles}
+          config={config}
+          sessionID={selectedSession?.id}
+          directory={selectedSession?.directory}
+          initialFile={desktopDiffData?.selectedFile}
+          onClose={() => setDesktopDiffOpen(false)}
+          onEditFile={(file) => setFileEditorPath(file)}
+          onResize={(w) => setDesktopDiffWidth(w)}
+        />
+      )}
 
       <BottomSheet
         activeSheet={activeDetailSheet}
@@ -1873,7 +2055,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         variantGroups={filteredVariantGroups}
         modelQuery={modelQuery}
         isWorking={isWorking}
-        onChangeModel={changeModel}
+        onChangeModel={(key, variant) => changeModel(key, variant, selectedSession?.id)}
         onModelQueryChange={setModelQuery}
         selectedVariant={selectedVariant}
         formatLimit={formatLimit}
@@ -1944,17 +2126,21 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         </Suspense>
       )}
 
-      {showTerminal && selectedSession && (
+      {showTerminal && selectedSession && (!isDesktop || !terminalDocked) && (
         <Suspense fallback={null}>
           <TerminalView
             lines={shellLines}
             running={shellRunning}
             sessionID={selectedSession.id}
             directory={selectedSession.directory}
+            shell={terminalShell}
+            onShellChange={setTerminalShell}
             onExecute={shellExecute}
             onClear={shellClear}
             onClose={() => setShowTerminal(false)}
             history={shellHistory}
+            isDocked={false}
+            onToggleDock={() => setTerminalDocked(true)}
           />
         </Suspense>
       )}

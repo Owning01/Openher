@@ -1,7 +1,7 @@
 import { memo, useCallback, useState, useMemo, useRef } from "react"
 import { PencilIcon, UndoIcon, MenuDotsIcon } from "../Icons"
 import { formatTime } from "../utils"
-import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
+import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { useT } from "../i18n-context"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import ToolPart from "./ToolPart"
@@ -46,7 +46,7 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): str
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate }: {
+export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
   message: RenderedMessage
   revert?: SessionView["revert"]
   onRevertToMessage?: (messageID: string) => void
@@ -66,6 +66,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   compactTools?: boolean
   thinkingDefault?: "auto" | "expanded" | "collapsed"
   onRegenerate?: () => void
+  onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
 }) {
   const t = useT()
   const [showConfirm, setShowConfirm] = useState(false)
@@ -247,7 +248,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
         )}
 
         {message.summaryDiffs && message.summaryDiffs.length > 0 && !showConfirm && (
-          <FileDiffs diffs={message.summaryDiffs} />
+          <FileDiffs diffs={message.summaryDiffs} onOpenADEDiff={onOpenADEDiff} />
         )}
 
         {isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || activeVariant || duration || message.info.finish === "aborted") && (

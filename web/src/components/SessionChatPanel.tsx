@@ -158,8 +158,18 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   // ===== Acciones =====
   const refresh = useCallback(() => Promise.resolve(onRefreshSessions()), [onRefreshSessions])
 
+  const panelModelAI = useMemo(() => {
+    return baseProps.getModelForSession ? baseProps.getModelForSession(session.id) : null
+  }, [baseProps.getModelForSession, session.id])
+
+  const panelModelOption = panelModelAI?.activeModelOption ?? baseProps.activeModelOption
+  const panelModelVariants = panelModelAI?.activeModelVariants ?? baseProps.activeModelVariants
+  const panelVariant = panelModelAI ? panelModelAI.selectedVariant : baseProps.selectedVariant
+
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>) => {
-    if (!msgs.composer) return
+    if (!config) return
+    if (!session) return
+    if (!msgs.composer.trim() && (!images || images.length === 0)) return
     if (connectionState === "offline") {
       onQueueAction({ type: "prompt", sessionID: session.id, directory: session.directory, payload: msgs.composer })
       msgs.setComposer("")
@@ -173,12 +183,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       msgs.setMessages((prev) => prev.filter((m) => !m.info.id || m.info.id <= revertMsgId))
     }
     setLocalRevertID(null)
-    msgs.send(session, baseProps.activeModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
+    msgs.send(session, panelModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
       refresh,
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
       onSetCommands, msgs.setRuntimeError, images)
       .catch(() => undefined)
-  }, [msgs, session, connectionState, onQueueAction, baseProps.activeModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID])
+  }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID])
 
   const handleAbort = useCallback(async () => {
     stopGenerationRef.current = true
@@ -229,12 +239,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     msgs.setCompacting(true)
     msgs.setAwaitingAssistantReply(true)
     try {
-      await msgs.compactSession(session.id, session.directory, baseProps.activeModelOption?.providerID ?? "", baseProps.activeModelOption?.modelID ?? "", refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined))
+      await msgs.compactSession(session.id, session.directory, panelModelOption?.providerID ?? "", panelModelOption?.modelID ?? "", refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined))
     } finally {
       msgs.setCompacting(false)
       msgs.setAwaitingAssistantReply(false)
     }
-  }, [msgs, session, baseProps.activeModelOption, refresh])
+  }, [msgs, session, panelModelOption, refresh])
 
   const chatProps: ChatViewProps = useMemo(() => ({
     ...baseProps,
@@ -247,6 +257,10 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     showTypingBubble: msgs.awaitingAssistantReply,
     loadingSessionID: null,
     selectedID: session.id,
+    activeModelOption: panelModelOption,
+    activeModelVariants: panelModelVariants,
+    selectedVariant: panelVariant,
+    onChangeVariant: (variant: string | null) => baseProps.onChangeVariant(variant, session.id),
     messageScrollSignature: msgs.messageScrollSignature,
     compacting: msgs.compacting,
     pendingQuestions,

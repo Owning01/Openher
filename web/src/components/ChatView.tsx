@@ -19,7 +19,7 @@ import { ChatCustomizerModal } from "./ChatCustomizerModal"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo,
-  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, Question, PermissionRequest, PromptSnippet, ChatSettings } from "../types"
+  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, PromptSnippet, ChatSettings } from "../types"
 
 export type ChatViewProps = {
   selectedSession: SessionView | null
@@ -42,7 +42,8 @@ export type ChatViewProps = {
   activeModelOption: ModelOption | null
   activeModelVariants: ModelOption[]
   selectedVariant: string | null
-  onChangeVariant: (variant: string | null) => void
+  onChangeVariant: (variant: string | null, sessionID?: string) => void
+  getModelForSession?: (sessionID?: string | null) => { activeModelOption: ModelOption | null; activeModel?: { providerID: string; modelID: string; variant?: string }; activeModelVariants: ModelOption[]; selectedVariant: string | null }
   primaryAgentOptions: AgentOption[]
   onChangeAgent: (id: string) => void
   projectName: string | null
@@ -107,6 +108,7 @@ export type ChatViewProps = {
   chatSettings?: ChatSettings
   onChatSettingChange?: <K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => void
   onResetChatSettings?: () => void
+  onOpenADEDiff?: (diffs?: FileDiff[], file?: string) => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -129,7 +131,7 @@ export const ChatView = memo(function ChatView({
   compacting, revertID,
   onExportMarkdown, onEditFile,
   snippets, charLimit, compactTools, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt,
-  chatSettings, onChatSettingChange, onResetChatSettings
+  chatSettings, onChatSettingChange, onResetChatSettings, onOpenADEDiff
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -332,6 +334,17 @@ export const ChatView = memo(function ChatView({
                 )}
               </div>
             )}
+            {diffFiles && diffFiles.length > 0 && onOpenADEDiff && (
+              <button
+                type="button"
+                className="btn-secondary compact header-diff-pill"
+                onClick={() => onOpenADEDiff()}
+                title="Abrir A.D.E Diff Viewer"
+              >
+                <span className="diff-pill-dot">●</span>
+                <span>Diffs ({diffFiles.length})</span>
+              </button>
+            )}
             <div className="overflow-wrap header-overflow" ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
               {chatSettings && onChatSettingChange && (
                 <button className="btn-icon compact chat-customize-btn"
@@ -510,6 +523,7 @@ export const ChatView = memo(function ChatView({
           compactTools={compactTools}
           thinkingDefault={thinkingDefault}
           onRegenerate={onRegenerate}
+          onOpenADEDiff={onOpenADEDiff}
         />
       </div>
 

@@ -27,6 +27,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             "app": "opencode-desktop",
             "version": env!("CARGO_PKG_VERSION"),
             "dist": state.dist.is_some(),
+            "ws_port": state.port + 1,
         });
         let _ = req.respond(json_ok(&body));
         return;
@@ -202,9 +203,11 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     if path == "/shell/pty" && method == Method::Post {
         let shell = q("shell");
         let cwd = q("cwd");
-        match state.pty.create(if shell.is_empty() { None } else { Some(shell) }, if cwd.is_empty() { None } else { Some(cwd) }) {
+        let cfg_shell = state.config.read().map(|c| c.shell.clone()).ok().filter(|s| !s.is_empty());
+        let shell_param = if shell.is_empty() { cfg_shell } else { Some(shell) };
+        match state.pty.create(shell_param, if cwd.is_empty() { None } else { Some(cwd) }) {
             Ok(id) => {
-                let _ = req.respond(json_ok(&serde_json::json!({ "id": id })));
+                let _ = req.respond(json_ok(&serde_json::json!({ "id": id, "ws_port": state.port + 1 })));
             }
             Err(e) => {
                 let _ = req.respond(json_err(500, &e));
@@ -642,20 +645,9 @@ fn url_decode(s: &str) -> String {
 }
 
 /// Base64 estándar (sin padding) para el buffer del pty.
+#[allow(dead_code)]
 fn base64_encode(data: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
-        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
-        let n = (b0 << 16) | (b1 << 8) | b2;
-        out.push(T[(n >> 18) as usize & 63] as char);
-        out.push(T[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
-    }
-    out
+    crate::state::base64_encode(data)
 }
 
 fn merge_config(cfg: &mut crate::state::ShellConfig, patch: &serde_json::Value) {

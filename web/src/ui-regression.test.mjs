@@ -36,7 +36,7 @@ assert.ok(/\.messages-end[\s\S]*?scroll-margin-bottom:\s*var\(--space-2\)/.test(
 assert.ok((composer + msgList).includes('requestAnimationFrame'), 'auto-scroll should use requestAnimationFrame')
 assert.ok(sessionCard.includes('session-card'), 'session card should have card class')
 assert.ok(app.includes('typing-bubble') || msgList.includes('typing-bubble'), 'detail view should render a temporary typing bubble while waiting for OpenCode output')
-assert.ok(msgList.includes('typing-dot'), 'typing bubble should show animated dots')
+assert.ok(msgList.includes('GridSpinner'), 'typing bubble should show the grid spinner')
 assert.ok(useMessages.includes('awaitingAssistantReply'), 'typing bubble should stay visible after the send request returns and until a new assistant message arrives')
 assert.ok(useMessages.includes('assistantResponseSignature'), 'typing bubble should be replaced by the next assistant response')
 assert.ok(useMessages.includes('optimisticUserMessages'), 'sent user messages should render immediately before the network round trip returns')

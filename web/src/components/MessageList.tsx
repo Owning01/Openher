@@ -1,7 +1,7 @@
 import { memo, useRef, useEffect, useState, Fragment, useMemo } from "react"
 import { ChatIcon, ScrollDownIcon, CompressIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import type { RenderedMessage, SessionView, AgentOption, ServerConfig } from "../types"
+import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { MessageBubble } from "./MessageBubble"
 import { GridSpinner } from "./GridSpinner"
 
@@ -31,11 +31,12 @@ type MessageListProps = {
   compactTools?: boolean
   thinkingDefault?: "auto" | "expanded" | "collapsed"
   onRegenerate?: () => void
+  onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
 }
 
 export const MessageList = memo(function MessageList({
   messages, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, activeVariant, compactTools, thinkingDefault, onRegenerate
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, activeVariant, compactTools, thinkingDefault, onRegenerate, onOpenADEDiff
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -168,6 +169,7 @@ export const MessageList = memo(function MessageList({
                   compactTools={compactTools}
                   thinkingDefault={thinkingDefault}
                   onRegenerate={onRegenerate}
+                  onOpenADEDiff={onOpenADEDiff}
                 />
               </Fragment>
             ))}
@@ -181,11 +183,7 @@ export const MessageList = memo(function MessageList({
             )}
             {showTypingBubble && !compacting && (
               <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')}>
-                <div className="typing-dots" aria-hidden="true">
-                  <span className="typing-dot" />
-                  <span className="typing-dot" />
-                  <span className="typing-dot" />
-                </div>
+                <GridSpinner label={t('detail.waiting')} size={20} />
               </article>
             )}
             <div ref={messagesEndRef} className="messages-end" aria-hidden="true" />

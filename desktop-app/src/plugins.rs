@@ -1,6 +1,6 @@
 //! Plugins (data/plugins/<name>/plugin.json) + Labs (apps del ecosistema).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Child;
 use std::sync::{Arc, Mutex};
 

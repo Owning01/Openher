@@ -16,17 +16,13 @@ windows-sys = { version = "0.59", features = [
     "Win32_UI_Shell",
 ] }
 tray-icon = "0.19"
-embed-resource = "2"
 portable-pty = "0.8"
 ureq = "2"
 winreg = "0.52"
+sha1 = "0.10"
 opencode-stats = { path = "../../opencode-stats" }
-
-[build-dependencies]
-embed-resource = "2"
 
 [profile.release]
 strip = true
 lto = true
-panic = "abort"
 codegen-units = 1

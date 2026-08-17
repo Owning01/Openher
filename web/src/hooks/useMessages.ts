@@ -55,6 +55,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const loadSelectedRequestRef = useRef(0)
   const awaitingAssistantBaselineRef = useRef("")
   const completionShouldPlayRef = useRef(false)
+  const isSendingRef = useRef(false)
   // Sesión que el estado `messages` representa. Guard contra races: los deltas
   // de otra sesión (que el SSE puede entregar durante una transición de sesión)
   // se rechazan si no coinciden con la sesión cargada.
@@ -111,9 +112,19 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [])
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
-    // Los deltas solo invalidan el mensaje tocado; el resto reusa su objeto
-    // RenderedMessage (referencia estable → bubbles memoizadas no re-renderizan).
-    const { out, cache } = computeRenderedMessages([...messages, ...optimisticUserMessages], dataMode, renderedCacheRef.current)
+    // Filtrar optimistas que ya están presentes en messages (por id o por coincidencia de texto en la misma sesión)
+    const existingUserTexts = new Set(
+      messages.filter((m) => m.info.role === "user").map((m) => `${m.info.sessionID}:${extractText(m).trim()}`)
+    )
+    const pendingOptimistic = optimisticUserMessages.filter((opt) => {
+      const key = `${opt.info.sessionID}:${extractText(opt).trim()}`
+      if (existingUserTexts.has(key)) {
+        existingUserTexts.delete(key)
+        return false
+      }
+      return true
+    })
+    const { out, cache } = computeRenderedMessages([...messages, ...pendingOptimistic], dataMode, renderedCacheRef.current)
     renderedCacheRef.current = cache
     return out
   }, [messages, optimisticUserMessages, dataMode])
@@ -358,6 +369,15 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         const isUserText = partType === "text" && replace && optimisticTextsRef.current.size > 0
           ? optimisticTextsRef.current.has(text.trim())
           : false
+        if (isUserText) {
+          setOptimisticUserMessages((current) => {
+            const idx = current.findIndex((opt) => opt.info.sessionID === sessionID && extractText(opt).trim() === text.trim())
+            if (idx >= 0) {
+              return current.filter((_, i) => i !== idx)
+            }
+            return current
+          })
+        }
         return [...prev, {
           info: {
             id: messageID,
@@ -494,7 +514,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // Guard anti doble-envío: mientras hay un turno en curso se ignora el
     // envío (el server encola igual, pero evita prompts duplicados por
     // doble-tap del botón Send en móvil).
-    if (awaitingAssistantReply) return
+    if (isSendingRef.current || awaitingAssistantReply) return
+    isSendingRef.current = true
 
     const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
 
@@ -502,67 +523,60 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       sendFn: () => Promise<unknown>,
       then: () => Promise<void>
     ) => {
-      setComposer("")
-      setOptimisticUserMessages((current) => [...current, optimisticMessage])
-      awaitingAssistantBaselineRef.current = assistantResponseSignature
-      completionShouldPlayRef.current = true
-      setAwaitingAssistantReply(true)
-      onSetRuntimeError(null)
-
-      let sendFailed = false
       try {
-        await sendFn()
-      } catch (err) {
-        sendFailed = true
-        const isNetwork = err instanceof TypeError || (err as Error).name === "AbortError" || /failed to fetch|network error|timeout/i.test((err as Error).message)
-        if (isNetwork) {
-          // El server pudo haber recibido el prompt aunque el fetch fallara
-          // localmente (red móvil/túnel): no remover el optimista ni restaurar
-          // el texto — el retry de confirmación decide qué pasó.
-          onSetRuntimeError((err as Error).message)
-        } else {
-          // El server respondió con un error: el prompt NO se procesó.
+        setComposer("")
+        setOptimisticUserMessages((current) => [...current, optimisticMessage])
+        awaitingAssistantBaselineRef.current = assistantResponseSignature
+        completionShouldPlayRef.current = true
+        setAwaitingAssistantReply(true)
+        onSetRuntimeError(null)
+
+        let sendFailed = false
+        try {
+          await sendFn()
+        } catch (err) {
+          sendFailed = true
+          const isNetwork = err instanceof TypeError || (err as Error).name === "AbortError" || /failed to fetch|network error|timeout/i.test((err as Error).message)
+          if (isNetwork) {
+            onSetRuntimeError((err as Error).message)
+          } else {
+            completionShouldPlayRef.current = false
+            setAwaitingAssistantReply(false)
+            removeOptimistic(optimisticMessage.info.id)
+            setComposer((current) => current || text)
+            onSetRuntimeError((err as Error).message)
+          }
+        }
+
+        let confirmed = false
+        try {
+          const deadline = Date.now() + 8000
+          while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
+            await then()
+            if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
+            await new Promise((r) => setTimeout(r, 1500))
+          }
+          confirmed = !optimisticIDsRef.current.has(optimisticMessage.info.id)
+        } catch {
+          // nunca tratar una falla de confirmación como falla de envío
+        }
+
+        if (sendFailed && confirmed) onSetRuntimeError(null)
+
+        if (!confirmed && sendFailed) {
           completionShouldPlayRef.current = false
           setAwaitingAssistantReply(false)
           removeOptimistic(optimisticMessage.info.id)
           setComposer((current) => current || text)
-          onSetRuntimeError((err as Error).message)
         }
-      }
 
-      // Confirmación: el server persiste el user message de forma asíncrona;
-      // loadSelected (match por texto) confirma el optimista. Una falla de red
-      // AQUÍ no significa que el envío falló — el merge por id del próximo
-      // fetch confirmará el optimista.
-      let confirmed = false
-      try {
-        const deadline = Date.now() + 8000
-        while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
-          await then()
-          if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
-          await new Promise((r) => setTimeout(r, 1500))
+        try {
+          await onRefreshSessions()
+        } catch {
+          // ignore
         }
-        confirmed = !optimisticIDsRef.current.has(optimisticMessage.info.id)
-      } catch {
-        // nunca tratar una falla de confirmación como falla de envío
-      }
-
-      // Si el envío dudó por red pero el server confirmó el mensaje, el error
-      // mostrado era falso: limpiarlo.
-      if (sendFailed && confirmed) onSetRuntimeError(null)
-
-      if (!confirmed && sendFailed) {
-        // El prompt no llegó al server: limpiar el optimista y devolver el texto.
-        completionShouldPlayRef.current = false
-        setAwaitingAssistantReply(false)
-        removeOptimistic(optimisticMessage.info.id)
-        setComposer((current) => current || text)
-      }
-
-      try {
-        await onRefreshSessions()
-      } catch {
-        // una falla del refresh no debe parecer una falla de envío
+      } finally {
+        isSendingRef.current = false
       }
     }
 

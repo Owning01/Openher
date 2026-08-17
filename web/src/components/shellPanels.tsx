@@ -4,6 +4,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
+import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import { FolderIcon, RefreshIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type ShellPanelKind } from "../shell"
@@ -12,9 +13,10 @@ import { useT } from "../i18n-context"
 // ============================================================== Terminal
 
 export const TerminalPanel = memo(function TerminalPanel({ cwd }: { cwd?: string }) {
+  // La cwd se congela al montar: la terminal se crea una sola vez sobre la
+  // ruta de la sesión que estaba activa al abrir el panel.
+  const [initialCwd] = useState(cwd)
   const ref = useRef<HTMLDivElement | null>(null)
-  const termRef = useRef<Terminal | null>(null)
-  const ptyIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     const el = ref.current
@@ -33,73 +35,129 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd }: { cwd?: string
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
+    // Renderer WebGL (aceleración por GPU); fallback a DOM si no hay GPU.
+    try {
+      term.loadAddon(new WebglAddon())
+    } catch {
+      /* renderer DOM por defecto */
+    }
     term.open(el)
     try {
       fit.fit()
     } catch {
       /* ignore */
     }
-    termRef.current = term
 
     let disposed = false
+    let ws: WebSocket | null = null
+    let ptyId = ""
     let pollTimer = 0
     let since = 0
+    let polling = false
 
+    const sendResize = () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ cmd: "resize", cols: term.cols, rows: term.rows }))
+      }
+    }
+
+    // Fallback a polling si el WebSocket no está disponible (server viejo).
     const poll = async () => {
-      const pid = ptyIdRef.current
-      if (disposed || !pid) return
+      if (disposed || !ptyId || !polling) return
       try {
-        const r = await shell.pty.poll(pid, since)
+        const r = await shell.pty.poll(ptyId, since)
         if (!disposed && r.data) {
           since = r.len
           term.write(b64decode(r.data))
         }
       } catch {
-        /* server restart etc */
+        /* ignore */
       }
-      if (!disposed) pollTimer = window.setTimeout(poll, 250)
+      if (!disposed && polling) pollTimer = window.setTimeout(poll, 250)
     }
 
-    const dispose = term.onData((d) => {
-      const pid = ptyIdRef.current
-      if (pid) shell.pty.write(pid, d)
+    const onData = term.onData((d) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ cmd: "write", data: d }))
+      } else if (ptyId) {
+        shell.pty.write(ptyId, d)
+      }
     })
 
-    shell.pty.create(cwd).then(({ id: newId }) => {
+    shell.pty.create(initialCwd).then(({ id, ws_port }) => {
       if (disposed) {
-        shell.pty.kill(newId)
+        shell.pty.kill(id)
         return
       }
-      ptyIdRef.current = newId
-      poll()
+      ptyId = id
+      const proto = location.protocol === "https:" ? "wss:" : "ws:"
+      try {
+        ws = new WebSocket(`${proto}//${location.hostname}:${ws_port}`)
+        ws.binaryType = "arraybuffer"
+        ws.onopen = () => {
+          ws!.send(JSON.stringify({ cmd: "attach", id }))
+          sendResize()
+        }
+        ws.onmessage = (e) => {
+          if (!disposed && e.data instanceof ArrayBuffer) {
+            term.write(new Uint8Array(e.data))
+          }
+        }
+        ws.onerror = () => {
+          polling = true
+          poll()
+        }
+        ws.onclose = () => {
+          if (!disposed) {
+            polling = true
+            poll()
+          }
+        }
+      } catch {
+        polling = true
+        poll()
+      }
     })
 
     const ro = new ResizeObserver(() => {
       try {
         fit.fit()
+        sendResize()
       } catch {
         /* ignore */
       }
     })
     ro.observe(el)
+    window.setTimeout(() => {
+      try {
+        fit.fit()
+        sendResize()
+      } catch {
+        /* ignore */
+      }
+    }, 400)
 
     return () => {
       disposed = true
       window.clearTimeout(pollTimer)
       ro.disconnect()
-      dispose.dispose()
-      const pid = ptyIdRef.current
-      if (pid) shell.pty.kill(pid)
+      onData.dispose()
+      try {
+        ws?.close()
+      } catch {
+        /* ignore */
+      }
+      if (ptyId) shell.pty.kill(ptyId)
       term.dispose()
     }
-  }, [cwd])
+  }, [initialCwd])
 
   return <div className="shell-terminal" ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6 }} />
 })
 
 // ============================================================== Explorador
 
-export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir }: { onOpenSessionDir: (dir: string) => void }) {
+export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir, initialCwd }: { onOpenSessionDir: (dir: string) => void; initialCwd?: string | null }) {
   const t = useT()
   const [drives, setDrives] = useState<string[]>([])
   const [cwd, setCwd] = useState<string | null>(null)
@@ -121,9 +179,13 @@ export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir }: {
     shell.fs.drives().then(({ drives }) => {
       setDrives(drives)
       shell.fs.favorites().then(({ favorites }) => setFavorites(favorites))
-      if (drives.length > 0) load(drives[0])
+      if (initialCwd) {
+        load(initialCwd)
+      } else if (drives.length > 0) {
+        load(drives[0])
+      }
     })
-  }, [load])
+  }, [load, initialCwd])
 
   const nav = (path: string) => {
     setHistory((h) => [...h, cwd ?? ""])
@@ -432,10 +494,25 @@ export const UpdatesPanel = memo(function UpdatesPanel() {
 export const StatsPanel = memo(function StatsPanel() {
   const t = useT()
   const [status, setStatus] = useState<{ running: boolean; port: number; url: string } | null>(null)
+  const [attemptedStart, setAttemptedStart] = useState(false)
 
   const load = useCallback(() => {
-    shell.stats.status().then(setStatus)
-  }, [])
+    shell.stats.status()
+      .then((s) => {
+        if (!s.running && !attemptedStart) {
+          setAttemptedStart(true)
+          shell.stats.start().then(() => shell.stats.status().then(setStatus)).catch(() => {})
+        }
+        setStatus(s)
+      })
+      .catch(() => {
+        // Fallback: verificar localhost:8765
+        fetch("http://localhost:8765/api/data?raw=1", { mode: "no-cors" })
+          .then(() => setStatus({ running: true, port: 8765, url: "http://localhost:8765" }))
+          .catch(() => setStatus({ running: false, port: 8765, url: "http://localhost:8765" }))
+      })
+  }, [attemptedStart])
+
   useEffect(() => {
     load()
     const iv = window.setInterval(load, 5000)
@@ -445,7 +522,7 @@ export const StatsPanel = memo(function StatsPanel() {
   return (
     <div className="shell-stats">
       {status?.running ? (
-        <iframe src={status.url} className="shell-stats-frame" title="OpenCode Stats" />
+        <iframe src={status.url || "http://localhost:8765"} className="shell-stats-frame" title="OpenCode Stats" />
       ) : (
         <div className="shell-empty">
           <p>{t('shell.statsOff')}</p>
@@ -574,7 +651,7 @@ export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir
     case "terminal":
       return <TerminalPanel cwd={cwd} />
     case "explorer":
-      return <ExplorerPanel onOpenSessionDir={onOpenSessionDir} />
+      return <ExplorerPanel onOpenSessionDir={onOpenSessionDir} initialCwd={cwd} />
     case "kanban":
       return <KanbanPanel />
     case "docs":

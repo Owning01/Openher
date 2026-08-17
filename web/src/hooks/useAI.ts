@@ -42,6 +42,64 @@ export function useAI(config: ServerConfig) {
   const [modelQuery, setModelQuery] = useState("")
   const [recentModelsArr, setRecentModelsArr] = useLocalStorage<ModelOption[]>(RECENT_MODELS_KEY, [])
 
+  const [sessionModels, setSessionModels] = useState<Record<string, { modelKey: string; variant?: string | null }>>(() => {
+    const map: Record<string, { modelKey: string; variant?: string | null }> = {}
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith("opencode.remote.model.session.")) {
+          const sid = k.slice("opencode.remote.model.session.".length)
+          const val = JSON.parse(localStorage.getItem(k) ?? "null")
+          if (val && typeof val.modelKey === "string") {
+            map[sid] = val
+          }
+        }
+      }
+    } catch { /* ignore */ }
+    return map
+  })
+
+  const getModelForSession = useCallback((sessionID?: string | null) => {
+    const sessionOverride = sessionID ? sessionModels[sessionID] : null
+    const key = sessionOverride?.modelKey ?? selectedModelKey
+    const variant = sessionOverride ? (sessionOverride.variant ?? null) : selectedVariant
+    const selected = key ? modelFromKey(key) : null
+
+    let resolvedOption: ModelOption | null = null
+    if (selected) {
+      if (variant) {
+        resolvedOption = modelOptions.find(
+          (opt) => sameModel(opt, selected) && opt.variant === variant
+        ) ?? null
+      }
+      if (!resolvedOption) {
+        resolvedOption = modelOptions.find(
+          (opt) => sameModel(opt, selected) && !opt.variant
+        ) ?? modelOptions.find((opt) => sameModel(opt, selected)) ?? null
+      }
+    }
+    if (!resolvedOption) {
+      resolvedOption = modelOptions.find((opt) => opt.isDefault) ?? modelOptions[0] ?? null
+    }
+
+    const resolvedVariant = resolvedOption?.variant ?? (variant || undefined)
+    const activeModel = resolvedOption
+      ? { providerID: resolvedOption.providerID, modelID: resolvedOption.modelID, variant: resolvedVariant }
+      : selected
+      ? { providerID: selected.providerID, modelID: selected.modelID, variant: resolvedVariant }
+      : undefined
+
+    const activeModelVariants = variantsOf(modelOptions, resolvedOption)
+
+    return {
+      activeModelOption: resolvedOption,
+      activeModel,
+      activeModelVariants,
+      selectedVariant: resolvedOption?.variant ?? variant ?? null,
+      selectedModelKey: key
+    }
+  }, [sessionModels, selectedModelKey, selectedVariant, modelOptions])
+
   const selectedModel = useMemo(() => selectedModelKey ? modelFromKey(selectedModelKey) : null, [selectedModelKey])
 
   const primaryAgentOptions = useMemo(() => filterPrimary(agentOptions), [agentOptions])
@@ -167,16 +225,27 @@ export function useAI(config: ServerConfig) {
     }
   }, [config, selectedModelKey, selectedVariant])
 
-  const changeModel = useCallback((nextKey: string, variant?: string | null) => {
-    setSelectedModelKey(nextKey)
-    localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
+  const changeModel = useCallback((nextKey: string, variant?: string | null, sessionID?: string | null) => {
     const v = variant !== undefined ? (variant ?? null) : null
-    setSelectedVariant(v)
-    if (v) {
-      localStorage.setItem(STORAGE_KEYS.MODEL_VARIANT, v)
+    if (sessionID) {
+      setSessionModels((prev) => {
+        const next = { ...prev, [sessionID]: { modelKey: nextKey, variant: v } }
+        try {
+          localStorage.setItem(`opencode.remote.model.session.${sessionID}`, JSON.stringify({ modelKey: nextKey, variant: v }))
+        } catch { /* ignore */ }
+        return next
+      })
     } else {
-      localStorage.removeItem(STORAGE_KEYS.MODEL_VARIANT)
+      setSelectedModelKey(nextKey)
+      localStorage.setItem(STORAGE_KEYS.MODEL, nextKey)
+      setSelectedVariant(v)
+      if (v) {
+        localStorage.setItem(STORAGE_KEYS.MODEL_VARIANT, v)
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.MODEL_VARIANT)
+      }
     }
+
     const model = modelOptions.find((m) => modelKey(m) === nextKey)
     if (model) {
       setRecentModelsArr((prev) => {
@@ -187,24 +256,38 @@ export function useAI(config: ServerConfig) {
     }
   }, [modelOptions, setRecentModelsArr])
 
-  const changeVariant = useCallback((variant: string | null) => {
-    setSelectedVariant(variant)
-    if (variant) {
-      localStorage.setItem(STORAGE_KEYS.MODEL_VARIANT, variant)
+  const changeVariant = useCallback((variant: string | null, sessionID?: string | null) => {
+    if (sessionID) {
+      setSessionModels((prev) => {
+        const current = prev[sessionID]
+        const currentKey = current?.modelKey ?? selectedModelKey ?? (activeModelOption ? modelKey(activeModelOption) : "")
+        if (!currentKey) return prev
+        const next = { ...prev, [sessionID]: { modelKey: currentKey, variant } }
+        try {
+          localStorage.setItem(`opencode.remote.model.session.${sessionID}`, JSON.stringify({ modelKey: currentKey, variant }))
+        } catch { /* ignore */ }
+        return next
+      })
     } else {
-      localStorage.removeItem(STORAGE_KEYS.MODEL_VARIANT)
+      setSelectedVariant(variant)
+      if (variant) {
+        localStorage.setItem(STORAGE_KEYS.MODEL_VARIANT, variant)
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.MODEL_VARIANT)
+      }
     }
-    if (selectedModelKey) {
-      const model = modelOptions.find((m) => modelKey(m) === selectedModelKey)
+    const currentKey = sessionID ? sessionModels[sessionID]?.modelKey ?? selectedModelKey : selectedModelKey
+    if (currentKey) {
+      const model = modelOptions.find((m) => modelKey(m) === currentKey)
       if (model) {
         setRecentModelsArr((prev) => {
-          const filtered = prev.filter((m) => modelKey(m) !== selectedModelKey)
+          const filtered = prev.filter((m) => modelKey(m) !== currentKey)
           filtered.unshift(variant ? { ...model, variant } : model)
           return filtered.slice(0, MAX_RECENT)
         })
       }
     }
-  }, [selectedModelKey, modelOptions, setRecentModelsArr])
+  }, [selectedModelKey, activeModelOption, sessionModels, modelOptions, setRecentModelsArr])
 
   const changeAgent = useCallback((nextAgentID: string, directory?: string) => {
     setSelectedAgentID(nextAgentID)
@@ -217,7 +300,7 @@ export function useAI(config: ServerConfig) {
     selectedModelKey, modelQuery, setModelQuery, selectedModel, primaryAgentOptions,
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
     groupedModelOptions, variantGroups, recentModels, activeModelVariants,
-    selectedVariant, changeVariant,
+    selectedVariant, changeVariant, getModelForSession,
     loadAgents, loadModels, changeModel, changeAgent
   }
 }

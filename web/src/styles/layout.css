@@ -285,7 +285,7 @@
   /* ===== Vista escritorio: sidebar de sesiones + contenido ===== */
   .app-shell {
     display: grid;
-    grid-template-columns: 340px minmax(0, 1fr);
+    grid-template-columns: 48px 340px minmax(0, 1fr);
     height: 100dvh;
     overflow: hidden;
     padding: 0;
@@ -308,6 +308,7 @@
     overflow: hidden;
     background: var(--surface);
     border-right: 1px solid var(--border);
+    container-type: inline-size;
   }
 
   .app-desktop-sidebar > .panel.sessions {
