@@ -54,6 +54,7 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "redo", description: "Redo last undone message", source: "command" },
   { name: "compact", description: "Compact/compress conversation history", source: "command" },
   { name: "theme", description: "Open theme picker", source: "command" },
+  { name: "connect", description: "Connect providers (API keys, OpenAI-compatible)", source: "command" },
 ]
 
 export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, activeAgentID, primaryAgentOptions, allAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, snippets = [], charLimit = 0 }: ComposerProps) {

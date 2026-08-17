@@ -79,6 +79,7 @@ function lazyRetry<T extends React.ComponentType<any>>(
 
 // Componentes pesados o poco frecuentes: se descargan bajo demanda
 const ThemePicker = lazyRetry(() => import("./components/ThemePicker").then((m) => ({ default: m.ThemePicker })))
+const ConnectProviderSheet = lazyRetry(() => import("./components/ConnectProviderSheet").then((m) => ({ default: m.ConnectProviderSheet })))
 const MCPBrowser = lazyRetry(() => import("./components/MCPBrowser").then((m) => ({ default: m.MCPBrowser })))
 const ArchivedList = lazyRetry(() => import("./components/ArchivedList").then((m) => ({ default: m.ArchivedList })))
 const FileEditor = lazyRetry(() => import("./components/FileEditor").then((m) => ({ default: m.FileEditor })))
@@ -417,9 +418,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const fb = useFileBrowser(config, selectedSession?.directory)
 
   const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
-  const { providers: providerList, connecting: connectingProvider, error: providerError, connectProvider, disconnectProvider } = useProviderManager(modelOptions, config)
+  const { providers: providerList, connecting: connectingProvider, error: providerError, connectProvider, disconnectProvider, addCustomProvider } = useProviderManager(modelOptions, config)
   const [readingMode, setReadingMode] = useState(false)
   const [showThemePicker, setShowThemePicker] = useState(false)
+  const [showConnectSheet, setShowConnectSheet] = useState(false)
   // ===== Feature: MCP Browser =====
   const [showMCPBrowser, setShowMCPBrowser] = useState(false)
 
@@ -1041,8 +1043,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setCommands, setRuntimeError, images)
     if (result === "help") { setHelpPage("commands"); navigate("help") }
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
+    if (result === "connect") setShowConnectSheet(true)
     return typeof result === "boolean" ? result : true
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker])
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker, setShowConnectSheet])
 
   const handleRegenerate = useCallback(async () => {
     if (!selectedSession) return
@@ -1354,8 +1357,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         return !(k === "session" && s === null)
       })
 
-      if (activeRemaining.length <= 1) {
-        const targetIdx = activeRemaining[0] ?? remainingIndices[0] ?? 0
+      if (activeRemaining.length === 0) {
+        return {
+          ...prevState,
+          lastClosedPanel: closedInfo,
+          layout: {
+            ...prev,
+            cols: 1,
+            rows: 1,
+            sessions: [null],
+            panelKinds: ["session"],
+            panelEditorPaths: {},
+            colSizes: [null],
+            rowSizes: [null],
+          }
+        }
+      }
+
+      if (activeRemaining.length === 1) {
+        const targetIdx = activeRemaining[0]
         return {
           ...prevState,
           lastClosedPanel: closedInfo,
@@ -2398,7 +2418,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onChangeAgentGlobal={changeAgent}
                       onOpenInThisPanel={(id) => openInPanel(i, id)}
                       onSwapPanels={handleSwapPanels}
-                      onOpenFile={handleOpenFile} />
+                      onOpenFile={handleOpenFile}
+                      onOpenConnect={() => setShowConnectSheet(true)} />
                   </div>
                 )
               }
@@ -2474,7 +2495,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onChangeAgentGlobal={changeAgent}
                       onOpenInThisPanel={(id) => openInPanel(maximizedIndex, id)}
                       onSwapPanels={handleSwapPanels}
-                      onOpenFile={handleOpenFile} />
+                      onOpenFile={handleOpenFile}
+                      onOpenConnect={() => setShowConnectSheet(true)} />
                   </div>
                 ) : (
                   <div className="desktop-grid" ref={gridRef}
@@ -2523,10 +2545,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           connectingProvider={connectingProvider}
           providerError={providerError}
           onConnectProvider={(pid, key) => {
-            if (!selectedSession) return
-            connectProvider(pid, key, selectedSession.id, selectedSession.directory)
+            connectProvider(pid, key).then((ok) => { if (ok) loadModels().catch(() => undefined) })
           }}
-          onDisconnectProvider={disconnectProvider}
+          onDisconnectProvider={(pid) => { disconnectProvider(pid).then(() => loadModels().catch(() => undefined)) }}
           serverProfiles={serverProfiles}
           onAddServerProfile={(name, _kind, config) => addProfile(name, { config })}
           onAddPairServer={(name, config) => {
@@ -2648,6 +2669,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         <Suspense fallback={null}>
           <ThemePicker onClose={() => setShowThemePicker(false)} />
         </Suspense>
+      )}
+
+      {showConnectSheet && config && (
+        <ConnectProviderSheet
+          config={config}
+          onClose={() => setShowConnectSheet(false)}
+          onConnect={connectProvider}
+          onDisconnect={disconnectProvider}
+          onAddCustom={addCustomProvider}
+          onConnected={() => loadModels().catch(() => undefined)}
+        />
       )}
 
       {showMCPBrowser && config && <Suspense fallback={null}><MCPBrowser config={config} onClose={() => setShowMCPBrowser(false)} /></Suspense>}

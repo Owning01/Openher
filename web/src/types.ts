@@ -283,6 +283,21 @@ export type ProviderInfo = {
   connected: boolean
 }
 
+export type ServerProvider = {
+  id: string
+  name: string
+  source: "env" | "config" | "custom" | "api"
+  env: string[]
+  key?: string
+  models: Record<string, unknown>
+}
+
+export type ServerProviderList = {
+  all: ServerProvider[]
+  default: Record<string, string>
+  connected: string[]
+}
+
 export type CommandInfo = {
   name: string
   description?: string

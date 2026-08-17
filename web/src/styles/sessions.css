@@ -927,7 +927,7 @@
   transition: background 0.1s;
 }
 .collapsible-toggle:hover {
-  background: var(--surface-strong);
+  background: transparent;
 }
 .collapsible-icon {
   flex-shrink: 0;

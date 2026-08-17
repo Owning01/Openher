@@ -1041,6 +1041,46 @@
 .provider-actions {
   flex-shrink: 0;
 }
+.connect-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.connect-sheet-body {
+  max-height: min(45vh, 380px);
+  overflow-y: auto;
+  margin-bottom: var(--space-3);
+}
+.connect-custom {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.connect-custom-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.connect-custom-form .form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+}
+.connect-custom-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+@media (min-width: 640px) {
+  .connect-custom-form .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 .btn-cancel {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);

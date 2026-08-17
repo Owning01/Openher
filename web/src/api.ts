@@ -15,6 +15,7 @@ import type {
   PathInfo,
   QuestionOption,
   ServerConfig,
+  ServerProviderList,
   Session,
   SessionStatus,
   TodoItem,
@@ -153,7 +154,7 @@ function withLocationDirectory(path: string, directory?: string): string {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE"
+  method?: "GET" | "POST" | "PATCH" | "DELETE" | "PUT"
   body?: unknown
   readTimeout?: number
   // Usa el path tal cual (sin prefijo /api ni unwrap): para probes de
@@ -696,6 +697,75 @@ export const api = {
     return mapProviderModels(response)
   },
 
+  // Proveedores y credenciales (comando /connect):
+  // v1: PUT/DELETE /auth/:providerID + GET /provider. v2 (beta):
+  // /api/integration/:id/connect/key + GET /api/integration.
+  async loadProviders(config: ServerConfig, directory?: string) {
+    const v2 = (await getApiVersion(config)) === "v2"
+    if (v2) {
+      const raw = await request<unknown>(config, withLocationDirectory("/api/integration", directory))
+      const list = Array.isArray(raw) ? raw as Array<{ id?: string; name?: string; authMethods?: unknown }> : []
+      return {
+        all: list.map((p) => ({
+          id: p.id ?? "",
+          name: p.name ?? p.id ?? "",
+          source: "config" as const,
+          env: [],
+          models: {},
+        })),
+        default: {} as Record<string, string>,
+        connected: [] as string[],
+      }
+    }
+    return request<ServerProviderList>(config, withDirectory("/provider", directory))
+  },
+
+  async setProviderAuth(config: ServerConfig, providerID: string, key: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      return request<boolean>(config, withLocationDirectory(`/api/integration/${providerID}/connect/key`, directory), {
+        method: "POST",
+        body: { key },
+      })
+    }
+    return request<boolean>(config, withDirectory(`/auth/${providerID}`, directory), {
+      method: "PUT",
+      body: { type: "api", key },
+    })
+  },
+
+  async removeProviderAuth(config: ServerConfig, providerID: string, directory?: string) {
+    return request<boolean>(config, withDirectory(`/auth/${providerID}`, directory), { method: "DELETE" })
+  },
+
+  // Provider custom (OpenAI-compatible): escribe la definición del provider en
+  // el archivo de config del server vía PATCH /config (npm @ai-sdk/openai-compatible).
+  async addCustomProvider(
+    config: ServerConfig,
+    providerID: string,
+    name: string,
+    baseURL: string,
+    models: string[],
+  ) {
+    const modelsObj: Record<string, { name: string }> = {}
+    for (const m of models) {
+      const id = m.trim()
+      if (id) modelsObj[id] = { name: id }
+    }
+    return request<unknown>(config, "/config", {
+      method: "PATCH",
+      body: {
+        provider: {
+          [providerID]: {
+            npm: "@ai-sdk/openai-compatible",
+            name,
+            options: { baseURL },
+            models: modelsObj,
+          },
+        },
+      },
+    })
+  },
+
   async createSession(config: ServerConfig, title?: string, model?: ModelSelection, directory?: string) {
     if ((await getApiVersion(config)) === "v2") {
       // v2: body { id?, agent?, model: ModelRef, location: LocationRef } — sin
@@ -735,7 +805,7 @@ export const api = {
       },
       parts: (m.parts ?? []).map((p) => ({
         ...p,
-        sessionID: p.sessionID || sessionID,
+        sessionID: p.sessionID ?? m.info?.sessionID ?? sessionID,
       })),
     }))
   },

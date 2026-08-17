@@ -441,12 +441,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (!part.id) return
     const visible = loadedSessionIDRef.current
     if (visible && visible !== sessionID) {
-      // Tool part de un subagente (task): el server manda la sesión/mensaje de
-      // la sesión HIJA, pero la tarjeta de invocación pertenece al chat del padre. Se ancla
-      // por partID al último mensaje assistant de la sesión visible.
-      // Las tools internas (read, bash, etc.) de la sesión hija NO deben anclarse al padre.
+      // Tool part de un subagente (task): solo la tarjeta de invocación (task/subagent)
+      // pertenece al chat del padre. Las tools internas (read, bash, grep...) de la
+      // sesión hija NO deben anclarse al mensaje del padre para evitar duplicación.
       const isTaskPart = part.tool === "task" || part.tool === "subagent" ||
-        (part.state && typeof part.state === "object" && ((part.state as Record<string, unknown>).input !== undefined))
+        (part.state && typeof part.state === "object" && (Boolean((part.state as any).input?.subagent_type) || Boolean((part.state as any).metadata?.subagent)))
       if (!isTaskPart) return
       const anchor = subagentAnchorRef.current.get(part.id)
       if (anchor) {
@@ -636,6 +635,22 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (parsed?.type === "themes") {
       setComposer("")
       return "themes"
+    }
+    if (parsed?.type === "connect") {
+      setComposer("")
+      // /connect <providerID> <apiKey> → setea la credencial directo.
+      // /connect (sin args) → abre el sheet de proveedores.
+      const m = parsed.text.trim().match(/^(\S+)\s+(\S+)/)
+      if (m) {
+        try {
+          await api.setProviderAuth(config, m[1], m[2], selectedSession.directory)
+          return true
+        } catch (err) {
+          onSetRuntimeError((err as Error).message)
+          return false
+        }
+      }
+      return "connect"
     }
     if (parsed?.type === "command") {
       const { isKnown } = await resolveCommand(config, parsed.command, commands, onSetCommands)

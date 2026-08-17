@@ -36,6 +36,7 @@ type Props = {
   onOpenInThisPanel: (sessionID: string, directory: string) => void
   onSwapPanels: (from: number, to: number) => void
   onOpenFile?: (path: string, panelIndex?: number, zone?: "left" | "right" | "top" | "bottom" | "center") => void
+  onOpenConnect?: () => void
 }
 
 export const SessionChatPanel = memo(function SessionChatPanel({
@@ -43,7 +44,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   onActivate, onClose, onSplitSession, onSettled,
   onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
   onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels,
-  onOpenFile
+  onOpenFile, onOpenConnect
 }: Props) {
   const t = useT()
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
@@ -188,13 +189,13 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       msgs.setMessages((prev) => prev.filter((m) => !m.info.id || m.info.id <= revertMsgId))
     }
     setLocalRevertID(null)
-    return msgs.send(session, panelModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
+    const res = await msgs.send(session, panelModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
       refresh,
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
       onSetCommands, msgs.setRuntimeError, images)
-      .then((r) => (typeof r === "boolean" ? r : true))
-      .catch(() => false)
-  }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID])
+    if (res === "connect") onOpenConnect?.()
+    return typeof res === "boolean" ? res : true
+  }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID, onOpenConnect])
 
   const handleAbort = useCallback(async () => {
     stopGenerationRef.current = true

@@ -415,7 +415,7 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                                 }
                             }
                         }
-                        "write" => {
+                        "write" | "input" => {
                             let id = conn.pty.lock().ok().and_then(|p| p.as_ref().map(|(i, _)| i.clone()));
                             if let Some(id) = id {
                                 if let Some(d) = cmd["data"].as_str() {

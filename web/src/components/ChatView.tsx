@@ -19,7 +19,7 @@ import { ChatCustomizerModal } from "./ChatCustomizerModal"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo,
-  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, PromptSnippet, ChatSettings } from "../types"
+  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, PromptSnippet, ChatSettings, TokenUsage } from "../types"
 
 export type ChatViewProps = {
   selectedSession: SessionView | null
@@ -251,52 +251,61 @@ export const ChatView = memo(function ChatView({
   }, [effectiveRevertID])
 
   const contextDisplay = useMemo(() => {
-    // Use the LAST assistant message's tokens and calculate tokens per second (tok/s)
-    let lastMsgTokens: RenderedMessage["tokens"]
+    // Buscar tokens del último mensaje con datos o usar los tokens acumulados de la sesión
+    let lastMsgTokens: RenderedMessage["tokens"] | TokenUsage | undefined
     let lastTps = ""
+
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i]
-      if (m.info.role === "assistant" && m.tokens) {
-        lastMsgTokens = m.tokens
-        if (m.info.time.completed && m.info.time.created) {
-          let out = (m.tokens.output ?? 0) + (m.tokens.reasoning ?? 0)
-          if (out <= 0 && m.text) out = Math.round(m.text.length / 4)
-
-          let genDurationMs = 0
-          if (m.parts && m.parts.length > 0) {
-            for (const p of m.parts) {
-              if (p.type === "text" || p.type === "reasoning") {
-                const start = p.time?.start ?? (p.time as any)?.created
-                const end = p.time?.end ?? (p.time as any)?.completed
-                if (start && end && end > start) {
-                  genDurationMs += (end - start)
-                }
-              }
-            }
-          }
-          if (genDurationMs <= 0) {
-            genDurationMs = m.info.time.completed - m.info.time.created
-          }
-          if (out > 0 && genDurationMs >= 100) {
+      if (m.tokens && ((m.tokens.input ?? 0) + (m.tokens.output ?? 0) + (m.tokens.reasoning ?? 0) > 0)) {
+        if (!lastMsgTokens) lastMsgTokens = m.tokens
+      }
+      if (!lastTps && m.info.role === "assistant") {
+        const start = m.info.time.created
+        const end = m.info.time.completed || Date.now()
+        let out = (m.tokens?.output ?? 0) + (m.tokens?.reasoning ?? 0)
+        if (out <= 0 && m.text) out = Math.round(m.text.length / 4)
+        if (out > 0 && start && end > start) {
+          const genDurationMs = end - start
+          if (genDurationMs >= 100) {
             const tps = (out / genDurationMs) * 1000
             if (tps > 0 && tps < 5000) lastTps = `${tps.toFixed(1)} tok/s`
           }
         }
-        break
       }
     }
-    if (!lastMsgTokens) return null
-    const total = (lastMsgTokens.input ?? 0) + (lastMsgTokens.output ?? 0) +
-      (lastMsgTokens.reasoning ?? 0) + (lastMsgTokens.cache?.read ?? 0) + (lastMsgTokens.cache?.write ?? 0)
-    if (total <= 0) return null
-    const limit = activeModelOption?.contextLimit
-    const pct = limit && limit > 0 ? Math.round((total / limit) * 100) : null
+
+    if (!lastMsgTokens && selectedSession?.tokens) {
+      lastMsgTokens = selectedSession.tokens
+    }
+
+    let total = 0
+    if (lastMsgTokens) {
+      total = (lastMsgTokens.input ?? 0) + (lastMsgTokens.output ?? 0) +
+        (lastMsgTokens.reasoning ?? 0) + (lastMsgTokens.cache?.read ?? 0) + (lastMsgTokens.cache?.write ?? 0)
+    }
+
+    if (total <= 0) {
+      // Estimar tokens acumulados de los mensajes si la tarea está en curso
+      let sumChars = 0
+      for (const m of messages) {
+        sumChars += m.text ? m.text.length : 0
+      }
+      if (sumChars > 0) {
+        total = Math.round(sumChars / 4)
+      }
+    }
+
     const cost = selectedSession?.cost ?? 0
-    let label = formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")
-    if (lastTps) label = `${label} · ⚡ ${lastTps}`
-    if (cost > 0) label = `${label} · ${formatCost(cost)}`
+    if (total <= 0 && cost <= 0 && !lastTps) return null
+
+    const limit = activeModelOption?.contextLimit
+    const pct = limit && limit > 0 && total > 0 ? Math.round((total / limit) * 100) : null
+    let label = total > 0 ? (formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")) : ""
+    if (lastTps) label = label ? `${label} · ⚡ ${lastTps}` : `⚡ ${lastTps}`
+    if (cost > 0) label = label ? `${label} · ${formatCost(cost)}` : (label ? `${label} · $0.00` : "")
     return { total, pct, limit, cost, lastTps, label }
-  }, [messages, activeModelOption?.contextLimit, selectedSession?.cost])
+  }, [messages, activeModelOption?.contextLimit, selectedSession?.tokens, selectedSession?.cost])
 
   return (
     <main className="panel detail fade-in">
