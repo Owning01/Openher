@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { ChatView } from "./ChatView"
 import { ErrorModal } from "./ErrorModal"
+import { SessionStatsPanel } from "./shellPanels"
 import { useMessages } from "../hooks/useMessages"
 import { useSSE } from "../hooks/useSSE"
 import { useSSEHandler } from "../hooks/useSSEHandler"
@@ -45,6 +46,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
   const [localRevertID, setLocalRevertID] = useState<string | null>(null)
   const [stopGenerationRef] = useState(() => ({ current: false }))
+  const [showStats, setShowStats] = useState(false)
 
   useEffect(() => {
     msgs.clearSession()
@@ -381,6 +383,15 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           <button
             type="button"
             className="btn-icon compact"
+            title={t('shell.kindSessionStats')}
+            aria-label={t('shell.kindSessionStats')}
+            onClick={(e) => { e.stopPropagation(); setShowStats((v) => !v) }}
+          >
+            📊
+          </button>
+          <button
+            type="button"
+            className="btn-icon compact"
             title={t('panel.close')}
             aria-label={t('panel.close')}
             onClick={(e) => {
@@ -392,6 +403,11 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           </button>
         </span>
       </div>
+      {showStats && (
+        <div className="session-stats-overlay">
+          <SessionStatsPanel sessionID={session.id} />
+        </div>
+      )}
       <ChatView {...chatProps} />
       {msgs.runtimeError && <ErrorModal message={msgs.runtimeError} onClose={() => msgs.setRuntimeError(null)} />}
     </div>
