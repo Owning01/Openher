@@ -122,6 +122,7 @@ function SubagentTaskCard({
   const [expanded, setExpanded] = useState(false)
   const [subMessages, setSubMessages] = useState<any[]>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [resolvedSessionId, setResolvedSessionId] = useState<string | null>(null)
 
   const agentType = ((part.state?.input as { subagent_type?: string } | undefined)?.subagent_type
     ?? extractParam(part.text ?? "", "subagent_type"))
@@ -130,9 +131,6 @@ function SubagentTaskCard({
     ?? extractParam(part.text ?? "", "description")
   const prompt = (part.state?.input as { prompt?: string } | undefined)?.prompt
     ?? extractParam(part.text ?? "", "prompt")
-  const sessionID = (part.state?.input as { sessionId?: string } | undefined)?.sessionId
-    ?? extractParam(part.text ?? "", "sessionId")
-    ?? part.sessionID
   const rawOutput = (part.state?.output as string | undefined) ?? getResultText(part.text ?? "")
 
   const title = agentType.charAt(0).toUpperCase() + agentType.slice(1)
@@ -140,19 +138,63 @@ function SubagentTaskCard({
 
   // Carga mensajes de la sesión del subagente al expandir
   useEffect(() => {
-    if (!expanded || !config || !sessionID) return
+    if (!expanded || !config) return
     let cancelled = false
     setLoadingMessages(true)
-    api.loadMessages(config, sessionID, directory).then((msgs: any) => {
-      if (cancelled) return
-      setSubMessages(Array.isArray(msgs) ? msgs : [])
-      setLoadingMessages(false)
-    }).catch(() => {
-      if (cancelled) return
-      setLoadingMessages(false)
-    })
+
+    const fetchSubMessages = async () => {
+      // 1. Extraer ID de la sesión hija desde input, metadata, output o texto
+      const input = part.state?.input as Record<string, unknown> | undefined
+      const meta = part.state?.metadata as Record<string, unknown> | undefined
+      const outObj = (typeof part.state?.output === "object" ? part.state.output : null) as Record<string, unknown> | null
+
+      let sId: string | undefined = (input?.sessionId as string)
+        ?? (input?.sessionID as string)
+        ?? (meta?.sessionId as string)
+        ?? (meta?.sessionID as string)
+        ?? (outObj?.sessionId as string)
+        ?? (outObj?.sessionID as string)
+        ?? (outObj?.id as string)
+
+      if (!sId) {
+        const textSource = `${part.text ?? ""} ${typeof part.state?.output === "string" ? part.state.output : ""} ${rawOutput}`
+        const match = textSource.match(/\b(ses_[a-zA-Z0-9_-]+)\b/i) || textSource.match(/session(?:Id|ID)?["':=\s]+([a-zA-Z0-9_-]{6,})/i)
+        if (match && match[1]) sId = match[1]
+      }
+
+      // 2. Si no viene en los datos, buscar en las sesiones hijas del server
+      if (!sId && part.sessionID) {
+        try {
+          const sessions = await api.listSessions(config, directory)
+          const child = sessions.find((s) => s.parentID === part.sessionID)
+          if (child) sId = child.id
+        } catch {}
+      }
+
+      // 3. Fallback a part.sessionID si no hay otra opción
+      if (!sId && part.sessionID) {
+        sId = part.sessionID
+      }
+
+      if (!sId) {
+        if (!cancelled) setLoadingMessages(false)
+        return
+      }
+
+      setResolvedSessionId(sId)
+
+      try {
+        const msgs = await api.loadMessages(config, sId, directory)
+        if (!cancelled) {
+          setSubMessages(Array.isArray(msgs) ? msgs : [])
+        }
+      } catch {}
+      if (!cancelled) setLoadingMessages(false)
+    }
+
+    void fetchSubMessages()
     return () => { cancelled = true }
-  }, [expanded, config, sessionID, directory])
+  }, [expanded, config, part, rawOutput, directory])
 
   // Computa los mensajes renderizados del subagente (reusando computeRenderedMessages)
   const renderedSubMessages = useMemo(() => {
@@ -256,14 +298,14 @@ function SubagentTaskCard({
             </div>
           )}
 
-          {sessionID && onViewSubagents && (
+          {resolvedSessionId && onViewSubagents && (
             <div className="subagent-task-footer">
               <button
                 type="button"
                 className="btn-secondary compact"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onViewSubagents(sessionID)
+                  onViewSubagents(resolvedSessionId)
                 }}
                 title={t('toolpart.viewSubagent') || "Abrir sesión dedicada"}
               >

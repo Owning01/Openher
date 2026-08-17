@@ -80,8 +80,9 @@ function calcTokensPerSecond(msg: RenderedMessage): string {
   return `${tps.toFixed(1)} tok/s`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
+export const MessageBubble = memo(function MessageBubble({ message, queued, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
   message: RenderedMessage
+  queued?: boolean
   revert?: SessionView["revert"]
   onRevertToMessage?: (messageID: string) => void
   onEditMessage?: (messageID: string, text: string) => void
@@ -207,7 +208,12 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
       >
         {message.info.role === "user" && (
           <header>
-            <strong>{t('detail.you')}</strong>
+            <span className="message-title-group">
+              <strong>{t('detail.you')}</strong>
+              {queued && (
+                <span className="msg-queued-badge" data-queued>{t('session.queued')}</span>
+              )}
+            </span>
             <div className="header-actions">
               <small>{formatTime(message.info.time.created)}</small>
               {onEditMessage && (

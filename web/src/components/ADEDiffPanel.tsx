@@ -219,7 +219,16 @@ export const ADEDiffPanel = memo(function ADEDiffPanel({
 
       {/* Body: Horizontal File Tabs + Full-Width Code Diff */}
       <div className="ade-diff-body">
-        <div className="ade-diff-tabs-bar" role="tablist" aria-label="Archivos modificados">
+        <div
+          className="ade-diff-tabs-bar"
+          role="tablist"
+          aria-label="Archivos modificados"
+          onWheel={(e) => {
+            if (e.deltaY !== 0 && e.deltaX === 0) {
+              e.currentTarget.scrollLeft += e.deltaY
+            }
+          }}
+        >
           {filteredFiles.map((f) => {
             const active = f.file === selectedFile
             const fileName = f.file.split(/[/\\]/).pop() || f.file
@@ -278,7 +287,14 @@ export const ADEDiffPanel = memo(function ADEDiffPanel({
                   </button>
                 </div>
               </div>
-              <div className="ade-code-scroll">
+              <div
+                className="ade-code-scroll"
+                onWheel={(e) => {
+                  if (e.shiftKey && e.deltaY !== 0 && e.deltaX === 0) {
+                    e.currentTarget.scrollLeft += e.deltaY
+                  }
+                }}
+              >
                 {loadingFile === selectedFile ? (
                   <div className="ade-diff-loading">Cargando diff...</div>
                 ) : parsedLines.length > 0 ? (

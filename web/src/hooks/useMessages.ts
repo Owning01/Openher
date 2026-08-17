@@ -140,6 +140,26 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       .join("|")
   }, [renderedMessages])
 
+  const pendingIndex = useMemo(() => {
+    let completed = -1
+    for (let i = renderedMessages.length - 1; i >= 0; i--) {
+      const m = renderedMessages[i]
+      if (m.info.role === "assistant" && m.info.time.completed) {
+        completed = i
+        break
+      }
+    }
+    let pending = -1
+    for (let i = renderedMessages.length - 1; i >= 0; i--) {
+      const m = renderedMessages[i]
+      if (i > completed && m.info.role === "assistant" && !m.info.time.completed) {
+        pending = i
+        break
+      }
+    }
+    return pending === -1 ? undefined : pending
+  }, [renderedMessages])
+
   const clearSession = useCallback(() => {
     loadedSessionIDRef.current = null
     subagentAnchorRef.current.clear()
@@ -513,10 +533,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   ) => {
     const text = (textOverride ?? composer).trim()
     if ((!text || !selectedSession) && (!images || images.length === 0)) return
-    // Guard anti doble-envío: mientras hay un turno en curso se ignora el
-    // envío (el server encola igual, pero evita prompts duplicados por
-    // doble-tap del botón Send en móvil).
-    if (isSendingRef.current || awaitingAssistantReply) return
+    // Guard anti doble-envío: evita peticiones HTTP concurrentes por doble tap
+    if (isSendingRef.current) return
     isSendingRef.current = true
 
     const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
@@ -656,7 +674,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
     compacting, setCompacting,
-    renderedMessages, messageScrollSignature, assistantResponseSignature,
+    renderedMessages, messageScrollSignature, assistantResponseSignature, pendingIndex,
     completionShouldPlayRef,
     clearSession, loadSelected, send: updateSend, abortSession,
     undoMessage, redoMessage, compactSession, sendShell: sendShellCallback,

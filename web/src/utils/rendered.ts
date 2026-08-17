@@ -69,6 +69,13 @@ export function computeRenderedMessages(
     const textBlocks: string[] = []
     for (const part of message.parts) {
       if (part.type === "tool" || toolPartTypes.has(part.type)) {
+        const isTaskCard = part.tool === "task" || part.tool === "subagent" ||
+          (part.state && typeof part.state === "object" && (((part.state as any).input?.subagent_type || (part.state as any).input?.prompt)))
+        // Si el tool part pertenece a una sesión hija (subagente) y no es la tarjeta principal del task,
+        // no se inyecta en el flujo de herramientas del padre.
+        if (part.sessionID && part.sessionID !== message.info.sessionID && !isTaskCard) {
+          continue
+        }
         toolParts.push({
           id: part.id,
           type: part.type,

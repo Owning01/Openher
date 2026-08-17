@@ -686,6 +686,7 @@ export default {
   'session.queueToggle': 'Cola',
   'session.queueToggleOn': 'Cola activada - los mensajes se envían automáticamente cuando el asistente termina',
   'session.queueToggleOff': 'Cola desactivada',
+  'session.queued': 'EN COLA',
   'dataUsage.title': 'Consumo de datos',
   'dataUsage.day': 'Día',
   'dataUsage.week': 'Semana',

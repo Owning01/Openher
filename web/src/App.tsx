@@ -333,7 +333,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     composer, setComposer,
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
-    renderedMessages, messageScrollSignature,
+    renderedMessages, messageScrollSignature, pendingIndex,
     completionShouldPlayRef,
     clearSession, loadSelected, send, abortSession,
     setMessages, undoMessage, redoMessage, compactSession,
@@ -1852,7 +1852,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const baseChatProps: ChatViewProps = useMemo(() => ({
     selectedSession,
     revertID: localRevertID,
-    messages: renderedMessages, todos,
+    messages: renderedMessages, pendingIndex, todos,
     todosExpanded, composer,
     isWorking, showTypingBubble,
     loadingSessionID, selectedID,

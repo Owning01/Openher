@@ -724,10 +724,20 @@ export const api = {
 
   async loadMessages(config: ServerConfig, sessionID: string, directory?: string, limit = 100) {
     const raw = await request<MessageEnvelope[] | V2Message[]>(config, withDirectory(`/session/${sessionID}/message?limit=${limit}`, directory))
-    if ((await getApiVersion(config)) === "v2") {
-      return (raw as V2Message[]).map(toMessageEnvelopeV1)
-    }
-    return raw as MessageEnvelope[]
+    const list = (await getApiVersion(config)) === "v2"
+      ? (raw as V2Message[]).map(toMessageEnvelopeV1)
+      : raw as MessageEnvelope[]
+    return (list ?? []).map((m) => ({
+      ...m,
+      info: {
+        ...m.info,
+        sessionID: m.info?.sessionID || sessionID,
+      },
+      parts: (m.parts ?? []).map((p) => ({
+        ...p,
+        sessionID: p.sessionID || sessionID,
+      })),
+    }))
   },
 
   async loadTodo(config: ServerConfig, sessionID: string, directory?: string) {

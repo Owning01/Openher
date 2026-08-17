@@ -57,7 +57,17 @@ export const DiffView = memo(function DiffView({ patch, autoScroll = false }: { 
   if (!patch) return null
   const lines = patch.split("\n")
   return (
-    <pre ref={containerRef} className="diff-view" role="img" aria-label="Diff">
+    <pre
+      ref={containerRef}
+      className="diff-view"
+      role="img"
+      aria-label="Diff"
+      onWheel={(e) => {
+        if (e.shiftKey && e.deltaY !== 0 && e.deltaX === 0) {
+          e.currentTarget.scrollLeft += e.deltaY
+        }
+      }}
+    >
       {lines.map((line, i) => (
         <div key={i} className={diffLineClass(line)}>
           {line || "\u00A0"}

@@ -687,6 +687,7 @@ export default {
   'session.queueToggle': 'Queue',
   'session.queueToggleOn': 'Queue enabled - messages send automatically when the assistant finishes',
   'session.queueToggleOff': 'Queue disabled',
+  'session.queued': 'QUEUED',
   'dataUsage.title': 'Data usage',
   'dataUsage.day': 'Day',
   'dataUsage.week': 'Week',

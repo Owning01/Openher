@@ -7,6 +7,7 @@ import { GridSpinner } from "./GridSpinner"
 
 type MessageListProps = {
   messages: RenderedMessage[]
+  pendingIndex?: number
   loadingSessionID: string | null
   selectedID: string | null
   showTypingBubble: boolean
@@ -35,7 +36,7 @@ type MessageListProps = {
 }
 
 export const MessageList = memo(function MessageList({
-  messages, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
+  messages, pendingIndex, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
   revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, activeVariant, compactTools, thinkingDefault, onRegenerate, onOpenADEDiff
 }: MessageListProps) {
   const t = useT()
@@ -147,10 +148,11 @@ export const MessageList = memo(function MessageList({
           </div>
         ) : (
           <>
-            {messages.map((message) => (
+            {messages.map((message, index) => (
               <Fragment key={message.info.id}>
                 <MessageBubble
                   message={message}
+                  queued={pendingIndex !== undefined && index > pendingIndex}
                   revert={revert}
                   onRevertToMessage={onRevertToMessage}
                   agents={agents}

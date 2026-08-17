@@ -687,6 +687,7 @@ type TranslationKey =
   | 'session.queueToggle'
   | 'session.queueToggleOn'
   | 'session.queueToggleOff'
+  | 'session.queued'
   | 'dataUsage.title'
   | 'dataUsage.day'
   | 'dataUsage.week'

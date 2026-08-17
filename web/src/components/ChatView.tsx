@@ -24,6 +24,7 @@ import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, 
 export type ChatViewProps = {
   selectedSession: SessionView | null
   messages: RenderedMessage[]
+  pendingIndex?: number
   todos: TodoItem[]
   todosExpanded: boolean
   composer: string
@@ -113,7 +114,7 @@ export type ChatViewProps = {
 }
 
 export const ChatView = memo(function ChatView({
-  selectedSession, messages, composer, isWorking,
+  selectedSession, messages, pendingIndex, composer, isWorking,
   showTypingBubble, loadingSessionID, selectedID, messageScrollSignature, view,
   dataMode: _dataMode,
   renamingSessionID, renameValue,
@@ -530,6 +531,7 @@ export const ChatView = memo(function ChatView({
       <div className="messages-wrap" ref={messagesWrapRef}>
         <MessageList
           messages={messages}
+          pendingIndex={pendingIndex}
           loadingSessionID={loadingSessionID}
           selectedID={selectedID}
           showTypingBubble={showTypingBubble}

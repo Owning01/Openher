@@ -1,5 +1,5 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
-import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, LayersIcon, PencilIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
@@ -41,8 +41,6 @@ type ComposerProps = {
   config?: ServerConfig
   directory?: string
   onThemeCommand?: () => void
-  queueEnabled?: boolean
-  onToggleQueue?: () => void
   snippets?: PromptSnippet[]
   charLimit?: number
 }
@@ -58,7 +56,7 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "theme", description: "Open theme picker", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, activeAgentID, primaryAgentOptions, allAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue, snippets = [], charLimit = 0 }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, activeAgentID, primaryAgentOptions, allAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, snippets = [], charLimit = 0 }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const [showAtMenu, setShowAtMenu] = useState(false)
@@ -322,10 +320,12 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [])
 
   const handleSendWithImages = useCallback(() => {
+    if (disabled) return
+    if (!value.trim() && images.length === 0) return
     onSend(images.length > 0 ? images : undefined)
     setImages([])
     resizeTextarea()
-  }, [onSend, images, resizeTextarea])
+  }, [onSend, images, resizeTextarea, disabled, value])
 
   const isCommandValid = useMemo(() => {
     if (!value.startsWith("/")) return false
@@ -427,7 +427,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [value, onChange, addImage])
 
   return (
-    <div className={`composer${isCommandValid ? " composer-command-mode" : ""}${isShellMode ? " composer-shell-mode" : ""}`} ref={composerRef} style={{ borderColor: `var(--agent-${agentColorIdx})` } as React.CSSProperties}>
+    <div className={`composer${isCommandValid ? " composer-command-mode" : ""}${isShellMode ? " composer-shell-mode" : ""}`} ref={composerRef}>
       {showSlashMenu && slashFiltered.length > 0 && (
         <div className="slash-menu">
           {slashFiltered.map((cmd, i) => (
@@ -575,19 +575,10 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               </svg>
             </button>
           )}
-          {onToggleQueue && (
-            <button onClick={onToggleQueue} disabled={disabled}
-              className="composer-queue-btn"
-              aria-pressed={queueEnabled}
-              aria-label={queueEnabled ? t('session.queueToggleOn') : t('session.queueToggleOff')}
-              title={queueEnabled ? t('session.queueToggleOn') : t('session.queueToggleOff')}>
-              <LayersIcon size={16} />
-            </button>
-          )}
           {visibleAgents.length > 1 && (
             <button onClick={handleToggleAgent} disabled={disabled}
               className="agent-toggle"
-              style={{ borderColor: `var(--agent-${agentColorIdx})`, color: `var(--agent-${agentColorIdx})` } as React.CSSProperties}>
+              style={{ color: `var(--agent-${agentColorIdx})` } as React.CSSProperties}>
               <span>{visibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
             </button>
           )}
@@ -600,11 +591,18 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
             </span>
           )}
           {isWorking && (
-            <button onClick={onAbort} className="btn-danger composer-bar-btn" title={t('composer.stop')} aria-label={t('composer.stop')}>
+            <button type="button" onClick={onAbort} className="btn-danger composer-bar-btn" title={t('composer.stop')} aria-label={t('composer.stop')}>
               <StopCircleIcon size={16} />
             </button>
           )}
-          <button onClick={handleSendWithImages} disabled={disabled || isWorking} className="btn-primary composer-bar-btn" title={t('composer.send')} aria-label={t('composer.send')}>
+          <button
+            type="button"
+            onClick={handleSendWithImages}
+            disabled={disabled || (!value.trim() && images.length === 0)}
+            className="btn-primary composer-bar-btn"
+            title={t('composer.send')}
+            aria-label={t('composer.send')}
+          >
             <SendIcon size={16} />
           </button>
         </div>

@@ -255,6 +255,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     selectedSession: session,
     revertID: localRevertID,
     messages: msgs.renderedMessages,
+    pendingIndex: msgs.pendingIndex,
     composer: msgs.composer,
     isWorking: msgs.awaitingAssistantReply,
     showTypingBubble: msgs.awaitingAssistantReply,
