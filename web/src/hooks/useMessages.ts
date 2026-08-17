@@ -308,6 +308,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     _onRefreshSessions: () => Promise<void>,
     onLoadSelected: () => Promise<void>,
     onPatchSession?: (patch: Partial<{ revert: { messageID: string } | undefined }>) => void,
+    onSetRevertID?: (id: string | null) => void,
   ) => {
     const userMessages = messages.filter((m) => m.info.role === "user")
     const target = userMessages.length > 0
@@ -320,18 +321,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       return
     }
     // S3: actualización optimista INSTANTÁNEA — el filtro local oculta los
-    // mensajes revertidos en ~0ms en vez de esperar 3-5 RTTs de red. La UI
-    // reacciona al instante mientras la red confirma en background.
+    // mensajes revertidos en ~0ms en vez de esperar 3-5 RTTs de red.
     setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= target.info.id))
-    // Marcar el revert localmente para que MessageBubble aplique el grey-out.
+    // BUG FIX: setear localRevertID para que MessageBubble aplique
+    // revert-hidden CSS. Sin esto, el assistant post-revert reaparece
+    // porque el merge de loadSelected lo conserva.
+    onSetRevertID?.(target.info.id)
     onPatchSession?.({ revert: { messageID: target.info.id } })
     try {
       if (awaitingAssistantReply || messages.some((m) => m.info.role !== "user" && !m.info.time.completed)) {
         await api.abort(config, sessionID, directory).catch(() => {})
       }
-      // S5: la respuesta de revert ya trae la session actualizada — no
-      // necesitamos refreshSessions global. Solo refetch de mensajes para
-      // reconciliar el estado del server con nuestro filtro optimista.
       await api.revert(config, sessionID, target.info.id, directory).catch(() => {})
       await onLoadSelected().catch(() => {})
     } catch (err) {

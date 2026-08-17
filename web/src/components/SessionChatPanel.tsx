@@ -235,7 +235,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   }, [msgs, config, session])
 
   const handleUndo = useCallback(() => {
-    msgs.undoMessage(session.id, session.directory, undefined, refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined))
+    msgs.undoMessage(session.id, session.directory, undefined, refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined), undefined, setLocalRevertID)
   }, [msgs, session, refresh])
 
   const handleRedo = useCallback(() => {

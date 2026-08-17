@@ -1808,7 +1808,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const patchSession = (patch: Record<string, unknown>) => {
       setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, ...patch } : s))
     }
-    undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory), patchSession)
+    undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory), patchSession, setLocalRevertID)
   }, [selectedSession, undoMessage, refreshSessions, loadSelected, setSessions])
 
   const handleRedo = useCallback(() => {
