@@ -550,7 +550,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
         let confirmed = false
         try {
-          const deadline = Date.now() + 8000
+          // Imágenes = payloads grandes → más tiempo para que el server confirme.
+          const hasImages = Boolean(images && images.length > 0)
+          const deadline = Date.now() + 8000 + (hasImages ? 12000 : 0)
           while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
             await then()
             if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
@@ -563,6 +565,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
         if (sendFailed && confirmed) onSetRuntimeError(null)
 
+        // Solo remover el optimistic si el send falló Y no se confirmó.
+        // Si el send fue exitoso pero la confirmación tardó, conservar el
+        // mensaje optimista (las imágenes llegarán con el próximo fetch).
         if (!confirmed && sendFailed) {
           completionShouldPlayRef.current = false
           setAwaitingAssistantReply(false)

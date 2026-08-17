@@ -1,7 +1,7 @@
 import { memo, useState, useCallback, useRef } from "react"
 import { useT } from "../i18n-context"
 import type { ShellType } from "../hooks/useShell"
-import { CloseIcon, TrashIcon, TerminalIcon } from "../Icons"
+import { CloseIcon, TrashIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, MaximizeIcon, MinimizeIcon, ChevronDownIcon } from "../Icons"
 import { TerminalPanel } from "./shellPanels"
 
 type Props = {
@@ -21,12 +21,12 @@ type Props = {
   onResizeHeight?: (height: number) => void
 }
 
-const SHELL_OPTIONS: Array<{ id: ShellType; label: string; icon: string }> = [
-  { id: "pwsh", label: "PowerShell 7 (pwsh)", icon: "⚡" },
-  { id: "powershell", label: "Windows PowerShell", icon: "PS" },
-  { id: "cmd", label: "Command Prompt (cmd)", icon: "C:" },
-  { id: "bash", label: "Git Bash (bash)", icon: "λ" },
-  { id: "wsl", label: "WSL (Linux)", icon: "🐧" },
+const SHELL_OPTIONS: Array<{ id: ShellType; label: string }> = [
+  { id: "pwsh", label: "pwsh" },
+  { id: "powershell", label: "powershell" },
+  { id: "cmd", label: "cmd" },
+  { id: "bash", label: "bash" },
+  { id: "wsl", label: "wsl" },
 ]
 
 export const TerminalView = memo(function TerminalView({
@@ -35,6 +35,7 @@ export const TerminalView = memo(function TerminalView({
   height = 280, onResizeHeight
 }: Props) {
   const t = useT()
+  const [activeTab, setActiveTab] = useState<"problems" | "output" | "debug" | "terminal" | "ports">("terminal")
   const [maximized, setMaximized] = useState(false)
   const [termKey, setTermKey] = useState(0)
   const dockRef = useRef<HTMLDivElement>(null)
@@ -65,8 +66,6 @@ export const TerminalView = memo(function TerminalView({
     window.addEventListener("pointerup", onUp)
   }, [height, onResizeHeight])
 
-  const displayDir = directory ? (directory.split(/[/\\]/).pop() || directory) : "workspace"
-
   const handleRestart = () => {
     setTermKey((k) => k + 1)
   }
@@ -80,74 +79,113 @@ export const TerminalView = memo(function TerminalView({
       )}
 
       {/* VS Code Style Header Bar */}
-      <div className="terminal-header-bar">
+      <div className="terminal-header-bar"
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", "kind:terminal")
+          e.dataTransfer.effectAllowed = "move"
+        }}
+      >
         <div className="terminal-tabs-group">
-          <div className="terminal-tab active">
-            <span className="terminal-tab-icon"><TerminalIcon size={13} /></span>
-            <span className="terminal-tab-title">{shell.toUpperCase()}</span>
-            <span className="terminal-tab-dir" title={directory || "Sin directorio"}>
-              ({displayDir})
-            </span>
+          <div className={`terminal-tab${activeTab === "problems" ? " active" : ""}`} onClick={() => setActiveTab("problems")}>
+            <span>PROBLEMS</span>
           </div>
+          <div className={`terminal-tab${activeTab === "output" ? " active" : ""}`} onClick={() => setActiveTab("output")}>
+            <span>OUTPUT</span>
+          </div>
+          <div className={`terminal-tab${activeTab === "debug" ? " active" : ""}`} onClick={() => setActiveTab("debug")}>
+            <span>DEBUG CONSOLE</span>
+          </div>
+          <div className={`terminal-tab${activeTab === "terminal" ? " active" : ""}`} onClick={() => setActiveTab("terminal")}>
+            <span className="terminal-status-dot" />
+            <span>TERMINAL</span>
+          </div>
+          <div className={`terminal-tab${activeTab === "ports" ? " active" : ""}`} onClick={() => setActiveTab("ports")}>
+            <span>PORTS</span>
+          </div>
+        </div>
 
-          {/* Selector de shell */}
+        {/* Action Controls */}
+        <div className="terminal-actions-group">
+          {/* Selector de shell activo */}
           {onShellChange && (
             <div className="terminal-shell-picker">
+              <span className="terminal-tab-icon" style={{ marginRight: 4 }}><TerminalIcon size={12} /></span>
               <select
                 value={shell}
                 onChange={(e) => onShellChange(e.target.value as ShellType)}
                 className="terminal-shell-select"
-                title="Seleccionar terminal predeterminada"
+                title="Seleccionar shell"
               >
                 {SHELL_OPTIONS.map((opt) => (
                   <option key={opt.id} value={opt.id}>
-                    {opt.icon} {opt.label}
+                    {opt.label}
                   </option>
                 ))}
               </select>
             </div>
           )}
-        </div>
 
-        {/* Action Controls */}
-        <div className="terminal-actions-group">
           <button
             type="button"
-            className="btn-icon compact terminal-action-btn"
+            className="terminal-action-btn"
             onClick={handleRestart}
-            title="Reiniciar sesión de terminal"
-            aria-label="Reiniciar terminal"
+            title="Nueva terminal / Reiniciar"
+            aria-label="Nueva terminal"
+          >
+            <PlusIcon size={13} />
+            <span style={{ marginLeft: 1 }}><ChevronDownIcon size={10} /></span>
+          </button>
+
+          <button
+            type="button"
+            className="terminal-action-btn"
+            onClick={onToggleDock}
+            title="Dividir terminal"
+            aria-label="Dividir terminal"
+          >
+            <SplitIcon size={13} />
+          </button>
+
+          <button
+            type="button"
+            className="terminal-action-btn"
+            onClick={handleRestart}
+            title="Eliminar terminal"
+            aria-label="Eliminar terminal"
           >
             <TrashIcon size={13} />
           </button>
-          {onToggleDock && (
-            <button
-              type="button"
-              className="btn-icon compact terminal-action-btn"
-              onClick={onToggleDock}
-              title={isDocked ? "Desacoplar (Ventana flotante)" : "Acoplar al panel inferior"}
-              aria-label="Alternar acoplamiento"
-            >
-              {isDocked ? "⧉" : "⤓"}
-            </button>
-          )}
+
+          <button
+            type="button"
+            className="terminal-action-btn"
+            title="Más acciones..."
+            aria-label="Más acciones"
+          >
+            <MoreHorizontalIcon size={13} />
+          </button>
+
+          <div className="terminal-separator" />
+
           {isDocked && (
             <button
               type="button"
-              className="btn-icon compact terminal-action-btn"
+              className="terminal-action-btn"
               onClick={() => setMaximized((v) => !v)}
-              title={maximized ? "Restaurar tamaño" : "Maximizar terminal"}
-              aria-label="Maximizar"
+              title={maximized ? "Restaurar panel" : "Maximizar panel"}
+              aria-label="Maximizar panel"
             >
-              {maximized ? "▼" : "▲"}
+              {maximized ? <MinimizeIcon size={13} /> : <MaximizeIcon size={13} />}
             </button>
           )}
+
           <button
             type="button"
-            className="btn-icon compact terminal-action-btn"
+            className="terminal-action-btn"
             onClick={onClose}
-            title="Cerrar terminal"
-            aria-label="Cerrar terminal"
+            title="Cerrar panel"
+            aria-label="Cerrar panel"
           >
             <CloseIcon size={13} />
           </button>
@@ -156,7 +194,13 @@ export const TerminalView = memo(function TerminalView({
 
       {/* Terminal Screen Body (WebGL ConPTY con 0ms de lag) */}
       <div className="terminal-screen" style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-        <TerminalPanel key={`${termKey}-${shell}-${directory}`} cwd={directory} shellName={shell} />
+        {activeTab === "terminal" ? (
+          <TerminalPanel key={`${termKey}-${shell}-${directory}`} cwd={directory} shellName={shell} />
+        ) : (
+          <div style={{ padding: "16px", color: "#8b949e", fontSize: "12px", fontFamily: "monospace" }}>
+            No hay elementos en la vista {activeTab.toUpperCase()}.
+          </div>
+        )}
       </div>
     </div>
   )

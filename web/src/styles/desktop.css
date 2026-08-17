@@ -857,101 +857,126 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px 4px 12px;
-  background: #161b22;
-  border-bottom: 1px solid #30363d;
+  padding: 0 8px;
+  height: 35px;
+  background: #181818;
+  border-bottom: 1px solid #2d2d2d;
   flex-shrink: 0;
   user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .terminal-tabs-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
+  height: 100%;
 }
 
 .terminal-tab {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 0 10px;
+  height: 35px;
   background: transparent;
-  color: #8b949e;
-  font-size: 0.75rem;
-  font-weight: 700;
+  color: #969696;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+  transition: color 0.1s ease;
+  box-sizing: border-box;
+}
+
+.terminal-tab:hover {
+  color: #cccccc;
 }
 
 .terminal-tab.active {
-  background: #21262d;
-  color: #58a6ff;
-  border: 1px solid #30363d;
+  background: transparent;
+  color: #ffffff;
+  border-bottom: 1px solid #007acc;
+  font-weight: 600;
+}
+
+.terminal-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #007acc;
+  display: inline-block;
+  margin-right: 2px;
 }
 
 .terminal-tab-icon {
   display: flex;
   align-items: center;
-  color: #10b981;
+  color: #cccccc;
 }
 
 .terminal-tab-dir {
-  font-size: 0.7rem;
-  color: #8b949e;
+  font-size: 10px;
+  color: #6e7681;
   font-weight: normal;
+  text-transform: none;
 }
 
 .terminal-shell-picker {
   display: flex;
   align-items: center;
+  margin-right: 4px;
 }
 
 .terminal-shell-select {
-  background: #21262d;
-  border: 1px solid #30363d;
-  color: #c9d1d9;
-  font-size: 0.72rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #cccccc;
+  font-size: 11px;
   font-family: inherit;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-weight: 500;
+  padding: 2px 4px;
+  border-radius: 3px;
   outline: none;
   cursor: pointer;
 }
+.terminal-shell-select:hover {
+  background: #2a2d2e;
+}
 .terminal-shell-select:focus {
-  border-color: #58a6ff;
+  border-color: #007acc;
 }
 
 .terminal-actions-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
-.terminal-running-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.7rem;
-  color: #e3b341;
-  margin-right: 6px;
-}
-
-.terminal-running-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #e3b341;
-  animation: pulse 1.2s infinite;
+.terminal-separator {
+  width: 1px;
+  height: 14px;
+  background: #333333;
+  margin: 0 4px;
 }
 
 .terminal-action-btn {
-  color: #8b949e;
-  padding: 3px;
-  border-radius: 4px;
+  color: #cccccc;
+  padding: 4px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.1s ease;
 }
 .terminal-action-btn:hover {
-  background: #21262d;
-  color: #f0f6fc;
+  background: #2a2d2e;
+  color: #ffffff;
 }
 
 .terminal-screen {

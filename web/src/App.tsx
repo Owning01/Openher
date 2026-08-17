@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { lazy, Suspense, useEffect, useMemo, useState, useCallback, useRef, memo } from "react"
 import { api } from "./api"
 import { I18nProvider, useT, normalizeLanguage } from "./i18n-context"
 import { languageOptions } from "./i18n"
@@ -162,6 +162,115 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
   } catch { /* ignore */ }
   return fallback
 }
+
+const ShellPanelCell = memo(function ShellPanelCell({
+  index,
+  kind,
+  cwd,
+  active,
+  onActivate,
+  onClose,
+  onOpenSessionDir,
+  onSplitSession,
+  onSwapPanels,
+}: {
+  index: number
+  kind: Exclude<ShellPanelKind, "session">
+  cwd?: string
+  active: boolean
+  onActivate: () => void
+  onClose: () => void
+  onOpenSessionDir: (dir: string) => void
+  onSplitSession: (index: number, dir: "left" | "right" | "top" | "bottom" | "center", specificId?: string) => void
+  onSwapPanels: (from: number, to: number) => void
+}) {
+  const [dropZone, setDropZone] = useState<"left" | "right" | "top" | "bottom" | "center" | null>(null)
+
+  const calcDropZone = (e: React.DragEvent<HTMLDivElement>): "left" | "right" | "top" | "bottom" | "center" => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const w = rect.width
+    const h = rect.height
+    if (y < h * 0.2) return "top"
+    if (y > h * 0.8) return "bottom"
+    if (x < w * 0.25) return "left"
+    if (x > w * 0.75) return "right"
+    return "center"
+  }
+
+  return (
+    <div
+      className={`desktop-shell-cell-wrapper${active ? " active" : ""}`}
+      style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column" }}
+      onClick={onActivate}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setDropZone(calcDropZone(e))
+      }}
+      onDragLeave={() => setDropZone(null)}
+      onDrop={(e) => {
+        e.preventDefault()
+        const zone = calcDropZone(e)
+        setDropZone(null)
+        const raw = e.dataTransfer.getData("text/plain")
+        if (raw.startsWith("panel:")) {
+          const parts = raw.split(":")
+          const fromIdx = Number(parts[1])
+          const fromPayload = parts[2]
+          if (fromIdx !== index) {
+            if (zone === "center") {
+              onSwapPanels(fromIdx, index)
+            } else {
+              onSplitSession(index, zone, fromPayload)
+            }
+          }
+        } else if (raw.startsWith("session:")) {
+          const sId = raw.replace("session:", "")
+          onSplitSession(index, zone, sId)
+        } else {
+          onSplitSession(index, zone, raw)
+        }
+      }}
+    >
+      {dropZone && (
+        <div
+          style={{
+            position: "absolute",
+            zIndex: 100,
+            pointerEvents: "none",
+            background: "rgba(88, 166, 255, 0.25)",
+            border: "2px dashed #58a6ff",
+            borderRadius: "var(--radius-md)",
+            transition: "all 0.1s ease",
+            ...(dropZone === "left"
+              ? { inset: "0 50% 0 0" }
+              : dropZone === "right"
+              ? { inset: "0 0 0 50%" }
+              : dropZone === "top"
+              ? { inset: "0 0 50% 0" }
+              : dropZone === "bottom"
+              ? { inset: "50% 0 0 0" }
+              : { inset: "0" }),
+          }}
+        />
+      )}
+      <button
+        type="button"
+        className="shell-panel-close"
+        title="Cerrar panel"
+        aria-label="Cerrar panel"
+        onClick={(e) => {
+          e.stopPropagation()
+          onClose()
+        }}
+      >
+        ×
+      </button>
+      <ShellPanel kind={kind} cwd={cwd} onOpenSessionDir={onOpenSessionDir} />
+    </div>
+  )
+})
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const t = useT()
@@ -1292,23 +1401,60 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     draggedSessionRef.current = { id, dir }
   }, [])
 
-  // 4-Way Docking: Acopla una sesión en cualquier lado (izq, der, arriba, abajo o centro) sin duplicar
+  // 4-Way Docking: Acopla una sesión o panel en cualquier lado (izq, der, arriba, abajo o centro) sin duplicar
   const handleDockSession = useCallback((index: number, dir: "left" | "right" | "top" | "bottom" | "center", specificId?: string) => {
     const drag = draggedSessionRef.current
-    const dragId = specificId || drag?.id
-    if (!dragId) return
+    const rawId = specificId || drag?.id
+    if (!rawId) return
     draggedSessionRef.current = null
+
+    let targetKind: ShellPanelKind | "editor" = "session"
+    let targetSessionId: string | null = null
+    let fromIndex: number | null = null
+
+    if (rawId.startsWith("panel:")) {
+      const parts = rawId.split(":")
+      fromIndex = Number(parts[1])
+      const payload = parts[2]
+      if (payload.startsWith("kind:")) {
+        targetKind = payload.replace("kind:", "") as ShellPanelKind
+        targetSessionId = null
+      } else if (payload === "terminal" || payload === "explorer" || payload === "kanban" || payload === "docs" || payload === "stats" || payload === "labs") {
+        targetKind = payload as ShellPanelKind
+        targetSessionId = null
+      } else {
+        targetKind = "session"
+        targetSessionId = payload
+      }
+    } else if (rawId.startsWith("kind:")) {
+      targetKind = rawId.replace("kind:", "") as ShellPanelKind
+      targetSessionId = null
+    } else if (rawId === "terminal" || rawId === "explorer" || rawId === "kanban" || rawId === "docs" || rawId === "stats" || rawId === "labs") {
+      targetKind = rawId as ShellPanelKind
+      targetSessionId = null
+    } else if (rawId.startsWith("session:")) {
+      targetKind = "session"
+      targetSessionId = rawId.replace("session:", "")
+    } else {
+      targetKind = "session"
+      targetSessionId = rawId
+    }
 
     if (dir === "center") {
       setDesktopLayout((prev) => {
         const sessions = [...prev.sessions]
         const panelKinds = [...prev.panelKinds]
-        const existing = sessions.indexOf(dragId)
-        if (existing >= 0 && existing !== index) {
-          sessions[existing] = null
+        if (targetSessionId) {
+          const existing = sessions.indexOf(targetSessionId)
+          if (existing >= 0 && existing !== index) {
+            sessions[existing] = null
+          }
+        } else if (fromIndex !== null && fromIndex !== index) {
+          panelKinds[fromIndex] = "session"
+          sessions[fromIndex] = null
         }
-        sessions[index] = dragId
-        panelKinds[index] = "session"
+        sessions[index] = targetSessionId
+        panelKinds[index] = targetKind
         return { ...prev, sessions, panelKinds }
       })
       setActivePanel(index)
@@ -1317,7 +1463,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
     if (dir === "left" || dir === "right") {
       setDesktopLayout((prev) => {
-        const baseSessions = prev.sessions.map((s) => (s === dragId ? null : s))
+        let baseSessions = [...prev.sessions]
+        let baseKinds = [...prev.panelKinds]
+        if (targetSessionId) {
+          baseSessions = baseSessions.map((s) => (s === targetSessionId ? null : s))
+        } else if (fromIndex !== null && fromIndex < baseKinds.length) {
+          baseKinds[fromIndex] = "session"
+          baseSessions[fromIndex] = null
+        }
         const cols = prev.cols + 1
         const col = index % prev.cols
         const sessions: Array<string | null> = []
@@ -1325,13 +1478,27 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         for (let r = 0; r < prev.rows; r++) {
           for (let c = 0; c < cols; c++) {
             if (dir === "right") {
-              if (c <= col) { sessions.push(baseSessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
-              else if (c === col + 1) { sessions.push(r === Math.floor(index / prev.cols) ? dragId : null); panelKinds.push("session") }
-              else { sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + (c - 1)] ?? "session") }
+              if (c <= col) {
+                sessions.push(baseSessions[r * prev.cols + c] ?? null)
+                panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
+              } else if (c === col + 1) {
+                sessions.push(r === Math.floor(index / prev.cols) ? targetSessionId : null)
+                panelKinds.push(r === Math.floor(index / prev.cols) ? targetKind : "session")
+              } else {
+                sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null)
+                panelKinds.push(baseKinds[r * prev.cols + (c - 1)] ?? "session")
+              }
             } else {
-              if (c === col) { sessions.push(r === Math.floor(index / prev.cols) ? dragId : null); panelKinds.push("session") }
-              else if (c < col) { sessions.push(baseSessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
-              else { sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + (c - 1)] ?? "session") }
+              if (c === col) {
+                sessions.push(r === Math.floor(index / prev.cols) ? targetSessionId : null)
+                panelKinds.push(r === Math.floor(index / prev.cols) ? targetKind : "session")
+              } else if (c < col) {
+                sessions.push(baseSessions[r * prev.cols + c] ?? null)
+                panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
+              } else {
+                sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null)
+                panelKinds.push(baseKinds[r * prev.cols + (c - 1)] ?? "session")
+              }
             }
           }
         }
@@ -1344,7 +1511,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
     if (dir === "top" || dir === "bottom") {
       setDesktopLayout((prev) => {
-        const baseSessions = prev.sessions.map((s) => (s === dragId ? null : s))
+        let baseSessions = [...prev.sessions]
+        let baseKinds = [...prev.panelKinds]
+        if (targetSessionId) {
+          baseSessions = baseSessions.map((s) => (s === targetSessionId ? null : s))
+        } else if (fromIndex !== null && fromIndex < baseKinds.length) {
+          baseKinds[fromIndex] = "session"
+          baseSessions[fromIndex] = null
+        }
         const rows = prev.rows + 1
         const row = Math.floor(index / prev.cols)
         const col = index % prev.cols
@@ -1353,13 +1527,27 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < prev.cols; c++) {
             if (dir === "bottom") {
-              if (r <= row) { sessions.push(baseSessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
-              else if (r === row + 1) { sessions.push(c === col ? dragId : null); panelKinds.push("session") }
-              else { sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[(r - 1) * prev.cols + c] ?? "session") }
+              if (r <= row) {
+                sessions.push(baseSessions[r * prev.cols + c] ?? null)
+                panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
+              } else if (r === row + 1) {
+                sessions.push(c === col ? targetSessionId : null)
+                panelKinds.push(c === col ? targetKind : "session")
+              } else {
+                sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null)
+                panelKinds.push(baseKinds[(r - 1) * prev.cols + c] ?? "session")
+              }
             } else {
-              if (r === row) { sessions.push(c === col ? dragId : null); panelKinds.push("session") }
-              else if (r < row) { sessions.push(baseSessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
-              else { sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[(r - 1) * prev.cols + c] ?? "session") }
+              if (r === row) {
+                sessions.push(c === col ? targetSessionId : null)
+                panelKinds.push(c === col ? targetKind : "session")
+              } else if (r < row) {
+                sessions.push(baseSessions[r * prev.cols + c] ?? null)
+                panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
+              } else {
+                sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null)
+                panelKinds.push(baseKinds[(r - 1) * prev.cols + c] ?? "session")
+              }
             }
           }
         }
@@ -2040,14 +2228,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               // Paneles de la shell (terminal, explorador, kanban, docs...)
               return (
                 <div key={`panel-${i}`} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
-                  <button type="button" className="shell-panel-close" title={t('panel.close')} aria-label={t('panel.close')}
-                    onClick={(e) => { e.stopPropagation(); closePanel(i) }}>×</button>
-                  {/* Terminales: arrancan en la ruta de la sesión activa
-                      (se congela al montar el panel). */}
-                  <ShellPanel
+                  <ShellPanelCell
+                    index={i}
                     kind={kind}
                     cwd={kind === "terminal" ? activeDir : session?.directory ?? undefined}
-                    onOpenSessionDir={openSessionInDir} />
+                    active={activePanel === i}
+                    onActivate={() => setActivePanel(i)}
+                    onClose={() => closePanel(i)}
+                    onOpenSessionDir={openSessionInDir}
+                    onSplitSession={handleDockSession}
+                    onSwapPanels={handleSwapPanels}
+                  />
                 </div>
               )
             })

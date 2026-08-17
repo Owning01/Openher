@@ -6,7 +6,7 @@ import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
-import { FolderIcon, RefreshIcon } from "../Icons"
+import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type ShellPanelKind } from "../shell"
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
@@ -98,24 +98,24 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
 
     const onData = term.onData((d) => {
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ cmd: "write", data: d }))
+        ws.send(JSON.stringify({ cmd: "input", data: d }))
       } else if (ptyId) {
-        shell.pty.write(ptyId, d)
+        shell.pty.write(ptyId, d).catch(() => {})
       }
     })
 
-    shell.pty.create(cwd, shellName).then(({ id, ws_port }) => {
+    shell.pty.create(cwd, shellName).then((res) => {
       if (disposed) {
-        shell.pty.kill(id)
+        shell.pty.kill(res.id)
         return
       }
-      ptyId = id
-      const proto = location.protocol === "https:" ? "wss:" : "ws:"
+      ptyId = res.id
       try {
-        ws = new WebSocket(`${proto}//${location.hostname}:${ws_port}`)
+        const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:"
+        const wsHost = window.location.hostname || "localhost"
+        ws = new WebSocket(`${wsProto}//${wsHost}:${res.ws_port}`)
         ws.binaryType = "arraybuffer"
         ws.onopen = () => {
-          ws!.send(JSON.stringify({ cmd: "attach", id }))
           sendResize()
         }
         ws.onmessage = (e) => {
@@ -182,20 +182,22 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
 })
 
 export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { cwd?: string; shellName?: string }) {
+  const [activeMainTab, setActiveMainTab] = useState<"problems" | "output" | "debug" | "terminal" | "ports">("terminal")
   const [termTabs, setTermTabs] = useState<Array<{ id: string; title: string }>>([
-    { id: "term-1", title: "Terminal 1" },
+    { id: "term-1", title: "pwsh" },
   ])
   const [activeTabId, setActiveTabId] = useState<string>("term-1")
+  const [currentShell, setCurrentShell] = useState<string>(shellName || "pwsh")
 
   const handleAddTab = () => {
     const nextNum = termTabs.length + 1
     const newId = `term-${Date.now()}`
-    setTermTabs((prev) => [...prev, { id: newId, title: `Terminal ${nextNum}` }])
+    setTermTabs((prev) => [...prev, { id: newId, title: `${currentShell} ${nextNum}` }])
     setActiveTabId(newId)
   }
 
-  const handleCloseTab = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleCloseTab = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
     if (termTabs.length <= 1) return
     const nextTabs = termTabs.filter((t) => t.id !== id)
     setTermTabs(nextTabs)
@@ -206,67 +208,112 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { c
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#0d1117" }}>
-      {/* Barra de pestañas de Terminal */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#161b22", borderBottom: "1px solid #30363d", padding: "0 4px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "2px", overflowX: "auto" }}>
-          {termTabs.map((tab) => {
-            const isActive = tab.id === activeTabId
-            return (
-              <div
-                key={tab.id}
-                onClick={() => setActiveTabId(tab.id)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "4px 10px",
-                  fontSize: "0.78rem",
-                  cursor: "pointer",
-                  color: isActive ? "#58a6ff" : "#8b949e",
-                  background: isActive ? "#0d1117" : "transparent",
-                  borderBottom: isActive ? "2px solid #58a6ff" : "2px solid transparent",
-                  fontWeight: isActive ? 600 : 400,
-                }}
-              >
-                <span>&gt;_</span>
-                <span>{tab.title}</span>
-                {termTabs.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={(e) => handleCloseTab(tab.id, e)}
-                    style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: "0 2px", fontSize: "11px", opacity: 0.7 }}
-                    title="Cerrar terminal"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            )
-          })}
+      {/* Barra superior estilo VS Code con drag & drop */}
+      <div className="terminal-header-bar"
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", "kind:terminal")
+          e.dataTransfer.effectAllowed = "move"
+        }}
+      >
+        <div className="terminal-tabs-group">
+          <div className={`terminal-tab${activeMainTab === "problems" ? " active" : ""}`} onClick={() => setActiveMainTab("problems")}>
+            <span>PROBLEMS</span>
+          </div>
+          <div className={`terminal-tab${activeMainTab === "output" ? " active" : ""}`} onClick={() => setActiveMainTab("output")}>
+            <span>OUTPUT</span>
+          </div>
+          <div className={`terminal-tab${activeMainTab === "debug" ? " active" : ""}`} onClick={() => setActiveMainTab("debug")}>
+            <span>DEBUG CONSOLE</span>
+          </div>
+          <div className={`terminal-tab${activeMainTab === "terminal" ? " active" : ""}`} onClick={() => setActiveMainTab("terminal")}>
+            <span className="terminal-status-dot" />
+            <span>TERMINAL</span>
+          </div>
+          <div className={`terminal-tab${activeMainTab === "ports" ? " active" : ""}`} onClick={() => setActiveMainTab("ports")}>
+            <span>PORTS</span>
+          </div>
+        </div>
+
+        <div className="terminal-actions-group">
+          <div className="terminal-shell-picker">
+            <span className="terminal-tab-icon" style={{ marginRight: 4 }}><TerminalIcon size={12} /></span>
+            <select
+              value={currentShell}
+              onChange={(e) => setCurrentShell(e.target.value)}
+              className="terminal-shell-select"
+              title="Seleccionar shell"
+            >
+              <option value="pwsh">pwsh</option>
+              <option value="powershell">powershell</option>
+              <option value="cmd">cmd</option>
+              <option value="bash">bash</option>
+              <option value="wsl">wsl</option>
+            </select>
+          </div>
+
           <button
             type="button"
+            className="terminal-action-btn"
             onClick={handleAddTab}
-            style={{ background: "none", border: "none", color: "#8b949e", cursor: "pointer", padding: "4px 8px", fontSize: "14px", fontWeight: 700 }}
-            title="Nueva pestaña de terminal"
+            title="Nueva terminal"
+            aria-label="Nueva terminal"
           >
-            +
+            <PlusIcon size={13} />
+            <span style={{ marginLeft: 1 }}><ChevronDownIcon size={10} /></span>
+          </button>
+
+          <button
+            type="button"
+            className="terminal-action-btn"
+            onClick={handleAddTab}
+            title="Dividir terminal"
+            aria-label="Dividir terminal"
+          >
+            <SplitIcon size={13} />
+          </button>
+
+          <button
+            type="button"
+            className="terminal-action-btn"
+            onClick={() => handleCloseTab(activeTabId)}
+            title="Eliminar terminal"
+            aria-label="Eliminar terminal"
+          >
+            <TrashIcon size={13} />
+          </button>
+
+          <button
+            type="button"
+            className="terminal-action-btn"
+            title="Más acciones..."
+            aria-label="Más acciones"
+          >
+            <MoreHorizontalIcon size={13} />
           </button>
         </div>
       </div>
+
       {/* Contenedor de la terminal activa */}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-        {termTabs.map((tab) => (
-          <div
-            key={tab.id}
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: tab.id === activeTabId ? "block" : "none",
-            }}
-          >
-            {tab.id === activeTabId && <SingleTerminal cwd={cwd} shellName={shellName} />}
+        {activeMainTab === "terminal" ? (
+          termTabs.map((tab) => (
+            <div
+              key={tab.id}
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: tab.id === activeTabId ? "block" : "none",
+              }}
+            >
+              {tab.id === activeTabId && <SingleTerminal cwd={cwd} shellName={currentShell} />}
+            </div>
+          ))
+        ) : (
+          <div style={{ padding: "16px", color: "#8b949e", fontSize: "12px", fontFamily: "monospace" }}>
+            No hay elementos en la vista {activeMainTab.toUpperCase()}.
           </div>
-        ))}
+        )}
       </div>
     </div>
   )

@@ -779,10 +779,18 @@ export const api = {
       })
     }
     const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string }> = []
-    if (text) parts.push({ type: "text", text })
+    if (text) {
+      parts.push({ type: "text", text })
+    } else if (images && images.length > 0) {
+      // El server puede rechazar mensajes sin partes de texto: enviar un
+      // placeholder cuando el usuario manda solo imágenes.
+      parts.push({ type: "text", text: "(image)" })
+    }
     if (images) {
       for (const img of images) {
-        parts.push({ type: "image", data: img.base64, mimeType: img.mime })
+        // El server espera base64 raw: strip del prefijo data URL si existe.
+        const raw = img.base64.includes(",") ? img.base64.split(",")[1] : img.base64
+        parts.push({ type: "image", data: raw, mimeType: img.mime })
       }
     }
     return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt_async`, directory), {
