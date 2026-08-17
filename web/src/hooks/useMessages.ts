@@ -305,8 +305,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     sessionID: string,
     directory: string,
     revert: { messageID: string } | undefined,
-    onRefreshSessions: () => Promise<void>,
+    _onRefreshSessions: () => Promise<void>,
     onLoadSelected: () => Promise<void>,
+    onPatchSession?: (patch: Partial<{ revert: { messageID: string } | undefined }>) => void,
   ) => {
     const userMessages = messages.filter((m) => m.info.role === "user")
     const target = userMessages.length > 0
@@ -318,13 +319,21 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       setRuntimeError("No messages to undo")
       return
     }
+    // S3: actualización optimista INSTANTÁNEA — el filtro local oculta los
+    // mensajes revertidos en ~0ms en vez de esperar 3-5 RTTs de red. La UI
+    // reacciona al instante mientras la red confirma en background.
+    setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= target.info.id))
+    // Marcar el revert localmente para que MessageBubble aplique el grey-out.
+    onPatchSession?.({ revert: { messageID: target.info.id } })
     try {
       if (awaitingAssistantReply || messages.some((m) => m.info.role !== "user" && !m.info.time.completed)) {
-        await api.abort(config, sessionID, directory)
+        await api.abort(config, sessionID, directory).catch(() => {})
       }
-      await api.revert(config, sessionID, target.info.id, directory)
-      await onLoadSelected()
-      await onRefreshSessions()
+      // S5: la respuesta de revert ya trae la session actualizada — no
+      // necesitamos refreshSessions global. Solo refetch de mensajes para
+      // reconciliar el estado del server con nuestro filtro optimista.
+      await api.revert(config, sessionID, target.info.id, directory).catch(() => {})
+      await onLoadSelected().catch(() => {})
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
@@ -333,13 +342,18 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const redoMessage = useCallback(async (
     sessionID: string,
     directory: string,
-    onRefreshSessions: () => Promise<void>,
+    _onRefreshSessions: () => Promise<void>,
     onLoadSelected: () => Promise<void>,
+    onPatchSession?: (patch: Partial<{ revert: undefined }>) => void,
   ) => {
+    // S3: limpiar el revert localmente para feedback instantáneo.
+    onPatchSession?.({ revert: undefined })
     try {
-      await api.unrevert(config, sessionID, directory)
-      await onLoadSelected()
-      await onRefreshSessions()
+      // S1+S5: unrevert + refetch en paralelo, sin refreshSessions global.
+      await Promise.all([
+        api.unrevert(config, sessionID, directory).catch(() => {}),
+        onLoadSelected().catch(() => {}),
+      ])
     } catch (err) {
       setRuntimeError((err as Error).message)
     }

@@ -205,33 +205,34 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const handleRevertToMessage = useCallback(async (messageID: string) => {
     try {
       if (msgs.awaitingAssistantReply) {
-        await api.abort(config, session.id, session.directory)
+        await api.abort(config, session.id, session.directory).catch(() => {})
       }
       const target = msgs.renderedMessages.find((m) => m.info.id === messageID)
-      await api.revert(config, session.id, messageID, session.directory)
+      // S3: filtro optimista instantáneo — oculta mensajes después del target.
+      msgs.setMessages((prev) => prev.filter((m) => m.info.sessionID !== session.id || !m.info.id || m.info.id <= messageID))
       setLocalRevertID(messageID)
-      await msgs.loadSelected(session.id, session.directory)
-      onRefreshSessions()
+      await api.revert(config, session.id, messageID, session.directory).catch(() => {})
+      await msgs.loadSelected(session.id, session.directory).catch(() => {})
       if (target?.text) msgs.setComposer(target.text)
     } catch (err) {
       msgs.setRuntimeError((err as Error).message)
     }
-  }, [msgs, config, session, onRefreshSessions])
+  }, [msgs, config, session])
 
   const handleEditMessage = useCallback(async (messageID: string, text: string) => {
     try {
       if (msgs.awaitingAssistantReply) {
-        await api.abort(config, session.id, session.directory)
+        await api.abort(config, session.id, session.directory).catch(() => {})
       }
-      await api.revert(config, session.id, messageID, session.directory)
+      msgs.setMessages((prev) => prev.filter((m) => m.info.sessionID !== session.id || !m.info.id || m.info.id <= messageID))
       setLocalRevertID(messageID)
-      await msgs.loadSelected(session.id, session.directory)
-      onRefreshSessions()
+      await api.revert(config, session.id, messageID, session.directory).catch(() => {})
+      await msgs.loadSelected(session.id, session.directory).catch(() => {})
       msgs.setComposer(text)
     } catch (err) {
       msgs.setRuntimeError((err as Error).message)
     }
-  }, [msgs, config, session, onRefreshSessions])
+  }, [msgs, config, session])
 
   const handleUndo = useCallback(() => {
     msgs.undoMessage(session.id, session.directory, undefined, refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined))

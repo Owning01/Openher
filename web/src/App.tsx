@@ -1771,45 +1771,54 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (!selectedSession) return
     try {
       if (awaitingAssistantReply) {
-        await api.abort(config, selectedSession.id, selectedSession.directory)
+        await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
       }
       const target = renderedMessages.find((m) => m.info.id === messageID)
-      await api.revert(config, selectedSession.id, messageID, selectedSession.directory)
+      // S3: filtro optimista instantáneo.
+      const sid = selectedSession.id
+      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id <= messageID))
       setLocalRevertID(messageID)
-      await loadSelected(selectedSession.id, selectedSession.directory)
-      await refreshSessions()
+      await api.revert(config, sid, messageID, selectedSession.directory).catch(() => {})
+      await loadSelected(sid, selectedSession.directory).catch(() => {})
       if (target?.text) setComposer(target.text)
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
-  }, [selectedSession, config, awaitingAssistantReply, loadSelected, refreshSessions, renderedMessages])
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, renderedMessages, setMessages])
 
   const handleEditMessage = useCallback(async (messageID: string, text: string) => {
     if (!selectedSession) return
     try {
       if (awaitingAssistantReply) {
-        await api.abort(config, selectedSession.id, selectedSession.directory)
+        await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
       }
-      await api.revert(config, selectedSession.id, messageID, selectedSession.directory)
+      const sid = selectedSession.id
+      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id <= messageID))
       setLocalRevertID(messageID)
-      await loadSelected(selectedSession.id, selectedSession.directory)
-      await refreshSessions()
+      await api.revert(config, sid, messageID, selectedSession.directory).catch(() => {})
+      await loadSelected(sid, selectedSession.directory).catch(() => {})
       setComposer(text)
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
-  }, [selectedSession, config, awaitingAssistantReply, loadSelected, refreshSessions])
-
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, setMessages])
   const handleUndo = useCallback(() => {
     if (!selectedSession) return
-    undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
-  }, [selectedSession, undoMessage, refreshSessions, loadSelected])
+    // S3+S5: patch local instantáneo — el undo se siente en ~0ms.
+    const patchSession = (patch: Record<string, unknown>) => {
+      setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, ...patch } : s))
+    }
+    undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory), patchSession)
+  }, [selectedSession, undoMessage, refreshSessions, loadSelected, setSessions])
 
   const handleRedo = useCallback(() => {
     if (!selectedSession) return
     setLocalRevertID(null)
-    redoMessage(selectedSession.id, selectedSession.directory, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
-  }, [selectedSession, redoMessage, refreshSessions, loadSelected])
+    const patchSession = (patch: Record<string, unknown>) => {
+      setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, ...patch } : s))
+    }
+    redoMessage(selectedSession.id, selectedSession.directory, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory), patchSession)
+  }, [selectedSession, redoMessage, refreshSessions, loadSelected, setSessions])
 
   const handleCompact = useCallback(async () => {
     if (!selectedSession || !activeModel) return
