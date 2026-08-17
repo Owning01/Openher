@@ -1117,7 +1117,7 @@
 }
 
 .agent-toggle:hover:not(:disabled) {
-  border-color: var(--primary);
+  border-color: transparent;
 }
 
 .agent-toggle[aria-pressed="true"] {

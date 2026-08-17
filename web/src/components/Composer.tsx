@@ -28,7 +28,7 @@ type ComposerProps = {
   value: string
   commands: CommandInfo[]
   onChange: (value: string) => void
-  onSend: (images?: ImageAttachment[]) => void | Promise<void>
+  onSend: (images?: ImageAttachment[]) => void | boolean | Promise<boolean | void>
   onShellSend?: (command: string) => void
   onAbort: () => void
   disabled: boolean
@@ -319,11 +319,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     setImages((prev) => prev.filter((img) => img.id !== id))
   }, [])
 
-  const handleSendWithImages = useCallback(() => {
+  const handleSendWithImages = useCallback(async () => {
     if (disabled) return
     if (!value.trim() && images.length === 0) return
-    onSend(images.length > 0 ? images : undefined)
-    setImages([])
+    const ok = await onSend(images.length > 0 ? images : undefined)
+    // Solo limpiar las imágenes si el envío fue exitoso: si falló (red o
+    // server) el usuario no pierde la imagen que pegó.
+    if (ok !== false) setImages([])
     resizeTextarea()
   }, [onSend, images, resizeTextarea, disabled, value])
 
@@ -578,7 +580,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           {visibleAgents.length > 1 && (
             <button onClick={handleToggleAgent} disabled={disabled}
               className="agent-toggle"
-              style={{ color: `var(--agent-${agentColorIdx})` } as React.CSSProperties}>
+              style={{ color: `var(--agent-${agentColorIdx})`, border: "none", outline: "none", background: "transparent", padding: "0 4px" } as React.CSSProperties}>
               <span>{visibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
             </button>
           )}

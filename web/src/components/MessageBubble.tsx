@@ -25,12 +25,6 @@ function messageIdGt(a: string, b: string): boolean {
   return a > b
 }
 
-function agentColorIndex(agentName: string | undefined, agents: AgentOption[]): number {
-  if (!agentName) return 0
-  const idx = agents.findIndex((a) => a.name === agentName || a.id === agentName)
-  return idx >= 0 ? idx % 7 : 0
-}
-
 function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): string {
   if (!msg.info.time.completed) return ""
   const finish = msg.info.finish
@@ -80,7 +74,7 @@ function calcTokensPerSecond(msg: RenderedMessage): string {
   return `${tps.toFixed(1)} tok/s`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, queued, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
+export const MessageBubble = memo(function MessageBubble({ message, queued, revert, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
   message: RenderedMessage
   queued?: boolean
   revert?: SessionView["revert"]
@@ -117,11 +111,6 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const isRevertPoint = revert && message.info.id === revert.messageID
 
   const isAssistant = message.info.role === "assistant"
-
-  const agentIdx = useMemo(
-    () => agentColorIndex(message.info.agent ?? message.info.providerID, agents ?? []),
-    [message.info.agent, message.info.providerID, agents],
-  )
 
   const duration = useMemo(
     () => calcDuration(message, prevUserTs),
@@ -296,7 +285,6 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
 
         {isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || activeVariant || duration || tokensPerSecond || message.info.finish === "aborted") && (
           <div className="message-footer">
-            <span className="msg-agent-dot" style={{ color: `var(--agent-${agentIdx})` }}>●</span>
             {(message.turnMode || message.info.mode) && (
               <span className="msg-footer-mode">{message.turnMode || message.info.mode}</span>
             )}

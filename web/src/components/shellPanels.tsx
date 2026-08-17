@@ -1612,6 +1612,7 @@ export type ShellPanelProps = {
   cwd?: string
   onOpenSessionDir: (dir: string) => void
   sessionID?: string | null
+  onOpenFile?: (path: string) => void
 }
 
 // ============================================================== Session Stats (compacto)
@@ -1726,12 +1727,12 @@ export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID, on
   )
 })
 
-export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir, sessionID: _sessionID }: ShellPanelProps) {
+export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir, sessionID: _sessionID, onOpenFile }: ShellPanelProps) {
   switch (kind) {
     case "terminal":
       return <TerminalPanel cwd={cwd} />
     case "explorer":
-      return <ExplorerPanel onOpenSessionDir={onOpenSessionDir} initialCwd={cwd} />
+      return <ExplorerPanel onOpenSessionDir={onOpenSessionDir} initialCwd={cwd} onOpenFile={onOpenFile} />
     case "kanban":
       return <KanbanPanel />
     case "docs":

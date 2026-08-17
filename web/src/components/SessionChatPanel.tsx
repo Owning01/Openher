@@ -35,13 +35,15 @@ type Props = {
   onChangeAgentGlobal: (agentID: string, directory?: string) => void
   onOpenInThisPanel: (sessionID: string, directory: string) => void
   onSwapPanels: (from: number, to: number) => void
+  onOpenFile?: (path: string, panelIndex?: number, zone?: "left" | "right" | "top" | "bottom" | "center") => void
 }
 
 export const SessionChatPanel = memo(function SessionChatPanel({
   session, config, dataMode, baseProps, active, connectionState, panelIndex,
   onActivate, onClose, onSplitSession, onSettled,
   onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
-  onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels
+  onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels,
+  onOpenFile
 }: Props) {
   const t = useT()
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
@@ -186,11 +188,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       msgs.setMessages((prev) => prev.filter((m) => !m.info.id || m.info.id <= revertMsgId))
     }
     setLocalRevertID(null)
-    msgs.send(session, panelModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
+    return msgs.send(session, panelModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
       refresh,
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
       onSetCommands, msgs.setRuntimeError, images)
-      .catch(() => undefined)
+      .then((r) => (typeof r === "boolean" ? r : true))
+      .catch(() => false)
   }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID])
 
   const handleAbort = useCallback(async () => {
@@ -327,22 +330,35 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         e.preventDefault()
         const zone = calcDropZone(e)
         setDropZone(null)
-        const raw = e.dataTransfer.getData("text/plain")
-        if (raw.startsWith("panel:")) {
-          const parts = raw.split(":")
-          const fromIdx = Number(parts[1])
-          if (fromIdx !== panelIndex) {
-            if (zone === "center") {
-              onSwapPanels(fromIdx, panelIndex)
-            } else {
-              onSplitSession(panelIndex, zone, raw)
-            }
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const f = e.dataTransfer.files[0]
+          const filePath = (f as any).path || f.name
+          if (filePath) {
+            onOpenFile?.(filePath, panelIndex, zone)
+            return
           }
-        } else if (raw.startsWith("session:")) {
-          const sId = raw.replace("session:", "")
-          onSplitSession(panelIndex, zone, sId)
-        } else {
-          onSplitSession(panelIndex, zone, raw)
+        }
+        const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
+        if (raw) {
+          if (raw.startsWith("panel:")) {
+            const parts = raw.split(":")
+            const fromIdx = Number(parts[1])
+            if (fromIdx !== panelIndex) {
+              if (zone === "center") {
+                onSwapPanels(fromIdx, panelIndex)
+              } else {
+                onSplitSession(panelIndex, zone, raw)
+              }
+            }
+          } else if (raw.startsWith("session:")) {
+            const sId = raw.replace("session:", "")
+            onSplitSession(panelIndex, zone, sId)
+          } else if (raw.startsWith("kind:")) {
+            onSplitSession(panelIndex, zone, raw)
+          } else {
+            // Archivo arrastrado desde el explorador interno o texto con ruta
+            onOpenFile?.(raw, panelIndex, zone)
+          }
         }
       }}
     >

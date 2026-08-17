@@ -542,7 +542,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     const doSend = async (
       sendFn: () => Promise<unknown>,
       then: () => Promise<void>
-    ) => {
+    ): Promise<boolean> => {
+      let ok = false
       try {
         setComposer("")
         setOptimisticUserMessages((current) => [...current, optimisticMessage])
@@ -551,48 +552,37 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         setAwaitingAssistantReply(true)
         onSetRuntimeError(null)
 
-        let sendFailed = false
         try {
           await sendFn()
+          ok = true
         } catch (err) {
-          sendFailed = true
-          const isNetwork = err instanceof TypeError || (err as Error).name === "AbortError" || /failed to fetch|network error|timeout/i.test((err as Error).message)
-          if (isNetwork) {
-            onSetRuntimeError((err as Error).message)
-          } else {
-            completionShouldPlayRef.current = false
-            setAwaitingAssistantReply(false)
-            removeOptimistic(optimisticMessage.info.id)
-            setComposer((current) => current || text)
-            onSetRuntimeError((err as Error).message)
-          }
-        }
-
-        let confirmed = false
-        try {
-          // Imágenes = payloads grandes → más tiempo para que el server confirme.
-          const hasImages = Boolean(images && images.length > 0)
-          const deadline = Date.now() + 8000 + (hasImages ? 12000 : 0)
-          while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
-            await then()
-            if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
-            await new Promise((r) => setTimeout(r, 1500))
-          }
-          confirmed = !optimisticIDsRef.current.has(optimisticMessage.info.id)
-        } catch {
-          // nunca tratar una falla de confirmación como falla de envío
-        }
-
-        if (sendFailed && confirmed) onSetRuntimeError(null)
-
-        // Solo remover el optimistic si el send falló Y no se confirmó.
-        // Si el send fue exitoso pero la confirmación tardó, conservar el
-        // mensaje optimista (las imágenes llegarán con el próximo fetch).
-        if (!confirmed && sendFailed) {
+          // Send fallido (red o server): remover el optimistic de inmediato,
+          // restaurar el texto y mostrar el error. El Composer conserva las
+          // imágenes porque recibe `false` como retorno.
           completionShouldPlayRef.current = false
           setAwaitingAssistantReply(false)
           removeOptimistic(optimisticMessage.info.id)
           setComposer((current) => current || text)
+          onSetRuntimeError((err as Error).message)
+        }
+
+        if (ok) {
+          // Send OK: esperar confirmación. El server puede tardar (payloads
+          // de imagen grandes) — poll hasta que el optimistic desaparezca
+          // (merge por id de loadSelected / echo SSE) o expire el deadline.
+          try {
+            const hasImages = Boolean(images && images.length > 0)
+            const deadline = Date.now() + 8000 + (hasImages ? 12000 : 0)
+            while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
+              await then()
+              if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
+              await new Promise((r) => setTimeout(r, 1500))
+            }
+          } catch {
+            // nunca tratar una falla de confirmación como falla de envío
+          }
+          // Si no confirmó (timeout): conservar el optimistic — el server lo
+          // entregará con el próximo fetch (merge por id nunca se encoge).
         }
 
         try {
@@ -603,6 +593,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       } finally {
         isSendingRef.current = false
       }
+      return ok
     }
 
     const parsed = parseCommand(text)
@@ -649,20 +640,18 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (parsed?.type === "command") {
       const { isKnown } = await resolveCommand(config, parsed.command, commands, onSetCommands)
       if (!isKnown) {
-        await doSend(
+        return doSend(
           () => api.sendPrompt(config, selectedSession.id, text.slice(1), selectedSession.directory, activeModel, activeAgentID),
           () => onLoadSelected()
         )
-        return
       }
-      await doSend(
+      return doSend(
         () => api.sendCommand(config, selectedSession.id, parsed.command, parsed.args, selectedSession.directory, activeModel, activeAgentID),
         () => onLoadSelected()
       )
-      return
     }
 
-    await doSend(
+    return doSend(
       () => api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID, images),
       () => onLoadSelected()
     )

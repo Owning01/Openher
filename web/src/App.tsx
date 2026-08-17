@@ -175,6 +175,7 @@ const ShellPanelCell = memo(function ShellPanelCell({
   onOpenSessionDir,
   onSplitSession,
   onSwapPanels,
+  onOpenFile,
 }: {
   index: number
   kind: Exclude<ShellPanelKind, "session">
@@ -186,6 +187,7 @@ const ShellPanelCell = memo(function ShellPanelCell({
   onOpenSessionDir: (dir: string) => void
   onSplitSession: (index: number, dir: "left" | "right" | "top" | "bottom" | "center", specificId?: string) => void
   onSwapPanels: (from: number, to: number) => void
+  onOpenFile?: (path: string, index?: number, zone?: "left" | "right" | "top" | "bottom" | "center") => void
 }) {
   const [dropZone, setDropZone] = useState<"left" | "right" | "top" | "bottom" | "center" | null>(null)
 
@@ -216,22 +218,35 @@ const ShellPanelCell = memo(function ShellPanelCell({
         e.preventDefault()
         const zone = calcDropZone(e)
         setDropZone(null)
-        const raw = e.dataTransfer.getData("text/plain")
-        if (raw.startsWith("panel:")) {
-          const parts = raw.split(":")
-          const fromIdx = Number(parts[1])
-          if (fromIdx !== index) {
-            if (zone === "center") {
-              onSwapPanels(fromIdx, index)
-            } else {
-              onSplitSession(index, zone, raw)
-            }
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const f = e.dataTransfer.files[0]
+          const filePath = (f as any).path || f.name
+          if (filePath) {
+            onOpenFile?.(filePath, index, zone)
+            return
           }
-        } else if (raw.startsWith("session:")) {
-          const sId = raw.replace("session:", "")
-          onSplitSession(index, zone, sId)
-        } else {
-          onSplitSession(index, zone, raw)
+        }
+        const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
+        if (raw) {
+          if (raw.startsWith("panel:")) {
+            const parts = raw.split(":")
+            const fromIdx = Number(parts[1])
+            if (fromIdx !== index) {
+              if (zone === "center") {
+                onSwapPanels(fromIdx, index)
+              } else {
+                onSplitSession(index, zone, raw)
+              }
+            }
+          } else if (raw.startsWith("session:")) {
+            const sId = raw.replace("session:", "")
+            onSplitSession(index, zone, sId)
+          } else if (raw.startsWith("kind:")) {
+            onSplitSession(index, zone, raw)
+          } else {
+            // Archivo arrastrado
+            onOpenFile?.(raw, index, zone)
+          }
         }
       }}
     >
@@ -269,7 +284,7 @@ const ShellPanelCell = memo(function ShellPanelCell({
       >
         ×
       </button>
-      <ShellPanel kind={kind} cwd={cwd} sessionID={sessionID} onOpenSessionDir={onOpenSessionDir} />
+      <ShellPanel kind={kind} cwd={cwd} sessionID={sessionID} onOpenSessionDir={onOpenSessionDir} onOpenFile={(p) => onOpenFile?.(p, index, "center")} />
     </div>
   )
 })
@@ -1026,6 +1041,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setCommands, setRuntimeError, images)
     if (result === "help") { setHelpPage("commands"); navigate("help") }
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
+    return typeof result === "boolean" ? result : true
   }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker])
 
   const handleRegenerate = useCallback(async () => {
@@ -1123,18 +1139,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   useEffect(() => {
     const ZOOM_KEY = "opencode.mobile.ui_zoom"
     const saved = localStorage.getItem(ZOOM_KEY)
-    let currentZoom = saved ? Math.min(2.5, Math.max(0.5, parseFloat(saved))) : 1
-    if (currentZoom !== 1 && !isNaN(currentZoom)) {
-      (document.documentElement.style as any).zoom = `${currentZoom}`
+    let currentZoom = saved ? Math.min(2.0, Math.max(0.7, parseFloat(saved))) : 1
+
+    const applyZoom = (z: number) => {
+      // Limpiar cualquier propiedad zoom antigua que desborde el viewport
+      try { (document.documentElement.style as any).zoom = "" } catch {}
+      const basePx = Math.round(16 * z * 10) / 10
+      document.documentElement.style.fontSize = `${basePx}px`
+      document.documentElement.style.setProperty("--ui-scale", `${z}`)
     }
+
+    applyZoom(currentZoom)
 
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
         const delta = e.deltaY < 0 ? 0.05 : -0.05
-        currentZoom = Math.min(2.5, Math.max(0.5, Math.round((currentZoom + delta) * 100) / 100))
+        currentZoom = Math.min(2.0, Math.max(0.7, Math.round((currentZoom + delta) * 100) / 100))
         if (Math.abs(currentZoom - 1) < 0.02) currentZoom = 1
-        ;(document.documentElement.style as any).zoom = `${currentZoom}`
+        applyZoom(currentZoom)
         localStorage.setItem(ZOOM_KEY, String(currentZoom))
       }
     }
@@ -1143,18 +1166,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "=" || e.key === "+") {
           e.preventDefault()
-          currentZoom = Math.min(2.5, Math.round((currentZoom + 0.1) * 10) / 10)
-          ;(document.documentElement.style as any).zoom = `${currentZoom}`
+          currentZoom = Math.min(2.0, Math.round((currentZoom + 0.1) * 10) / 10)
+          applyZoom(currentZoom)
           localStorage.setItem(ZOOM_KEY, String(currentZoom))
         } else if (e.key === "-") {
           e.preventDefault()
-          currentZoom = Math.max(0.5, Math.round((currentZoom - 0.1) * 10) / 10)
-          ;(document.documentElement.style as any).zoom = `${currentZoom}`
+          currentZoom = Math.max(0.7, Math.round((currentZoom - 0.1) * 10) / 10)
+          applyZoom(currentZoom)
           localStorage.setItem(ZOOM_KEY, String(currentZoom))
         } else if (e.key === "0") {
           e.preventDefault()
           currentZoom = 1
-          ;(document.documentElement.style as any).zoom = "1"
+          applyZoom(1)
           localStorage.setItem(ZOOM_KEY, "1")
         }
       }
@@ -1847,6 +1870,148 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     </>
   )
 
+  const handleOpenFile = useCallback((filePath: string, targetIndex?: number, zone?: "left" | "right" | "top" | "bottom" | "center") => {
+    if (!isDesktop) {
+      setFileEditorPath(filePath)
+      return
+    }
+
+    setDesktopLayout((prev) => {
+      // 1. Si se especificó targetIndex y zone:
+      if (targetIndex != null && zone) {
+        if (zone === "center") {
+          const panelKinds = [...prev.panelKinds]
+          panelKinds[targetIndex] = "editor"
+          const panelEditorPaths = { ...prev.panelEditorPaths, [targetIndex]: filePath }
+          return { ...prev, panelKinds, panelEditorPaths }
+        }
+        if (zone === "left") {
+          const cols = prev.cols + 1
+          const col = targetIndex % prev.cols
+          const sessions: Array<string | null> = []
+          const panelKinds: Array<ShellPanelKind | "editor"> = []
+          const panelEditorPaths: Record<number, string> = {}
+          for (let r = 0; r < prev.rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              if (c < col) {
+                const oldIdx = r * prev.cols + c
+                sessions.push(prev.sessions[oldIdx] ?? null)
+                panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+                if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
+              } else if (c === col) {
+                sessions.push(null)
+                panelKinds.push("editor")
+                panelEditorPaths[sessions.length - 1] = filePath
+              } else {
+                const oldIdx = r * prev.cols + (c - 1)
+                sessions.push(prev.sessions[oldIdx] ?? null)
+                panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+                if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
+              }
+            }
+          }
+          return { ...prev, cols, sessions, panelKinds, panelEditorPaths, colSizes: new Array(cols).fill(null) }
+        }
+      }
+
+      // 2. Si ya hay un editor abierto, actualizar su ruta
+      const existingEditorIdx = prev.panelKinds.indexOf("editor")
+      if (existingEditorIdx >= 0) {
+        return {
+          ...prev,
+          panelEditorPaths: {
+            ...prev.panelEditorPaths,
+            [existingEditorIdx]: filePath,
+          }
+        }
+      }
+
+      // 3. Si tenemos 1 solo panel (el chat), colocar editor a la izquierda (col 0) y chat a la derecha (col 1)
+      if (prev.cols === 1 && prev.rows === 1) {
+        const curSessionId = prev.sessions[0] ?? selectedSession?.id ?? null
+        return {
+          ...prev,
+          cols: 2,
+          rows: 1,
+          colSizes: [null, null],
+          rowSizes: [null],
+          panelKinds: ["editor", "session"],
+          sessions: [null, curSessionId],
+          panelEditorPaths: { 0: filePath },
+        }
+      }
+
+      // 4. Si tenemos Explorador en col 0 y Chat en col 1 (2 cols):
+      // Col 0: Explorador | Col 1: Editor (centro) | Col 2: Chat (derecha)
+      const explorerIdx = prev.panelKinds.indexOf("explorer")
+      const chatIdx = prev.panelKinds.indexOf("session")
+      if (explorerIdx === 0 && chatIdx === 1 && prev.cols === 2) {
+        const curSessionId = prev.sessions[1] ?? selectedSession?.id ?? null
+        return {
+          ...prev,
+          cols: 3,
+          rows: 1,
+          colSizes: [null, null, null],
+          rowSizes: [null],
+          panelKinds: ["explorer", "editor", "session"],
+          sessions: [null, null, curSessionId],
+          panelEditorPaths: { 1: filePath },
+        }
+      }
+
+      // 5. Si hay un panel activo que no sea el chat, abrir el editor allí
+      const activeKind = prev.panelKinds[activePanel]
+      if (activeKind !== "session") {
+        const panelKinds = [...prev.panelKinds]
+        panelKinds[activePanel] = "editor"
+        return {
+          ...prev,
+          panelKinds,
+          panelEditorPaths: {
+            ...prev.panelEditorPaths,
+            [activePanel]: filePath,
+          }
+        }
+      }
+
+      // 6. Colocar editor en posición activa a la izquierda del chat
+      const cols = prev.cols + 1
+      const col = activePanel % prev.cols
+      const sessions: Array<string | null> = []
+      const panelKinds: Array<ShellPanelKind | "editor"> = []
+      const panelEditorPaths: Record<number, string> = {}
+
+      for (let r = 0; r < prev.rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (c < col) {
+            const oldIdx = r * prev.cols + c
+            sessions.push(prev.sessions[oldIdx] ?? null)
+            panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+            if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
+          } else if (c === col) {
+            sessions.push(null)
+            panelKinds.push("editor")
+            panelEditorPaths[sessions.length - 1] = filePath
+          } else {
+            const oldIdx = r * prev.cols + (c - 1)
+            sessions.push(prev.sessions[oldIdx] ?? null)
+            panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+            if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
+          }
+        }
+      }
+
+      return {
+        ...prev,
+        cols,
+        sessions,
+        panelKinds,
+        panelEditorPaths,
+        colSizes: new Array(cols).fill(null),
+      }
+    })
+  }, [isDesktop, selectedSession?.id, activePanel])
+
   // Memoizado: un objeto literal por render re-renderiza todo el árbol del
   // chat (SessionChatPanel/ChatView) con cada setState global.
   const baseChatProps: ChatViewProps = useMemo(() => ({
@@ -1884,7 +2049,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     onOpenSession: handleOpenSession,
     readingMode, onToggleReadingMode: () => setReadingMode((v) => !v),
     onExportChat: handleExportChat, onExportMarkdown: handleExportMarkdown, onSnapshot: handleSnapshot,
-    onEditFile: (file) => setFileEditorPath(file),
+    onEditFile: (file) => handleOpenFile(file),
     onOpenSettings: () => navigate("settings"),
     onThemeCommand: () => setShowThemePicker(true),
     config,
@@ -2232,7 +2397,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onShellExecute={shellExecute}
                       onChangeAgentGlobal={changeAgent}
                       onOpenInThisPanel={(id) => openInPanel(i, id)}
-                      onSwapPanels={handleSwapPanels} />
+                      onSwapPanels={handleSwapPanels}
+                      onOpenFile={handleOpenFile} />
                   </div>
                 )
               }
@@ -2262,6 +2428,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     onOpenSessionDir={openSessionInDir}
                     onSplitSession={handleDockSession}
                     onSwapPanels={handleSwapPanels}
+                    onOpenFile={handleOpenFile}
                   />
                 </div>
               )
@@ -2306,7 +2473,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onShellExecute={shellExecute}
                       onChangeAgentGlobal={changeAgent}
                       onOpenInThisPanel={(id) => openInPanel(maximizedIndex, id)}
-                      onSwapPanels={handleSwapPanels} />
+                      onSwapPanels={handleSwapPanels}
+                      onOpenFile={handleOpenFile} />
                   </div>
                 ) : (
                   <div className="desktop-grid" ref={gridRef}

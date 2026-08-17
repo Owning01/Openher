@@ -158,7 +158,34 @@ function remarkHighlight(query?: string) {
   }
 }
 
-const components = { table: Table, a: Link }
+function InlineCode({ className, children, ...props }: ComponentProps<"code">) {
+  const isBlock = Boolean(className && (className.includes("hljs") || className.includes("language-")))
+  if (isBlock) {
+    return <code className={className} {...props}>{children}</code>
+  }
+  return (
+    <code
+      style={{
+        background: "transparent",
+        backgroundColor: "transparent",
+        border: "none",
+        borderRadius: "0",
+        boxShadow: "none",
+        padding: "0",
+        margin: "0",
+        color: "var(--md-code, var(--success, #4ade80))",
+        fontFamily: "var(--font-mono, monospace)",
+        fontSize: "0.88em",
+        fontWeight: 500,
+      }}
+      {...props}
+    >
+      {children}
+    </code>
+  )
+}
+
+const components = { table: Table, a: Link, code: InlineCode }
 
 // Caché del árbol renderizado por (texto, highlight): reusar el elemento evita
 // re-parsear react-markdown + lowlight en re-renders sin cambio de texto

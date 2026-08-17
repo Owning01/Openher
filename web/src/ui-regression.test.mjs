@@ -177,8 +177,11 @@ assert.ok(app.includes('handleRestartHost') && app.includes("shutdown /r /t 10")
 assert.ok(app.includes("shutdown /s /t 0"), 'host shutdown should still run through the server shell')
 
 // Envío: una falla de confirmación/refresh NO debe parecer una falla de envío
-assert.ok(useMessages.includes('let sendFailed = false'), 'send flow should track whether the POST itself failed')
-assert.ok(useMessages.includes('!confirmed && sendFailed'), 'optimistic message should only be rolled back when the send truly failed')
+assert.ok(useMessages.includes('let ok = false'), 'send flow should track whether the POST itself succeeded')
+assert.ok(useMessages.includes('ok = true'), 'send flow should mark success only after the POST resolves')
+assert.ok(useMessages.includes('if (ok)'), 'confirmation loop should only run after a successful POST')
+assert.ok(useMessages.includes('return ok'), 'send flow should return the POST success boolean')
+assert.ok(useMessages.includes('removeOptimistic(optimisticMessage.info.id)'), 'optimistic message should be rolled back when the send truly failed')
 assert.ok(!chatView.includes('shutdown /r'), 'chat overflow should not duplicate the host restart (it lives in Settings extras)')
 
 // Cola de prompts ELIMINADA por completo: el envío es directo y el server

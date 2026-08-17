@@ -16,11 +16,12 @@
   font-style: italic;
 }
 .thinking-text code {
-  color: var(--md-code);
-  background: var(--surface-strong);
-  padding: 0.05rem 0.3rem;
-  border-radius: 0.2rem;
-  font-size: 0.76rem;
+  color: var(--md-code, var(--success, #4ade80));
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  font-size: 0.8em;
   font-style: normal;
 }
 .thinking-text u {
@@ -704,10 +705,10 @@
   border-radius: var(--chat-bubble-radius, 12px);
 }
 
-/* Modo plan: la caja del mensaje y el indicador de modo usan el color del plan */
+/* Modo plan: solo color de texto en el indicador de modo, sin borde de color */
 .message.user[data-mode="plan"] {
-  background: var(--chat-user-bubble-bg, var(--warning-soft));
-  border-left: 3px solid var(--chat-accent, var(--warning));
+  background: var(--chat-user-bubble-bg, var(--surface));
+  border: 1px solid var(--border);
 }
 
 .message[data-mode="plan"] .msg-footer-mode {
@@ -801,13 +802,24 @@
   color: var(--danger);
 }
 
-.message-content code {
-  background: transparent;
-  color: var(--md-code);
-  font-weight: 500;
-  font-size: 0.82rem;
-  padding: 0;
-  border-radius: 0;
+.message code:not(pre code),
+.message-content code:not(pre code),
+.message-content p code,
+.message-content li code,
+.message-content span code,
+.message-content a code,
+.thinking-text code,
+.inline-code-clean {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: var(--md-code, #4ade80) !important;
+  font-family: var(--font-mono, monospace) !important;
+  font-weight: 500 !important;
 }
 
 
@@ -1201,10 +1213,19 @@
   }
 }
 
-.message code,
+.message code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.88em;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--md-code, var(--success, #4ade80));
+}
+
 .help code,
 .command-name {
-  font-family: var(--font-mono);
+  font-family: var(--font-mono, monospace);
   font-size: 0.88em;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);

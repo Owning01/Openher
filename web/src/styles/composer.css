@@ -180,16 +180,20 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-1);
-  border: 1px solid var(--border);
+  border: none !important;
   border-radius: var(--radius-sm);
-  background: transparent;
+  background: transparent !important;
   color: var(--text);
   font-weight: 700;
-  font-size: 0.72rem;
-  padding: 0.15rem 0.45rem;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.35rem;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
   white-space: nowrap;
+}
+
+.agent-toggle:hover:not(:disabled) {
+  border-color: transparent !important;
+  background: rgba(128, 128, 128, 0.08) !important;
 }
 
 /* ===== Composer: snippets + contador ===== */
