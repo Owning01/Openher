@@ -9,24 +9,37 @@ import { GridSpinner } from "./GridSpinner"
 // Sin fondo de estado: el pill muestra busy/retry cuando corresponde, y la
 // sesión idle no lleva ninguna marca visual.
 export const QuickAccessCard = memo(function QuickAccessCard({
-  session, isFavorite, onOpen, onToggleFavorite, onDismiss, children,
+  session, isFavorite, onOpen, onToggleFavorite, onDismiss, onDragStartSession, children,
 }: {
   session: SessionView
   isFavorite: boolean
   onOpen: (id: string, directory: string) => void
   onToggleFavorite: (id: string) => void
   onDismiss?: (id: string) => void
+  onDragStartSession?: (id: string, directory: string) => void
   children?: ReactNode
 }) {
   const t = useT()
   return (
-    <div className="quick-access-card" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}
+    <div
+      className="quick-access-card"
+      onClick={() => onOpen(session.id, session.directory)}
+      role="button"
+      tabIndex={0}
+      draggable={!!onDragStartSession}
+      onDragStart={(e) => {
+        if (!onDragStartSession) return
+        e.dataTransfer.setData("text/plain", `session:${session.id}`)
+        e.dataTransfer.effectAllowed = "move"
+        onDragStartSession(session.id, session.directory)
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()
           onOpen(session.id, session.directory)
         }
-      }}>
+      }}
+    >
       {children}
       <button className="quick-access-star"
         onClick={(e) => { e.stopPropagation(); onToggleFavorite(session.id) }}

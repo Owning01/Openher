@@ -9,10 +9,13 @@ import "@xterm/xterm/css/xterm.css"
 import { FolderIcon, RefreshIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type ShellPanelKind } from "../shell"
 import { useT } from "../i18n-context"
+import { Markdown } from "./Markdown"
 
 // ============================================================== Terminal
 
-export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { cwd?: string; shellName?: string }) {
+// ============================================================== Terminal (Multi-Pestaña)
+
+const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: string; shellName?: string }) {
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -42,6 +45,22 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { c
     } catch {
       /* renderer DOM por defecto si no hay soporte WebGL */
     }
+
+    term.attachCustomKeyEventHandler((e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "c" && term.hasSelection()) {
+        if (e.type === "keydown") {
+          navigator.clipboard.writeText(term.getSelection())
+        }
+        return false
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "v" && e.type === "keydown") {
+        navigator.clipboard.readText().then((text) => {
+          if (text) term.paste(text)
+        }).catch(() => {})
+        return false
+      }
+      return true
+    })
 
     try {
       fit.fit()
@@ -120,13 +139,18 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { c
       }
     })
 
+    let resizeTimer = 0
     const ro = new ResizeObserver(() => {
-      try {
-        fit.fit()
-        sendResize()
-      } catch {
-        /* ignore */
-      }
+      window.clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(() => {
+        if (disposed) return
+        try {
+          fit.fit()
+          sendResize()
+        } catch {
+          /* ignore */
+        }
+      }, 30)
     })
     ro.observe(el)
     window.setTimeout(() => {
@@ -136,11 +160,12 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { c
       } catch {
         /* ignore */
       }
-    }, 400)
+    }, 150)
 
     return () => {
       disposed = true
       window.clearTimeout(pollTimer)
+      window.clearTimeout(resizeTimer)
       ro.disconnect()
       onData.dispose()
       try {
@@ -153,7 +178,98 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { c
     }
   }, [cwd, shellName])
 
-  return <div className="shell-terminal" ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6 }} />
+  return <div ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6 }} />
+})
+
+export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { cwd?: string; shellName?: string }) {
+  const [termTabs, setTermTabs] = useState<Array<{ id: string; title: string }>>([
+    { id: "term-1", title: "Terminal 1" },
+  ])
+  const [activeTabId, setActiveTabId] = useState<string>("term-1")
+
+  const handleAddTab = () => {
+    const nextNum = termTabs.length + 1
+    const newId = `term-${Date.now()}`
+    setTermTabs((prev) => [...prev, { id: newId, title: `Terminal ${nextNum}` }])
+    setActiveTabId(newId)
+  }
+
+  const handleCloseTab = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (termTabs.length <= 1) return
+    const nextTabs = termTabs.filter((t) => t.id !== id)
+    setTermTabs(nextTabs)
+    if (activeTabId === id) {
+      setActiveTabId(nextTabs[nextTabs.length - 1].id)
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#0d1117" }}>
+      {/* Barra de pestañas de Terminal */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#161b22", borderBottom: "1px solid #30363d", padding: "0 4px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "2px", overflowX: "auto" }}>
+          {termTabs.map((tab) => {
+            const isActive = tab.id === activeTabId
+            return (
+              <div
+                key={tab.id}
+                onClick={() => setActiveTabId(tab.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "4px 10px",
+                  fontSize: "0.78rem",
+                  cursor: "pointer",
+                  color: isActive ? "#58a6ff" : "#8b949e",
+                  background: isActive ? "#0d1117" : "transparent",
+                  borderBottom: isActive ? "2px solid #58a6ff" : "2px solid transparent",
+                  fontWeight: isActive ? 600 : 400,
+                }}
+              >
+                <span>&gt;_</span>
+                <span>{tab.title}</span>
+                {termTabs.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleCloseTab(tab.id, e)}
+                    style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: "0 2px", fontSize: "11px", opacity: 0.7 }}
+                    title="Cerrar terminal"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )
+          })}
+          <button
+            type="button"
+            onClick={handleAddTab}
+            style={{ background: "none", border: "none", color: "#8b949e", cursor: "pointer", padding: "4px 8px", fontSize: "14px", fontWeight: 700 }}
+            title="Nueva pestaña de terminal"
+          >
+            +
+          </button>
+        </div>
+      </div>
+      {/* Contenedor de la terminal activa */}
+      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+        {termTabs.map((tab) => (
+          <div
+            key={tab.id}
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: tab.id === activeTabId ? "block" : "none",
+            }}
+          >
+            {tab.id === activeTabId && <SingleTerminal cwd={cwd} shellName={shellName} />}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 })
 
 // ============================================================== Explorador
@@ -650,6 +766,9 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   const [activeTab, setActiveTab] = useState<string>(initialPath || "")
   const [filesState, setFilesState] = useState<Record<string, { content: string; dirty: boolean; loading: boolean; error: string | null }>>({})
   const [saving, setSaving] = useState(false)
+  const [mdViewMode, setMdViewMode] = useState<"edit" | "preview" | "split">("split")
+
+  const isMarkdown = /\.(md|markdown|mdown|mkd)$/i.test(activeTab)
 
   // Si cambia la prop inicial desde fuera (ej: clic en otro archivo)
   useEffect(() => {
@@ -728,6 +847,9 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   }
 
   const relPath = initialCwd && activeTab.startsWith(initialCwd) ? activeTab.slice(initialCwd.length).replace(/^[/\\]+/, "") : activeTab
+  const lineCount = activeFile?.content ? activeFile.content.split("\n").length : 0
+  const charCount = activeFile?.content ? activeFile.content.length : 0
+  const ext = (activeTab.split(".").pop() || "").toLowerCase()
 
   return (
     <div className="file-editor-panel" style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
@@ -776,6 +898,37 @@ export const FileEditorPanel = memo(function FileEditorPanel({
           })}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "0 6px" }}>
+          {isMarkdown && (
+            <div style={{ display: "inline-flex", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
+              <button
+                type="button"
+                className={`btn-icon compact${mdViewMode === "edit" ? " active" : ""}`}
+                style={{ borderRadius: 0, padding: "2px 6px", fontSize: "12px", border: "none", background: mdViewMode === "edit" ? "var(--primary-soft)" : "transparent", color: mdViewMode === "edit" ? "var(--primary)" : "var(--muted)" }}
+                onClick={() => setMdViewMode("edit")}
+                title="Editor de código"
+              >
+                ✏️ Editar
+              </button>
+              <button
+                type="button"
+                className={`btn-icon compact${mdViewMode === "split" ? " active" : ""}`}
+                style={{ borderRadius: 0, padding: "2px 6px", fontSize: "12px", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)", borderTop: "none", borderBottom: "none", background: mdViewMode === "split" ? "var(--primary-soft)" : "transparent", color: mdViewMode === "split" ? "var(--primary)" : "var(--muted)" }}
+                onClick={() => setMdViewMode("split")}
+                title="Vista dividida (Editor + Vista previa)"
+              >
+                ◫ Dividido
+              </button>
+              <button
+                type="button"
+                className={`btn-icon compact${mdViewMode === "preview" ? " active" : ""}`}
+                style={{ borderRadius: 0, padding: "2px 6px", fontSize: "12px", border: "none", background: mdViewMode === "preview" ? "var(--primary-soft)" : "transparent", color: mdViewMode === "preview" ? "var(--primary)" : "var(--muted)" }}
+                onClick={() => setMdViewMode("preview")}
+                title="Vista previa renderizada"
+              >
+                👁️ Vista previa
+              </button>
+            </div>
+          )}
           {activeFile?.dirty && (
             <button type="button" className="btn-primary compact" onClick={handleSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
@@ -789,15 +942,67 @@ export const FileEditorPanel = memo(function FileEditorPanel({
         </div>
       </div>
 
-      {/* Cuerpo del editor de código */}
-      <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "2px 10px", fontSize: "0.72rem", color: "var(--muted)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)" }}>
-          {relPath}
+      {/* Barra de información del archivo */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 10px", fontSize: "0.72rem", color: "var(--muted)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)" }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{relPath}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+          {ext && <span style={{ textTransform: "uppercase", fontWeight: 700, color: "var(--primary)" }}>{ext}</span>}
+          <span>{lineCount} líneas</span>
+          <span>{charCount} caracs</span>
+          <kbd style={{ fontSize: "0.68rem", opacity: 0.8 }}>Ctrl+S</kbd>
         </div>
+      </div>
+
+      {/* Cuerpo del editor de código / Markdown */}
+      <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex" }}>
         {activeFile?.loading ? (
           <div style={{ padding: 16, color: "var(--muted)" }}>Cargando archivo...</div>
         ) : activeFile?.error ? (
           <div style={{ padding: 16, color: "var(--danger)" }}>{activeFile.error}</div>
+        ) : isMarkdown && mdViewMode === "preview" ? (
+          <div className="markdown-body message-content" style={{ flex: 1, padding: "16px 24px", overflowY: "auto", background: "var(--surface)" }}>
+            <Markdown text={activeFile?.content ?? ""} />
+          </div>
+        ) : isMarkdown && mdViewMode === "split" ? (
+          <div style={{ flex: 1, display: "flex", minHeight: 0, width: "100%" }}>
+            <div style={{ flex: 1, minWidth: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+              <textarea
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  boxSizing: "border-box",
+                  border: "none",
+                  outline: "none",
+                  resize: "none",
+                  background: "var(--surface)",
+                  color: "var(--text)",
+                  fontFamily: "Consolas, 'Cascadia Mono', monospace",
+                  fontSize: "13px",
+                  lineHeight: 1.5,
+                  padding: "10px",
+                  tabSize: 2,
+                }}
+                value={activeFile?.content ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setFilesState((prev) => ({
+                    ...prev,
+                    [activeTab]: { ...(prev[activeTab] || { loading: false, error: null }), content: val, dirty: true },
+                  }))
+                }}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+                    e.preventDefault()
+                    handleSave()
+                  }
+                }}
+                spellCheck={false}
+              />
+            </div>
+            <div className="markdown-body message-content" style={{ flex: 1, minWidth: 0, padding: "16px 20px", overflowY: "auto", background: "var(--surface-subtle)" }}>
+              <Markdown text={activeFile?.content ?? ""} />
+            </div>
+          </div>
         ) : (
           <textarea
             style={{

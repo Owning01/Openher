@@ -525,6 +525,23 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
             }
             onChange(event.target.value)
           }}
+          onPaste={(e) => {
+            const items = e.clipboardData?.items
+            if (!items) return
+            for (const item of Array.from(items)) {
+              if (item.type.startsWith("image/")) {
+                e.preventDefault()
+                const blob = item.getAsFile()
+                if (!blob) continue
+                const reader = new FileReader()
+                reader.onload = () => {
+                  if (typeof reader.result === "string") addImage(reader.result, blob.type, blob.name || "clipboard.png")
+                }
+                reader.readAsDataURL(blob)
+                return
+              }
+            }
+          }}
           aria-label={t('composer.inputLabel')}
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}

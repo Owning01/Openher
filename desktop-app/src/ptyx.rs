@@ -298,8 +298,11 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
     let _ = stream.set_read_timeout(None);
     let _ = stream.set_write_timeout(None);
 
-    // Socket compartido (reader escribe pongs; writer el output).
-    let sock = Arc::new(Mutex::new(stream));
+    let mut read_stream = match stream.try_clone() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let write_sock = Arc::new(Mutex::new(stream));
     // Estado: el pty adjuntado + condvar para avisar al writer.
     let conn = Arc::new(WsConn {
         pty: Mutex::new(None),
@@ -308,7 +311,7 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
 
     // Writer: stream del output (bloquea en el condvar de datos).
     {
-        let sock = sock.clone();
+        let write_sock = write_sock.clone();
         let conn = conn.clone();
         std::thread::Builder::new()
             .name("pty-ws-writer".into())
@@ -324,7 +327,7 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                             let (g, _) = match conn.attached.wait_timeout(p, Duration::from_millis(500)) { Ok(r) => r, Err(_) => return };
                             p = g;
                             // Si la conexión murió, salir.
-                            if sock.lock().map(|s| s.peer_addr().is_err()).unwrap_or(true) {
+                            if write_sock.lock().map(|s| s.peer_addr().is_err()).unwrap_or(true) {
                                 return;
                             }
                         }
@@ -334,7 +337,7 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                         let delta = data[consumed..].to_vec();
                         consumed = data.len();
                         drop(data);
-                        if ws_write_locked(&sock, 0x2, &delta).is_err() {
+                        if ws_write_locked(&write_sock, 0x2, &delta).is_err() {
                             return;
                         }
                         continue;
@@ -357,7 +360,7 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
     loop {
         frame.clear();
         let mut hdr = [0u8; 2];
-        match read_exact_or(&mut sock.lock().unwrap_or_else(|e| e.into_inner()), &mut hdr) {
+        match read_exact_or(&mut read_stream, &mut hdr) {
             Ok(true) => {}
             _ => return,
         }
@@ -366,13 +369,13 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
         let mut len = (hdr[1] & 0x7F) as u64;
         if len == 126 {
             let mut b = [0u8; 2];
-            if !read_exact_or(&mut sock.lock().unwrap_or_else(|e| e.into_inner()), &mut b).unwrap_or(false) {
+            if !read_exact_or(&mut read_stream, &mut b).unwrap_or(false) {
                 return;
             }
             len = u16::from_be_bytes(b) as u64;
         } else if len == 127 {
             let mut b = [0u8; 8];
-            if !read_exact_or(&mut sock.lock().unwrap_or_else(|e| e.into_inner()), &mut b).unwrap_or(false) {
+            if !read_exact_or(&mut read_stream, &mut b).unwrap_or(false) {
                 return;
             }
             len = u64::from_be_bytes(b);
@@ -381,11 +384,11 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
             return;
         }
         let mut mask = [0u8; 4];
-        if masked && !read_exact_or(&mut sock.lock().unwrap_or_else(|e| e.into_inner()), &mut mask).unwrap_or(false) {
+        if masked && !read_exact_or(&mut read_stream, &mut mask).unwrap_or(false) {
             return;
         }
         let mut payload = vec![0u8; len as usize];
-        if len > 0 && !read_exact_or(&mut sock.lock().unwrap_or_else(|e| e.into_inner()), &mut payload).unwrap_or(false) {
+        if len > 0 && !read_exact_or(&mut read_stream, &mut payload).unwrap_or(false) {
             return;
         }
         if masked {
@@ -397,7 +400,7 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
         match opcode {
             0x8 => return, // close
             0x9 => {
-                let _ = ws_write_locked(&sock, 0xA, &payload); // ping -> pong
+                let _ = ws_write_locked(&write_sock, 0xA, &payload); // ping -> pong
             }
             0x1 | 0x2 => {
                 let text = String::from_utf8_lossy(&payload).to_string();

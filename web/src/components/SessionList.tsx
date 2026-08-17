@@ -332,7 +332,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
             <div className="quick-access-list" id="quick-favorites" role="tabpanel" ref={favoritesListRef}>
               {favoriteSessions.slice(0, favoritesLimit).map((session) => (
                 <QuickAccessCard key={session.id} session={session} isFavorite
-                  onOpen={onOpen} onToggleFavorite={onToggleFavorite} />
+                  onOpen={onOpen} onToggleFavorite={onToggleFavorite}
+                  onDragStartSession={onDragStartSession} />
               ))}
               {favoritesLimit < favoriteSessions.length && (
                 <div ref={favoritesSentinelRef} className="recent-sentinel" aria-hidden="true" />
@@ -344,7 +345,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
               {activeSessions.map((session) => (
                 <QuickAccessCard key={session.id} session={session}
                   isFavorite={favorites.has(session.id)}
-                  onOpen={onOpen} onToggleFavorite={onToggleFavorite} />
+                  onOpen={onOpen} onToggleFavorite={onToggleFavorite}
+                  onDragStartSession={onDragStartSession} />
               ))}
             </div>
           )}
@@ -365,7 +367,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                   <QuickAccessCard key={session.id} session={session}
                     isFavorite={favorites.has(session.id)}
                     onOpen={onOpen} onToggleFavorite={onToggleFavorite}
-                    onDismiss={(id) => setConfirmingDismissId(id)} />
+                    onDismiss={(id) => setConfirmingDismissId(id)}
+                    onDragStartSession={onDragStartSession} />
                 )
               ))}
               {recentLimit < recentFiltered.length && (

@@ -21,9 +21,9 @@ type Props = {
   panelIndex: number
   onActivate: () => void
   onClose: () => void
-  /** Soltar una sesión (arrastrada desde la lista) sobre este panel: splitea
-      a la izquierda o derecha según la mitad donde se suelte. */
-  onSplitSession: (index: number, dir: "left" | "right") => void
+  /** Soltar una sesión (arrastrada desde la lista o desde otro panel) sobre este panel:
+      acopla a izquierda, derecha, arriba, abajo o centro. */
+  onSplitSession: (index: number, dir: "left" | "right" | "top" | "bottom" | "center", specificId?: string) => void
   onSettled: (sessionID: string, directory: string) => void
   onRefreshSessions: () => Promise<void> | void
   onSetCommands: (commands: CommandInfo[]) => void
@@ -293,31 +293,97 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     onChangeAgentGlobal, onOpenInThisPanel,
   ])
 
+  const [dropZone, setDropZone] = useState<"left" | "right" | "top" | "bottom" | "center" | null>(null)
+
+  const calcDropZone = (e: React.DragEvent<HTMLDivElement>): "left" | "right" | "top" | "bottom" | "center" => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const w = rect.width
+    const h = rect.height
+    if (y < h * 0.2) return "top"
+    if (y > h * 0.8) return "bottom"
+    if (x < w * 0.25) return "left"
+    if (x > w * 0.75) return "right"
+    return "center"
+  }
+
   return (
-    <div className={`session-panel${active ? " active" : ""}`} onClick={onActivate}
-      onDragOver={(e) => e.preventDefault()}
+    <div
+      className={`session-panel${active ? " active" : ""}`}
+      onClick={onActivate}
+      style={{ position: "relative" }}
+      onDragOver={(e) => {
+        e.preventDefault()
+        const zone = calcDropZone(e)
+        setDropZone(zone)
+      }}
+      onDragLeave={() => setDropZone(null)}
       onDrop={(e) => {
         e.preventDefault()
-        // Autodetección del lado: mitad izquierda → split a la izquierda,
-        // mitad derecha → split a la derecha.
-        const rect = e.currentTarget.getBoundingClientRect()
-        const dir = e.clientX < rect.left + rect.width / 2 ? "left" : "right"
-        onSplitSession(panelIndex, dir)
-      }}>
-      <div className="session-panel-header" draggable
-        onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(panelIndex)); e.dataTransfer.effectAllowed = "move" }}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault(); e.stopPropagation()
-          const raw = e.dataTransfer.getData("text/plain")
-          if (/^\d+$/.test(raw)) onSwapPanels(Number(raw), panelIndex)
-        }}>
+        const zone = calcDropZone(e)
+        setDropZone(null)
+        const raw = e.dataTransfer.getData("text/plain")
+        if (/^\d+$/.test(raw) && Number(raw) !== panelIndex) {
+          // Arrastrado desde el header de otro panel
+          const fromIdx = Number(raw)
+          if (zone === "center") {
+            onSwapPanels(fromIdx, panelIndex)
+          } else {
+            onSplitSession(panelIndex, zone, session.id)
+          }
+        } else {
+          onSplitSession(panelIndex, zone)
+        }
+      }}
+    >
+      {dropZone && (
+        <div
+          style={{
+            position: "absolute",
+            zIndex: 100,
+            pointerEvents: "none",
+            background: "rgba(88, 166, 255, 0.25)",
+            border: "2px dashed #58a6ff",
+            borderRadius: "var(--radius-md)",
+            transition: "all 0.1s ease",
+            ...(dropZone === "left"
+              ? { inset: "0 50% 0 0" }
+              : dropZone === "right"
+              ? { inset: "0 0 0 50%" }
+              : dropZone === "top"
+              ? { inset: "0 0 50% 0" }
+              : dropZone === "bottom"
+              ? { inset: "50% 0 0 0" }
+              : { inset: "0" }),
+          }}
+        />
+      )}
+      <div
+        className="session-panel-header"
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", String(panelIndex))
+          e.dataTransfer.effectAllowed = "move"
+        }}
+      >
         <span className="session-panel-title" title={session.directory}>
           {basename(session.directory)}
         </span>
         {busy && !active && <span className="session-panel-busy-dot" title={t('panel.busy')} aria-label={t('panel.busy')} />}
         <span className="session-panel-actions">
-          <button type="button" className="btn-icon compact" title={t('panel.close')} aria-label={t('panel.close')} onClick={(e) => { e.stopPropagation(); onClose() }}>×</button>
+          <button
+            type="button"
+            className="btn-icon compact"
+            title={t('panel.close')}
+            aria-label={t('panel.close')}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
+          >
+            ×
+          </button>
         </span>
       </div>
       <ChatView {...chatProps} />

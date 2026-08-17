@@ -1,97 +1,32 @@
 /* ===== Paneles de la shell (terminal, explorador, kanban, docs, ...) ===== */
 
-.desktop-add-bar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-  padding: 0 var(--space-1);
-}
-
-.desktop-add-label {
-  font-size: 0.9rem;
-  color: var(--muted);
-  margin-right: 2px;
-  user-select: none;
-}
-
-.desktop-add-btn {
+.shell-panel-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10;
   min-height: 0;
-  padding: 2px 7px;
-  font-size: 0.85rem;
-  line-height: 1.4;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--muted);
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.desktop-add-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.shell-panel-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-subtle);
-  flex-shrink: 0;
-  border-top-left-radius: var(--radius-lg);
-  border-top-right-radius: var(--radius-lg);
-}
-
-.shell-tab-pills {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  overflow-x: auto;
-}
-
-.shell-tab-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-}
-
-.shell-tab-pill:hover {
-  background: var(--surface);
-  color: var(--text);
-}
-
-.shell-tab-pill.active {
-  background: var(--surface-strong);
-  color: var(--primary);
-  border-color: var(--border);
-}
-
-.shell-panel-kind {
-  font-size: 0.78rem;
   padding: 2px 6px;
-  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  line-height: 1;
   border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   background: var(--surface);
-  color: var(--text);
-  max-width: 150px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.shell-panel-spacer {
-  flex: 1;
+.desktop-cell:hover .shell-panel-close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.shell-panel-close:hover {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .shell-terminal {
