@@ -1477,3 +1477,66 @@
   }
 }
 
+/* Modal Window for Settings */
+.settings-modal-window {
+  width: 95vw;
+  max-width: 1080px;
+  height: 88vh;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  padding: 0;
+}
+
+.settings-modal-top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--surface-hover, rgba(255, 255, 255, 0.03));
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.settings-modal-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.settings-modal-close {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+.settings-modal-close:hover {
+  background: var(--surface-active);
+  color: var(--text);
+}
+
+.settings-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+

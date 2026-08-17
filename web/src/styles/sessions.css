@@ -525,36 +525,50 @@
 /* ===== Quick Access ===== */
 .quick-access-tabs {
   display: flex;
-  align-items: stretch;
-  border: none;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: transparent;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
   margin-bottom: var(--space-2);
   width: 100%;
+}
+
+.quick-access-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .quick-access-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  flex: 1;
+  gap: 4px;
+  flex: 1 1 auto;
   min-width: 0;
-  padding: 0.45rem 0.5rem;
-  border: none;
-  background: transparent;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle, rgba(255, 255, 255, 0.02));
   color: var(--muted-strong);
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   white-space: nowrap;
   overflow: hidden;
+  flex-shrink: 1;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.quick-access-tab-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .quick-access-tab + .quick-access-tab {
@@ -567,7 +581,8 @@
 }
 
 .quick-access-tab.open {
-  background: transparent;
+  background: var(--surface-hover, rgba(255, 255, 255, 0.05));
+  border-color: var(--border);
   color: var(--primary);
   font-weight: 900;
 }
@@ -575,11 +590,12 @@
 .quick-access-count {
   font-size: 0.68rem;
   font-weight: 800;
-  padding: 0.05rem 0.4rem;
+  padding: 0.05rem 0.35rem;
   border-radius: 999px;
   background: transparent;
   border: none;
   color: var(--muted-strong);
+  flex-shrink: 0;
 }
 
 .quick-access-tab.open .quick-access-count {

@@ -1,7 +1,7 @@
 // Cliente de la API de la shell (/shell/*) + utilidades del explorador.
 // Solo disponible cuando la app la sirve el exe de escritorio (mismo origen).
 
-export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "labs" | "config" | "editor"
+export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor"
 
 export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs"]
 
@@ -91,6 +91,7 @@ export const shell = {
   stats: {
     status: () => get<{ running: boolean; port: number; url: string }>("/shell/stats"),
     start: () => post("/shell/stats/start"),
+    proxy: (path: string) => fetch(`/shell/stats/proxy/${path}`).then((r) => r.json()),
   },
   plugins: {
     list: () => get<{ plugins: ShellPlugin[] }>("/shell/plugins"),

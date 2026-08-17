@@ -195,7 +195,7 @@ export const TerminalView = memo(function TerminalView({
       {/* Terminal Screen Body (WebGL ConPTY con 0ms de lag) */}
       <div className="terminal-screen" style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         {activeTab === "terminal" ? (
-          <TerminalPanel key={`${termKey}-${shell}-${directory}`} cwd={directory} shellName={shell} />
+          <TerminalPanel key={`${termKey}-${shell}-${directory}`} cwd={directory} shellName={shell} hideHeader />
         ) : (
           <div style={{ padding: "16px", color: "#8b949e", fontSize: "12px", fontFamily: "monospace" }}>
             No hay elementos en la vista {activeTab.toUpperCase()}.

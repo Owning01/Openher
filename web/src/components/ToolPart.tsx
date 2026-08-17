@@ -1,12 +1,13 @@
-import { memo, useMemo, useState, type ReactNode } from "react"
+import { memo, useMemo, useState, useEffect, type ReactNode } from "react"
 import type { ServerConfig, FileDiff } from "../types"
 import { toolMeta, detectToolName, isTaskTool, isQuestionTool } from "../utils/toolMeta"
+import { api } from "../api"
 import { QuestionPrompt } from "./QuestionPrompt"
 import { CollapsibleSection } from "./CollapsibleSection"
 import { GridSpinner } from "./GridSpinner"
 import { DiffView, parseDiffStat, synthesizeWritePatch } from "./DiffView"
 import { useT } from "../i18n-context"
-import { CodeIcon, FileIcon, TerminalIcon, GlobeIcon, SearchIcon, ToolIcon } from "../Icons"
+import { CodeIcon, FileIcon, TerminalIcon, GlobeIcon, SearchIcon, ToolIcon, BrainIcon } from "../Icons"
 
 export type ToolPartData = {
   id: string
@@ -96,6 +97,186 @@ function formatInput(input: unknown): string {
   } catch {
     return String(input)
   }
+}
+
+function SubagentTaskCard({
+  part,
+  config,
+  directory,
+  onViewSubagents,
+  isDone,
+  isError,
+  t,
+}: {
+  part: ToolPartData
+  config?: ServerConfig
+  directory?: string
+  onViewSubagents?: (subagentID?: string) => void
+  isDone: boolean
+  isError: boolean
+  t: (key: any, vars?: any) => string
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [subMessages, setSubMessages] = useState<any[]>([])
+  const [loadingMessages, setLoadingMessages] = useState(false)
+
+  const agentType = ((part.state?.input as { subagent_type?: string } | undefined)?.subagent_type
+    ?? extractParam(part.text ?? "", "subagent_type"))
+    || "General"
+  const description = (part.state?.input as { description?: string } | undefined)?.description
+    ?? extractParam(part.text ?? "", "description")
+  const prompt = (part.state?.input as { prompt?: string } | undefined)?.prompt
+    ?? extractParam(part.text ?? "", "prompt")
+  const sessionID = (part.state?.input as { sessionId?: string } | undefined)?.sessionId
+    ?? extractParam(part.text ?? "", "sessionId")
+    ?? part.sessionID
+  const rawOutput = (part.state?.output as string | undefined) ?? getResultText(part.text ?? "")
+
+  const title = agentType.charAt(0).toUpperCase() + agentType.slice(1)
+  const subtitle = description || prompt || undefined
+
+  // Carga mensajes de la sesión del subagente al expandir
+  useEffect(() => {
+    if (!expanded || !config || !sessionID) return
+    let cancelled = false
+    setLoadingMessages(true)
+    api.loadMessages(config, sessionID, directory).then((msgs: any) => {
+      if (cancelled) return
+      setSubMessages(Array.isArray(msgs) ? msgs : [])
+      setLoadingMessages(false)
+    }).catch(() => {
+      if (cancelled) return
+      setLoadingMessages(false)
+    })
+    return () => { cancelled = true }
+  }, [expanded, config, sessionID, directory])
+
+  // Extraer thinking, tools, y respuestas de los mensajes del subagente
+  const parsedItems = useMemo(() => {
+    const items: Array<{ type: "prompt" | "thinking" | "tool" | "message"; title?: string; content: string }> = []
+    
+    if (prompt) {
+      items.push({ type: "prompt", title: "Objetivo / Prompt", content: prompt })
+    }
+
+    if (subMessages.length > 0) {
+      for (const m of subMessages) {
+        if (m.parts && Array.isArray(m.parts)) {
+          for (const p of m.parts) {
+            if (p.type === "reasoning" || p.type === "thinking") {
+              if (p.text?.trim()) {
+                items.push({ type: "thinking", title: "Thinking", content: p.text.trim() })
+              }
+            } else if (p.type === "tool" || p.type.startsWith("tool_") || p.tool) {
+              const tName = p.tool || detectToolName(p.text ?? "") || "action"
+              const tInput = formatInput(p.state?.input ?? extractParam(p.text ?? "", "input"))
+              const tOut = formatInput(p.state?.output ?? extractParam(p.text ?? "", "output") ?? p.text)
+              items.push({
+                type: "tool",
+                title: `${tName.toUpperCase()}`,
+                content: [tInput, tOut].filter(Boolean).join("\n→ "),
+              })
+            } else if (p.type === "text" && p.text?.trim()) {
+              items.push({ type: "message", title: m.info?.role === "user" ? "User" : "Agent", content: p.text.trim() })
+            }
+          }
+        } else if (m.text?.trim()) {
+          items.push({ type: "message", title: m.info?.role === "user" ? "User" : "Agent", content: m.text.trim() })
+        }
+      }
+    } else if (rawOutput && rawOutput !== prompt) {
+      items.push({ type: "message", title: "Resultado", content: rawOutput })
+    }
+
+    return items
+  }, [prompt, subMessages, rawOutput])
+
+  return (
+    <div className={`subagent-task-card${expanded ? " is-expanded" : ""}${isDone ? "" : " working"}`}>
+      <div
+        className="subagent-task-header"
+        onClick={() => setExpanded((v) => !v)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+      >
+        <div className="subagent-task-left">
+          <span className="subagent-task-badge">
+            <ToolIcon size={12} />
+            {title}
+          </span>
+          <span className="subagent-task-title" title={subtitle || title}>
+            {subtitle || title}
+          </span>
+        </div>
+        <div className="subagent-task-right">
+          <span className="subagent-task-status">
+            {isDone ? (
+              isError ? <span style={{ color: "var(--danger)" }}>✗ Error</span> : <span style={{ color: "var(--success)" }}>✓ Completado</span>
+            ) : (
+              <><GridSpinner label={title} size={14} /><span style={{ color: "var(--accent)" }}>En progreso...</span></>
+            )}
+          </span>
+          <span className="subagent-expand-chevron" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: "10px", color: "var(--text-muted)" }}>
+            ▼
+          </span>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="subagent-task-window">
+          {loadingMessages && subMessages.length === 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--muted)", padding: "8px 0" }}>
+              <GridSpinner label="Cargando detalles" size={14} />
+              <span>Cargando acciones y mensajes del subagente...</span>
+            </div>
+          )}
+
+          {parsedItems.map((item, idx) => (
+            <div key={idx} className="subagent-section-block">
+              <div className="subagent-section-title">
+                {item.type === "thinking" && <span style={{ color: "var(--accent)", display: "inline-flex" }}><BrainIcon size={13} /></span>}
+                {item.type === "tool" && <span style={{ color: "var(--primary)", display: "inline-flex" }}><TerminalIcon size={13} /></span>}
+                {item.type === "prompt" && <span style={{ color: "var(--info)", display: "inline-flex" }}><CodeIcon size={13} /></span>}
+                <span>{item.title}</span>
+              </div>
+              {item.type === "thinking" ? (
+                <div className="subagent-thinking-box">{item.content}</div>
+              ) : item.type === "tool" ? (
+                <div className="subagent-action-item">{item.content}</div>
+              ) : (
+                <div style={{ whiteSpace: "pre-wrap", fontSize: "0.8rem", color: "var(--text)" }}>
+                  {item.content}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {parsedItems.length === 0 && !loadingMessages && (
+            <div style={{ color: "var(--muted)", fontStyle: "italic", fontSize: "0.78rem" }}>
+              Sin mensajes adicionales registrados para este subagente.
+            </div>
+          )}
+
+          {sessionID && onViewSubagents && (
+            <div className="subagent-task-footer">
+              <button
+                type="button"
+                className="btn-secondary compact"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onViewSubagents(sessionID)
+                }}
+                title={t('toolpart.viewSubagent') || "Abrir sesión dedicada"}
+              >
+                {t('toolpart.viewSubagent') || "Ver sesión completa →"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function DiffStatBadge({ add, del }: { add: number; del: number }) {
@@ -207,41 +388,16 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
 
   // ---- Task (subagent) tool ----
   if (isTaskTool(text ?? "") || toolName === "task") {
-    const agentType = ((part.state?.input as { subagent_type?: string } | undefined)?.subagent_type
-      ?? extractParam(text ?? "", "subagent_type"))
-      || "General"
-    const description = (part.state?.input as { description?: string } | undefined)?.description
-      ?? extractParam(text ?? "", "description")
-    const sessionID = (part.state?.input as { sessionId?: string } | undefined)?.sessionId
-      ?? extractParam(text ?? "", "sessionId")
-      ?? part.sessionID
-    const isTaskDone = isDone
-    const title = agentType.charAt(0).toUpperCase() + agentType.slice(1)
-    const subtitle = description || undefined
-    // Al terminar, toda la tarjeta navega al subagente (una sola vía, sin
-    // botón separado): el sessionID del part puede no coincidir con el id de
-    // la lista — ChatView cae al primer hijo con parentID.
-    const canView = isTaskDone && !!sessionID && !!onViewSubagents
-
     return (
-      <div className={`tool-part tool-task${isTaskDone ? "" : " working"}${canView ? " clickable" : ""}`}>
-        <button
-          type="button"
-          className="tool-part-toggle"
-          style={canView ? undefined : { cursor: "default" }}
-          onClick={() => { if (canView) onViewSubagents(sessionID) }}
-          disabled={!canView}
-          aria-label={canView ? t('toolpart.viewSubagent') : undefined}
-          title={canView ? t('toolpart.viewSubagent') : undefined}
-        >
-          <span className="tool-part-icon">{isTaskDone ? (isError ? "✗" : "✓") : <GridSpinner label={title} size={16} />}</span>
-          <span className="tool-part-label" style={{ textTransform: "none" }}>
-            <span className="tool-part-subagent-prefix">{t('toolpart.subagent')}:</span> {title}
-            {subtitle ? <span className="tool-part-arg"> · {subtitle}</span> : null}
-          </span>
-          {!isTaskDone && <span className="tool-status-dot" />}
-        </button>
-      </div>
+      <SubagentTaskCard
+        part={part}
+        config={config}
+        directory={directory}
+        onViewSubagents={onViewSubagents}
+        isDone={isDone}
+        isError={isError}
+        t={t}
+      />
     )
   }
 

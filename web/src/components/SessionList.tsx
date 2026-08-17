@@ -305,16 +305,16 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
             {favorites.size > 0 && sessions.some((s) => favorites.has(s.id)) && (
               <button type="button" className={`quick-access-tab${!collapsedSections.favorites ? " open" : ""}`}
                 onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites}
-                aria-controls="quick-favorites" role="tab">
-                {t('favorites.label')}
+                aria-controls="quick-favorites" role="tab" title={t('favorites.label')}>
+                <span className="quick-access-tab-label">{t('favorites.label')}</span>
                 <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}
             {activeSessions.length > 0 && (
               <button type="button" className={`quick-access-tab${!collapsedSections.active ? " open" : ""}`}
                 onClick={() => toggleSection("active")} aria-expanded={!collapsedSections.active}
-                aria-controls="quick-active" role="tab">
-                {t('sessions.activeLabel')}
+                aria-controls="quick-active" role="tab" title={t('sessions.activeLabel')}>
+                <span className="quick-access-tab-label">{t('sessions.activeLabel')}</span>
                 <span className="quick-access-count">{activeSessions.length}</span>
                 <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
@@ -322,8 +322,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
             {recentSessions.length > 0 && (
               <button type="button" className={`quick-access-tab${!collapsedSections.recent ? " open" : ""}`}
                 onClick={() => toggleSection("recent")} aria-expanded={!collapsedSections.recent}
-                aria-controls="quick-recent" role="tab">
-                {t('sessions.recentLabel')}
+                aria-controls="quick-recent" role="tab" title={t('sessions.recentLabel')}>
+                <span className="quick-access-tab-label">{t('sessions.recentLabel')}</span>
                 <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}

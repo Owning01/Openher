@@ -1,5 +1,6 @@
 //! Router de la API /shell/* + estáticos de la web app (mismo origen).
 
+use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -544,6 +545,26 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     if path == "/shell/stats/start" && method == Method::Post {
         crate::statsx::ensure(&state);
         let _ = req.respond(json_ok(&state.stats.status()));
+        return;
+    }
+    // Proxy a opencode-stats: /shell/stats/proxy/* → http://127.0.0.1:8765/api/*
+    if let Some(rest) = path.strip_prefix("/shell/stats/proxy/") {
+        let stats_url = format!("http://127.0.0.1:8765/api/{rest}");
+        match ureq::get(&stats_url).call() {
+            Ok(resp) => {
+                let mut body = Vec::new();
+                resp.into_reader().read_to_end(&mut body).unwrap_or_default();
+                let ct = "application/json";
+                let _ = req.respond(
+                    Response::from_string(String::from_utf8_lossy(&body).to_string())
+                        .with_header(Header::from_bytes("Content-Type", ct).unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap()),
+                );
+            }
+            Err(_) => {
+                let _ = req.respond(json_err(502, "stats server unavailable"));
+            }
+        }
         return;
     }
     // ============================== Plugins + Labs

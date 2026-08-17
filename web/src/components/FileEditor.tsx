@@ -1,5 +1,6 @@
 import { memo, useState, useEffect } from "react"
 import { api } from "../api"
+import { shell } from "../shell"
 import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import { basename } from "../utils"
@@ -22,20 +23,51 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
     let cancelled = false
     setLoading(true)
     setError(null)
-    api.readFile(config, path, directory).then((result) => {
-      if (cancelled) return
-      if (result.type === "binary") {
-        setError("Binary file — cannot display")
-        setLoading(false)
-        return
+
+    const load = async () => {
+      // Si la ruta es absoluta o estamos en desktop, probamos leer vía shell nativo primero
+      if (typeof window !== "undefined" && (window as any).__OPENCODE_DESKTOP__) {
+        try {
+          const r = await shell.fs.read(path)
+          if (!cancelled) {
+            setContent(r.content)
+            setLoading(false)
+            return
+          }
+        } catch {
+          // Si falla shell.fs.read, cae al endpoint del servidor
+        }
       }
-      setContent(result.content)
-      setLoading(false)
-    }).catch((err) => {
-      if (cancelled) return
-      setError(err instanceof Error ? err.message : "Failed to load file")
-      setLoading(false)
-    })
+
+      try {
+        const result = await api.readFile(config, path, directory)
+        if (cancelled) return
+        if (result.type === "binary") {
+          setError("Binary file — cannot display")
+          setLoading(false)
+          return
+        }
+        setContent(result.content)
+        setLoading(false)
+      } catch (err) {
+        if (cancelled) return
+        // Intento de rescate con shell.fs.read si api.readFile falló (por paths absolutos de Windows)
+        try {
+          const r = await shell.fs.read(path)
+          if (!cancelled) {
+            setContent(r.content)
+            setLoading(false)
+            return
+          }
+        } catch {
+          // ignora
+        }
+        setError(err instanceof Error ? err.message : "Failed to load file")
+        setLoading(false)
+      }
+    }
+
+    load()
     return () => { cancelled = true }
   }, [config, path, directory])
 

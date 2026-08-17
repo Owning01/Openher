@@ -198,6 +198,16 @@ export const ADEDiffPanel = memo(function ADEDiffPanel({
           </span>
         </div>
         <div className="ade-diff-header-actions">
+          {fileItems.length > 4 && (
+            <input
+              type="search"
+              className="ade-diff-tab-search"
+              placeholder="Filtrar..."
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              title="Filtrar pestañas"
+            />
+          )}
           <button type="button" className="btn-icon compact" onClick={handleCopyDiff} title={copied ? "Copiado" : "Copiar diff"}>
             {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
           </button>
@@ -207,49 +217,34 @@ export const ADEDiffPanel = memo(function ADEDiffPanel({
         </div>
       </div>
 
-      {/* Body: File list on left/top + Code View on right/center */}
+      {/* Body: Horizontal File Tabs + Full-Width Code Diff */}
       <div className="ade-diff-body">
-        <div className="ade-diff-filelist">
-          <div className="ade-diff-search-wrap">
-            <input
-              type="search"
-              className="ade-diff-search"
-              placeholder="Filtrar archivos..."
-              value={filterQuery}
-              onChange={(e) => setFilterQuery(e.target.value)}
-            />
-          </div>
-          <div className="ade-diff-items">
-            {filteredFiles.map((f) => {
-              const active = f.file === selectedFile
-              const fileName = f.file.split(/[/\\]/).pop() || f.file
-              const dirName = f.file.includes("/") || f.file.includes("\\")
-                ? f.file.slice(0, Math.max(f.file.lastIndexOf("/"), f.file.lastIndexOf("\\")))
-                : ""
-              return (
-                <button
-                  key={f.file}
-                  type="button"
-                  className={`ade-file-item${active ? " active" : ""}`}
-                  onClick={() => setSelectedFile(f.file)}
-                  title={f.file}
-                >
-                  <FileTypeIcon name={f.file} size={15} />
-                  <div className="ade-file-info">
-                    <span className="ade-file-name">{fileName}</span>
-                    {dirName && <span className="ade-file-dir">{dirName}</span>}
-                  </div>
-                  <div className="ade-file-stats">
-                    {f.additions > 0 && <span className="positive">+{f.additions}</span>}
-                    {f.deletions > 0 && <span className="negative">−{f.deletions}</span>}
-                  </div>
-                </button>
-              )
-            })}
-            {filteredFiles.length === 0 && (
-              <div className="ade-diff-empty-files">Sin archivos</div>
-            )}
-          </div>
+        <div className="ade-diff-tabs-bar" role="tablist" aria-label="Archivos modificados">
+          {filteredFiles.map((f) => {
+            const active = f.file === selectedFile
+            const fileName = f.file.split(/[/\\]/).pop() || f.file
+            return (
+              <button
+                key={f.file}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={`ade-diff-tab${active ? " active" : ""}`}
+                onClick={() => setSelectedFile(f.file)}
+                title={f.file}
+              >
+                <FileTypeIcon name={f.file} size={14} />
+                <span className="ade-diff-tab-name">{fileName}</span>
+                <span className="ade-diff-tab-stats">
+                  {f.additions > 0 && <span className="positive">+{f.additions}</span>}
+                  {f.deletions > 0 && <span className="negative">−{f.deletions}</span>}
+                </span>
+              </button>
+            )
+          })}
+          {filteredFiles.length === 0 && (
+            <div className="ade-diff-tab-empty">Sin archivos</div>
+          )}
         </div>
 
         {/* Code Diff Display */}

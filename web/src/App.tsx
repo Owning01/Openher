@@ -167,6 +167,7 @@ const ShellPanelCell = memo(function ShellPanelCell({
   index,
   kind,
   cwd,
+  sessionID,
   active,
   onActivate,
   onClose,
@@ -177,6 +178,7 @@ const ShellPanelCell = memo(function ShellPanelCell({
   index: number
   kind: Exclude<ShellPanelKind, "session">
   cwd?: string
+  sessionID?: string | null
   active: boolean
   onActivate: () => void
   onClose: () => void
@@ -267,7 +269,7 @@ const ShellPanelCell = memo(function ShellPanelCell({
       >
         ×
       </button>
-      <ShellPanel kind={kind} cwd={cwd} onOpenSessionDir={onOpenSessionDir} />
+      <ShellPanel kind={kind} cwd={cwd} sessionID={sessionID} onOpenSessionDir={onOpenSessionDir} />
     </div>
   )
 })
@@ -2232,6 +2234,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     index={i}
                     kind={kind}
                     cwd={kind === "terminal" ? activeDir : session?.directory ?? undefined}
+                    sessionID={session?.id}
                     active={activePanel === i}
                     onActivate={() => setActivePanel(i)}
                     onClose={() => closePanel(i)}
@@ -2367,7 +2370,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onOpenGitHub={handleOpenGitHub}
           onOpenFavoritesManager={() => setShowFavoritesManager(true)}
           onOpenArchivedView={() => setShowArchivedView(true)}
-          onOpenShortcuts={() => setShowShortcuts(true)} />
+          onOpenShortcuts={() => setShowShortcuts(true)}
+          onClose={() => {
+            if (navStackRef.current.length > 0) goBack()
+            else handleNavigate(desktopLayout.sessions.some(Boolean) ? "detail" : "sessions")
+          }} />
       )}
 
       {view === "help" && (
@@ -2476,7 +2483,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           <FileEditor
             config={config}
             path={fileEditorPath}
-            directory={selectedSession?.directory}
+            directory={currentActiveSession?.directory || activeSessionDir || selectedSession?.directory}
             onClose={() => setFileEditorPath(null)}
           />
         </Suspense>

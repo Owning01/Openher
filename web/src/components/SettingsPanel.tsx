@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useMemo, useEffect } from "react"
-import { SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon } from "../Icons"
+import { SettingsIcon, SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo,
   ServerProfile, ChatSettings, PromptSnippet } from "../types"
@@ -87,6 +87,7 @@ type SettingsPanelProps = {
   onOpenFavoritesManager?: () => void
   onOpenArchivedView?: () => void
   onOpenShortcuts?: () => void
+  onClose?: () => void
 }
 
 export const SettingsPanel = memo(function SettingsPanel({
@@ -105,9 +106,11 @@ export const SettingsPanel = memo(function SettingsPanel({
   serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile, onApplyServerProfile, onAddPairServer, activeServerProfileID,
   chatSettings, onChatSettingChange, onResetChatSettings,
   snippets, onAddSnippet, onRemoveSnippet,
-  onShutdownHost, onRestartHost, onOpenGitHub, onOpenFavoritesManager, onOpenArchivedView, onOpenShortcuts
+  onShutdownHost, onRestartHost, onOpenGitHub, onOpenFavoritesManager, onOpenArchivedView, onOpenShortcuts,
+  onClose
 }: SettingsPanelProps) {
   const t = useT()
+  const isDesktop = useIsDesktop()
   const [showPassword, setShowPassword] = useState(false)
   const [modelQuery, setModelQuery] = useState("")
   const [showShutdownConfirm, setShowShutdownConfirm] = useState(false)
@@ -222,6 +225,15 @@ export const SettingsPanel = memo(function SettingsPanel({
     return () => clearTimeout(timer)
   }, [desktopCfg])
 
+  useEffect(() => {
+    if (!onClose) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onClose])
+
   const uniqueModels = useMemo(() => {
     return Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values())
   }, [modelOptions, mk])
@@ -325,7 +337,6 @@ export const SettingsPanel = memo(function SettingsPanel({
   type CategoryKey = "servers" | "models" | "appearance" | "chat" | "remote" | "system"
   const [activeCategory, setActiveCategory] = useState<CategoryKey>("servers")
   const [settingsSearch, setSettingsSearch] = useState("")
-  const isDesktop = useIsDesktop()
 
   const categories: Array<{ id: CategoryKey; label: string; icon: string; badge?: string | number }> = [
     { id: "servers", label: t('settings.sectionServers'), icon: "🌐", badge: draftConfig.host ? "●" : undefined },
@@ -344,7 +355,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   const showRemote = !isDesktop || isSearching || activeCategory === "remote"
   const showSystem = !isDesktop || isSearching || activeCategory === "system"
 
-  return (
+  const panelContent = (
     <section className="panel settings fade-in">
       <div className="settings-top-bar">
         <div className="settings-header" style={{ margin: 0 }}>
@@ -1119,6 +1130,35 @@ export const SettingsPanel = memo(function SettingsPanel({
       )}
     </section>
   )
+
+  if (onClose) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-content settings-modal-window" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('nav.settings') || "Configuración"}>
+          <div className="settings-modal-top-header">
+            <div className="settings-modal-title-group">
+              <SettingsIcon size={18} />
+              <h2 className="settings-modal-title">{t('nav.settings') || "Configuración"}</h2>
+            </div>
+            <button
+              type="button"
+              className="btn-icon compact settings-modal-close"
+              onClick={onClose}
+              title={t('panel.close') || "Cerrar"}
+              aria-label={t('panel.close') || "Cerrar"}
+            >
+              ×
+            </button>
+          </div>
+          <div className="settings-modal-body">
+            {panelContent}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return panelContent
 })
 
 export default SettingsPanel

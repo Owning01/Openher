@@ -181,7 +181,7 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
   return <div ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6 }} />
 })
 
-export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { cwd?: string; shellName?: string }) {
+export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName, hideHeader = false }: { cwd?: string; shellName?: string; hideHeader?: boolean }) {
   const [activeMainTab, setActiveMainTab] = useState<"problems" | "output" | "debug" | "terminal" | "ports">("terminal")
   const [termTabs, setTermTabs] = useState<Array<{ id: string; title: string }>>([
     { id: "term-1", title: "pwsh" },
@@ -209,13 +209,14 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { c
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#0d1117" }}>
       {/* Barra superior estilo VS Code con drag & drop */}
-      <div className="terminal-header-bar"
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData("text/plain", "kind:terminal")
-          e.dataTransfer.effectAllowed = "move"
-        }}
-      >
+      {!hideHeader && (
+        <div className="terminal-header-bar"
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData("text/plain", "kind:terminal")
+            e.dataTransfer.effectAllowed = "move"
+          }}
+        >
         <div className="terminal-tabs-group">
           <div className={`terminal-tab${activeMainTab === "problems" ? " active" : ""}`} onClick={() => setActiveMainTab("problems")}>
             <span>PROBLEMS</span>
@@ -293,6 +294,7 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { c
           </button>
         </div>
       </div>
+      )}
 
       {/* Contenedor de la terminal activa */}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
@@ -826,12 +828,16 @@ export const FileEditorPanel = memo(function FileEditorPanel({
 
   // Cargar contenido de la pestaña activa si no fue cargada aún
   useEffect(() => {
-    if (!activeTab || filesState[activeTab]) return
+    if (!activeTab) return
     let cancelled = false
-    setFilesState((prev) => ({
-      ...prev,
-      [activeTab]: { content: "", dirty: false, loading: true, error: null },
-    }))
+    setFilesState((prev) => {
+      if (prev[activeTab] && (prev[activeTab].content || prev[activeTab].error)) return prev
+      return {
+        ...prev,
+        [activeTab]: { content: "", dirty: false, loading: true, error: null },
+      }
+    })
+
     shell.fs.read(activeTab).then((r) => {
       if (cancelled) return
       setFilesState((prev) => ({
@@ -845,8 +851,11 @@ export const FileEditorPanel = memo(function FileEditorPanel({
         [activeTab]: { content: "", dirty: false, loading: false, error: err instanceof Error ? err.message : "Error al abrir archivo" },
       }))
     })
-    return () => { cancelled = true }
-  }, [activeTab, filesState])
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab])
 
   const activeFile = filesState[activeTab]
 
@@ -1467,9 +1476,132 @@ export type ShellPanelProps = {
   kind: Exclude<ShellPanelKind, "session">
   cwd?: string
   onOpenSessionDir: (dir: string) => void
+  sessionID?: string | null
 }
 
-export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir }: ShellPanelProps) {
+// ============================================================== Session Stats (compacto)
+
+type SessionDetail = {
+  id: string
+  title: string
+  model: string
+  directory: string
+  created: number
+  updated: number
+  input: number
+  output: number
+  reasoning: number
+  cache_read: number
+  cache_write: number
+  cost: number
+  events: number
+  events_mb: number
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
+}
+
+function fmtCost(n: number): string {
+  if (n >= 1) return `$${n.toFixed(2)}`
+  if (n >= 0.01) return `$${n.toFixed(3)}`
+  return `$${n.toFixed(4)}`
+}
+
+function timeAgo(ts: number): string {
+  const diff = Date.now() / 1000 - ts
+  if (diff < 60) return "ahora"
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`
+  return `${Math.floor(diff / 86400)}d`
+}
+
+export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID }: { sessionID?: string | null }) {
+  const t = useT()
+  const [detail, setDetail] = useState<SessionDetail | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    if (!sessionID) return
+    setLoading(true)
+    setError(null)
+    try {
+      const r = await shell.stats.proxy(`admin/session/${sessionID}`)
+      setDetail(r)
+    } catch {
+      setError("Stats no disponibles")
+    } finally {
+      setLoading(false)
+    }
+  }, [sessionID])
+
+  useEffect(() => {
+    load()
+    const iv = window.setInterval(load, 15_000)
+    return () => window.clearInterval(iv)
+  }, [load])
+
+  if (!sessionID) return <div className="shell-empty"><p>{t('shell.noSession')}</p></div>
+  if (loading && !detail) return <div className="shell-empty"><p>Cargando stats...</p></div>
+  if (error) return <div className="shell-empty"><p>{error}</p><button className="btn-secondary" onClick={load}>Reintentar</button></div>
+  if (!detail) return null
+
+  const totalTokens = detail.input + detail.output + detail.reasoning
+  const cacheHit = detail.cache_read > 0 ? ((detail.cache_read / (detail.cache_read + detail.input)) * 100).toFixed(0) : "0"
+
+  return (
+    <div className="session-stats">
+      <div className="session-stats-header">
+        <span className="session-stats-title" title={detail.title}>{detail.title || "(sin título)"}</span>
+        <button className="btn-icon compact" onClick={load} title="Actualizar">↻</button>
+      </div>
+      <div className="session-stats-grid">
+        <div className="session-stats-card">
+          <span className="ss-label">Costo</span>
+          <span className="ss-value">{fmtCost(detail.cost)}</span>
+        </div>
+        <div className="session-stats-card">
+          <span className="ss-label">Tokens</span>
+          <span className="ss-value">{fmtTokens(totalTokens)}</span>
+        </div>
+        <div className="session-stats-card">
+          <span className="ss-label">Input</span>
+          <span className="ss-value">{fmtTokens(detail.input)}</span>
+        </div>
+        <div className="session-stats-card">
+          <span className="ss-label">Output</span>
+          <span className="ss-value">{fmtTokens(detail.output)}</span>
+        </div>
+        <div className="session-stats-card">
+          <span className="ss-label">Reasoning</span>
+          <span className="ss-value">{fmtTokens(detail.reasoning)}</span>
+        </div>
+        <div className="session-stats-card">
+          <span className="ss-label">Cache HIT</span>
+          <span className="ss-value">{cacheHit}%</span>
+        </div>
+        <div className="session-stats-card">
+          <span className="ss-label">Eventos</span>
+          <span className="ss-value">{detail.events}</span>
+        </div>
+        <div className="session-stats-card">
+          <span className="ss-label">Última vez</span>
+          <span className="ss-value">{timeAgo(detail.updated)}</span>
+        </div>
+      </div>
+      {detail.model && (
+        <div className="session-stats-footer">
+          <span className="ss-model">{detail.model}</span>
+        </div>
+      )}
+    </div>
+  )
+})
+
+export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir, sessionID: _sessionID }: ShellPanelProps) {
   switch (kind) {
     case "terminal":
       return <TerminalPanel cwd={cwd} />
