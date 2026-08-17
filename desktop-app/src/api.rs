@@ -194,6 +194,84 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         }
         return;
     }
+    if path == "/shell/fs/delete" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                match crate::fsx::delete_entry(p) {
+                    Ok(()) => {
+                        let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
+                    }
+                    Err(e) => {
+                        let _ = req.respond(json_err(500, &e));
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+    if path == "/shell/fs/copy" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let src = b["src"].as_str().unwrap_or("");
+                let dest = b["dest"].as_str().unwrap_or("");
+                match crate::fsx::copy_entry(src, dest) {
+                    Ok(target) => {
+                        let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "path": target })));
+                    }
+                    Err(e) => {
+                        let _ = req.respond(json_err(500, &e));
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+    if path == "/shell/fs/write" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                let data = b["data"].as_str().unwrap_or("");
+                match crate::fsx::write_file(p, data) {
+                    Ok(()) => {
+                        let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
+                    }
+                    Err(e) => {
+                        let _ = req.respond(json_err(500, &e));
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+    if path == "/shell/fs/mkdir" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                match crate::fsx::mkdir_entry(p) {
+                    Ok(()) => {
+                        let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
+                    }
+                    Err(e) => {
+                        let _ = req.respond(json_err(500, &e));
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
 
     // ============================== Terminales (pty)
     if path == "/shell/pty" && method == Method::Get {

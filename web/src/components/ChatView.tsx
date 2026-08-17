@@ -339,7 +339,7 @@ export const ChatView = memo(function ChatView({
                 type="button"
                 className="btn-secondary compact header-diff-pill"
                 onClick={() => onOpenADEDiff()}
-                title="Abrir A.D.E Diff Viewer"
+                title="Abrir panel de diffs"
               >
                 <span className="diff-pill-dot">●</span>
                 <span>Diffs ({diffFiles.length})</span>

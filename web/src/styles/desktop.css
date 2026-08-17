@@ -482,7 +482,7 @@
   color: #000;
 }
 
-/* ===== A.D.E Diff Panel (Antigravity 2.0 style) ===== */
+/* ===== Diff Panel ===== */
 .ade-diff-panel {
   position: relative;
   display: flex;
@@ -490,7 +490,7 @@
   height: 100%;
   min-height: 0;
   background: var(--surface);
-  border-left: 1px solid var(--border-strong, var(--border));
+  border-left: 1px solid var(--border);
   overflow: hidden;
   z-index: 10;
 }
@@ -514,7 +514,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px 8px 16px;
-  background: var(--surface-subtle, #161b22);
+  background: var(--surface-subtle);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -523,17 +523,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.ade-diff-badge {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  background: linear-gradient(135deg, #10b981, #06b6d4);
-  color: #000;
-  padding: 2px 6px;
-  border-radius: 4px;
-  text-transform: uppercase;
 }
 
 .ade-diff-title {
@@ -578,7 +567,7 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
-  background: var(--surface-subtle, #0d1117);
+  background: var(--surface-subtle);
 }
 
 .ade-diff-search-wrap {
@@ -624,12 +613,12 @@
   transition: all 0.1s ease;
 }
 .ade-file-item:hover {
-  background: var(--surface-hover, rgba(255, 255, 255, 0.04));
+  background: var(--surface-strong);
 }
 .ade-file-item.active {
-  background: var(--primary-soft, rgba(16, 185, 129, 0.12));
-  border-color: rgba(16, 185, 129, 0.3);
-  color: var(--primary, #10b981);
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .ade-file-info {
@@ -670,7 +659,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--surface, #0d1117);
+  background: var(--surface);
 }
 
 .ade-code-header {
@@ -678,7 +667,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
-  background: var(--surface-strong, #161b22);
+  background: var(--surface-subtle);
   border-bottom: 1px solid var(--border);
   font-size: 0.75rem;
   font-family: var(--font-mono);
@@ -710,26 +699,28 @@
 
 .ade-code-scroll {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   font-family: var(--font-mono, monospace);
   font-size: 0.78rem;
   line-height: 1.45;
-  background: #0d1117;
-  color: #c9d1d9;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .ade-diff-table {
   display: flex;
   flex-direction: column;
-  min-width: 100%;
-  width: max-content;
+  width: 100%;
 }
 
 .ade-diff-row {
   display: flex;
   align-items: stretch;
   min-height: 20px;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .ade-line-num {
@@ -737,10 +728,10 @@
   flex-shrink: 0;
   text-align: right;
   padding: 0 6px;
-  color: #6e7681;
+  color: var(--muted);
   user-select: none;
   font-size: 0.7rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid var(--border);
 }
 
 .ade-line-sign {
@@ -753,41 +744,45 @@
 
 .ade-line-code {
   flex: 1;
+  min-width: 0;
   padding-right: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .ade-diff-row.diff-add {
-  background: rgba(46, 160, 67, 0.18);
-  color: #7ee787;
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--success);
 }
 .ade-diff-row.diff-add .ade-line-num {
-  background: rgba(46, 160, 67, 0.28);
-  color: #aff5b4;
+  background: rgba(16, 185, 129, 0.22);
+  color: var(--success);
 }
 .ade-diff-row.diff-add .ade-line-sign {
-  color: #3fb950;
+  color: var(--success);
 }
 
 .ade-diff-row.diff-del {
-  background: rgba(248, 81, 73, 0.18);
-  color: #ffa198;
+  background: rgba(239, 68, 68, 0.14);
+  color: var(--danger);
 }
 .ade-diff-row.diff-del .ade-line-num {
-  background: rgba(248, 81, 73, 0.28);
-  color: #ffdcd7;
+  background: rgba(239, 68, 68, 0.22);
+  color: var(--danger);
 }
 .ade-diff-row.diff-del .ade-line-sign {
-  color: #f85149;
+  color: var(--danger);
 }
 
 .ade-diff-row.diff-hunk {
-  background: rgba(56, 139, 253, 0.15);
-  color: #79c0ff;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--primary);
   font-weight: 600;
 }
 .ade-diff-row.diff-hunk .ade-line-num {
-  background: rgba(56, 139, 253, 0.22);
-  color: #a5d6ff;
+  background: rgba(59, 130, 246, 0.18);
+  color: var(--primary);
 }
 
 .ade-diff-loading,

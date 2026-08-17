@@ -397,6 +397,34 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     }
   }, [value, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, onChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput])
 
+  const handleComposerDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    // 1. Archivos externos arrastrados desde el SO
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      for (const f of Array.from(e.dataTransfer.files)) {
+        if (f.type.startsWith("image/")) {
+          const reader = new FileReader()
+          reader.onload = () => {
+            if (typeof reader.result === "string") {
+              addImage(reader.result, f.type, f.name)
+            }
+          }
+          reader.readAsDataURL(f)
+        } else {
+          const sep = value ? (value.endsWith(" ") ? "" : " ") : ""
+          onChange(value + sep + f.name)
+        }
+      }
+      return
+    }
+    // 2. Elemento arrastrado desde el panel Explorador interno
+    const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
+    if (path) {
+      const sep = value ? (value.endsWith(" ") ? "" : " ") : ""
+      onChange(value + sep + path)
+    }
+  }, [value, onChange, addImage])
+
   return (
     <div className={`composer${isCommandValid ? " composer-command-mode" : ""}${isShellMode ? " composer-shell-mode" : ""}`} ref={composerRef} style={{ borderColor: `var(--agent-${agentColorIdx})` } as React.CSSProperties}>
       {showSlashMenu && slashFiltered.length > 0 && (
@@ -476,7 +504,11 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           })}
         </div>
       )}
-      <div className="composer-input-wrap">
+      <div
+        className="composer-input-wrap"
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy" }}
+        onDrop={handleComposerDrop}
+      >
         <button onClick={handleFilePick} disabled={disabled}
           className="composer-inline-btn composer-img-btn" title="Attach file"
           tabIndex={-1}>

@@ -146,34 +146,49 @@ export const ADEDiffPanel = memo(function ADEDiffPanel({
     setTimeout(() => setCopied(false), 2000)
   }, [currentPatch])
 
-  // Resize drag handle
+  // Resize drag handle (DOM directo a 60fps sin re-render de React)
   const startResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
     const startX = e.clientX
     const panel = panelRef.current
-    const startWidth = panel ? panel.getBoundingClientRect().width : 480
+    const startWidth = panel ? panel.getBoundingClientRect().width : 440
+    let lastW = startWidth
+    document.body.style.userSelect = "none"
+    document.body.style.cursor = "col-resize"
 
     const onMove = (ev: PointerEvent) => {
-      const nextW = Math.max(340, Math.min(900, startWidth - (ev.clientX - startX)))
-      if (onResize) onResize(nextW)
+      lastW = Math.max(280, Math.min(900, startWidth - (ev.clientX - startX)))
+      if (panelRef.current) {
+        panelRef.current.style.width = `${lastW}px`
+      }
+      const shell = panelRef.current?.closest(".app-shell") as HTMLElement | null
+      if (shell) {
+        const parts = shell.style.gridTemplateColumns.split(" ")
+        if (parts.length >= 4) {
+          parts[3] = `${lastW}px`
+          shell.style.gridTemplateColumns = parts.join(" ")
+        }
+      }
     }
     const onUp = () => {
+      document.body.style.userSelect = ""
+      document.body.style.cursor = ""
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
+      if (onResize) onResize(lastW)
     }
     window.addEventListener("pointermove", onMove)
     window.addEventListener("pointerup", onUp)
   }, [onResize])
 
   return (
-    <aside className="ade-diff-panel" ref={panelRef} aria-label="A.D.E Diff Viewer">
+    <aside className="ade-diff-panel" ref={panelRef} aria-label="Diff Viewer">
       <div className="ade-diff-resizer" onPointerDown={startResize} title="Redimensionar panel de diff" />
 
       {/* Top Header */}
       <div className="ade-diff-header">
         <div className="ade-diff-title-wrap">
-          <span className="ade-diff-badge">A.D.E</span>
-          <span className="ade-diff-title">Diff Viewer</span>
+          <span className="ade-diff-title">Diff</span>
           <span className="ade-diff-count-chip">
             {fileItems.length} {fileItems.length === 1 ? "archivo" : "archivos"}
           </span>

@@ -1,7 +1,7 @@
 // Cliente de la API de la shell (/shell/*) + utilidades del explorador.
 // Solo disponible cuando la app la sirve el exe de escritorio (mismo origen).
 
-export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "labs" | "config"
+export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "labs" | "config" | "editor"
 
 export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs"]
 
@@ -53,9 +53,19 @@ export const shell = {
     favorites: () => get<{ favorites: string[] }>("/shell/fs/favorites"),
     toggleFavorite: (path: string, add: boolean) => post("/shell/fs/favorites", { path, add }),
     sessionFor: (path: string) => get<{ ok: boolean; directory?: string }>(`/shell/fs/session?path=${encodeURIComponent(path)}`),
+    delete: (path: string) => post("/shell/fs/delete", { path }),
+    copy: (src: string, dest: string) => post<{ ok: boolean; path: string }>("/shell/fs/copy", { src, dest }),
+    write: (path: string, dataBase64: string) => post("/shell/fs/write", { path, data: dataBase64 }),
+    mkdir: (path: string) => post("/shell/fs/mkdir", { path }),
   },
   pty: {
-    create: (cwd?: string) => post<{ id: string; ws_port: number }>(`/shell/pty${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`),
+    create: (cwd?: string, shellName?: string) => {
+      const params = new URLSearchParams()
+      if (cwd) params.set("cwd", cwd)
+      if (shellName) params.set("shell", shellName)
+      const qs = params.toString()
+      return post<{ id: string; ws_port: number }>(`/shell/pty${qs ? `?${qs}` : ""}`)
+    },
     write: (id: string, data: string) => post(`/shell/pty/${id}/write`, { data }),
     resize: (id: string, cols: number, rows: number) => post(`/shell/pty/${id}/resize`, { cols, rows }),
     kill: (id: string) => fetch(`/shell/pty/${id}`, { method: "DELETE" }).then(() => undefined),

@@ -73,8 +73,8 @@ impl PtyRegistry {
             .collect()
     }
 
-    pub fn create(&self, shell: Option<String>, cwd: Option<String>) -> Result<String, String> {
-        let shell = shell.unwrap_or_else(default_shell);
+    pub fn create(&self, shell_req: Option<String>, cwd: Option<String>) -> Result<String, String> {
+        let (shell_exe, shell_args) = resolve_shell(shell_req.as_deref());
         let cwd = cwd.filter(|c| !c.is_empty());
         let pty_system = native_pty_system();
         let size = PtySize {
@@ -84,7 +84,10 @@ impl PtyRegistry {
             pixel_height: 0,
         };
         let pair = pty_system.openpty(size).map_err(|e| e.to_string())?;
-        let mut cmd = CommandBuilder::new(&shell);
+        let mut cmd = CommandBuilder::new(&shell_exe);
+        for arg in shell_args {
+            cmd.arg(arg);
+        }
         if let Some(dir) = &cwd {
             cmd.cwd(dir);
         }
@@ -97,7 +100,7 @@ impl PtyRegistry {
         let out = output.clone();
         // Hilo lector: vuelca el output del pty al buffer compartido.
         std::thread::spawn(move || {
-            let mut buf = vec![0u8; 8192];
+            let mut buf = vec![0u8; 16384];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
@@ -112,7 +115,7 @@ impl PtyRegistry {
         let id = format!("pt{}", crate::state::now_ms());
         let session = PtySession {
             id: id.clone(),
-            shell,
+            shell: shell_exe,
             cwd: cwd.unwrap_or_else(|| std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()),
             writer: Mutex::new(writer),
             master: Mutex::new(master),
@@ -157,9 +160,70 @@ impl PtyRegistry {
     }
 }
 
+pub fn resolve_shell(shell_req: Option<&str>) -> (String, Vec<String>) {
+    if cfg!(windows) {
+        let req = shell_req.unwrap_or("").trim().to_lowercase();
+        if req == "cmd" || req == "cmd.exe" {
+            return ("cmd.exe".into(), vec![]);
+        }
+        if req == "bash" || req == "git-bash" {
+            let paths = [
+                r"C:\Program Files\Git\bin\bash.exe",
+                r"C:\Program Files (x86)\Git\bin\bash.exe",
+                "bash.exe",
+            ];
+            for p in paths {
+                if std::path::Path::new(p).exists() {
+                    return (p.into(), vec!["--login".into(), "-i".into()]);
+                }
+            }
+            return ("bash.exe".into(), vec![]);
+        }
+        if req == "wsl" {
+            return ("wsl.exe".into(), vec![]);
+        }
+        if req == "powershell" || req == "windows powershell" {
+            let legacy = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe";
+            if std::path::Path::new(legacy).exists() {
+                return (legacy.into(), vec!["-NoLogo".into()]);
+            }
+            return ("powershell.exe".into(), vec!["-NoLogo".into()]);
+        }
+
+        // Buscar primero la versión más reciente: PowerShell 7 (pwsh.exe)
+        let pwsh_candidates = [
+            r"C:\Program Files\PowerShell\7\pwsh.exe",
+            r"C:\Program Files\PowerShell\7-preview\pwsh.exe",
+            r"C:\Program Files (x86)\PowerShell\7\pwsh.exe",
+        ];
+        for p in pwsh_candidates {
+            if std::path::Path::new(p).exists() {
+                return (p.into(), vec!["-NoLogo".into()]);
+            }
+        }
+        // Buscar pwsh en el PATH
+        if let Ok(path_var) = std::env::var("PATH") {
+            for dir in std::env::split_paths(&path_var) {
+                let candidate = dir.join("pwsh.exe");
+                if candidate.exists() {
+                    return (candidate.to_string_lossy().to_string(), vec!["-NoLogo".into()]);
+                }
+            }
+        }
+
+        // Fallback a Windows PowerShell si pwsh no está disponible
+        let ps_legacy = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe";
+        if std::path::Path::new(ps_legacy).exists() {
+            return (ps_legacy.into(), vec!["-NoLogo".into()]);
+        }
+        ("cmd.exe".into(), vec![])
+    } else {
+        (shell_req.unwrap_or("sh").into(), vec![])
+    }
+}
+
 pub fn default_shell() -> String {
-    // cmd.exe arranca ~10x más rápido que PowerShell (sin carga de .NET).
-    if cfg!(windows) { "cmd.exe".into() } else { "sh".into() }
+    resolve_shell(None).0
 }
 
 // ======================================================== WebSocket (pty)
@@ -230,7 +294,9 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
         return;
     }
     let _ = stream.flush();
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(8)));
+    let _ = stream.set_nodelay(true);
+    let _ = stream.set_read_timeout(None);
+    let _ = stream.set_write_timeout(None);
 
     // Socket compartido (reader escribe pongs; writer el output).
     let sock = Arc::new(Mutex::new(stream));
@@ -390,10 +456,11 @@ fn read_exact_or(stream: &mut TcpStream, buf: &mut [u8]) -> std::io::Result<bool
         match stream.read(&mut buf[read..]) {
             Ok(0) => return Ok(false),
             Ok(n) => read += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
                 || e.kind() == std::io::ErrorKind::TimedOut => {
-                // Sin datos: no es cierre, solo timeout de lectura.
-                return Ok(false);
+                std::thread::sleep(Duration::from_millis(5));
+                continue;
             }
             Err(_) => return Ok(false),
         }

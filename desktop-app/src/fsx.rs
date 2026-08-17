@@ -144,3 +144,67 @@ pub fn toggle_favorite(path: &str, add: bool) -> Result<(), String> {
     fav.save();
     Ok(())
 }
+
+pub fn delete_entry(path: &str) -> Result<(), String> {
+    let p = Path::new(path);
+    if !p.exists() {
+        return Err("No existe".into());
+    }
+    if p.is_dir() {
+        std::fs::remove_dir_all(p).map_err(|e| e.to_string())
+    } else {
+        std::fs::remove_file(p).map_err(|e| e.to_string())
+    }
+}
+
+pub fn mkdir_entry(path: &str) -> Result<(), String> {
+    let p = Path::new(path);
+    std::fs::create_dir_all(p).map_err(|e| e.to_string())
+}
+
+pub fn copy_entry(src: &str, dest_dir: &str) -> Result<String, String> {
+    let s = Path::new(src);
+    if !s.exists() {
+        return Err("Origen no existe".into());
+    }
+    let d_dir = Path::new(dest_dir);
+    if !d_dir.is_dir() {
+        return Err("Destino no es carpeta".into());
+    }
+    let filename = s.file_name().ok_or("Nombre de archivo inválido")?;
+    let mut target = d_dir.join(filename);
+    if target.exists() && target == s {
+        let stem = s.file_stem().and_then(|st| st.to_str()).unwrap_or("file");
+        let ext = s.extension().and_then(|e| e.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
+        target = d_dir.join(format!("{stem}-copia{ext}"));
+    }
+    if s.is_file() {
+        std::fs::copy(s, &target).map_err(|e| e.to_string())?;
+    } else if s.is_dir() {
+        copy_dir_recursive(s, &target).map_err(|e| e.to_string())?;
+    }
+    Ok(crate::state::pstring(&target))
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_recursive(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
+pub fn write_file(path: &str, data_base64: &str) -> Result<(), String> {
+    let p = Path::new(path);
+    if let Some(parent) = p.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let bytes = crate::state::base64_decode(data_base64).map_err(|e| e.to_string())?;
+    std::fs::write(p, bytes).map_err(|e| e.to_string())
+}

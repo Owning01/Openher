@@ -56,23 +56,38 @@ import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
 import { shell } from "./shell"
-import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, DocsPanel, UpdatesPanel, LabsPanel, ConfigPanel } from "./components/shellPanels"
+import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, DocsPanel, UpdatesPanel, LabsPanel, ConfigPanel, FileEditorPanel } from "./components/shellPanels"
 import type { ServerProfile } from "./types"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
 
+function lazyRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>,
+): React.LazyExoticComponent<T> {
+  return lazy(() =>
+    factory().catch((err) => {
+      const hasReloaded = sessionStorage.getItem("opencode_chunk_reloaded")
+      if (!hasReloaded && String(err).includes("dynamically imported module")) {
+        sessionStorage.setItem("opencode_chunk_reloaded", "1")
+        window.location.reload()
+      }
+      throw err
+    }),
+  )
+}
+
 // Componentes pesados o poco frecuentes: se descargan bajo demanda
-const ThemePicker = lazy(() => import("./components/ThemePicker").then((m) => ({ default: m.ThemePicker })))
-const MCPBrowser = lazy(() => import("./components/MCPBrowser").then((m) => ({ default: m.MCPBrowser })))
-const ArchivedList = lazy(() => import("./components/ArchivedList").then((m) => ({ default: m.ArchivedList })))
-const FileEditor = lazy(() => import("./components/FileEditor").then((m) => ({ default: m.FileEditor })))
-const TerminalView = lazy(() => import("./components/TerminalView").then((m) => ({ default: m.TerminalView })))
-const RemoteDesktop = lazy(() => import("./components/RemoteDesktop").then((m) => ({ default: m.RemoteDesktop })))
-const ThemeCreator = lazy(() => import("./components/ThemeCreator").then((m) => ({ default: m.ThemeCreator })))
-const FavoritesManager = lazy(() => import("./components/FavoritesManager").then((m) => ({ default: m.FavoritesManager })))
-const FileBrowser = lazy(() => import("./components/FileBrowser").then((m) => ({ default: m.FileBrowser })))
-const HelpPage = lazy(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
-const FolderPicker = lazy(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
+const ThemePicker = lazyRetry(() => import("./components/ThemePicker").then((m) => ({ default: m.ThemePicker })))
+const MCPBrowser = lazyRetry(() => import("./components/MCPBrowser").then((m) => ({ default: m.MCPBrowser })))
+const ArchivedList = lazyRetry(() => import("./components/ArchivedList").then((m) => ({ default: m.ArchivedList })))
+const FileEditor = lazyRetry(() => import("./components/FileEditor").then((m) => ({ default: m.FileEditor })))
+const TerminalView = lazyRetry(() => import("./components/TerminalView").then((m) => ({ default: m.TerminalView })))
+const RemoteDesktop = lazyRetry(() => import("./components/RemoteDesktop").then((m) => ({ default: m.RemoteDesktop })))
+const ThemeCreator = lazyRetry(() => import("./components/ThemeCreator").then((m) => ({ default: m.ThemeCreator })))
+const FavoritesManager = lazyRetry(() => import("./components/FavoritesManager").then((m) => ({ default: m.FavoritesManager })))
+const FileBrowser = lazyRetry(() => import("./components/FileBrowser").then((m) => ({ default: m.FileBrowser })))
+const HelpPage = lazyRetry(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
+const FolderPicker = lazyRetry(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
 
 type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "docs" | "updates" | "labs" | "config"
 
@@ -80,7 +95,8 @@ type DesktopLayout = {
   cols: number
   rows: number
   sessions: Array<string | null>
-  panelKinds: Array<ShellPanelKind>
+  panelKinds: Array<ShellPanelKind | "editor">
+  panelEditorPaths?: Record<number, string>
   colSizes: Array<number | null>
   rowSizes: Array<number | null>
 }
@@ -1237,6 +1253,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const startX = e.clientX
     const startWidth = sidebarWidth
     let lastW = sidebarWidth
+    document.body.style.userSelect = "none"
+    document.body.style.cursor = "col-resize"
     const apply = (w: number) => {
       if (shellRef.current) shellRef.current.style.gridTemplateColumns = `48px ${w}px minmax(0, 1fr)${desktopDiffOpen ? ` ${desktopDiffWidth}px` : ""}`
     }
@@ -1245,13 +1263,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       apply(lastW)
     }
     const onUp = () => {
+      document.body.style.userSelect = ""
+      document.body.style.cursor = ""
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
       setSidebarWidth(lastW)
     }
     window.addEventListener("pointermove", onMove)
     window.addEventListener("pointerup", onUp)
-  }, [sidebarWidth, setSidebarWidth])
+  }, [sidebarWidth, setSidebarWidth, desktopDiffOpen, desktopDiffWidth])
 
   // Atajos de escritorio (splits/sidebar/layouts) — solo desktop
   useEffect(() => {
@@ -1592,6 +1612,50 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     promptSnippets, handleRegenerate, handleInsertPrompt, handleSendPrompt,
   ])
 
+  const activeSessionSid = isDesktop ? desktopLayout.sessions[Math.min(activePanel, desktopLayout.sessions.length - 1)] : selectedSession?.id
+  const currentActiveSession = (activeSessionSid ? sessions.find((s) => s.id === activeSessionSid) : null)
+    ?? selectedSession
+    ?? (desktopLayout.sessions.find(Boolean) ? sessions.find((s) => s.id === desktopLayout.sessions.find(Boolean)) : null)
+    ?? sessions[0]
+    ?? null
+  const activeSessionDir = currentActiveSession?.directory ?? selectedSession?.directory ?? sessions[0]?.directory ?? undefined
+
+  const handleOpenFileFromExplorer = useCallback((filePath: string) => {
+    if (isDesktop) {
+      const hasActiveSession = desktopLayout.sessions.some(Boolean)
+      if (hasActiveSession) {
+        if (desktopLayout.cols === 1) {
+          setDesktopLayout((prev) => ({
+            ...prev,
+            cols: 2,
+            colSizes: [prev.colSizes[0] ?? 450, prev.colSizes[1] ?? 450],
+            panelKinds: [prev.panelKinds[0] ?? "session", "editor"],
+            panelEditorPaths: { ...(prev.panelEditorPaths ?? {}), 1: filePath },
+          }))
+          setActivePanel(1)
+        } else {
+          const targetPanel = activePanel === 0 ? 1 : activePanel
+          setDesktopLayout((prev) => ({
+            ...prev,
+            panelKinds: prev.panelKinds.map((k, idx) => (idx === targetPanel ? "editor" : k)),
+            panelEditorPaths: { ...(prev.panelEditorPaths ?? {}), [targetPanel]: filePath },
+          }))
+          setActivePanel(targetPanel)
+        }
+      } else {
+        setDesktopLayout((prev) => ({
+          ...prev,
+          cols: 1,
+          panelKinds: ["editor"],
+          panelEditorPaths: { ...(prev.panelEditorPaths ?? {}), 0: filePath },
+        }))
+        setActivePanel(0)
+      }
+    } else {
+      setFileEditorPath(filePath)
+    }
+  }, [isDesktop, desktopLayout, activePanel])
+
   const detailView = <ChatView {...baseChatProps} />
 
   return (
@@ -1667,7 +1731,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               </div>
               <div className="desktop-sidebar-body">
                 {activity === "sessions" ? sessionsView
-                  : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={selectedSession?.directory} />
+                  : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                   : activity === "stats" ? <StatsPanel />
                   : activity === "kanban" ? <KanbanPanel />
                   : activity === "docs" ? <DocsPanel />
@@ -1710,6 +1774,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               const startSize = desktopLayout.colSizes[colIndex]
                 ?? (e.currentTarget.parentElement!.getBoundingClientRect().width / desktopLayout.cols)
               const sizes = [...desktopLayout.colSizes]
+              document.body.style.userSelect = "none"
+              document.body.style.cursor = "col-resize"
               const apply = () => {
                 if (!gridRef.current) return
                 const cols: Array<number | null | "handle"> = []
@@ -1721,6 +1787,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 apply()
               }
               const onUp = () => {
+                document.body.style.userSelect = ""
+                document.body.style.cursor = ""
                 window.removeEventListener("pointermove", onMove)
                 window.removeEventListener("pointerup", onUp)
                 setDesktopLayout((prev) => ({ ...prev, colSizes: sizes }))
@@ -1734,6 +1802,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               const startSize = desktopLayout.rowSizes[rowIndex]
                 ?? (e.currentTarget.parentElement!.getBoundingClientRect().height / desktopLayout.rows)
               const sizes = [...desktopLayout.rowSizes]
+              document.body.style.userSelect = "none"
+              document.body.style.cursor = "row-resize"
               const apply = () => {
                 if (!gridRef.current) return
                 const rows: Array<number | null | "handle"> = []
@@ -1745,6 +1815,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 apply()
               }
               const onUp = () => {
+                document.body.style.userSelect = ""
+                document.body.style.cursor = ""
                 window.removeEventListener("pointermove", onMove)
                 window.removeEventListener("pointerup", onUp)
                 setDesktopLayout((prev) => ({ ...prev, rowSizes: sizes }))
@@ -1798,6 +1870,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onChangeAgentGlobal={changeAgent}
                       onOpenInThisPanel={(id) => openInPanel(i, id)}
                       onSwapPanels={handleSwapPanels} />
+                  </div>
+                )
+              }
+              if (kind === "editor") {
+                const editorPath = desktopLayout.panelEditorPaths?.[i]
+                return (
+                  <div key={`panel-${i}`} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
+                    <FileEditorPanel
+                      path={editorPath || ""}
+                      initialCwd={activeSessionDir}
+                      onClose={() => closePanel(i)}
+                    />
                   </div>
                 )
               }
@@ -2010,13 +2094,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         </Suspense>
       )}
 
-        {isDesktop && showTerminal && terminalDocked && selectedSession && (
+        {isDesktop && showTerminal && terminalDocked && (
           <Suspense fallback={null}>
             <TerminalView
               lines={shellLines}
               running={shellRunning}
-              sessionID={selectedSession.id}
-              directory={selectedSession.directory}
+              sessionID={currentActiveSession?.id || selectedSession?.id || ""}
+              directory={activeSessionDir || selectedSession?.directory || ""}
               shell={terminalShell}
               onShellChange={setTerminalShell}
               onExecute={shellExecute}
@@ -2126,13 +2210,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         </Suspense>
       )}
 
-      {showTerminal && selectedSession && (!isDesktop || !terminalDocked) && (
+      {showTerminal && (!isDesktop || !terminalDocked) && (
         <Suspense fallback={null}>
           <TerminalView
             lines={shellLines}
             running={shellRunning}
-            sessionID={selectedSession.id}
-            directory={selectedSession.directory}
+            sessionID={currentActiveSession?.id || selectedSession?.id || ""}
+            directory={activeSessionDir || selectedSession?.directory || ""}
             shell={terminalShell}
             onShellChange={setTerminalShell}
             onExecute={shellExecute}

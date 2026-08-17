@@ -93,12 +93,6 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
     [message, prevUserTs],
   )
 
-  const handleClick = useCallback(() => {
-    if (message.info.role === "user" && onRevertToMessage) {
-      setShowConfirm(true)
-    }
-  }, [message.info.role, message.info.id, onRevertToMessage])
-
   const handleConfirmUndo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     setShowConfirm(false)
@@ -139,8 +133,6 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
     onRegenerate?.()
   }, [onRegenerate])
 
-  const isUserClickable = message.info.role === "user" && onRevertToMessage && !showConfirm
-
   return (
     <>
       {isRevertPoint && (
@@ -150,14 +142,9 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
         </div>
       )}
       <article
-        className={`message ${message.info.role} fade-in${(isReverted || isRevertPoint) ? " revert-hidden" : ""}${isUserClickable ? " clickable" : ""}${showConfirm ? " confirming-undo" : ""}`}
+        className={`message ${message.info.role} fade-in${(isReverted || isRevertPoint) ? " revert-hidden" : ""}${showConfirm ? " confirming-undo" : ""}`}
         data-message-id={message.info.id}
         data-mode={message.turnMode || undefined}
-        onClick={isUserClickable ? handleClick : undefined}
-        role={isUserClickable ? "button" : undefined}
-        tabIndex={isUserClickable ? 0 : undefined}
-        onKeyDown={isUserClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick() } } : undefined}
-        title={isUserClickable ? t('detail.revertToHere') : undefined}
         onContextMenu={handleContextMenu}
         onTouchEnd={() => {
           if (touchTimerRef.current) {
@@ -185,15 +172,26 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
             <div className="header-actions">
               <small>{formatTime(message.info.time.created)}</small>
               {onEditMessage && (
-                <button className="btn-icon btn-ghost edit-msg-btn" onClick={(e) => { e.stopPropagation(); onEditMessage(message.info.id, message.text) }} title="Edit message" aria-label="Edit message">
+                <button type="button" className="btn-icon btn-ghost edit-msg-btn" onClick={(e) => { e.stopPropagation(); onEditMessage(message.info.id, message.text) }} title="Edit message" aria-label="Edit message">
                   <PencilIcon size={14} />
+                </button>
+              )}
+              {onRevertToMessage && (
+                <button
+                  type="button"
+                  className="btn-icon btn-ghost revert-msg-btn"
+                  onClick={(e) => { e.stopPropagation(); setShowConfirm((v) => !v) }}
+                  title={t('detail.revertToHere')}
+                  aria-label={t('detail.revertToHere')}
+                >
+                  <UndoIcon size={13} />
                 </button>
               )}
             </div>
           </header>
         )}
 
-        {message.text && !showConfirm && (
+        {message.text && (
           <div className="message-content">
             {/* Durante el streaming el texto cambia en cada delta: parsear
                 markdown por delta es O(n²) en mensajes largos. Pre-wrap plano
@@ -214,15 +212,15 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
 
         {showConfirm && (
           <div className="undo-confirm">
-            <span className="undo-confirm-text">Undo this message?</span>
+            <span className="undo-confirm-text">{t('detail.revertToHere')}?</span>
             <div className="undo-confirm-actions">
-              <button className="undo-confirm-yes" onClick={handleConfirmUndo}>Yes</button>
-              <button className="undo-confirm-no" onClick={handleCancelUndo}>No</button>
+              <button type="button" className="undo-confirm-yes" onClick={handleConfirmUndo}>{t('session.undo')}</button>
+              <button type="button" className="undo-confirm-no" onClick={handleCancelUndo}>{t('session.cancel')}</button>
             </div>
           </div>
         )}
 
-        {message.thinkingParts && message.thinkingParts.length > 0 && !showConfirm && (
+        {message.thinkingParts && message.thinkingParts.length > 0 && (
           <div className="thinking-block">
             <ThinkingBlock
               key={thinkingDefault}
@@ -232,7 +230,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
             />
           </div>
         )}
-        {message.toolParts.length > 0 && !showConfirm && (
+        {message.toolParts.length > 0 && (
           <div className="tool-parts">
             {message.toolParts.map((tp) => (
               <ToolPart
@@ -247,7 +245,7 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
           </div>
         )}
 
-        {message.summaryDiffs && message.summaryDiffs.length > 0 && !showConfirm && (
+        {message.summaryDiffs && message.summaryDiffs.length > 0 && (
           <FileDiffs diffs={message.summaryDiffs} onOpenADEDiff={onOpenADEDiff} />
         )}
 

@@ -38,13 +38,13 @@ export const FileDiffs = memo(function FileDiffs({
           <span
             className="file-diffs-ade-link"
             role="button"
-            title="Abrir en A.D.E Diff Viewer"
+            title="Abrir visor de diff"
             onClick={(e) => {
               e.stopPropagation()
               onOpenADEDiff(diffs)
             }}
           >
-            A.D.E ↗
+            Diff ↗
           </span>
         )}
         <span className="tool-part-chevron">{open ? "▾" : "▸"}</span>

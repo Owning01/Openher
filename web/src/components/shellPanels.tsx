@@ -12,10 +12,7 @@ import { useT } from "../i18n-context"
 
 // ============================================================== Terminal
 
-export const TerminalPanel = memo(function TerminalPanel({ cwd }: { cwd?: string }) {
-  // La cwd se congela al montar: la terminal se crea una sola vez sobre la
-  // ruta de la sesión que estaba activa al abrir el panel.
-  const [initialCwd] = useState(cwd)
+export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName }: { cwd?: string; shellName?: string }) {
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -84,7 +81,7 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd }: { cwd?: string
       }
     })
 
-    shell.pty.create(initialCwd).then(({ id, ws_port }) => {
+    shell.pty.create(cwd, shellName).then(({ id, ws_port }) => {
       if (disposed) {
         shell.pty.kill(id)
         return
@@ -150,42 +147,90 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd }: { cwd?: string
       if (ptyId) shell.pty.kill(ptyId)
       term.dispose()
     }
-  }, [initialCwd])
+  }, [cwd, shellName])
 
   return <div className="shell-terminal" ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6 }} />
 })
 
 // ============================================================== Explorador
 
-export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir, initialCwd }: { onOpenSessionDir: (dir: string) => void; initialCwd?: string | null }) {
+let clipboardItem: { path: string; name: string; isDir: boolean } | null = null
+
+export const ExplorerPanel = memo(function ExplorerPanel({
+  onOpenSessionDir,
+  initialCwd,
+  onOpenFile,
+}: {
+  onOpenSessionDir: (dir: string) => void
+  initialCwd?: string | null
+  onOpenFile?: (path: string) => void
+}) {
   const t = useT()
   const [drives, setDrives] = useState<string[]>([])
-  const [cwd, setCwd] = useState<string | null>(null)
+  const [showDrives, setShowDrives] = useState(false)
+  const [cwd, setCwd] = useState<string | null>(initialCwd || null)
   const [dirs, setDirs] = useState<FsEntry[]>([])
   const [files, setFiles] = useState<FsEntry[]>([])
   const [favorites, setFavorites] = useState<string[]>([])
   const [preview, setPreview] = useState<{ path: string; content: string; ext: string; truncated: boolean } | null>(null)
   const [history, setHistory] = useState<string[]>([])
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: FsEntry | null; isDir: boolean } | null>(null)
+  const [copied, setCopied] = useState<typeof clipboardItem>(clipboardItem)
+  const [dragOverTree, setDragOverTree] = useState(false)
+  const [actionNotice, setActionNotice] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  const showNotice = (msg: string) => {
+    setActionNotice(msg)
+    window.setTimeout(() => setActionNotice((m) => (m === msg ? null : m)), 2500)
+  }
 
   const load = useCallback(async (path: string) => {
+    if (!path) return
     setCwd(path)
     setPreview(null)
-    const r = await shell.fs.list(path)
-    setDirs(r.dirs)
-    setFiles(r.files)
+    try {
+      const r = await shell.fs.list(path)
+      setDirs(r.dirs || [])
+      setFiles(r.files || [])
+    } catch {
+      setDirs([])
+      setFiles([])
+    }
   }, [])
 
+  // Auto-cargar la sesión cuando cambia o se define initialCwd
   useEffect(() => {
-    shell.fs.drives().then(({ drives }) => {
-      setDrives(drives)
-      shell.fs.favorites().then(({ favorites }) => setFavorites(favorites))
-      if (initialCwd) {
-        load(initialCwd)
-      } else if (drives.length > 0) {
-        load(drives[0])
+    if (initialCwd) {
+      load(initialCwd)
+    } else {
+      shell.fs.drives().then(({ drives }) => {
+        setDrives(drives)
+        if (drives.length > 0) load(drives[0])
+      }).catch(() => {})
+    }
+  }, [initialCwd, load])
+
+  useEffect(() => {
+    if (showDrives && drives.length === 0) {
+      shell.fs.drives().then(({ drives }) => {
+        setDrives(drives)
+        shell.fs.favorites().then(({ favorites }) => setFavorites(favorites))
+      }).catch(() => {})
+    }
+  }, [showDrives, drives.length])
+
+  // Cerrar menú contextual al hacer clic fuera
+  useEffect(() => {
+    if (!contextMenu) return
+    const onDocClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setContextMenu(null)
       }
-    })
-  }, [load, initialCwd])
+    }
+    window.addEventListener("pointerdown", onDocClick)
+    return () => window.removeEventListener("pointerdown", onDocClick)
+  }, [contextMenu])
 
   const nav = (path: string) => {
     setHistory((h) => [...h, cwd ?? ""])
@@ -196,6 +241,8 @@ export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir, ini
     if (prev) {
       setHistory((h) => h.slice(0, -1))
       load(prev)
+    } else if (initialCwd && cwd !== initialCwd) {
+      load(initialCwd)
     }
   }
   const fav = (path: string, add: boolean) => {
@@ -203,23 +250,186 @@ export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir, ini
   }
 
   const openFile = async (path: string) => {
+    if (onOpenFile) {
+      onOpenFile(path)
+      return
+    }
     const r = await shell.fs.read(path)
     setPreview({ path: r.path, content: r.content, ext: r.ext, truncated: r.truncated })
   }
 
+  const handleContextMenu = (e: React.MouseEvent, entry: FsEntry | null, isDir: boolean) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const x = Math.min(e.clientX, window.innerWidth - 200)
+    const y = Math.min(e.clientY, window.innerHeight - 250)
+    setContextMenu({ x, y, entry, isDir })
+  }
+
+  const copyRelativePath = (path: string) => {
+    const base = initialCwd || cwd || ""
+    const rel = base && path.startsWith(base) ? path.slice(base.length).replace(/^[/\\]+/, "") : path
+    navigator.clipboard.writeText(rel)
+    setContextMenu(null)
+    showNotice(`Ruta relativa copiada: ${rel}`)
+  }
+
+  const copyFullPath = (path: string) => {
+    navigator.clipboard.writeText(path)
+    setContextMenu(null)
+    showNotice(`Ruta completa copiada`)
+  }
+
+  const handleCopyItem = (entry: FsEntry, isDir: boolean) => {
+    clipboardItem = { path: entry.path, name: entry.name, isDir }
+    setCopied(clipboardItem)
+    setContextMenu(null)
+    showNotice(`Copiado: ${entry.name}`)
+  }
+
+  const handlePasteItem = async (destDir: string) => {
+    if (!copied) return
+    setContextMenu(null)
+    try {
+      await shell.fs.copy(copied.path, destDir)
+      showNotice(`Pegado en ${destDir.split(/[/\\]/).pop() || destDir}`)
+      if (cwd) load(cwd)
+    } catch {
+      showNotice(`Error al pegar archivo`)
+    }
+  }
+
+  const handleDeleteItem = async (entry: FsEntry) => {
+    setContextMenu(null)
+    if (!window.confirm(`¿Eliminar definitivamente "${entry.name}"?`)) return
+    try {
+      await shell.fs.delete(entry.path)
+      showNotice(`Eliminado: ${entry.name}`)
+      if (cwd) load(cwd)
+    } catch {
+      showNotice(`Error al eliminar`)
+    }
+  }
+
+  const handleDropExternal = async (e: React.DragEvent, targetDir: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverTree(false)
+    const filesList = e.dataTransfer.files
+    if (!filesList || filesList.length === 0) return
+
+    let count = 0
+    for (const f of Array.from(filesList)) {
+      try {
+        const reader = new FileReader()
+        const b64 = await new Promise<string>((res, rej) => {
+          reader.onload = () => {
+            const dataUrl = reader.result as string
+            const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl
+            res(base64)
+          }
+          reader.onerror = rej
+          reader.readAsDataURL(f)
+        })
+        const sep = targetDir.includes("\\") ? "\\" : "/"
+        const targetPath = `${targetDir}${targetDir.endsWith(sep) ? "" : sep}${f.name}`
+        await shell.fs.write(targetPath, b64)
+        count++
+      } catch {
+        /* ignore */
+      }
+    }
+    showNotice(`Añadido(s) ${count} archivo(s) a la carpeta`)
+    if (cwd) load(cwd)
+  }
+
+  const handleCreateFile = async (parentDir: string) => {
+    setContextMenu(null)
+    const name = window.prompt("Nombre del nuevo archivo (ej: app.ts):")
+    if (!name || !name.trim()) return
+    const sep = parentDir.includes("\\") ? "\\" : "/"
+    const fullPath = `${parentDir}${parentDir.endsWith(sep) ? "" : sep}${name.trim()}`
+    try {
+      await shell.fs.write(fullPath, "")
+      showNotice(`Archivo creado: ${name}`)
+      if (cwd) load(cwd)
+      if (onOpenFile) onOpenFile(fullPath)
+    } catch {
+      showNotice("Error al crear archivo")
+    }
+  }
+
+  const handleCreateFolder = async (parentDir: string) => {
+    setContextMenu(null)
+    const name = window.prompt("Nombre de la nueva carpeta:")
+    if (!name || !name.trim()) return
+    const sep = parentDir.includes("\\") ? "\\" : "/"
+    const fullPath = `${parentDir}${parentDir.endsWith(sep) ? "" : sep}${name.trim()}`
+    try {
+      await shell.fs.mkdir(fullPath)
+      showNotice(`Carpeta creada: ${name}`)
+      if (cwd) load(cwd)
+    } catch {
+      showNotice("Error al crear carpeta")
+    }
+  }
+
+  const projName = initialCwd ? (initialCwd.split(/[/\\]/).filter(Boolean).pop() || initialCwd) : null
+
   return (
-    <div className="shell-explorer">
+    <div
+      className={`shell-explorer${dragOverTree ? " is-drag-over" : ""}`}
+      onContextMenu={(e) => handleContextMenu(e, null, true)}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragOverTree(true) }}
+      onDragLeave={() => setDragOverTree(false)}
+      onDrop={(e) => handleDropExternal(e, cwd || initialCwd || "")}
+    >
       <div className="shell-explorer-top">
         <button className="btn-icon compact" onClick={back} title={t('shell.back')} aria-label={t('shell.back')}>←</button>
-        <span className="shell-path" title={cwd ?? ""}>{cwd ?? "…"}</span>
+        <span className="shell-path" title={cwd ?? ""}>
+          {projName && cwd?.startsWith(initialCwd!) ? (
+            cwd === initialCwd ? `📁 ${projName}` : `📁 ${projName}/${cwd.slice(initialCwd!.length).replace(/^[/\\]+/, "")}`
+          ) : (cwd ?? "…")}
+        </span>
+        <button type="button" className="btn-icon compact" onClick={() => handleCreateFile(cwd || initialCwd || "")} title="Nuevo archivo">
+          +📄
+        </button>
+        <button type="button" className="btn-icon compact" onClick={() => handleCreateFolder(cwd || initialCwd || "")} title="Nueva carpeta">
+          +📁
+        </button>
+        <button type="button" className="btn-icon compact" onClick={() => load(cwd || initialCwd || "")} title="Recargar archivos">
+          ↻
+        </button>
+        {copied && cwd && (
+          <button type="button" className="btn-icon compact" onClick={() => handlePasteItem(cwd)} title={`Pegar "${copied.name}" aquí`}>
+            📋
+          </button>
+        )}
+        {initialCwd && (
+          <button type="button" className="btn-icon compact" onClick={() => setShowDrives(!showDrives)} title={showDrives ? "Ocultar unidades de disco" : "Ver discos del sistema"}>
+            💾
+          </button>
+        )}
       </div>
-      <div className="shell-drives">
-        {drives.map((d) => (
-          <button key={d} type="button" className={`shell-drive${cwd === d ? " active" : ""}`} onClick={() => load(d)}>{d}</button>
-        ))}
-      </div>
+      {actionNotice && (
+        <div style={{ padding: "4px 8px", fontSize: "0.75rem", background: "var(--primary-soft)", color: "var(--primary)", borderBottom: "1px solid var(--border)" }}>
+          {actionNotice}
+        </div>
+      )}
+      {showDrives && (
+        <div className="shell-drives">
+          {initialCwd && (
+            <button type="button" className={`shell-drive${cwd === initialCwd ? " active" : ""}`} onClick={() => load(initialCwd)} title={initialCwd}>
+              📁 Proyecto ({projName})
+            </button>
+          )}
+          {drives.map((d) => (
+            <button key={d} type="button" className={`shell-drive${cwd === d ? " active" : ""}`} onClick={() => load(d)}>{d}</button>
+          ))}
+        </div>
+      )}
       <div className="shell-tree">
-        {favorites.length > 0 && (
+        {showDrives && favorites.length > 0 && (
           <div className="shell-tree-group">
             <div className="shell-tree-title">Favoritos</div>
             {favorites.map((f) => (
@@ -232,7 +442,22 @@ export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir, ini
           </div>
         )}
         {dirs.map((d) => (
-          <div key={d.path} className="shell-row shell-dir" onClick={() => nav(d.path)} onDoubleClick={() => fav(d.path, true)} title={d.path}>
+          <div
+            key={d.path}
+            className="shell-row shell-dir"
+            onClick={() => nav(d.path)}
+            onDoubleClick={() => fav(d.path, true)}
+            onContextMenu={(e) => handleContextMenu(e, d, true)}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy" }}
+            onDrop={(e) => handleDropExternal(e, d.path)}
+            draggable={true}
+            onDragStart={(e) => {
+              e.dataTransfer.setData("text/plain", d.path)
+              e.dataTransfer.setData("application/x-opencode-path", d.path)
+              e.dataTransfer.setData("application/x-opencode-is-image", "0")
+            }}
+            title={d.path}
+          >
             <FolderIcon size={13} className="shell-glyph" />
             <span className="shell-name">{d.name}</span>
             {cwd && (
@@ -242,8 +467,21 @@ export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir, ini
         ))}
         {files.map((f) => {
           const ic = fileIcon(f.name, false)
+          const isImg = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f.name)
           return (
-            <div key={f.path} className="shell-row shell-file" onClick={() => openFile(f.path)} title={f.path}>
+            <div
+              key={f.path}
+              className="shell-row shell-file"
+              onClick={() => openFile(f.path)}
+              onContextMenu={(e) => handleContextMenu(e, f, false)}
+              draggable={true}
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", f.path)
+                e.dataTransfer.setData("application/x-opencode-path", f.path)
+                e.dataTransfer.setData("application/x-opencode-is-image", isImg ? "1" : "0")
+              }}
+              title={f.path}
+            >
               <span className="shell-glyph" style={{ color: ic.color }}>{ic.glyph}</span>
               <span className="shell-name">{f.name}</span>
               <span className="shell-size">{f.size != null ? (f.size > 1024 * 1024 ? `${(f.size / 1048576).toFixed(1)}M` : f.size > 1024 ? `${(f.size / 1024).toFixed(0)}K` : `${f.size}B`) : ""}</span>
@@ -252,6 +490,109 @@ export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir, ini
         })}
         {dirs.length === 0 && files.length === 0 && <div className="shell-empty">{t('shell.empty')}</div>}
       </div>
+
+      {/* Menú Contextual (Click Derecho) */}
+      {contextMenu && (
+        <div
+          ref={menuRef}
+          className="modal-dropdown fade-in"
+          style={{
+            position: "fixed",
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+            zIndex: 99999,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-sm)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+            padding: "4px 0",
+            minWidth: "190px",
+          }}
+        >
+          {contextMenu.entry && (
+            <>
+              <button
+                type="button"
+                className="overflow-item"
+                onClick={() => (contextMenu.isDir ? nav(contextMenu.entry!.path) : openFile(contextMenu.entry!.path))}
+              >
+                <span>📂</span> {contextMenu.isDir ? "Abrir carpeta" : "Abrir archivo"}
+              </button>
+              <button
+                type="button"
+                className="overflow-item"
+                onClick={() => copyRelativePath(contextMenu.entry!.path)}
+              >
+                <span>🔗</span> Obtener ruta relativa
+              </button>
+              <button
+                type="button"
+                className="overflow-item"
+                onClick={() => copyFullPath(contextMenu.entry!.path)}
+              >
+                <span>📋</span> Obtener ruta completa
+              </button>
+              <button
+                type="button"
+                className="overflow-item"
+                onClick={() => handleCreateFile(contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : cwd || initialCwd || "")}
+              >
+                <span>📄</span> Nuevo archivo
+              </button>
+              <button
+                type="button"
+                className="overflow-item"
+                onClick={() => handleCreateFolder(contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : cwd || initialCwd || "")}
+              >
+                <span>📁</span> Nueva carpeta
+              </button>
+              <button
+                type="button"
+                className="overflow-item"
+                onClick={() => handleCopyItem(contextMenu.entry!, contextMenu.isDir)}
+              >
+                <span>📋</span> Copiar {contextMenu.isDir ? "carpeta" : "archivo"}
+              </button>
+              <button
+                type="button"
+                className="overflow-item"
+                style={{ color: "var(--danger)" }}
+                onClick={() => handleDeleteItem(contextMenu.entry!)}
+              >
+                <span>🗑️</span> Eliminar
+              </button>
+            </>
+          )}
+          {!contextMenu.entry && (
+            <>
+              <button
+                type="button"
+                className="overflow-item"
+                onClick={() => handleCreateFile(cwd || initialCwd || "")}
+              >
+                <span>📄</span> Nuevo archivo aquí
+              </button>
+              <button
+                type="button"
+                className="overflow-item"
+                onClick={() => handleCreateFolder(cwd || initialCwd || "")}
+              >
+                <span>📁</span> Nueva carpeta aquí
+              </button>
+            </>
+          )}
+          {copied && (
+            <button
+              type="button"
+              className="overflow-item"
+              onClick={() => handlePasteItem(contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : cwd || initialCwd || "")}
+            >
+              <span>📥</span> Pegar "{copied.name}"
+            </button>
+          )}
+        </div>
+      )}
+
       {preview && (
         <div className="shell-preview">
           <div className="shell-preview-head">
@@ -262,6 +603,116 @@ export const ExplorerPanel = memo(function ExplorerPanel({ onOpenSessionDir, ini
           <pre className="shell-preview-body">{preview.content}{preview.truncated ? "\n…" : ""}</pre>
         </div>
       )}
+    </div>
+  )
+})
+
+// ============================================================== Editor de Archivos (Pestaña / Panel)
+
+export const FileEditorPanel = memo(function FileEditorPanel({
+  path,
+  onClose,
+  initialCwd,
+}: {
+  path: string
+  onClose?: () => void
+  initialCwd?: string
+}) {
+  const [content, setContent] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    shell.fs.read(path).then((r) => {
+      if (cancelled) return
+      setContent(r.content)
+      setLoading(false)
+      setDirty(false)
+    }).catch((err) => {
+      if (cancelled) return
+      setError(err instanceof Error ? err.message : "Error al abrir archivo")
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [path])
+
+  const handleSave = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const b64 = btoa(unescape(encodeURIComponent(content)))
+      await shell.fs.write(path, b64)
+      setDirty(false)
+    } catch {
+      setError("Error al guardar archivo")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const fileName = path.split(/[/\\]/).pop() || path
+  const relPath = initialCwd && path.startsWith(initialCwd) ? path.slice(initialCwd.length).replace(/^[/\\]+/, "") : path
+
+  return (
+    <div className="file-editor-panel" style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
+      <div className="file-editor-tab-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+          <span style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--text)" }}>{fileName}</span>
+          <span style={{ fontSize: "0.75rem", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{relPath}</span>
+          {dirty && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)" }} title="Cambios sin guardar" />}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {dirty && (
+            <button type="button" className="btn-primary compact" onClick={handleSave} disabled={saving}>
+              {saving ? "Guardando..." : "Guardar"}
+            </button>
+          )}
+          {onClose && (
+            <button type="button" className="btn-icon compact" onClick={onClose} title="Cerrar pestaña">
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+      <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+        {loading ? (
+          <div style={{ padding: 16, color: "var(--muted)" }}>Cargando archivo...</div>
+        ) : error ? (
+          <div style={{ padding: 16, color: "var(--danger)" }}>{error}</div>
+        ) : (
+          <textarea
+            style={{
+              width: "100%",
+              height: "100%",
+              boxSizing: "border-box",
+              border: "none",
+              outline: "none",
+              resize: "none",
+              background: "var(--surface)",
+              color: "var(--text)",
+              fontFamily: "Consolas, 'Cascadia Mono', monospace",
+              fontSize: "13px",
+              lineHeight: 1.5,
+              padding: "10px",
+              tabSize: 2,
+            }}
+            value={content}
+            onChange={(e) => { setContent(e.target.value); setDirty(true) }}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+                e.preventDefault()
+                handleSave()
+              }
+            }}
+            spellCheck={false}
+          />
+        )}
+      </div>
     </div>
   )
 })
