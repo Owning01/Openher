@@ -45,6 +45,7 @@ export type ChatViewProps = {
   onChangeVariant: (variant: string | null, sessionID?: string) => void
   getModelForSession?: (sessionID?: string | null) => { activeModelOption: ModelOption | null; activeModel?: { providerID: string; modelID: string; variant?: string }; activeModelVariants: ModelOption[]; selectedVariant: string | null }
   primaryAgentOptions: AgentOption[]
+  allAgentOptions?: AgentOption[]
   onChangeAgent: (id: string) => void
   projectName: string | null
   onStartRename: (session: SessionView) => void
@@ -116,7 +117,7 @@ export const ChatView = memo(function ChatView({
   showTypingBubble, loadingSessionID, selectedID, messageScrollSignature, view,
   dataMode: _dataMode,
   renamingSessionID, renameValue,
-  activeModelOption, activeAgentID, primaryAgentOptions, onChangeAgent,
+  activeModelOption, activeAgentID, primaryAgentOptions, allAgentOptions, onChangeAgent,
   activeModelVariants, selectedVariant, onChangeVariant,
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
@@ -606,6 +607,7 @@ export const ChatView = memo(function ChatView({
           isWorking={isWorking}
           activeAgentID={activeAgentID}
           primaryAgentOptions={primaryAgentOptions}
+          allAgentOptions={allAgentOptions}
           onChangeAgent={onChangeAgent}
           contextLabel={contextDisplay?.label || null}
           onShellSend={onShellSend}

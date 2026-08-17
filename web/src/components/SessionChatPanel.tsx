@@ -324,14 +324,20 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         const zone = calcDropZone(e)
         setDropZone(null)
         const raw = e.dataTransfer.getData("text/plain")
-        if (/^\d+$/.test(raw) && Number(raw) !== panelIndex) {
-          // Arrastrado desde el header de otro panel
-          const fromIdx = Number(raw)
-          if (zone === "center") {
-            onSwapPanels(fromIdx, panelIndex)
-          } else {
-            onSplitSession(panelIndex, zone, session.id)
+        if (raw.startsWith("panel:")) {
+          const parts = raw.split(":")
+          const fromIdx = Number(parts[1])
+          const fromSessionId = parts[2]
+          if (fromIdx !== panelIndex) {
+            if (zone === "center") {
+              onSwapPanels(fromIdx, panelIndex)
+            } else {
+              onSplitSession(panelIndex, zone, fromSessionId)
+            }
           }
+        } else if (raw.startsWith("session:")) {
+          const sId = raw.replace("session:", "")
+          onSplitSession(panelIndex, zone, sId)
         } else {
           onSplitSession(panelIndex, zone)
         }
@@ -363,7 +369,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         className="session-panel-header"
         draggable
         onDragStart={(e) => {
-          e.dataTransfer.setData("text/plain", String(panelIndex))
+          e.dataTransfer.setData("text/plain", `panel:${panelIndex}:${session.id}`)
           e.dataTransfer.effectAllowed = "move"
         }}
       >

@@ -16,6 +16,7 @@ import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type 
 import { fetchGoUsage, loadGoAccounts, saveGoAccounts, type GoUsage } from "../goUsage"
 import { getDataUsage, formatBytes } from "../utils/dataUsage"
 import { variantsOf } from "../utils/model-utils"
+import { useIsDesktop } from "../hooks/useIsDesktop"
 
 type UsageStats = {
   promptsSent: number
@@ -321,13 +322,47 @@ export const SettingsPanel = memo(function SettingsPanel({
     { key: "permissionUI" as const, label: t('settings.permissionUI'), desc: t('settings.permissionUIDesc') },
   ]
 
+  type CategoryKey = "servers" | "models" | "appearance" | "chat" | "remote" | "system"
+  const [activeCategory, setActiveCategory] = useState<CategoryKey>("servers")
+  const [settingsSearch, setSettingsSearch] = useState("")
+  const isDesktop = useIsDesktop()
+
+  const categories: Array<{ id: CategoryKey; label: string; icon: string; badge?: string | number }> = [
+    { id: "servers", label: t('settings.sectionServers'), icon: "🌐", badge: draftConfig.host ? "●" : undefined },
+    { id: "models", label: t('settings.providers') || "IA & Modelos", icon: "🤖", badge: providers.length || undefined },
+    { id: "appearance", label: t('settings.sectionPreferences') || "Apariencia", icon: "🎨" },
+    { id: "chat", label: t('settings.chatCustomization') || "Chat", icon: "💬" },
+    { id: "remote", label: t('settings.desktopTitle') || "Escritorio Remoto", icon: "⚡" },
+    { id: "system", label: t('settings.extras') || "Sistema & Extras", icon: "🛠️" },
+  ]
+
+  const isSearching = settingsSearch.trim().length > 0
+  const showServers = !isDesktop || isSearching || activeCategory === "servers"
+  const showModels = !isDesktop || isSearching || activeCategory === "models"
+  const showAppearance = !isDesktop || isSearching || activeCategory === "appearance"
+  const showChat = !isDesktop || isSearching || activeCategory === "chat"
+  const showRemote = !isDesktop || isSearching || activeCategory === "remote"
+  const showSystem = !isDesktop || isSearching || activeCategory === "system"
+
   return (
     <section className="panel settings fade-in">
-      <div className="settings-header">
-        <h2>{t('settings.title')}</h2>
-        <p className="subtle">
-          {draftConfig.host && draftConfig.port > 0 ? `${draftConfig.host}:${draftConfig.port}` : t('settings.hostPlaceholder')}
-        </p>
+      <div className="settings-top-bar">
+        <div className="settings-header" style={{ margin: 0 }}>
+          <h2>{t('settings.title')}</h2>
+          <p className="subtle">
+            {draftConfig.host && draftConfig.port > 0 ? `${draftConfig.host}:${draftConfig.port}` : t('settings.hostPlaceholder')}
+          </p>
+        </div>
+        <div className="settings-search-wrapper">
+          <span className="settings-search-icon">🔍</span>
+          <input
+            className="settings-search-input"
+            type="text"
+            placeholder={t('sessions.searchPlaceholder') || "Buscar ajuste..."}
+            value={settingsSearch}
+            onChange={(e) => setSettingsSearch(e.target.value)}
+          />
+        </div>
         <button onClick={onTest} className="btn-secondary settings-test-btn" disabled={testingConnection || !canTestDraft}
           title={!canTestDraft ? t('settings.testNeedsFields') : testAlreadyPassedForDraft ? t('settings.testAgainTitle') : undefined}>
           {testingConnection ? (
@@ -336,10 +371,49 @@ export const SettingsPanel = memo(function SettingsPanel({
             <><TestIcon size={18} />{testAlreadyPassedForDraft ? t('settings.testAgain') : t('settings.test')}</>
           )}
         </button>
-        <p className="subtle">{t('settings.draftHint')}</p>
       </div>
+      <p className="subtle" style={{ margin: "0 0 var(--space-2) 0" }}>{t('settings.draftHint')}</p>
 
+      {/* Notice */}
+      {settingsNotice && (
+        <div className={`notice ${settingsNotice.type} fade-in`}>
+          {settingsNotice.type === 'success' && '✓ '}
+          {settingsNotice.type === 'error' && '✗ '}
+          {settingsNotice.type === 'info' && 'ℹ '}
+          <span style={{ whiteSpace: "pre-line" }}>{settingsNotice.text}</span>
+        </div>
+      )}
+
+      {connectedVersion && testAlreadyPassedForDraft && (
+        <div className="notice success fade-in">
+          {t('settings.connectedTo', { version: connectedVersion })}
+        </div>
+      )}
+
+      <div className={isDesktop ? "settings-split-container" : "settings-mobile-container"}>
+        {isDesktop && (
+          <nav className="settings-sidebar-nav" aria-label="Categorías de ajustes">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                className={`settings-nav-btn${activeCategory === cat.id && !isSearching ? " active" : ""}`}
+                onClick={() => {
+                  setActiveCategory(cat.id)
+                  setSettingsSearch("")
+                }}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+                {cat.badge !== undefined && <span className="settings-nav-badge">{cat.badge}</span>}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        <div className="settings-content-pane">
       {/* Saved servers + per-server config */}
+      {showServers && (
       <SettingsSection title={t('settings.sectionServers')} icon={<ServerIcon size={14} />}
         open={serversOpen} onToggle={() => setServersOpen((v) => !v)}
         actions={
@@ -520,8 +594,10 @@ export const SettingsPanel = memo(function SettingsPanel({
           </button>
         </div>
       </SettingsSection>
+      )}
 
       {/* Data mode */}
+      {showServers && (
       <SettingsSection title={t('settings.dataModeTitle')}>
         <p className="subtle">{t('settings.dataModeDesc')}</p>
         <div className="data-mode-grid">
@@ -545,24 +621,10 @@ export const SettingsPanel = memo(function SettingsPanel({
           </span>
         </button>
       </SettingsSection>
-
-      {/* Notice */}
-      {settingsNotice && (
-        <div className={`notice ${settingsNotice.type} fade-in`}>
-          {settingsNotice.type === 'success' && '✓ '}
-          {settingsNotice.type === 'error' && '✗ '}
-          {settingsNotice.type === 'info' && 'ℹ '}
-          <span style={{ whiteSpace: "pre-line" }}>{settingsNotice.text}</span>
-        </div>
-      )}
-
-      {connectedVersion && testAlreadyPassedForDraft && (
-        <div className="notice success fade-in">
-          {t('settings.connectedTo', { version: connectedVersion })}
-        </div>
       )}
 
       {/* Preferences */}
+      {showAppearance && (
       <SettingsSection title={t('settings.sectionPreferences')}>
         <div className="form-grid">
           <label className="form-field">
@@ -641,8 +703,10 @@ export const SettingsPanel = memo(function SettingsPanel({
           )}
         </div>
       </SettingsSection>
+      )}
 
       {/* Feature flags */}
+      {showSystem && (
       <SettingsSection title={t('settings.featureFlags')}>
         <p className="subtle">{t('settings.featureFlagsDesc')}</p>
         <div className="switch-list">
@@ -659,8 +723,10 @@ export const SettingsPanel = memo(function SettingsPanel({
           ))}
         </div>
       </SettingsSection>
+      )}
 
       {/* Providers */}
+      {showModels && (
       <SettingsSection title={t('settings.providers')}>
         <p className="subtle">{t('settings.providersDesc')}</p>
         <ProviderManager
@@ -671,8 +737,10 @@ export const SettingsPanel = memo(function SettingsPanel({
           onDisconnect={onDisconnectProvider}
         />
       </SettingsSection>
+      )}
 
       {/* Blocked models */}
+      {showModels && (
       <SettingsSection title={t('settings.blockedModels')}>
         <p className="subtle">{t('settings.blockedModelsHint')}</p>
         {modelOptions.length === 0 ? (
@@ -732,8 +800,10 @@ export const SettingsPanel = memo(function SettingsPanel({
           </>
         )}
       </SettingsSection>
+      )}
 
       {/* Chat customization */}
+      {showChat && (
       <SettingsSection title={t('settings.chatCustomization')}>
         <p className="subtle">{t('settings.chatCustomizationDesc')}</p>
         <ChatCustomizer
@@ -741,14 +811,18 @@ export const SettingsPanel = memo(function SettingsPanel({
           onSettingChange={onChatSettingChange}
           onReset={onResetChatSettings} />
       </SettingsSection>
+      )}
 
       {/* Prompt snippets */}
+      {showChat && (
       <SettingsSection title={t('settings.snippets')}>
         <p className="subtle">{t('settings.snippetsDesc')}</p>
         <SnippetManager snippets={snippets} onAdd={onAddSnippet} onRemove={onRemoveSnippet} />
       </SettingsSection>
+      )}
 
       {/* Extras */}
+      {showSystem && (
       <SettingsSection title={t('settings.extras')}>
         <p className="subtle">{t('settings.extrasDesc')}</p>
         <div className="settings-extras-list">
@@ -802,8 +876,10 @@ export const SettingsPanel = memo(function SettingsPanel({
           )}
         </div>
       </SettingsSection>
+      )}
 
       {/* Stats */}
+      {showSystem && (
       <SettingsSection title={t('settings.stats')} icon={<StatsIcon size={14} />}>
         <div className="stats-grid">
           <div className="stat-item">
@@ -821,7 +897,9 @@ export const SettingsPanel = memo(function SettingsPanel({
           </button>
         </div>
       </SettingsSection>
+      )}
 
+      {showRemote && (
       <SettingsSection title={t('settings.desktopTitle')}>
         <p className="subtle">{t('settings.desktopHint')}</p>
         <div className="desktop-settings-grid">
@@ -884,7 +962,9 @@ export const SettingsPanel = memo(function SettingsPanel({
         </div>
         {desktopNotice && <p className={`desktop-settings-notice ${desktopNoticeType}`}>{desktopNotice}</p>}
       </SettingsSection>
+      )}
 
+      {showModels && (
       <SettingsSection title={t('settings.goTitle')}>
         <p className="subtle">{t('settings.goHint')}</p>
         {goKeys.map((key, i) => {
@@ -975,6 +1055,9 @@ export const SettingsPanel = memo(function SettingsPanel({
           {goSaved && goKeys.length > 1 && <span className="desktop-saved-hint">{t('settings.goSaved')}</span>}
         </div>
       </SettingsSection>
+      )}
+        </div>
+      </div>
 
       <div className="settings-footer">
         <button type="button" className="btn-secondary" onClick={() => onNavigate("help")}>

@@ -1348,3 +1348,132 @@
   letter-spacing: 0.15em;
 }
 
+/* ===== Settings Option 1: Split Sidebar & Content Pane ===== */
+.settings-split-container {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  gap: var(--space-4);
+  align-items: start;
+  width: 100%;
+}
+
+.settings-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2);
+  position: sticky;
+  top: var(--space-3);
+}
+
+.settings-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.settings-nav-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.settings-nav-btn.active {
+  background: var(--primary-soft, rgba(88, 166, 255, 0.12));
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.settings-nav-badge {
+  margin-left: auto;
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+.settings-nav-btn.active .settings-nav-badge {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.settings-content-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.settings-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.settings-search-wrapper {
+  position: relative;
+  flex: 1;
+  max-width: 380px;
+}
+
+.settings-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.settings-search-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.settings-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  font-size: 0.85rem;
+}
+
+.settings-mobile-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+@media (max-width: 780px) {
+  .settings-top-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .settings-search-wrapper {
+    max-width: 100%;
+  }
+}
+

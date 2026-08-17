@@ -170,6 +170,20 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         let _ = req.respond(json_ok(&crate::fsx::session_for_dir(&q("path"))));
         return;
     }
+    if path == "/shell/fs/pick-folder" {
+        match crate::fsx::pick_folder() {
+            Ok(Some(p)) => {
+                let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "path": p })));
+            }
+            Ok(None) => {
+                let _ = req.respond(json_ok(&serde_json::json!({ "ok": false, "path": null })));
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(500, &e));
+            }
+        }
+        return;
+    }
     if path == "/shell/fs/favorites" && method == Method::Get {
         let _ = req.respond(json_ok(&serde_json::json!({ "favorites": crate::fsx::favorites() })));
         return;

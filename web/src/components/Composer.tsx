@@ -35,6 +35,7 @@ type ComposerProps = {
   isWorking: boolean
   activeAgentID: string
   primaryAgentOptions: AgentOption[]
+  allAgentOptions?: AgentOption[]
   onChangeAgent: (id: string) => void
   contextLabel?: string | null
   config?: ServerConfig
@@ -57,7 +58,7 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "theme", description: "Open theme picker", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, activeAgentID, primaryAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue, snippets = [], charLimit = 0 }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, activeAgentID, primaryAgentOptions, allAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, queueEnabled = false, onToggleQueue, snippets = [], charLimit = 0 }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const [showAtMenu, setShowAtMenu] = useState(false)
@@ -79,8 +80,8 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const [historyDraft, setHistoryDraft] = useState<string | null>(null)
 
   const visibleAgents = useMemo(
-    () => primaryAgentOptions.filter((a) => !a.hidden),
-    [primaryAgentOptions],
+    () => (allAgentOptions ?? primaryAgentOptions).filter((a) => !a.hidden),
+    [allAgentOptions, primaryAgentOptions],
   )
 
   const [mentionItems, setMentionItems] = useState<MentionItem[]>([])

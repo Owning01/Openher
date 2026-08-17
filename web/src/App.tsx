@@ -983,9 +983,79 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       await onLoadSelected(created.id, created.directory)
       await refreshSessions()
     }
-  }, [createSession, activeModel, onLoadSelected, refreshSessions, persistDirectory])
+  }, [createSession, activeModel, recordSessionCreated, persistDirectory, navigate, onLoadSelected, refreshSessions])
 
   const isDesktop = useIsDesktop()
+
+  const handleOpenNewSession = useCallback(async () => {
+    if (isDesktop) {
+      try {
+        const res = await shell.fs.pickFolder()
+        if (res && res.ok && res.path) {
+          await handleCreateSession(res.path)
+          return
+        }
+        if (res && res.ok === false && res.path === null) {
+          // El usuario canceló la selección de carpeta
+          return
+        }
+      } catch {
+        // En caso de que no esté corriendo bajo el shell exe, fallback a picker
+      }
+      openNewSessionPicker()
+      return
+    }
+    openNewSessionPicker()
+  }, [isDesktop, handleCreateSession, openNewSessionPicker])
+
+  // Zoom general de la interfaz con Ctrl + Ruedita y atajos de teclado (Ctrl + / Ctrl - / Ctrl 0)
+  useEffect(() => {
+    const ZOOM_KEY = "opencode.mobile.ui_zoom"
+    const saved = localStorage.getItem(ZOOM_KEY)
+    let currentZoom = saved ? Math.min(2.5, Math.max(0.5, parseFloat(saved))) : 1
+    if (currentZoom !== 1 && !isNaN(currentZoom)) {
+      (document.documentElement.style as any).zoom = `${currentZoom}`
+    }
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        const delta = e.deltaY < 0 ? 0.05 : -0.05
+        currentZoom = Math.min(2.5, Math.max(0.5, Math.round((currentZoom + delta) * 100) / 100))
+        if (Math.abs(currentZoom - 1) < 0.02) currentZoom = 1
+        ;(document.documentElement.style as any).zoom = `${currentZoom}`
+        localStorage.setItem(ZOOM_KEY, String(currentZoom))
+      }
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "=" || e.key === "+") {
+          e.preventDefault()
+          currentZoom = Math.min(2.5, Math.round((currentZoom + 0.1) * 10) / 10)
+          ;(document.documentElement.style as any).zoom = `${currentZoom}`
+          localStorage.setItem(ZOOM_KEY, String(currentZoom))
+        } else if (e.key === "-") {
+          e.preventDefault()
+          currentZoom = Math.max(0.5, Math.round((currentZoom - 0.1) * 10) / 10)
+          ;(document.documentElement.style as any).zoom = `${currentZoom}`
+          localStorage.setItem(ZOOM_KEY, String(currentZoom))
+        } else if (e.key === "0") {
+          e.preventDefault()
+          currentZoom = 1
+          ;(document.documentElement.style as any).zoom = "1"
+          localStorage.setItem(ZOOM_KEY, "1")
+        }
+      }
+    }
+
+    window.addEventListener("wheel", handleWheel, { passive: false })
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("wheel", handleWheel)
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [])
 
   // ===== Desktop: grid de paneles (splits) =====
   const [desktopState, setDesktopState] = useState(() => loadDesktopState(selectedSession?.id ?? null))
@@ -1030,8 +1100,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const openInPanel = useCallback((index: number, id: string) => {
     setDesktopLayout((prev) => {
+      const existing = prev.sessions.indexOf(id)
       const sessions = [...prev.sessions]
       const panelKinds = [...prev.panelKinds]
+      if (existing >= 0 && existing !== index) {
+        sessions[existing] = null
+      }
       sessions[index] = id
       panelKinds[index] = "session"
       return { ...prev, sessions, panelKinds }
@@ -1218,7 +1292,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     draggedSessionRef.current = { id, dir }
   }, [])
 
-  // 4-Way Docking: Acopla una sesión en cualquier lado (izq, der, arriba, abajo o centro)
+  // 4-Way Docking: Acopla una sesión en cualquier lado (izq, der, arriba, abajo o centro) sin duplicar
   const handleDockSession = useCallback((index: number, dir: "left" | "right" | "top" | "bottom" | "center", specificId?: string) => {
     const drag = draggedSessionRef.current
     const dragId = specificId || drag?.id
@@ -1229,6 +1303,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setDesktopLayout((prev) => {
         const sessions = [...prev.sessions]
         const panelKinds = [...prev.panelKinds]
+        const existing = sessions.indexOf(dragId)
+        if (existing >= 0 && existing !== index) {
+          sessions[existing] = null
+        }
         sessions[index] = dragId
         panelKinds[index] = "session"
         return { ...prev, sessions, panelKinds }
@@ -1239,6 +1317,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
     if (dir === "left" || dir === "right") {
       setDesktopLayout((prev) => {
+        const baseSessions = prev.sessions.map((s) => (s === dragId ? null : s))
         const cols = prev.cols + 1
         const col = index % prev.cols
         const sessions: Array<string | null> = []
@@ -1246,13 +1325,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         for (let r = 0; r < prev.rows; r++) {
           for (let c = 0; c < cols; c++) {
             if (dir === "right") {
-              if (c <= col) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
+              if (c <= col) { sessions.push(baseSessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
               else if (c === col + 1) { sessions.push(r === Math.floor(index / prev.cols) ? dragId : null); panelKinds.push("session") }
-              else { sessions.push(prev.sessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + (c - 1)] ?? "session") }
+              else { sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + (c - 1)] ?? "session") }
             } else {
               if (c === col) { sessions.push(r === Math.floor(index / prev.cols) ? dragId : null); panelKinds.push("session") }
-              else if (c < col) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
-              else { sessions.push(prev.sessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + (c - 1)] ?? "session") }
+              else if (c < col) { sessions.push(baseSessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
+              else { sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + (c - 1)] ?? "session") }
             }
           }
         }
@@ -1265,6 +1344,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
     if (dir === "top" || dir === "bottom") {
       setDesktopLayout((prev) => {
+        const baseSessions = prev.sessions.map((s) => (s === dragId ? null : s))
         const rows = prev.rows + 1
         const row = Math.floor(index / prev.cols)
         const col = index % prev.cols
@@ -1273,13 +1353,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < prev.cols; c++) {
             if (dir === "bottom") {
-              if (r <= row) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
+              if (r <= row) { sessions.push(baseSessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
               else if (r === row + 1) { sessions.push(c === col ? dragId : null); panelKinds.push("session") }
-              else { sessions.push(prev.sessions[(r - 1) * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[(r - 1) * prev.cols + c] ?? "session") }
+              else { sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[(r - 1) * prev.cols + c] ?? "session") }
             } else {
               if (r === row) { sessions.push(c === col ? dragId : null); panelKinds.push("session") }
-              else if (r < row) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
-              else { sessions.push(prev.sessions[(r - 1) * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[(r - 1) * prev.cols + c] ?? "session") }
+              else if (r < row) { sessions.push(baseSessions[r * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[r * prev.cols + c] ?? "session") }
+              else { sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null); panelKinds.push(prev.panelKinds[(r - 1) * prev.cols + c] ?? "session") }
             }
           }
         }
@@ -1346,7 +1426,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       if (e.shiftKey && k === "v") { e.preventDefault(); splitPanel(activePanel, "bottom"); return }
       if (k === "m") { e.preventDefault(); if (desktopLayout.sessions[activePanel]) toggleMaximize(activePanel); return }
       if (k === "b") { e.preventDefault(); setSidebarCollapsed((v) => !v); return }
-      if (k === "n") { e.preventDefault(); openNewSessionPicker(); return }
+      if (k === "n") { e.preventDefault(); handleOpenNewSession(); return }
       if (!e.shiftKey && /^[1-9]$/.test(k)) {
         const idx = Number(k) - 1
         if (idx < desktopLayout.cols * desktopLayout.rows) { e.preventDefault(); setActivePanel(idx) }
@@ -1355,7 +1435,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [isDesktop, view, maximizedPanel, desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions, activePanel, closePanel, splitPanel, toggleMaximize, setSidebarCollapsed, openNewSessionPicker])
+  }, [isDesktop, view, maximizedPanel, desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions, activePanel, closePanel, splitPanel, toggleMaximize, setSidebarCollapsed, handleOpenNewSession])
 
   const handleOpenSession = useCallback(async (id: string, dir: string) => {
     navigate("detail")
@@ -1516,7 +1596,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         onSelectProject={setSelectedProjectDir}
         onQueryChange={setQuery}
         onRefresh={refreshSessionsWithIndicator}
-        onNewSession={openNewSessionPicker}
+        onNewSession={handleOpenNewSession}
         onOpen={handleOpenSession}
         onStartRename={startRename}
         onRenameChange={setRenameValue}
@@ -1576,6 +1656,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     onChangeVariant: (variant: string | null, sessionID?: string) => changeVariant(variant, sessionID ?? selectedSession?.id),
     getModelForSession,
     primaryAgentOptions,
+    allAgentOptions: agentOptions,
     onChangeAgent: (id) => changeAgent(id, selectedSession?.directory),
     projectName,
     onStartRename: startRename,
