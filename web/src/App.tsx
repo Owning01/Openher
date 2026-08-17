@@ -13,6 +13,7 @@ import { usePolling } from "./hooks/usePolling"
 import { useCompletionAudio } from "./hooks/useCompletionAudio"
 import { useFolderPicker } from "./hooks/useFolderPicker"
 import { useStats } from "./hooks/useStats"
+import { prefetchServerStats } from "./hooks/useServerStats"
 import { useSSE } from "./hooks/useSSE"
 import { useOfflineCache } from "./hooks/useOfflineCache"
 import { NavBar } from "./components/NavBar"
@@ -219,12 +220,11 @@ const ShellPanelCell = memo(function ShellPanelCell({
         if (raw.startsWith("panel:")) {
           const parts = raw.split(":")
           const fromIdx = Number(parts[1])
-          const fromPayload = parts[2]
           if (fromIdx !== index) {
             if (zone === "center") {
               onSwapPanels(fromIdx, index)
             } else {
-              onSplitSession(index, zone, fromPayload)
+              onSplitSession(index, zone, raw)
             }
           }
         } else if (raw.startsWith("session:")) {
@@ -439,9 +439,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       if (!s.running) void shell.stats.start().catch(() => {})
     }).catch(() => {})
 
-    // 2. Pre-cargar datos del servidor de stats si hay config
+    // 2. Pre-cargar base de datos de stats en segundo plano (memoria + caché)
     if (config?.host) {
-      void api.fetchStats(config, DEFAULT_STATS_PORT).catch(() => {})
+      void prefetchServerStats(config, DEFAULT_STATS_PORT)
     }
   }, [config?.host])
 
@@ -1417,13 +1417,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (rawId.startsWith("panel:")) {
       const parts = rawId.split(":")
       fromIndex = Number(parts[1])
-      const payload = parts[2]
+      const payload = parts.slice(2).join(":")
       if (payload.startsWith("kind:")) {
         targetKind = payload.replace("kind:", "") as ShellPanelKind
         targetSessionId = null
       } else if (payload === "terminal" || payload === "explorer" || payload === "kanban" || payload === "docs" || payload === "stats" || payload === "labs") {
         targetKind = payload as ShellPanelKind
         targetSessionId = null
+      } else if (payload.startsWith("session:")) {
+        targetKind = "session"
+        targetSessionId = payload.replace("session:", "")
       } else {
         targetKind = "session"
         targetSessionId = payload
@@ -1454,6 +1457,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         } else if (fromIndex !== null && fromIndex !== index) {
           panelKinds[fromIndex] = "session"
           sessions[fromIndex] = null
+        } else if (targetKind !== "session") {
+          const existing = panelKinds.indexOf(targetKind)
+          if (existing >= 0 && existing !== index) {
+            panelKinds[existing] = "session"
+            sessions[existing] = null
+          }
         }
         sessions[index] = targetSessionId
         panelKinds[index] = targetKind
@@ -1472,6 +1481,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         } else if (fromIndex !== null && fromIndex < baseKinds.length) {
           baseKinds[fromIndex] = "session"
           baseSessions[fromIndex] = null
+        } else if (targetKind !== "session") {
+          const existing = baseKinds.indexOf(targetKind)
+          if (existing >= 0) {
+            baseKinds[existing] = "session"
+            baseSessions[existing] = null
+          }
         }
         const cols = prev.cols + 1
         const col = index % prev.cols
@@ -1520,6 +1535,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         } else if (fromIndex !== null && fromIndex < baseKinds.length) {
           baseKinds[fromIndex] = "session"
           baseSessions[fromIndex] = null
+        } else if (targetKind !== "session") {
+          const existing = baseKinds.indexOf(targetKind)
+          if (existing >= 0) {
+            baseKinds[existing] = "session"
+            baseSessions[existing] = null
+          }
         }
         const rows = prev.rows + 1
         const row = Math.floor(index / prev.cols)

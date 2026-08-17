@@ -422,10 +422,12 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     const visible = loadedSessionIDRef.current
     if (visible && visible !== sessionID) {
       // Tool part de un subagente (task): el server manda la sesión/mensaje de
-      // la sesión HIJA, pero la tarjeta pertenece al chat del padre. Se ancla
-      // por partID al último mensaje assistant de la sesión visible (el turno
-      // en curso que desplegó al subagente).
-      if (part.type !== "tool" && part.type !== "tool_use") return
+      // la sesión HIJA, pero la tarjeta de invocación pertenece al chat del padre. Se ancla
+      // por partID al último mensaje assistant de la sesión visible.
+      // Las tools internas (read, bash, etc.) de la sesión hija NO deben anclarse al padre.
+      const isTaskPart = part.tool === "task" || part.tool === "subagent" ||
+        (part.state && typeof part.state === "object" && ((part.state as Record<string, unknown>).input !== undefined))
+      if (!isTaskPart) return
       const anchor = subagentAnchorRef.current.get(part.id)
       if (anchor) {
         sessionID = anchor.sessionID

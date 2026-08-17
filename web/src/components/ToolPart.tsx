@@ -7,7 +7,10 @@ import { CollapsibleSection } from "./CollapsibleSection"
 import { GridSpinner } from "./GridSpinner"
 import { DiffView, parseDiffStat, synthesizeWritePatch } from "./DiffView"
 import { useT } from "../i18n-context"
-import { CodeIcon, FileIcon, TerminalIcon, GlobeIcon, SearchIcon, ToolIcon, BrainIcon } from "../Icons"
+import { CodeIcon, FileIcon, TerminalIcon, GlobeIcon, SearchIcon, ToolIcon } from "../Icons"
+import { Markdown } from "./Markdown"
+import { ThinkingBlock } from "./ThinkingBlock"
+import { computeRenderedMessages } from "../utils/rendered"
 
 export type ToolPartData = {
   id: string
@@ -151,45 +154,11 @@ function SubagentTaskCard({
     return () => { cancelled = true }
   }, [expanded, config, sessionID, directory])
 
-  // Extraer thinking, tools, y respuestas de los mensajes del subagente
-  const parsedItems = useMemo(() => {
-    const items: Array<{ type: "prompt" | "thinking" | "tool" | "message"; title?: string; content: string }> = []
-    
-    if (prompt) {
-      items.push({ type: "prompt", title: "Objetivo / Prompt", content: prompt })
-    }
-
-    if (subMessages.length > 0) {
-      for (const m of subMessages) {
-        if (m.parts && Array.isArray(m.parts)) {
-          for (const p of m.parts) {
-            if (p.type === "reasoning" || p.type === "thinking") {
-              if (p.text?.trim()) {
-                items.push({ type: "thinking", title: "Thinking", content: p.text.trim() })
-              }
-            } else if (p.type === "tool" || p.type.startsWith("tool_") || p.tool) {
-              const tName = p.tool || detectToolName(p.text ?? "") || "action"
-              const tInput = formatInput(p.state?.input ?? extractParam(p.text ?? "", "input"))
-              const tOut = formatInput(p.state?.output ?? extractParam(p.text ?? "", "output") ?? p.text)
-              items.push({
-                type: "tool",
-                title: `${tName.toUpperCase()}`,
-                content: [tInput, tOut].filter(Boolean).join("\n→ "),
-              })
-            } else if (p.type === "text" && p.text?.trim()) {
-              items.push({ type: "message", title: m.info?.role === "user" ? "User" : "Agent", content: p.text.trim() })
-            }
-          }
-        } else if (m.text?.trim()) {
-          items.push({ type: "message", title: m.info?.role === "user" ? "User" : "Agent", content: m.text.trim() })
-        }
-      }
-    } else if (rawOutput && rawOutput !== prompt) {
-      items.push({ type: "message", title: "Resultado", content: rawOutput })
-    }
-
-    return items
-  }, [prompt, subMessages, rawOutput])
+  // Computa los mensajes renderizados del subagente (reusando computeRenderedMessages)
+  const renderedSubMessages = useMemo(() => {
+    if (!subMessages || subMessages.length === 0) return []
+    return computeRenderedMessages(subMessages, undefined, new Map()).out
+  }, [subMessages])
 
   return (
     <div className={`subagent-task-card${expanded ? " is-expanded" : ""}${isDone ? "" : " working"}`}>
@@ -225,34 +194,63 @@ function SubagentTaskCard({
 
       {expanded && (
         <div className="subagent-task-window">
-          {loadingMessages && subMessages.length === 0 && (
+          {prompt && (
+            <div className="subagent-section-block">
+              <div className="subagent-section-title">
+                <span style={{ color: "var(--info)", display: "inline-flex" }}><CodeIcon size={13} /></span>
+                <span>Objetivo / Prompt</span>
+              </div>
+              <div style={{ fontSize: "0.82rem", color: "var(--text)" }}>
+                <Markdown text={prompt} />
+              </div>
+            </div>
+          )}
+
+          {loadingMessages && renderedSubMessages.length === 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--muted)", padding: "8px 0" }}>
               <GridSpinner label="Cargando detalles" size={14} />
               <span>Cargando acciones y mensajes del subagente...</span>
             </div>
           )}
 
-          {parsedItems.map((item, idx) => (
-            <div key={idx} className="subagent-section-block">
-              <div className="subagent-section-title">
-                {item.type === "thinking" && <span style={{ color: "var(--accent)", display: "inline-flex" }}><BrainIcon size={13} /></span>}
-                {item.type === "tool" && <span style={{ color: "var(--primary)", display: "inline-flex" }}><TerminalIcon size={13} /></span>}
-                {item.type === "prompt" && <span style={{ color: "var(--info)", display: "inline-flex" }}><CodeIcon size={13} /></span>}
-                <span>{item.title}</span>
-              </div>
-              {item.type === "thinking" ? (
-                <div className="subagent-thinking-box">{item.content}</div>
-              ) : item.type === "tool" ? (
-                <div className="subagent-action-item">{item.content}</div>
-              ) : (
-                <div style={{ whiteSpace: "pre-wrap", fontSize: "0.8rem", color: "var(--text)" }}>
-                  {item.content}
+          {renderedSubMessages.length > 0 && (
+            <div className="subagent-inner-session" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {renderedSubMessages.map((msg) => (
+                <div key={msg.info.id} className={`subagent-inner-bubble ${msg.info.role}`}>
+                  {msg.thinkingParts && msg.thinkingParts.length > 0 && (
+                    <ThinkingBlock parts={msg.thinkingParts} defaultOpen={false} />
+                  )}
+                  {msg.toolParts && msg.toolParts.map((tp) => (
+                    <ToolPart
+                      key={tp.id}
+                      part={tp}
+                      config={config}
+                      directory={directory}
+                      onViewSubagents={onViewSubagents}
+                    />
+                  ))}
+                  {msg.text && (
+                    <div style={{ padding: "4px 0", fontSize: "0.82rem", color: "var(--text)" }}>
+                      <Markdown text={msg.text} />
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
-          ))}
+          )}
 
-          {parsedItems.length === 0 && !loadingMessages && (
+          {renderedSubMessages.length === 0 && !loadingMessages && rawOutput && rawOutput !== prompt && (
+            <div className="subagent-section-block">
+              <div className="subagent-section-title">
+                <span>Resultado</span>
+              </div>
+              <div style={{ fontSize: "0.82rem", color: "var(--text)" }}>
+                <Markdown text={rawOutput} />
+              </div>
+            </div>
+          )}
+
+          {renderedSubMessages.length === 0 && !loadingMessages && (!rawOutput || rawOutput === prompt) && !prompt && (
             <div style={{ color: "var(--muted)", fontStyle: "italic", fontSize: "0.78rem" }}>
               Sin mensajes adicionales registrados para este subagente.
             </div>

@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useMemo, useRef } from "react"
-import { PencilIcon, UndoIcon, MenuDotsIcon } from "../Icons"
+import { PencilIcon, UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon } from "../Icons"
 import { formatTime } from "../utils"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { useT } from "../i18n-context"
@@ -44,6 +44,40 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): str
   const hours = Math.floor(dur / 3600000)
   const minutes = Math.floor((dur % 3600000) / 60000)
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+}
+
+function calcTokensPerSecond(msg: RenderedMessage): string {
+  if (!msg.info.time.completed || !msg.info.time.created) return ""
+  const tokens = msg.tokens ?? msg.info.tokens
+  let outputTokens = (tokens?.output ?? 0) + (tokens?.reasoning ?? 0)
+  if (outputTokens <= 0 && msg.text) {
+    outputTokens = Math.round(msg.text.length / 4)
+  }
+  if (outputTokens <= 0) return ""
+
+  // Duración precisa de la generación de texto/reasoning
+  let genDurationMs = 0
+  if (msg.parts && msg.parts.length > 0) {
+    for (const p of msg.parts) {
+      if (p.type === "text" || p.type === "reasoning") {
+        const start = p.time?.start ?? (p.time as any)?.created
+        const end = p.time?.end ?? (p.time as any)?.completed
+        if (start && end && end > start) {
+          genDurationMs += (end - start)
+        }
+      }
+    }
+  }
+
+  // Fallback a la duración del mensaje del asistente (completed - created)
+  if (genDurationMs <= 0) {
+    genDurationMs = msg.info.time.completed - msg.info.time.created
+  }
+
+  if (genDurationMs < 100) return ""
+  const tps = (outputTokens / genDurationMs) * 1000
+  if (tps <= 0 || tps > 5000) return ""
+  return `${tps.toFixed(1)} tok/s`
 }
 
 export const MessageBubble = memo(function MessageBubble({ message, revert, onRevertToMessage, onEditMessage, agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
@@ -91,6 +125,11 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
   const duration = useMemo(
     () => calcDuration(message, prevUserTs),
     [message, prevUserTs],
+  )
+
+  const tokensPerSecond = useMemo(
+    () => calcTokensPerSecond(message),
+    [message],
   )
 
   const handleConfirmUndo = useCallback((e: React.MouseEvent) => {
@@ -249,15 +288,20 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
           <FileDiffs diffs={message.summaryDiffs} onOpenADEDiff={onOpenADEDiff} />
         )}
 
-        {isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || activeVariant || duration || message.info.finish === "aborted") && (
+        {isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || activeVariant || duration || tokensPerSecond || message.info.finish === "aborted") && (
           <div className="message-footer">
-            <span className="msg-agent-dot" style={{ color: `var(--agent-${agentIdx})` }}>▣</span>
+            <span className="msg-agent-dot" style={{ color: `var(--agent-${agentIdx})` }}>●</span>
             {(message.turnMode || message.info.mode) && (
               <span className="msg-footer-mode">{message.turnMode || message.info.mode}</span>
             )}
             {message.info.modelID && <span className="msg-footer-model"> · {message.info.modelID}</span>}
             {activeVariant && <span className="msg-footer-variant"> · {activeVariant}</span>}
             {duration && <span className="msg-footer-duration"> · {duration}</span>}
+            {tokensPerSecond && (
+              <span className="msg-footer-tps" title="Velocidad de generación de tokens" style={{ color: "var(--primary)", fontWeight: 600 }}>
+                {" "}· ⚡ {tokensPerSecond}
+              </span>
+            )}
             {message.info.finish === "aborted" && (
               <span className="msg-footer-interrupted"> · interrupted</span>
             )}
@@ -273,11 +317,11 @@ export const MessageBubble = memo(function MessageBubble({ message, revert, onRe
               {moreOpen && (
                 <div className="msg-more-dropdown fade-in">
                   <button type="button" className="overflow-item" onClick={handleCopyText} disabled={!message.text}>
-                    <span>📋</span> {t('chat.copyText')}
+                    <CopyIcon size={13} /> {t('chat.copyText')}
                   </button>
                   {onRegenerate && (
                     <button type="button" className="overflow-item" onClick={handleRegenerate}>
-                      <span>↻</span> {t('chat.regenerate')}
+                      <RefreshIcon size={13} /> {t('chat.regenerate')}
                     </button>
                   )}
                 </div>

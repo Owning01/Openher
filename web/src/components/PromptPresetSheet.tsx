@@ -1,5 +1,5 @@
 import { memo, useCallback } from "react"
-import { CloseIcon } from "../Icons"
+import { CloseIcon, SaveIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { PROMPT_PRESETS } from "../promptPresets"
 
@@ -49,7 +49,7 @@ export const PromptPresetSheet = memo(function PromptPresetSheet({ onInsert, onS
               <div className="prompt-preset-actions">
                 <button type="button" className="btn-secondary compact"
                   onClick={() => handleCopy(t(preset.textKey))}
-                  title={t('chat.copyText')} aria-label={t('chat.copyText')}>📋</button>
+                  title={t('chat.copyText')} aria-label={t('chat.copyText')}><SaveIcon size={14} /></button>
                 <button type="button" className="btn-secondary compact"
                   onClick={() => { onInsert(t(preset.textKey)) }}
                   title={t('chat.insertPrompt')} aria-label={t('chat.insertPrompt')}>↩</button>

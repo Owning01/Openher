@@ -9,6 +9,7 @@ import { api } from "../api"
 import { useT } from "../i18n-context"
 import { QUESTION_POLL_INTERVAL_MS } from "../constants"
 import { basename } from "../utils"
+import { StatsIcon } from "../Icons"
 import type { ChatViewProps } from "./ChatView"
 import type { ServerConfig, DataMode, SessionView, CommandInfo, Question, PermissionRequest } from "../types"
 
@@ -329,19 +330,18 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         if (raw.startsWith("panel:")) {
           const parts = raw.split(":")
           const fromIdx = Number(parts[1])
-          const fromSessionId = parts[2]
           if (fromIdx !== panelIndex) {
             if (zone === "center") {
               onSwapPanels(fromIdx, panelIndex)
             } else {
-              onSplitSession(panelIndex, zone, fromSessionId)
+              onSplitSession(panelIndex, zone, raw)
             }
           }
         } else if (raw.startsWith("session:")) {
           const sId = raw.replace("session:", "")
           onSplitSession(panelIndex, zone, sId)
         } else {
-          onSplitSession(panelIndex, zone)
+          onSplitSession(panelIndex, zone, raw)
         }
       }}
     >
@@ -387,7 +387,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
             aria-label={t('shell.kindSessionStats')}
             onClick={(e) => { e.stopPropagation(); setShowStats((v) => !v) }}
           >
-            📊
+            <StatsIcon size={14} />
           </button>
           <button
             type="button"

@@ -6,7 +6,7 @@ import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
-import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon } from "../Icons"
+import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type ShellPanelKind } from "../shell"
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
@@ -393,7 +393,7 @@ function ExplorerTreeFolder({
         <FolderIcon size={13} className="shell-glyph" />
         <span className="shell-name">{entry.name}</span>
         {cwd && (
-          <button className="btn-icon compact shell-star" title={t('shell.fav')} onClick={(e) => { e.stopPropagation(); fav(entry.path, true) }}>☆</button>
+          <button className="btn-icon compact shell-star" title={t('shell.fav')} onClick={(e) => { e.stopPropagation(); fav(entry.path, true) }}><StarIcon size={12} /></button>
         )}
       </div>
 
@@ -681,26 +681,26 @@ export const ExplorerPanel = memo(function ExplorerPanel({
         <button className="btn-icon compact" onClick={back} title={t('shell.back')} aria-label={t('shell.back')}>←</button>
         <span className="shell-path" title={cwd ?? ""}>
           {projName && cwd?.startsWith(initialCwd!) ? (
-            cwd === initialCwd ? `📁 ${projName}` : `📁 ${projName}/${cwd.slice(initialCwd!.length).replace(/^[/\\]+/, "")}`
+            cwd === initialCwd ? <><FolderIcon size={12} /> {projName}</> : <><FolderIcon size={12} /> {projName}/{cwd.slice(initialCwd!.length).replace(/^[/\\]+/, "")}</>
           ) : (cwd ?? "…")}
         </span>
         <button type="button" className="btn-icon compact" onClick={() => handleCreateFile(cwd || initialCwd || "")} title="Nuevo archivo">
-          +📄
+          +<FileIcon size={13} />
         </button>
         <button type="button" className="btn-icon compact" onClick={() => handleCreateFolder(cwd || initialCwd || "")} title="Nueva carpeta">
-          +📁
+          +<FolderIcon size={13} />
         </button>
         <button type="button" className="btn-icon compact" onClick={() => load(cwd || initialCwd || "")} title="Recargar archivos">
           ↻
         </button>
         {copied && cwd && (
           <button type="button" className="btn-icon compact" onClick={() => handlePasteItem(cwd)} title={`Pegar "${copied.name}" aquí`}>
-            📋
+            <SaveIcon size={13} />
           </button>
         )}
         {initialCwd && (
           <button type="button" className="btn-icon compact" onClick={() => setShowDrives(!showDrives)} title={showDrives ? "Ocultar unidades de disco" : "Ver discos del sistema"}>
-            💾
+            <DiskIcon size={13} />
           </button>
         )}
       </div>
@@ -713,7 +713,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
         <div className="shell-drives">
           {initialCwd && (
             <button type="button" className={`shell-drive${cwd === initialCwd ? " active" : ""}`} onClick={() => load(initialCwd)} title={initialCwd}>
-              📁 Proyecto ({projName})
+              <FolderIcon size={13} /> Proyecto ({projName})
             </button>
           )}
           {drives.map((d) => (
@@ -799,42 +799,42 @@ export const ExplorerPanel = memo(function ExplorerPanel({
                 className="overflow-item"
                 onClick={() => (contextMenu.isDir ? nav(contextMenu.entry!.path) : openFile(contextMenu.entry!.path))}
               >
-                <span>📂</span> {contextMenu.isDir ? "Abrir carpeta" : "Abrir archivo"}
+                <span><FolderIcon size={14} /></span> {contextMenu.isDir ? "Abrir carpeta" : "Abrir archivo"}
               </button>
               <button
                 type="button"
                 className="overflow-item"
                 onClick={() => copyRelativePath(contextMenu.entry!.path)}
               >
-                <span>🔗</span> Obtener ruta relativa
+                <span><LinkIcon size={14} /></span> Obtener ruta relativa
               </button>
               <button
                 type="button"
                 className="overflow-item"
                 onClick={() => copyFullPath(contextMenu.entry!.path)}
               >
-                <span>📋</span> Obtener ruta completa
+                <span><SaveIcon size={14} /></span> Obtener ruta completa
               </button>
               <button
                 type="button"
                 className="overflow-item"
                 onClick={() => handleCreateFile(contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : cwd || initialCwd || "")}
               >
-                <span>📄</span> Nuevo archivo
+                <span><FileIcon size={14} /></span> Nuevo archivo
               </button>
               <button
                 type="button"
                 className="overflow-item"
                 onClick={() => handleCreateFolder(contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : cwd || initialCwd || "")}
               >
-                <span>📁</span> Nueva carpeta
+                <span><FolderIcon size={14} /></span> Nueva carpeta
               </button>
               <button
                 type="button"
                 className="overflow-item"
                 onClick={() => handleCopyItem(contextMenu.entry!, contextMenu.isDir)}
               >
-                <span>📋</span> Copiar {contextMenu.isDir ? "carpeta" : "archivo"}
+                <span><SaveIcon size={14} /></span> Copiar {contextMenu.isDir ? "carpeta" : "archivo"}
               </button>
               <button
                 type="button"
@@ -847,7 +847,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
                   }).catch(() => showNotice(`No se pudo abrir el Explorador`))
                 }}
               >
-                <span>🖥️</span> Abrir en el Explorador
+                <span><MonitorIcon size={14} /></span> Abrir en el Explorador
               </button>
               <button
                 type="button"
@@ -855,7 +855,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
                 style={{ color: "var(--danger)" }}
                 onClick={() => handleDeleteItem(contextMenu.entry!)}
               >
-                <span>🗑️</span> Eliminar
+                <span><TrashIcon size={14} /></span> Eliminar
               </button>
             </>
           )}
@@ -866,14 +866,14 @@ export const ExplorerPanel = memo(function ExplorerPanel({
                 className="overflow-item"
                 onClick={() => handleCreateFile(cwd || initialCwd || "")}
               >
-                <span>📄</span> Nuevo archivo aquí
+                <span><FileIcon size={14} /></span> Nuevo archivo aquí
               </button>
               <button
                 type="button"
                 className="overflow-item"
                 onClick={() => handleCreateFolder(cwd || initialCwd || "")}
               >
-                <span>📁</span> Nueva carpeta aquí
+                <span><FolderIcon size={14} /></span> Nueva carpeta aquí
               </button>
             </>
           )}
@@ -883,7 +883,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
               className="overflow-item"
               onClick={() => handlePasteItem(contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : cwd || initialCwd || "")}
             >
-              <span>📥</span> Pegar "{copied.name}"
+              <span><SaveIcon size={14} /></span> Pegar "{copied.name}"
             </button>
           )}
         </div>
@@ -1091,7 +1091,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
                 onClick={() => setMdViewMode("edit")}
                 title="Editor de código"
               >
-                ✏️ Editar
+                <PencilIcon size={12} /> Editar
               </button>
               <button
                 type="button"
@@ -1109,7 +1109,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
                 onClick={() => setMdViewMode("preview")}
                 title="Vista previa renderizada"
               >
-                👁️ Vista previa
+                <EyeIcon size={12} /> Vista previa
               </button>
             </div>
           )}
@@ -1623,11 +1623,7 @@ type SessionDetail = {
   directory: string
   created: number
   updated: number
-  input: number
-  output: number
-  reasoning: number
-  cache_read: number
-  cache_write: number
+  tokens?: { tokens_input?: number; tokens_output?: number; tokens_reasoning?: number; tokens_cache_read?: number; tokens_cache_write?: number }
   cost: number
   events: number
   events_mb: number
@@ -1702,16 +1698,21 @@ export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID, on
         {loading && !detail && <div className="shell-empty"><p>Cargando stats...</p></div>}
         {error && <div className="shell-empty"><p className="ss-error">{error}</p><button className="btn-secondary" onClick={load}>Reintentar</button></div>}
         {detail && (() => {
-          const totalTokens = detail.input + detail.output + detail.reasoning
-          const cacheHit = detail.cache_read > 0 ? ((detail.cache_read / (detail.cache_read + detail.input)) * 100).toFixed(0) : "0"
+          const t = detail.tokens
+          const input = t?.tokens_input ?? 0
+          const output = t?.tokens_output ?? 0
+          const reasoning = t?.tokens_reasoning ?? 0
+          const cacheRead = t?.tokens_cache_read ?? 0
+          const totalTokens = input + output + reasoning
+          const cacheHit = cacheRead > 0 ? ((cacheRead / (cacheRead + input)) * 100).toFixed(0) : "0"
           return (
             <>
               <div className="session-stats-grid">
                 <div className="session-stats-card"><span className="ss-label">Costo</span><span className="ss-value">{fmtCost(detail.cost)}</span></div>
                 <div className="session-stats-card"><span className="ss-label">Tokens</span><span className="ss-value">{fmtTokens(totalTokens)}</span></div>
-                <div className="session-stats-card"><span className="ss-label">Input</span><span className="ss-value">{fmtTokens(detail.input)}</span></div>
-                <div className="session-stats-card"><span className="ss-label">Output</span><span className="ss-value">{fmtTokens(detail.output)}</span></div>
-                <div className="session-stats-card"><span className="ss-label">Reasoning</span><span className="ss-value">{fmtTokens(detail.reasoning)}</span></div>
+                <div className="session-stats-card"><span className="ss-label">Input</span><span className="ss-value">{fmtTokens(input)}</span></div>
+                <div className="session-stats-card"><span className="ss-label">Output</span><span className="ss-value">{fmtTokens(output)}</span></div>
+                <div className="session-stats-card"><span className="ss-label">Reasoning</span><span className="ss-value">{fmtTokens(reasoning)}</span></div>
                 <div className="session-stats-card"><span className="ss-label">Cache HIT</span><span className="ss-value">{cacheHit}%</span></div>
                 <div className="session-stats-card"><span className="ss-label">Eventos</span><span className="ss-value">{detail.events}</span></div>
                 <div className="session-stats-card"><span className="ss-label">Última vez</span><span className="ss-value">{timeAgo(detail.updated)}</span></div>

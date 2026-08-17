@@ -250,11 +250,39 @@ export const ChatView = memo(function ChatView({
   }, [effectiveRevertID])
 
   const contextDisplay = useMemo(() => {
-    // Use the LAST assistant message's tokens (per-exchange, like the TUI does)
+    // Use the LAST assistant message's tokens and calculate tokens per second (tok/s)
     let lastMsgTokens: RenderedMessage["tokens"]
+    let lastTps = ""
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i]
-      if (m.info.role === "assistant" && m.tokens) { lastMsgTokens = m.tokens; break }
+      if (m.info.role === "assistant" && m.tokens) {
+        lastMsgTokens = m.tokens
+        if (m.info.time.completed && m.info.time.created) {
+          let out = (m.tokens.output ?? 0) + (m.tokens.reasoning ?? 0)
+          if (out <= 0 && m.text) out = Math.round(m.text.length / 4)
+
+          let genDurationMs = 0
+          if (m.parts && m.parts.length > 0) {
+            for (const p of m.parts) {
+              if (p.type === "text" || p.type === "reasoning") {
+                const start = p.time?.start ?? (p.time as any)?.created
+                const end = p.time?.end ?? (p.time as any)?.completed
+                if (start && end && end > start) {
+                  genDurationMs += (end - start)
+                }
+              }
+            }
+          }
+          if (genDurationMs <= 0) {
+            genDurationMs = m.info.time.completed - m.info.time.created
+          }
+          if (out > 0 && genDurationMs >= 100) {
+            const tps = (out / genDurationMs) * 1000
+            if (tps > 0 && tps < 5000) lastTps = `${tps.toFixed(1)} tok/s`
+          }
+        }
+        break
+      }
     }
     if (!lastMsgTokens) return null
     const total = (lastMsgTokens.input ?? 0) + (lastMsgTokens.output ?? 0) +
@@ -263,8 +291,10 @@ export const ChatView = memo(function ChatView({
     const limit = activeModelOption?.contextLimit
     const pct = limit && limit > 0 ? Math.round((total / limit) * 100) : null
     const cost = selectedSession?.cost ?? 0
-    const label = formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")
-    return { total, pct, limit, cost, label: cost > 0 ? `${label} · ${formatCost(cost)}` : label }
+    let label = formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")
+    if (lastTps) label = `${label} · ⚡ ${lastTps}`
+    if (cost > 0) label = `${label} · ${formatCost(cost)}`
+    return { total, pct, limit, cost, lastTps, label }
   }, [messages, activeModelOption?.contextLimit, selectedSession?.cost])
 
   return (

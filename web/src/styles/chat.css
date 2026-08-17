@@ -1602,6 +1602,42 @@
   border-top: 1px dashed var(--border);
 }
 
+.subagent-inner-session {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.subagent-inner-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.subagent-inner-bubble.user {
+  border-left: 2px solid var(--primary, #58a6ff);
+}
+
+.subagent-inner-bubble.assistant {
+  border-left: 2px solid var(--accent, #a371f7);
+}
+
+.subagent-prompt-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--info, #388bfd);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
 
 /* ===== Question Prompt UI ===== */
 .question-prompt {

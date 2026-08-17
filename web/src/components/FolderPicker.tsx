@@ -131,7 +131,7 @@ export const FolderPicker = memo(function FolderPicker({
           <>
             {parent !== null && (
               <button type="button" className="fp-row" onClick={() => onBrowse(parent)}>
-                <span className="fp-row-icon">📂</span>
+                <span className="fp-row-icon"><FolderIcon size={16} /></span>
                 <span className="fp-row-name">..</span>
                 <small className="fp-row-hint">Carpeta superior</small>
               </button>
@@ -143,7 +143,7 @@ export const FolderPicker = memo(function FolderPicker({
             ) : pickerItems.map((item) => (
               <button key={item.absolute} type="button" className="fp-row"
                 onClick={() => onBrowse(item.absolute)}>
-                <span className="fp-row-icon">📁</span>
+                <span className="fp-row-icon"><FolderIcon size={16} /></span>
                 <span className="fp-row-name">{item.name}</span>
               </button>
             ))}

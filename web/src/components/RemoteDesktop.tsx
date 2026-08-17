@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState, useEffect } from "react"
-import { CloseIcon, KeyboardIcon } from "../Icons"
+import { CloseIcon, KeyboardIcon, MonitorIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { desktopApi, desktopThumb, type DesktopConfig, type DesktopWindow } from "../desktop"
 import { useRemoteDesktop } from "../hooks/useRemoteDesktop"
@@ -626,12 +626,12 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
             <div className="desktop-picker-title">{t('desktop.source')}</div>
             <div className="desktop-picker-list">
               <button className="desktop-picker-item" onClick={() => pickSource({ mode: "screen", monitor: 0, label: t('desktop.fullScreen') })}>
-                <span className="desktop-picker-icon">🖥</span>
+                <span className="desktop-picker-icon"><MonitorIcon size={18} /></span>
                 <span className="desktop-picker-name"><strong>{t('desktop.fullScreen')}</strong></span>
               </button>
               {(info?.monitors ?? []).length > 1 && info?.monitors.map((m, i) => (
                 <button key={i} className="desktop-picker-item" onClick={() => pickSource({ mode: "screen", monitor: i, label: `${t('desktop.monitor')} ${i + 1}${m.primary ? " ★" : ""}` })}>
-                  <span className="desktop-picker-icon">🖥</span>
+                  <span className="desktop-picker-icon"><MonitorIcon size={18} /></span>
                   <span className="desktop-picker-name"><strong>{t('desktop.monitor')} {i + 1}</strong></span>
                 </button>
               ))}

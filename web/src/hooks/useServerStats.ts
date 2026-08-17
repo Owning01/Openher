@@ -3,6 +3,41 @@ import type { ServerConfig, StatsPayload } from "../types"
 import { api } from "../api"
 import { STORAGE_KEYS, DEFAULT_STATS_PORT } from "../constants"
 
+let globalCachedStats: StatsPayload | null = null
+let globalStatsLoadedAt = 0
+
+export function getCachedServerStats(): StatsPayload | null {
+  if (globalCachedStats) return globalCachedStats
+  try {
+    const raw = localStorage.getItem("opencode.stats.cache")
+    if (raw) {
+      globalCachedStats = JSON.parse(raw)
+      return globalCachedStats
+    }
+  } catch {}
+  return null
+}
+
+export function setCachedServerStats(data: StatsPayload) {
+  globalCachedStats = data
+  globalStatsLoadedAt = Date.now()
+  try {
+    localStorage.setItem("opencode.stats.cache", JSON.stringify(data))
+  } catch {}
+}
+
+export async function prefetchServerStats(config: ServerConfig, statsPort = DEFAULT_STATS_PORT): Promise<StatsPayload | null> {
+  if (!config?.host) return null
+  try {
+    const payload = await api.fetchStats(config, statsPort)
+    if (payload) {
+      setCachedServerStats(payload)
+      return payload
+    }
+  } catch {}
+  return null
+}
+
 function loadPort(): number {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.STATS_PORT)
@@ -29,10 +64,10 @@ export function useServerStats(config: ServerConfig | null) {
   })
   const [until, setUntil] = useState(() => dateStr(new Date()))
   const [model, setModel] = useState("")
-  const [data, setData] = useState<StatsPayload | null>(null)
+  const [data, setData] = useState<StatsPayload | null>(getCachedServerStats)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [loadedAt, setLoadedAt] = useState(0)
+  const [loadedAt, setLoadedAt] = useState<number>(() => globalStatsLoadedAt)
 
   const setStatsPort = useCallback((port: number) => {
     const n = Number.isFinite(port) && port > 0 ? Math.round(port) : DEFAULT_STATS_PORT
@@ -40,13 +75,15 @@ export function useServerStats(config: ServerConfig | null) {
     try { localStorage.setItem(STORAGE_KEYS.STATS_PORT, String(n)) } catch {}
   }, [])
 
-  const refresh = useCallback(async (opts?: { since?: string; until?: string; model?: string }) => {
+  const refresh = useCallback(async (opts?: { since?: string; until?: string; model?: string; silent?: boolean }) => {
     if (!config?.host) {
       setError("Sin servidor configurado")
       setLoading(false)
       return
     }
-    setLoading(true)
+    if (!opts?.silent && !data) {
+      setLoading(true)
+    }
     setError(null)
     try {
       const payload = await api.fetchStats(
@@ -56,14 +93,17 @@ export function useServerStats(config: ServerConfig | null) {
         opts?.until ?? until,
         opts?.model ?? model
       )
+      setCachedServerStats(payload)
       setData(payload)
       setLoadedAt(Date.now())
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      if (!data) {
+        setError(err instanceof Error ? err.message : String(err))
+      }
     } finally {
       setLoading(false)
     }
-  }, [config, statsPort, since, until, model])
+  }, [config, statsPort, since, until, model, data])
 
   const applyFilters = useCallback((s: string, u: string, m: string) => {
     setSince(s)
@@ -73,13 +113,15 @@ export function useServerStats(config: ServerConfig | null) {
   }, [refresh])
 
   useEffect(() => {
-    if (config?.host) void refresh()
+    if (config?.host) {
+      void refresh({ silent: !!data })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.host, config?.port, statsPort])
 
   useEffect(() => {
     if (!config?.host) return
-    const id = setInterval(() => { void refresh() }, 60_000)
+    const id = setInterval(() => { void refresh({ silent: true }) }, 30_000)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.host, statsPort])

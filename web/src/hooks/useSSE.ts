@@ -109,9 +109,11 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
             // El tool part del SUBAGENTE (task) trae el sessionID de la sesión
             // HIJA en part.sessionID — su tarjeta pertenece al chat del padre,
             // así que NO se filtra por sesión (el resto de eventos ajenos sí).
-            const isSubagentToolPart = event.type === "message.part.updated" &&
-              !!partObj && (partObj.type === "tool" || partObj.type === "tool_use")
-            if (!isSubagentToolPart) {
+            // NOTA: SOLO las tarjetas 'task'/'subagent' pertenecen al padre. Las tools internas (read, bash, etc.)
+            // pertenecen a la sesión hija y NO deben inyectarse en el chat del padre.
+            const isSubagentTaskPart = event.type === "message.part.updated" &&
+              !!partObj && (partObj.tool === "task" || partObj.tool === "subagent" || !!(partObj.state as Record<string, unknown>)?.input)
+            if (!isSubagentTaskPart) {
               const evtSession = (props.sessionID ?? nested?.sessionID ?? partObj?.sessionID) as string | undefined
               if (typeof evtSession === "string" && evtSession !== visible) return
             }

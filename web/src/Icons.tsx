@@ -141,6 +141,12 @@ export const MinimizeIcon = (p: { className?: string; size?: number; style?: CSS
 export const ChevronDownIcon = (p: { className?: string; size?: number; style?: CSSProperties }) => (
   <Svg {...p} label="Chevron down"><polyline points="6 9 12 15 18 9"/></Svg>)
 
+export const DiskIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Disk"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></Svg>)
+export const LinkIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Link"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></Svg>)
+export const MonitorIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Monitor"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></Svg>)
 export const LogoIcon = ({ className = "", size = 32 }: { className?: string; size?: number }) => {
   return (
     <img src="./img/apple-touch-icon-180x180.jpg" alt="OpenCode"
