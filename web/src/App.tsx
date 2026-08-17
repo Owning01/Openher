@@ -2492,6 +2492,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       {fb.isOpen && (
         <Suspense fallback={null}>
           <FileBrowser
+            config={config}
+            directory={currentActiveSession?.directory || activeSessionDir || selectedSession?.directory}
             currentPath={fb.currentPath}
             items={fb.items}
             loading={fb.loading}

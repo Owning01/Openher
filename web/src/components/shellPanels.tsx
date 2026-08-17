@@ -325,6 +325,128 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName, hideH
 
 let clipboardItem: { path: string; name: string; isDir: boolean } | null = null
 
+function ExplorerTreeFolder({
+  entry,
+  depth = 0,
+  onOpenFile,
+  handleContextMenu,
+  handleDropExternal,
+  fav,
+  cwd,
+  t,
+}: {
+  entry: FsEntry
+  depth?: number
+  onOpenFile: (path: string) => void
+  handleContextMenu: (e: React.MouseEvent, entry: FsEntry | null, isDir: boolean) => void
+  handleDropExternal: (e: React.DragEvent, targetDir: string) => void
+  fav: (path: string, add: boolean) => void
+  cwd: string | null
+  t: (k: any) => string
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [subDirs, setSubDirs] = useState<FsEntry[]>([])
+  const [subFiles, setSubFiles] = useState<FsEntry[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const toggle = async () => {
+    if (expanded) {
+      setExpanded(false)
+      return
+    }
+    setExpanded(true)
+    if (subDirs.length === 0 && subFiles.length === 0) {
+      setLoading(true)
+      try {
+        const r = await shell.fs.list(entry.path)
+        setSubDirs(r.dirs || [])
+        setSubFiles(r.files || [])
+      } catch {
+        setSubDirs([])
+        setSubFiles([])
+      } finally {
+        setLoading(false)
+      }
+    }
+  }
+
+  return (
+    <div className="shell-tree-folder-group">
+      <div
+        className={`shell-row shell-dir${expanded ? " is-expanded" : ""}`}
+        style={{ paddingLeft: `${depth * 14 + 6}px` }}
+        onClick={toggle}
+        onDoubleClick={() => fav(entry.path, true)}
+        onContextMenu={(e) => handleContextMenu(e, entry, true)}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy" }}
+        onDrop={(e) => handleDropExternal(e, entry.path)}
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", entry.path)
+          e.dataTransfer.setData("application/x-opencode-path", entry.path)
+          e.dataTransfer.setData("application/x-opencode-is-image", "0")
+        }}
+      >
+        <span className="shell-tree-chevron" style={{ width: 12, fontSize: 9, color: "var(--muted)", display: "inline-flex", justifyContent: "center", flexShrink: 0 }}>
+          {expanded ? "▼" : "▶"}
+        </span>
+        <FolderIcon size={13} className="shell-glyph" />
+        <span className="shell-name">{entry.name}</span>
+        {cwd && (
+          <button className="btn-icon compact shell-star" title={t('shell.fav')} onClick={(e) => { e.stopPropagation(); fav(entry.path, true) }}>☆</button>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="shell-tree-sublist" style={{ borderLeft: "1px solid rgba(255,255,255,0.06)", marginLeft: `${depth * 14 + 11}px` }}>
+          {loading && (
+            <div style={{ padding: "3px 8px 3px 14px", color: "var(--muted)", fontSize: "0.72rem" }}>
+              Cargando...
+            </div>
+          )}
+          {!loading && subDirs.map((d) => (
+            <ExplorerTreeFolder
+              key={d.path}
+              entry={d}
+              depth={depth + 1}
+              onOpenFile={onOpenFile}
+              handleContextMenu={handleContextMenu}
+              handleDropExternal={handleDropExternal}
+              fav={fav}
+              cwd={cwd}
+              t={t}
+            />
+          ))}
+          {!loading && subFiles.map((f) => {
+            const ic = fileIcon(f.name, false)
+            const isImg = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f.name)
+            return (
+              <div
+                key={f.path}
+                className="shell-row shell-file"
+                style={{ paddingLeft: `${(depth + 1) * 14 + 6}px` }}
+                onClick={() => onOpenFile(f.path)}
+                onContextMenu={(e) => handleContextMenu(e, f, false)}
+                draggable={true}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/plain", f.path)
+                  e.dataTransfer.setData("application/x-opencode-path", f.path)
+                  e.dataTransfer.setData("application/x-opencode-is-image", isImg ? "1" : "0")
+                }}
+              >
+                <span style={{ width: 12, flexShrink: 0 }} />
+                <span className="shell-glyph" style={{ color: ic.color }}>{ic.glyph}</span>
+                <span className="shell-name">{f.name}</span>
+                <span className="shell-size">{f.size != null ? (f.size > 1024 * 1024 ? `${(f.size / 1048576).toFixed(1)}M` : f.size > 1024 ? `${(f.size / 1024).toFixed(0)}K` : `${f.size}B`) : ""}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export const ExplorerPanel = memo(function ExplorerPanel({
   onOpenSessionDir,
   initialCwd,
@@ -613,27 +735,17 @@ export const ExplorerPanel = memo(function ExplorerPanel({
           </div>
         )}
         {dirs.map((d) => (
-          <div
+          <ExplorerTreeFolder
             key={d.path}
-            className="shell-row shell-dir"
-            onClick={() => nav(d.path)}
-            onDoubleClick={() => fav(d.path, true)}
-            onContextMenu={(e) => handleContextMenu(e, d, true)}
-            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy" }}
-            onDrop={(e) => handleDropExternal(e, d.path)}
-            draggable={true}
-            onDragStart={(e) => {
-              e.dataTransfer.setData("text/plain", d.path)
-              e.dataTransfer.setData("application/x-opencode-path", d.path)
-              e.dataTransfer.setData("application/x-opencode-is-image", "0")
-            }}
-          >
-            <FolderIcon size={13} className="shell-glyph" />
-            <span className="shell-name">{d.name}</span>
-            {cwd && (
-              <button className="btn-icon compact shell-star" title={t('shell.fav')} onClick={(e) => { e.stopPropagation(); fav(d.path, true) }}>☆</button>
-            )}
-          </div>
+            entry={d}
+            depth={0}
+            onOpenFile={openFile}
+            handleContextMenu={handleContextMenu}
+            handleDropExternal={handleDropExternal}
+            fav={fav}
+            cwd={cwd}
+            t={t}
+          />
         ))}
         {files.map((f) => {
           const ic = fileIcon(f.name, false)
@@ -858,12 +970,14 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   }, [activeTab])
 
   const activeFile = filesState[activeTab]
+  const autoSaveTimerRef = useRef<number | null>(null)
 
-  const handleSave = async () => {
-    if (!activeTab || !activeFile || saving) return
+  const handleSave = useCallback(async () => {
+    if (!activeTab || !filesState[activeTab] || saving) return
+    const current = filesState[activeTab]
     setSaving(true)
     try {
-      const b64 = btoa(unescape(encodeURIComponent(activeFile.content)))
+      const b64 = btoa(unescape(encodeURIComponent(current.content)))
       await shell.fs.write(activeTab, b64)
       setFilesState((prev) => ({
         ...prev,
@@ -877,7 +991,21 @@ export const FileEditorPanel = memo(function FileEditorPanel({
     } finally {
       setSaving(false)
     }
-  }
+  }, [activeTab, filesState, saving])
+
+  // Autoguardado con debounce de 1000ms al detectar modificaciones
+  useEffect(() => {
+    if (!activeFile?.dirty || activeFile?.loading || saving) return
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      void handleSave()
+    }, 1000)
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+  }, [activeFile?.content, activeFile?.dirty, activeFile?.loading, handleSave, saving])
 
   const handleCloseTab = (tabToClose: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -939,7 +1067,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
               >
                 <span style={{ color: ic.color, fontSize: "0.9rem" }}>{ic.glyph}</span>
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{name}</span>
-                {isDirty && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--primary)" }} title="Cambios sin guardar" />}
+                {isDirty && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--primary)" }} title="Modificado (autoguardando...)" />}
                 <button
                   type="button"
                   className="btn-icon compact"
@@ -1002,6 +1130,13 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 10px", fontSize: "0.72rem", color: "var(--muted)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)" }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{relPath}</span>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+          {saving ? (
+            <span style={{ color: "var(--primary)", fontWeight: 600 }}>Guardando...</span>
+          ) : activeFile?.dirty ? (
+            <span style={{ color: "var(--warning, #e3b341)" }}>● Modificado</span>
+          ) : (
+            <span style={{ color: "var(--color-success, #3fb950)", opacity: 0.9 }}>✓ Guardado</span>
+          )}
           {ext && <span style={{ textTransform: "uppercase", fontWeight: 700, color: "var(--primary)" }}>{ext}</span>}
           <span>{lineCount} líneas</span>
           <span>{charCount} caracs</span>
@@ -1518,7 +1653,7 @@ function timeAgo(ts: number): string {
   return `${Math.floor(diff / 86400)}d`
 }
 
-export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID }: { sessionID?: string | null }) {
+export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID, onClose }: { sessionID?: string | null; onClose?: () => void }) {
   const t = useT()
   const [detail, setDetail] = useState<SessionDetail | null>(null)
   const [loading, setLoading] = useState(false)
@@ -1530,9 +1665,18 @@ export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID }: 
     setError(null)
     try {
       const r = await shell.stats.proxy(`admin/session/${sessionID}`)
-      setDetail(r)
+      if (r && r.error) {
+        setError(r.error)
+        setDetail(null)
+      } else if (r && r.id) {
+        setDetail(r)
+        setError(null)
+      } else {
+        setError("Sesión no encontrada en stats")
+        setDetail(null)
+      }
     } catch {
-      setError("Stats no disponibles")
+      setError("No se pudo conectar con opencode-stats")
     } finally {
       setLoading(false)
     }
@@ -1544,59 +1688,39 @@ export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID }: 
     return () => window.clearInterval(iv)
   }, [load])
 
-  if (!sessionID) return <div className="shell-empty"><p>{t('shell.noSession')}</p></div>
-  if (loading && !detail) return <div className="shell-empty"><p>Cargando stats...</p></div>
-  if (error) return <div className="shell-empty"><p>{error}</p><button className="btn-secondary" onClick={load}>Reintentar</button></div>
-  if (!detail) return null
-
-  const totalTokens = detail.input + detail.output + detail.reasoning
-  const cacheHit = detail.cache_read > 0 ? ((detail.cache_read / (detail.cache_read + detail.input)) * 100).toFixed(0) : "0"
-
   return (
-    <div className="session-stats">
-      <div className="session-stats-header">
-        <span className="session-stats-title" title={detail.title}>{detail.title || "(sin título)"}</span>
-        <button className="btn-icon compact" onClick={load} title="Actualizar">↻</button>
-      </div>
-      <div className="session-stats-grid">
-        <div className="session-stats-card">
-          <span className="ss-label">Costo</span>
-          <span className="ss-value">{fmtCost(detail.cost)}</span>
-        </div>
-        <div className="session-stats-card">
-          <span className="ss-label">Tokens</span>
-          <span className="ss-value">{fmtTokens(totalTokens)}</span>
-        </div>
-        <div className="session-stats-card">
-          <span className="ss-label">Input</span>
-          <span className="ss-value">{fmtTokens(detail.input)}</span>
-        </div>
-        <div className="session-stats-card">
-          <span className="ss-label">Output</span>
-          <span className="ss-value">{fmtTokens(detail.output)}</span>
-        </div>
-        <div className="session-stats-card">
-          <span className="ss-label">Reasoning</span>
-          <span className="ss-value">{fmtTokens(detail.reasoning)}</span>
-        </div>
-        <div className="session-stats-card">
-          <span className="ss-label">Cache HIT</span>
-          <span className="ss-value">{cacheHit}%</span>
-        </div>
-        <div className="session-stats-card">
-          <span className="ss-label">Eventos</span>
-          <span className="ss-value">{detail.events}</span>
-        </div>
-        <div className="session-stats-card">
-          <span className="ss-label">Última vez</span>
-          <span className="ss-value">{timeAgo(detail.updated)}</span>
+    <div className="session-stats-modal">
+      <div className="session-stats-modal-header">
+        <span className="session-stats-modal-title">Stats de sesión</span>
+        <div className="session-stats-modal-actions">
+          <button className="btn-icon compact" onClick={load} title="Actualizar">↻</button>
+          {onClose && <button className="btn-icon compact" onClick={onClose} title="Cerrar">×</button>}
         </div>
       </div>
-      {detail.model && (
-        <div className="session-stats-footer">
-          <span className="ss-model">{detail.model}</span>
-        </div>
-      )}
+      <div className="session-stats-modal-body">
+        {!sessionID && <div className="shell-empty"><p>{t('shell.noSession')}</p></div>}
+        {loading && !detail && <div className="shell-empty"><p>Cargando stats...</p></div>}
+        {error && <div className="shell-empty"><p className="ss-error">{error}</p><button className="btn-secondary" onClick={load}>Reintentar</button></div>}
+        {detail && (() => {
+          const totalTokens = detail.input + detail.output + detail.reasoning
+          const cacheHit = detail.cache_read > 0 ? ((detail.cache_read / (detail.cache_read + detail.input)) * 100).toFixed(0) : "0"
+          return (
+            <>
+              <div className="session-stats-grid">
+                <div className="session-stats-card"><span className="ss-label">Costo</span><span className="ss-value">{fmtCost(detail.cost)}</span></div>
+                <div className="session-stats-card"><span className="ss-label">Tokens</span><span className="ss-value">{fmtTokens(totalTokens)}</span></div>
+                <div className="session-stats-card"><span className="ss-label">Input</span><span className="ss-value">{fmtTokens(detail.input)}</span></div>
+                <div className="session-stats-card"><span className="ss-label">Output</span><span className="ss-value">{fmtTokens(detail.output)}</span></div>
+                <div className="session-stats-card"><span className="ss-label">Reasoning</span><span className="ss-value">{fmtTokens(detail.reasoning)}</span></div>
+                <div className="session-stats-card"><span className="ss-label">Cache HIT</span><span className="ss-value">{cacheHit}%</span></div>
+                <div className="session-stats-card"><span className="ss-label">Eventos</span><span className="ss-value">{detail.events}</span></div>
+                <div className="session-stats-card"><span className="ss-label">Última vez</span><span className="ss-value">{timeAgo(detail.updated)}</span></div>
+              </div>
+              {detail.model && <div className="session-stats-footer"><span className="ss-model">{detail.model}</span></div>}
+            </>
+          )
+        })()}
+      </div>
     </div>
   )
 })

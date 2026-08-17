@@ -404,8 +404,10 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         </span>
       </div>
       {showStats && (
-        <div className="session-stats-overlay">
-          <SessionStatsPanel sessionID={session.id} />
+        <div className="session-stats-overlay" onClick={() => setShowStats(false)}>
+          <div onClick={(e) => e.stopPropagation()}>
+            <SessionStatsPanel sessionID={session.id} onClose={() => setShowStats(false)} />
+          </div>
         </div>
       )}
       <ChatView {...chatProps} />

@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useMemo, useEffect } from "react"
-import { SettingsIcon, SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon } from "../Icons"
+import { SettingsIcon, SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon, GlobeIcon, BrainIcon, PaintIcon, ChatIcon, ToolIcon, SearchIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo,
   ServerProfile, ChatSettings, PromptSnippet } from "../types"
@@ -338,13 +338,13 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [activeCategory, setActiveCategory] = useState<CategoryKey>("servers")
   const [settingsSearch, setSettingsSearch] = useState("")
 
-  const categories: Array<{ id: CategoryKey; label: string; icon: string; badge?: string | number }> = [
-    { id: "servers", label: t('settings.sectionServers'), icon: "🌐", badge: draftConfig.host ? "●" : undefined },
-    { id: "models", label: t('settings.providers') || "IA & Modelos", icon: "🤖", badge: providers.length || undefined },
-    { id: "appearance", label: t('settings.sectionPreferences') || "Apariencia", icon: "🎨" },
-    { id: "chat", label: t('settings.chatCustomization') || "Chat", icon: "💬" },
-    { id: "remote", label: t('settings.desktopTitle') || "Escritorio Remoto", icon: "⚡" },
-    { id: "system", label: t('settings.extras') || "Sistema & Extras", icon: "🛠️" },
+  const categories: Array<{ id: CategoryKey; label: string; icon: React.ReactNode; badge?: string | number }> = [
+    { id: "servers", label: t('settings.sectionServers'), icon: <GlobeIcon size={16} />, badge: draftConfig.host ? "●" : undefined },
+    { id: "models", label: t('settings.providers') || "IA & Modelos", icon: <BrainIcon size={16} />, badge: providers.length || undefined },
+    { id: "appearance", label: t('settings.sectionPreferences') || "Apariencia", icon: <PaintIcon size={16} /> },
+    { id: "chat", label: t('settings.chatCustomization') || "Chat", icon: <ChatIcon size={16} /> },
+    { id: "remote", label: t('settings.desktopTitle') || "Escritorio Remoto", icon: <PowerIcon size={16} /> },
+    { id: "system", label: t('settings.extras') || "Sistema & Extras", icon: <ToolIcon size={16} /> },
   ]
 
   const isSearching = settingsSearch.trim().length > 0
@@ -365,7 +365,7 @@ export const SettingsPanel = memo(function SettingsPanel({
           </p>
         </div>
         <div className="settings-search-wrapper">
-          <span className="settings-search-icon">🔍</span>
+          <span className="settings-search-icon"><SearchIcon size={14} /></span>
           <input
             className="settings-search-input"
             type="text"
@@ -414,8 +414,8 @@ export const SettingsPanel = memo(function SettingsPanel({
                   setSettingsSearch("")
                 }}
               >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
+                <span className="settings-nav-icon">{cat.icon}</span>
+                <span className="settings-nav-label">{cat.label}</span>
                 {cat.badge !== undefined && <span className="settings-nav-badge">{cat.badge}</span>}
               </button>
             ))}

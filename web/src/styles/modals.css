@@ -133,6 +133,23 @@
   white-space: nowrap;
 }
 
+.file-tree-node {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.file-tree-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .modal-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
