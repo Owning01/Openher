@@ -308,6 +308,19 @@ fn setup_tray(proxy: EventLoopProxy<AppEvent>) -> Result<(), Box<dyn std::error:
 }
 
 fn main() {
+    std::panic::set_hook(Box::new(|info| {
+        let msg = format!("Error crítico en OpenCode Desktop:\n\n{}", info);
+        eprintln!("{}", msg);
+        let _ = std::fs::write("opencode-desktop-error.log", &msg);
+        #[cfg(windows)]
+        unsafe {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+            let wide: Vec<u16> = msg.encode_utf16().chain(Some(0)).collect();
+            let title: Vec<u16> = "OpenCode Desktop Error".encode_utf16().chain(Some(0)).collect();
+            MessageBoxW(std::ptr::null_mut(), wide.as_ptr(), title.as_ptr(), MB_OK | MB_ICONERROR);
+        }
+    }));
+
     let config = state::load_config();
     let persisted = state::load_persisted();
 

@@ -10,6 +10,7 @@ import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizon
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type ShellPanelKind } from "../shell"
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
+import { Modal } from "./Modal"
 
 // ============================================================== Terminal
 
@@ -544,7 +545,14 @@ export const ExplorerPanel = memo(function ExplorerPanel({
   const [copied, setCopied] = useState<typeof clipboardItem>(clipboardItem)
   const [dragOverTree, setDragOverTree] = useState(false)
   const [actionNotice, setActionNotice] = useState<string | null>(null)
+  const [execConfirm, setExecConfirm] = useState<{ path: string; name: string } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+
+  const isExecScript = (path?: string) => {
+    if (!path) return false
+    const p = path.toLowerCase()
+    return p.endsWith(".bat") || p.endsWith(".cmd") || p.endsWith(".vbs") || p.endsWith(".ps1") || p.endsWith(".exe") || p.endsWith(".sh")
+  }
 
   const showNotice = (msg: string) => {
     setActionNotice(msg)
@@ -869,6 +877,20 @@ export const ExplorerPanel = memo(function ExplorerPanel({
         >
           {contextMenu.entry && (
             <>
+              {!contextMenu.isDir && isExecScript(contextMenu.entry.path) && (
+                <button
+                  type="button"
+                  className="overflow-item"
+                  style={{ color: "var(--primary)", fontWeight: 600 }}
+                  onClick={() => {
+                    const entry = contextMenu.entry!
+                    setContextMenu(null)
+                    setExecConfirm({ path: entry.path, name: entry.name })
+                  }}
+                >
+                  <span><TerminalIcon size={14} /></span> Ejecutar script
+                </button>
+              )}
               <button
                 type="button"
                 className="overflow-item"
@@ -973,6 +995,45 @@ export const ExplorerPanel = memo(function ExplorerPanel({
           </div>
           <pre className="shell-preview-body">{preview.content}{preview.truncated ? "\n…" : ""}</pre>
         </div>
+      )}
+
+      {execConfirm && (
+        <Modal onClose={() => setExecConfirm(null)} className="compact-modal" aria-labelledby="exec-confirm-title">
+          <h2 id="exec-confirm-title" style={{ display: "flex", alignItems: "center", gap: 8, margin: 0, fontSize: "1.1rem" }}>
+            <TerminalIcon size={18} /> Ejecutar archivo
+          </h2>
+          <p style={{ margin: "12px 0 6px", fontSize: "0.9rem" }}>
+            ¿Estás seguro de que deseas ejecutar <strong>{execConfirm.name}</strong>?
+          </p>
+          <p className="subtle" style={{ wordBreak: "break-all", fontSize: "0.8rem", margin: "0 0 16px" }}>
+            {execConfirm.path}
+          </p>
+          <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" className="btn-secondary compact" onClick={() => setExecConfirm(null)}>
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn-primary compact"
+              onClick={async () => {
+                const target = execConfirm
+                setExecConfirm(null)
+                try {
+                  const res = await shell.fs.execFile(target.path)
+                  if (res.ok) {
+                    showNotice(`Ejecutando: ${target.name}`)
+                  } else {
+                    showNotice(`Error al ejecutar archivo`)
+                  }
+                } catch (err: any) {
+                  showNotice(`Error: ${err?.message || "al ejecutar"}`)
+                }
+              }}
+            >
+              <TerminalIcon size={14} /> Ejecutar
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   )

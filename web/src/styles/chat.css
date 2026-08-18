@@ -1125,13 +1125,58 @@
   margin: var(--space-2) 0;
 }
 
-.message-content pre {
+.code-block-wrap {
   margin-top: var(--space-2);
-  overflow-x: auto;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
   border-radius: var(--radius-md);
-  background: #0a0a0c;
-  color: #e4e4e7;
+  background: var(--code-bg, #0a0a0c);
+  overflow: hidden;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: rgba(128, 128, 128, 0.06);
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  font-size: 0.72rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--muted, #888);
+  user-select: none;
+}
+
+.code-block-lang {
+  text-transform: lowercase;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.code-block-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--muted, #888);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  font-size: 0.72rem;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+
+.code-block-copy:hover {
+  background: rgba(128, 128, 128, 0.12);
+  color: var(--text, #e4e4e7);
+}
+
+.message-content pre {
+  margin: 0;
+  overflow-x: auto;
+  background: transparent;
+  color: var(--code-text, #e4e4e7);
   padding: var(--space-4);
   font-size: 0.82rem;
   line-height: 1.55;

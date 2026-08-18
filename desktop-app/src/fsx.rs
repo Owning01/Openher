@@ -227,6 +227,54 @@ pub fn write_file(path: &str, data_base64: &str) -> Result<(), String> {
     std::fs::write(p, bytes).map_err(|e| e.to_string())
 }
 
+pub fn execute_file(path: &str) -> Result<serde_json::Value, String> {
+    let p = Path::new(path);
+    if !p.exists() || !p.is_file() {
+        return Err("El archivo no existe".into());
+    }
+    let parent = p.parent().unwrap_or_else(|| Path::new("."));
+    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        let mut cmd = match ext.as_str() {
+            "bat" | "cmd" => {
+                let mut c = Command::new("cmd.exe");
+                c.args(["/c", "start", "", path]);
+                c
+            }
+            "vbs" => {
+                let mut c = Command::new("wscript.exe");
+                c.arg(path);
+                c
+            }
+            "ps1" => {
+                let mut c = Command::new("powershell.exe");
+                c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path]);
+                c
+            }
+            _ => {
+                let mut c = Command::new("cmd.exe");
+                c.args(["/c", "start", "", path]);
+                c
+            }
+        };
+        cmd.current_dir(parent);
+        cmd.spawn().map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "ok": true, "path": path }))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::process::Command;
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", path]);
+        cmd.current_dir(parent);
+        cmd.spawn().map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "ok": true, "path": path }))
+    }
+}
+
 #[cfg(target_os = "windows")]
 pub fn pick_folder() -> Result<Option<String>, String> {
     use std::process::Command;

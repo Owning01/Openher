@@ -1,4 +1,4 @@
-import { memo, type ComponentProps, type ReactNode } from "react"
+import { memo, useState, useCallback, type ComponentProps, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { createLowlight } from "lowlight"
@@ -158,6 +158,43 @@ function remarkHighlight(query?: string) {
   }
 }
 
+function CodeBlock({ children, ...props }: ComponentProps<"pre">) {
+  const [copied, setCopied] = useState(false)
+  // Extract language from the inner <code> className
+  const codeChild = Array.isArray(children) ? children[0] : children
+  const lang = (codeChild?.props?.className?.match(/language-(\w+)/)?.[1]) || ""
+  const text = typeof codeChild?.props?.children === "string"
+    ? codeChild.props.children
+    : Array.isArray(codeChild?.props?.children)
+      ? codeChild.props.children.join("")
+      : ""
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    }).catch(() => {})
+  }, [text])
+
+  return (
+    <div className="code-block-wrap">
+      <div className="code-block-header">
+        <span className="code-block-lang">{lang || "code"}</span>
+        <button type="button" className="code-block-copy" onClick={handleCopy}
+          title={copied ? "Copied!" : "Copy code"}>
+          {copied ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          )}
+          <span>{copied ? "Copied!" : "Copy"}</span>
+        </button>
+      </div>
+      <pre {...props}>{children}</pre>
+    </div>
+  )
+}
+
 function InlineCode({ className, children, ...props }: ComponentProps<"code">) {
   const isBlock = Boolean(className && (className.includes("hljs") || className.includes("language-")))
   if (isBlock) {
@@ -185,7 +222,7 @@ function InlineCode({ className, children, ...props }: ComponentProps<"code">) {
   )
 }
 
-const components = { table: Table, a: Link, code: InlineCode }
+const components = { table: Table, a: Link, code: InlineCode, pre: CodeBlock }
 
 // Caché del árbol renderizado por (texto, highlight): reusar el elemento evita
 // re-parsear react-markdown + lowlight en re-renders sin cambio de texto

@@ -299,6 +299,25 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         }
         return;
     }
+    if path == "/shell/fs/exec" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                match crate::fsx::execute_file(p) {
+                    Ok(val) => {
+                        let _ = req.respond(json_ok(&val));
+                    }
+                    Err(e) => {
+                        let _ = req.respond(json_err(500, &e));
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
 
     // ============================== Terminales (pty)
     if path == "/shell/pty" && method == Method::Get {
