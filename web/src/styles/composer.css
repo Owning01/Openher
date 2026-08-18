@@ -73,6 +73,10 @@
   outline: none;
 }
 
+.composer-input-wrap.has-mic textarea {
+  padding-right: 3.9rem;
+}
+
 /* Focus visible propio: el outline global se descarta acá (textarea del
    composer), se reemplaza por un ring con el focus-ring del tema. */
 .composer-input-wrap textarea:focus {
@@ -135,6 +139,25 @@
 
 .composer-mic-btn {
   right: 0.3rem;
+}
+
+.composer-send-btn {
+  right: 2.2rem;
+  color: var(--primary);
+}
+
+.composer-send-btn.with-mic {
+  right: 2.2rem;
+}
+
+.composer-send-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.composer-send-btn:disabled:hover {
+  color: var(--primary);
+  background: transparent;
 }
 
 .composer-mic-btn.recording {

@@ -509,7 +509,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         </div>
       )}
       <div
-        className="composer-input-wrap"
+        className={`composer-input-wrap${supported ? " has-mic" : ""}`}
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy" }}
         onDrop={handleComposerDrop}
       >
@@ -562,6 +562,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
             <MicIcon size={18} />
           </button>
         )}
+        <button
+          type="button"
+          onClick={handleSendWithImages}
+          disabled={disabled || (!value.trim() && images.length === 0)}
+          className={`composer-inline-btn composer-send-btn${supported ? " with-mic" : ""}`}
+          title={t('composer.send')}
+          aria-label={t('composer.send')}
+          tabIndex={-1}
+        >
+          <SendIcon size={18} />
+        </button>
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
@@ -598,16 +609,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               <StopCircleIcon size={16} />
             </button>
           )}
-          <button
-            type="button"
-            onClick={handleSendWithImages}
-            disabled={disabled || (!value.trim() && images.length === 0)}
-            className="btn-primary composer-bar-btn"
-            title={t('composer.send')}
-            aria-label={t('composer.send')}
-          >
-            <SendIcon size={16} />
-          </button>
         </div>
       </div>
       {editingImage && (

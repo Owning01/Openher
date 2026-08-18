@@ -98,9 +98,16 @@ type DesktopLayout = {
   rows: number
   sessions: Array<string | null>
   panelKinds: Array<ShellPanelKind | "editor">
+  panelIds: Array<string>
   panelEditorPaths?: Record<number, string>
   colSizes: Array<number | null>
   rowSizes: Array<number | null>
+}
+
+let panelIdCounter = 0
+function genPanelId(): string {
+  panelIdCounter += 1
+  return `panel-${Date.now().toString(36)}-${panelIdCounter}`
 }
 
 type DesktopState = {
@@ -120,7 +127,7 @@ type DesktopState = {
 
 function loadDesktopState(fallbackSessionID: string | null): DesktopState {
   const fallback: DesktopState = {
-    layout: { cols: 1, rows: 1, sessions: [fallbackSessionID], panelKinds: ["session"], colSizes: [null], rowSizes: [null] } as DesktopLayout,
+    layout: { cols: 1, rows: 1, sessions: [fallbackSessionID], panelKinds: ["session"], panelIds: [genPanelId()], colSizes: [null], rowSizes: [null] } as DesktopLayout,
     sidebarWidth: 340,
     sidebarCollapsed: false,
     activity: "sessions" as DesktopActivity,
@@ -150,12 +157,18 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
       const finalTabStacks: Array<Array<string>> = Array.isArray(rawTabStacks) && rawTabStacks.length === total
         ? rawTabStacks.map((s: any) => Array.isArray(s) ? s.filter((x: any) => typeof x === "string") : [])
         : tabStacks
+      // Stable panel ids: preserve persisted ids, else generate fresh ones
+      const rawPanelIds = (layout as any).panelIds
+      const panelIds: Array<string> = Array.isArray(rawPanelIds) && rawPanelIds.length === total
+        ? rawPanelIds.map((p: any) => (typeof p === "string" ? p : genPanelId()))
+        : new Array(total).fill(null).map(() => genPanelId())
       return {
         layout: {
           cols: layout.cols,
           rows: layout.rows,
           sessions: layout.sessions.map((s: any) => (typeof s === "string" ? s : null)),
           panelKinds: kinds,
+          panelIds,
           colSizes: layout.cols === 1 ? [null] : (Array.isArray(layout.colSizes) && layout.colSizes.length === layout.cols ? layout.colSizes : new Array(layout.cols).fill(null)),
           rowSizes: layout.rows === 1 ? [null] : (Array.isArray(layout.rowSizes) && layout.rowSizes.length === layout.rows ? layout.rowSizes : new Array(layout.rows).fill(null)),
         },
@@ -1333,31 +1346,33 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         const col = index % prev.cols
         const sessions: Array<string | null> = []
         const panelKinds: Array<ShellPanelKind> = []
+        const panelIds: Array<string> = []
         for (let r = 0; r < prev.rows; r++) {
           for (let c = 0; c < cols; c++) {
-            if (c <= col) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(kindsOf(r, c)) }
-            else if (c === col + 1) { sessions.push(null); panelKinds.push("session") }
-            else { sessions.push(prev.sessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(kindsOf(r, c - 1)) }
+            if (c <= col) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(kindsOf(r, c)); panelIds.push(prev.panelIds[r * prev.cols + c]) }
+            else if (c === col + 1) { sessions.push(null); panelKinds.push("session"); panelIds.push(genPanelId()) }
+            else { sessions.push(prev.sessions[r * prev.cols + (c - 1)] ?? null); panelKinds.push(kindsOf(r, c - 1)); panelIds.push(prev.panelIds[r * prev.cols + (c - 1)]) }
           }
         }
         const colSizes = [...prev.colSizes]
         colSizes.splice(col + 1, 0, null)
-        return { ...prev, cols, sessions, panelKinds, colSizes }
+        return { ...prev, cols, sessions, panelKinds, panelIds, colSizes }
       }
       const rows = prev.rows + 1
       const row = Math.floor(index / prev.cols)
       const sessions: Array<string | null> = []
       const panelKinds: Array<ShellPanelKind> = []
+      const panelIds: Array<string> = []
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < prev.cols; c++) {
-          if (r <= row) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(kindsOf(r, c)) }
-          else if (r === row + 1) { sessions.push(null); panelKinds.push("session") }
-          else { sessions.push(prev.sessions[(r - 1) * prev.cols + c] ?? null); panelKinds.push(kindsOf(r - 1, c)) }
+          if (r <= row) { sessions.push(prev.sessions[r * prev.cols + c] ?? null); panelKinds.push(kindsOf(r, c)); panelIds.push(prev.panelIds[r * prev.cols + c]) }
+          else if (r === row + 1) { sessions.push(null); panelKinds.push("session"); panelIds.push(genPanelId()) }
+          else { sessions.push(prev.sessions[(r - 1) * prev.cols + c] ?? null); panelKinds.push(kindsOf(r - 1, c)); panelIds.push(prev.panelIds[(r - 1) * prev.cols + c]) }
         }
       }
       const rowSizes = [...prev.rowSizes]
       rowSizes.splice(row + 1, 0, null)
-      return { ...prev, rows, sessions, panelKinds, rowSizes }
+      return { ...prev, rows, sessions, panelKinds, panelIds, rowSizes }
     })
   }, [])
 
@@ -1369,8 +1384,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       if (emptySlot >= 0) {
         const sessions = [...prev.sessions]
         const panelKinds = [...prev.panelKinds]
+        const panelIds = [...prev.panelIds]
         panelKinds[emptySlot] = kind
-        return { ...prev, sessions, panelKinds }
+        return { ...prev, sessions, panelKinds, panelIds }
       }
       let cols = prev.cols
       let rows = prev.rows
@@ -1379,16 +1395,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       else cols = 2, rows = 2 // reset visual de 3x1 -> 2x2
       const sessions: Array<string | null> = new Array(cols * rows).fill(null)
       const panelKinds: Array<ShellPanelKind> = new Array(cols * rows).fill("session")
+      const panelIds: Array<string> = new Array(cols * rows).fill(null).map(() => genPanelId())
       for (let i = 0; i < Math.min(total, cols * rows); i++) {
         sessions[i] = prev.sessions[i]
         panelKinds[i] = prev.panelKinds[i]
+        panelIds[i] = prev.panelIds[i]
       }
       panelKinds[sessions.length - 1] = kind
       const colSizes = new Array(cols).fill(null)
       const rowSizes = new Array(rows).fill(null)
       prev.colSizes.forEach((s, i) => { if (i < cols) colSizes[i] = s })
       prev.rowSizes.forEach((s, i) => { if (i < rows) rowSizes[i] = s })
-      return { ...prev, cols, rows, sessions, panelKinds, colSizes, rowSizes }
+      return { ...prev, cols, rows, sessions, panelKinds, panelIds, colSizes, rowSizes }
     })
     setActivePanel(0)
   }, [])
@@ -1442,6 +1460,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             rows: 1,
             sessions: [null],
             panelKinds: ["session"],
+            panelIds: [genPanelId()],
             panelEditorPaths: {},
             colSizes: [null],
             rowSizes: [null],
@@ -1460,6 +1479,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             rows: 1,
             sessions: [prev.sessions[targetIdx] ?? null],
             panelKinds: [prev.panelKinds[targetIdx] ?? "session"],
+            panelIds: [prev.panelIds[targetIdx]],
             panelEditorPaths: prev.panelEditorPaths?.[targetIdx] ? { 0: prev.panelEditorPaths[targetIdx] } : {},
             colSizes: [null],
             rowSizes: [null],
@@ -1469,6 +1489,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
       let sessions = [...prev.sessions]
       let panelKinds = [...prev.panelKinds]
+      let panelIds = [...prev.panelIds]
       sessions[index] = null
       panelKinds[index] = "session"
       let { cols, rows, colSizes, rowSizes } = prev
@@ -1481,6 +1502,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           if (rowEmpty && rows > 1) {
             sessions = sessions.filter((_, i) => Math.floor(i / cols) !== r)
             panelKinds = panelKinds.filter((_, i) => Math.floor(i / cols) !== r)
+            panelIds = panelIds.filter((_, i) => Math.floor(i / cols) !== r)
             rows -= 1
             rowSizes = rowSizes.filter((_, i) => i !== r)
             changed = true
@@ -1493,6 +1515,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           if (colEmpty && cols > 1) {
             sessions = sessions.filter((_, i) => i % cols !== c)
             panelKinds = panelKinds.filter((_, i) => i % cols !== c)
+            panelIds = panelIds.filter((_, i) => i % cols !== c)
             cols -= 1
             colSizes = colSizes.filter((_, i) => i !== c)
             changed = true
@@ -1505,7 +1528,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       return {
         ...prevState,
         lastClosedPanel: closedInfo,
-        layout: { ...prev, cols, rows, sessions, panelKinds, colSizes, rowSizes }
+        layout: { ...prev, cols, rows, sessions, panelKinds, panelIds, colSizes, rowSizes }
       }
     })
     setActivePanel((prev) => (prev >= index ? Math.max(0, prev - 1) : prev))
@@ -1567,14 +1590,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setDesktopLayout((prev) => {
         const sessions = [...prev.sessions]
         const panelKinds = [...prev.panelKinds]
+        const panelIds = [...prev.panelIds]
         if (targetSessionId) {
           const existing = sessions.indexOf(targetSessionId)
           if (existing >= 0 && existing !== index) {
             sessions[existing] = null
           }
         } else if (fromIndex !== null && fromIndex !== index) {
+          // Mover panel: el id del panel viaja con él (evita remount del terminal)
           panelKinds[fromIndex] = "session"
           sessions[fromIndex] = null
+          ;[panelIds[fromIndex], panelIds[index]] = [panelIds[index], panelIds[fromIndex]]
         } else if (targetKind !== "session") {
           const existing = panelKinds.indexOf(targetKind)
           if (existing >= 0 && existing !== index) {
@@ -1584,7 +1610,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         }
         sessions[index] = targetSessionId
         panelKinds[index] = targetKind
-        return { ...prev, sessions, panelKinds }
+        return { ...prev, sessions, panelKinds, panelIds }
       })
       setActivePanel(index)
       return
@@ -1594,51 +1620,64 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setDesktopLayout((prev) => {
         let baseSessions = [...prev.sessions]
         let baseKinds = [...prev.panelKinds]
+        let baseIds = [...prev.panelIds]
+        let movedId: string | null = null
         if (targetSessionId) {
           baseSessions = baseSessions.map((s) => (s === targetSessionId ? null : s))
         } else if (fromIndex !== null && fromIndex < baseKinds.length) {
           baseKinds[fromIndex] = "session"
           baseSessions[fromIndex] = null
+          movedId = baseIds[fromIndex]
         } else if (targetKind !== "session") {
           const existing = baseKinds.indexOf(targetKind)
           if (existing >= 0) {
             baseKinds[existing] = "session"
             baseSessions[existing] = null
+            movedId = baseIds[existing]
           }
         }
         const cols = prev.cols + 1
         const col = index % prev.cols
         const sessions: Array<string | null> = []
         const panelKinds: Array<ShellPanelKind | "editor"> = []
+        const panelIds: Array<string> = []
         for (let r = 0; r < prev.rows; r++) {
           for (let c = 0; c < cols; c++) {
             if (dir === "right") {
               if (c <= col) {
                 sessions.push(baseSessions[r * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
+                panelIds.push(baseIds[r * prev.cols + c])
               } else if (c === col + 1) {
-                sessions.push(r === Math.floor(index / prev.cols) ? targetSessionId : null)
-                panelKinds.push(r === Math.floor(index / prev.cols) ? targetKind : "session")
+                const isTarget = r === Math.floor(index / prev.cols)
+                sessions.push(isTarget ? targetSessionId : null)
+                panelKinds.push(isTarget ? targetKind : "session")
+                panelIds.push(isTarget ? (movedId ?? genPanelId()) : genPanelId())
               } else {
                 sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + (c - 1)] ?? "session")
+                panelIds.push(baseIds[r * prev.cols + (c - 1)])
               }
             } else {
               if (c === col) {
-                sessions.push(r === Math.floor(index / prev.cols) ? targetSessionId : null)
-                panelKinds.push(r === Math.floor(index / prev.cols) ? targetKind : "session")
+                const isTarget = r === Math.floor(index / prev.cols)
+                sessions.push(isTarget ? targetSessionId : null)
+                panelKinds.push(isTarget ? targetKind : "session")
+                panelIds.push(isTarget ? (movedId ?? genPanelId()) : genPanelId())
               } else if (c < col) {
                 sessions.push(baseSessions[r * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
+                panelIds.push(baseIds[r * prev.cols + c])
               } else {
                 sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + (c - 1)] ?? "session")
+                panelIds.push(baseIds[r * prev.cols + (c - 1)])
               }
             }
           }
         }
         const colSizes = new Array(cols).fill(null)
-        return { ...prev, cols, sessions, panelKinds, colSizes }
+        return { ...prev, cols, sessions, panelKinds, panelIds, colSizes }
       })
       setActivePanel(dir === "right" ? index + 1 : index)
       return
@@ -1648,16 +1687,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setDesktopLayout((prev) => {
         let baseSessions = [...prev.sessions]
         let baseKinds = [...prev.panelKinds]
+        let baseIds = [...prev.panelIds]
+        let movedId: string | null = null
         if (targetSessionId) {
           baseSessions = baseSessions.map((s) => (s === targetSessionId ? null : s))
         } else if (fromIndex !== null && fromIndex < baseKinds.length) {
           baseKinds[fromIndex] = "session"
           baseSessions[fromIndex] = null
+          movedId = baseIds[fromIndex]
         } else if (targetKind !== "session") {
           const existing = baseKinds.indexOf(targetKind)
           if (existing >= 0) {
             baseKinds[existing] = "session"
             baseSessions[existing] = null
+            movedId = baseIds[existing]
           }
         }
         const rows = prev.rows + 1
@@ -1665,35 +1708,44 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         const col = index % prev.cols
         const sessions: Array<string | null> = []
         const panelKinds: Array<ShellPanelKind | "editor"> = []
+        const panelIds: Array<string> = []
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < prev.cols; c++) {
             if (dir === "bottom") {
               if (r <= row) {
                 sessions.push(baseSessions[r * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
+                panelIds.push(baseIds[r * prev.cols + c])
               } else if (r === row + 1) {
-                sessions.push(c === col ? targetSessionId : null)
-                panelKinds.push(c === col ? targetKind : "session")
+                const isTarget = c === col
+                sessions.push(isTarget ? targetSessionId : null)
+                panelKinds.push(isTarget ? targetKind : "session")
+                panelIds.push(isTarget ? (movedId ?? genPanelId()) : genPanelId())
               } else {
                 sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[(r - 1) * prev.cols + c] ?? "session")
+                panelIds.push(baseIds[(r - 1) * prev.cols + c])
               }
             } else {
               if (r === row) {
-                sessions.push(c === col ? targetSessionId : null)
-                panelKinds.push(c === col ? targetKind : "session")
+                const isTarget = c === col
+                sessions.push(isTarget ? targetSessionId : null)
+                panelKinds.push(isTarget ? targetKind : "session")
+                panelIds.push(isTarget ? (movedId ?? genPanelId()) : genPanelId())
               } else if (r < row) {
                 sessions.push(baseSessions[r * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
+                panelIds.push(baseIds[r * prev.cols + c])
               } else {
                 sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[(r - 1) * prev.cols + c] ?? "session")
+                panelIds.push(baseIds[(r - 1) * prev.cols + c])
               }
             }
           }
         }
         const rowSizes = new Array(rows).fill(null)
-        return { ...prev, rows, sessions, panelKinds, rowSizes }
+        return { ...prev, rows, sessions, panelKinds, panelIds, rowSizes }
       })
       setActivePanel(index)
       return
@@ -1705,9 +1757,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setDesktopLayout((prev) => {
       const sessions = [...prev.sessions]
       const panelKinds = [...prev.panelKinds]
+      const panelIds = [...prev.panelIds]
       ;[sessions[from], sessions[to]] = [sessions[to], sessions[from]]
       ;[panelKinds[from], panelKinds[to]] = [panelKinds[to], panelKinds[from]]
-      return { ...prev, sessions, panelKinds }
+      ;[panelIds[from], panelIds[to]] = [panelIds[to], panelIds[from]]
+      return { ...prev, sessions, panelKinds, panelIds }
     })
   }, [setDesktopLayout])
 
@@ -2461,6 +2515,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               const kind = desktopLayout.panelKinds[i] ?? "session"
               const sid = desktopLayout.sessions[i]
               const session = sid ? sessions.find((s) => s.id === sid) ?? null : null
+              const panelId = desktopLayout.panelIds?.[i] ?? `panel-${i}`
               const col = i % desktopLayout.cols
               const row = Math.floor(i / desktopLayout.cols)
               const placement = { gridColumn: col * 2 + 1, gridRow: row * 2 + 1 }
@@ -2472,7 +2527,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               if (kind === "session") {
                 if (!session) {
                   return (
-                    <div key={`ph-${i}`} className="desktop-cell-placeholder" style={placement} onClick={() => setActivePanel(i)}>
+                    <div key={panelId} className="desktop-cell-placeholder" style={placement} onClick={() => setActivePanel(i)}>
                       <button type="button" className="btn-icon compact desktop-cell-close"
                         title="Close split" aria-label="Close split"
                         onClick={(e) => { e.stopPropagation(); closePanel(i) }}>×</button>
@@ -2482,7 +2537,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   )
                 }
                 return (
-                  <div key={`panel-${i}`} style={placement} className="desktop-cell">
+                  <div key={panelId} style={placement} className="desktop-cell">
                     <SessionChatPanel
                       session={session}
                       config={config!}
@@ -2518,7 +2573,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               if (kind === "editor") {
                 const editorPath = desktopLayout.panelEditorPaths?.[i]
                 return (
-                  <div key={`panel-${i}`} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
+                  <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
                     <FileEditorPanel
                       path={editorPath || ""}
                       initialCwd={activeSessionDir}
@@ -2529,7 +2584,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               }
               // Paneles de la shell (terminal, explorador, kanban, docs...)
               return (
-                <div key={`panel-${i}`} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
+                <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
                   <ShellPanelCell
                     index={i}
                     kind={kind}
