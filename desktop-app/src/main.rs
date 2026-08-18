@@ -153,10 +153,11 @@ impl ApplicationHandler<AppEvent> for App {
         let ctx: &mut WebContext = self.web_context.get_or_insert(context);
         let builder = WebViewBuilder::with_web_context(ctx)
             .with_url(&self.url)
-            // Aceleración por GPU: fuerza D3D11/compositor GPU (NVIDIA/AMD/Intel).
+            // Aceleración por GPU + Desactivar bloqueo de X-Frame-Options/CORS en iframe incrustado.
             .with_additional_browser_args(
-                "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-accelerated-video-decode",
-            );        match builder.build_as_child(&window) {
+                "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-accelerated-video-decode --disable-web-security --disable-site-isolation-trials --disable-features=IsolateOrigins,site-per-process",
+            );
+        match builder.build_as_child(&window) {
             Ok(wv) => {
                 self.webview = Some(wv);
                 self.window = Some(window);

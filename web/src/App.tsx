@@ -2407,7 +2407,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     onRenameConfirm: renameSession,
     onRenameCancel: cancelRename,
     onComposerChange: setComposer,
-    onSend: (imgs) => handleSend(imgs),
+    onSend: (imgs, opts) => handleSend(imgs, opts),
     onAbort: handleAbort,
     onTodosToggle: () => setTodosExpanded((v) => !v),
     onBackToSessions: goBack,

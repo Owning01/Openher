@@ -3,6 +3,7 @@
 use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use tiny_http::{Header, Method, Request, Response, StatusCode};
 
@@ -647,6 +648,47 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             }
             Err(e) => {
                 let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+
+    // ============================== Proxy (para iframe de páginas externas sin bloqueo CORS / X-Frame-Options)
+    if path == "/shell/proxy" {
+        let target_url = q("url");
+        if target_url.is_empty() {
+            let _ = req.respond(json_err(400, "Falta parámetro url"));
+            return;
+        }
+        let ureq_res = ureq::get(&target_url)
+            .timeout(Duration::from_secs(15))
+            .call();
+        match ureq_res {
+            Ok(resp) => {
+                let content_type = resp.header("Content-Type").unwrap_or("text/html").to_string();
+                let mut reader = resp.into_reader();
+                let mut buf = Vec::new();
+                let _ = reader.read_to_end(&mut buf);
+                let _ = req.respond(
+                    Response::from_data(buf)
+                        .with_status_code(StatusCode(200))
+                        .with_header(Header::from_bytes("Content-Type", content_type.as_bytes()).unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, OPTIONS").unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Headers", "*").unwrap()),
+                );
+            }
+            Err(e) => {
+                let err_html = format!(
+                    "<!DOCTYPE html><html><body style='font-family:sans-serif;padding:30px;background:#1e1e1e;color:#fff;'><h3>No se pudo cargar: {}</h3><p style='color:#ef4444;'>{}</p></body></html>",
+                    target_url, e
+                );
+                let _ = req.respond(
+                    Response::from_string(err_html)
+                        .with_status_code(StatusCode(502))
+                        .with_header(Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap()),
+                );
             }
         }
         return;

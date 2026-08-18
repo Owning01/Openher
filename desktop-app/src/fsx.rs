@@ -241,7 +241,7 @@ pub fn execute_file(path: &str) -> Result<serde_json::Value, String> {
         let mut cmd = match ext.as_str() {
             "bat" | "cmd" => {
                 let mut c = Command::new("cmd.exe");
-                c.args(["/c", "start", "", path]);
+                c.args(["/c", "start", "OpenCode Script", "cmd.exe", "/k", path]);
                 c
             }
             "vbs" => {
@@ -250,13 +250,17 @@ pub fn execute_file(path: &str) -> Result<serde_json::Value, String> {
                 c
             }
             "ps1" => {
-                let mut c = Command::new("powershell.exe");
-                c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path]);
+                let mut c = Command::new("cmd.exe");
+                c.args(["/c", "start", "OpenCode PowerShell", "powershell.exe", "-NoExit", "-ExecutionPolicy", "Bypass", "-File", path]);
+                c
+            }
+            "exe" => {
+                let c = Command::new(path);
                 c
             }
             _ => {
                 let mut c = Command::new("cmd.exe");
-                c.args(["/c", "start", "", path]);
+                c.args(["/c", "start", "OpenCode Script", "cmd.exe", "/k", path]);
                 c
             }
         };
