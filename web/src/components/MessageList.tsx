@@ -28,7 +28,6 @@ type MessageListProps = {
   todosOpen?: boolean
   highlight?: string
   scrollToMessageID?: string | null
-  activeVariant?: string
   compactTools?: boolean
   thinkingDefault?: "auto" | "expanded" | "collapsed"
   onRegenerate?: () => void
@@ -37,7 +36,7 @@ type MessageListProps = {
 
 export const MessageList = memo(function MessageList({
   messages, pendingIndex, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, activeVariant, compactTools, thinkingDefault, onRegenerate, onOpenADEDiff
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, compactTools, thinkingDefault, onRegenerate, onOpenADEDiff
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -45,14 +44,16 @@ export const MessageList = memo(function MessageList({
   const [isAtBottom, setIsAtBottom] = useState(true)
 
   // El footer (modo · modelo · nivel de pensamiento · duración) se muestra solo
-  // en el último mensaje assistant, o en un mensaje donde el modelo/plan cambió
-  // respecto al anterior (misma regla visual que el TUI).
+  // en el último mensaje assistant COMPLETED, o en un mensaje donde el
+  // modelo/plan cambió respecto al anterior (misma regla visual que el TUI).
+  // FIX: buscar el último COMPLETED (no el último en general) — durante
+  // streaming el nuevo assistant incompleto no roba el footer del anterior.
   const footerInfoMap = useMemo(() => {
     const map = new Map<string, boolean>()
     let lastAssistantId: string | null = null
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i]
-      if (m.info.role === "assistant") { lastAssistantId = m.info.id; break }
+      if (m.info.role === "assistant" && m.info.time.completed) { lastAssistantId = m.info.id; break }
     }
     let prev: { modelID?: string; mode?: string; agent?: string } | null = null
     for (const msg of messages) {
@@ -64,14 +65,6 @@ export const MessageList = memo(function MessageList({
       prev = { modelID: msg.info.modelID, mode: msg.info.mode, agent: msg.info.agent }
     }
     return map
-  }, [messages])
-
-  const lastAssistantId = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i]
-      if (m.info.role === "assistant") return m.info.id
-    }
-    return null
   }, [messages])
 
   const prevUserTsMap = useMemo(() => {
@@ -158,7 +151,6 @@ export const MessageList = memo(function MessageList({
                   agents={agents}
                   prevUserTs={message.info.parentID ? prevUserTsMap.get(message.info.parentID) : undefined}
                   showModelInfo={footerInfoMap.get(message.info.id) ?? false}
-                  activeVariant={message.info.id === lastAssistantId ? activeVariant : undefined}
                   config={config}
                   directory={directory}
                   onViewSubagents={onViewSubagents}

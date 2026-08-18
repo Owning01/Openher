@@ -74,7 +74,7 @@ function calcTokensPerSecond(msg: RenderedMessage): string {
   return `${tps.toFixed(1)} tok/s`
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, queued, revert, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, activeVariant, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
+export const MessageBubble = memo(function MessageBubble({ message, queued, revert, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
   message: RenderedMessage
   queued?: boolean
   revert?: SessionView["revert"]
@@ -83,7 +83,6 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   agents?: AgentOption[]
   prevUserTs?: number
   showModelInfo?: boolean
-  activeVariant?: string
   config?: ServerConfig
   directory?: string
   onViewSubagents?: (subagentID?: string) => void
@@ -283,17 +282,16 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           <FileDiffs diffs={message.summaryDiffs} onOpenADEDiff={onOpenADEDiff} />
         )}
 
-        {isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || activeVariant || duration || tokensPerSecond || message.info.finish === "aborted") && (
+        {isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || duration || tokensPerSecond || message.info.finish === "aborted") && (
           <div className="message-footer">
             {(message.turnMode || message.info.mode) && (
               <span className="msg-footer-mode">{message.turnMode || message.info.mode}</span>
             )}
             {message.info.modelID && <span className="msg-footer-model"> · {message.info.modelID}</span>}
-            {activeVariant && <span className="msg-footer-variant"> · {activeVariant}</span>}
             {duration && <span className="msg-footer-duration"> · {duration}</span>}
             {tokensPerSecond && (
-              <span className="msg-footer-tps" title="Velocidad de generación de tokens" style={{ color: "var(--primary)", fontWeight: 600 }}>
-                {" "}· ⚡ {tokensPerSecond}
+              <span className="msg-footer-tps" title="Velocidad de generación de tokens">
+                {" "}· {tokensPerSecond}
               </span>
             )}
             {message.info.finish === "aborted" && (
