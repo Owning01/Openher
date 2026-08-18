@@ -1,0 +1,117 @@
+import { memo, useCallback, useRef, useState } from "react"
+import { basename } from "../utils"
+import { PlusIcon, CloseIcon } from "../Icons"
+
+type SessionLike = { id: string; title?: string; directory: string }
+
+export type TabBarTab = {
+  id: string
+  label: string
+  busy?: boolean
+}
+
+export const TabBar = memo(function TabBar({
+  tabs,
+  activeIndex,
+  sessions,
+  busySessionIds,
+  onSwitch,
+  onClose,
+  onAdd,
+  onMoveTab,
+}: {
+  tabs: Array<string>
+  activeIndex: number
+  sessions: Array<SessionLike>
+  busySessionIds?: Set<string>
+  onSwitch: (index: number) => void
+  onClose: (index: number) => void
+  onAdd: () => void
+  onMoveTab: (fromIndex: number, toIndex: number) => void
+}) {
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
+  const barRef = useRef<HTMLDivElement>(null)
+
+  const getLabel = useCallback((id: string) => {
+    const session = sessions.find((s) => s.id === id)
+    if (session?.title && session.title !== "New Session") return session.title
+    if (session?.directory) return basename(session.directory)
+    return id.slice(0, 8)
+  }, [sessions])
+
+  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
+    e.dataTransfer.setData("text/plain", `tab:${index}`)
+    e.dataTransfer.effectAllowed = "move"
+    setDragIdx(index)
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    setDragOverIdx(index)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent, toIndex: number) => {
+    e.preventDefault()
+    const data = e.dataTransfer.getData("text/plain")
+    if (data.startsWith("tab:")) {
+      const fromIndex = parseInt(data.slice(4), 10)
+      if (!isNaN(fromIndex) && fromIndex !== toIndex) {
+        onMoveTab(fromIndex, toIndex)
+      }
+    }
+    setDragIdx(null)
+    setDragOverIdx(null)
+  }, [onMoveTab])
+
+  const handleDragEnd = useCallback(() => {
+    setDragIdx(null)
+    setDragOverIdx(null)
+  }, [])
+
+  return (
+    <div className="tab-bar" ref={barRef}>
+      {tabs.map((id, i) => {
+        const busy = busySessionIds?.has(id)
+        const isDragging = dragIdx === i
+        const isDragOver = dragOverIdx === i && dragIdx !== null && dragIdx !== i
+        return (
+          <div
+            key={id}
+            className={`tab${i === activeIndex ? " active" : ""}${isDragging ? " tab-dragging" : ""}${isDragOver ? " tab-drag-over" : ""}`}
+            draggable
+            onClick={() => onSwitch(i)}
+            onDragStart={(e) => handleDragStart(e, i)}
+            onDragOver={(e) => handleDragOver(e, i)}
+            onDrop={(e) => handleDrop(e, i)}
+            onDragEnd={handleDragEnd}
+            title={getLabel(id)}
+          >
+            <span className="tab-label">{getLabel(id)}</span>
+            {busy && <span className="tab-busy" />}
+            {tabs.length > 1 && (
+              <button
+                type="button"
+                className="tab-close"
+                onClick={(e) => { e.stopPropagation(); onClose(i) }}
+                aria-label="Close tab"
+              >
+                <CloseIcon size={10} />
+              </button>
+            )}
+          </div>
+        )
+      })}
+      <button
+        type="button"
+        className="tab-add"
+        onClick={onAdd}
+        title="New tab"
+        aria-label="New tab"
+      >
+        <PlusIcon size={12} />
+      </button>
+    </div>
+  )
+})

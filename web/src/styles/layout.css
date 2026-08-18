@@ -581,6 +581,140 @@
     flex-shrink: 0;
   }
 
+  /* ===== Tab Bar (per-panel, VS Code style) ===== */
+  .tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 var(--space-2);
+    min-height: 32px;
+  }
+
+  .tab-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--muted-strong);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+    min-width: 48px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    transition: background 0.1s, color 0.1s;
+    user-select: none;
+    flex-shrink: 0;
+  }
+
+  .tab:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+  }
+
+  .tab.active {
+    background: var(--chat-bg-color, var(--surface));
+    color: var(--text);
+    border-color: var(--border);
+    font-weight: 600;
+    position: relative;
+  }
+
+  .tab.active::after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--chat-bg-color, var(--surface));
+  }
+
+  .tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tab-busy {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary);
+    flex-shrink: 0;
+    animation: pulse-busy 1.5s ease-in-out infinite;
+  }
+
+  .tab-dragging {
+    opacity: 0.4;
+  }
+
+  .tab-drag-over {
+    border-left: 2px solid var(--primary);
+  }
+
+  .tab-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    border: none;
+    color: var(--muted-strong);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.1s, background 0.1s;
+  }
+
+  .tab:hover .tab-close,
+  .tab.active .tab-close {
+    opacity: 1;
+  }
+
+  .tab-close:hover {
+    background: rgba(128, 128, 128, 0.15);
+    color: var(--text);
+  }
+
+  .tab-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    border: none;
+    color: var(--muted-strong);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .tab-add:hover {
+    background: rgba(128, 128, 128, 0.12);
+    color: var(--text);
+  }
+
   /* ===== Sidebar de escritorio (resize + colapsar) ===== */
   .app-desktop-sidebar {
     position: relative;

@@ -10,6 +10,7 @@ import { useT } from "../i18n-context"
 import { QUESTION_POLL_INTERVAL_MS } from "../constants"
 import { basename, isSessionActive } from "../utils"
 import { StatsIcon } from "../Icons"
+import { TabBar } from "./TabBar"
 import type { ChatViewProps } from "./ChatView"
 import type { ServerConfig, DataMode, SessionView, CommandInfo, Question, PermissionRequest } from "../types"
 
@@ -37,6 +38,13 @@ type Props = {
   onSwapPanels: (from: number, to: number) => void
   onOpenFile?: (path: string, panelIndex?: number, zone?: "left" | "right" | "top" | "bottom" | "center") => void
   onOpenConnect?: () => void
+  tabStack?: Array<string>
+  allSessions?: Array<{ id: string; title?: string; directory: string }>
+  busySessionIds?: Set<string>
+  onTabSwitch?: (panelIndex: number, tabIndex: number) => void
+  onTabClose?: (panelIndex: number, tabIndex: number) => void
+  onTabAdd?: (panelIndex: number) => void
+  onTabMove?: (panelIndex: number, fromIndex: number, toIndex: number) => void
 }
 
 export const SessionChatPanel = memo(function SessionChatPanel({
@@ -44,7 +52,8 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   onActivate, onClose, onSplitSession, onSettled,
   onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
   onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels,
-  onOpenFile, onOpenConnect
+  onOpenFile, onOpenConnect,
+  tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove
 }: Props) {
   const t = useT()
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
@@ -397,6 +406,18 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           }}
         />
       )}
+      {(tabStack && tabStack.length > 0) ? (
+        <TabBar
+          tabs={tabStack}
+          activeIndex={tabStack.indexOf(session.id)}
+          sessions={allSessions ?? []}
+          busySessionIds={busySessionIds}
+          onSwitch={(i) => onTabSwitch?.(panelIndex, i)}
+          onClose={(i) => onTabClose?.(panelIndex, i)}
+          onAdd={() => onTabAdd?.(panelIndex)}
+          onMoveTab={(from, to) => onTabMove?.(panelIndex, from, to)}
+        />
+      ) : null}
       <div
         className="session-panel-header"
         draggable

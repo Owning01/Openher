@@ -115,6 +115,7 @@ type DesktopState = {
   terminalDocked?: boolean
   terminalHeight?: number
   lastClosedPanel?: { index: number; kind: ShellPanelKind; sessionId: string | null } | null
+  tabStacks?: Array<Array<string>>
 }
 
 function loadDesktopState(fallbackSessionID: string | null): DesktopState {
@@ -140,6 +141,15 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
         Array.isArray(layout.panelKinds) && layout.panelKinds.length === total
           ? layout.panelKinds.map((k: any) => (k === "session" || k === "terminal" || k === "explorer" || k === "kanban" || k === "docs" || k === "updates" || k === "stats" || k === "labs" || k === "config" ? k : "session"))
           : new Array(total).fill("session")
+      // Migrate old flat sessions to tab stacks
+      const tabStacks: Array<Array<string>> = layout.sessions.map((s: any) => {
+        if (Array.isArray(s)) return s.filter((x: any) => typeof x === "string")
+        return typeof s === "string" ? [s] : []
+      })
+      const rawTabStacks = raw?.tabStacks
+      const finalTabStacks: Array<Array<string>> = Array.isArray(rawTabStacks) && rawTabStacks.length === total
+        ? rawTabStacks.map((s: any) => Array.isArray(s) ? s.filter((x: any) => typeof x === "string") : [])
+        : tabStacks
       return {
         layout: {
           cols: layout.cols,
@@ -149,6 +159,7 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
           colSizes: layout.cols === 1 ? [null] : (Array.isArray(layout.colSizes) && layout.colSizes.length === layout.cols ? layout.colSizes : new Array(layout.cols).fill(null)),
           rowSizes: layout.rows === 1 ? [null] : (Array.isArray(layout.rowSizes) && layout.rowSizes.length === layout.rows ? layout.rowSizes : new Array(layout.rows).fill(null)),
         },
+        tabStacks: finalTabStacks,
         sidebarWidth: Math.max(200, Math.min(480, raw?.sidebarWidth ?? 340)),
         sidebarCollapsed: !!raw?.sidebarCollapsed,
         activity: (["sessions", "explorer", "stats", "kanban", "docs", "updates", "labs", "config"].includes(raw?.activity ?? "") ? raw!.activity! : "sessions") as DesktopActivity,
@@ -1223,6 +1234,34 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const setSidebarCollapsed = useCallback((collapsed: boolean | ((v: boolean) => boolean)) => {
     setDesktopState((prev) => ({ ...prev, sidebarCollapsed: typeof collapsed === "function" ? collapsed(prev.sidebarCollapsed) : collapsed }))
   }, [])
+
+  // Tab stacks: tracks all open session IDs per panel (for tab bar)
+  const tabStacks = desktopState.tabStacks
+  const setTabStacks = useCallback((updater: (prev: Array<Array<string>>) => Array<Array<string>>) => {
+    setDesktopState((prev) => ({ ...prev, tabStacks: updater(prev.tabStacks ?? []) }))
+  }, [])
+
+  const removeTab = useCallback((panelIndex: number, tabIndex: number) => {
+    setTabStacks((prev) => {
+      const next = prev.map((s) => [...s])
+      if (!next[panelIndex]) return next
+      next[panelIndex] = next[panelIndex].filter((_, i) => i !== tabIndex)
+      return next
+    })
+  }, [setTabStacks])
+
+  const moveTab = useCallback((panelIndex: number, fromIndex: number, toIndex: number) => {
+    setTabStacks((prev) => {
+      const next = prev.map((s) => [...s])
+      if (!next[panelIndex]) return next
+      const stack = [...next[panelIndex]]
+      if (fromIndex < 0 || fromIndex >= stack.length || toIndex < 0 || toIndex >= stack.length) return next
+      const [moved] = stack.splice(fromIndex, 1)
+      stack.splice(toIndex, 0, moved)
+      next[panelIndex] = stack
+      return next
+    })
+  }, [setTabStacks])
   const [activePanel, setActivePanel] = useState(0)
   const [maximizedPanel, setMaximizedPanel] = useState<number | null>(null)
   // Refs para resize fluido: durante el drag se muta el DOM directamente
@@ -1262,8 +1301,29 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       panelKinds[index] = "session"
       return { ...prev, sessions, panelKinds }
     })
+    // Register in tab stack
+    setTabStacks((prev) => {
+      const next = prev.map((s) => [...s])
+      while (next.length <= index) next.push([])
+      // Remove from other panels
+      for (let i = 0; i < next.length; i++) {
+        next[i] = next[i].filter((sid) => sid !== id)
+      }
+      if (!next[index]) next[index] = []
+      if (!next[index].includes(id)) {
+        next[index] = [...next[index], id]
+      }
+      return next
+    })
     setActivePanel(index)
-  }, [])
+  }, [setTabStacks])
+
+  const switchTab = useCallback((panelIndex: number, tabIndex: number) => {
+    const stack = tabStacks?.[panelIndex]
+    if (!stack || tabIndex < 0 || tabIndex >= stack.length) return
+    const sessionId = stack[tabIndex]
+    openInPanel(panelIndex, sessionId)
+  }, [tabStacks, openInPanel])
 
   const splitPanel = useCallback((index: number, dir: "right" | "bottom") => {
     setDesktopLayout((prev) => {
@@ -2396,6 +2456,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               window.addEventListener("pointermove", onMove)
               window.addEventListener("pointerup", onUp)
             }
+            const busySessions = new Set(sessions.filter((s) => s.status === "busy" || s.status === "retry").map((s) => s.id))
             const cells = Array.from({ length: desktopLayout.cols * desktopLayout.rows }).map((_, i) => {
               const kind = desktopLayout.panelKinds[i] ?? "session"
               const sid = desktopLayout.sessions[i]
@@ -2443,7 +2504,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onOpenInThisPanel={(id) => openInPanel(i, id)}
                       onSwapPanels={handleSwapPanels}
                       onOpenFile={handleOpenFile}
-                      onOpenConnect={() => setShowConnectSheet(true)} />
+                      onOpenConnect={() => setShowConnectSheet(true)}
+                      tabStack={tabStacks?.[i] ?? []}
+                      allSessions={sessions}
+                      busySessionIds={busySessions}
+                      onTabSwitch={switchTab}
+                      onTabClose={removeTab}
+                      onTabAdd={() => {}} // TODO: open session picker
+                      onTabMove={(from, to) => moveTab(i, from, to)} />
                   </div>
                 )
               }
@@ -2520,7 +2588,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onOpenInThisPanel={(id) => openInPanel(maximizedIndex, id)}
                       onSwapPanels={handleSwapPanels}
                       onOpenFile={handleOpenFile}
-                      onOpenConnect={() => setShowConnectSheet(true)} />
+                      onOpenConnect={() => setShowConnectSheet(true)}
+                      tabStack={tabStacks?.[maximizedIndex] ?? []}
+                      allSessions={sessions}
+                      busySessionIds={busySessions}
+                      onTabSwitch={switchTab}
+                      onTabClose={removeTab}
+                      onTabAdd={() => {}}
+                      onTabMove={(from, to) => moveTab(maximizedIndex, from, to)} />
                   </div>
                 ) : (
                   <div className="desktop-grid" ref={gridRef}
