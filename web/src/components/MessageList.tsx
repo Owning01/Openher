@@ -128,7 +128,7 @@ export const MessageList = memo(function MessageList({
   return (
     <div className="message-list-root">
       <div className="messages" ref={messagesRef}>
-        {loadingSessionID === selectedID ? (
+        {loadingSessionID && loadingSessionID === selectedID ? (
           <div className="empty-state compact">
             <GridSpinner label={t('detail.loading')} />
             <p aria-hidden="true">{t('detail.loading')}</p>
