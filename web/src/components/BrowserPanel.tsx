@@ -3,7 +3,35 @@ import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
 
-const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
+const IS_DESKTOP = typeof window !== "undefined" && (!!(window as any).__OPENCODE_DESKTOP__ || (window.location.hostname === "127.0.0.1" && window.location.port !== ""))
+
+function toEmbeddableUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    if (u.hostname.includes("youtube.com") && u.pathname.includes("/watch")) {
+      const v = u.searchParams.get("v")
+      if (v) return `https://www.youtube-nocookie.com/embed/${v}?autoplay=1`
+    }
+    if (u.hostname.includes("youtu.be")) {
+      const v = u.pathname.replace(/^\//, "")
+      if (v) return `https://www.youtube-nocookie.com/embed/${v}?autoplay=1`
+    }
+  } catch {}
+  return url
+}
+
+function getFrameSrc(url: string): string {
+  if (!url || url === "about:blank") return "about:blank"
+  if (/^(http:\/\/)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(url)) {
+    return url
+  }
+  const embed = toEmbeddableUrl(url)
+  if (embed !== url) return embed
+
+  // Para sitios externos con protección de iframe (X-Frame-Options/CSP), usar el proxy local
+  const base = typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:5900"
+  return `${base}/shell/proxy?url=${encodeURIComponent(url)}`
+}
 
 type DeviceMode = "responsive" | "mobile" | "tablet" | "desktop"
 
@@ -485,7 +513,7 @@ export const BrowserPanel = memo(function BrowserPanel({
         ) : (
           <iframe
             key={reloadKey}
-            src={currentSrc}
+            src={toEmbeddableUrl(currentSrc)}
             title="Vista previa web"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-top-navigation-by-user-activation"
             allow="clipboard-read; clipboard-write; geolocation; microphone; camera; midi; encrypted-media"

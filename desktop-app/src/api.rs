@@ -797,6 +797,69 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         }
     }
 
+    // ============================== Web Proxy Anti-CORS / Anti-Framebusting
+    if path == "/shell/proxy" && method == Method::Get {
+        let url_param = q("url");
+        if url_param.is_empty() {
+            let _ = req.respond(json_err(400, "Falta parametro url"));
+            return;
+        }
+        let target_url = if !url_param.starts_with("http://") && !url_param.starts_with("https://") {
+            format!("https://{url_param}")
+        } else {
+            url_param
+        };
+
+        let client = ureq::builder()
+            .timeout(std::time::Duration::from_secs(12))
+            .redirects(5)
+            .build();
+
+        match client.get(&target_url)
+            .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+            .call() {
+            Ok(resp) => {
+                let content_type = resp.header("Content-Type").unwrap_or("text/html; charset=utf-8").to_string();
+                let status = resp.status();
+                let mut reader = resp.into_reader();
+                let mut body_bytes = Vec::new();
+                let _ = std::io::Read::read_to_end(&mut reader, &mut body_bytes);
+
+                if content_type.contains("html") {
+                    if let Ok(mut html) = String::from_utf8(body_bytes) {
+                        let base_tag = format!(r#"<base href="{}">"#, target_url);
+                        if let Some(pos) = html.find("<head>") {
+                            html.insert_str(pos + 6, &base_tag);
+                        } else {
+                            html.insert_str(0, &base_tag);
+                        }
+                        let clean_html = html.replace("top.location", "self.location")
+                                             .replace("parent.location", "self.location")
+                                             .replace("window.top", "window.self");
+                        let _ = req.respond(
+                            Response::from_string(clean_html)
+                                .with_status_code(StatusCode(status))
+                                .with_header(Header::from_bytes("Content-Type", content_type.as_bytes()).unwrap())
+                                .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap()),
+                        );
+                        return;
+                    }
+                }
+
+                let _ = req.respond(
+                    Response::from_data(body_bytes)
+                        .with_status_code(StatusCode(status))
+                        .with_header(Header::from_bytes("Content-Type", content_type.as_bytes()).unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap()),
+                );
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(502, &format!("Proxy error: {e}")));
+            }
+        }
+        return;
+    }
+
     // ============================== Browser (Sub-WebView2 nativo ultra-ligero)
     if path == "/shell/browser/open" && method == Method::Post {
         if let Ok(v) = read_body(&mut req) {

@@ -612,6 +612,16 @@ button.compact {
   color: var(--text); white-space: pre-wrap; word-break: break-word;
   line-height: 1.5;
 }
+.skill-detail-actions {
+  display: flex; justify-content: flex-end; padding-top: var(--space-3);
+}
+.skill-use-btn {
+  background: var(--primary, #10b981); color: #fff;
+  border: none; border-radius: var(--radius-md);
+  padding: 0.5rem 1.2rem; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; transition: opacity 0.15s;
+}
+.skill-use-btn:hover { opacity: 0.9; }
 
 /* ===== Chat customizer (desde el propio chat) ===== */
 .chat-customizer-modal { max-width: 480px; max-height: 82vh; display: flex; flex-direction: column; }

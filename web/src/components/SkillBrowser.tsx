@@ -87,10 +87,16 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
     return result
   }, [filtered, query])
 
-  const handleSelect = useCallback((skill: SkillItem) => {
-    onSelect(skill.name)
+  const handleView = useCallback((skill: SkillItem) => {
     setSelectedSkill(skill)
-  }, [onSelect])
+  }, [])
+
+  const handleUse = useCallback(() => {
+    if (selectedSkill) {
+      onSelect(selectedSkill.name)
+      onClose()
+    }
+  }, [selectedSkill, onSelect, onClose])
 
   const handleBack = useCallback(() => {
     setSelectedSkill(null)
@@ -103,7 +109,7 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-content skill-browser skill-browser-detail" onClick={(e) => e.stopPropagation()}>
           <div className="skill-detail-header">
-            <button type="button" className="skill-detail-back" onClick={handleBack}>← {t('detail.backToSessions') || 'Back'}</button>
+            <button type="button" className="skill-detail-back" onClick={handleBack}>← Back</button>
             <span className="skill-detail-tokens">{tokenCount.toLocaleString()} tokens</span>
           </div>
           <div className="skill-detail-title">
@@ -115,6 +121,11 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
           )}
           <div className="skill-detail-content">
             <pre>{selectedSkill.content || selectedSkill.description || ""}</pre>
+          </div>
+          <div className="skill-detail-actions">
+            <button type="button" className="skill-use-btn" onClick={handleUse}>
+              Use skill
+            </button>
           </div>
         </div>
       </div>
@@ -138,7 +149,7 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
               {group.items.map((skill) => {
                 const Icon = getSkillIcon(skill.name)
                 return (
-                  <button key={skill.id} className="skill-card" onClick={() => handleSelect(skill)}>
+                  <button key={skill.id} className="skill-card" onClick={() => handleView(skill)}>
                     <span className="skill-card-icon"><Icon size={18} /></span>
                     <div className="skill-card-body">
                       <span className="skill-card-name">{skill.name}</span>

@@ -1,4 +1,4 @@
-export type ShortcutCategory = "tabs" | "splits" | "general"
+export type ShortcutCategory = "tabs" | "splits" | "general" | "terminal"
 
 export type ShortcutItem = {
   id: string
@@ -79,6 +79,14 @@ export const DEFAULT_SHORTCUTS: ShortcutItem[] = [
     keys: "?",
     label: "Mostrar atajos de teclado",
     category: "general",
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: "new_terminal",
+    keys: "Ctrl + Shift + Ñ",
+    label: "Nueva terminal en panel activo",
+    category: "terminal",
     enabled: true,
     isDefault: true,
   },

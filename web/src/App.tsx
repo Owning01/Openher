@@ -2026,6 +2026,24 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         return
       }
 
+      const newTermSc = shortcuts.find((s) => s.id === "new_terminal" && s.enabled)
+      if (newTermSc && matchesShortcut(e, newTermSc.keys)) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (isDesktop) {
+          // Convertir el panel activo a terminal
+          setDesktopLayout((prev) => {
+            const panelKinds = [...prev.panelKinds]
+            panelKinds[activePanel] = "terminal"
+            return { ...prev, panelKinds }
+          })
+        } else {
+          // En mobile: abrir terminal inferior
+          setShowTerminal(true)
+        }
+        return
+      }
+
       const k = e.key.toLowerCase()
       if (!e.shiftKey && /^[1-9]$/.test(k)) {
         const idx = Number(k) - 1
