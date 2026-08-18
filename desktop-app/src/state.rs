@@ -100,6 +100,8 @@ pub struct AppState {
     #[allow(dead_code)]
     pub cache: RwLock<std::collections::HashMap<String, String>>,
     pub dist: Option<PathBuf>,
+    /// Canal para enviar comandos al sub-WebView (main thread).
+    pub browser: std::sync::mpsc::Sender<crate::browser_view::BrowserCommand>,
 }
 
 /// data/ vive al lado del exe (portable, cero escrituras en C:).

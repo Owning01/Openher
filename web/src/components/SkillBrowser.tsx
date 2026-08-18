@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useCallback } from "react"
+import { memo, useState, useEffect, useCallback, useMemo } from "react"
 import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import { api } from "../api"
@@ -10,6 +10,30 @@ type Props = {
   config: ServerConfig
   onClose: () => void
   onSelect: (skillName: string) => void
+}
+
+function getSkillCategory(name: string): string {
+  if (name.startsWith("flutter")) return "Flutter"
+  if (name.startsWith("mcp")) return "MCP"
+  if (name.includes("web") || name.includes("frontend") || name.includes("seo") || name.includes("performance")) return "Web"
+  if (name.includes("code") || name.includes("optimize")) return "Code"
+  return ""
+}
+
+function getSkillIcon(name: string): string {
+  if (name.startsWith("flutter")) return "📱"
+  if (name.startsWith("mcp")) return "🔌"
+  if (name.includes("web") || name.includes("frontend")) return "🌐"
+  if (name.includes("seo")) return "🔍"
+  if (name.includes("performance")) return "⚡"
+  if (name.includes("firebase")) return "🔥"
+  if (name.includes("code") || name.includes("optimize")) return "🛠"
+  if (name.includes("design") || name.includes("premium")) return "🎨"
+  if (name.includes("canvas")) return "🖼"
+  if (name.includes("lean") || name.includes("ctx")) return "🧠"
+  if (name.includes("skill")) return "⚙️"
+  if (name.includes("mi-entorno")) return "👤"
+  return "📄"
 }
 
 export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSelect }: Props) {
@@ -26,9 +50,29 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
     }).catch(() => setLoading(false))
   }, [config])
 
-  const filtered = query
-    ? skills.filter((s) => s.name.toLowerCase().includes(query.toLowerCase()) || (s.description?.toLowerCase() ?? "").includes(query.toLowerCase()))
-    : skills
+  const filtered = useMemo(() => {
+    if (!query) return skills
+    const q = query.toLowerCase()
+    return skills.filter((s) =>
+      s.name.toLowerCase().includes(q) || (s.description?.toLowerCase() ?? "").includes(q)
+    )
+  }, [skills, query])
+
+  const grouped = useMemo(() => {
+    if (query) return [{ label: "", items: filtered }]
+    const groups = new Map<string, SkillItem[]>()
+    for (const skill of filtered) {
+      const cat = getSkillCategory(skill.name)
+      const key = cat || "Other"
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(skill)
+    }
+    const result: { label: string; items: SkillItem[] }[] = []
+    for (const [label, items] of groups) {
+      result.push({ label, items })
+    }
+    return result
+  }, [filtered, query])
 
   const handleSelect = useCallback((name: string) => {
     onSelect(name)
@@ -53,13 +97,21 @@ export const SkillBrowser = memo(function SkillBrowser({ config, onClose, onSele
         <div className="skill-list">
           {loading && <div className="skill-empty">{t('skills.loading')}</div>}
           {!loading && filtered.length === 0 && <div className="skill-empty">{t('skills.empty')}</div>}
-          {filtered.map((skill) => (
-            <button key={skill.id} className="skill-item" onClick={() => handleSelect(skill.name)}>
-              <strong className="skill-name">{skill.name}</strong>
-              {skill.description && (
-                <small className="skill-blurb">{firstSentence(skill.description)}</small>
-              )}
-            </button>
+          {grouped.map((group) => (
+            <div key={group.label || "__all__"} className="skill-group">
+              {group.label && <div className="skill-group-label">{group.label}</div>}
+              {group.items.map((skill) => (
+                <button key={skill.id} className="skill-card" onClick={() => handleSelect(skill.name)}>
+                  <span className="skill-card-icon">{getSkillIcon(skill.name)}</span>
+                  <div className="skill-card-body">
+                    <span className="skill-card-name">{skill.name}</span>
+                    {skill.description && (
+                      <span className="skill-card-desc">{firstSentence(skill.description)}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       </div>

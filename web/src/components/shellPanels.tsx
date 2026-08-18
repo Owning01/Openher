@@ -12,7 +12,8 @@ import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
 import { BrowserPanel } from "./BrowserPanel"
-export { BrowserPanel }
+import { DocEditorPanel } from "./DocEditorPanel"
+export { BrowserPanel, DocEditorPanel }
 
 // ============================================================== Terminal
 
@@ -953,6 +954,82 @@ export const ExplorerPanel = memo(function ExplorerPanel({
                   <span><TerminalIcon size={14} /></span> Ejecutar script
                 </button>
               )}
+              {!contextMenu.isDir && (contextMenu.entry.name.endsWith(".docx") || contextMenu.entry.name.endsWith(".pdf") || contextMenu.entry.name.endsWith(".md") || contextMenu.entry.name.endsWith(".txt")) && (
+                <>
+                  {contextMenu.entry.name.endsWith(".docx") && (
+                    <button
+                      type="button"
+                      className="overflow-item"
+                      onClick={() => {
+                        const p = contextMenu.entry!.path
+                        setContextMenu(null)
+                        shell.doc.convert(p, "md").then((r: any) => {
+                          if (r.ok) {
+                            showNotice(`Convertido a Markdown: ${r.dest}`)
+                            load(cwd || "")
+                          }
+                        }).catch((e: any) => showNotice(`Error: ${e.message || String(e)}`))
+                      }}
+                    >
+                      <span><FileIcon size={14} /></span> Convertir a Markdown (.md)
+                    </button>
+                  )}
+                  {contextMenu.entry.name.endsWith(".pdf") && (
+                    <button
+                      type="button"
+                      className="overflow-item"
+                      onClick={() => {
+                        const p = contextMenu.entry!.path
+                        setContextMenu(null)
+                        shell.doc.convert(p, "md").then((r: any) => {
+                          if (r.ok) {
+                            showNotice(`Extraído texto a Markdown: ${r.dest}`)
+                            load(cwd || "")
+                          }
+                        }).catch((e: any) => showNotice(`Error: ${e.message || String(e)}`))
+                      }}
+                    >
+                      <span><FileIcon size={14} /></span> Extraer texto a Markdown (.md)
+                    </button>
+                  )}
+                  {(contextMenu.entry.name.endsWith(".md") || contextMenu.entry.name.endsWith(".txt")) && (
+                    <>
+                      <button
+                        type="button"
+                        className="overflow-item"
+                        onClick={() => {
+                          const p = contextMenu.entry!.path
+                          setContextMenu(null)
+                          shell.doc.convert(p, "docx").then((r: any) => {
+                            if (r.ok) {
+                              showNotice(`Convertido a Word: ${r.dest}`)
+                              load(cwd || "")
+                            }
+                          }).catch((e: any) => showNotice(`Error: ${e.message || String(e)}`))
+                        }}
+                      >
+                        <span><FileIcon size={14} /></span> Convertir a Word (.docx)
+                      </button>
+                      <button
+                        type="button"
+                        className="overflow-item"
+                        onClick={() => {
+                          const p = contextMenu.entry!.path
+                          setContextMenu(null)
+                          shell.doc.convert(p, "pdf").then((r: any) => {
+                            if (r.ok) {
+                              showNotice(`Convertido a PDF: ${r.dest}`)
+                              load(cwd || "")
+                            }
+                          }).catch((e: any) => showNotice(`Error: ${e.message || String(e)}`))
+                        }}
+                      >
+                        <span><FileIcon size={14} /></span> Convertir a PDF (.pdf)
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
               <button
                 type="button"
                 className="overflow-item"
@@ -1438,14 +1515,35 @@ export const KanbanPanel = memo(function KanbanPanel() {
   const [boards, setBoards] = useState<KanbanBoard[]>([])
   const [active, setActive] = useState<string | null>(null)
   const [drag, setDrag] = useState<string | null>(null)
+  const [showNotes, setShowNotes] = useState<boolean>(true)
+  const [boardNotes, setBoardNotes] = useState<string>("")
 
   const load = useCallback(() => {
     shell.kanban.all().then(({ boards }) => {
       setBoards(boards)
-      setActive((a) => (a && boards.some((b) => b.id === a) ? a : boards[0]?.id ?? null))
+      setActive((a) => {
+        const next = a && boards.some((b) => b.id === a) ? a : boards[0]?.id ?? null
+        if (next) {
+          setBoardNotes(localStorage.getItem(`opencode.kanban.notes.${next}`) || "")
+        }
+        return next
+      })
     })
   }, [])
   useEffect(load, [load])
+
+  useEffect(() => {
+    if (active) {
+      setBoardNotes(localStorage.getItem(`opencode.kanban.notes.${active}`) || "")
+    }
+  }, [active])
+
+  const handleNotesChange = (val: string) => {
+    setBoardNotes(val)
+    if (active) {
+      localStorage.setItem(`opencode.kanban.notes.${active}`, val)
+    }
+  }
 
   const board = boards.find((b) => b.id === active) ?? null
   const addCard = async (column: string) => {
@@ -1486,37 +1584,114 @@ export const KanbanPanel = memo(function KanbanPanel() {
   }
 
   return (
-    <div className="shell-kanban">
-      <div className="shell-kanban-head">
-        <select value={active ?? ""} onChange={(e) => setActive(e.target.value)}>
+    <div className="shell-kanban" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <div className="shell-kanban-head" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px" }}>
+        <select value={active ?? ""} onChange={(e) => setActive(e.target.value)} style={{ flex: "0 0 auto" }}>
           {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
         <button className="btn-secondary compact" onClick={addBoard}>{t('shell.newBoard')}</button>
+        <button
+          type="button"
+          className={`btn-secondary compact${showNotes ? " active" : ""}`}
+          onClick={() => setShowNotes((v) => !v)}
+          title="Mostrar/Ocultar notas del tablero"
+          style={{ marginLeft: "auto" }}
+        >
+          📝 Notas
+        </button>
         <button className="btn-icon compact" title={t('shell.deleteBoard')} onClick={() => { if (board && window.confirm(t('shell.deleteBoard'))) shell.kanban.delBoard(board.id).then(load) }}>×</button>
       </div>
-      <div className="shell-kanban-cols">
-        {board.columns.map((col) => (
-          <div key={col.id} className="shell-kanban-col"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => drop(col.id)}>
-            <div className="shell-kanban-col-title">{col.title}</div>
-            <div className="shell-kanban-cards">
-              {board.cards.filter((c) => c.column === col.id).map((c) => (
-                <div key={c.id} className="shell-kanban-card" style={{ borderLeft: `3px solid ${c.color}` }}
-                  draggable onDragStart={() => setDrag(c.id)}
-                  title={c.notes || undefined}
-                  onDoubleClick={() => {
-                    const notes = window.prompt(t('shell.cardNotes'), c.notes)
-                    if (notes !== null) shell.kanban.updateCard(c.id, { notes }).then(load)
-                  }}>
-                  <span>{c.title}</span>
-                  <button className="btn-icon compact" onClick={() => delCard(c.id)}>×</button>
-                </div>
-              ))}
-              <button className="shell-kanban-add" onClick={() => addCard(col.id)}>+ {t('shell.addCard')}</button>
+
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className="shell-kanban-cols" style={{ flex: showNotes ? "1 1 65%" : "1 1 100%", minHeight: 120 }}>
+          {board.columns.map((col) => (
+            <div key={col.id} className="shell-kanban-col"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => drop(col.id)}>
+              <div className="shell-kanban-col-title">{col.title}</div>
+              <div className="shell-kanban-cards">
+                {board.cards.filter((c) => c.column === col.id).map((c) => (
+                  <div key={c.id} className="shell-kanban-card" style={{ borderLeft: `3px solid ${c.color}` }}
+                    draggable onDragStart={() => setDrag(c.id)}
+                    title={c.notes || undefined}
+                    onDoubleClick={() => {
+                      const notes = window.prompt(t('shell.cardNotes'), c.notes)
+                      if (notes !== null) shell.kanban.updateCard(c.id, { notes }).then(load)
+                    }}>
+                    <span>{c.title}</span>
+                    <button className="btn-icon compact" onClick={() => delCard(c.id)}>×</button>
+                  </div>
+                ))}
+                <button className="shell-kanban-add" onClick={() => addCard(col.id)}>+ {t('shell.addCard')}</button>
+              </div>
             </div>
+          ))}
+        </div>
+
+        {/* Sección de Notas del Tablero */}
+        {showNotes && (
+          <div style={{
+            flex: "0 0 auto",
+            maxHeight: "35%",
+            height: 140,
+            borderTop: "1px solid rgba(255,255,255,0.1)",
+            background: "#0d1117",
+            display: "flex",
+            flexDirection: "column",
+            padding: "6px 12px",
+            boxSizing: "border-box",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #8b949e)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                📌 Notas del Tablero ({board.name})
+              </span>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted, #6e7681)" }}>{boardNotes.length} caracteres</span>
+                <button
+                  type="button"
+                  className="btn-icon compact"
+                  title="Copiar notas"
+                  onClick={() => navigator.clipboard?.writeText(boardNotes)}
+                  style={{ fontSize: 11, padding: "1px 6px" }}
+                >
+                  Copiar
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon compact"
+                  title="Limpiar notas"
+                  onClick={() => {
+                    if (window.confirm("¿Limpiar las notas de este tablero?")) {
+                      handleNotesChange("")
+                    }
+                  }}
+                  style={{ fontSize: 11, padding: "1px 6px" }}
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={boardNotes}
+              onChange={(e) => handleNotesChange(e.target.value)}
+              placeholder="Escribe notas, enlaces, recordatorios o ideas para este tablero (se guarda automáticamente)..."
+              style={{
+                flex: 1,
+                width: "100%",
+                resize: "none",
+                background: "rgba(255,255,255,0.03)",
+                color: "#e6edf3",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 4,
+                padding: "6px 8px",
+                fontSize: 12,
+                fontFamily: "var(--font-mono, monospace)",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
           </div>
-        ))}
+        )}
       </div>
     </div>
   )
@@ -1659,24 +1834,26 @@ export const UpdatesPanel = memo(function UpdatesPanel() {
 export const StatsPanel = memo(function StatsPanel() {
   const t = useT()
   const [status, setStatus] = useState<{ running: boolean; port: number; url: string } | null>(null)
-  const [attemptedStart, setAttemptedStart] = useState(false)
+  const [starting, setStarting] = useState(false)
 
   const load = useCallback(() => {
     shell.stats.status()
       .then((s) => {
-        if (!s.running && !attemptedStart) {
-          setAttemptedStart(true)
-          shell.stats.start().then(() => shell.stats.status().then(setStatus)).catch(() => {})
-        }
         setStatus(s)
+        if (!s.running && !starting) {
+          setStarting(true)
+          shell.stats.start()
+            .then(() => shell.stats.status().then(setStatus))
+            .catch(() => {})
+            .finally(() => setStarting(false))
+        }
       })
       .catch(() => {
-        // Fallback: verificar localhost:8765
         fetch("http://localhost:8765/api/data?raw=1", { mode: "no-cors" })
           .then(() => setStatus({ running: true, port: 8765, url: "http://localhost:8765" }))
           .catch(() => setStatus({ running: false, port: 8765, url: "http://localhost:8765" }))
       })
-  }, [attemptedStart])
+  }, [starting])
 
   useEffect(() => {
     load()
@@ -1691,7 +1868,9 @@ export const StatsPanel = memo(function StatsPanel() {
       ) : (
         <div className="shell-empty">
           <p>{t('shell.statsOff')}</p>
-          <button className="btn-primary" onClick={() => shell.stats.start().then(load)}>{t('shell.startStats')}</button>
+          <button className="btn-primary" disabled={starting} onClick={() => { setStarting(true); shell.stats.start().then(load).finally(() => setStarting(false)) }}>
+            {starting ? "…" : t('shell.startStats')}
+          </button>
         </div>
       )}
     </div>
@@ -1946,6 +2125,8 @@ export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir
       return <ConfigPanel />
     case "browser":
       return <BrowserPanel initialUrl={cwd?.startsWith("http") ? cwd : "http://localhost:5173"} />
+    case "doc":
+      return <DocEditorPanel initialPath={cwd} />
     default:
       return null
   }

@@ -1,9 +1,9 @@
 // Cliente de la API de la shell (/shell/*) + utilidades del explorador.
 // Solo disponible cuando la app la sirve el exe de escritorio (mismo origen).
 
-export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser"
+export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser" | "doc"
 
-export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser"]
+export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser", "doc"]
 
 export type FsEntry = { name: string; path: string; is_dir: boolean; size: number | null; modified: number | null }
 
@@ -143,6 +143,24 @@ export const shell = {
   autostart: {
     get: () => get<{ enabled: boolean }>("/shell/autostart"),
     set: (enabled: boolean) => post("/shell/autostart", { enabled }),
+  },
+  doc: {
+    convert: (src: string, target: "md" | "docx" | "pdf", dest?: string) =>
+      post<{ ok: boolean; src: string; dest: string; format: string; size: number; preview: string }>("/shell/doc/convert", { src, target, dest }),
+    save: (path: string, content: string, format: "md" | "docx" | "pdf") =>
+      post<{ ok: boolean; path: string }>("/shell/doc/save", { path, content, format }),
+  },
+  browser: {
+    open: (url: string, bounds: { x: number; y: number; w: number; h: number }) =>
+      post<{ ok: boolean }>("/shell/browser/open", { url, bounds }),
+    setBounds: (bounds: { x: number; y: number; w: number; h: number }) =>
+      post<{ ok: boolean }>("/shell/browser/bounds", bounds),
+    setVisibility: (visible: boolean) =>
+      post<{ ok: boolean }>("/shell/browser/visibility", { visible }),
+    navigate: (url: string, action?: "back" | "forward" | "reload") =>
+      post<{ ok: boolean }>("/shell/browser/navigate", { url, action }),
+    close: () => post<{ ok: boolean }>("/shell/browser/close"),
+    url: () => get<{ url: string }>("/shell/browser/url"),
   },
   config: {
     get: () => get<ShellConfig>("/shell/config"),

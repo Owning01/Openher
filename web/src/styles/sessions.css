@@ -810,6 +810,36 @@
   border-left-color: var(--border, rgba(255, 255, 255, 0.15));
 }
 
+.session-parent-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.session-parent-wrap.has-children .session-card {
+  cursor: pointer;
+}
+
+.session-expand-icon {
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--muted, rgba(255, 255, 255, 0.5));
+  transition: transform 0.15s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.session-expand-icon.expanded {
+  transform: translateY(-50%) rotate(90deg);
+}
+
 
 /* ===== Project Card ===== */
 .project-card {

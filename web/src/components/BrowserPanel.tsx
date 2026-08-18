@@ -1,6 +1,9 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
+import { shell } from "../shell"
+
+const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
 
 type DeviceMode = "responsive" | "mobile" | "tablet" | "desktop"
 
@@ -89,11 +92,14 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("responsive")
   const [showTuneDropdown, setShowTuneDropdown] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const viewportRef = useRef<HTMLDivElement | null>(null)
+  const nativeReady = useRef(false)
 
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   useOutsideClick(dropdownRef, () => setShowTuneDropdown(false), showTuneDropdown)
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0]
+  const currentSrc = activeTab?.url || "about:blank"
 
   useEffect(() => {
     if (activeTab) {
@@ -117,6 +123,48 @@ export const BrowserPanel = memo(function BrowserPanel({
     return u
   }
 
+  // --- Native Sub-WebView (desktop only) ---
+  useEffect(() => {
+    if (!IS_DESKTOP || !viewportRef.current) return
+    const el = viewportRef.current
+
+    // Open native sub-WebView with initial URL at the viewport bounds
+    const rect = el.getBoundingClientRect()
+    const bounds = { x: rect.x, y: rect.y, w: rect.width, h: rect.height }
+    shell.browser.open(currentSrc, bounds).catch(() => {})
+    nativeReady.current = true
+
+    // ResizeObserver: sync bounds in real time
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { x, y, width, height } = entry.contentRect
+        if (debounceTimer) clearTimeout(debounceTimer)
+        debounceTimer = setTimeout(() => {
+          shell.browser.setBounds({ x, y, w: width, h: height }).catch(() => {})
+        }, 50)
+      }
+    })
+    ro.observe(el)
+
+    return () => {
+      ro.disconnect()
+      if (debounceTimer) clearTimeout(debounceTimer)
+      shell.browser.close().catch(() => {})
+      nativeReady.current = false
+    }
+  }, []) // Solo en mount — el cleanup cierra
+
+  // Navigate native WebView when URL changes
+  useEffect(() => {
+    if (!IS_DESKTOP || !nativeReady.current) return
+    shell.browser.navigate(currentSrc).catch(() => {})
+  }, [currentSrc])
+
+  // Visibility: hide when component is not active (e.g. tab switch)
+  // The parent handles this via the `active` prop — but for now we
+  // keep it simple: the native view is always visible while mounted.
+
   const navigateTab = useCallback((newUrl: string) => {
     const norm = normalizeUrl(newUrl)
     setInputUrl(norm)
@@ -137,7 +185,11 @@ export const BrowserPanel = memo(function BrowserPanel({
         }
       })
     )
-    setReloadKey((k) => k + 1)
+    if (IS_DESKTOP) {
+      shell.browser.navigate(norm).catch(() => {})
+    } else {
+      setReloadKey((k) => k + 1)
+    }
   }, [activeTabId])
 
   const handleAddTab = () => {
@@ -177,7 +229,11 @@ export const BrowserPanel = memo(function BrowserPanel({
       prev.map((t) => (t.id === activeTabId ? { ...t, url: prevUrl, historyIdx: prevIdx, title: formatDisplayTitle(prevUrl) } : t))
     )
     setInputUrl(prevUrl)
-    setReloadKey((k) => k + 1)
+    if (IS_DESKTOP) {
+      shell.browser.navigate(prevUrl, "back").catch(() => {})
+    } else {
+      setReloadKey((k) => k + 1)
+    }
   }
 
   const handleForward = () => {
@@ -188,13 +244,21 @@ export const BrowserPanel = memo(function BrowserPanel({
       prev.map((t) => (t.id === activeTabId ? { ...t, url: nextUrl, historyIdx: nextIdx, title: formatDisplayTitle(nextUrl) } : t))
     )
     setInputUrl(nextUrl)
-    setReloadKey((k) => k + 1)
+    if (IS_DESKTOP) {
+      shell.browser.navigate(nextUrl, "forward").catch(() => {})
+    } else {
+      setReloadKey((k) => k + 1)
+    }
   }
 
   const handleReload = () => {
     setLoading(true)
     setHasError(false)
-    setReloadKey((k) => k + 1)
+    if (IS_DESKTOP) {
+      shell.browser.navigate(currentSrc, "reload").catch(() => {})
+    } else {
+      setReloadKey((k) => k + 1)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -210,7 +274,6 @@ export const BrowserPanel = memo(function BrowserPanel({
   }
 
   const targetWidth = DEVICE_WIDTHS[deviceMode]
-  const currentSrc = activeTab?.url || "about:blank"
 
   return (
     <div className="browser-shell">
@@ -399,7 +462,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       </div>
 
       {/* 4. Web Viewport */}
-      <div className="browser-viewport-container">
+      <div className="browser-viewport-container" ref={viewportRef}>
         {hasError ? (
           <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text)", maxWidth: "460px", margin: "auto" }}>
             <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>⚠️</div>
@@ -416,6 +479,9 @@ export const BrowserPanel = memo(function BrowserPanel({
               </button>
             </div>
           </div>
+        ) : IS_DESKTOP ? (
+          /* Desktop: native sub-WebView renders here, no iframe needed */
+          null
         ) : (
           <iframe
             key={reloadKey}

@@ -9,6 +9,7 @@
 #![windows_subsystem = "windows"]
 
 mod api;
+mod browser_view;
 mod docsx;
 mod fsx;
 mod kanban;
@@ -18,6 +19,7 @@ mod srvman;
 mod state;
 mod statsx;
 mod updates;
+mod doc_engine;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -62,6 +64,10 @@ struct App {
     webview: Option<WebView>,
     web_context: Option<WebContext>,
     browser_mode: bool,
+    /// Canal de comandos del sub-WebView (receiver se procesa en el event loop).
+    browser_rx: Option<std::sync::mpsc::Receiver<browser_view::BrowserCommand>>,
+    /// Estado interno del sub-WebView (solo main thread).
+    browser_inner: browser_view::SubWebViewInner,
 }
 
 enum AppEvent {
@@ -193,6 +199,12 @@ impl ApplicationHandler<AppEvent> for App {
                 event_loop.exit();
             }
             _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(rx) = &self.browser_rx {
+            browser_view::process_browser_commands(rx, &mut self.browser_inner, self.web_context.as_mut(), self.window.as_ref());
         }
     }
 
@@ -348,6 +360,7 @@ fn main() {
         std::process::exit(1);
     });
 
+    let (browser_tx, browser_rx) = std::sync::mpsc::channel();
     let dist = web_dist_dir();
     let app_state = Arc::new(AppState {
         config: std::sync::RwLock::new(config.clone()),
@@ -360,6 +373,7 @@ fn main() {
         stats: statsx::StatsManager::new(),
         cache: std::sync::RwLock::new(std::collections::HashMap::new()),
         dist,
+        browser: browser_tx,
     });
     state::save_config(&config);
     if !state::autostart_enabled() {
@@ -409,6 +423,12 @@ fn main() {
         webview: None,
         web_context: None,
         browser_mode: false,
+        browser_rx: Some(browser_rx),
+        browser_inner: browser_view::SubWebViewInner {
+            webview: None,
+            url: String::new(),
+            visible: false,
+        },
     };
     event_loop.run_app(&mut app).unwrap();
 }

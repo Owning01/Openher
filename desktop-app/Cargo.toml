@@ -21,6 +21,10 @@ portable-pty = "0.8"
 ureq = "2"
 winreg = "0.52"
 sha1 = "0.10"
+pdf-extract = "0.7"
+lopdf = "0.34"
+quick-xml = { version = "0.37", features = ["serialize"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 opencode-stats = { path = "../../opencode-stats" }
 
 [profile.release]

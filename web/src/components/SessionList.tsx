@@ -76,6 +76,7 @@ export const SessionList = memo(function SessionList({
   } | null>(null)
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
+  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
 
   const recentFiltered = useMemo(
     () => recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)),
@@ -371,16 +372,46 @@ export const SessionList = memo(function SessionList({
 
     return (
       <div className="session-cards-hierarchical">
-        {parents.map((parent) => (
-          <div key={parent.id} className="session-group">
-            {renderCard(parent, false)}
-            {childrenByParent.get(parent.id)?.map((child) => (
-              <div key={child.id} className="session-child-wrap" style={{ paddingLeft: "16px" }}>
-                {renderCard(child, true)}
+        {parents.map((parent) => {
+          const children = childrenByParent.get(parent.id)
+          const hasChildren = children && children.length > 0
+          const isCollapsed = collapsedParents.has(parent.id)
+          return (
+            <div key={parent.id} className="session-group">
+              <div
+                className={`session-parent-wrap${hasChildren ? " has-children" : ""}`}
+                onClick={(e) => {
+                  if (!hasChildren || selectMode) return
+                  e.stopPropagation()
+                  setCollapsedParents((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(parent.id)) next.delete(parent.id)
+                    else next.add(parent.id)
+                    return next
+                  })
+                }}
+                onDoubleClick={(e) => {
+                  if (!hasChildren) return
+                  e.stopPropagation()
+                  onOpen(parent.id, parent.directory)
+                }}
+                style={{ cursor: hasChildren ? "pointer" : undefined }}
+              >
+                {hasChildren && (
+                  <span className={`session-expand-icon${isCollapsed ? "" : " expanded"}`}>
+                    <ChevronIcon size={14} />
+                  </span>
+                )}
+                {renderCard(parent, false)}
               </div>
-            ))}
-          </div>
-        ))}
+              {hasChildren && !isCollapsed && children.map((child) => (
+                <div key={child.id} className="session-child-wrap" style={{ paddingLeft: "16px" }}>
+                  {renderCard(child, true)}
+                </div>
+              ))}
+            </div>
+          )
+        })}
         {orphanChildren.map((child) => (
           <div key={child.id} className="session-child-wrap" style={{ paddingLeft: "16px" }}>
             {renderCard(child, true)}
@@ -389,7 +420,7 @@ export const SessionList = memo(function SessionList({
       </div>
     )
   }, [
-    t, selectedID, renamingSessionID, renameValue, favorites,
+    t, selectedID, renamingSessionID, renameValue, favorites, collapsedParents,
     onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
     onDelete, onToggleFavorite, onExportChat, onSnapshot, onArchive, onFork,
     onDragStartSession, handleSessionContextMenu, selectMode, selectedIds, toggleCheck

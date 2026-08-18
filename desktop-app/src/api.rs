@@ -320,6 +320,62 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         return;
     }
 
+    // ============================== Conversor y Editor de Documentos (Rust ultra-ligero)
+    if path == "/shell/doc/convert" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let src = b["src"].as_str().unwrap_or("");
+                let target = b["target"].as_str().unwrap_or("md");
+                let dest = b["dest"].as_str();
+                match crate::doc_engine::convert_file(src, target, dest) {
+                    Ok(val) => {
+                        let _ = req.respond(json_ok(&val));
+                    }
+                    Err(e) => {
+                        let _ = req.respond(json_err(500, &e));
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+    if path == "/shell/doc/save" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let path_str = b["path"].as_str().unwrap_or("");
+                let md_content = b["content"].as_str().unwrap_or("");
+                let format = b["format"].as_str().unwrap_or("md").to_lowercase();
+                let p = Path::new(path_str);
+                let res: Result<(), String> = match format.as_str() {
+                    "docx" => match crate::doc_engine::md_to_docx(md_content) {
+                        Ok(bytes) => std::fs::write(p, bytes).map_err(|e| e.to_string()),
+                        Err(e) => Err(e),
+                    },
+                    "pdf" => match crate::doc_engine::md_to_pdf(md_content) {
+                        Ok(bytes) => std::fs::write(p, bytes).map_err(|e| e.to_string()),
+                        Err(e) => Err(e),
+                    },
+                    _ => std::fs::write(p, md_content.as_bytes()).map_err(|e| e.to_string()),
+                };
+                match res {
+                    Ok(_) => {
+                        let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "path": path_str })));
+                    }
+                    Err(e) => {
+                        let _ = req.respond(json_err(500, &e));
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+
     // ============================== Terminales (pty)
     if path == "/shell/pty" && method == Method::Get {
         let _ = req.respond(json_ok(&serde_json::json!({ "terms": state.pty.list() })));
@@ -739,6 +795,102 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             );
             return;
         }
+    }
+
+    // ============================== Browser (Sub-WebView2 nativo ultra-ligero)
+    if path == "/shell/browser/open" && method == Method::Post {
+        if let Ok(v) = read_body(&mut req) {
+            let url = v["url"].as_str().unwrap_or("about:blank").to_string();
+            let bx = v["bounds"]["x"].as_f64().unwrap_or(0.0) as f32;
+            let by = v["bounds"]["y"].as_f64().unwrap_or(0.0) as f32;
+            let bw = v["bounds"]["w"].as_f64().unwrap_or(800.0) as f32;
+            let bh = v["bounds"]["h"].as_f64().unwrap_or(600.0) as f32;
+            let bounds = wry::Rect {
+                position: wry::dpi::LogicalPosition::new(bx, by).into(),
+                size: wry::dpi::LogicalSize::new(bw, bh).into(),
+            };
+            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+            let _ = state.browser.send(crate::browser_view::BrowserCommand::Open { url, bounds, reply: reply_tx });
+            let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
+                Ok(Err(e)) => json_err(500, &e),
+                Err(_) => json_err(504, "timeout"),
+            };
+            let _ = req.respond(resp);
+            return;
+        }
+    }
+    if path == "/shell/browser/bounds" && method == Method::Post {
+        if let Ok(v) = read_body(&mut req) {
+            let bx = v["x"].as_f64().unwrap_or(0.0) as f32;
+            let by = v["y"].as_f64().unwrap_or(0.0) as f32;
+            let bw = v["w"].as_f64().unwrap_or(800.0) as f32;
+            let bh = v["h"].as_f64().unwrap_or(600.0) as f32;
+            let bounds = wry::Rect {
+                position: wry::dpi::LogicalPosition::new(bx, by).into(),
+                size: wry::dpi::LogicalSize::new(bw, bh).into(),
+            };
+            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+            let _ = state.browser.send(crate::browser_view::BrowserCommand::Bounds { bounds, reply: reply_tx });
+            let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
+                Ok(Err(e)) => json_err(500, &e),
+                Err(_) => json_err(504, "timeout"),
+            };
+            let _ = req.respond(resp);
+            return;
+        }
+    }
+    if path == "/shell/browser/visibility" && method == Method::Post {
+        if let Ok(v) = read_body(&mut req) {
+            let visible = v["visible"].as_bool().unwrap_or(true);
+            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+            let _ = state.browser.send(crate::browser_view::BrowserCommand::Visible { visible, reply: reply_tx });
+            let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
+                Ok(Err(e)) => json_err(500, &e),
+                Err(_) => json_err(504, "timeout"),
+            };
+            let _ = req.respond(resp);
+            return;
+        }
+    }
+    if path == "/shell/browser/navigate" && method == Method::Post {
+        if let Ok(v) = read_body(&mut req) {
+            let url = v["url"].as_str().unwrap_or("").to_string();
+            let action = v["action"].as_str().map(|s| s.to_string());
+            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+            let _ = state.browser.send(crate::browser_view::BrowserCommand::Navigate { url, action, reply: reply_tx });
+            let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
+                Ok(Err(e)) => json_err(500, &e),
+                Err(_) => json_err(504, "timeout"),
+            };
+            let _ = req.respond(resp);
+            return;
+        }
+    }
+    if path == "/shell/browser/close" && method == Method::Post {
+        let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+        let _ = state.browser.send(crate::browser_view::BrowserCommand::Close { reply: reply_tx });
+        let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
+            Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
+            Ok(Err(e)) => json_err(500, &e),
+            Err(_) => json_err(504, "timeout"),
+        };
+        let _ = req.respond(resp);
+        return;
+    }
+    if path == "/shell/browser/url" && method == Method::Get {
+        let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+        let _ = state.browser.send(crate::browser_view::BrowserCommand::CurrentUrl { reply: reply_tx });
+        let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
+            Ok(Ok(url)) => json_ok(&serde_json::json!({ "url": url })),
+            Ok(Err(e)) => json_err(500, &e),
+            Err(_) => json_err(504, "timeout"),
+        };
+        let _ = req.respond(resp);
+        return;
     }
 
     let _ = req.respond(

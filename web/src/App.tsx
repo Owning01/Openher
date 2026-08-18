@@ -49,7 +49,7 @@ import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
 import { useSSEHandler } from "./hooks/useSSEHandler"
-import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, HelpIcon, GithubIcon, StatsIcon, TestIcon, GlobeIcon } from "./Icons"
+import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, StatsIcon, GlobeIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -58,7 +58,7 @@ import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
 import { shell } from "./shell"
-import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, DocsPanel, UpdatesPanel, LabsPanel, ConfigPanel, FileEditorPanel, BrowserPanel } from "./components/shellPanels"
+import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, ConfigPanel, FileEditorPanel, BrowserPanel } from "./components/shellPanels"
 import type { ServerProfile } from "./types"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
@@ -92,7 +92,7 @@ const FileBrowser = lazyRetry(() => import("./components/FileBrowser").then((m) 
 const HelpPage = lazyRetry(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const FolderPicker = lazyRetry(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
 
-type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "docs" | "updates" | "labs" | "config"
+type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config"
 
 type DesktopLayout = {
   cols: number
@@ -148,7 +148,7 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
       const total = layout.cols * layout.rows
       const kinds: Array<ShellPanelKind> =
         Array.isArray(layout.panelKinds) && layout.panelKinds.length === total
-          ? layout.panelKinds.map((k: any) => (k === "session" || k === "terminal" || k === "explorer" || k === "kanban" || k === "docs" || k === "updates" || k === "stats" || k === "labs" || k === "config" ? k : "session"))
+          ? layout.panelKinds.map((k: any) => (k === "session" || k === "terminal" || k === "explorer" || k === "kanban" || k === "stats" || k === "config" ? k : "session"))
           : new Array(total).fill("session")
       // Migrate old flat sessions to tab stacks
       const tabStacks: Array<Array<string>> = layout.sessions.map((s: any) => {
@@ -177,7 +177,7 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
         tabStacks: finalTabStacks,
         sidebarWidth: Math.max(200, Math.min(480, raw?.sidebarWidth ?? 340)),
         sidebarCollapsed: !!raw?.sidebarCollapsed,
-        activity: (["sessions", "explorer", "stats", "kanban", "docs", "updates", "labs", "config"].includes(raw?.activity ?? "") ? raw!.activity! : "sessions") as DesktopActivity,
+        activity: (["sessions", "explorer", "stats", "kanban", "config"].includes(raw?.activity ?? "") ? raw!.activity! : "sessions") as DesktopActivity,
         activePanel: typeof raw?.activePanel === "number" ? raw.activePanel : 0,
         desktopDiffOpen: !!raw?.desktopDiffOpen,
         desktopDiffWidth: Math.max(280, Math.min(800, raw?.desktopDiffWidth ?? 440)),
@@ -1603,7 +1603,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       if (payload.startsWith("kind:")) {
         targetKind = payload.replace("kind:", "") as ShellPanelKind
         targetSessionId = null
-      } else if (payload === "terminal" || payload === "explorer" || payload === "kanban" || payload === "docs" || payload === "stats" || payload === "labs") {
+      } else if (payload === "terminal" || payload === "explorer" || payload === "kanban" || payload === "stats") {
         targetKind = payload as ShellPanelKind
         targetSessionId = null
       } else if (payload.startsWith("session:")) {
@@ -1616,7 +1616,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     } else if (rawId.startsWith("kind:")) {
       targetKind = rawId.replace("kind:", "") as ShellPanelKind
       targetSessionId = null
-    } else if (rawId === "terminal" || rawId === "explorer" || rawId === "kanban" || rawId === "docs" || rawId === "stats" || rawId === "labs") {
+    } else if (rawId === "terminal" || rawId === "explorer" || rawId === "kanban" || rawId === "stats") {
       targetKind = rawId as ShellPanelKind
       targetSessionId = null
     } else if (rawId.startsWith("session:")) {
@@ -1746,8 +1746,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       })
       if (targetSessionId) {
         setTabStacks((prev) => {
-          const prevCols = desktopLayout.cols
-          const prevRows = desktopLayout.rows
+          const prevCols = desktopLayoutRef.current.cols
+          const prevRows = desktopLayoutRef.current.rows
           const filtered = prev.map((s) => s.filter((sid) => sid !== targetSessionId))
           const cols = prevCols + 1
           const col = index % prevCols
@@ -1856,8 +1856,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       })
       if (targetSessionId) {
         setTabStacks((prev) => {
-          const prevCols = desktopLayout.cols
-          const prevRows = desktopLayout.rows
+          const prevCols = desktopLayoutRef.current.cols
+          const prevRows = desktopLayoutRef.current.rows
           const filtered = prev.map((s) => s.filter((sid) => sid !== targetSessionId))
           const rows = prevRows + 1
           const row = Math.floor(index / prevCols)
@@ -1892,7 +1892,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setActivePanel(index)
       return
     }
-  }, [tabStacks, setTabStacks, desktopLayout.cols, desktopLayout.rows])
+  }, [tabStacks, setTabStacks])
 
   const handleSwapPanels = useCallback((from: number, to: number) => {
     if (from === to) return
@@ -1922,7 +1922,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       lastW = Math.max(200, Math.min(480, startWidth + (ev.clientX - startX)))
       apply(lastW)
     }
+    let committed = false
     const onUp = () => {
+      if (committed) return
+      committed = true
       document.body.style.userSelect = ""
       document.body.style.cursor = ""
       window.removeEventListener("pointermove", onMove)
@@ -2633,15 +2636,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <button type="button" className={`activity-btn${activity === "kanban" ? " active" : ""}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
               onClick={() => { if (activity === "kanban") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("kanban"); setSidebarCollapsed(false) } }}>
               <LayersIcon size={18} /></button>
-            <button type="button" className={`activity-btn${activity === "docs" ? " active" : ""}`} title={t('shell.kindDocs')} aria-label={t('shell.kindDocs')}
-              onClick={() => { if (activity === "docs") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("docs"); setSidebarCollapsed(false) } }}>
-              <HelpIcon size={18} /></button>
-            <button type="button" className={`activity-btn${activity === "updates" ? " active" : ""}`} title={t('shell.kindUpdates')} aria-label={t('shell.kindUpdates')}
-              onClick={() => { if (activity === "updates") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("updates"); setSidebarCollapsed(false) } }}>
-              <GithubIcon size={18} /></button>
-            <button type="button" className={`activity-btn${activity === "labs" ? " active" : ""}`} title={t('shell.kindLabs')} aria-label={t('shell.kindLabs')}
-              onClick={() => { if (activity === "labs") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("labs"); setSidebarCollapsed(false) } }}>
-              <TestIcon size={18} /></button>
           </div>
           <div className="app-desktop-activity-bottom">
             <button type="button" className={`activity-btn${view === "settings" ? " active" : ""}`} title={t('nav.settings') || "Configuración"} aria-label={t('nav.settings') || "Configuración"}
@@ -2673,9 +2667,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     : activity === "explorer" ? t('shell.kindExplorer')
                     : activity === "stats" ? t('shell.kindStats')
                     : activity === "kanban" ? t('shell.kindKanban')
-                    : activity === "docs" ? t('shell.kindDocs')
-                    : activity === "updates" ? t('shell.kindUpdates')
-                    : activity === "labs" ? t('shell.kindLabs')
                     : t('shell.kindConfig')}
                 </span>
                 <span className="desktop-sidebar-actions">
@@ -2687,9 +2678,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                   : activity === "stats" ? <StatsPanel />
                   : activity === "kanban" ? <KanbanPanel />
-                  : activity === "docs" ? <DocsPanel />
-                  : activity === "updates" ? <UpdatesPanel />
-                  : activity === "labs" ? <LabsPanel />
                   : <ConfigPanel />}
               </div>
               <div className="desktop-sidebar-resizer" onPointerDown={startSidebarResize} title={t('desktop.resizeSidebar')} />
@@ -2739,7 +2727,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 sizes[colIndex] = Math.max(220, Math.min(900, startSize + (ev.clientX - startX)))
                 apply()
               }
+              let committed = false
               const onUp = () => {
+                if (committed) return
+                committed = true
                 document.body.style.userSelect = ""
                 document.body.style.cursor = ""
                 window.removeEventListener("pointermove", onMove)
@@ -2767,7 +2758,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 sizes[rowIndex] = Math.max(200, Math.min(800, startSize + (ev.clientY - startY)))
                 apply()
               }
+              let committed = false
               const onUp = () => {
+                if (committed) return
+                committed = true
                 document.body.style.userSelect = ""
                 document.body.style.cursor = ""
                 window.removeEventListener("pointermove", onMove)
