@@ -1,7 +1,6 @@
 import { memo, useCallback, useRef, useState } from "react"
 import { useT } from "../i18n-context"
 import { TerminalPanel } from "./shellPanels"
-import { CloseIcon, MaximizeIcon, MinimizeIcon, SplitIcon } from "../Icons"
 import type { ShellType, ShellLine } from "../hooks/useShell"
 
 type Props = {
@@ -89,52 +88,14 @@ export const TerminalView = memo(function TerminalView({
 
       {/* Terminal Real con xterm.js y ConPTY */}
       <div style={{ flex: 1, minHeight: 0, position: "relative", width: "100%", height: "100%" }}>
-        <TerminalPanel cwd={directory} />
-
-        {/* Botones de control de ventana (dock, maximize, close) */}
-        <div
-          style={{
-            position: "absolute",
-            top: 4,
-            right: 8,
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            zIndex: 10,
-          }}
-        >
-          {onToggleDock && (
-            <button
-              type="button"
-              className="terminal-action-btn"
-              onClick={onToggleDock}
-              title={isDocked ? "Desacoplar terminal" : "Acoplar abajo"}
-              aria-label={isDocked ? "Desacoplar terminal" : "Acoplar abajo"}
-            >
-              <SplitIcon size={12} />
-            </button>
-          )}
-
-          <button
-            type="button"
-            className="terminal-action-btn"
-            onClick={() => setMaximized((v) => !v)}
-            title={maximized ? "Restaurar tamaño" : "Maximizar"}
-            aria-label={maximized ? "Restaurar tamaño" : "Maximizar"}
-          >
-            {maximized ? <MinimizeIcon size={12} /> : <MaximizeIcon size={12} />}
-          </button>
-
-          <button
-            type="button"
-            className="terminal-action-btn"
-            onClick={onClose}
-            title="Cerrar panel"
-            aria-label="Cerrar panel"
-          >
-            <CloseIcon size={13} />
-          </button>
-        </div>
+        <TerminalPanel
+          cwd={directory}
+          onToggleDock={onToggleDock}
+          isDocked={isDocked}
+          onMaximize={() => setMaximized((v) => !v)}
+          maximized={maximized}
+          onClose={onClose}
+        />
       </div>
     </div>
   )

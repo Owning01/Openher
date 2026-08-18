@@ -27,9 +27,32 @@ export type ShellConfig = {
   labs_apps: { id: string; title: string; path: string }[]
 }
 
+let resolvedBase: string | null = null
+
+export async function resolveShellBase(): Promise<string> {
+  if (resolvedBase !== null) return resolvedBase
+  try {
+    const res = await fetch("/shell/health", { cache: "no-store" })
+    if (res.ok) {
+      resolvedBase = ""
+      return ""
+    }
+  } catch {}
+  try {
+    const res = await fetch("http://127.0.0.1:5900/shell/health", { cache: "no-store" })
+    if (res.ok) {
+      resolvedBase = "http://127.0.0.1:5900"
+      return resolvedBase
+    }
+  } catch {}
+  resolvedBase = ""
+  return ""
+}
+
 export async function shellAvailable(): Promise<boolean> {
   try {
-    const r = await fetch("/shell/health", { cache: "no-store" })
+    const base = await resolveShellBase()
+    const r = await fetch(`${base}/shell/health`, { cache: "no-store" })
     return r.ok
   } catch {
     return false
@@ -41,9 +64,19 @@ async function j<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
-const get = <T>(url: string) => fetch(url).then(j<T>)
-const post = <T>(url: string, body?: unknown) =>
-  fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then(j<T>)
+const get = async <T>(url: string) => {
+  const base = await resolveShellBase()
+  return fetch(`${base}${url}`).then(j<T>)
+}
+
+const post = async <T>(url: string, body?: unknown) => {
+  const base = await resolveShellBase()
+  return fetch(`${base}${url}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  }).then(j<T>)
+}
 
 export const shell = {
   fs: {

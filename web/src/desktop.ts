@@ -140,7 +140,7 @@ export const desktopApi = {
 
 const BOUNDARY = "--ocd-frame"
 
-function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+function concatBytes(a: Uint8Array<ArrayBufferLike>, b: Uint8Array<ArrayBufferLike>): Uint8Array {
   const out = new Uint8Array(a.length + b.length)
   out.set(a)
   out.set(b)
@@ -192,7 +192,7 @@ export async function readMJPEGStream(
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
 
   const reader = res.body.getReader()
-  let buffer = new Uint8Array(0)
+  let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0)
 
   for (;;) {
     const { done, value } = await reader.read()

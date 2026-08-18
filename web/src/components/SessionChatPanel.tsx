@@ -177,7 +177,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const panelModelVariants = panelModelAI?.activeModelVariants ?? baseProps.activeModelVariants
   const panelVariant = panelModelAI ? panelModelAI.selectedVariant : baseProps.selectedVariant
 
-  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>) => {
+  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }) => {
     if (!config) return
     if (!session) return
     if (!msgs.composer.trim() && (!images || images.length === 0)) return
@@ -186,6 +186,22 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       msgs.setComposer("")
       msgs.setRuntimeError("Prompt queued - will send when connection is restored")
       return
+    }
+    let sendText = msgs.composer
+    let originalText: string | null = null
+    if (options?.translate && msgs.composer.trim()) {
+      try {
+        const { translateToEnglish } = await import("../utils/translate")
+        const translated = await translateToEnglish(msgs.composer)
+        if (translated !== msgs.composer) {
+          originalText = msgs.composer
+          sendText = translated
+          msgs.setComposer(translated)
+        }
+      } catch (err) {
+        msgs.setRuntimeError(`Translation failed: ${(err as Error).message}`)
+        return
+      }
     }
     onRecordPrompt(msgs.composer)
     stopGenerationRef.current = false
@@ -197,7 +213,8 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     const res = await msgs.send(session, panelModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
       refresh,
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
-      onSetCommands, msgs.setRuntimeError, images)
+      onSetCommands, msgs.setRuntimeError, images,
+      sendText !== msgs.composer ? sendText : undefined, undefined, originalText ?? undefined)
     if (res === "connect") onOpenConnect?.()
     return typeof res === "boolean" ? res : true
   }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID, onOpenConnect])

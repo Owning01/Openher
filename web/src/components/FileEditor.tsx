@@ -1,9 +1,10 @@
-import { memo, useState, useEffect, useRef, useCallback } from "react"
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { api } from "../api"
 import { shell } from "../shell"
 import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import { basename } from "../utils"
+import { lowlight, langFromFilename } from "../utils/highlight"
 import type { ServerConfig } from "../types"
 
 type Props = {
@@ -11,6 +12,19 @@ type Props = {
   path: string
   directory?: string
   onClose: () => void
+}
+
+function serializeHast(nodes: unknown[]): string {
+  let out = ""
+  for (const n of nodes as Array<{ type: string; tagName?: string; properties?: Record<string, string[]>; children?: unknown[]; value?: string }>) {
+    if (n.type === "text") {
+      out += (n.value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    } else if (n.type === "element" && n.tagName) {
+      const cls = n.properties?.className?.join(" ") ?? ""
+      out += `<${n.tagName}${cls ? ` class="${cls}"` : ""}>${serializeHast(n.children ?? [])}</${n.tagName}>`
+    }
+  }
+  return out
 }
 
 export const FileEditor = memo(function FileEditor({ config, path, directory, onClose }: Props) {
@@ -129,6 +143,19 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [content, dirty, saveFile])
 
+  const highlighted = useMemo(() => {
+    if (!content) return ""
+    const lang = langFromFilename(path)
+    try {
+      const root = lowlight.highlight(lang, content) as unknown as { children: Array<{ type: string; tagName?: string; properties?: Record<string, string[]>; children?: unknown[]; value?: string }> }
+      return serializeHast(root.children)
+    } catch {
+      return content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    }
+  }, [content, path])
+
+  const lineCount = useMemo(() => content.split("\n").length, [content])
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content file-editor" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="File Editor">
@@ -149,16 +176,29 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
           ) : error ? (
             <p className="error-text">{error}</p>
           ) : (
-            <textarea
-              className="file-editor-textarea"
-              value={content}
-              onChange={(e) => {
-                setContent(e.target.value)
-                setDirty(true)
-              }}
-              spellCheck={false}
-              autoFocus
-            />
+            <div className="code-editor-wrap">
+              <div className="code-editor-lines" aria-hidden="true">
+                {Array.from({ length: lineCount }, (_, i) => (
+                  <span key={i + 1}>{i + 1}</span>
+                ))}
+              </div>
+              <div className="code-editor-scroll">
+                <pre className="code-editor-highlight" aria-hidden="true">
+                  <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+                </pre>
+                <textarea
+                  className="code-editor-textarea"
+                  value={content}
+                  onChange={(e) => {
+                    setContent(e.target.value)
+                    setDirty(true)
+                  }}
+                  spellCheck={false}
+                  autoFocus
+                  wrap="off"
+                />
+              </div>
+            </div>
           )}
         </div>
       </div>

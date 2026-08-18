@@ -26,7 +26,6 @@ export type BrowserTabItem = {
   title: string
   history: string[]
   historyIdx: number
-  useProxy?: boolean
 }
 
 function getFavicon(url: string) {
@@ -46,9 +45,7 @@ function getFavicon(url: string) {
     )
   }
   if (u.includes("gemini.google.com") || u.includes("google.")) {
-    return (
-      <span style={{ fontSize: "0.85rem", color: "#38bdf8" }}>✦</span>
-    )
+    return <span style={{ fontSize: "0.85rem", color: "#38bdf8" }}>✦</span>
   }
   if (u.includes("localhost") || u.includes("127.0.0.1") || u.includes("0.0.0.0")) {
     return <span style={{ fontSize: "0.85rem" }}>🌐</span>
@@ -83,7 +80,6 @@ export const BrowserPanel = memo(function BrowserPanel({
       title: formatDisplayTitle(initialUrl),
       history: [initialUrl],
       historyIdx: 0,
-      useProxy: false,
     },
   ])
   const [activeTabId, setActiveTabId] = useState<string>("tab-1")
@@ -121,7 +117,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     return u
   }
 
-  const navigateTab = useCallback((newUrl: string, useProxy?: boolean) => {
+  const navigateTab = useCallback((newUrl: string) => {
     const norm = normalizeUrl(newUrl)
     setInputUrl(norm)
     setLoading(true)
@@ -138,7 +134,6 @@ export const BrowserPanel = memo(function BrowserPanel({
           title: formatDisplayTitle(norm),
           history: nextHist,
           historyIdx: nextHist.length - 1,
-          useProxy: useProxy !== undefined ? useProxy : t.useProxy,
         }
       })
     )
@@ -154,7 +149,6 @@ export const BrowserPanel = memo(function BrowserPanel({
       title: formatDisplayTitle(defaultUrl),
       history: [defaultUrl],
       historyIdx: 0,
-      useProxy: false,
     }
     setTabs((prev) => [...prev, newTab])
     setActiveTabId(newId)
@@ -215,23 +209,12 @@ export const BrowserPanel = memo(function BrowserPanel({
     }
   }
 
-  const toggleProxy = () => {
-    if (!activeTab) return
-    const nextProxy = !activeTab.useProxy
-    setTabs((prev) =>
-      prev.map((t) => (t.id === activeTabId ? { ...t, useProxy: nextProxy } : t))
-    )
-    setReloadKey((k) => k + 1)
-  }
-
   const targetWidth = DEVICE_WIDTHS[deviceMode]
-  const currentSrc = activeTab?.useProxy
-    ? `/shell/proxy?url=${encodeURIComponent(activeTab.url)}`
-    : activeTab?.url || "about:blank"
+  const currentSrc = activeTab?.url || "about:blank"
 
   return (
     <div className="browser-shell">
-      {/* 1. Chrome-like Tab Bar on Top */}
+      {/* 1. Chrome-like Tab Bar on Top (Preserves tabs styling) */}
       <div className="browser-tabbar">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId
@@ -268,7 +251,7 @@ export const BrowserPanel = memo(function BrowserPanel({
         </button>
       </div>
 
-      {/* 2. Navigation Toolbar */}
+      {/* 2. Navigation Toolbar (Clean, no background, no border on buttons/input) */}
       <div className="browser-toolbar">
         <div className="browser-nav-actions">
           <button
@@ -302,13 +285,13 @@ export const BrowserPanel = memo(function BrowserPanel({
           </button>
         </div>
 
-        {/* 3. Pill Omnibox (Address Bar) */}
+        {/* 3. Address Bar (Clean Input without background/border) */}
         <div className="browser-omnibox" ref={dropdownRef}>
           <button
             type="button"
             className={`browser-tune-btn${showTuneDropdown ? " active" : ""}`}
             onClick={() => setShowTuneDropdown((v) => !v)}
-            title="Configuración de navegador y puertos"
+            title="Configuración de puertos y resolución"
             aria-label="Configuración"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -328,7 +311,7 @@ export const BrowserPanel = memo(function BrowserPanel({
 
           {loading && <LoadingIcon size={14} className="browser-loading-spinner" />}
 
-          {/* Tune / Config Dropdown */}
+          {/* Config Dropdown */}
           {showTuneDropdown && (
             <div className="browser-tune-dropdown">
               <div className="browser-tune-section">
@@ -386,45 +369,6 @@ export const BrowserPanel = memo(function BrowserPanel({
                   </button>
                 </div>
               </div>
-
-              <div className="browser-tune-section" style={{ borderTop: "1px solid var(--border)", paddingTop: "8px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text)" }}>Bypass Anti-CORS / Proxy</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={activeTab?.useProxy || false}
-                    onClick={toggleProxy}
-                    style={{
-                      width: "32px",
-                      height: "18px",
-                      borderRadius: "9px",
-                      background: activeTab?.useProxy ? "var(--primary)" : "var(--border)",
-                      position: "relative",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        width: "14px",
-                        height: "14px",
-                        borderRadius: "50%",
-                        background: "#fff",
-                        position: "absolute",
-                        top: "2px",
-                        left: activeTab?.useProxy ? "16px" : "2px",
-                        transition: "left 0.2s",
-                      }}
-                    />
-                  </button>
-                </div>
-                <small style={{ fontSize: "0.68rem", color: "var(--muted)", display: "block", marginTop: "2px" }}>
-                  Permite ver sitios que rechazan iframe (Google, GitHub, etc.)
-                </small>
-              </div>
             </div>
           )}
 
@@ -454,21 +398,18 @@ export const BrowserPanel = memo(function BrowserPanel({
         )}
       </div>
 
-      {/* 4. Web Viewport (Iframe) */}
+      {/* 4. Web Viewport */}
       <div className="browser-viewport-container">
         {hasError ? (
           <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text)", maxWidth: "460px", margin: "auto" }}>
             <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>⚠️</div>
             <h3 style={{ margin: "0 0 8px 0", fontSize: "1.1rem" }}>No se pudo conectar con la página</h3>
             <p style={{ fontSize: "0.82rem", color: "var(--muted)", marginBottom: "20px" }}>
-              Si es un servidor local, verifica que el dev server esté ejecutándose (botón <strong>▶ Run Web</strong> en el chat).
+              Si es un servidor local, verifica que el dev server esté ejecutándose (botón <strong>▶ Run Web</strong> en el chat). Si es un sitio web externo protegido, ábrelo en el navegador externo.
             </p>
             <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
               <button type="button" className="btn-primary compact" onClick={handleReload}>
                 Reintentar
-              </button>
-              <button type="button" className="btn-secondary compact" onClick={toggleProxy}>
-                {activeTab?.useProxy ? "Probar modo Directo" : "Probar con Proxy Anti-CORS"}
               </button>
               <button type="button" className="btn-secondary compact" onClick={handleOpenExternal}>
                 Abrir en Chrome / Edge

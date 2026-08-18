@@ -13,7 +13,9 @@ type HelpPageProps = {
 
 const helpTabs: HelpPageType[] = ["overview", "server", "network", "troubleshooting", "commands"]
 
-function helpContent(t: ReturnType<typeof useT>, key: string): JSX.Element[] {
+import type { ReactNode } from "react"
+
+function helpContent(t: ReturnType<typeof useT>, key: string): ReactNode[] {
   const raw = t(key)
   return raw.split("|").map((line, i) => {
     if (!line.trim()) return <br key={i} />

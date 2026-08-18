@@ -1266,6 +1266,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   // ===== Desktop: grid de paneles (splits) =====
   const [desktopState, setDesktopState] = useState(() => loadDesktopState(selectedSession?.id ?? null))
   const desktopLayout = desktopState.layout
+  const desktopLayoutRef = useRef(desktopLayout)
+  desktopLayoutRef.current = desktopLayout
   const setDesktopLayout = useCallback((updater: (prev: DesktopLayout) => DesktopLayout) => {
     setDesktopState((prev) => ({ ...prev, layout: updater(prev.layout) }))
   }, [])
@@ -1546,17 +1548,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           }
         }
         if (changed) continue
+        // Find all empty columns at once (checking against original grid before any removal)
+        const emptyCols: number[] = []
         for (let c = 0; c < cols; c++) {
-          const colEmpty = sessions.filter((_, i) => i % cols === c).every((_, i) => isEmpty(i * cols + c))
-          if (colEmpty && cols > 1) {
-            sessions = sessions.filter((_, i) => i % cols !== c)
-            panelKinds = panelKinds.filter((_, i) => i % cols !== c)
-            panelIds = panelIds.filter((_, i) => i % cols !== c)
-            cols -= 1
-            colSizes = colSizes.filter((_, i) => i !== c)
-            changed = true
-            break
-          }
+          const colEmpty = Array.from({ length: rows }, (_, r) => r * cols + c).every((i) => isEmpty(i))
+          if (colEmpty) emptyCols.push(c)
+        }
+        if (emptyCols.length > 0 && cols > emptyCols.length) {
+          const removeSet = new Set(emptyCols)
+          sessions = sessions.filter((_, i) => !removeSet.has(i % cols))
+          panelKinds = panelKinds.filter((_, i) => !removeSet.has(i % cols))
+          panelIds = panelIds.filter((_, i) => !removeSet.has(i % cols))
+          cols -= emptyCols.length
+          colSizes = colSizes.filter((_, i) => !removeSet.has(i))
+          changed = true
         }
         if (cols === 1) colSizes = [null]
         if (rows === 1) rowSizes = [null]
@@ -1900,6 +1905,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       ;[panelIds[from], panelIds[to]] = [panelIds[to], panelIds[from]]
       return { ...prev, sessions, panelKinds, panelIds }
     })
+    setActivePanel(to)
   }, [setDesktopLayout])
 
   const startSidebarResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {

@@ -6,7 +6,7 @@ import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
-import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon } from "../Icons"
+import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type ShellPanelKind } from "../shell"
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
@@ -194,7 +194,27 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
   return <div ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6 }} />
 })
 
-export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName, hideHeader = false, panelIndex }: { cwd?: string; shellName?: string; hideHeader?: boolean; panelIndex?: number }) {
+export const TerminalPanel = memo(function TerminalPanel({
+  cwd,
+  shellName,
+  hideHeader = false,
+  panelIndex,
+  onToggleDock,
+  isDocked,
+  onMaximize,
+  maximized,
+  onClose,
+}: {
+  cwd?: string
+  shellName?: string
+  hideHeader?: boolean
+  panelIndex?: number
+  onToggleDock?: () => void
+  isDocked?: boolean
+  onMaximize?: () => void
+  maximized?: boolean
+  onClose?: () => void
+}) {
   const [activeMainTab, setActiveMainTab] = useState<"problems" | "output" | "debug" | "terminal" | "ports">("terminal")
   const [currentShell, setCurrentShell] = useState<string>(shellName || "pwsh")
   const [termTabs, setTermTabs] = useState<Array<{ id: string; title: string; shell: string }>>([
@@ -308,6 +328,46 @@ export const TerminalPanel = memo(function TerminalPanel({ cwd, shellName, hideH
             >
               <MoreHorizontalIcon size={13} />
             </button>
+
+            {(onToggleDock || onMaximize || onClose) && (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 2, marginLeft: 6, borderLeft: "1px solid rgba(255,255,255,0.1)", paddingLeft: 6 }}>
+                {onToggleDock && (
+                  <button
+                    type="button"
+                    className="terminal-action-btn"
+                    onClick={onToggleDock}
+                    title={isDocked ? "Desacoplar terminal" : "Acoplar abajo"}
+                    aria-label={isDocked ? "Desacoplar terminal" : "Acoplar abajo"}
+                  >
+                    <SplitIcon size={12} />
+                  </button>
+                )}
+
+                {onMaximize && (
+                  <button
+                    type="button"
+                    className="terminal-action-btn"
+                    onClick={onMaximize}
+                    title={maximized ? "Restaurar tamaño" : "Maximizar"}
+                    aria-label={maximized ? "Restaurar tamaño" : "Maximizar"}
+                  >
+                    {maximized ? <MinimizeIcon size={12} /> : <MaximizeIcon size={12} />}
+                  </button>
+                )}
+
+                {onClose && (
+                  <button
+                    type="button"
+                    className="terminal-action-btn"
+                    onClick={onClose}
+                    title="Cerrar panel"
+                    aria-label="Cerrar panel"
+                  >
+                    <CloseIcon size={13} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

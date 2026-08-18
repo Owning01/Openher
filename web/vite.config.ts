@@ -4,11 +4,19 @@ import babel from "@rolldown/plugin-babel"
 
 export default defineConfig({
   base: "./",
+  server: {
+    port: 5173,
+    proxy: {
+      "/shell": {
+        target: "http://127.0.0.1:5900",
+        changeOrigin: true,
+      },
+    },
+  },
   plugins: [
     react(),
-    // React Compiler: memoización automática. target "18" → usa
-    // react-compiler-runtime (React 18 no trae react/compiler-runtime).
-    babel({ presets: [reactCompilerPreset({ target: "18" })] }),
+    // React Compiler: memoización automática.
+    babel({ presets: [reactCompilerPreset({ target: "19" })] }),
   ],
   build: {
     rollupOptions: {

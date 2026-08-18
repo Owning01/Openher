@@ -1,4 +1,4 @@
-import { memo, useState, useEffect } from "react"
+import { memo, useState, useEffect, type ReactNode } from "react"
 import { SettingsIcon, SunIcon, MoonIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { ViewType } from "../types"
@@ -14,7 +14,7 @@ type NavBarProps = {
 
 // Navegación mínima: a las sesiones/proyectos se llega tocando el brand
 // "OpenCode"; al chat se entra tocando cada sesión.
-const navItems: Array<{ view: ViewType; icon: JSX.Element; label: string }> = [
+const navItems: Array<{ view: ViewType; icon: ReactNode; label: string }> = [
   { view: "settings", icon: <SettingsIcon size={18} />, label: "nav.settings" }
 ]
 
