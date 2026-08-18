@@ -28,6 +28,7 @@ import { ADEDiffPanel } from "./components/ADEDiffPanel"
 import { ConfirmModal } from "./components/ConfirmModal"
 import { ErrorModal } from "./components/ErrorModal"
 import { ShortcutsModal } from "./components/ShortcutsModal"
+import { loadShortcutsConfig, matchesShortcut, type ShortcutItem } from "./shortcuts"
 import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, Question, PermissionRequest, QuestionInfo, FileDiff } from "./types"
 import type { LanguageCode } from "./i18n"
 import { formatLimit, extractPath, extractName, extractBranch, isSessionActive, filterByQuery } from "./utils"
@@ -48,7 +49,7 @@ import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
 import { useSSEHandler } from "./hooks/useSSEHandler"
-import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, HelpIcon, GithubIcon, StatsIcon, TestIcon } from "./Icons"
+import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, HelpIcon, GithubIcon, StatsIcon, TestIcon, GlobeIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -57,7 +58,7 @@ import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
 import { shell } from "./shell"
-import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, DocsPanel, UpdatesPanel, LabsPanel, ConfigPanel, FileEditorPanel } from "./components/shellPanels"
+import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, DocsPanel, UpdatesPanel, LabsPanel, ConfigPanel, FileEditorPanel, BrowserPanel } from "./components/shellPanels"
 import type { ServerProfile } from "./types"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
@@ -100,6 +101,7 @@ type DesktopLayout = {
   panelKinds: Array<ShellPanelKind | "editor">
   panelIds: Array<string>
   panelEditorPaths?: Record<number, string>
+  panelBrowserUrls?: Record<number, string>
   colSizes: Array<number | null>
   rowSizes: Array<number | null>
 }
@@ -490,6 +492,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // ===== Feature: Shortcuts =====
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [shortcuts, setShortcuts] = useState<ShortcutItem[]>(() => loadShortcutsConfig())
+  useEffect(() => {
+    const update = () => setShortcuts(loadShortcutsConfig())
+    window.addEventListener("opencode-shortcuts-changed", update)
+    return () => window.removeEventListener("opencode-shortcuts-changed", update)
+  }, [])
   const { settings: chatSettings, setSetting: setChatSetting, resetDefaults: resetChatSettings } = useChatSettings()
   const { snippets: promptSnippets, addSnippet, removeSnippet } = usePromptSnippets()
 
@@ -1041,20 +1049,21 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   // Global ? key for shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "?" && !e.ctrlKey && !e.metaKey && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      const showSc = shortcuts.find((s) => s.id === "show_shortcuts" && s.enabled)
+      if (showSc && matchesShortcut(e, showSc.keys) && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
         setShowShortcuts(true)
       }
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [])
+  }, [shortcuts])
 
   const handleLanguageChange = useCallback((lang: LanguageCode) => {
     setLanguage(lang)
     localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang)
   }, [setLanguage])
 
-  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>) => {
+  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }) => {
     if (!selectedSession) return
     if (connectionState === "offline") {
       queueAction({ type: "prompt", sessionID: selectedSession.id, directory: selectedSession.directory, payload: composer })
@@ -1062,7 +1071,23 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setRuntimeError("Prompt queued - will send when connection is restored")
       return
     }
-    recordPrompt(composer)
+    let textToSend = composer
+    let originalText: string | null = null
+    if (options?.translate && composer.trim()) {
+      try {
+        const { translateToEnglish } = await import("./utils/translate")
+        const translated = await translateToEnglish(composer)
+        if (translated !== composer) {
+          originalText = composer
+          textToSend = translated
+          setComposer(translated)
+        }
+      } catch (err) {
+        setRuntimeError(`Translation failed: ${(err as Error).message}`)
+        return
+      }
+    }
+    recordPrompt(textToSend)
     stopGenerationRef.current = false
     // Consumir un revert pendiente: el server elimina los mensajes revertidos
     // al recibir el nuevo prompt — el estado local debe descartarlos YA (el
@@ -1079,7 +1104,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-      setCommands, setRuntimeError, images, undefined, setLocalRevertID)
+      setCommands, setRuntimeError, images, textToSend !== composer ? textToSend : undefined, setLocalRevertID, originalText ?? undefined)
     if (result === "help") { setHelpPage("commands"); navigate("help") }
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
     if (result === "connect") setShowConnectSheet(true)
@@ -1902,13 +1927,46 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     window.addEventListener("pointerup", onUp)
   }, [sidebarWidth, setSidebarWidth, desktopDiffOpen, desktopDiffWidth])
 
-  // Atajos de escritorio (splits/sidebar/layouts) — solo desktop
+  // Atajos de escritorio (splits/sidebar/layouts/tabs) — solo desktop
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!isDesktop || (view !== "sessions" && view !== "detail") || !(e.ctrlKey || e.metaKey)) return
+
+      // 1. Tab switching in the column/panel that was clicked last (activePanel)
+      const nextTabSc = shortcuts.find((s) => s.id === "switch_tab_next" && s.enabled)
+      const prevTabSc = shortcuts.find((s) => s.id === "switch_tab_prev" && s.enabled)
+
+      if (nextTabSc && matchesShortcut(e, nextTabSc.keys)) {
+        e.preventDefault()
+        e.stopPropagation()
+        const stack = tabStacks?.[activePanel]
+        if (stack && stack.length > 1) {
+          const currentId = desktopLayout.sessions[activePanel]
+          const currentIdx = currentId ? stack.indexOf(currentId) : 0
+          const nextIdx = (currentIdx + 1) % stack.length
+          switchTab(activePanel, nextIdx)
+        }
+        return
+      }
+
+      if (prevTabSc && matchesShortcut(e, prevTabSc.keys)) {
+        e.preventDefault()
+        e.stopPropagation()
+        const stack = tabStacks?.[activePanel]
+        if (stack && stack.length > 1) {
+          const currentId = desktopLayout.sessions[activePanel]
+          const currentIdx = currentId ? stack.indexOf(currentId) : 0
+          const prevIdx = (currentIdx - 1 + stack.length) % stack.length
+          switchTab(activePanel, prevIdx)
+        }
+        return
+      }
+
       const inEditable = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
-      const k = e.key.toLowerCase()
-      if (k === "w") {
+
+      // 2. Close split
+      const closeSc = shortcuts.find((s) => s.id === "close_split" && s.enabled)
+      if (closeSc && matchesShortcut(e, closeSc.keys)) {
         e.preventDefault()
         if (maximizedPanel !== null) { setMaximizedPanel(null); return }
         if (desktopLayout.cols > 1 || desktopLayout.rows > 1 || desktopLayout.sessions.some((s) => s !== null)) {
@@ -1916,12 +1974,50 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         }
         return
       }
+
       if (inEditable) return
-      if (e.shiftKey && k === "s") { e.preventDefault(); splitPanel(activePanel, "right"); return }
-      if (e.shiftKey && k === "v") { e.preventDefault(); splitPanel(activePanel, "bottom"); return }
-      if (k === "m") { e.preventDefault(); if (desktopLayout.sessions[activePanel]) toggleMaximize(activePanel); return }
-      if (k === "b") { e.preventDefault(); setSidebarCollapsed((v) => !v); return }
-      if (k === "n") { e.preventDefault(); handleOpenNewSession(); return }
+
+      // 3. Split right
+      const splitRightSc = shortcuts.find((s) => s.id === "split_right" && s.enabled)
+      if (splitRightSc && matchesShortcut(e, splitRightSc.keys)) {
+        e.preventDefault()
+        splitPanel(activePanel, "right")
+        return
+      }
+
+      // 4. Split bottom
+      const splitBottomSc = shortcuts.find((s) => s.id === "split_bottom" && s.enabled)
+      if (splitBottomSc && matchesShortcut(e, splitBottomSc.keys)) {
+        e.preventDefault()
+        splitPanel(activePanel, "bottom")
+        return
+      }
+
+      // 5. Maximize / restore
+      const maxSc = shortcuts.find((s) => s.id === "maximize_panel" && s.enabled)
+      if (maxSc && matchesShortcut(e, maxSc.keys)) {
+        e.preventDefault()
+        if (desktopLayout.sessions[activePanel]) toggleMaximize(activePanel)
+        return
+      }
+
+      // 6. Toggle sidebar
+      const sidebarSc = shortcuts.find((s) => s.id === "toggle_sidebar" && s.enabled)
+      if (sidebarSc && matchesShortcut(e, sidebarSc.keys)) {
+        e.preventDefault()
+        setSidebarCollapsed((v) => !v)
+        return
+      }
+
+      // 7. New session
+      const newSessSc = shortcuts.find((s) => s.id === "new_session" && s.enabled)
+      if (newSessSc && matchesShortcut(e, newSessSc.keys)) {
+        e.preventDefault()
+        handleOpenNewSession()
+        return
+      }
+
+      const k = e.key.toLowerCase()
       if (!e.shiftKey && /^[1-9]$/.test(k)) {
         const idx = Number(k) - 1
         if (idx < desktopLayout.cols * desktopLayout.rows) { e.preventDefault(); setActivePanel(idx) }
@@ -1930,7 +2026,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [isDesktop, view, maximizedPanel, desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions, activePanel, closePanel, splitPanel, toggleMaximize, setSidebarCollapsed, handleOpenNewSession])
+  }, [isDesktop, view, maximizedPanel, desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions, activePanel, tabStacks, switchTab, closePanel, splitPanel, toggleMaximize, setSidebarCollapsed, handleOpenNewSession, shortcuts])
 
   const handleOpenSession = useCallback(async (id: string, dir: string) => {
     navigate("detail")
@@ -2449,7 +2545,54 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [isDesktop, desktopLayout, activePanel])
 
-  const detailView = <ChatView {...baseChatProps} />
+  const handleOpenBrowser = useCallback((url: string) => {
+    if (isDesktop) {
+      const existingBrowserIdx = desktopLayout.panelKinds.findIndex((k) => k === "browser")
+      if (existingBrowserIdx >= 0) {
+        setDesktopLayout((prev) => ({
+          ...prev,
+          panelBrowserUrls: { ...(prev.panelBrowserUrls ?? {}), [existingBrowserIdx]: url },
+        }))
+        setActivePanel(existingBrowserIdx)
+        return
+      }
+
+      const hasActiveSession = desktopLayout.sessions.some(Boolean)
+      if (hasActiveSession) {
+        if (desktopLayout.cols === 1) {
+          setDesktopLayout((prev) => ({
+            ...prev,
+            cols: 2,
+            colSizes: [null, null],
+            panelKinds: [prev.panelKinds[0] ?? "session", "browser"],
+            panelBrowserUrls: { ...(prev.panelBrowserUrls ?? {}), 1: url },
+          }))
+          setActivePanel(1)
+        } else {
+          const targetPanel = activePanel === 0 ? 1 : activePanel
+          setDesktopLayout((prev) => ({
+            ...prev,
+            panelKinds: prev.panelKinds.map((k, idx) => (idx === targetPanel ? "browser" : k)),
+            panelBrowserUrls: { ...(prev.panelBrowserUrls ?? {}), [targetPanel]: url },
+          }))
+          setActivePanel(targetPanel)
+        }
+      } else {
+        setDesktopLayout((prev) => ({
+          ...prev,
+          cols: 1,
+          colSizes: [null],
+          panelKinds: ["browser"],
+          panelBrowserUrls: { ...(prev.panelBrowserUrls ?? {}), 0: url },
+        }))
+        setActivePanel(0)
+      }
+    } else {
+      window.open(url, "_blank")
+    }
+  }, [isDesktop, desktopLayout, activePanel])
+
+  const detailView = <ChatView {...baseChatProps} onOpenBrowser={handleOpenBrowser} />
 
   return (
     <div className="app-shell" data-navbar="header" ref={shellRef}
@@ -2476,6 +2619,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 addPanel("stats")
               }}>
               <StatsIcon size={18} /></button>
+            <button type="button" className="activity-btn" title="Navegador Web / Localhost" aria-label="Navegador Web"
+              onClick={() => {
+                handleOpenBrowser("http://localhost:5173")
+              }}>
+              <GlobeIcon size={18} /></button>
             <button type="button" className={`activity-btn${activity === "kanban" ? " active" : ""}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
               onClick={() => { if (activity === "kanban") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("kanban"); setSidebarCollapsed(false) } }}>
               <LayersIcon size={18} /></button>
@@ -2673,6 +2821,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onSwapPanels={handleSwapPanels}
                       onOpenFile={handleOpenFile}
                       onOpenConnect={() => setShowConnectSheet(true)}
+                      onOpenBrowser={handleOpenBrowser}
                       tabStack={tabStacks?.[i]?.length ? tabStacks[i] : (session ? [session.id] : [])}
                       allSessions={sessions}
                       busySessionIds={busySessions}
@@ -2690,6 +2839,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     <FileEditorPanel
                       path={editorPath || ""}
                       initialCwd={activeSessionDir}
+                      onClose={() => closePanel(i)}
+                    />
+                  </div>
+                )
+              }
+              if (kind === "browser") {
+                const browserUrl = desktopLayout.panelBrowserUrls?.[i] || "http://localhost:5173"
+                return (
+                  <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
+                    <BrowserPanel
+                      initialUrl={browserUrl}
                       onClose={() => closePanel(i)}
                     />
                   </div>
@@ -2757,6 +2917,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onSwapPanels={handleSwapPanels}
                       onOpenFile={handleOpenFile}
                       onOpenConnect={() => setShowConnectSheet(true)}
+                      onOpenBrowser={handleOpenBrowser}
                       tabStack={tabStacks?.[maximizedIndex]?.length ? tabStacks[maximizedIndex] : (maximizedSession ? [maximizedSession.id] : [])}
                       allSessions={sessions}
                       busySessionIds={busySessions}

@@ -1,6 +1,7 @@
 import { memo, useCallback, useState, useMemo, useRef } from "react"
 import { PencilIcon, UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon } from "../Icons"
 import { formatTime } from "../utils"
+import { getTranslationOriginal } from "../hooks/useMessages"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { useT } from "../i18n-context"
 import { useOutsideClick } from "../hooks/useOutsideClick"
@@ -74,6 +75,24 @@ function calcTokensPerSecond(msg: RenderedMessage): string {
   return `${tps.toFixed(1)} tok/s`
 }
 
+const TranslationOriginal = memo(function TranslationOriginal({ messageId }: { messageId: string }) {
+  const [show, setShow] = useState(false)
+  const original = getTranslationOriginal(messageId)
+  if (!original) return null
+  return (
+    <div className="translation-original">
+      <button type="button" className="translation-toggle" onClick={() => setShow((v) => !v)}>
+        {show ? "hide original" : "ver original"}
+      </button>
+      {show && (
+        <div className="translation-original-text">
+          <Markdown text={original} />
+        </div>
+      )}
+    </div>
+  )
+})
+
 export const MessageBubble = memo(function MessageBubble({ message, queued, revert, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen, highlight, compactTools, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
   message: RenderedMessage
   queued?: boolean
@@ -100,7 +119,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const [showConfirm, setShowConfirm] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-const [editingImage, setEditingImage] = useState<{ id: string; src: string; mime: string } | null>(null)
+  const [editingImage, setEditingImage] = useState<{ id: string; src: string; mime: string } | null>(null)
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const moreWrapRef = useRef<HTMLSpanElement | null>(null)
   useOutsideClick(moreWrapRef, () => setMoreOpen(false), moreOpen)
@@ -198,7 +217,6 @@ const [editingImage, setEditingImage] = useState<{ id: string; src: string; mime
         {message.info.role === "user" && (
           <header>
             <span className="message-title-group">
-              <strong>{t('detail.you')}</strong>
               {queued && (
                 <span className="msg-queued-badge" data-queued>{t('session.queued')}</span>
               )}
@@ -238,6 +256,8 @@ const [editingImage, setEditingImage] = useState<{ id: string; src: string; mime
             )}
           </div>
         )}
+
+        <TranslationOriginal messageId={message.info.id} />
 
         {message.parts.filter((p) => !!getPartImageData(p)).map((p) => {
           const src = getPartImageData(p)

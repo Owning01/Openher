@@ -14,6 +14,16 @@ const shellToolNames = new Set(["bash", "execute", "terminal", "shell", "pwsh", 
 
 const COMPOSER_STORAGE_KEY = "opencode.remote.composer"
 
+// Translation originals: maps message ID → original (pre-translation) text.
+// Populated when TSL is active and a message is sent.
+const translationOriginals = new Map<string, string>()
+export function getTranslationOriginal(id: string): string | undefined {
+  return translationOriginals.get(id)
+}
+export function setTranslationOriginal(id: string, text: string) {
+  translationOriginals.set(id, text)
+}
+
 function extractText(msg: MessageEnvelope): string {
   const blocks: string[] = []
   for (const part of msg.parts) {
@@ -551,12 +561,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     images?: Array<{ base64: string; mime: string }>,
     textOverride?: string,
     onSetRevertID?: (id: string | null) => void,
+    translatedFrom?: string,
   ) => {
     const text = (textOverride ?? composer).trim()
     if ((!text || !selectedSession) && (!images || images.length === 0)) return false
     try {
 
     const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
+    // Store original text for "ver original" if this was translated
+    if (translatedFrom) {
+      setTranslationOriginal(optimisticMessage.info.id, translatedFrom)
+    }
 
     const doSend = async (
       sendFn: () => Promise<unknown>,

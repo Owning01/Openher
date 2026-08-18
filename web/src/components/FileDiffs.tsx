@@ -19,10 +19,6 @@ export const FileDiffs = memo(function FileDiffs({
   const total = sumDiffStat(diffs)
 
   const handleToggle = () => {
-    if (onOpenADEDiff && window.innerWidth > 780) {
-      onOpenADEDiff(diffs)
-      return
-    }
     setOpen((v) => !v)
   }
 

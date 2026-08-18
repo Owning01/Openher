@@ -442,18 +442,15 @@
 .file-diffs-ade-link {
   font-size: 0.65rem;
   font-weight: 800;
-  background: var(--primary-soft, rgba(16, 185, 129, 0.15));
   color: var(--primary, #10b981);
   padding: 2px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(16, 185, 129, 0.3);
   margin-left: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease;
 }
 .file-diffs-ade-link:hover {
-  background: var(--primary);
-  color: #000;
+  color: var(--primary-hover, #059669);
 }
 
 .header-diff-pill {

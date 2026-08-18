@@ -28,7 +28,7 @@ type ComposerProps = {
   value: string
   commands: CommandInfo[]
   onChange: (value: string) => void
-  onSend: (images?: ImageAttachment[]) => void | boolean | Promise<boolean | void>
+  onSend: (images?: ImageAttachment[], options?: { translate?: boolean }) => void | boolean | Promise<boolean | void>
   onShellSend?: (command: string) => void
   onAbort: () => void
   disabled: boolean
@@ -62,6 +62,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const [slashIndex, setSlashIndex] = useState(0)
   const [showAtMenu, setShowAtMenu] = useState(false)
   const [atQuery, setAtQuery] = useState("")
+  const [tslEnabled, setTslEnabled] = useState(false)
   const [atIndex, setAtIndex] = useState(0)
   const [showSnippetMenu, setShowSnippetMenu] = useState(false)
   const snippetMenuRef = useRef<HTMLDivElement | null>(null)
@@ -323,12 +324,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const handleSendWithImages = useCallback(async () => {
     if (disabled) return
     if (!value.trim() && images.length === 0) return
-    const ok = await onSend(images.length > 0 ? images : undefined)
+    const opts = tslEnabled ? { translate: true } : undefined
+    const ok = await onSend(images.length > 0 ? images : undefined, opts)
     // Solo limpiar las imágenes si el envío fue exitoso: si falló (red o
     // server) el usuario no pierde la imagen que pegó.
     if (ok !== false) setImages([])
     resizeTextarea()
-  }, [onSend, images, resizeTextarea, disabled, value])
+  }, [onSend, images, resizeTextarea, disabled, value, tslEnabled])
 
   const isCommandValid = useMemo(() => {
     if (!value.startsWith("/")) return false
@@ -602,6 +604,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               </svg>
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setTslEnabled((v) => !v)}
+            disabled={disabled}
+            className="composer-tsl-btn"
+            style={{ color: tslEnabled ? "var(--primary)" : undefined }}
+            title={tslEnabled ? "Translate ES→EN (active)" : "Translate ES→EN"}
+            aria-pressed={tslEnabled}
+          >
+            TSL
+          </button>
           {visibleAgents.length > 1 && (
             <button onClick={handleToggleAgent} disabled={disabled}
               className="agent-toggle"

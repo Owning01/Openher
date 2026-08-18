@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -17,6 +17,7 @@ import { PermissionPrompt } from "./PermissionPrompt"
 import { ChatCustomizerModal } from "./ChatCustomizerModal"
 
 import { useOutsideClick } from "../hooks/useOutsideClick"
+import { useDevServer } from "../hooks/useDevServer"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo,
   ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, PromptSnippet, ChatSettings, TokenUsage } from "../types"
@@ -112,6 +113,7 @@ export type ChatViewProps = {
   onChatSettingChange?: <K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => void
   onResetChatSettings?: () => void
   onOpenADEDiff?: (diffs?: FileDiff[], file?: string) => void
+  onOpenBrowser?: (url: string) => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -125,7 +127,7 @@ export const ChatView = memo(function ChatView({
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, sessions, onOpenSession, onOpenSettings, onOpenSessionStats, onShellSend, onThemeCommand,
-  onOpenRemoteDesktop,
+  onOpenRemoteDesktop, onOpenBrowser,
   flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
   pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
@@ -164,6 +166,7 @@ export const ChatView = memo(function ChatView({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
   const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
   const messagesWrapRef = useRef<HTMLDivElement | null>(null)
+  const devServer = useDevServer(selectedSession?.directory)
 
   // Copiar selección: aparece solo cuando hay texto seleccionado dentro del chat;
   // cualquier scroll lo oculta.
@@ -373,6 +376,49 @@ export const ChatView = memo(function ChatView({
                   </div>
                 )}
               </div>
+            )}
+            {devServer.hasDevServer && (
+              <button
+                type="button"
+                className={`header-dev-server-btn${devServer.status === "running" ? " running" : devServer.status === "starting" ? " starting" : ""}`}
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  try {
+                    const url = await devServer.startDevServer()
+                    if (onOpenBrowser) {
+                      onOpenBrowser(url)
+                    } else {
+                      window.open(url, "_blank")
+                    }
+                  } catch (err) {
+                    console.error("Error starting dev server:", err)
+                  }
+                }}
+                title={
+                  devServer.status === "running"
+                    ? `Dev server corriendo en ${devServer.serverUrl} (Clic para abrir pestaña de navegador)`
+                    : devServer.status === "starting"
+                    ? "Iniciando dev server..."
+                    : `Ejecutar "${devServer.devCommand}" y abrir vista previa web`
+                }
+              >
+                {devServer.status === "starting" ? (
+                  <>
+                    <LoadingIcon size={12} />
+                    <span>Iniciando...</span>
+                  </>
+                ) : devServer.status === "running" ? (
+                  <>
+                    <span style={{ color: "#22c55e", fontSize: "0.8rem" }}>●</span>
+                    <span>{devServer.serverUrl ? devServer.serverUrl.replace(/^https?:\/\//, "") : "Web"}</span>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: "0.75rem" }}>▶</span>
+                    <span>{devServer.devCommand || "Run Web"}</span>
+                  </>
+                )}
+              </button>
             )}
             {diffFiles && diffFiles.length > 0 && onOpenADEDiff && (
               <button

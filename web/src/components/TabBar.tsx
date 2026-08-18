@@ -34,6 +34,20 @@ export const TabBar = memo(function TabBar({
   const barRef = useRef<HTMLDivElement>(null)
 
   const getLabel = useCallback((id: string) => {
+    if (id.startsWith("browser:") || id.startsWith("http://") || id.startsWith("https://")) {
+      const u = id.replace(/^browser:/, "")
+      return `🌐 ${u.replace(/^https?:\/\//, "")}`
+    }
+    if (id.startsWith("editor:")) {
+      return `📝 ${basename(id.replace(/^editor:/, ""))}`
+    }
+    if (id.startsWith("terminal")) return "💻 Terminal"
+    if (id === "explorer") return "📁 Explorador"
+    if (id === "stats") return "📊 Estadísticas"
+    if (id === "kanban") return "📋 Kanban"
+    if (id === "docs") return "📖 Docs"
+    if (id === "labs") return "🧪 Labs"
+
     const session = sessions.find((s) => s.id === id)
     if (session?.title && session.title !== "New Session") return session.title
     if (session?.directory) return basename(session.directory)

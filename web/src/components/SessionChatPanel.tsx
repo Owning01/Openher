@@ -36,6 +36,7 @@ type Props = {
   onSwapPanels: (from: number, to: number) => void
   onOpenFile?: (path: string, panelIndex?: number, zone?: "left" | "right" | "top" | "bottom" | "center") => void
   onOpenConnect?: () => void
+  onOpenBrowser?: (url: string) => void
   tabStack?: Array<string>
   allSessions?: Array<{ id: string; title?: string; directory: string }>
   busySessionIds?: Set<string>
@@ -50,7 +51,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   onActivate, onClose: _onClose, onSplitSession, onSettled,
   onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
   onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels,
-  onOpenFile, onOpenConnect,
+  onOpenFile, onOpenConnect, onOpenBrowser,
   tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove
 }: Props) {
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
@@ -307,6 +308,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     onChangeAgent: (id) => onChangeAgentGlobal(id, session.directory),
     onBackToSessions: () => undefined,
     onOpenSession: (id, dir) => onOpenInThisPanel(id, dir),
+    onOpenBrowser,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     baseProps, session, localRevertID, msgs, streamState, pendingQuestions,
@@ -314,7 +316,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     handleRedo, handleCompact, handleRevertToMessage, handleEditMessage,
     handleQuestionReply, handleQuestionReject, handleDismissQuestion,
     handlePermissionApprove, handlePermissionReject, onShellExecute,
-    onChangeAgentGlobal, onOpenInThisPanel,
+    onChangeAgentGlobal, onOpenInThisPanel, onOpenBrowser,
   ])
 
   const [dropZone, setDropZone] = useState<"left" | "right" | "top" | "bottom" | "center" | null>(null)

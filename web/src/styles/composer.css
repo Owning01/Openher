@@ -254,6 +254,33 @@
   color: var(--primary);
 }
 
+.composer-tsl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  min-width: 26px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.35rem;
+  transition: color 0.15s;
+}
+
+.composer-tsl-btn:hover:not(:disabled) {
+  color: var(--primary);
+}
+
+.composer-tsl-btn[aria-pressed="true"] {
+  color: var(--primary);
+}
+
 .composer-char-count {
   font-size: 0.7rem;
   font-family: var(--font-mono);
@@ -478,6 +505,43 @@
   opacity: 0.6;
   font-weight: 400;
   font-size: 0.65rem;
+}
+
+/* ===== Dev Server Button (header del chat) ===== */
+.header-dev-server-btn {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.header-dev-server-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.header-dev-server-btn.running {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+.header-dev-server-btn.starting {
+  border-color: rgba(234, 179, 8, 0.5);
+  background: rgba(234, 179, 8, 0.12);
+  color: #eab308;
 }
 
 /* Menú de niveles de pensamiento del toggle del modelo */

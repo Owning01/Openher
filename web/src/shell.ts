@@ -1,9 +1,9 @@
 // Cliente de la API de la shell (/shell/*) + utilidades del explorador.
 // Solo disponible cuando la app la sirve el exe de escritorio (mismo origen).
 
-export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor"
+export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser"
 
-export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs"]
+export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser"]
 
 export type FsEntry = { name: string; path: string; is_dir: boolean; size: number | null; modified: number | null }
 

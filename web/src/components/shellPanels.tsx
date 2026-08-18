@@ -11,6 +11,8 @@ import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoa
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
+import { BrowserPanel } from "./BrowserPanel"
+export { BrowserPanel }
 
 // ============================================================== Terminal
 
@@ -1882,6 +1884,8 @@ export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir
       return <LabsPanel />
     case "config":
       return <ConfigPanel />
+    case "browser":
+      return <BrowserPanel initialUrl={cwd?.startsWith("http") ? cwd : "http://localhost:5173"} />
     default:
       return null
   }
