@@ -41,10 +41,17 @@ export const TabBar = memo(function TabBar({
   }, [sessions])
 
   const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
-    e.dataTransfer.setData("text/plain", `tab:${index}`)
+    const id = tabs[index]
+    e.dataTransfer.setData("application/x-opencode-tab-index", String(index))
+    if (id) {
+      e.dataTransfer.setData("application/x-opencode-path", `session:${id}`)
+      e.dataTransfer.setData("text/plain", `session:${id}`)
+    } else {
+      e.dataTransfer.setData("text/plain", `tab:${index}`)
+    }
     e.dataTransfer.effectAllowed = "move"
     setDragIdx(index)
-  }, [])
+  }, [tabs])
 
   const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault()
@@ -54,12 +61,10 @@ export const TabBar = memo(function TabBar({
 
   const handleDrop = useCallback((e: React.DragEvent, toIndex: number) => {
     e.preventDefault()
-    const data = e.dataTransfer.getData("text/plain")
-    if (data.startsWith("tab:")) {
-      const fromIndex = parseInt(data.slice(4), 10)
-      if (!isNaN(fromIndex) && fromIndex !== toIndex) {
-        onMoveTab(fromIndex, toIndex)
-      }
+    const tabIdx = e.dataTransfer.getData("application/x-opencode-tab-index")
+    const fromIndex = tabIdx ? parseInt(tabIdx, 10) : NaN
+    if (!isNaN(fromIndex) && fromIndex !== toIndex) {
+      onMoveTab(fromIndex, toIndex)
     }
     setDragIdx(null)
     setDragOverIdx(null)
@@ -71,7 +76,15 @@ export const TabBar = memo(function TabBar({
   }, [])
 
   return (
-    <div className="tab-bar" ref={barRef}>
+    <div
+      className="tab-bar"
+      ref={barRef}
+      onWheel={(e) => {
+        if (e.deltaY) {
+          e.currentTarget.scrollLeft += e.deltaY
+        }
+      }}
+    >
       {tabs.map((id, i) => {
         const busy = busySessionIds?.has(id)
         const isDragging = dragIdx === i

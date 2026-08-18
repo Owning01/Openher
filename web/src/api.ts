@@ -302,17 +302,7 @@ async function requestWithHeaders<T>(config: ServerConfig, path: string, options
   }
   // En modo auto, si el server es v2 (todavía no detectado) el primer intento
   // con ruta v1 da 404: reintentamos con el prefijo /api y cacheamos el dialecto.
-  const attempt = (withPrefix: boolean): Promise<ResponseWithHeaders<T>> => {
-    const target = `${baseUrl(config)}${withPrefix ? `/api${path}` : options.rawPath ? path : apiPath(config, path)}`
-    return requestRaw<T>(config, target, options).catch((err) => {
-      if (autoV2 && withPrefix === false && err instanceof Error && /^HTTP 404$/.test(err.message)) {
-        rememberApiVersion(config, "v2")
-        return attempt(true)
-      }
-      throw err
-    })
-  }
-  return attempt(false)
+  return requestRaw<T>(config, `${baseUrl(config)}${apiPath(config, path)}`, options)
 }
 
 async function requestRaw<T>(config: ServerConfig, target: string, options: RequestOptions = {}): Promise<ResponseWithHeaders<T>> {
@@ -395,7 +385,8 @@ async function requestRaw<T>(config: ServerConfig, target: string, options: Requ
       // determinísticos — reintentarlos duplica la latencia sin beneficio.
       const retryable = lastError instanceof TypeError || lastError.name === "AbortError"
         || /network|timeout|fetch failed|ERR_/i.test(lastError.message)
-      if (attempt < maxRetries && retryable) {
+      if (!retryable) break
+      if (attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, computeBackoff(1_000, 10_000, attempt)))
       }
     }
@@ -623,8 +614,10 @@ export const api = {
       // v2: /fs/list devuelve { location, data: FileSystemEntry[] } — sin
       // name/absolute: se derivan del path relativo.
       const rel = path.replace(/\\/g, "/").replace(/^[A-Za-z]:\/?/, "").replace(/^\/+/, "")
+      const basePath = withLocationDirectory("/fs/list", directory)
+      const sep = basePath.includes("?") ? "&" : "?"
       const raw = await request<Array<{ path?: string; type?: string }>>(config,
-        `${withLocationDirectory("/fs/list", directory)}${rel ? `&path=${encodeURIComponent(rel)}` : ""}`)
+        `${basePath}${rel ? `${sep}path=${encodeURIComponent(rel)}` : ""}`)
       return raw.map((e) => ({
         name: (e.path ?? "").split("/").pop() ?? "",
         path: e.path ?? "",
@@ -703,7 +696,7 @@ export const api = {
   async loadProviders(config: ServerConfig, directory?: string) {
     const v2 = (await getApiVersion(config)) === "v2"
     if (v2) {
-      const raw = await request<unknown>(config, withLocationDirectory("/api/integration", directory))
+      const raw = await request<unknown>(config, withLocationDirectory("/integration", directory))
       const list = Array.isArray(raw) ? raw as Array<{ id?: string; name?: string; authMethods?: unknown }> : []
       return {
         all: list.map((p) => ({
@@ -722,7 +715,7 @@ export const api = {
 
   async setProviderAuth(config: ServerConfig, providerID: string, key: string, directory?: string) {
     if ((await getApiVersion(config)) === "v2") {
-      return request<boolean>(config, withLocationDirectory(`/api/integration/${providerID}/connect/key`, directory), {
+      return request<boolean>(config, withLocationDirectory(`/integration/${providerID}/connect/key`, directory), {
         method: "POST",
         body: { key },
       })
@@ -734,6 +727,9 @@ export const api = {
   },
 
   async removeProviderAuth(config: ServerConfig, providerID: string, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      return request<boolean>(config, withLocationDirectory(`/integration/${providerID}/disconnect`, directory), { method: "DELETE" })
+    }
     return request<boolean>(config, withDirectory(`/auth/${providerID}`, directory), { method: "DELETE" })
   },
 
@@ -1004,8 +1000,10 @@ export const api = {
   async findFiles(config: ServerConfig, query: string, directory?: string, limit = 20) {
     if ((await getApiVersion(config)) === "v2") {
       // v2: /fs/find devuelve FileSystemEntry[] ({path,type}) ya tipado.
+      const basePath = withLocationDirectory("/fs/find", directory)
+      const sep = basePath.includes("?") ? "&" : "?"
       const raw = await request<Array<{ path?: string; type?: string }>>(config,
-        `${withLocationDirectory("/fs/find", directory)}&query=${encodeURIComponent(query)}&type=file&limit=${limit}`)
+        `${basePath}${sep}query=${encodeURIComponent(query)}&type=file&limit=${limit}`)
       return raw.map((e) => ({ path: e.path ?? "", type: (e.type === "directory" ? "directory" : "file") as "file" | "directory" }))
     }
     // El server devuelve string[] (paths relativos), no {path,type}[].

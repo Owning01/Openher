@@ -1,5 +1,5 @@
-import { memo, useCallback, useState } from "react"
-import { PlayIcon, PencilIcon, TrashIcon, StarIcon, ShareIcon, SaveIcon, ArchiveIcon, ForkIcon, ChevronIcon } from "../Icons"
+import { memo, useCallback } from "react"
+import { StarIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { formatTime } from "../utils"
 import { InlineRename } from "./InlineRename"
@@ -11,35 +11,34 @@ type SessionCardProps = {
   isRenaming: boolean
   renameValue: string
   isFavorite: boolean
+  isChild?: boolean
   onOpen: (id: string, dir: string) => void
   onStartRename: (session: SessionView) => void
   onRenameChange: (value: string) => void
   onRenameConfirm: (id: string, title: string, dir: string) => void
   onRenameCancel: () => void
-  onDelete: (session: SessionView) => void
+  onDelete?: (session: SessionView) => void
   onToggleFavorite: (id: string) => void
   onExportChat?: (session: SessionView) => void
   onSnapshot?: (session: SessionView) => void
   onArchive?: (id: string) => void
   onFork?: (session: SessionView) => void
   onDragStartSession?: (id: string, dir: string) => void
+  onContextMenu?: (e: React.MouseEvent, session: SessionView) => void
   selectMode?: boolean
   isChecked?: boolean
   onToggleCheck?: () => void
 }
 
 export const SessionCard = memo(function SessionCard({
-  session, isSelected, isRenaming, renameValue, isFavorite,
-  onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
-  onToggleFavorite, onExportChat, onSnapshot, onArchive, onFork, onDragStartSession,
+  session, isSelected, isRenaming, renameValue, isFavorite, isChild = false,
+  onOpen, onStartRename: _onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
+  onToggleFavorite, onDragStartSession, onContextMenu,
   selectMode = false, isChecked = false, onToggleCheck
 }: SessionCardProps) {
   const t = useT()
-  const [actionsOpen, setActionsOpen] = useState(false)
 
   const handleOpen = useCallback(() => onOpen(session.id, session.directory), [session.id, session.directory, onOpen])
-  const handleDelete = useCallback(() => onDelete(session), [session, onDelete])
-  const handleStartRename = useCallback(() => onStartRename(session), [session, onStartRename])
   const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     onToggleFavorite(session.id)
@@ -48,22 +47,29 @@ export const SessionCard = memo(function SessionCard({
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     if (selectMode) onToggleCheck?.()
-    else setActionsOpen((v) => !v)
-  }, [selectMode, onToggleCheck])
+    else handleOpen()
+  }, [selectMode, onToggleCheck, handleOpen])
 
   return (
-    <article className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${actionsOpen ? "actions-open" : ""} ${selectMode ? "select-mode" : ""} ${isChecked ? "checked" : ""} fade-in`}
+    <article
+      className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${isChild ? "is-child-session" : ""} ${selectMode ? "select-mode" : ""} ${isChecked ? "checked" : ""} fade-in`}
       draggable={!!onDragStartSession && !selectMode}
+      onClick={handleCardClick}
+      onContextMenu={(e) => {
+        if (onContextMenu) {
+          e.preventDefault()
+          e.stopPropagation()
+          onContextMenu(e, session)
+        }
+      }}
       onDragStart={(e) => {
         if (!onDragStartSession) return
-        // Sin setData el drag no arranca en Chromium. Prefijo "session:" para
-        // no chocar con el swap numérico de paneles (header de session-panel).
         e.dataTransfer.setData("text/plain", `session:${session.id}`)
         e.dataTransfer.effectAllowed = "move"
         onDragStartSession(session.id, session.directory)
-      }}>
-      <div className="session-card-header" onClick={handleCardClick} role="button" tabIndex={0}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleCardClick(e as never) } }}>
+      }}
+    >
+      <div className="session-card-header">
         <div className="session-card-title-group">
           {selectMode ? (
             <span className={`session-checkbox${isChecked ? " checked" : ""}`} aria-hidden="true">
@@ -77,6 +83,11 @@ export const SessionCard = memo(function SessionCard({
               <StarIcon size={15} className={isFavorite ? "star-filled" : "star-empty"} />
             </button>
           )}
+          {isChild && (
+            <span className="subagent-branch-tag" title="Subagente" style={{ fontSize: "0.72rem", color: "var(--muted)", opacity: 0.8, marginRight: 2 }}>
+              ↳
+            </span>
+          )}
           {isRenaming ? (
             <InlineRename value={renameValue} original={session.title}
               onChange={onRenameChange}
@@ -87,55 +98,10 @@ export const SessionCard = memo(function SessionCard({
             <h3 className="session-title">{session.title}</h3>
           )}
         </div>
-        <ChevronIcon size={14} className={`session-card-chevron${actionsOpen ? " open" : ""}`} />
+        <span className="subtle time-label" style={{ fontSize: "0.72rem", flexShrink: 0 }}>
+          {formatTime(session.updated)}
+        </span>
       </div>
-
-      <div className="session-card-body" onClick={handleCardClick}>
-      </div>
-
-      {!selectMode && actionsOpen && (
-        <div className="session-card-meta">
-          <div className="session-stats">
-            <span className="subtle time-label">{t('sessions.updated', { time: formatTime(session.updated) })}</span>
-          </div>
-        </div>
-      )}
-
-      {!selectMode && actionsOpen && (
-      <div className="session-actions">
-        <button onClick={(e) => { e.stopPropagation(); handleOpen() }} className="btn-primary session-open-btn">
-          <PlayIcon size={15} />
-          {t('sessions.open')}
-        </button>
-        {onExportChat && (
-          <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); onExportChat(session) }} title={t('detail.exportChat') || "Export"}>
-            <ShareIcon size={15} />
-          </button>
-        )}
-        {onSnapshot && (
-          <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); onSnapshot(session) }} title={t('detail.snapshot') || "Snapshot"}>
-            <SaveIcon size={15} />
-          </button>
-        )}
-        {onArchive && (
-          <button className="btn-icon compact" onClick={(e) => { e.stopPropagation(); onArchive(session.id) }}
-            title={t('detail.archive')} aria-label={t('detail.archive')}>
-            <ArchiveIcon size={14} />
-          </button>
-        )}
-        {onFork && (
-          <button className="btn-secondary compact-action-btn" onClick={(e) => { e.stopPropagation(); onFork(session) }} title={t('session.fork') || "Fork"} aria-label={t('session.fork') || "Fork"}>
-            <ForkIcon size={14} />
-          </button>
-        )}
-        <button className="btn-icon compact" onClick={(e) => { e.stopPropagation(); handleStartRename() }} title={t('session.renameTitle')} aria-label={t('session.renameTitle')}>
-          <PencilIcon size={15} />
-        </button>
-        <button className="btn-icon compact session-delete-btn" onClick={(e) => { e.stopPropagation(); handleDelete() }} title={t('session.deleteTitle')} aria-label={t('session.deleteTitle')}>
-          <TrashIcon size={15} />
-        </button>
-      </div>
-      )}
     </article>
   )
 })

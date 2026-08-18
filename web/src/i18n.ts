@@ -300,7 +300,6 @@ type TranslationKey =
   | 'detail.modelSearchEmpty'
   | 'detail.modelDefault'
   | 'detail.modelRecent'
-  | 'detail.thought'
   | 'detail.modelAll'
   | 'detail.modelProvider'
   | 'detail.modelContext'

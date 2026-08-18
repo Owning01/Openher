@@ -100,7 +100,7 @@ func (s *server) wrap(next http.HandlerFunc) http.HandlerFunc {
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			}
 		}()
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5901")
 		w.Header().Set("Access-Control-Allow-Headers", "authorization, content-type")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Cache-Control", "no-store")
@@ -205,7 +205,7 @@ func (s *server) handleStream(w http.ResponseWriter, r *http.Request) {
 		s.captureRectMu.Unlock()
 
 		s.lastFpMu.Lock()
-		changed := frameCount == 0 || !hasChanged(fr.RGBA)
+		changed := frameCount == 0 || hasChanged(fr.RGBA)
 		s.lastFpMu.Unlock()
 
 		// Frame inicial siempre + cambios; nunca inundar al cliente.

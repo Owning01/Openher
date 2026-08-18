@@ -268,7 +268,9 @@ const ShellPanelCell = memo(function ShellPanelCell({
             onSplitSession(index, zone, sId)
           } else if (raw.startsWith("kind:")) {
             onSplitSession(index, zone, raw)
-          } else {
+          } else if (raw.startsWith("tab:")) {
+            // Ignorar tab suelto
+          } else if (raw.includes("/") || raw.includes("\\") || raw.includes(".")) {
             // Archivo arrastrado
             onOpenFile?.(raw, index, zone)
           }
@@ -564,7 +566,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   // Replay offline queue when connected
   useEffect(() => {
     if (connectionState !== "connected" || !config || !selectedSession) return
+    let active = true
     dequeueAll().then((actions) => {
+      if (!active) return
       for (const a of actions) {
         if (a.type === "prompt") {
           api.sendPrompt(config, a.sessionID, a.payload, a.directory).catch(() => {})
@@ -575,6 +579,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         }
       }
     })
+    return () => { active = false }
   }, [connectionState, config, selectedSession, dequeueAll])
 
   // Notify on completion (transición awaiting → false, no en el primer delta)
@@ -1074,7 +1079,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-      setCommands, setRuntimeError, images)
+      setCommands, setRuntimeError, images, undefined, setLocalRevertID)
     if (result === "help") { setHelpPage("commands"); navigate("help") }
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
     if (result === "connect") setShowConnectSheet(true)
@@ -1105,7 +1110,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-      setCommands, setRuntimeError, undefined, lastUser.text)
+      setCommands, setRuntimeError, undefined, lastUser.text, setLocalRevertID)
   }, [selectedSession, renderedMessages, localRevertID, awaitingAssistantReply, config, send, activeModel, activeAgentID, commands, refreshSessions, loadSelected, setCommands, setRuntimeError, setMessages])
 
   const handleInsertPrompt = useCallback((text: string) => {
@@ -1123,7 +1128,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-      setCommands, setRuntimeError, undefined, text)
+      setCommands, setRuntimeError, undefined, text, setLocalRevertID)
   }, [selectedSession, awaitingAssistantReply, config, send, activeModel, activeAgentID, commands, refreshSessions, loadSelected, setCommands, setRuntimeError])
 
   const handleAbort = useCallback(async () => {    if (!selectedSession) return
@@ -1601,8 +1606,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           // Moving a session: remove from source
           const existing = sessions.indexOf(targetSessionId)
           if (existing >= 0 && existing !== index) {
-            sessions[existing] = null
-            panelKinds[existing] = "session"
+            const rem = tabStacks?.[existing]?.filter((sid) => sid !== targetSessionId) ?? []
+            sessions[existing] = rem.length > 0 ? rem[0] : null
+            if (rem.length === 0) panelKinds[existing] = "session"
             panelIds[existing] = genPanelId()
           }
         } else if (fromIndex !== null && fromIndex !== index) {
@@ -1623,6 +1629,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         panelKinds[index] = targetKind
         return { ...prev, sessions, panelKinds, panelIds }
       })
+      if (targetSessionId) {
+        setTabStacks((prev) => {
+          const next = prev.map((s) => s.filter((sid) => sid !== targetSessionId))
+          while (next.length <= index) next.push([])
+          if (!next[index].includes(targetSessionId)) {
+            next[index] = [...next[index], targetSessionId]
+          }
+          return next
+        })
+      }
       setActivePanel(index)
       return
     }
@@ -1634,7 +1650,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         let baseIds = [...prev.panelIds]
         let movedId: string | null = null
         if (targetSessionId) {
-          baseSessions = baseSessions.map((s) => (s === targetSessionId ? null : s))
+          baseSessions = baseSessions.map((s, pIdx) => {
+            if (s === targetSessionId) {
+              const rem = tabStacks?.[pIdx]?.filter((sid) => sid !== targetSessionId) ?? []
+              return rem.length > 0 ? rem[0] : null
+            }
+            return s
+          })
         } else if (fromIndex !== null && fromIndex < baseKinds.length) {
           baseKinds[fromIndex] = "session"
           baseSessions[fromIndex] = null
@@ -1692,6 +1714,40 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         const colSizes = new Array(cols).fill(null)
         return { ...prev, cols, sessions, panelKinds, panelIds, colSizes }
       })
+      if (targetSessionId) {
+        setTabStacks((prev) => {
+          const prevCols = desktopLayout.cols
+          const prevRows = desktopLayout.rows
+          const filtered = prev.map((s) => s.filter((sid) => sid !== targetSessionId))
+          const cols = prevCols + 1
+          const col = index % prevCols
+          const newStacks: Array<Array<string>> = []
+          for (let r = 0; r < prevRows; r++) {
+            for (let c = 0; c < cols; c++) {
+              if (dir === "right") {
+                if (c <= col) {
+                  newStacks.push(filtered[r * prevCols + c] ?? [])
+                } else if (c === col + 1) {
+                  const isTarget = r === Math.floor(index / prevCols)
+                  newStacks.push(isTarget ? [targetSessionId] : [])
+                } else {
+                  newStacks.push(filtered[r * prevCols + (c - 1)] ?? [])
+                }
+              } else {
+                if (c === col) {
+                  const isTarget = r === Math.floor(index / prevCols)
+                  newStacks.push(isTarget ? [targetSessionId] : [])
+                } else if (c < col) {
+                  newStacks.push(filtered[r * prevCols + c] ?? [])
+                } else {
+                  newStacks.push(filtered[r * prevCols + (c - 1)] ?? [])
+                }
+              }
+            }
+          }
+          return newStacks
+        })
+      }
       setActivePanel(dir === "right" ? index + 1 : index)
       return
     }
@@ -1703,7 +1759,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         let baseIds = [...prev.panelIds]
         let movedId: string | null = null
         if (targetSessionId) {
-          baseSessions = baseSessions.map((s) => (s === targetSessionId ? null : s))
+          baseSessions = baseSessions.map((s, pIdx) => {
+            if (s === targetSessionId) {
+              const rem = tabStacks?.[pIdx]?.filter((sid) => sid !== targetSessionId) ?? []
+              return rem.length > 0 ? rem[0] : null
+            }
+            return s
+          })
         } else if (fromIndex !== null && fromIndex < baseKinds.length) {
           baseKinds[fromIndex] = "session"
           baseSessions[fromIndex] = null
@@ -1762,10 +1824,45 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         const rowSizes = new Array(rows).fill(null)
         return { ...prev, rows, sessions, panelKinds, panelIds, rowSizes }
       })
+      if (targetSessionId) {
+        setTabStacks((prev) => {
+          const prevCols = desktopLayout.cols
+          const prevRows = desktopLayout.rows
+          const filtered = prev.map((s) => s.filter((sid) => sid !== targetSessionId))
+          const rows = prevRows + 1
+          const row = Math.floor(index / prevCols)
+          const col = index % prevCols
+          const newStacks: Array<Array<string>> = []
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < prevCols; c++) {
+              if (dir === "bottom") {
+                if (r <= row) {
+                  newStacks.push(filtered[r * prevCols + c] ?? [])
+                } else if (r === row + 1) {
+                  const isTarget = c === col
+                  newStacks.push(isTarget ? [targetSessionId] : [])
+                } else {
+                  newStacks.push(filtered[(r - 1) * prevCols + c] ?? [])
+                }
+              } else {
+                if (r === row) {
+                  const isTarget = c === col
+                  newStacks.push(isTarget ? [targetSessionId] : [])
+                } else if (r < row) {
+                  newStacks.push(filtered[r * prevCols + c] ?? [])
+                } else {
+                  newStacks.push(filtered[(r - 1) * prevCols + c] ?? [])
+                }
+              }
+            }
+          }
+          return newStacks
+        })
+      }
       setActivePanel(index)
       return
     }
-  }, [])
+  }, [tabStacks, setTabStacks, desktopLayout.cols, desktopLayout.rows])
 
   const handleSwapPanels = useCallback((from: number, to: number) => {
     if (from === to) return
@@ -2576,7 +2673,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onSwapPanels={handleSwapPanels}
                       onOpenFile={handleOpenFile}
                       onOpenConnect={() => setShowConnectSheet(true)}
-                      tabStack={tabStacks?.[i] ?? []}
+                      tabStack={tabStacks?.[i]?.length ? tabStacks[i] : (session ? [session.id] : [])}
                       allSessions={sessions}
                       busySessionIds={busySessions}
                       onTabSwitch={switchTab}
@@ -2660,7 +2757,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onSwapPanels={handleSwapPanels}
                       onOpenFile={handleOpenFile}
                       onOpenConnect={() => setShowConnectSheet(true)}
-                      tabStack={tabStacks?.[maximizedIndex] ?? []}
+                      tabStack={tabStacks?.[maximizedIndex]?.length ? tabStacks[maximizedIndex] : (maximizedSession ? [maximizedSession.id] : [])}
                       allSessions={sessions}
                       busySessionIds={busySessions}
                       onTabSwitch={switchTab}

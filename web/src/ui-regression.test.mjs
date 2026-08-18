@@ -106,14 +106,10 @@ assert.ok(/\.message-content pre[\s\S]*?overflow-x:\s*auto/.test(styles), 'fence
 
 assert.match(icons, /export const RefreshIcon/, 'RefreshIcon should exist for idle refresh UI')
 
-// Lazy loading de sesiones recientes (6 iniciales, +10 al scrollear al final)
-assert.ok(sessionList.includes('recentLimit') && sessionList.includes('useState(6)'), 'recent sessions should start at 6 visible')
-assert.ok(sessionList.includes('recentSentinelRef'), 'recent list should render a scroll sentinel for lazy loading')
-assert.ok(sessionList.includes('IntersectionObserver'), 'recent lazy loading should use IntersectionObserver on the scroll container')
-assert.ok(sessionList.includes('setRecentLimit((n) => Math.min(n + 10'), 'recent lazy loading should add 10 sessions per batch')
-assert.ok(sessionList.includes('recentFiltered.slice(0, recentLimit)'), 'recent list should render up to the current lazy limit')
+// Sesiones de acceso rápido con scroll y sin topes artificiales
 assert.ok(!sessionList.includes('favoriteSessions.slice(0, 5)'), 'favorites should not be hard-capped at 5')
-assert.ok(sessionList.includes('recentListRef'), 'recent list should expose a scrollable container ref for the sentinel')
+assert.ok(!sessionList.includes('recentFiltered.slice(0, 5)'), 'recent sessions should not be hard-capped at 5')
+assert.ok(styles.includes('.quick-access-list') && styles.includes('overflow-y: auto'), 'quick access list should be scrollable')
 
 // Spinner de 9 cuadrados en vez de la pill "Ocupado" para sesiones corriendo
 const quickAccess = readFileSync(new URL('./components/QuickAccessCard.tsx', import.meta.url), 'utf8')

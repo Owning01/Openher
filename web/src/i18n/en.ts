@@ -346,7 +346,7 @@ export default {
   'shell.kindUpdates': 'Updates',
 'shell.kindStats': 'Stats',
 'shell.kindSessionStats': 'Session Stats',
-'shell.noSession': 'No hay sesión activa',
+'shell.noSession': 'No active session',
 'shell.kindLabs': 'Labs',
   'shell.kindConfig': 'Config',
   'detail.selectSession': 'Select a session',

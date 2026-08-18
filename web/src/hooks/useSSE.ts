@@ -11,7 +11,10 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   // si arrancamos antes de la detección (auto → v1 por default), el
   // subscription evita que el /event de v2 se conecte en loop.
   const [versionTick, setVersionTick] = useState(0)
-  useEffect(() => onApiVersionChange(() => setVersionTick((n) => n + 1)), [])
+  useEffect(() => {
+    const unsub = onApiVersionChange(() => setVersionTick((n) => n + 1))
+    return unsub
+  }, [])
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const reconnectAttemptRef = useRef(0)

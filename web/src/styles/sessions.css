@@ -616,7 +616,26 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong, rgba(255, 255, 255, 0.2)) transparent;
+  padding-right: var(--space-1);
   container-type: inline-size;
+}
+
+.quick-access-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.quick-access-list::-webkit-scrollbar-thumb {
+  background: var(--border-strong, rgba(255, 255, 255, 0.2));
+  border-radius: 3px;
+}
+
+.quick-access-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .quick-access-card {
@@ -770,6 +789,25 @@
 
 .session-card.is-favorite {
   border-left-color: var(--accent, #d2a8ff);
+}
+
+.session-child-wrap {
+  position: relative;
+}
+
+.session-child-wrap::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: -4px;
+  bottom: 50%;
+  width: 1px;
+  background: var(--border-subtle, rgba(255, 255, 255, 0.12));
+}
+
+.session-card.is-child-session {
+  opacity: 0.92;
+  border-left-color: var(--border, rgba(255, 255, 255, 0.15));
 }
 
 

@@ -118,9 +118,11 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
     let db = await getDB()
     if (!db || !flags.offlineCache) return
     try {
-      const tx = db.transaction(DB_STORES.messages, "readwrite")
-      const store = tx.objectStore(DB_STORES.messages)
+      // Read existing data in a separate transaction to avoid IDB auto-commit
+      // during the async encrypt() calls below.
       const existing = await new Promise<{ sessionID: string; messages: MessageEnvelope[]; hashes?: Record<string, string>; cachedAt: number } | null>((resolve) => {
+        const tx = db!.transaction(DB_STORES.messages, "readonly")
+        const store = tx.objectStore(DB_STORES.messages)
         const req = store.get(sessionID)
         req.onsuccess = () => resolve(req.result ?? null)
         req.onerror = () => resolve(null)
@@ -184,7 +186,10 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
           if (p.text) hashes[p.id] = partHash(p)
         }
       }
-      store.put({ sessionID, messages: encrypted, hashes, cachedAt: Date.now() })
+      // Write in a separate transaction (the async encrypt above can't hold the old one).
+      const writeTx = db.transaction(DB_STORES.messages, "readwrite")
+      const writeStore = writeTx.objectStore(DB_STORES.messages)
+      writeStore.put({ sessionID, messages: encrypted, hashes, cachedAt: Date.now() })
     } catch (err) { console.error("[OfflineCache] cacheMessages:", err) }
   }, [flags.offlineCache])
 

@@ -72,7 +72,7 @@ export function useRemoteDesktop(config: DesktopConfig | null, params: StreamPar
             infoRef.current = i
             setInfo(i)
           }
-          const lastLatency = Date.now()
+          let lastLatency = Date.now()
           await readMJPEGStream(config, params, controller.signal, (url, len) => {
             if (cancelled) {
               URL.revokeObjectURL(url)
@@ -84,6 +84,7 @@ export function useRemoteDesktop(config: DesktopConfig | null, params: StreamPar
             bytesRef.current += len
             setBytes(bytesRef.current)
             setLatency(Date.now() - lastLatency)
+            lastLatency = Date.now()
             if (statusRef.current !== "streaming") setStatus("streaming")
           })
           if (cancelled) return

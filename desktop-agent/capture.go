@@ -185,8 +185,6 @@ func captureWindow(hwnd uintptr) (*frame, error) {
 	r, _, _ = procPrintWindow.Call(hwnd, memDC, pwRenderFullContent)
 	if r == 0 {
 		// Fallback: recortar el escritorio (ventanas que no cooperan con PrintWindow).
-		deleteDC(memDC)
-		deleteObject(hbm)
 		return captureRect(wr)
 	}
 	drawCursorInto(memDC, wr)
@@ -200,8 +198,6 @@ func captureWindow(hwnd uintptr) (*frame, error) {
 	// solo color). Detectar el frame casi uniforme y volver al recorte real
 	// del escritorio — mismo camino del fallback por error.
 	if isUniformFrame(buf, int(w), int(h)) {
-		deleteDC(memDC)
-		deleteObject(hbm)
 		return captureRect(wr)
 	}
 	rgba := bgraToRGBA(buf, int(w), int(h))

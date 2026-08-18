@@ -259,11 +259,15 @@ const [editingImage, setEditingImage] = useState<{ id: string; src: string; mime
             src={editingImage.src}
             mime={editingImage.mime}
             onApply={(base64) => {
-              const partIdx = message.parts.findIndex((pp) => pp.id === editingImage.id)
-              if (partIdx >= 0) {
-                message.parts[partIdx].data = base64
-                message.parts[partIdx].url = `data:${editingImage.mime};base64,${base64.split(",")[1] || base64}`
-              }
+              const updatedParts = message.parts.map((pp) => {
+                if (pp.id !== editingImage.id) return pp
+                return {
+                  ...pp,
+                  data: base64,
+                  url: `data:${editingImage.mime};base64,${base64.split(",")[1] || base64}`,
+                }
+              })
+              Object.assign(message, { parts: updatedParts })
               setEditingImage(null)
             }}
             onClose={() => setEditingImage(null)} />

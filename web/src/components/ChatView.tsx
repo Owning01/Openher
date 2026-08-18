@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -79,6 +79,7 @@ export type ChatViewProps = {
   agents?: AgentOption[]
   config?: ServerConfig
   onOpenSettings?: () => void
+  onOpenSessionStats?: () => void
   onShellSend?: (command: string) => void
   onThemeCommand?: () => void
   flags: FeatureFlags
@@ -123,7 +124,7 @@ export const ChatView = memo(function ChatView({
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
-  agents, config, sessions, onOpenSession, onOpenSettings, onShellSend, onThemeCommand,
+  agents, config, sessions, onOpenSession, onOpenSettings, onOpenSessionStats, onShellSend, onThemeCommand,
   onOpenRemoteDesktop,
   flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
   pendingQuestions, permissionRequest,
@@ -215,8 +216,6 @@ export const ChatView = memo(function ChatView({
   useEffect(() => {
     setPendingCount(pendingQuestions?.length ?? 0)
   }, [pendingQuestions])
-
-  useOutsideClick(overflowRef, () => setShowOverflow(false), showOverflow)
 
   // Buscador de mensajes: navegación entre coincidencias (no filtra la lista).
   const deferredQuery = useDeferredValue(messageQuery)
@@ -431,6 +430,11 @@ export const ChatView = memo(function ChatView({
                   {onOpenSettings && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenSettings() }}>
                       <SettingsIcon size={14} /> {t('nav.settings')}
+                    </button>
+                  )}
+                  {onOpenSessionStats && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenSessionStats() }}>
+                      <StatsIcon size={14} /> {t('shell.kindSessionStats')}
                     </button>
                   )}
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSearch((v) => !v) }}>

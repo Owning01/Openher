@@ -1,4 +1,4 @@
-import { memo, useRef, useLayoutEffect, useState, useCallback, useEffect, useMemo } from "react"
+import { memo, useRef, useState, useCallback, useMemo } from "react"
 import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon, ArchiveIcon, TrashIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
@@ -76,13 +76,6 @@ export const SessionList = memo(function SessionList({
   } | null>(null)
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
-  // Recientes: arranca en 6 y carga +10 con scroll infinito (desktop scrollea
-  // la lista con barra propia; móvil crece hasta el final).
-  const [recentLimit, setRecentLimit] = useState(6)
-  const recentSentinelRef = useRef<HTMLDivElement | null>(null)
-  const recentListRef = useRef<HTMLDivElement | null>(null)
-  const [favoritesLimit, setFavoritesLimit] = useState(6)
-  const favoritesListRef = useRef<HTMLDivElement | null>(null)
 
   const recentFiltered = useMemo(
     () => recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)),
@@ -93,7 +86,6 @@ export const SessionList = memo(function SessionList({
     () => sessions.filter((s) => favorites.has(s.id)),
     [sessions, favorites]
   )
-  const favoritesSentinelRef = useRef<HTMLDivElement | null>(null)
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
     // Normaliza el estado guardado: exactamente un panel abierto (recientes
@@ -109,6 +101,7 @@ export const SessionList = memo(function SessionList({
       return { favorites: true, active: true, recent: false }
     }
   })
+
   const toggleSection = useCallback((key: string) => {
     setCollapsedSections((prev) => {
       // Accordion: toggle del tocado; el resto siempre queda cerrado.
@@ -181,89 +174,233 @@ export const SessionList = memo(function SessionList({
     </div>
   )
 
-  const prevProjectDir = useRef(selectedProjectDir)
-  useLayoutEffect(() => {
-    if (selectedProjectDir && prevProjectDir.current !== selectedProjectDir) {
-      window.scrollTo(0, 0)
-    }
-    prevProjectDir.current = selectedProjectDir
-  }, [selectedProjectDir])
-
-  // Lazy loading (scroll infinito) de recientes y favoritos: al llegar al
-  // final del scroll se cargan +10. root = la lista scrolleable (desktop);
-  // en móvil la lista crece naturalmente y el sentinel queda visible →
-  // el IO dispara y se carga todo (que es el comportamiento esperado).
-  const recentObserverRef = useRef<IntersectionObserver | null>(null)
-  const favoritesObserverRef = useRef<IntersectionObserver | null>(null)
-  useEffect(() => {
-    recentObserverRef.current?.disconnect()
-    favoritesObserverRef.current?.disconnect()
-    if (recentLimit < recentFiltered.length && recentSentinelRef.current && !collapsedSections.recent) {
-      recentObserverRef.current = new IntersectionObserver(
-        (entries) => { if (entries.some((e) => e.isIntersecting)) setRecentLimit((n) => Math.min(n + 10, recentFiltered.length)) },
-        { root: recentListRef.current ?? containerRef.current, rootMargin: "120px" }
-      )
-      recentObserverRef.current.observe(recentSentinelRef.current)
-    }
-    if (favoritesLimit < favoriteSessions.length && favoritesSentinelRef.current && !collapsedSections.favorites) {
-      favoritesObserverRef.current = new IntersectionObserver(
-        (entries) => { if (entries.some((e) => e.isIntersecting)) setFavoritesLimit((n) => Math.min(n + 10, favoriteSessions.length)) },
-        { root: favoritesListRef.current ?? containerRef.current, rootMargin: "120px" }
-      )
-      favoritesObserverRef.current.observe(favoritesSentinelRef.current)
-    }
-    return () => { recentObserverRef.current?.disconnect(); favoritesObserverRef.current?.disconnect() }
-  }, [recentLimit, recentFiltered.length, collapsedSections.recent, favoritesLimit, favoriteSessions.length, collapsedSections.favorites, favoriteSessions])
-
-  // Reset al REABRIR la sección (volver al tope). No se dispara por los polls:
-  // el contenido real se detecta por firma de ids (el array cambia de identidad
-  // en cada refresh — resetear por length causaba el salto del scroll arriba).
-  const recentSigRef = useRef("")
-  useEffect(() => {
-    setRecentLimit((n) => Math.min(Math.max(n, 6), recentFiltered.length || 1))
-  }, [collapsedSections.recent])
-  useEffect(() => {
-    const sig = recentFiltered.map((s) => s.id).join(",")
-    if (sig === recentSigRef.current) return
-    recentSigRef.current = sig
-    setRecentLimit((n) => Math.min(Math.max(n, 6), recentFiltered.length || 1))
-  }, [recentFiltered])
-  const favoritesSigRef = useRef("")
-  useEffect(() => {
-    const sig = favoriteSessions.map((s) => s.id).join(",")
-    if (sig === favoritesSigRef.current) return
-    favoritesSigRef.current = sig
-    setFavoritesLimit((n) => Math.min(Math.max(n, 6), favoriteSessions.length || 1))
-  }, [favoriteSessions])
+  const [sessionContextMenu, setSessionContextMenu] = useState<{
+    x: number
+    y: number
+    session: SessionView
+  } | null>(null)
 
   const notices = <ConnectionNotices connectionState={connectionState} />
 
-  const sessionCards = projectSessions.length === 0 ? (
-    <div className="empty-state">
-      <FolderIcon size={48} className="icon-empty-state" />
-      <p>{t('sessions.emptyTitle')}</p>
-      <p className="subtle">{t('sessions.emptyHint')}</p>
-    </div>
-  ) : (
-    projectSessions.map((session) => (
-      <SessionCard key={session.id} session={session} isSelected={selectedID === session.id}
-        isRenaming={renamingSessionID === session.id} renameValue={renameValue}
+  const handleSessionContextMenu = useCallback((e: React.MouseEvent, session: SessionView) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setSessionContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      session,
+    })
+  }, [])
+
+  const handleProjectContextMenu = useCallback((e: React.MouseEvent, dir: string, dirSessions: SessionView[]) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setProjectContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      dir,
+      sessions: dirSessions,
+    })
+  }, [])
+
+  const sessionContextMenuElement = sessionContextMenu ? (
+    <ContextMenu
+      x={sessionContextMenu.x}
+      y={sessionContextMenu.y}
+      actions={[
+        {
+          id: "open",
+          label: t('sessions.open') || "Abrir",
+          onAction: () => {
+            onOpen(sessionContextMenu.session.id, sessionContextMenu.session.directory)
+          }
+        },
+        {
+          id: "toggle-fav",
+          label: favorites.has(sessionContextMenu.session.id)
+            ? t('favorites.remove')
+            : t('favorites.add'),
+          onAction: () => {
+            onToggleFavorite(sessionContextMenu.session.id)
+          }
+        },
+        {
+          id: "rename",
+          label: t('session.rename') || "Renombrar sesión",
+          onAction: () => {
+            onStartRename(sessionContextMenu.session)
+          }
+        },
+        ...(onArchive ? [{
+          id: "archive",
+          label: t('detail.archive') || "Archivar sesión",
+          onAction: () => {
+            onArchive(sessionContextMenu.session.id)
+          }
+        }] : []),
+        {
+          id: "delete",
+          label: t('session.delete') || "Eliminar sesión",
+          onAction: () => {
+            onDelete(sessionContextMenu.session)
+          }
+        },
+        {
+          id: "copy-id",
+          label: "Copiar ID",
+          onAction: () => {
+            navigator.clipboard?.writeText(sessionContextMenu.session.id).catch(() => {})
+          }
+        }
+      ]}
+      onClose={() => setSessionContextMenu(null)}
+    />
+  ) : null
+
+  const projectContextMenuElement = projectContextMenu ? (
+    <ContextMenu
+      x={projectContextMenu.x}
+      y={projectContextMenu.y}
+      actions={[
+        {
+          id: "new-session",
+          label: t('project.newSession'),
+          onAction: () => {
+            onNewSessionHere?.(projectContextMenu.dir)
+          }
+        },
+        ...(onOpenExplorer ? [{
+          id: "view-explorer",
+          label: t('project.viewExplorer'),
+          onAction: () => {
+            onOpenExplorer(projectContextMenu.dir)
+          }
+        }] : []),
+        {
+          id: "reveal-explorer",
+          label: t('project.revealExplorer'),
+          onAction: () => {
+            shell.fs.reveal(projectContextMenu.dir).catch(() => {})
+          }
+        },
+        {
+          id: "toggle-favorites",
+          label: projectContextMenu.sessions.length > 0 && projectContextMenu.sessions.every((s) => favorites.has(s.id))
+            ? t('favorites.remove')
+            : t('favorites.add'),
+          onAction: () => {
+            if (projectContextMenu.sessions.length === 0) return
+            const allFav = projectContextMenu.sessions.every((s) => favorites.has(s.id))
+            if (allFav) {
+              projectContextMenu.sessions.forEach((s) => {
+                if (favorites.has(s.id)) onToggleFavorite(s.id)
+              })
+            } else {
+              projectContextMenu.sessions.forEach((s) => {
+                if (!favorites.has(s.id)) onToggleFavorite(s.id)
+              })
+            }
+          }
+        },
+        {
+          id: "copy-path",
+          label: t('project.copyPath'),
+          onAction: () => {
+            navigator.clipboard?.writeText(projectContextMenu.dir).catch(() => {})
+          }
+        }
+      ]}
+      onClose={() => setProjectContextMenu(null)}
+    />
+  ) : null
+
+  const renderSessionCards = useCallback((list: SessionView[]) => {
+    if (list.length === 0) {
+      return (
+        <div className="empty-state">
+          <FolderIcon size={48} className="icon-empty-state" />
+          <p>{t('sessions.emptyTitle')}</p>
+          <p className="subtle">{t('sessions.emptyHint')}</p>
+        </div>
+      )
+    }
+
+    const parents = list.filter((s) => !s.parentID)
+    const childrenByParent = new Map<string, SessionView[]>()
+    const orphanChildren: SessionView[] = []
+
+    list.forEach((s) => {
+      if (s.parentID) {
+        if (list.some((p) => p.id === s.parentID)) {
+          const arr = childrenByParent.get(s.parentID) ?? []
+          arr.push(s)
+          childrenByParent.set(s.parentID, arr)
+        } else {
+          orphanChildren.push(s)
+        }
+      }
+    })
+
+    const renderCard = (session: SessionView, isChild = false) => (
+      <SessionCard
+        key={session.id}
+        session={session}
+        isChild={isChild}
+        isSelected={selectedID === session.id}
+        isRenaming={renamingSessionID === session.id}
+        renameValue={renameValue}
         isFavorite={favorites.has(session.id)}
-        onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
-        onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
+        onOpen={onOpen}
+        onStartRename={onStartRename}
+        onRenameChange={onRenameChange}
+        onRenameConfirm={onRenameConfirm}
+        onRenameCancel={onRenameCancel}
+        onDelete={onDelete}
         onToggleFavorite={onToggleFavorite}
-        onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} onFork={onFork}
+        onExportChat={onExportChat}
+        onSnapshot={onSnapshot}
+        onArchive={onArchive}
+        onFork={onFork}
         onDragStartSession={onDragStartSession}
-        selectMode={selectMode} isChecked={selectedIds.has(session.id)} onToggleCheck={() => toggleCheck(session.id)} />
-    ))
-  )
+        onContextMenu={handleSessionContextMenu}
+        selectMode={selectMode}
+        isChecked={selectedIds.has(session.id)}
+        onToggleCheck={() => toggleCheck(session.id)}
+      />
+    )
+
+    return (
+      <div className="session-cards-hierarchical">
+        {parents.map((parent) => (
+          <div key={parent.id} className="session-group">
+            {renderCard(parent, false)}
+            {childrenByParent.get(parent.id)?.map((child) => (
+              <div key={child.id} className="session-child-wrap" style={{ paddingLeft: "16px" }}>
+                {renderCard(child, true)}
+              </div>
+            ))}
+          </div>
+        ))}
+        {orphanChildren.map((child) => (
+          <div key={child.id} className="session-child-wrap" style={{ paddingLeft: "16px" }}>
+            {renderCard(child, true)}
+          </div>
+        ))}
+      </div>
+    )
+  }, [
+    t, selectedID, renamingSessionID, renameValue, favorites,
+    onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
+    onDelete, onToggleFavorite, onExportChat, onSnapshot, onArchive, onFork,
+    onDragStartSession, handleSessionContextMenu, selectMode, selectedIds, toggleCheck
+  ])
 
   if (selectedProjectDir) {
     return (
       <section ref={containerRef} className="panel sessions fade-in">
         <div className="section-heading">
           <div>
-            <h2>{selectedProjectDir}</h2>
+            <h2 onContextMenu={(e) => handleProjectContextMenu(e, selectedProjectDir, projectSessions)}>{selectedProjectDir}</h2>
             <p className="subtle">
               <button className="btn-link" onClick={() => onSelectProject(null)}>← {t('sessions.title')}</button>
               <span style={{ marginLeft: 'var(--space-3)' }}>{t('sessions.count', { count: projectSessions.length })}</span>
@@ -287,7 +424,9 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
         </div>
         {notices}
         {selectionBar}
-        <div className="session-list">{sessionCards}</div>
+        <div className="session-list">{renderSessionCards(projectSessions)}</div>
+        {sessionContextMenuElement}
+        {projectContextMenuElement}
       </section>
     )
   }
@@ -338,15 +477,13 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
             )}
           </div>
           {favorites.size > 0 && !collapsedSections.favorites && favoriteSessions.length > 0 && (
-            <div className="quick-access-list" id="quick-favorites" role="tabpanel" ref={favoritesListRef}>
-              {favoriteSessions.slice(0, favoritesLimit).map((session) => (
+            <div className="quick-access-list" id="quick-favorites" role="tabpanel">
+              {favoriteSessions.map((session) => (
                 <QuickAccessCard key={session.id} session={session} isFavorite
                   onOpen={onOpen} onToggleFavorite={onToggleFavorite}
-                  onDragStartSession={onDragStartSession} />
+                  onDragStartSession={onDragStartSession}
+                  onContextMenu={handleSessionContextMenu} />
               ))}
-              {favoritesLimit < favoriteSessions.length && (
-                <div ref={favoritesSentinelRef} className="recent-sentinel" aria-hidden="true" />
-              )}
             </div>
           )}
           {!collapsedSections.active && (
@@ -355,13 +492,14 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                 <QuickAccessCard key={session.id} session={session}
                   isFavorite={favorites.has(session.id)}
                   onOpen={onOpen} onToggleFavorite={onToggleFavorite}
-                  onDragStartSession={onDragStartSession} />
+                  onDragStartSession={onDragStartSession}
+                  onContextMenu={handleSessionContextMenu} />
               ))}
             </div>
           )}
           {!collapsedSections.recent && (
-            <div className="quick-access-list" id="quick-recent" role="tabpanel" ref={recentListRef}>
-              {recentFiltered.slice(0, recentLimit).map((session) => (
+            <div className="quick-access-list" id="quick-recent" role="tabpanel">
+              {recentFiltered.map((session) => (
                 confirmingDismissId === session.id ? (
                   <div key={session.id} className="quick-access-card confirming-dismiss" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
                     <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
@@ -377,12 +515,10 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                     isFavorite={favorites.has(session.id)}
                     onOpen={onOpen} onToggleFavorite={onToggleFavorite}
                     onDismiss={(id) => setConfirmingDismissId(id)}
-                    onDragStartSession={onDragStartSession} />
+                    onDragStartSession={onDragStartSession}
+                    onContextMenu={handleSessionContextMenu} />
                 )
               ))}
-              {recentLimit < recentFiltered.length && (
-                <div ref={recentSentinelRef} className="recent-sentinel" aria-hidden="true" />
-              )}
             </div>
           )}
         </div>
@@ -420,15 +556,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
               <div key={dir} className="project-card-wrap fade-in">
                 <article className={`project-card${isExpanded ? " expanded" : ""}`} role="button" tabIndex={0}
                   onClick={() => toggleProject(dir)}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    setProjectContextMenu({
-                      x: e.clientX,
-                      y: e.clientY,
-                      dir,
-                      sessions: projectSessionsList,
-                    })
-                  }}
+                  onContextMenu={(e) => handleProjectContextMenu(e, dir, projectSessionsList)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProject(dir) } }}>
                   <div className="project-card-header">
                     <strong className="project-path">{dir}</strong>
@@ -436,17 +564,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                 </article>
                 {isExpanded && (
                   <div className="project-sessions-inline">
-                    {projectSessionsList.map((session) => (
-                      <SessionCard key={session.id} session={session} isSelected={selectedID === session.id}
-                        isRenaming={renamingSessionID === session.id} renameValue={renameValue}
-                        isFavorite={favorites.has(session.id)}
-                        onOpen={onOpen} onStartRename={onStartRename} onRenameChange={onRenameChange}
-                        onRenameConfirm={onRenameConfirm} onRenameCancel={onRenameCancel} onDelete={onDelete}
-                        onToggleFavorite={onToggleFavorite}
-                        onExportChat={onExportChat} onSnapshot={onSnapshot} onArchive={onArchive} onFork={onFork}
-                        onDragStartSession={onDragStartSession}
-                        selectMode={selectMode} isChecked={selectedIds.has(session.id)} onToggleCheck={() => toggleCheck(session.id)} />
-                    ))}
+                    {renderSessionCards(projectSessionsList)}
                   </div>
                 )}
               </div>
@@ -456,62 +574,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
       )}
 
-      {projectContextMenu && (
-        <ContextMenu
-          x={projectContextMenu.x}
-          y={projectContextMenu.y}
-          actions={[
-            {
-              id: "new-session",
-              label: t('project.newSession'),
-              onAction: () => {
-                onNewSessionHere?.(projectContextMenu.dir)
-              }
-            },
-            ...(onOpenExplorer ? [{
-              id: "view-explorer",
-              label: t('project.viewExplorer'),
-              onAction: () => {
-                onOpenExplorer(projectContextMenu.dir)
-              }
-            }] : []),
-            {
-              id: "reveal-explorer",
-              label: t('project.revealExplorer'),
-              onAction: () => {
-                shell.fs.reveal(projectContextMenu.dir).catch(() => {})
-              }
-            },
-            {
-              id: "toggle-favorites",
-              label: projectContextMenu.sessions.length > 0 && projectContextMenu.sessions.every((s) => favorites.has(s.id))
-                ? t('favorites.remove')
-                : t('favorites.add'),
-              onAction: () => {
-                if (projectContextMenu.sessions.length === 0) return
-                const allFav = projectContextMenu.sessions.every((s) => favorites.has(s.id))
-                if (allFav) {
-                  projectContextMenu.sessions.forEach((s) => {
-                    if (favorites.has(s.id)) onToggleFavorite(s.id)
-                  })
-                } else {
-                  projectContextMenu.sessions.forEach((s) => {
-                    if (!favorites.has(s.id)) onToggleFavorite(s.id)
-                  })
-                }
-              }
-            },
-            {
-              id: "copy-path",
-              label: t('project.copyPath'),
-              onAction: () => {
-                navigator.clipboard.writeText(projectContextMenu.dir).catch(() => {})
-              }
-            }
-          ]}
-          onClose={() => setProjectContextMenu(null)}
-        />
-      )}
+      {sessionContextMenuElement}
+      {projectContextMenuElement}
     </section>
   )
 })

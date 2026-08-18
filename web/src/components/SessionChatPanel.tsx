@@ -6,10 +6,8 @@ import { useMessages } from "../hooks/useMessages"
 import { useSSE } from "../hooks/useSSE"
 import { useSSEHandler } from "../hooks/useSSEHandler"
 import { api } from "../api"
-import { useT } from "../i18n-context"
 import { QUESTION_POLL_INTERVAL_MS } from "../constants"
-import { basename, isSessionActive } from "../utils"
-import { StatsIcon } from "../Icons"
+import { isSessionActive } from "../utils"
 import { TabBar } from "./TabBar"
 import type { ChatViewProps } from "./ChatView"
 import type { ServerConfig, DataMode, SessionView, CommandInfo, Question, PermissionRequest } from "../types"
@@ -49,13 +47,12 @@ type Props = {
 
 export const SessionChatPanel = memo(function SessionChatPanel({
   session, config, dataMode, baseProps, active, connectionState, panelIndex,
-  onActivate, onClose, onSplitSession, onSettled,
+  onActivate, onClose: _onClose, onSplitSession, onSettled,
   onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
   onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels,
   onOpenFile, onOpenConnect,
   tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove
 }: Props) {
-  const t = useT()
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
   const [localRevertID, setLocalRevertID] = useState<string | null>(null)
   const [stopGenerationRef] = useState(() => ({ current: false }))
@@ -66,8 +63,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     msgs.loadSelected(session.id, session.directory).catch(() => undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id, session.directory])
-
-  const busy = msgs.awaitingAssistantReply
 
   const awaitingReplyRef = useRef(false)
   awaitingReplyRef.current = msgs.awaitingAssistantReply
@@ -244,7 +239,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   }, [msgs, config, session])
 
   const handleUndo = useCallback(() => {
-    msgs.undoMessage(session.id, session.directory, undefined, refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined), undefined, setLocalRevertID)
+    msgs.undoMessage(session.id, session.directory, session.revert, refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined), undefined, setLocalRevertID)
   }, [msgs, session, refresh])
 
   const handleRedo = useCallback(() => {
@@ -377,7 +372,9 @@ export const SessionChatPanel = memo(function SessionChatPanel({
             onSplitSession(panelIndex, zone, sId)
           } else if (raw.startsWith("kind:")) {
             onSplitSession(panelIndex, zone, raw)
-          } else {
+          } else if (raw.startsWith("tab:")) {
+            // Ignorar tab suelto
+          } else if (raw.includes("/") || raw.includes("\\") || raw.includes(".")) {
             // Archivo arrastrado desde el explorador interno o texto con ruta
             onOpenFile?.(raw, panelIndex, zone)
           }
@@ -418,42 +415,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           onMoveTab={(from, to) => onTabMove?.(panelIndex, from, to)}
         />
       ) : null}
-      <div
-        className="session-panel-header"
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData("text/plain", `panel:${panelIndex}:${session.id}`)
-          e.dataTransfer.effectAllowed = "move"
-        }}
-      >
-        <span className="session-panel-title" title={session.directory}>
-          {basename(session.directory)}
-        </span>
-        {busy && !active && <span className="session-panel-busy-dot" title={t('panel.busy')} aria-label={t('panel.busy')} />}
-        <span className="session-panel-actions">
-          <button
-            type="button"
-            className="btn-icon compact"
-            title={t('shell.kindSessionStats')}
-            aria-label={t('shell.kindSessionStats')}
-            onClick={(e) => { e.stopPropagation(); setShowStats((v) => !v) }}
-          >
-            <StatsIcon size={14} />
-          </button>
-          <button
-            type="button"
-            className="btn-icon compact"
-            title={t('panel.close')}
-            aria-label={t('panel.close')}
-            onClick={(e) => {
-              e.stopPropagation()
-              onClose()
-            }}
-          >
-            ×
-          </button>
-        </span>
-      </div>
       {showStats && (
         <div className="session-stats-overlay" onClick={() => setShowStats(false)}>
           <div onClick={(e) => e.stopPropagation()}>
@@ -461,7 +422,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           </div>
         </div>
       )}
-      <ChatView {...chatProps} />
+      <ChatView {...chatProps} onOpenSessionStats={() => setShowStats(true)} />
       {msgs.runtimeError && <ErrorModal message={msgs.runtimeError} onClose={() => msgs.setRuntimeError(null)} />}
     </div>
   )

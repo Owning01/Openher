@@ -301,6 +301,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     completionShouldPlayRef.current = false
   }, [config])
 
+  const isUndoingRef = useRef(false)
+
   const undoMessage = useCallback(async (
     sessionID: string,
     directory: string,
@@ -310,32 +312,37 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     onPatchSession?: (patch: Partial<{ revert: { messageID: string } | undefined }>) => void,
     onSetRevertID?: (id: string | null) => void,
   ) => {
-    const userMessages = messages.filter((m) => m.info.role === "user")
-    const target = userMessages.length > 0
-      ? revert
-        ? userMessages.filter((m) => m.info.id < revert.messageID).pop()
-        : userMessages.pop()
-      : undefined
-    if (!target) {
-      setRuntimeError("No messages to undo")
-      return
-    }
-    // S3: actualización optimista INSTANTÁNEA — el filtro local oculta los
-    // mensajes revertidos en ~0ms en vez de esperar 3-5 RTTs de red.
-    setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= target.info.id))
-    // BUG FIX: setear localRevertID para que MessageBubble aplique
-    // revert-hidden CSS. Sin esto, el assistant post-revert reaparece
-    // porque el merge de loadSelected lo conserva.
-    onSetRevertID?.(target.info.id)
-    onPatchSession?.({ revert: { messageID: target.info.id } })
+    if (isUndoingRef.current) return
+    isUndoingRef.current = true
     try {
+      const userMessages = messages.filter((m) => m.info.role === "user")
+      const target = userMessages.length > 0
+        ? revert
+          ? userMessages.filter((m) => m.info.id < revert.messageID).pop()
+          : userMessages.pop()
+        : undefined
+      if (!target) {
+        setRuntimeError("No messages to undo")
+        return
+      }
+      // S3: actualización optimista INSTANTÁNEA — el filtro local oculta los
+      // mensajes revertidos en ~0ms en vez de esperar 3-5 RTTs de red.
+      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= target.info.id))
+      onSetRevertID?.(target.info.id)
+      onPatchSession?.({ revert: { messageID: target.info.id } })
       if (awaitingAssistantReply || messages.some((m) => m.info.role !== "user" && !m.info.time.completed)) {
         await api.abort(config, sessionID, directory).catch(() => {})
       }
-      await api.revert(config, sessionID, target.info.id, directory).catch(() => {})
+      const revertResult = await api.revert(config, sessionID, target.info.id, directory).catch((err: Error) => {
+        setRuntimeError(`Revert failed: ${err.message || "server error"}`)
+        return null
+      })
+      if (revertResult === null) return
       await onLoadSelected().catch(() => {})
     } catch (err) {
       setRuntimeError((err as Error).message)
+    } finally {
+      isUndoingRef.current = false
     }
   }, [config, messages, awaitingAssistantReply])
 
@@ -543,6 +550,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     onSetRuntimeError: (err: string | null) => void,
     images?: Array<{ base64: string; mime: string }>,
     textOverride?: string,
+    onSetRevertID?: (id: string | null) => void,
   ) => {
     const text = (textOverride ?? composer).trim()
     if ((!text || !selectedSession) && (!images || images.length === 0)) return false
@@ -629,7 +637,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     }
     if (parsed?.type === "undo") {
       setComposer("")
-      await undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, onRefreshSessions, onLoadSelected)
+      await undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, onRefreshSessions, onLoadSelected, undefined, onSetRevertID)
       return
     }
     if (parsed?.type === "redo") {

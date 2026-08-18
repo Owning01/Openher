@@ -307,35 +307,6 @@
 
 }
 
-/* ===== Quick access (favoritos/recientes): scroll propio en desktop =====
-   Listas largas con altura acotada y barra de scroll visible en vez de
-   renderizar todo el viewport. Móvil conserva el crecimiento natural. */
-@media (min-width: 900px) and (pointer: fine) {
-  .quick-access-list {
-    max-height: min(44vh, 440px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
-    padding-right: var(--space-2);
-  }
 
-  .quick-access-list::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .quick-access-list::-webkit-scrollbar-thumb {
-    background: var(--border-strong);
-    border-radius: 4px;
-  }
-
-  .quick-access-list::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .recent-sentinel {
-    flex-shrink: 0;
-  }
-}
 
 

@@ -9,7 +9,7 @@ import { GridSpinner } from "./GridSpinner"
 // Sin fondo de estado: el pill muestra busy/retry cuando corresponde, y la
 // sesión idle no lleva ninguna marca visual.
 export const QuickAccessCard = memo(function QuickAccessCard({
-  session, isFavorite, onOpen, onToggleFavorite, onDismiss, onDragStartSession, children,
+  session, isFavorite, onOpen, onToggleFavorite, onDismiss, onDragStartSession, onContextMenu, children,
 }: {
   session: SessionView
   isFavorite: boolean
@@ -17,6 +17,7 @@ export const QuickAccessCard = memo(function QuickAccessCard({
   onToggleFavorite: (id: string) => void
   onDismiss?: (id: string) => void
   onDragStartSession?: (id: string, directory: string) => void
+  onContextMenu?: (e: React.MouseEvent, session: SessionView) => void
   children?: ReactNode
 }) {
   const t = useT()
@@ -24,6 +25,13 @@ export const QuickAccessCard = memo(function QuickAccessCard({
     <div
       className="quick-access-card"
       onClick={() => onOpen(session.id, session.directory)}
+      onContextMenu={(e) => {
+        if (onContextMenu) {
+          e.preventDefault()
+          e.stopPropagation()
+          onContextMenu(e, session)
+        }
+      }}
       role="button"
       tabIndex={0}
       draggable={!!onDragStartSession}

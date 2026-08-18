@@ -245,12 +245,18 @@ func (s *server) handleInputMsg(msg inputMsg) error {
 		}
 		mods := modsHeld(msg.Mods)
 		press := func(down bool) {
+			events := make([]input, 0, len(mods)+1)
 			for _, m := range mods {
-				sendInput([]input{keyEventInput(m, down, false)})
+				events = append(events, keyEventInput(m, down, false))
 			}
-			sendInput([]input{keyEventInput(vk, down, false)})
+			events = append(events, keyEventInput(vk, down, false))
+			sendInput(events)
+			releaseEvents := make([]input, 0, len(mods))
 			for i := len(mods) - 1; i >= 0; i-- {
-				sendInput([]input{keyEventInput(mods[i], !down, false)})
+				releaseEvents = append(releaseEvents, keyEventInput(mods[i], !down, false))
+			}
+			if len(releaseEvents) > 0 {
+				sendInput(releaseEvents)
 			}
 		}
 		switch msg.Action {
@@ -265,18 +271,22 @@ func (s *server) handleInputMsg(msg inputMsg) error {
 		return nil
 
 	case "text":
+		events := make([]input, 0, len(msg.Text)*2)
 		for _, r := range msg.Text {
 			switch r {
 			case '\n', '\r':
 				vk, _ := vkForCode("enter")
-				sendInput([]input{keyEventInput(vk, true, false), keyEventInput(vk, false, false)})
+				events = append(events, keyEventInput(vk, true, false), keyEventInput(vk, false, false))
 			case '\t':
 				vk, _ := vkForCode("tab")
-				sendInput([]input{keyEventInput(vk, true, false), keyEventInput(vk, false, false)})
+				events = append(events, keyEventInput(vk, true, false), keyEventInput(vk, false, false))
 			default:
 				// KEYEVENTF_UNICODE: funciona para cualquier carácter (ñ, ü, CJK...).
-				sendInput([]input{keyEventInput(uint16(r), true, true), keyEventInput(uint16(r), false, true)})
+				events = append(events, keyEventInput(uint16(r), true, true), keyEventInput(uint16(r), false, true))
 			}
+		}
+		if len(events) > 0 {
+			sendInput(events)
 		}
 		return nil
 	}
