@@ -850,12 +850,20 @@ export const api = {
 
   async sendPrompt(config: ServerConfig, sessionID: string, text: string, directory?: string, model?: ModelSelection, agentID?: string, images?: Array<{ base64: string; mime: string }>) {
     if ((await getApiVersion(config)) === "v2") {
-      // v2 (beta): el payload es SOLO { text } — model/agent son por-sesión y el
-      // server rechaza campos extra (additionalProperties:false → 400). Las
-      // imágenes aún no están mapeadas en v2.
+      // v2: el schema solo acepta parts type text|file|agent|subtask —
+      // "image" no existe y el server rechaza con 400. Las imágenes se
+      // omiten con un placeholder en el texto para que el usuario sepa
+      // que se perdieron.
+      let v2Text = text
+      if (images && images.length > 0) {
+        const imgNote = images.length === 1
+          ? "[image omitted — v2 doesn't support image parts]"
+          : `[${images.length} images omitted — v2 doesn't support image parts]`
+        v2Text = text ? `${text}\n\n${imgNote}` : imgNote
+      }
       return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt`, directory), {
         method: "POST",
-        body: { text }
+        body: { text: v2Text }
       })
     }
     const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string }> = []

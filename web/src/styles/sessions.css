@@ -727,7 +727,7 @@
 .quick-access-list {
   display: flex !important;
   flex-direction: column !important;
-  gap: var(--space-3);
+  gap: 2px;
   overflow-anchor: none;
   width: 100%;
 }
@@ -739,44 +739,46 @@
 }
 
 .session-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 0 !important;
   background: transparent;
-  padding: var(--space-4);
+  padding: 6px 8px;
   cursor: pointer;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s, box-shadow 0.2s;
-  box-shadow: none;
+  transition: background 0.15s ease;
+  box-shadow: none !important;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 2px;
   position: relative;
 }
 
 .session-card:hover,
 .session-card:focus-visible {
-  border-color: var(--primary);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), 0 0 0 1px var(--primary-soft);
-  transform: translateY(-2px);
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none !important;
+  transform: none !important;
   outline: none;
 }
 
 .session-card.active {
-  border-color: var(--primary);
-  background: linear-gradient(145deg, var(--surface-subtle) 0%, var(--surface) 100%);
-  box-shadow: 0 0 0 1px var(--primary), 0 6px 20px rgba(0, 0, 0, 0.3);
+  border-left-color: var(--primary, #58a6ff);
+  background: rgba(88, 166, 255, 0.08);
+  box-shadow: none !important;
 }
 
 .session-card.is-favorite {
-  border-left: 3px solid var(--accent);
+  border-left-color: var(--accent, #d2a8ff);
 }
 
 
 /* ===== Project Card ===== */
 .project-card {
-  border: 1px solid transparent;
-  border-radius: var(--radius-lg);
-  background: var(--surface-subtle);
-  padding: var(--space-4);
+  border: none;
+  border-radius: 0 !important;
+  background: transparent;
+  padding: 6px 8px;
   cursor: pointer;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s, box-shadow 0.2s;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -851,8 +853,8 @@
 }
 
 .session-title {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 0.88rem;
+  font-weight: 500;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
