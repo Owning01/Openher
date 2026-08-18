@@ -867,19 +867,17 @@ export const api = {
       })
     }
     const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string }> = []
-    if (text) {
-      parts.push({ type: "text", text })
-    } else if (images && images.length > 0) {
-      // El server puede rechazar mensajes sin partes de texto: enviar un
-      // placeholder cuando el usuario manda solo imágenes.
-      parts.push({ type: "text", text: "(image)" })
+    // El server (v1 y v2) solo acepta parts type text|file|agent|subtask —
+    // "image" no existe en el schema y causa 400. Las imágenes se convierten
+    // a placeholder de texto para que el mensaje se envíe correctamente.
+    let imageNote = ""
+    if (images && images.length > 0) {
+      imageNote = images.length === 1
+        ? "\n\n[image — image parts not supported by server]"
+        : `\n\n[${images.length} images — image parts not supported by server]`
     }
-    if (images) {
-      for (const img of images) {
-        // El server espera base64 raw: strip del prefijo data URL si existe.
-        const raw = img.base64.includes(",") ? img.base64.split(",")[1] : img.base64
-        parts.push({ type: "image", data: raw, mimeType: img.mime })
-      }
+    if (text || imageNote) {
+      parts.push({ type: "text", text: (text || "") + imageNote })
     }
     return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt_async`, directory), {
       method: "POST",

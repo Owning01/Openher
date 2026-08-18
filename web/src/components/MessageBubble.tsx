@@ -49,28 +49,12 @@ function calcTokensPerSecond(msg: RenderedMessage): string {
   }
   if (outputTokens <= 0) return ""
 
-  // Duración precisa de la generación de texto/reasoning
-  let genDurationMs = 0
-  if (msg.parts && msg.parts.length > 0) {
-    for (const p of msg.parts) {
-      if (p.type === "text" || p.type === "reasoning") {
-        const start = p.time?.start ?? (p.time as any)?.created
-        const end = p.time?.end ?? (p.time as any)?.completed
-        if (start && end && end > start) {
-          genDurationMs += (end - start)
-        }
-      }
-    }
-  }
+  // Duración real de la generación del mensaje del asistente (en ms)
+  const genDurationMs = msg.info.time.completed - msg.info.time.created
+  if (genDurationMs < 500) return ""
 
-  // Fallback a la duración del mensaje del asistente (completed - created)
-  if (genDurationMs <= 0) {
-    genDurationMs = msg.info.time.completed - msg.info.time.created
-  }
-
-  if (genDurationMs < 100) return ""
   const tps = (outputTokens / genDurationMs) * 1000
-  if (tps <= 0 || tps > 5000) return ""
+  if (tps < 1 || tps > 300) return ""
   return `${tps.toFixed(1)} tok/s`
 }
 
