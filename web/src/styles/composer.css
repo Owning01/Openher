@@ -104,7 +104,6 @@
 
 .composer-inline-btn:hover {
   color: var(--primary);
-  background: var(--primary-soft);
 }
 
 .composer-img-btn {
@@ -157,7 +156,6 @@
 
 .composer-send-btn:disabled:hover {
   color: var(--primary);
-  background: transparent;
 }
 
 .composer-stop-btn {
@@ -171,7 +169,6 @@
 
 .composer-stop-btn:hover {
   color: var(--danger);
-  background: var(--danger-soft);
 }
 
 .composer-mic-btn.recording {

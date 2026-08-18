@@ -526,6 +526,7 @@ button.compact {
 
 /* ===== Skill Browser ===== */
 .skill-browser { max-width: 560px; max-height: 80vh; display: flex; flex-direction: column; }
+.skill-browser-detail { max-width: 640px; }
 .skill-search { margin: 0 0 var(--space-3); }
 .skill-search input {
   width: 100%; padding: 0.65rem 0.9rem;
@@ -558,8 +559,9 @@ button.compact {
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 .skill-card-icon {
-  font-size: 1.3rem; line-height: 1; flex-shrink: 0;
-  margin-top: 0.1rem;
+  color: var(--accent, #fab283); flex-shrink: 0;
+  margin-top: 0.15rem;
+  display: flex; align-items: center; justify-content: center;
 }
 .skill-card-body { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; flex: 1; }
 .skill-card-name {
@@ -571,6 +573,44 @@ button.compact {
   font-size: 0.78rem; color: var(--muted); line-height: 1.35;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Skill detail view */
+.skill-detail-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.skill-detail-back {
+  background: none; border: none; color: var(--primary, #10b981);
+  cursor: pointer; font-size: 0.82rem; padding: 0;
+  display: flex; align-items: center; gap: 0.3rem;
+}
+.skill-detail-back:hover { opacity: 0.8; }
+.skill-detail-tokens {
+  font-size: 0.72rem; color: var(--muted);
+  background: var(--surface-strong); padding: 0.2rem 0.6rem;
+  border-radius: 99px; font-variant-numeric: tabular-nums;
+}
+.skill-detail-title {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin-bottom: var(--space-2); color: var(--accent, #fab283);
+}
+.skill-detail-title h3 {
+  margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text);
+}
+.skill-detail-desc {
+  font-size: 0.85rem; color: var(--muted); margin: 0 0 var(--space-3);
+  line-height: 1.4;
+}
+.skill-detail-content {
+  flex: 1; overflow-y: auto; background: var(--surface-strong);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 0.8rem 1rem;
+}
+.skill-detail-content pre {
+  margin: 0; font-family: inherit; font-size: 0.8rem;
+  color: var(--text); white-space: pre-wrap; word-break: break-word;
+  line-height: 1.5;
 }
 
 /* ===== Chat customizer (desde el propio chat) ===== */

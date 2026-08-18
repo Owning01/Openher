@@ -1244,10 +1244,10 @@
 .message-content pre code .token.attr-name { color: var(--code-attr); }
 
 .message-content .table-wrap {
-  overflow-x: auto;
   margin-top: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  overflow-x: hidden;
 }
 
 .message-content .table-wrap table {
@@ -1261,7 +1261,8 @@
   border: 1px solid var(--border);
   padding: var(--space-2) var(--space-3);
   text-align: left;
-  white-space: nowrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .message-content .table-wrap th {
