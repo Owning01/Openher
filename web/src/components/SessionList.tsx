@@ -5,6 +5,8 @@ import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
 import { SessionToolbar } from "./SessionToolbar"
 import { QuickAccessCard } from "./QuickAccessCard"
+import { ContextMenu } from "./ContextMenu"
+import { shell } from "../shell"
 import type { SessionView, ConnectionState, DataMode } from "../types"
 
 type SessionListProps = {
@@ -41,6 +43,7 @@ type SessionListProps = {
   onFork?: (session: SessionView) => void
   onDismissRecent?: (id: string) => void
   onNewSessionHere?: (directory: string) => void
+  onOpenExplorer?: (directory: string) => void
   onDragStartSession?: (id: string, dir: string) => void
   onDeleteMany?: (ids: string[]) => void
   onArchiveMany?: (ids: string[]) => void
@@ -56,7 +59,7 @@ export const SessionList = memo(function SessionList({
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
   onToggleFavorite, onOpenSettings, onExportChat, onSnapshot, onArchive, onFork,
-  onDismissRecent, onNewSessionHere, onDragStartSession, onDeleteMany, onArchiveMany
+  onDismissRecent, onNewSessionHere, onOpenExplorer, onDragStartSession, onDeleteMany, onArchiveMany
 }: SessionListProps) {
   const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -65,6 +68,12 @@ export const SessionList = memo(function SessionList({
   const [searchOpen, setSearchOpen] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [projectContextMenu, setProjectContextMenu] = useState<{
+    x: number
+    y: number
+    dir: string
+    sessions: SessionView[]
+  } | null>(null)
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
   // Recientes: arranca en 6 y carga +10 con scroll infinito (desktop scrollea
@@ -411,6 +420,15 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
               <div key={dir} className="project-card-wrap fade-in">
                 <article className={`project-card${isExpanded ? " expanded" : ""}`} role="button" tabIndex={0}
                   onClick={() => toggleProject(dir)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setProjectContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      dir,
+                      sessions: projectSessionsList,
+                    })
+                  }}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProject(dir) } }}>
                   <div className="project-card-header">
                     <strong className="project-path">{dir}</strong>
@@ -436,6 +454,63 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
           })
         )}
       </div>
+      )}
+
+      {projectContextMenu && (
+        <ContextMenu
+          x={projectContextMenu.x}
+          y={projectContextMenu.y}
+          actions={[
+            {
+              id: "new-session",
+              label: t('project.newSession'),
+              onAction: () => {
+                onNewSessionHere?.(projectContextMenu.dir)
+              }
+            },
+            ...(onOpenExplorer ? [{
+              id: "view-explorer",
+              label: t('project.viewExplorer'),
+              onAction: () => {
+                onOpenExplorer(projectContextMenu.dir)
+              }
+            }] : []),
+            {
+              id: "reveal-explorer",
+              label: t('project.revealExplorer'),
+              onAction: () => {
+                shell.fs.reveal(projectContextMenu.dir).catch(() => {})
+              }
+            },
+            {
+              id: "toggle-favorites",
+              label: projectContextMenu.sessions.length > 0 && projectContextMenu.sessions.every((s) => favorites.has(s.id))
+                ? t('favorites.remove')
+                : t('favorites.add'),
+              onAction: () => {
+                if (projectContextMenu.sessions.length === 0) return
+                const allFav = projectContextMenu.sessions.every((s) => favorites.has(s.id))
+                if (allFav) {
+                  projectContextMenu.sessions.forEach((s) => {
+                    if (favorites.has(s.id)) onToggleFavorite(s.id)
+                  })
+                } else {
+                  projectContextMenu.sessions.forEach((s) => {
+                    if (!favorites.has(s.id)) onToggleFavorite(s.id)
+                  })
+                }
+              }
+            },
+            {
+              id: "copy-path",
+              label: t('project.copyPath'),
+              onAction: () => {
+                navigator.clipboard.writeText(projectContextMenu.dir).catch(() => {})
+              }
+            }
+          ]}
+          onClose={() => setProjectContextMenu(null)}
+        />
       )}
     </section>
   )

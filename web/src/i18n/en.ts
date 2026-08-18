@@ -748,5 +748,9 @@ export default {
   'stats.setupTitle': 'Activate on your PC',
   'stats.setupHint': 'Double-click start-stats.bat (or run this command) on the computer that runs opencode. It opens firewall port 8765 automatically.',
   'stats.setupCopy': 'Copy command',
-  'stats.setupCopied': 'Copied!'
+  'stats.setupCopied': 'Copied!',
+  'project.newSession': 'New session (/new)',
+  'project.viewExplorer': 'View in explorer',
+  'project.revealExplorer': 'Open in File Explorer',
+  'project.copyPath': 'Copy path'
 }

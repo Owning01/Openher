@@ -607,12 +607,47 @@
   font-size: inherit;
 }
 
+.message-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: min(280px, 100%);
+  margin-top: var(--space-2);
+}
+
 .message-image {
   display: var(--chat-image-vis, block);
-  max-width: min(280px, 100%);
+  max-width: 100%;
   border-radius: var(--radius-sm);
-  margin-top: var(--space-2);
   object-fit: contain;
+  cursor: zoom-in;
+}
+
+.message-image-edit {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-xs);
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0;
+}
+
+.message-image-wrap:hover .message-image-edit {
+  opacity: 1;
+}
+
+:root[data-theme="light"] .message-image-edit {
+  background: rgba(255, 255, 255, 0.8);
+  color: #333;
 }
 
 /* ===== Vista previa del ChatCustomizer ===== */

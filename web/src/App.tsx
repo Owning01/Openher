@@ -1247,6 +1247,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const setSidebarCollapsed = useCallback((collapsed: boolean | ((v: boolean) => boolean)) => {
     setDesktopState((prev) => ({ ...prev, sidebarCollapsed: typeof collapsed === "function" ? collapsed(prev.sidebarCollapsed) : collapsed }))
   }, [])
+  const [explorerCwd, setExplorerCwd] = useState<string | undefined>(undefined)
+  const handleOpenExplorer = useCallback((dir: string) => {
+    setExplorerCwd(dir)
+    setActivity("explorer")
+    setSidebarCollapsed(false)
+  }, [setActivity, setSidebarCollapsed])
 
   // Tab stacks: tracks all open session IDs per panel (for tab bar)
   const tabStacks = desktopState.tabStacks
@@ -2012,6 +2018,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         onFork={(s) => handleCreateSession(s.directory)}
         onDismissRecent={dismissRecent}
         onNewSessionHere={(dir) => handleCreateSession(dir)}
+        onOpenExplorer={handleOpenExplorer}
         onDragStartSession={handleSessionDragStart}
         onDeleteMany={handleDeleteMany}
         onArchiveMany={flags.sessionArchive ? handleArchiveMany : undefined} />
@@ -2426,7 +2433,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               </div>
               <div className="desktop-sidebar-body">
                 {activity === "sessions" ? sessionsView
-                  : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
+                  : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                   : activity === "stats" ? <StatsPanel />
                   : activity === "kanban" ? <KanbanPanel />
                   : activity === "docs" ? <DocsPanel />

@@ -562,17 +562,30 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
             <MicIcon size={18} />
           </button>
         )}
-        <button
-          type="button"
-          onClick={handleSendWithImages}
-          disabled={disabled || (!value.trim() && images.length === 0)}
-          className={`composer-inline-btn composer-send-btn${supported ? " with-mic" : ""}`}
-          title={t('composer.send')}
-          aria-label={t('composer.send')}
-          tabIndex={-1}
-        >
-          <SendIcon size={18} />
-        </button>
+        {isWorking ? (
+          <button
+            type="button"
+            onClick={onAbort}
+            className={`composer-inline-btn composer-stop-btn${supported ? " with-mic" : ""}`}
+            title={t('composer.stop')}
+            aria-label={t('composer.stop')}
+            tabIndex={-1}
+          >
+            <StopCircleIcon size={18} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSendWithImages}
+            disabled={disabled || (!value.trim() && images.length === 0)}
+            className={`composer-inline-btn composer-send-btn${supported ? " with-mic" : ""}`}
+            title={t('composer.send')}
+            aria-label={t('composer.send')}
+            tabIndex={-1}
+          >
+            <SendIcon size={18} />
+          </button>
+        )}
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
@@ -603,11 +616,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               title={charLimit > 0 ? `${value.length}/${charLimit}` : `${value.length} chars`}>
               {charLimit > 0 ? `${value.length}/${charLimit}` : value.length}
             </span>
-          )}
-          {isWorking && (
-            <button type="button" onClick={onAbort} className="btn-danger composer-bar-btn" title={t('composer.stop')} aria-label={t('composer.stop')}>
-              <StopCircleIcon size={16} />
-            </button>
           )}
         </div>
       </div>

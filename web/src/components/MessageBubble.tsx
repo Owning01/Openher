@@ -9,6 +9,22 @@ import { FileDiffs } from "./FileDiffs"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { Markdown } from "./Markdown"
 import { ImageLightbox } from "./ImageLightbox"
+import { ImageEditor } from "./ImageEditor"
+
+/** Extract base64 image data from a message part (handles both type:image and type:file). */
+function getPartImageData(p: { type: string; data?: string; url?: string; mimeType?: string; mime?: string }): string | null {
+  if (p.type === "image" && p.data) return p.data
+  if (p.type === "file") {
+    const mime = p.mime || p.mimeType || ""
+    if (!mime.startsWith("image/")) return null
+    if (p.data) return p.data
+    if (p.url) {
+      if (p.url.startsWith("data:")) return p.url
+      return null
+    }
+  }
+  return null
+}
 
 // Compara ids de mensaje (msg_<hexTimestamp+counter>): lexicográfica por
 // defecto, con fallback numérico si el server cambia el formato del id.
@@ -84,6 +100,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const [showConfirm, setShowConfirm] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+const [editingImage, setEditingImage] = useState<{ id: string; src: string; mime: string } | null>(null)
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const moreWrapRef = useRef<HTMLSpanElement | null>(null)
   useOutsideClick(moreWrapRef, () => setMoreOpen(false), moreOpen)
@@ -222,10 +239,35 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           </div>
         )}
 
-        {message.parts.filter((p) => p.type === "image" && p.data).map((p) => (
-          <img key={p.id} src={p.data} alt="" className="message-image" loading="lazy"
-            onClick={() => setLightboxSrc(p.data ?? null)} />
-        ))}
+        {message.parts.filter((p) => !!getPartImageData(p)).map((p) => {
+          const src = getPartImageData(p)
+          if (!src) return null
+          return (
+            <div key={p.id} className="message-image-wrap">
+              <img src={src} alt="" className="message-image" loading="lazy"
+                onClick={() => setLightboxSrc(src)} />
+              <button type="button" className="message-image-edit" title={t('image.editorTitle')}
+                onClick={(e) => { e.stopPropagation(); setEditingImage({ id: p.id, src, mime: p.mime || p.mimeType || "image/png" }) }}>
+                <PencilIcon size={12} />
+              </button>
+            </div>
+          )
+        })}
+
+        {editingImage && (
+          <ImageEditor
+            src={editingImage.src}
+            mime={editingImage.mime}
+            onApply={(base64) => {
+              const partIdx = message.parts.findIndex((pp) => pp.id === editingImage.id)
+              if (partIdx >= 0) {
+                message.parts[partIdx].data = base64
+                message.parts[partIdx].url = `data:${editingImage.mime};base64,${base64.split(",")[1] || base64}`
+              }
+              setEditingImage(null)
+            }}
+            onClose={() => setEditingImage(null)} />
+        )}
 
         {showConfirm && (
           <div className="undo-confirm">

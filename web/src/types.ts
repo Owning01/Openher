@@ -129,7 +129,10 @@ export type MessageEnvelope = {
     sessionID?: string
     text?: string
     data?: string
+    url?: string
     mimeType?: string
+    mime?: string
+    filename?: string
     callID?: string
     tool?: string
     state?: {

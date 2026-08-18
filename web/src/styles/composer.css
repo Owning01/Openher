@@ -160,6 +160,20 @@
   background: transparent;
 }
 
+.composer-stop-btn {
+  right: 2.2rem;
+  color: var(--danger);
+}
+
+.composer-stop-btn.with-mic {
+  right: 2.2rem;
+}
+
+.composer-stop-btn:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
 .composer-mic-btn.recording {
   color: var(--danger);
   background: var(--danger-soft);

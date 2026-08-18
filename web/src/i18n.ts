@@ -716,6 +716,10 @@ type TranslationKey =
   | 'connect.models'
   | 'connect.addProvider'
   | 'connect.customRequired'
+  | 'project.newSession'
+  | 'project.viewExplorer'
+  | 'project.revealExplorer'
+  | 'project.copyPath'
 
 // Partial: los idiomas pueden omitir keys — createTranslator cae al EN
 // (getTranslations(lang)[key] ?? en[key] ?? key).
