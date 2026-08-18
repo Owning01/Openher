@@ -1592,20 +1592,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         const panelKinds = [...prev.panelKinds]
         const panelIds = [...prev.panelIds]
         if (targetSessionId) {
+          // Moving a session: remove from source
           const existing = sessions.indexOf(targetSessionId)
           if (existing >= 0 && existing !== index) {
             sessions[existing] = null
+            panelKinds[existing] = "session"
+            panelIds[existing] = genPanelId()
           }
         } else if (fromIndex !== null && fromIndex !== index) {
-          // Mover panel: el id del panel viaja con él (evita remount del terminal)
+          // Moving a non-session panel (terminal, explorer, etc.): clear source
           panelKinds[fromIndex] = "session"
           sessions[fromIndex] = null
-          ;[panelIds[fromIndex], panelIds[index]] = [panelIds[index], panelIds[fromIndex]]
+          panelIds[fromIndex] = genPanelId()
         } else if (targetKind !== "session") {
+          // Moving by kind: find and clear existing
           const existing = panelKinds.indexOf(targetKind)
           if (existing >= 0 && existing !== index) {
             panelKinds[existing] = "session"
             sessions[existing] = null
+            panelIds[existing] = genPanelId()
           }
         }
         sessions[index] = targetSessionId
@@ -1628,12 +1633,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           baseKinds[fromIndex] = "session"
           baseSessions[fromIndex] = null
           movedId = baseIds[fromIndex]
+          baseIds[fromIndex] = ""  // clear id so copy doesn't reuse it
         } else if (targetKind !== "session") {
           const existing = baseKinds.indexOf(targetKind)
           if (existing >= 0) {
             baseKinds[existing] = "session"
             baseSessions[existing] = null
             movedId = baseIds[existing]
+            baseIds[existing] = ""
           }
         }
         const cols = prev.cols + 1
@@ -1647,7 +1654,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               if (c <= col) {
                 sessions.push(baseSessions[r * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
-                panelIds.push(baseIds[r * prev.cols + c])
+                panelIds.push(baseIds[r * prev.cols + c] || genPanelId())
               } else if (c === col + 1) {
                 const isTarget = r === Math.floor(index / prev.cols)
                 sessions.push(isTarget ? targetSessionId : null)
@@ -1656,7 +1663,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               } else {
                 sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + (c - 1)] ?? "session")
-                panelIds.push(baseIds[r * prev.cols + (c - 1)])
+                panelIds.push(baseIds[r * prev.cols + (c - 1)] || genPanelId())
               }
             } else {
               if (c === col) {
@@ -1667,11 +1674,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               } else if (c < col) {
                 sessions.push(baseSessions[r * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
-                panelIds.push(baseIds[r * prev.cols + c])
+                panelIds.push(baseIds[r * prev.cols + c] || genPanelId())
               } else {
                 sessions.push(baseSessions[r * prev.cols + (c - 1)] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + (c - 1)] ?? "session")
-                panelIds.push(baseIds[r * prev.cols + (c - 1)])
+                panelIds.push(baseIds[r * prev.cols + (c - 1)] || genPanelId())
               }
             }
           }
@@ -1695,12 +1702,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           baseKinds[fromIndex] = "session"
           baseSessions[fromIndex] = null
           movedId = baseIds[fromIndex]
+          baseIds[fromIndex] = ""
         } else if (targetKind !== "session") {
           const existing = baseKinds.indexOf(targetKind)
           if (existing >= 0) {
             baseKinds[existing] = "session"
             baseSessions[existing] = null
             movedId = baseIds[existing]
+            baseIds[existing] = ""
           }
         }
         const rows = prev.rows + 1
@@ -1715,7 +1724,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               if (r <= row) {
                 sessions.push(baseSessions[r * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
-                panelIds.push(baseIds[r * prev.cols + c])
+                panelIds.push(baseIds[r * prev.cols + c] || genPanelId())
               } else if (r === row + 1) {
                 const isTarget = c === col
                 sessions.push(isTarget ? targetSessionId : null)
@@ -1724,7 +1733,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               } else {
                 sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[(r - 1) * prev.cols + c] ?? "session")
-                panelIds.push(baseIds[(r - 1) * prev.cols + c])
+                panelIds.push(baseIds[(r - 1) * prev.cols + c] || genPanelId())
               }
             } else {
               if (r === row) {
@@ -1735,11 +1744,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               } else if (r < row) {
                 sessions.push(baseSessions[r * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[r * prev.cols + c] ?? "session")
-                panelIds.push(baseIds[r * prev.cols + c])
+                panelIds.push(baseIds[r * prev.cols + c] || genPanelId())
               } else {
                 sessions.push(baseSessions[(r - 1) * prev.cols + c] ?? null)
                 panelKinds.push(baseKinds[(r - 1) * prev.cols + c] ?? "session")
-                panelIds.push(baseIds[(r - 1) * prev.cols + c])
+                panelIds.push(baseIds[(r - 1) * prev.cols + c] || genPanelId())
               }
             }
           }
