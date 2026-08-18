@@ -8,7 +8,7 @@ import { useSSEHandler } from "../hooks/useSSEHandler"
 import { api } from "../api"
 import { useT } from "../i18n-context"
 import { QUESTION_POLL_INTERVAL_MS } from "../constants"
-import { basename } from "../utils"
+import { basename, isSessionActive } from "../utils"
 import { StatsIcon } from "../Icons"
 import type { ChatViewProps } from "./ChatView"
 import type { ServerConfig, DataMode, SessionView, CommandInfo, Question, PermissionRequest } from "../types"
@@ -254,6 +254,17 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     }
   }, [msgs, session, panelModelOption, refresh])
 
+  const isWorking = useMemo(() => {
+    if (msgs.awaitingAssistantReply) return true
+    if (isSessionActive(session)) return true
+    const list = msgs.renderedMessages
+    if (list.length > 0) {
+      const last = list[list.length - 1]
+      if (last.info.role === "assistant" && !last.info.time.completed) return true
+    }
+    return false
+  }, [msgs.awaitingAssistantReply, msgs.renderedMessages, session])
+
   const chatProps: ChatViewProps = useMemo(() => ({
     ...baseProps,
     view: "detail",
@@ -262,8 +273,8 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     messages: msgs.renderedMessages,
     pendingIndex: msgs.pendingIndex,
     composer: msgs.composer,
-    isWorking: msgs.awaitingAssistantReply,
-    showTypingBubble: msgs.awaitingAssistantReply,
+    isWorking,
+    showTypingBubble: isWorking,
     loadingSessionID: null,
     selectedID: session.id,
     activeModelOption: panelModelOption,

@@ -3,8 +3,10 @@ import { STORAGE_KEYS } from "./constants"
 
 export const LANGUAGE_STORAGE_KEY = STORAGE_KEYS.LANGUAGE
 
-export function isSessionActive(s: { status: string }): boolean {
-  return s.status === "busy" || s.status === "retry"
+export function isSessionActive(s?: { status?: any } | null): boolean {
+  if (!s || !s.status) return false
+  const st = typeof s.status === "object" ? s.status.type : s.status
+  return st === "busy" || st === "retry" || st === "running" || st === "working"
 }
 
 export function hasFileChanges(s: { files: number; additions: number; deletions: number }): boolean {

@@ -260,16 +260,16 @@ export const ChatView = memo(function ChatView({
       if (m.tokens && ((m.tokens.input ?? 0) + (m.tokens.output ?? 0) + (m.tokens.reasoning ?? 0) > 0)) {
         if (!lastMsgTokens) lastMsgTokens = m.tokens
       }
-      if (!lastTps && m.info.role === "assistant") {
+      if (!lastTps && m.info.role === "assistant" && m.info.time.completed && m.info.time.created) {
         const start = m.info.time.created
-        const end = m.info.time.completed || Date.now()
+        const end = m.info.time.completed
         let out = (m.tokens?.output ?? 0) + (m.tokens?.reasoning ?? 0)
         if (out <= 0 && m.text) out = Math.round(m.text.length / 4)
-        if (out > 0 && start && end > start) {
+        if (out > 0 && end > start) {
           const genDurationMs = end - start
-          if (genDurationMs >= 100) {
+          if (genDurationMs >= 500) {
             const tps = (out / genDurationMs) * 1000
-            if (tps > 0 && tps < 5000) lastTps = `${tps.toFixed(1)} tok/s`
+            if (tps >= 1 && tps <= 300) lastTps = `${tps.toFixed(1)} tok/s`
           }
         }
       }

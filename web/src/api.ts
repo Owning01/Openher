@@ -866,18 +866,24 @@ export const api = {
         body: { text: v2Text }
       })
     }
-    const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string }> = []
-    // El server (v1 y v2) solo acepta parts type text|file|agent|subtask —
-    // "image" no existe en el schema y causa 400. Las imágenes se convierten
-    // a placeholder de texto para que el mensaje se envíe correctamente.
-    let imageNote = ""
-    if (images && images.length > 0) {
-      imageNote = images.length === 1
-        ? "\n\n[image — image parts not supported by server]"
-        : `\n\n[${images.length} images — image parts not supported by server]`
+    const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string; mime?: string; url?: string; filename?: string }> = []
+    if (text) {
+      parts.push({ type: "text", text })
+    } else if (images && images.length > 0) {
+      parts.push({ type: "text", text: "(image)" })
     }
-    if (text || imageNote) {
-      parts.push({ type: "text", text: (text || "") + imageNote })
+    if (images) {
+      for (const img of images) {
+        // El server acepta type:"file" con url:data:<mime>;base64,<raw>
+        // (formato del TUI). type:"image" no existe en el schema.
+        const raw = img.base64.includes(",") ? img.base64.split(",")[1] : img.base64
+        parts.push({
+          type: "file",
+          mime: img.mime,
+          filename: `clipboard.${img.mime.split("/")[1] || "png"}`,
+          url: `data:${img.mime};base64,${raw}`,
+        })
+      }
     }
     return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt_async`, directory), {
       method: "POST",

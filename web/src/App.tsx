@@ -774,7 +774,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setPermissionRequest(null)
   }, [])
 
-  const isSessionRunning = Boolean(selectedSession && isSessionActive(selectedSession))
+  const isLastAssistantIncomplete = Boolean(
+    selectedSession &&
+    renderedMessages.length > 0 &&
+    renderedMessages[renderedMessages.length - 1].info.role === "assistant" &&
+    !renderedMessages[renderedMessages.length - 1].info.time.completed
+  )
+  const isSessionRunning = Boolean(selectedSession && (isSessionActive(selectedSession) || isLastAssistantIncomplete))
   const isWorking = awaitingAssistantReply || isSessionRunning
   const showTypingBubble = Boolean(selectedSession) && isWorking
 
