@@ -16,7 +16,7 @@ export function useMemoryUsage(intervalMs = 5000): MemoryInfo | null {
       try {
         setMem({
           jsHeapUsed: perf.memory.usedJSHeapSize,
-          jsHeapTotal: perf.memory.jsHeapSizeLimit,
+          jsHeapTotal: perf.memory.totalJSHeapSize,
         })
       } catch { /* ignore */ }
     }
