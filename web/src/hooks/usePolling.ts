@@ -51,6 +51,12 @@ export function usePolling(
       } catch (e) {
         failCountRef.current++
         console.warn("poll error", failCountRef.current, e)
+        // Re-schedule con backoff: si el server está caído, el próximo tick
+        // espera más en vez de seguir martillando al intervalo base.
+        if (!streamActive && mounted) {
+          if (timerRef.current) clearInterval(timerRef.current)
+          schedule()
+        }
       } finally {
         busyRef.current = false
       }

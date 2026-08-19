@@ -6,9 +6,11 @@
 //!
 //! La creación del WebView DEBE ocurrir en el thread principal (winit
 //! event loop). El API HTTP corre en otro thread, así que usamos un
-//! canal mpsc para enviar comandos al main thread y recibir resultados.
+//! canal crossbeam para enviar comandos al main thread y recibir
+//! resultados. crossbeam-channel soporta `try_recv()` (non-blocking)
+//! para que el event loop no se quede colgado en `recv()`.
 
-use std::sync::mpsc;
+use crossbeam_channel::{bounded, Receiver, Sender, TryRecvError};
 use wry::{MemoryUsageLevel, Rect, WebView, WebViewBuilder, WebViewBuilderExtWindows, WebViewExtWindows};
 
 /// Comando enviado desde el thread HTTP al main thread para crear/manipular
@@ -17,26 +19,26 @@ pub enum BrowserCommand {
     Open {
         url: String,
         bounds: Rect,
-        reply: mpsc::Sender<Result<(), String>>,
+        reply: crossbeam_channel::Sender<Result<(), String>>,
     },
     Bounds {
         bounds: Rect,
-        reply: mpsc::Sender<Result<(), String>>,
+        reply: crossbeam_channel::Sender<Result<(), String>>,
     },
     Visible {
         visible: bool,
-        reply: mpsc::Sender<Result<(), String>>,
+        reply: crossbeam_channel::Sender<Result<(), String>>,
     },
     Navigate {
         url: String,
         action: Option<String>,
-        reply: mpsc::Sender<Result<(), String>>,
+        reply: crossbeam_channel::Sender<Result<(), String>>,
     },
     Close {
-        reply: mpsc::Sender<Result<(), String>>,
+        reply: crossbeam_channel::Sender<Result<(), String>>,
     },
     CurrentUrl {
-        reply: mpsc::Sender<Result<String, String>>,
+        reply: crossbeam_channel::Sender<Result<String, String>>,
     },
 }
 
@@ -49,24 +51,26 @@ pub struct SubWebViewInner {
 
 /// Manager que despacha comandos al main thread vía canal.
 pub struct SubWebViewManager {
-    pub tx: mpsc::Sender<BrowserCommand>,
+    pub tx: Sender<BrowserCommand>,
 }
 
 impl SubWebViewManager {
-    /// Crea el manager y spawnea el thread receptor de comandos.
-    /// `web_context` y `window` se usan en el main thread para construir WebViews.
-    pub fn new() -> (Self, mpsc::Receiver<BrowserCommand>) {
-        let (tx, rx) = mpsc::channel();
+    /// Crea el manager con un canal bounded(32) (backpressure contra el
+    /// HTTP thread si el main thread está saturado procesando comandos).
+    pub fn new() -> (Self, Receiver<BrowserCommand>) {
+        let (tx, rx) = bounded(32);
         (Self { tx }, rx)
     }
 
-    pub fn send<T>(&self, cmd: BrowserCommand, rx: mpsc::Receiver<T>) -> Result<T, String> {
+    /// Envía un comando y espera la respuesta. El HTTP thread se bloquea
+    /// aquí hasta que el main thread procese el comando y envíe el reply.
+    pub fn send<T>(&self, cmd: BrowserCommand, rx: crossbeam_channel::Receiver<T>) -> Result<T, String> {
         self.tx.send(cmd).map_err(|_| "main thread gone".to_string())?;
         rx.recv().map_err(|_| "main thread dropped reply".to_string())
     }
 
     pub fn open(&self, url: &str, bounds: Rect) -> Result<(), String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
+        let (reply_tx, reply_rx) = bounded(1);
         self.send(
             BrowserCommand::Open {
                 url: url.to_string(),
@@ -78,17 +82,17 @@ impl SubWebViewManager {
     }
 
     pub fn set_bounds(&self, bounds: Rect) -> Result<(), String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
+        let (reply_tx, reply_rx) = bounded(1);
         self.send(BrowserCommand::Bounds { bounds, reply: reply_tx }, reply_rx)?
     }
 
     pub fn set_visible(&self, visible: bool) -> Result<(), String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
+        let (reply_tx, reply_rx) = bounded(1);
         self.send(BrowserCommand::Visible { visible, reply: reply_tx }, reply_rx)?
     }
 
     pub fn navigate(&self, url: &str, action: Option<&str>) -> Result<(), String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
+        let (reply_tx, reply_rx) = bounded(1);
         self.send(
             BrowserCommand::Navigate {
                 url: url.to_string(),
@@ -100,52 +104,59 @@ impl SubWebViewManager {
     }
 
     pub fn close(&self) -> Result<(), String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
+        let (reply_tx, reply_rx) = bounded(1);
         self.send(BrowserCommand::Close { reply: reply_tx }, reply_rx)?
     }
 
     pub fn current_url(&self) -> Result<String, String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
+        let (reply_tx, reply_rx) = bounded(1);
         self.send(BrowserCommand::CurrentUrl { reply: reply_tx }, reply_rx)?
     }
 }
 
-/// Procesa comandos en el main thread. Llamar desde `App::window_event`
-/// o un timer periódico. Retorna `true` si procesó algo.
+/// Procesa comandos en el main thread. Llamar desde `App::about_to_wait`.
+/// Usa `try_recv()` (non-blocking) para no bloquear el event loop.
+/// Limita a MAX_CMDS_PER_TICK por tick para evitar jank durante bursts
+/// de comandos (ej: drag del browser panel genera un bounds por mousemove).
+const MAX_CMDS_PER_TICK: usize = 8;
+
 pub fn process_browser_commands(
-    rx: &mpsc::Receiver<BrowserCommand>,
+    rx: &Receiver<BrowserCommand>,
     inner: &mut SubWebViewInner,
     ctx: Option<&mut wry::WebContext>,
     window: Option<&winit::window::Window>,
 ) {
     let mut ctx = ctx;
-    // Drain todos los comandos pendientes (non-blocking)
-    while let Ok(cmd) = rx.try_recv() {
-        match cmd {
-            BrowserCommand::Open { url, bounds, reply } => {
-                let result = cmd_open(inner, ctx.as_deref_mut(), window, &url, bounds);
-                let _ = reply.send(result);
-            }
-            BrowserCommand::Bounds { bounds, reply } => {
-                let result = cmd_bounds(inner, bounds);
-                let _ = reply.send(result);
-            }
-            BrowserCommand::Visible { visible, reply } => {
-                let result = cmd_visible(inner, visible);
-                let _ = reply.send(result);
-            }
-            BrowserCommand::Navigate { url, action, reply } => {
-                let result = cmd_navigate(inner, &url, action.as_deref());
-                let _ = reply.send(result);
-            }
-            BrowserCommand::Close { reply } => {
-                let result = cmd_close(inner);
-                let _ = reply.send(result);
-            }
-            BrowserCommand::CurrentUrl { reply } => {
-                let result = cmd_current_url(inner);
-                let _ = reply.send(result);
-            }
+    for _ in 0..MAX_CMDS_PER_TICK {
+        match rx.try_recv() {
+            Ok(cmd) => match cmd {
+                BrowserCommand::Open { url, bounds, reply } => {
+                    let result = cmd_open(inner, ctx.as_deref_mut(), window, &url, bounds);
+                    let _ = reply.send(result);
+                }
+                BrowserCommand::Bounds { bounds, reply } => {
+                    let result = cmd_bounds(inner, bounds);
+                    let _ = reply.send(result);
+                }
+                BrowserCommand::Visible { visible, reply } => {
+                    let result = cmd_visible(inner, visible);
+                    let _ = reply.send(result);
+                }
+                BrowserCommand::Navigate { url, action, reply } => {
+                    let result = cmd_navigate(inner, &url, action.as_deref());
+                    let _ = reply.send(result);
+                }
+                BrowserCommand::Close { reply } => {
+                    let result = cmd_close(inner);
+                    let _ = reply.send(result);
+                }
+                BrowserCommand::CurrentUrl { reply } => {
+                    let result = cmd_current_url(inner);
+                    let _ = reply.send(result);
+                }
+            },
+            Err(TryRecvError::Empty) => break,
+            Err(TryRecvError::Disconnected) => break,
         }
     }
 }

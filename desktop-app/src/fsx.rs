@@ -85,19 +85,26 @@ pub fn list_dir(path: &str) -> Result<serde_json::Value, String> {
 }
 
 pub fn read_file(path: &str, limit: usize) -> Result<serde_json::Value, String> {
+    use std::io::Read;
     let p = Path::new(path);
     if !p.is_file() {
         return Err("no es archivo".into());
     }
-    let bytes = std::fs::read(p).map_err(|e| e.to_string())?;
-    let truncated = bytes.len() > limit;
-    let head = &bytes[..bytes.len().min(limit)];
-    let text = String::from_utf8_lossy(head).to_string();
+    let meta = std::fs::metadata(p).map_err(|e| e.to_string())?;
+    let total_size = meta.len() as usize;
+    // Leer solo los primeros `limit` bytes en vez del archivo completo.
+    // Para archivos de 500MB esto evita 500MB de alloc en memoria.
+    let read_limit = limit.min(total_size);
+    let mut buf = vec![0u8; read_limit];
+    let mut f = std::fs::File::open(p).map_err(|e| e.to_string())?;
+    f.read_exact(&mut buf).map_err(|e| e.to_string())?;
+    let truncated = total_size > limit;
+    let text = String::from_utf8_lossy(&buf).to_string();
     Ok(serde_json::json!({
         "path": crate::state::pstring(p),
         "content": text,
         "truncated": truncated,
-        "size": bytes.len(),
+        "size": total_size,
         "ext": p.extension().and_then(|e| e.to_str()).unwrap_or(""),
     }))
 }

@@ -406,11 +406,14 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             let info = match out {
                 Some(o) => {
                     let d = o.data.lock().unwrap();
-                    let len = d.len();
-                    let start = since.min(len);
-                    let delta = &d[start..len];
+                    let base = o.base_offset.load(std::sync::atomic::Ordering::Relaxed);
+                    let total_len = base + d.len();
+                    // Si el cliente pide datos antes del base (buffer rotó),
+                    // devolver todo el buffer disponible.
+                    let start = if since < base { 0 } else { since - base };
+                    let delta = &d[start..];
                     serde_json::json!({
-                        "len": len,
+                        "len": total_len,
                         "done": o.done.load(std::sync::atomic::Ordering::SeqCst),
                         "data": base64_encode(delta),
                     })

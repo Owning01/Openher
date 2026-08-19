@@ -8,10 +8,19 @@ use std::time::Duration;
 
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 
-/// Buffer de salida del pty: append-only con condvar. Cada consumidor SSE
+/// Buffer de salida del pty: ring buffer con condvar. Cada consumidor SSE
 /// lleva su propio cursor (replay desde 0 en reconexión).
+/// El buffer mantiene los últimos MAX_PTY_BYTES bytes; los más viejos se
+/// descartan (en vez de bloquear tout el output nuevo como antes).
+const MAX_PTY_BYTES: usize = 2 * 1024 * 1024; // 2 MB
+
 pub struct PtyOutput {
     pub data: Mutex<Vec<u8>>,
+    /// Bytes totales escritos (monotónico creciente). El cliente usa este
+    /// valor como `len` para calcular su próximo `since`. Si el buffer
+    /// recortó, el `since` del cliente puede ser menor que `base_offset` y
+    /// se devuelve todo el buffer disponible.
+    pub base_offset: std::sync::atomic::AtomicUsize,
     pub done: std::sync::atomic::AtomicBool,
     pub cv: Condvar,
 }
@@ -20,14 +29,19 @@ impl PtyOutput {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             data: Mutex::new(Vec::new()),
+            base_offset: std::sync::atomic::AtomicUsize::new(0),
             done: std::sync::atomic::AtomicBool::new(false),
             cv: Condvar::new(),
         })
     }
     pub fn append(&self, bytes: &[u8]) {
         let mut d = self.data.lock().unwrap_or_else(|e| e.into_inner());
-        if d.len() < 1_048_576 {
-            d.extend_from_slice(bytes);
+        d.extend_from_slice(bytes);
+        // Ring buffer: si excede el máximo, recortar la primera mitad.
+        if d.len() > MAX_PTY_BYTES {
+            let drain = d.len() / 2;
+            d.drain(..drain);
+            self.base_offset.fetch_add(drain, std::sync::atomic::Ordering::Relaxed);
         }
         drop(d);
         self.cv.notify_all();

@@ -225,13 +225,10 @@ function normalizeHeaders(headers: Record<string, unknown> | undefined): Record<
 
 function serializedSize(value: unknown): number {
   if (value === undefined || value === null) return 0
-  if (typeof value === "number" || typeof value === "boolean") return String(value).length
+  if (typeof value === "number") return value
+  if (typeof value === "boolean") return 4
   if (typeof value === "string") return value.length
-  try {
-    return JSON.stringify(value)?.length ?? 0
-  } catch {
-    return 0
-  }
+  return 0
 }
 
 type ConfigProvidersResponse = {
@@ -374,10 +371,12 @@ async function requestRaw<T>(config: ServerConfig, target: string, options: Requ
 
       const responseHeaders = normalizeHeaders(Object.fromEntries(response.headers.entries()))
       recordDataUsage(serializedSize(options.body), "up")
-      recordDataUsage(serializedSize(response.headers.get("content-length")), "down")
+      const contentLength = Number(response.headers.get("content-length"))
+      if (contentLength > 0) recordDataUsage(contentLength, "down")
       if (response.status === 204) return { data: true as T, headers: responseHeaders }
       const json = (await response.json()) as T
-      recordDataUsage(serializedSize(json), "down")
+      // Medir solo si content-length no estaba disponible (evita JSON.stringify).
+      if (!contentLength) recordDataUsage(serializedSize(json), "down")
       return { data: unwrapData(json), headers: responseHeaders }
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))

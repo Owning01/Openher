@@ -65,7 +65,10 @@ struct App {
     web_context: Option<WebContext>,
     browser_mode: bool,
     /// Canal de comandos del sub-WebView (receiver se procesa en el event loop).
-    browser_rx: Option<std::sync::mpsc::Receiver<browser_view::BrowserCommand>>,
+    browser_rx: Option<crossbeam_channel::Receiver<browser_view::BrowserCommand>>,
+    /// Sender: se mantiene vivo para que el canal no se cierre si el AppState
+    /// todavía tiene referencias (browser_mgr.tx es clone de este).
+    _browser_tx: crossbeam_channel::Sender<browser_view::BrowserCommand>,
     /// Estado interno del sub-WebView (solo main thread).
     browser_inner: browser_view::SubWebViewInner,
 }
@@ -362,6 +365,7 @@ fn main() {
     });
 
     let (browser_mgr, browser_rx) = browser_view::SubWebViewManager::new();
+    let browser_tx = browser_mgr.tx.clone();
     let dist = web_dist_dir();
     let app_state = Arc::new(AppState {
         config: std::sync::RwLock::new(config.clone()),
@@ -424,6 +428,7 @@ fn main() {
         web_context: None,
         browser_mode: false,
         browser_rx: Some(browser_rx),
+        _browser_tx: browser_tx,
         browser_inner: browser_view::SubWebViewInner {
             webview: None,
             url: String::new(),

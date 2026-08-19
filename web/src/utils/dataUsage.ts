@@ -1,5 +1,6 @@
 const STORAGE_KEY = "opencode.datausage.v1"
 const MAX_AGE_MS = 31 * 24 * 60 * 60 * 1000
+const FLUSH_INTERVAL_MS = 3000
 
 export type DataPeriod = "day" | "week" | "month"
 export type NetworkKind = "mobile" | "wifi" | "other"
@@ -46,11 +47,28 @@ function writeEntries(entries: DataUsageEntry[]) {
   }
 }
 
+// --- Batch: acumula en memoria, flush cada FLUSH_INTERVAL_MS ---
+let pendingBatch: DataUsageEntry[] = []
+let flushTimer: ReturnType<typeof setInterval> | null = null
+
+function flush() {
+  if (pendingBatch.length === 0) return
+  const entries = readEntries()
+  entries.push(...pendingBatch)
+  pendingBatch = []
+  writeEntries(entries)
+}
+
+function scheduleFlush() {
+  if (flushTimer) return
+  flushTimer = setInterval(flush, FLUSH_INTERVAL_MS)
+  window.addEventListener("beforeunload", flush)
+}
+
 export function recordDataUsage(bytes: number, dir: "up" | "down") {
   if (!Number.isFinite(bytes) || bytes <= 0) return
-  const entries = readEntries()
-  entries.push({ ts: Date.now(), bytes: Math.round(bytes), dir, net: detectNetwork() })
-  writeEntries(entries)
+  pendingBatch.push({ ts: Date.now(), bytes: Math.round(bytes), dir, net: detectNetwork() })
+  scheduleFlush()
 }
 
 export type NetworkUsage = { up: number; down: number; total: number }
@@ -81,6 +99,8 @@ export function getDataUsage(): DataUsageSummary {
 
   const totals = { day: empty(), week: empty(), month: empty() }
 
+  // Flush pendientes antes de leer para que el resumen incluya datos frescos.
+  flush()
   for (const e of readEntries()) {
     const net: NetworkKind = e.net === "mobile" || e.net === "wifi" ? e.net : "other"
     for (const period of ["day", "week", "month"] as const) {
@@ -103,6 +123,7 @@ export function getDataUsage(): DataUsageSummary {
 }
 
 export function resetDataUsage() {
+  flush()
   try {
     localStorage.removeItem(STORAGE_KEY)
   } catch {

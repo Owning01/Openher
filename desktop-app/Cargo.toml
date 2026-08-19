@@ -21,6 +21,7 @@ portable-pty = "0.8"
 ureq = "2"
 winreg = "0.52"
 sha1 = "0.10"
+crossbeam-channel = "0.5"
 pdf-extract = "0.7"
 lopdf = "0.34"
 quick-xml = { version = "0.37", features = ["serialize"] }

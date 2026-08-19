@@ -122,48 +122,80 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [])
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
-    // Filtrar optimistas que ya están presentes en messages (por id o por coincidencia de texto en la misma sesión)
-    const existingUserTexts = new Set(
-      messages.filter((m) => m.info.role === "user").map((m) => `${m.info.sessionID}:${extractText(m).trim()}`)
-    )
-    // Para mensajes solo-imagen, trackear por sesión + cantidad de partes imagen
-    const existingImageCounts = new Map<string, number>()
-    for (const m of messages.filter((m) => m.info.role === "user")) {
-      const imgCount = m.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
-      if (imgCount > 0) {
-        existingImageCounts.set(m.info.sessionID, (existingImageCounts.get(m.info.sessionID) ?? 0) + imgCount)
-      }
-    }
-    const pendingOptimistic = optimisticUserMessages.filter((opt) => {
-      const key = `${opt.info.sessionID}:${extractText(opt).trim()}`
-      if (existingUserTexts.has(key)) {
-        existingUserTexts.delete(key)
-        return false
-      }
-      // Para mensajes solo-imagen: si el server ya tiene mensajes de usuario
-      // con imágenes en la misma sesión, asumir que fue confirmado
-      if (!extractText(opt).trim()) {
-        const optImgCount = opt.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
-        if (optImgCount > 0 && existingImageCounts.has(opt.info.sessionID)) {
-          return false
+    // Optimización: si no hay optimistas pendientes, skip el trabajo
+    // pesado de extractText (O(n) por cada user message cada frame).
+    // Durante streaming la mayoría de frames no tiene optimistas.
+    let merged: MessageEnvelope[]
+    if (optimisticUserMessages.length === 0) {
+      merged = messages
+    } else {
+      // Filtrar optimistas que ya están presentes en messages (por id o por coincidencia de texto en la misma sesión)
+      const existingUserTexts = new Set(
+        messages.filter((m) => m.info.role === "user").map((m) => `${m.info.sessionID}:${extractText(m).trim()}`)
+      )
+      // Para mensajes solo-imagen, trackear por sesión + cantidad de partes imagen
+      const existingImageCounts = new Map<string, number>()
+      for (const m of messages.filter((m) => m.info.role === "user")) {
+        const imgCount = m.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+        if (imgCount > 0) {
+          existingImageCounts.set(m.info.sessionID, (existingImageCounts.get(m.info.sessionID) ?? 0) + imgCount)
         }
       }
-      return true
-    })
-    const { out, cache } = computeRenderedMessages([...messages, ...pendingOptimistic], dataMode, renderedCacheRef.current)
+      const pendingOptimistic = optimisticUserMessages.filter((opt) => {
+        const key = `${opt.info.sessionID}:${extractText(opt).trim()}`
+        if (existingUserTexts.has(key)) {
+          existingUserTexts.delete(key)
+          return false
+        }
+        // Para mensajes solo-imagen: si el server ya tiene mensajes de usuario
+        // con imágenes en la misma sesión, asumir que fue confirmado
+        if (!extractText(opt).trim()) {
+          const optImgCount = opt.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+          if (optImgCount > 0 && existingImageCounts.has(opt.info.sessionID)) {
+            return false
+          }
+        }
+        return true
+      })
+      merged = [...messages, ...pendingOptimistic]
+    }
+    const { out, cache } = computeRenderedMessages(merged, dataMode, renderedCacheRef.current)
     renderedCacheRef.current = cache
     return out
   }, [messages, optimisticUserMessages, dataMode])
 
+  // Firmas baratas: solo cambian cuando la cantidad de mensajes o el último
+  // id/longitud cambian. Evita O(n) join por frame.
+  const lastSigRef = useRef({ count: 0, lastID: "", lastLen: 0, signature: "", assistantCount: 0, assistantLastID: "", assistantLastLen: 0, assistantSignature: "" })
   const messageScrollSignature = useMemo(() => {
-    return renderedMessages.map((m) => `${m.info.id}:${m.text.length}`).join("|")
+    const s = lastSigRef.current
+    const n = renderedMessages.length
+    const last = n > 0 ? renderedMessages[n - 1] : null
+    if (last && last.info.id === s.lastID && last.text.length === s.lastLen && n === s.count) {
+      return s.signature
+    }
+    const sig = renderedMessages.map((m) => `${m.info.id}:${m.text.length}`).join("|")
+    s.count = n
+    s.lastID = last?.info.id ?? ""
+    s.lastLen = last?.text.length ?? 0
+    s.signature = sig
+    return sig
   }, [renderedMessages])
 
   const assistantResponseSignature = useMemo(() => {
-    return renderedMessages
-      .filter((m) => m.info.role !== "user")
-      .map((m) => `${m.info.id}:${m.text.length}`)
-      .join("|")
+    const s = lastSigRef.current
+    const assistantMsgs = renderedMessages.filter((m) => m.info.role !== "user")
+    const ac = assistantMsgs.length
+    const aLast = ac > 0 ? assistantMsgs[ac - 1] : null
+    if (aLast && aLast.info.id === s.assistantLastID && aLast.text.length === s.assistantLastLen && ac === s.assistantCount) {
+      return s.assistantSignature
+    }
+    const sig = assistantMsgs.map((m) => `${m.info.id}:${m.text.length}`).join("|")
+    s.assistantCount = ac
+    s.assistantLastID = aLast?.info.id ?? ""
+    s.assistantLastLen = aLast?.text.length ?? 0
+    s.assistantSignature = sig
+    return sig
   }, [renderedMessages])
 
   const pendingIndex = useMemo(() => {

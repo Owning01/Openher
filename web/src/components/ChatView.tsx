@@ -164,6 +164,11 @@ export const ChatView = memo(function ChatView({
   const [showChatCustomizer, setShowChatCustomizer] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
+  // Estable: evita que cada render del padre cree un nuevo function ref
+  // y anule el memo de todas las MessageBubble.
+  const handleContextMenu = useCallback((x: number, y: number, messageID: string) => {
+    setContextMenu({ x, y, messageID })
+  }, [])
   const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
   const messagesWrapRef = useRef<HTMLDivElement | null>(null)
   const devServer = useDevServer(selectedSession?.directory)
@@ -605,7 +610,7 @@ export const ChatView = memo(function ChatView({
           config={config}
           directory={selectedSession?.directory}
           onViewSubagents={handleViewSubagents}
-          onContextMenu={flags.contextMenu ? (x, y, messageID) => setContextMenu({ x, y, messageID }) : undefined}
+          onContextMenu={flags.contextMenu ? handleContextMenu : undefined}
           showTodoButton={showTodoButton ?? false}
           onToggleTodos={onTodosToggle}
           todosOpen={todosExpanded}

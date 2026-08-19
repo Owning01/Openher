@@ -8,6 +8,41 @@ import { ImageEditor } from "./ImageEditor"
 
 type ImageAttachment = { id: string; base64: string; mime: string; name: string }
 
+const IMAGE_MAX_SIZE = 1600
+
+/** Downscale de imágenes grandes antes de base64: reduce heap ~4x y tiempo de upload. */
+async function downscaleImage(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.readAsDataURL(file)
+    })
+  }
+  const bitmap = await createImageBitmap(file)
+  const scale = Math.min(1, IMAGE_MAX_SIZE / Math.max(bitmap.width, bitmap.height))
+  if (scale >= 1) {
+    bitmap.close()
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.readAsDataURL(file)
+    })
+  }
+  const w = Math.round(bitmap.width * scale)
+  const h = Math.round(bitmap.height * scale)
+  const canvas = new OffscreenCanvas(w, h)
+  const ctx = canvas.getContext("2d")!
+  ctx.drawImage(bitmap, 0, 0, w, h)
+  bitmap.close()
+  const blob = await canvas.convertToBlob({ type: file.type || "image/jpeg", quality: 0.85 })
+  return new Promise<string>((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.readAsDataURL(blob)
+  })
+}
+
 const HISTORY_KEY = "opencode.remote.promptHistory"
 const MAX_HISTORY = 50
 
@@ -306,12 +341,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     input.onchange = () => {
       const files = input.files; if (!files) return
       for (const f of Array.from(files)) {
-        const reader = new FileReader()
-        reader.onload = () => {
-          const result = reader.result
-          if (typeof result === "string") addImage(result, f.type || "application/octet-stream", f.name)
-        }
-        reader.readAsDataURL(f)
+        downscaleImage(f).then((base64) => addImage(base64, f.type || "application/octet-stream", f.name))
       }
     }
     input.click()
@@ -414,13 +444,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       for (const f of Array.from(e.dataTransfer.files)) {
         if (f.type.startsWith("image/")) {
-          const reader = new FileReader()
-          reader.onload = () => {
-            if (typeof reader.result === "string") {
-              addImage(reader.result, f.type, f.name)
-            }
-          }
-          reader.readAsDataURL(f)
+          downscaleImage(f).then((base64) => addImage(base64, f.type, f.name))
         } else {
           const sep = value ? (value.endsWith(" ") ? "" : " ") : ""
           onChange(value + sep + f.name)
@@ -544,11 +568,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
                 e.preventDefault()
                 const blob = item.getAsFile()
                 if (!blob) continue
-                const reader = new FileReader()
-                reader.onload = () => {
-                  if (typeof reader.result === "string") addImage(reader.result, blob.type, blob.name || "clipboard.png")
-                }
-                reader.readAsDataURL(blob)
+                downscaleImage(blob).then((base64) => addImage(base64, blob.type, blob.name || "clipboard.png"))
                 return
               }
             }

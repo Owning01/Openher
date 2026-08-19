@@ -882,7 +882,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const pollInterval = dataMode === "full" ? (isStreamingActive ? 5000 : 3500) : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
 
   const pollControl = usePolling(async () => {
-    await refreshSessions(true)
+    // Full refresh (per-directory hydration) solo en modo full.
+    // En saver/ultra/miser: light refresh (1 request) para ahorrar datos.
+    await refreshSessions(dataMode === "full")
     if (connectionStateRef.current === "offline") {
       throw new Error("offline")
     }

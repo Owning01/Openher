@@ -251,9 +251,24 @@ pub fn json_err(code: u16, msg: &str) -> tiny_http::Response<std::io::Cursor<Vec
         )
 }
 
+/// Lee el body de un request HTTP y lo parsea como JSON.
+/// Cap de 16 MB para evitar OOM con payloads maliciosos o accidentsales
+/// (base64 de archivos grandes, uploads sin límite).
 pub fn read_body(req: &mut tiny_http::Request) -> Result<serde_json::Value, String> {
+    const MAX_BODY_BYTES: usize = 16 * 1024 * 1024; // 16 MB
     let mut buf = Vec::new();
-    let _ = req.as_reader().read_to_end(&mut buf);
+    let reader = req.as_reader();
+    let mut total = 0usize;
+    let mut chunk = [0u8; 8192];
+    loop {
+        let n = reader.read(&mut chunk).map_err(|e| format!("read error: {e}"))?;
+        if n == 0 { break }
+        total += n;
+        if total > MAX_BODY_BYTES {
+            return Err(format!("body too large: >{MAX_BODY_BYTES} bytes"))
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    }
     let s = String::from_utf8_lossy(&buf);
     serde_json::from_str(&s).map_err(|e| format!("json inválido: {e}"))
 }
