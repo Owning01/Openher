@@ -174,6 +174,12 @@ fn cmd_open(
     let wv = WebViewBuilder::with_web_context(ctx)
         .with_url(url)
         .with_focused(true)
+        // UA Chrome-like: muchos sitios (Google, YouTube, etc.) detectan el UA
+        // con "Edg/" y bloquean o degradan. WebView2 es Chromium real, así que
+        // usar el UA de Chrome hace que la detección de browser funcione.
+        .with_user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        )
         .with_additional_browser_args(
             "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-video-decode --enable-accelerated-2d-canvas \
              --disable-web-security --disable-site-isolation-trials \
