@@ -410,7 +410,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                     let total_len = base + d.len();
                     // Si el cliente pide datos antes del base (buffer rotó),
                     // devolver todo el buffer disponible.
-                    let start = if since < base { 0 } else { since - base };
+                    let start = since.saturating_sub(base);
                     let delta = &d[start..];
                     serde_json::json!({
                         "len": total_len,

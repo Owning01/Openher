@@ -601,6 +601,7 @@ export default {
   'settings.chatMinimalistMode': 'Modo minimalista (colapsar pensamiento + tools)',
   'detail.activity': 'Actividad',
   'detail.activityThinking': 'pensando',
+  'detail.activityTool': 'tool',
   'detail.activityTools': 'tools',
   'detail.activityCompaction': 'compaction',
   'settings.chatCompletionSound': 'Sonido al completar',

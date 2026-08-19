@@ -393,6 +393,7 @@
   max-height: 42vh;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  contain: layout style paint;
 }
 
 .model-option {
@@ -484,6 +485,7 @@
   padding: var(--space-2) var(--space-1);
   scroll-padding-bottom: var(--space-2);
   overscroll-behavior-y: contain;
+  contain: layout style paint;
 }
 
 /* La separación entre mensajes la controla --chat-message-gap (ChatCustomizer)

@@ -30,6 +30,7 @@ export type ChatViewProps = {
   todosExpanded: boolean
   composer: string
   isWorking: boolean
+  isSending?: boolean
   showTypingBubble: boolean
   loadingSessionID: string | null
   selectedID: string | null
@@ -118,7 +119,7 @@ export type ChatViewProps = {
 }
 
 export const ChatView = memo(function ChatView({
-  selectedSession, messages, pendingIndex, composer, isWorking,
+  selectedSession, messages, pendingIndex, composer, isWorking, isSending,
   showTypingBubble, loadingSessionID, selectedID, messageScrollSignature, view,
   dataMode: _dataMode,
   renamingSessionID, renameValue,
@@ -708,6 +709,7 @@ export const ChatView = memo(function ChatView({
           onAbort={onAbort}
           disabled={!selectedSession}
           isWorking={isWorking}
+          isSending={isSending}
           activeAgentID={activeAgentID}
           primaryAgentOptions={primaryAgentOptions}
           allAgentOptions={allAgentOptions}

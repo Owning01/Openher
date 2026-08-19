@@ -2,7 +2,7 @@ import { memo, useState, useCallback, type ReactNode } from "react"
 import { ChevronIcon } from "../Icons"
 
 type Props = {
-  icon: ReactNode
+  icon?: ReactNode
   title: string
   subtitle?: ReactNode
   filePath?: string
@@ -27,7 +27,7 @@ export const CollapsibleSection = memo(function CollapsibleSection({ icon, title
   return (
     <div className={`collapsible-section${open ? " open" : ""}${className ? " " + className : ""}`}>
       <button className="collapsible-toggle" onClick={handleToggle} aria-expanded={open}>
-        <span className="collapsible-icon">{icon}</span>
+        {icon && <span className="collapsible-icon">{icon}</span>}
         <span className="collapsible-title">{title}</span>
         {subtitle && <span className="collapsible-subtitle">{subtitle}</span>}
         {filePath && <span className="collapsible-file">{filePath}</span>}

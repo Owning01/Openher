@@ -602,6 +602,7 @@ export default {
   'settings.chatMinimalistMode': 'Minimalist mode (collapse thinking + tools)',
   'detail.activity': 'Activity',
   'detail.activityThinking': 'thinking',
+  'detail.activityTool': 'tool',
   'detail.activityTools': 'tools',
   'detail.activityCompaction': 'compaction',
   'settings.chatCompletionSound': 'Completion sound',

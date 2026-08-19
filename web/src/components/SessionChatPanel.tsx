@@ -295,6 +295,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     messages: msgs.renderedMessages,
     pendingIndex: msgs.pendingIndex,
     composer: msgs.composer,
+    isSending: msgs.isSending,
     isWorking,
     showTypingBubble: isWorking,
     loadingSessionID: null,

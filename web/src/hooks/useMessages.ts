@@ -66,6 +66,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const awaitingAssistantBaselineRef = useRef("")
   const completionShouldPlayRef = useRef(false)
   const isSendingRef = useRef(false)
+  const [isSending, setIsSending] = useState(false)
   // Sesión que el estado `messages` representa. Guard contra races: los deltas
   // de otra sesión (que el SSE puede entregar durante una transición de sesión)
   // se rechazan si no coinciden con la sesión cargada.
@@ -651,6 +652,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       // posteriores.
       if (isSendingRef.current) return false
       isSendingRef.current = true
+      setIsSending(true)
       let ok = false
       try {
         setComposer("")
@@ -674,9 +676,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           onSetRuntimeError((err as Error).message)
         }
       } finally {
-        // Reset inmediato después del POST — la confirmación posterior no
-        // bloquea nuevos envíos (isSendingRef queda false durante el poll).
-        isSendingRef.current = false
+        // NO reset isSendingRef aquí — se mantiene true hasta que termine
+        // la confirmación o el error, evitando doble-envío por race condition
+        // con re-render async de React.
+      }
+
+      if (!ok) {
+        setIsSending(false)
       }
 
       if (ok) {
@@ -704,6 +710,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       } catch {
         // ignore
       }
+      isSendingRef.current = false
+      setIsSending(false)
       return ok
     }
 
@@ -793,6 +801,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   return {
     messages, setMessages, optimisticUserMessages,
     composer, setComposer,
+    isSending,
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
     compacting, setCompacting,

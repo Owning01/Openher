@@ -351,7 +351,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             const toolRunning = hasTools && message.toolParts.some((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending")
             const isStreaming = thinkingStreaming || toolRunning
 
-            // Título en vivo mientras el agente trabaja (acción actual).
+            // --- Título en vivo mientras el agente trabaja (acción actual) ---
             let liveTitle: string
             if (thinkingStreaming) {
               liveTitle = t('detail.thinking')
@@ -362,12 +362,15 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
               liveTitle = t('detail.thinking')
             }
 
-            // Título tenue para el turno ya completado (sin repetir "Actividad").
+            // --- Título tenue para el turno completado ---
+            // "Thinking" solo aparece si NO hay tools (si hay tools, thinking es implícito).
+            const toolCount = message.toolParts.length
+            const toolLabel = toolCount === 1 ? t('detail.activityTool') : `${toolCount} ${t('detail.activityTools')}`
             const completedParts: string[] = []
-            if (hasThinking) completedParts.push(t('detail.thought'))
-            if (hasTools) completedParts.push(`${message.toolParts.length} ${t('detail.activityTools')}`)
+            if (hasTools) completedParts.push(toolLabel)
+            else if (hasThinking) completedParts.push(t('detail.thought'))
             if (message.hasCompaction) completedParts.push(t('detail.activityCompaction'))
-            const completedTitle = completedParts.join(" · ")
+            const completedTitle = completedParts.join(" · ") || t('detail.activity')
 
             const title = isWorkingTurn ? liveTitle : completedTitle
             const subtitle = isWorkingTurn
@@ -377,7 +380,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             return (
               <div className={`activity-box activity-box-${isWorkingTurn ? "working" : "completed"}`}>
                 <CollapsibleSection
-                  icon={<ToolIcon size={14} />}
+                  icon={isWorkingTurn ? <ToolIcon size={14} /> : undefined}
                   title={title}
                   subtitle={subtitle}
                   open={activityOpen}

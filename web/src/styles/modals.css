@@ -12,6 +12,7 @@
   background: rgba(0, 0, 0, 0.88);
   padding: var(--space-4);
   cursor: zoom-out;
+  will-change: opacity;
 }
 
 .image-lightbox img {
@@ -40,6 +41,7 @@
   justify-content: center;
   padding: var(--space-4);
   background: var(--modal-backdrop);
+  will-change: opacity;
 }
 
 .modal-card {
@@ -50,6 +52,7 @@
   background: var(--surface);
   padding: var(--space-5);
   box-shadow: var(--shadow-md);
+  will-change: transform, opacity;
 }
 
 .modal-card .subtle {
@@ -102,6 +105,7 @@
   display: flex;
   flex-direction: column;
   padding: var(--space-1) 0;
+  contain: layout style paint;
 }
 
 .folder-row {
@@ -167,6 +171,7 @@
   align-items: flex-end;
   justify-content: center;
   background: var(--sheet-backdrop);
+  will-change: opacity;
 }
 
 .bottom-sheet {
@@ -180,6 +185,7 @@
   background: var(--surface);
   padding: var(--space-3) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom));
   box-shadow: var(--shadow-md);
+  will-change: transform;
 }
 
 .sheet-handle {
@@ -234,6 +240,7 @@ button.compact {
   display: flex;
   align-items: center;
   justify-content: center;
+  will-change: opacity;
 }
 
 .modal-content {
@@ -244,6 +251,7 @@ button.compact {
   max-width: 400px;
   width: 90%;
   box-shadow: var(--shadow-lg);
+  will-change: transform, opacity;
 }
 
 .modal-header {
@@ -273,6 +281,7 @@ button.compact {
   display: flex;
   align-items: center;
   justify-content: center;
+  will-change: opacity;
 }
 
 .theme-picker {
@@ -285,6 +294,7 @@ button.compact {
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  will-change: transform, opacity;
 }
 
 .theme-picker-header {
@@ -327,6 +337,7 @@ button.compact {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  contain: layout style paint;
 }
 
 .theme-picker-item {
@@ -490,6 +501,7 @@ button.compact {
   margin-top: var(--space-3);
   max-height: 300px;
   overflow-y: auto;
+  contain: layout style paint;
 }
 
 .queued-item {
@@ -535,7 +547,7 @@ button.compact {
   font-size: 0.88rem; transition: border-color 0.15s;
 }
 .skill-search input:focus { outline: none; border-color: var(--primary, #10b981); }
-.skill-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-3); }
+.skill-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-3); contain: layout style paint; }
 .skill-empty { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.85rem; }
 
 .skill-group { display: flex; flex-direction: column; gap: 4px; }
@@ -637,7 +649,7 @@ button.compact {
 
 /* ===== Archived List ===== */
 .archived-list { max-width: 500px; }
-.archived-list-items { display: flex; flex-direction: column; gap: var(--space-2); }
+.archived-list-items { display: flex; flex-direction: column; gap: var(--space-2); contain: layout style paint; }
 .archived-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: var(--radius-sm); }
 .archived-item-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
 .archived-item-actions { display: flex; gap: var(--space-2); flex-shrink: 0; }

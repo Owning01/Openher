@@ -68,6 +68,7 @@ type ComposerProps = {
   onAbort: () => void
   disabled: boolean
   isWorking: boolean
+  isSending?: boolean
   activeAgentID: string
   primaryAgentOptions: AgentOption[]
   allAgentOptions?: AgentOption[]
@@ -92,7 +93,7 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "connect", description: "Connect providers (API keys, OpenAI-compatible)", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, activeAgentID, primaryAgentOptions, allAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, snippets = [], charLimit = 0 }: ComposerProps) {
+export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, isSending = false, activeAgentID, primaryAgentOptions, allAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, snippets = [], charLimit = 0 }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const [showAtMenu, setShowAtMenu] = useState(false)
@@ -185,6 +186,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [value, allSlashCommands])
 
   useEffect(() => {
+    // Short-circuit: la mayoría de keystrokes no activan menúes.
+    // Solo corre regex cuando el valor podría coincidir.
+    if (!value.startsWith("/") && !/(?:^|\s)@/.test(value)) {
+      if (showSlashMenu) setShowSlashMenu(false)
+      if (showAtMenu) setShowAtMenu(false)
+      return
+    }
     if (value.startsWith("/")) {
       setShowSlashMenu(true)
       setSlashIndex(0)
@@ -198,6 +206,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     } else {
       setShowAtMenu(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value])
 
   useEffect(() => {
@@ -264,19 +273,14 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const [images, setImages] = useState<ImageAttachment[]>([])
 
   // Auto-grow: la caja crece mientras se escribe (hasta 120px) y vuelve a su
-  // alto mínimo cuando se vacía (al enviar/limpiar). La medición corre en
-  // doble requestAnimationFrame: en el mismo tick del cambio de value el DOM
-  // todavía no hizo reflow (WebView/móvil) y scrollHeight devuelve el alto
-  // anterior — el textarea quedaría crecido tras enviar un mensaje largo.
-  // height:auto primero deja que el navegador calcule el alto natural real.
+  // alto mínimo cuando se vacía (al enviar/limpiar). Un solo rAF alcanza
+  // para que el DOM haga reflow y scrollHeight sea correcto durante typing.
   const resizeTextarea = useCallback(() => {
     const ta = textareaRef.current
     if (!ta) return
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        ta.style.height = "auto"
-        ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
-      })
+      ta.style.height = "auto"
+      ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
     })
   }, [])
 
@@ -430,13 +434,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     }
 
     if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu) {
-      if (isMobileInput) return
+      if (isMobileInput || isSending) return
       e.preventDefault()
       if (value.trim()) pushHistory(value)
       historyIndexRef.current = -1; setHistoryDraft(null)
       handleSendWithImages()
     }
-  }, [value, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, onChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput])
+  }, [value, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, onChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput, isSending])
 
   const handleComposerDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -604,7 +608,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           <button
             type="button"
             onClick={handleSendWithImages}
-            disabled={disabled || (!value.trim() && images.length === 0)}
+            disabled={disabled || isSending || (!value.trim() && images.length === 0)}
             className={`composer-inline-btn composer-send-btn${supported ? " with-mic" : ""}`}
             title={t('composer.send')}
             aria-label={t('composer.send')}

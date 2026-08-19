@@ -30,7 +30,7 @@ use state::AppState;
 use tiny_http::Server;
 use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
 use winit::application::ApplicationHandler;
-use winit::dpi::{LogicalPosition, LogicalSize};
+use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
@@ -173,7 +173,7 @@ impl ApplicationHandler<AppEvent> for App {
             .with_initialization_script("window.__OPENCODE_DESKTOP__ = true;")
             // Aceleración por GPU + Desactivar bloqueo de X-Frame-Options/CORS en iframe incrustado.
             .with_additional_browser_args(
-                "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-accelerated-video-decode --disable-web-security --disable-site-isolation-trials --disable-features=IsolateOrigins,site-per-process",
+                "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-accelerated-video-decode --enable-gpu-rasterization --enable-zero-copy --disable-web-security --disable-site-isolation-trials --disable-features=IsolateOrigins,site-per-process",
             );
         match builder.build_as_child(&window) {
             Ok(wv) => {

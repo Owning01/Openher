@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
-import { toBase64, getApiVersion, onApiVersionChange } from "../api"
+import { toBase64, resolveApiVersion, onApiVersionChange } from "../api"
 import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS, SSE_CONNECT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
@@ -56,7 +56,11 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
     const connect = useCallback(async () => {
       if (!config || !mountedRef.current) return
     // El dialecto resuelve el endpoint: v2 expone SSE en /api/event.
-    const v2 = (await getApiVersion(config)) === "v2"
+    // resolveApiVersion es sync (cache memoizado por host) — no bloquea el
+    // connect() con un health probe. Si el cache está vacío, cae a v1 y se
+    // corrige en background cuando el health detecta v2 (onApiVersionChange
+    // re-ejecuta el efecto de conexión).
+    const v2 = resolveApiVersion(config) === "v2"
 
     abortRef.current?.abort()
     clearHeartbeat()

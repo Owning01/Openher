@@ -535,7 +535,7 @@
   font-weight: 600;
   padding: 0.15rem 0.5rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
   white-space: nowrap;
   flex-shrink: 0;
 }

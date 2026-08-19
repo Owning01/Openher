@@ -377,6 +377,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const {
     composer, setComposer,
+    isSending,
     awaitingAssistantReply, setAwaitingAssistantReply,
     runtimeError, setRuntimeError,
     renderedMessages, messageScrollSignature, pendingIndex,
@@ -879,12 +880,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     connectionStateRef.current = connectionState
   }, [connectionState])
 
-  const pollInterval = dataMode === "full" ? (isStreamingActive ? 5000 : 3500) : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
+  // Poll rápido durante turnos activos (sin SSE en modos saver/ultra/miser):
+  // 3s cuando el server está generando, intervalo normal en idle.
+  const baseInterval = dataMode === "full" ? (isStreamingActive ? 5000 : 3500) : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
+  const pollInterval = (selectedSession && isSessionActive(selectedSession)) ? Math.min(baseInterval, 3000) : baseInterval
 
   const pollControl = usePolling(async () => {
-    // Full refresh (per-directory hydration) solo en modo full.
+    // Full refresh (per-directory hydration) solo en modo full SIN SSE activo.
+    // Cuando SSE streama en vivo, los deltas ya llegan por /event — el refresh
+    // pesado solo satura el túnel y compite con el stream.
     // En saver/ultra/miser: light refresh (1 request) para ahorrar datos.
-    await refreshSessions(dataMode === "full")
+    const sseLive = streamState === "streaming"
+    if (dataMode === "full" && !sseLive) {
+      await refreshSessions(true)
+    } else if (dataMode !== "full") {
+      await refreshSessions(false)
+    }
     if (connectionStateRef.current === "offline") {
       throw new Error("offline")
     }
@@ -894,7 +905,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       // El skip solo es seguro si el SSE está streamando en vivo: si está
       // caído/polling (túnel móvil), hay que fetchear siempre o la respuesta
       // del modelo nunca llega hasta que el turno termina.
-      const sseLive = streamState === "streaming"
       const skip = dataMode !== "full" && sseLive && prevUpdated !== undefined && selectedSession.updated <= prevUpdated
       if (!skip) {
         await loadSelected(selectedSession.id, selectedSession.directory)
@@ -911,7 +921,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "idle" } : s))
       }
     }
-  }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, selectedSession?.id, selectedSession?.status, isStreamingActive], isStreamingActive)
+  }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, streamState, selectedSession?.id, selectedSession?.status, isStreamingActive], isStreamingActive)
 
   useCompletionAudio(awaitingAssistantReply, completionShouldPlayRef, dataMode, chatSettings.completionSound, () => {
     if (selectedSession && dataMode !== "ultra" && dataMode !== "miser") {
@@ -2347,7 +2357,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     revertID: localRevertID,
     messages: renderedMessages, pendingIndex, todos,
     todosExpanded, composer,
-    isWorking, showTypingBubble,
+    isWorking, showTypingBubble, isSending,
     loadingSessionID, selectedID,
     messageScrollSignature, view,
     dataMode,
