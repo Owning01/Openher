@@ -146,7 +146,7 @@ export const ChatView = memo(function ChatView({
   const [showModelMenu, setShowModelMenu] = useState(false)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const modelToggleRef = useRef<HTMLButtonElement | null>(null)
-  useOutsideClick(modelMenuRef, () => setShowModelMenu(false), showModelMenu)
+  // Modal centrado: solo se cierra con X o ESC (no con click outside).
   useEffect(() => {
     if (!showModelMenu) return
     const onKey = (e: KeyboardEvent) => {
@@ -156,7 +156,6 @@ export const ChatView = memo(function ChatView({
       }
     }
     window.addEventListener("keydown", onKey)
-    modelMenuRef.current?.querySelector<HTMLButtonElement>("button")?.focus()
     return () => window.removeEventListener("keydown", onKey)
   }, [showModelMenu])
   const [showSkills, setShowSkills] = useState(false)
@@ -354,31 +353,39 @@ export const ChatView = memo(function ChatView({
                     {activeModelOption.variant ? <span className="header-model-variant"> · {activeModelOption.variant}</span> : ""}
                   </span>
                 </button>
-                {showModelMenu && (
-                  <div id="header-model-menu" className="header-model-menu fade-in" aria-labelledby="hmm-title">
-                    <div className="hmm-title" id="hmm-title">
-                      <strong>{activeModelOption.modelName ?? t('detail.modelLoading')}</strong>
-                      {activeModelOption.providerName && <small>{activeModelOption.providerName}</small>}
+                {showModelMenu && createPortal(
+                  <div className="model-modal-overlay">
+                    <div className="model-modal" ref={modelMenuRef}>
+                      <div className="model-modal-header">
+                        <div className="model-modal-title">
+                          <strong>{activeModelOption.modelName ?? t('detail.modelLoading')}</strong>
+                          {activeModelOption.providerName && <small>{activeModelOption.providerName}</small>}
+                        </div>
+                        <button type="button" className="model-modal-close" onClick={() => { setShowModelMenu(false); modelToggleRef.current?.focus() }} aria-label="Close">
+                          <CloseIcon />
+                        </button>
+                      </div>
+                      {activeModelVariants.length > 0 ? (
+                        <ThinkingLevels
+                          base={activeModelOption}
+                          variants={activeModelVariants}
+                          activeVariant={selectedVariant}
+                          onChange={(_key, variant) => {
+                            const next = variant ?? null
+                            if (next !== selectedVariant) onChangeVariant(next)
+                            setShowModelMenu(false)
+                            modelToggleRef.current?.focus()
+                          }} />
+                      ) : (
+                        <span className="hmm-none">{t('detail.noThinkingLevels')}</span>
+                      )}
+                      <button type="button" className="hmm-change"
+                        onClick={() => { setShowModelMenu(false); modelToggleRef.current?.focus(); onSheetOpen("ai") }}>
+                        {t('detail.changeModel')}
+                      </button>
                     </div>
-                    {activeModelVariants.length > 0 ? (
-                      <ThinkingLevels
-                        base={activeModelOption}
-                        variants={activeModelVariants}
-                        activeVariant={selectedVariant}
-                        onChange={(_key, variant) => {
-                          const next = variant ?? null
-                          if (next !== selectedVariant) onChangeVariant(next)
-                          setShowModelMenu(false)
-                          modelToggleRef.current?.focus()
-                        }} />
-                    ) : (
-                      <span className="hmm-none">{t('detail.noThinkingLevels')}</span>
-                    )}
-                    <button type="button" className="hmm-change"
-                      onClick={() => { setShowModelMenu(false); modelToggleRef.current?.focus(); onSheetOpen("ai") }}>
-                      {t('detail.changeModel')}
-                    </button>
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </div>
             )}
