@@ -507,6 +507,8 @@
     background: transparent;
     position: relative;
     touch-action: none;
+    /* 4px hit-area en vez de 6px: no tapa la scrollbar de los paneles adyacentes */
+    width: 4px;
   }
 
   .desktop-resize-row {
@@ -514,6 +516,7 @@
     background: transparent;
     position: relative;
     touch-action: none;
+    height: 4px;
   }
 
   .desktop-resize-col::after {
@@ -521,8 +524,8 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 2px;
-    right: 2px;
+    left: 1px;
+    right: 1px;
     background: var(--border-subtle);
     transition: background 0.12s;
   }
@@ -532,8 +535,8 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: 2px;
-    bottom: 2px;
+    top: 1px;
+    bottom: 1px;
     background: var(--border-subtle);
     transition: background 0.12s;
   }
@@ -797,7 +800,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: 6px;
+    width: 4px;
     cursor: col-resize;
     touch-action: none;
     z-index: 2;
@@ -808,8 +811,8 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 2px;
-    right: 2px;
+    left: 1px;
+    right: 1px;
     background: var(--border-subtle);
     transition: background 0.12s;
   }

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useState } from "react"
 import { Markdown } from "./Markdown"
-import { DiskIcon, RefreshIcon } from "../Icons"
+import { DiskIcon, RefreshIcon, PencilIcon, EyeIcon, SplitIcon } from "../Icons"
 import { shell } from "../shell"
 
 type Props = {
@@ -149,32 +149,19 @@ export const DocEditorPanel = memo(function DocEditorPanel({ initialPath }: Prop
           </button>
         </div>
 
-        <div style={{ display: "inline-flex", background: "rgba(255,255,255,0.05)", borderRadius: 4, padding: 2 }}>
-          <button
-            type="button"
-            className={`btn-icon compact${viewMode === "edit" ? " active" : ""}`}
-            onClick={() => setViewMode("edit")}
-            style={{ fontSize: 11, padding: "2px 6px" }}
-          >
-            Editar
-          </button>
-          <button
-            type="button"
-            className={`btn-icon compact${viewMode === "split" ? " active" : ""}`}
-            onClick={() => setViewMode("split")}
-            style={{ fontSize: 11, padding: "2px 6px" }}
-          >
-            Split
-          </button>
-          <button
-            type="button"
-            className={`btn-icon compact${viewMode === "preview" ? " active" : ""}`}
-            onClick={() => setViewMode("preview")}
-            style={{ fontSize: 11, padding: "2px 6px" }}
-          >
-            Vista Previa
-          </button>
-        </div>
+      </div>
+
+      {/* Barra de modos markdown — 3 iconos compactos debajo */}
+      <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "2px 6px", background: "rgba(0,0,0,0.2)", borderBottom: "1px solid rgba(255,255,255,0.05)", height: 26, minHeight: 26, flexShrink: 0 }}>
+        <button type="button" onClick={() => setViewMode("edit")} title="Editar" aria-label="Editar" style={{ width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", border: viewMode === "edit" ? "1px solid #58a6ff" : "1px solid transparent", borderRadius: 4, background: viewMode === "edit" ? "rgba(88,166,255,0.15)" : "transparent", color: viewMode === "edit" ? "#58a6ff" : "#8b949e", cursor: "pointer", padding: 0 }}>
+          <PencilIcon size={12} />
+        </button>
+        <button type="button" onClick={() => setViewMode("split")} title="Vista dividida" aria-label="Vista dividida" style={{ width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", border: viewMode === "split" ? "1px solid #58a6ff" : "1px solid transparent", borderRadius: 4, background: viewMode === "split" ? "rgba(88,166,255,0.15)" : "transparent", color: viewMode === "split" ? "#58a6ff" : "#8b949e", cursor: "pointer", padding: 0 }}>
+          <SplitIcon size={12} />
+        </button>
+        <button type="button" onClick={() => setViewMode("preview")} title="Vista previa" aria-label="Vista previa" style={{ width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", border: viewMode === "preview" ? "1px solid #58a6ff" : "1px solid transparent", borderRadius: 4, background: viewMode === "preview" ? "rgba(88,166,255,0.15)" : "transparent", color: viewMode === "preview" ? "#58a6ff" : "#8b949e", cursor: "pointer", padding: 0 }}>
+          <EyeIcon size={12} />
+        </button>
       </div>
 
       {/* Barra de formato rápido (WYSIWYG Markdown Helpers) */}

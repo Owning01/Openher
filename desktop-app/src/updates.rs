@@ -18,7 +18,7 @@ fn get_json(url: &str) -> Option<serde_json::Value> {
 }
 
 pub fn github(state: &AppState) -> serde_json::Value {
-    let repos = state.config.read().unwrap().github_repos.clone();
+    let repos = state.config.read().unwrap_or_else(|e| e.into_inner()).github_repos.clone();
     let mut out = Vec::new();
     for repo in repos {
         let releases = get_json(&format!("https://api.github.com/repos/{repo}/releases?per_page=5"));
@@ -64,7 +64,7 @@ pub fn github(state: &AppState) -> serde_json::Value {
 }
 
 pub fn x_feed(state: &AppState) -> serde_json::Value {
-    let handles = state.config.read().unwrap().x_handles.clone();
+    let handles = state.config.read().unwrap_or_else(|e| e.into_inner()).x_handles.clone();
     let mut out = Vec::new();
     for handle in handles {
         let url = format!("https://r.jina.ai/https://x.com/{handle}");

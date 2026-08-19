@@ -5,7 +5,7 @@ use std::path::Path;
 use crate::state::AppState;
 
 pub fn list(state: &AppState) -> serde_json::Value {
-    let root = crate::state::docs_root(&state.config.read().unwrap());
+    let root = crate::state::docs_root(&state.config.read().unwrap_or_else(|e| e.into_inner()));
     let mut files = Vec::new();
     walk(&root, &root, 0, &mut files);
     serde_json::json!({
@@ -45,7 +45,7 @@ fn walk(root: &Path, dir: &Path, depth: usize, out: &mut Vec<serde_json::Value>)
 }
 
 pub fn read(state: &AppState, rel: &str) -> Result<serde_json::Value, String> {
-    let root = crate::state::docs_root(&state.config.read().unwrap());
+    let root = crate::state::docs_root(&state.config.read().unwrap_or_else(|e| e.into_inner()));
     let mut path = root.join(rel);
     if !path.starts_with(&root) {
         return Err("ruta inválida".into());

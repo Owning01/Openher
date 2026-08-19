@@ -57,6 +57,21 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove
 }: Props) {
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
+  const composerRef = useRef(msgs.composer)
+  useEffect(() => { composerRef.current = msgs.composer }, [msgs.composer])
+  const composerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const debouncedSetComposer = useCallback((value: string) => {
+    composerRef.current = value
+    if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
+    if (value === "") {
+      msgs.setComposer("")
+      return
+    }
+    composerDebounceRef.current = setTimeout(() => msgs.setComposer(value), 600)
+  }, [msgs.setComposer])
+  useEffect(() => () => {
+    if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
+  }, [])
   const { getCachedMessages } = useOfflineCache(baseProps.flags)
   const [localRevertID, setLocalRevertID] = useState<string | null>(null)
   const [stopGenerationRef] = useState(() => ({ current: false }))
@@ -137,33 +152,36 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const panelModelVariants = panelModelAI?.activeModelVariants ?? baseProps.activeModelVariants
   const panelVariant = panelModelAI ? panelModelAI.selectedVariant : baseProps.selectedVariant
 
-  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }) => {
+  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string) => {
     if (!config) return
     if (!session) return
-    if (!msgs.composer.trim() && (!images || images.length === 0)) return
+    const currentComposer = (typeof text === "string" ? text : composerRef.current).trim() ? (typeof text === "string" ? text : composerRef.current) : ""
+    if (!currentComposer.trim() && (!images || images.length === 0)) return
     if (connectionState === "offline") {
-      onQueueAction({ type: "prompt", sessionID: session.id, directory: session.directory, payload: msgs.composer })
+      onQueueAction({ type: "prompt", sessionID: session.id, directory: session.directory, payload: currentComposer })
       msgs.setComposer("")
+      composerRef.current = ""
       msgs.setRuntimeError("Prompt queued - will send when connection is restored")
       return
     }
-    let sendText = msgs.composer
+    let sendText = currentComposer
     let originalText: string | null = null
-    if (options?.translate && msgs.composer.trim()) {
+    if (options?.translate && currentComposer.trim()) {
       try {
         const { translateToEnglish } = await import("../utils/translate")
-        const translated = await translateToEnglish(msgs.composer)
-        if (translated !== msgs.composer) {
-          originalText = msgs.composer
+        const translated = await translateToEnglish(currentComposer)
+        if (translated !== currentComposer) {
+          originalText = currentComposer
           sendText = translated
           msgs.setComposer(translated)
+          composerRef.current = translated
         }
       } catch (err) {
         msgs.setRuntimeError(`Translation failed: ${(err as Error).message}`)
         return
       }
     }
-    onRecordPrompt(msgs.composer)
+    onRecordPrompt(currentComposer)
     stopGenerationRef.current = false
     const revertMsgId = localRevertID ?? session?.revert?.messageID
     if (revertMsgId) {
@@ -174,7 +192,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       refresh,
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
       onSetCommands, msgs.setRuntimeError, images,
-      sendText !== msgs.composer ? sendText : undefined, undefined, originalText ?? undefined)
+      sendText !== currentComposer ? sendText : undefined, undefined, originalText ?? undefined)
     if (res === "connect") onOpenConnect?.()
     return typeof res === "boolean" ? res : true
   }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID, onOpenConnect])
@@ -268,7 +286,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     compacting: msgs.compacting,
     pendingQuestions,
     permissionRequest,
-    onComposerChange: msgs.setComposer,
+    onComposerChange: debouncedSetComposer,
     onSend: handleSend,
     onAbort: handleAbort,
     onUndo: handleUndo,

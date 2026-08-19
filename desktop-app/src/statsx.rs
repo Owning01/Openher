@@ -19,7 +19,7 @@ impl StatsManager {
     }
 
     pub fn status(&self) -> serde_json::Value {
-        let running = *self.running.lock().unwrap();
+        let running = *self.running.lock().unwrap_or_else(|e| e.into_inner());
         let alive = probe(STATS_PORT);
         serde_json::json!({
             "running": running || alive,
@@ -41,7 +41,7 @@ fn probe(port: u16) -> bool {
 /// Arranca (si no está) el server de stats en un thread. Idempotente.
 pub fn ensure(state: &Arc<AppState>) {
     {
-        let mut running = state.stats.running.lock().unwrap();
+        let mut running = state.stats.running.lock().unwrap_or_else(|e| e.into_inner());
         if *running {
             return;
         }

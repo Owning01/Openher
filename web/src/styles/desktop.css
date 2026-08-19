@@ -560,16 +560,29 @@
   overflow: hidden;
 }
 
-/* ===== VS Code style tabs — genérico DRY (usado por diff y editor de archivos)
-   Paleta de la app: --surface-subtle = tabBar bg (#252526), --surface = tab activa
-   (#1E1E1E), --primary = línea activa (#10b981), --text/--muted.
-   Métricas idénticas a VS Code: 35px alto, 13px Segoe UI, línea 2px. */
+/* ===== Tabs de editor de archivos — DRY con .tab de sesiones (24px/23px) ===== */
 .file-editor-tab-bar {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 1px;
+  padding: 0 var(--space-1);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  flex-shrink: 0;
+  min-height: 24px;
+  height: 24px;
 }
 
-.ade-diff-tabs-bar,
-.file-editor-tab-bar {
+.file-editor-tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Diff mantiene 35px VS Code */
+.ade-diff-tabs-bar {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -584,19 +597,64 @@
   contain: layout style paint;
 }
 
-.ade-diff-tabs-bar::-webkit-scrollbar,
-.file-editor-tab-bar::-webkit-scrollbar {
+.ade-diff-tabs-bar::-webkit-scrollbar {
   height: 3px;
 }
 
-.ade-diff-tabs-bar::-webkit-scrollbar-thumb,
-.file-editor-tab-bar::-webkit-scrollbar-thumb {
+.ade-diff-tabs-bar::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 2px;
 }
 
-.ade-diff-tab,
+/* file-editor tabs comparten métricas de .tab (layout.css) */
 .file-editor-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 6px;
+  border-radius: 0;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: var(--muted-strong);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  min-width: 48px;
+  height: 23px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+  user-select: none;
+}
+
+.file-editor-tab:hover {
+  background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+}
+
+.file-editor-tab.active {
+  background: var(--chat-bg-color, var(--surface));
+  color: var(--text);
+  border-color: var(--border);
+  font-weight: 600;
+  position: relative;
+}
+
+.file-editor-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--chat-bg-color, var(--surface));
+}
+
+.ade-diff-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -616,14 +674,12 @@
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.ade-diff-tab:hover,
-.file-editor-tab:hover {
+.ade-diff-tab:hover {
   background: var(--surface-hover, rgba(255, 255, 255, 0.04));
   color: var(--text);
 }
 
-.ade-diff-tab.active,
-.file-editor-tab.active {
+.ade-diff-tab.active {
   background: var(--surface, #252526);
   color: var(--text, #fff);
   border-bottom-color: var(--primary);
@@ -638,6 +694,10 @@
   white-space: nowrap;
 }
 
+.file-editor-tab-name {
+  max-width: 120px;
+}
+
 .file-editor-tab-icon {
   display: inline-flex;
   align-items: center;
@@ -649,29 +709,29 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 13px;
+  height: 13px;
   padding: 0;
   border: none;
-  border-radius: 3px;
+  border-radius: 0;
   background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1;
+  color: var(--muted-strong);
   cursor: pointer;
+  flex-shrink: 0;
   opacity: 0;
-  transition: background 0.12s, color 0.12s, opacity 0.12s;
+  transition: opacity 0.1s, background 0.1s;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .file-editor-tab:hover .file-editor-tab-close,
 .file-editor-tab.active .file-editor-tab-close {
-  opacity: 0.7;
+  opacity: 1;
 }
 
 .file-editor-tab-close:hover {
-  background: var(--surface-strong);
+  background: rgba(128, 128, 128, 0.15);
   color: var(--text);
-  opacity: 1 !important;
 }
 
 .file-editor-dirty {
@@ -680,6 +740,45 @@
   border-radius: 50%;
   background: var(--primary);
   flex-shrink: 0;
+}
+
+/* Barra de modos markdown — 3 iconos compactos debajo de las pestañas */
+.file-editor-md-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border);
+  height: 26px;
+  min-height: 26px;
+  flex-shrink: 0;
+}
+
+.file-editor-md-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.file-editor-md-btn:hover {
+  background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+  color: var(--text);
+}
+
+.file-editor-md-btn.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 
 .ade-diff-tab-stats {

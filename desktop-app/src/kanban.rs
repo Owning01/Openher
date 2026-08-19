@@ -60,11 +60,11 @@ impl KanbanStore {
     }
 
     pub fn all(&self) -> serde_json::Value {
-        serde_json::to_value(&*self.data.read().unwrap()).unwrap_or(serde_json::json!({}))
+        serde_json::to_value(&*self.data.read().unwrap_or_else(|e| e.into_inner())).unwrap_or(serde_json::json!({}))
     }
 
     pub fn add_board(&self, name: &str) -> Result<serde_json::Value, String> {
-        let mut d = self.data.write().unwrap();
+        let mut d = self.data.write().unwrap_or_else(|e| e.into_inner());
         let id = format!("b{}", crate::state::now_ms());
         let board = Board {
             id: id.clone(),
@@ -83,7 +83,7 @@ impl KanbanStore {
     }
 
     pub fn delete_board(&self, id: &str) -> Result<(), String> {
-        let mut d = self.data.write().unwrap();
+        let mut d = self.data.write().unwrap_or_else(|e| e.into_inner());
         let before = d.boards.len();
         d.boards.retain(|b| b.id != id);
         if d.boards.len() == before {
@@ -102,7 +102,7 @@ impl KanbanStore {
         notes: &str,
         color: &str,
     ) -> Result<serde_json::Value, String> {
-        let mut d = self.data.write().unwrap();
+        let mut d = self.data.write().unwrap_or_else(|e| e.into_inner());
         let b = d
             .boards
             .iter_mut()
@@ -123,7 +123,7 @@ impl KanbanStore {
     }
 
     pub fn update_card(&self, id: &str, patch: &serde_json::Value) -> Result<(), String> {
-        let mut d = self.data.write().unwrap();
+        let mut d = self.data.write().unwrap_or_else(|e| e.into_inner());
         for b in &mut d.boards {
             if let Some(card) = b.cards.iter_mut().find(|c| c.id == id) {
                 if let Some(col) = patch["column"].as_str() {
@@ -147,7 +147,7 @@ impl KanbanStore {
     }
 
     pub fn delete_card(&self, id: &str) -> Result<(), String> {
-        let mut d = self.data.write().unwrap();
+        let mut d = self.data.write().unwrap_or_else(|e| e.into_inner());
         for b in &mut d.boards {
             let before = b.cards.len();
             b.cards.retain(|c| c.id != id);

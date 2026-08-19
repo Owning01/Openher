@@ -112,16 +112,23 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   )
 
   // Local value: input responde instantáneo sin re-render del padre (App).
-  //encil: typing → localValue inmediato (solo Composer re-render), parent via transition.
+  // Typing → solo Composer re-render; parent se actualiza debounced en App.
   const [localValue, setLocalValue] = useState(value)
   const [, startTransition] = useTransition()
+  const lastExternalRef = useRef(value)
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
   useEffect(() => {
-    if (value !== localValue) setLocalValue(value)
-  }, [value])
+    if (value !== lastExternalRef.current) {
+      lastExternalRef.current = value
+      if (value !== localValue) setLocalValue(value)
+    }
+  }, [value, localValue])
   const handleChange = useCallback((newValue: string) => {
     setLocalValue(newValue)
-    startTransition(() => onChange(newValue))
-  }, [onChange])
+    lastExternalRef.current = newValue
+    startTransition(() => onChangeRef.current(newValue))
+  }, [])
 
   const promptHistoryRef = useRef<string[]>(loadHistory())
   const historyIndexRef = useRef(-1)

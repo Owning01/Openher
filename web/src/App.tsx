@@ -422,9 +422,23 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     applyDelta, applyPart, compacting, setCompacting, messages
   } = useMessages(config)
   const [, startTransition] = useTransition()
+  const composerRef = useRef(composer)
+  useEffect(() => { composerRef.current = composer }, [composer])
+  const composerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleComposerChange = useCallback((value: string) => {
-    startTransition(() => setComposer(value))
+    composerRef.current = value
+    if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
+    if (value === "") {
+      startTransition(() => setComposer(""))
+      return
+    }
+    composerDebounceRef.current = setTimeout(() => {
+      startTransition(() => setComposer(value))
+    }, 600)
   }, [setComposer])
+  useEffect(() => () => {
+    if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
+  }, [])
 
   const {
     todos, diffFiles, projectDashboard, dashboardError,
@@ -1062,7 +1076,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string) => {
     if (!selectedSession) return
-    const composerText = text ?? composer
+    const composerText = text ?? composerRef.current
     if (connectionState === "offline") {
       queueAction({ type: "prompt", sessionID: selectedSession.id, directory: selectedSession.directory, payload: composerText })
       setComposer("")
@@ -1107,7 +1121,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
     if (result === "connect") setShowConnectSheet(true)
     return typeof result === "boolean" ? result : true
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, composer, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker, setShowConnectSheet])
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker, setShowConnectSheet])
 
   const handleRegenerate = useCallback(async () => {
     if (!selectedSession) return
@@ -1897,6 +1911,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [setDesktopLayout])
 
   const startSidebarResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // No bloquear la scrollbar nativa: el resizer de 4px ocupa el borde derecho
+    // [right-4, right], la scrollbar ocupa [right-12, right]. Dejar 8px centrales
+    // [right-12, right-4] para scroll; el borde de 4px sigue siendo draggable.
+    const sidebarEl = (e.currentTarget as HTMLElement).closest(".app-desktop-sidebar") as HTMLElement | null
+    const scrollEl = (sidebarEl?.querySelector(".desktop-sidebar-body") ?? sidebarEl?.querySelector(".panel.sessions")) as HTMLElement | null
+    if (scrollEl && scrollEl.scrollHeight > scrollEl.clientHeight) {
+      const r = scrollEl.getBoundingClientRect()
+      if (e.clientX >= r.right - 14 && e.clientX < r.right - 4 && e.clientY >= r.top && e.clientY <= r.bottom) return
+    }
     e.preventDefault()
     const startX = e.clientX
     const startWidth = sidebarWidth
@@ -2783,7 +2806,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 if (!gridRef.current) return
                 const cols: Array<number | null | "handle"> = []
                 sizes.forEach((s, i) => { if (i > 0) cols.push("handle"); cols.push(s) })
-                gridRef.current.style.gridTemplateColumns = cols.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "1fr").join(" ")
+                gridRef.current.style.gridTemplateColumns = cols.map((x) => x === "handle" ? "4px" : x ? `${x}px` : "1fr").join(" ")
               }
               const onMove = (ev: PointerEvent) => {
                 sizes[colIndex] = Math.max(220, Math.min(900, startSize + (ev.clientX - startX)))
@@ -2814,7 +2837,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 if (!gridRef.current) return
                 const rows: Array<number | null | "handle"> = []
                 sizes.forEach((s, i) => { if (i > 0) rows.push("handle"); rows.push(s) })
-                gridRef.current.style.gridTemplateRows = rows.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "1fr").join(" ")
+                gridRef.current.style.gridTemplateRows = rows.map((x) => x === "handle" ? "4px" : x ? `${x}px` : "1fr").join(" ")
               }
               const onMove = (ev: PointerEvent) => {
                 sizes[rowIndex] = Math.max(200, Math.min(800, startSize + (ev.clientY - startY)))
@@ -2999,8 +3022,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   <div className="desktop-grid" ref={gridRef}
                     data-cols={desktopLayout.cols}
                     style={{
-                      gridTemplateColumns: gridCols.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "minmax(0, 1fr)").join(" "),
-                      gridTemplateRows: gridRows.map((x) => x === "handle" ? "6px" : x ? `${x}px` : "minmax(0, 1fr)").join(" "),
+                      gridTemplateColumns: gridCols.map((x) => x === "handle" ? "4px" : x ? `${x}px` : "minmax(0, 1fr)").join(" "),
+                      gridTemplateRows: gridRows.map((x) => x === "handle" ? "4px" : x ? `${x}px` : "minmax(0, 1fr)").join(" "),
                     }}>
                     {cells}
                     {colHandles}

@@ -51,7 +51,7 @@ impl PluginRegistry {
                 }
             }
         }
-        *self.plugins.lock().unwrap() = out
+        *self.plugins.lock().unwrap_or_else(|e| e.into_inner()) = out
             .iter()
             .filter_map(|v| serde_json::from_value(v.clone()).ok())
             .collect();
@@ -59,7 +59,7 @@ impl PluginRegistry {
     }
 
     pub fn list(&self) -> serde_json::Value {
-        let plugins = self.plugins.lock().unwrap().clone();
+        let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner()).clone();
         serde_json::json!({ "plugins": plugins })
     }
 
@@ -71,18 +71,18 @@ impl PluginRegistry {
     }
 
     pub fn run_command(&self, name: &str) -> Result<serde_json::Value, String> {
-        let plugins = self.plugins.lock().unwrap();
+        let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner());
         let m = plugins.iter().find(|p| p.name == name).ok_or("plugin no existe")?;
         let cmd = m.command.as_deref().ok_or("sin comando")?;
         let cwd = m.cwd.as_deref().map(Path::new);
         let child = crate::common::spawn_detached(cmd, cwd)?;
         let pid = child.id();
-        self.running.lock().unwrap().push((name.to_string(), child));
+        self.running.lock().unwrap_or_else(|e| e.into_inner()).push((name.to_string(), child));
         Ok(serde_json::json!({ "started": true, "pid": pid }))
     }
 
     pub fn running(&self) -> serde_json::Value {
-        let running = self.running.lock().unwrap();
+        let running = self.running.lock().unwrap_or_else(|e| e.into_inner());
         serde_json::json!({
             "running": running.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>()
         })
@@ -91,7 +91,7 @@ impl PluginRegistry {
 
 /// Labs: apps del ecosistema (server opencode, stats, desktop-agent, plugins).
 pub fn labs_list(state: &crate::state::AppState) -> serde_json::Value {
-    let cfg = state.config.read().unwrap();
+    let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
     let mut apps = Vec::new();
     apps.push(serde_json::json!({
         "id": "server",
@@ -127,7 +127,7 @@ pub fn labs_start(state: &Arc<crate::state::AppState>, id: &str) -> Result<serde
         crate::statsx::ensure(state);
         return Ok(serde_json::json!({ "started": true, "pid": "thread" }));
     }
-    let cfg = state.config.read().unwrap();
+    let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
     let (title, path): (String, String) = match id {
         "server" => ("Server opencode".to_string(), cfg.start_command.clone()),
         "desktop-agent" => ("Escritorio remoto".to_string(), cfg.desktop_agent_path.clone()),

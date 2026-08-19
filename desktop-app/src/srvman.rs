@@ -47,13 +47,13 @@ impl ServerManager {
         }
         let child = crate::common::spawn_detached(cmd, None)?;
         let pid = child.id();
-        self.children.lock().unwrap().insert("server".into(), child);
+        self.children.lock().unwrap_or_else(|e| e.into_inner()).insert("server".into(), child);
         Ok(serde_json::json!({ "started": true, "pid": pid }))
     }
 
     /// Detiene SOLO los procesos que la shell arrancó.
     pub fn stop(&self) -> Result<serde_json::Value, String> {
-        let mut map = self.children.lock().unwrap();
+        let mut map = self.children.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(mut child) = map.remove("server") {
             let _ = child.kill();
             let _ = child.wait();

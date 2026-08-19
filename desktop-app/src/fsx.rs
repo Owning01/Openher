@@ -153,12 +153,12 @@ pub fn app_state() -> Arc<FavoritesStore> {
 }
 
 pub fn favorites() -> Vec<String> {
-    app_state().paths.read().unwrap().clone()
+    app_state().paths.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 pub fn toggle_favorite(path: &str, add: bool) -> Result<(), String> {
     let fav = app_state();
-    let mut list = fav.paths.write().unwrap();
+    let mut list = fav.paths.write().unwrap_or_else(|e| e.into_inner());
     if add {
         if !list.contains(&path.to_string()) {
             list.push(path.to_string());

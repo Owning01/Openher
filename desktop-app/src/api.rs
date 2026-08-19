@@ -36,17 +36,17 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
 
     // ============================== Config
     if path == "/shell/config" && method == Method::Get {
-        let cfg = state.config.read().unwrap().clone();
+        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
         let _ = req.respond(json_ok(&serde_json::to_value(cfg).unwrap_or_default()));
         return;
     }
     if path == "/shell/config" && method == Method::Post {
         match read_body(&mut req) {
             Ok(patch) => {
-                let mut cfg = state.config.read().unwrap().clone();
+                let mut cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
                 merge_config(&mut cfg, &patch);
                 crate::state::save_config(&cfg);
-                *state.config.write().unwrap() = cfg.clone();
+                *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
                 let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "config": cfg })));
             }
             Err(e) => {
@@ -56,7 +56,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         return;
     }
     if path == "/shell/config/export" {
-        let cfg = state.config.read().unwrap().clone();
+        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
         let _ = req.respond(json_ok(&serde_json::json!({ "config": cfg })));
         return;
     }
@@ -66,7 +66,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 if let Some(cfg) = body.get("config") {
                     if let Ok(cfg) = serde_json::from_value::<crate::state::ShellConfig>(cfg.clone()) {
                         crate::state::save_config(&cfg);
-                        *state.config.write().unwrap() = cfg.clone();
+                        *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
                         let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
                         return;
                     }
@@ -107,14 +107,14 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
 
     // ============================== Sesiones (estado persistido)
     if path == "/shell/session-state" && method == Method::Get {
-        let s = state.persisted.read().unwrap().clone();
+        let s = state.persisted.read().unwrap_or_else(|e| e.into_inner()).clone();
         let _ = req.respond(json_ok(&serde_json::to_value(s).unwrap_or_default()));
         return;
     }
     if path == "/shell/session-state" && method == Method::Post {
         match read_body(&mut req) {
             Ok(b) => {
-                let mut s = state.persisted.write().unwrap();
+                let mut s = state.persisted.write().unwrap_or_else(|e| e.into_inner());
                 if let Some(w) = b["window_w"].as_f64() {
                     s.window_w = Some(w);
                 }
@@ -383,7 +383,10 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     if path == "/shell/pty" && method == Method::Post {
         let shell = q("shell");
         let cwd = q("cwd");
-        let cfg_shell = state.config.read().map(|c| c.shell.clone()).ok().filter(|s| !s.is_empty());
+        let cfg_shell = {
+            let s = state.config.read().unwrap_or_else(|e| e.into_inner()).shell.clone();
+            if s.is_empty() { None } else { Some(s) }
+        };
         let shell_param = if shell.is_empty() { cfg_shell } else { Some(shell) };
         match state.pty.create(shell_param, if cwd.is_empty() { None } else { Some(cwd) }) {
             Ok(id) => {
@@ -405,12 +408,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             let out = state.pty.stream_rx(&id);
             let info = match out {
                 Some(o) => {
-                    let d = o.data.lock().unwrap();
+                    let d = o.data.lock().unwrap_or_else(|e| e.into_inner());
                     let base = o.base_offset.load(std::sync::atomic::Ordering::Relaxed);
                     let total_len = base + d.len();
                     // Si el cliente pide datos antes del base (buffer rotó),
                     // devolver todo el buffer disponible.
-                    let start = since.saturating_sub(base);
+                    let start = since.saturating_sub(base).min(d.len());
                     let delta = &d[start..];
                     serde_json::json!({
                         "len": total_len,
@@ -562,12 +565,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
 
     // ============================== Server manager
     if path == "/shell/server" && method == Method::Get {
-        let ports = state.config.read().unwrap().server_ports.clone();
+        let ports = state.config.read().unwrap_or_else(|e| e.into_inner()).server_ports.clone();
         let _ = req.respond(json_ok(&state.servers.status(&ports)));
         return;
     }
     if path == "/shell/server/start" && method == Method::Post {
-        let cmd = state.config.read().unwrap().start_command.clone();
+        let cmd = state.config.read().unwrap_or_else(|e| e.into_inner()).start_command.clone();
         match state.servers.start(&cmd) {
             Ok(v) => {
                 let _ = req.respond(json_ok(&v));
@@ -804,7 +807,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             let mime = mime_for(&file);
             if is_index {
                 if let Ok(mut s) = String::from_utf8(bytes.clone()) {
-                    let inject = inject_config_script(&state.config.read().unwrap());
+                    let inject = inject_config_script(&state.config.read().unwrap_or_else(|e| e.into_inner()));
                     if let Some(pos) = s.rfind("</head>") {
                         s.insert_str(pos, &inject);
                     } else {

@@ -1365,9 +1365,9 @@ export const FileEditorPanel = memo(function FileEditorPanel({
 
   return (
     <div className="file-editor-panel" style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
-      {/* Barra de pestañas — VS Code style, colores de la app (DRY con .ade-diff-tabs) */}
+      {/* Barra de pestañas — DRY con .tab (24px/23px) */}
       <div className="file-editor-tab-bar">
-        <div style={{ display: "flex", alignItems: "center", gap: "2px", minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1px", minWidth: 0, overflowX: "auto", scrollbarWidth: "none" }}>
           {tabs.map((tab) => {
             const name = tab.split(/[/\\]/).pop() || tab
             const isActive = tab === activeTab
@@ -1398,38 +1398,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
             )
           })}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "0 6px" }}>
-          {isMarkdown && (
-            <div style={{ display: "inline-flex", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
-              <button
-                type="button"
-                className={`btn-icon compact${mdViewMode === "edit" ? " active" : ""}`}
-                style={{ borderRadius: 0, padding: "2px 6px", fontSize: "12px", border: "none", background: mdViewMode === "edit" ? "var(--primary-soft)" : "transparent", color: mdViewMode === "edit" ? "var(--primary)" : "var(--muted)" }}
-                onClick={() => setMdViewMode("edit")}
-                title="Editor de código"
-              >
-                <PencilIcon size={12} /> Editar
-              </button>
-              <button
-                type="button"
-                className={`btn-icon compact${mdViewMode === "split" ? " active" : ""}`}
-                style={{ borderRadius: 0, padding: "2px 6px", fontSize: "12px", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)", borderTop: "none", borderBottom: "none", background: mdViewMode === "split" ? "var(--primary-soft)" : "transparent", color: mdViewMode === "split" ? "var(--primary)" : "var(--muted)" }}
-                onClick={() => setMdViewMode("split")}
-                title="Vista dividida (Editor + Vista previa)"
-              >
-                ◫ Dividido
-              </button>
-              <button
-                type="button"
-                className={`btn-icon compact${mdViewMode === "preview" ? " active" : ""}`}
-                style={{ borderRadius: 0, padding: "2px 6px", fontSize: "12px", border: "none", background: mdViewMode === "preview" ? "var(--primary-soft)" : "transparent", color: mdViewMode === "preview" ? "var(--primary)" : "var(--muted)" }}
-                onClick={() => setMdViewMode("preview")}
-                title="Vista previa renderizada"
-              >
-                <EyeIcon size={12} /> Vista previa
-              </button>
-            </div>
-          )}
+        <div style={{ display: "flex", alignItems: "center", gap: "4px", padding: "0 4px", flexShrink: 0 }}>
           {activeFile?.dirty && (
             <button type="button" className="btn-primary compact" onClick={handleSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
@@ -1442,6 +1411,20 @@ export const FileEditorPanel = memo(function FileEditorPanel({
           )}
         </div>
       </div>
+      {/* Barra de modos markdown — 3 iconos compactos debajo de las pestañas */}
+      {isMarkdown && (
+        <div className="file-editor-md-bar">
+          <button type="button" className={`file-editor-md-btn${mdViewMode === "edit" ? " active" : ""}`} onClick={() => setMdViewMode("edit")} title="Editar" aria-label="Editar">
+            <PencilIcon size={12} />
+          </button>
+          <button type="button" className={`file-editor-md-btn${mdViewMode === "split" ? " active" : ""}`} onClick={() => setMdViewMode("split")} title="Vista dividida" aria-label="Vista dividida">
+            <SplitIcon size={12} />
+          </button>
+          <button type="button" className={`file-editor-md-btn${mdViewMode === "preview" ? " active" : ""}`} onClick={() => setMdViewMode("preview")} title="Vista previa" aria-label="Vista previa">
+            <EyeIcon size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Barra de información del archivo */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 10px", fontSize: "0.72rem", color: "var(--muted)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)" }}>
