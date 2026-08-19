@@ -180,10 +180,26 @@ fn cmd_open(
         .with_user_agent(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         )
+        // Permitir reproducción automática (YouTube, música, etc.) sin gesto del usuario.
+        .with_autoplay(true)
         .with_additional_browser_args(
-            "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-video-decode --enable-accelerated-2d-canvas \
+            // GPU + aceleración
+            "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-video-decode \
+             --enable-accelerated-2d-canvas --enable-zero-copy \
+             \
              --disable-web-security --disable-site-isolation-trials \
-             --disable-features=IsolateOrigins,site-per-process",
+             --disable-features=IsolateOrigins,site-per-process \
+             \
+             --autoplay-policy=no-user-gesture-required \
+             --disable-blink-features=AutomationControlled \
+             --disable-features=WebRtcHideLocalIpsWithMdns \
+             --no-first-run --no-default-browser-check \
+             --disable-component-update --disable-background-networking \
+             --disable-renderer-backgrounding --disable-background-timer-throttling \
+             --disable-hang-monitor --disable-ipc-flooding-protection \
+             --disable-popup-blocking --disable-prompt-on-repost \
+             \
+             --enable-widevine-cdm --disable-component-update",
         )
         .build_as_child(window)
         .map_err(|e| format!("SubWebView create: {e}"))?;
