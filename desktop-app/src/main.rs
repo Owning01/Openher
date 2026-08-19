@@ -150,9 +150,8 @@ impl ApplicationHandler<AppEvent> for App {
         attributes.title = "OpenCode Desktop".to_string();
         // Restaurar geometría persistida (posición + tamaño) si existe.
         if let Some(g) = state::load_window_geometry() {
-            let scale = if g.scale > 0.0 { g.scale } else { 1.0 };
-            attributes.position = Some(LogicalPosition::new(g.x / scale, g.y / scale).into());
-            attributes.inner_size = Some(LogicalSize::new(g.width, g.height).into());
+            attributes.position = Some(PhysicalPosition::new(g.x, g.y).into());
+            attributes.inner_size = Some(PhysicalSize::new(g.width, g.height).into());
         } else {
             attributes.inner_size = Some(LogicalSize::new(DEFAULT_W, DEFAULT_H).into());
         }
@@ -220,6 +219,26 @@ impl ApplicationHandler<AppEvent> for App {
         }
     }
 
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(rx) = &self.browser_rx {
+            browser_view::process_browser_commands(rx, &mut self.browser_inner, self.web_context.as_mut(), self.window.as_ref());
+        }
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
+        match event {
+            AppEvent::Quit => event_loop.exit(),
+            AppEvent::Restore => {
+                if let Some(window) = &self.window {
+                    window.set_visible(true);
+                    window.focus_window();
+                }
+            }
+        }
+    }
+}
+
+impl App {
     /// Persiste posición+tamaño de la ventana (throttle ~400ms) para reabrir
     /// la app donde el usuario la dejó.
     fn save_geometry(&mut self) {
@@ -239,24 +258,6 @@ impl ApplicationHandler<AppEvent> for App {
                 height: size.height,
                 scale: sf,
             });
-        }
-    }
-
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(rx) = &self.browser_rx {
-            browser_view::process_browser_commands(rx, &mut self.browser_inner, self.web_context.as_mut(), self.window.as_ref());
-        }
-    }
-
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
-        match event {
-            AppEvent::Quit => event_loop.exit(),
-            AppEvent::Restore => {
-                if let Some(window) = &self.window {
-                    window.set_visible(true);
-                    window.focus_window();
-                }
-            }
         }
     }
 }

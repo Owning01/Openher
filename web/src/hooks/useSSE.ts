@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
 import { toBase64, getApiVersion, onApiVersionChange } from "../api"
 import { recordDataUsage } from "../utils/dataUsage"
-import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS } from "../constants"
+import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS, SSE_CONNECT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
 
 export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void, directory?: string, sessionID?: string | null) {
@@ -81,11 +81,14 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
 
     try {
       setStreamState("reconnecting")
+      // Timeout de conexión: si el servidor no responde en 8s, abortar y reconectar.
+      const connectTimer = setTimeout(() => abort.abort(), SSE_CONNECT_TIMEOUT_MS)
       const response = await fetch(url, {
         headers,
         signal: abort.signal,
         cache: "no-store",
       })
+      clearTimeout(connectTimer)
       if (!response.ok || !response.body) {
         throw new Error(`SSE HTTP ${response.status}`)
       }

@@ -232,7 +232,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // Seteo ANTES del await: los deltas que lleguen durante el fetch de esta
     // sesión ya se aplican (el merge por id conserva lo streamed local).
     loadedSessionIDRef.current = sessionID
-    const limit = dataMode === "ultra" ? 30 : dataMode === "miser" ? 20 : 100
+    const limit = dataMode === "ultra" ? 100 : dataMode === "miser" ? 50 : 500
 
     const raw = await api.loadMessages(config, sessionID, directory, limit)
     if (requestID !== loadSelectedRequestRef.current) return

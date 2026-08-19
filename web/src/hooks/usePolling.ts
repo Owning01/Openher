@@ -46,14 +46,15 @@ export function usePolling(
       busyRef.current = true
       try {
         await savedCallback.current()
-        if (streamActive) failCountRef.current = 0
-        else if (failCountRef.current > 0) failCountRef.current = Math.max(0, failCountRef.current - 1)
+        // Éxito: resetear failCount. Si el server responde bien, no hay backoff.
+        failCountRef.current = 0
       } catch (e) {
         failCountRef.current++
         console.warn("poll error", failCountRef.current, e)
-        // Re-schedule con backoff: si el server está caído, el próximo tick
-        // espera más en vez de seguir martillando al intervalo base.
-        if (!streamActive && mounted) {
+        // Backoff solo después de 2+ fallos consecutivos: un fallo aislado
+        // (timeout, red) no debería retardar el próximo poll. Al superar
+        // POLL_BACKOFF_BASE_MS se re-schedule con el intervalo mayor.
+        if (!streamActive && mounted && failCountRef.current >= 2) {
           if (timerRef.current) clearInterval(timerRef.current)
           schedule()
         }
