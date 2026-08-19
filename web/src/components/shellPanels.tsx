@@ -1399,11 +1399,6 @@ export const FileEditorPanel = memo(function FileEditorPanel({
           })}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "4px", padding: "0 4px", flexShrink: 0 }}>
-          {activeFile?.dirty && (
-            <button type="button" className="btn-primary compact" onClick={handleSave} disabled={saving}>
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
-          )}
           {onClose && (
             <button type="button" className="btn-icon compact" onClick={onClose} title="Cerrar panel de editor">
               ×
@@ -1425,24 +1420,6 @@ export const FileEditorPanel = memo(function FileEditorPanel({
           </button>
         </div>
       )}
-
-      {/* Barra de información del archivo */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 10px", fontSize: "0.72rem", color: "var(--muted)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface)" }}>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{relPath}</span>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-          {saving ? (
-            <span style={{ color: "var(--primary)", fontWeight: 600 }}>Guardando...</span>
-          ) : activeFile?.dirty ? (
-            <span style={{ color: "var(--warning, #e3b341)" }}>● Modificado</span>
-          ) : (
-            <span style={{ color: "var(--color-success, #3fb950)", opacity: 0.9 }}>✓ Guardado</span>
-          )}
-          {ext && <span style={{ textTransform: "uppercase", fontWeight: 700, color: "var(--primary)" }}>{ext}</span>}
-          <span>{lineCount} líneas</span>
-          <span>{charCount} caracs</span>
-          <kbd style={{ fontSize: "0.68rem", opacity: 0.8 }}>Ctrl+S</kbd>
-        </div>
-      </div>
 
       {/* Cuerpo del editor de código / Markdown */}
       <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex" }}>
@@ -1528,6 +1505,17 @@ export const FileEditorPanel = memo(function FileEditorPanel({
             spellCheck={false}
           />
         )}
+      </div>
+      {/* Status bar inferior — todo mismo color */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 10px", fontSize: "0.72rem", color: "var(--muted)", borderTop: "1px solid var(--border-subtle)", background: "var(--surface)", height: "22px", minHeight: "22px", flexShrink: 0 }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{relPath}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+          <span>{saving ? "Guardando..." : activeFile?.dirty ? "● Modificado" : "✓ Guardado"}</span>
+          {ext && <span style={{ textTransform: "uppercase" }}>{ext}</span>}
+          <span>{lineCount} líneas</span>
+          <span>{charCount} caracs</span>
+          <span>Ctrl+S</span>
+        </div>
       </div>
     </div>
   )

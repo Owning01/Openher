@@ -121,9 +121,9 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   useEffect(() => {
     if (value !== lastExternalRef.current) {
       lastExternalRef.current = value
-      if (value !== localValue) setLocalValue(value)
+      setLocalValue(value)
     }
-  }, [value, localValue])
+  }, [value])
   const handleChange = useCallback((newValue: string) => {
     setLocalValue(newValue)
     lastExternalRef.current = newValue

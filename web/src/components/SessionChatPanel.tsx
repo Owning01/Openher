@@ -61,13 +61,14 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   useEffect(() => { composerRef.current = msgs.composer }, [msgs.composer])
   const composerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const debouncedSetComposer = useCallback((value: string) => {
+    const prev = composerRef.current
     composerRef.current = value
     if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
-    if (value === "") {
-      msgs.setComposer("")
+    if (value === "" || Math.abs(value.length - prev.length) > 12 || value.startsWith("/")) {
+      msgs.setComposer(value)
       return
     }
-    composerDebounceRef.current = setTimeout(() => msgs.setComposer(value), 600)
+    composerDebounceRef.current = setTimeout(() => msgs.setComposer(value), 350)
   }, [msgs.setComposer])
   useEffect(() => () => {
     if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)

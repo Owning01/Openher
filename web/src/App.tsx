@@ -426,15 +426,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   useEffect(() => { composerRef.current = composer }, [composer])
   const composerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleComposerChange = useCallback((value: string) => {
+    const prev = composerRef.current
     composerRef.current = value
     if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
-    if (value === "") {
-      startTransition(() => setComposer(""))
+    if (value === "" || Math.abs(value.length - prev.length) > 12 || value.startsWith("/")) {
+      startTransition(() => setComposer(value))
       return
     }
     composerDebounceRef.current = setTimeout(() => {
       startTransition(() => setComposer(value))
-    }, 600)
+    }, 350)
   }, [setComposer])
   useEffect(() => () => {
     if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
