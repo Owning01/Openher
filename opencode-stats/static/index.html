@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenCode Stats</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%233b82f6'/><text x='8' y='12' font-size='10' text-anchor='middle' fill='white' font-family='monospace'>t</text></svg>">
+  <script src="/vendor/tailwind.js"></script>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body class="bg-[#0b0e14] text-slate-200 antialiased min-h-screen">
+
+  <div id="loadingOverlay" class="overlay hidden">
+    <div class="spinner"></div>
+    <div id="loadingText" class="text-sm text-slate-300">Cargando datos de la base de datos...</div>
+  </div>
+
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="app-sidebar">
+      <div class="sidebar-header">
+        <h1 class="text-lg font-bold text-white whitespace-nowrap">OpenCode Stats</h1>
+        <button id="btnSidebarClose" class="sidebar-toggle" title="Cerrar panel">✕</button>
+      </div>
+      <nav id="sidebarTabs" class="sidebar-nav"></nav>
+      <div class="sidebar-footer">
+        <button id="btnPrefs" title="Configuración" class="sidebar-action-btn">⚙</button>
+      </div>
+    </aside>
+
+    <!-- Overlay para cerrar sidebar en móvil -->
+    <div id="sidebarOverlay" class="sidebar-overlay hidden"></div>
+
+    <!-- Contenido principal -->
+    <div class="app-main">
+      <!-- Barra superior (móvil) -->
+      <header class="app-topbar">
+        <button id="btnSidebarOpen" class="sidebar-toggle" title="Abrir panel">☰</button>
+        <h1 class="text-base font-bold text-white whitespace-nowrap">OpenCode Stats</h1>
+        <div class="ml-auto flex items-center gap-2">
+          <button id="btnFilters" title="Ocultar filtros de fechas" class="text-sm leading-none bg-blue-600 hover:bg-blue-500 rounded px-2.5 py-1.5 font-medium text-white">▾</button>
+        </div>
+      </header>
+
+      <!-- Filtros -->
+      <div id="filtersBar" class="filters-bar">
+        <div class="filters-row">
+          <label class="text-xs text-slate-400">Desde</label>
+          <input id="fSince" type="date" class="filter-input">
+          <label class="text-xs text-slate-400">Hasta</label>
+          <input id="fUntil" type="date" class="filter-input">
+          <label class="text-xs text-slate-400">Modelo</label>
+          <input id="fModel" type="text" placeholder="deepseek, gpt, ..." class="filter-input filter-input-wide">
+          <button id="btnApply" class="filter-btn">Aplicar filtros</button>
+          <span class="filter-sep"></span>
+          <button id="btnRange24" class="filter-btn-sm">24 h</button>
+          <button id="btnRange7" class="filter-btn-sm">7 d</button>
+          <button id="btnRange30" class="filter-btn-sm">30 d</button>
+          <button id="btnRangeMonth" class="filter-btn-sm">Este mes</button>
+          <label class="flex items-center gap-1.5 text-xs text-slate-400 ml-2">
+            <input id="chkAuto" type="checkbox" class="accent-blue-500"> Auto
+          </label>
+          <span id="autoInfo" class="text-xs text-slate-500"></span>
+        </div>
+      </div>
+
+      <!-- Cards -->
+      <div id="cards" class="cards-grid"></div>
+
+      <!-- Paneles -->
+      <main class="panels-area">
+
+        <section id="panel-resumen" class="panel">
+          <div id="todayBox" class="today-grid"></div>
+          <div class="charts-grid">
+            <div class="chart-card" data-chart="days">
+              <h3 class="chart-title">Costo por día (USD)</h3>
+              <div class="chart-container"><canvas id="chartDays"></canvas></div>
+            </div>
+            <div class="chart-card" data-chart="requests">
+              <h3 class="chart-title">Peticiones por día</h3>
+              <div class="chart-container"><canvas id="chartRequests"></canvas></div>
+            </div>
+            <div class="chart-card" data-chart="tokens">
+              <h3 class="chart-title">Tokens por día (input + output)</h3>
+              <div class="chart-container"><canvas id="chartTokens"></canvas></div>
+            </div>
+            <div class="chart-card" data-chart="models">
+              <h3 class="chart-title">Costo por modelo</h3>
+              <div class="chart-container"><canvas id="chartModels"></canvas></div>
+            </div>
+          </div>
+          <div id="statsBox" class="stats-box"></div>
+        </section>
+
+        <section id="panel-modelo" class="panel hidden">
+          <table class="tbl"><thead id="th-modelo"></thead><tbody id="tb-modelo"></tbody></table>
+        </section>
+
+        <section id="panel-proyecto" class="panel hidden">
+          <table class="tbl"><thead id="th-proyecto"></thead><tbody id="tb-proyecto"></tbody></table>
+        </section>
+
+        <section id="panel-dia" class="panel hidden">
+          <table class="tbl"><thead id="th-dia"></thead><tbody id="tb-dia"></tbody></table>
+        </section>
+
+        <section id="panel-mes" class="panel hidden">
+          <table class="tbl"><thead id="th-mes"></thead><tbody id="tb-mes"></tbody></table>
+        </section>
+
+        <section id="panel-herramientas" class="panel hidden">
+          <div class="toolbar-row">
+            <button id="btnTools24" class="filter-btn-sm">24 h</button>
+            <button id="btnTools7" class="filter-btn-sm">7 d</button>
+            <button id="btnTools30" class="filter-btn-sm">30 d</button>
+            <button id="btnToolsMonth" class="filter-btn-sm">Este mes</button>
+            <button id="btnToolsAll" class="filter-btn-sm">Todo</button>
+            <span id="toolsRange" class="text-xs text-slate-500"></span>
+          </div>
+          <table class="tbl"><thead id="th-herramientas"></thead><tbody id="tb-herramientas"></tbody></table>
+        </section>
+
+        <section id="panel-sesiones" class="panel hidden">
+          <div class="toolbar-row">
+            <input id="searchSesiones" type="text" placeholder="Buscar sesión por título o modelo..." class="filter-input filter-input-wide">
+            <span id="sesionesCount" class="text-xs text-slate-500"></span>
+          </div>
+          <table class="tbl"><thead id="th-sesiones"></thead><tbody id="tb-sesiones"></tbody></table>
+        </section>
+
+        <section id="panel-limites" class="panel hidden space-y-6">
+          <div>
+            <div class="toolbar-row">
+              <h3 class="text-sm font-semibold text-slate-300">Uso real de OpenCode Go</h3>
+              <select id="goAccount" class="filter-input"></select>
+              <button id="btnGoRefresh" class="filter-btn-sm">Actualizar</button>
+              <span id="goUsageState" class="text-xs text-slate-500"></span>
+            </div>
+            <div id="goUsageBox" class="text-xs text-slate-400"></div>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-slate-300 mb-2">Uso de peticiones vs cuota (ventanas móviles: 5 h · 7 días · 30 días)</h3>
+            <table class="tbl"><thead id="th-uso"></thead><tbody id="tb-uso"></tbody></table>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-slate-300 mb-2">Precios por 1M tokens (USD) — OpenCode Go</h3>
+            <table class="tbl"><thead id="th-precios"></thead><tbody id="tb-precios"></tbody></table>
+          </div>
+          <p class="text-xs text-slate-500 leading-relaxed">
+            Las peticiones se estiman contando respuestas del asistente (una por completion).
+            En modelos con precio por tramo (GPT 5.6 Luna, Qwen3.7/3.6 Plus) se usa el tramo base.
+            Modelos *-free no cotizan.
+          </p>
+        </section>
+
+        <section id="panel-gestion" class="panel hidden">
+          <div id="adminBanner" class="hidden mb-3 border border-red-900 bg-red-950/40 rounded-lg px-4 py-3 text-sm text-red-300"></div>
+          <div class="admin-toolbar">
+            <button id="btnAdminRefresh" class="admin-btn primary">Actualizar</button>
+            <button id="btnAdminDelete" class="admin-btn danger">Eliminar</button>
+            <button id="btnAdminMove" class="admin-btn">Mover de ruta</button>
+            <button id="btnAdminRename" class="admin-btn">Renombrar</button>
+            <button id="btnAdminArchive" class="admin-btn">Archivar</button>
+            <button id="btnAdminExport" class="admin-btn">Exportar JSON</button>
+            <button id="btnAdminUndo" class="admin-btn success">Deshacer última op</button>
+            <button id="btnAdminPricing" class="admin-btn">Precios</button>
+            <button id="btnAdminPrune" class="admin-btn warning">Prune por fecha</button>
+            <button id="btnAdminBackup" class="admin-btn success">Backup completo</button>
+            <button id="btnAdminVacuum" class="admin-btn">VACUUM</button>
+            <button id="btnAdminDb" class="admin-btn" title="Indicar la ruta de la base de datos de opencode">Base de datos…</button>
+          </div>
+          <div id="adminInfo" class="text-xs text-slate-400 mb-2"></div>
+          <div class="toolbar-row">
+            <input id="adminSearch" type="text" placeholder="Buscar por título, modelo o proyecto..." class="filter-input filter-input-wide">
+            <label class="flex items-center gap-1.5 text-xs text-slate-400 ml-auto">
+              <input id="chkGroup" type="checkbox" class="accent-blue-500"> Agrupar por proyecto
+            </label>
+            <span class="text-xs text-slate-500">doble click en una fila = detalle</span>
+          </div>
+          <table class="tbl">
+            <thead id="th-admin"></thead>
+            <tbody id="tb-admin"></tbody>
+          </table>
+          <dialog id="adminDialog" class="bg-[#141a24] border border-slate-700 rounded-xl p-5 w-[560px] max-w-full text-slate-200 backdrop:bg-black/70"></dialog>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <dialog id="prefsDialog" class="bg-[#141a24] border border-slate-700 rounded-xl p-5 w-[440px] max-w-full text-slate-200 backdrop:bg-black/70"></dialog>
+
+  <script src="/vendor/chart.js"></script>
+  <script src="/app.js"></script>
+  <script src="/admin.js"></script>
+</body>
+</html>

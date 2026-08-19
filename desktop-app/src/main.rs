@@ -308,7 +308,7 @@ fn setup_tray(proxy: EventLoopProxy<AppEvent>) -> Result<(), Box<dyn std::error:
             _ => {}
         }
     });
-    let _ = TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
+    TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
         if let TrayIconEvent::Click {
             button: MouseButton::Left,
             button_state: MouseButtonState::Up,

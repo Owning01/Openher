@@ -41,9 +41,6 @@ var (
 	procGetCurrentProcessId     = kernel32.NewProc("GetCurrentProcessId")
 	procSetProcessDPIAware      = user32.NewProc("SetProcessDPIAware")
 	procSendInput               = user32.NewProc("SendInput")
-	procVkKeyScanW              = user32.NewProc("VkKeyScanW")
-	procGetAsyncKeyState        = user32.NewProc("GetAsyncKeyState")
-	procGetForegroundWindow     = user32.NewProc("GetForegroundWindow")
 )
 
 // GDI / system metrics

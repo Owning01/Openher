@@ -98,7 +98,7 @@ impl PluginRegistry {
         let child = if cmd.trim().to_lowercase().ends_with(".bat") {
             std::process::Command::new("cmd").args(["/c", cmd.trim()]).spawn()
         } else {
-            let parts: Vec<&str> = cmd.trim().split_whitespace().collect();
+            let parts: Vec<&str> = cmd.split_whitespace().collect();
             if parts.is_empty() {
                 return Err("comando vacío".into());
             }

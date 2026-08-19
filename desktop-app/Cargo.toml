@@ -25,12 +25,7 @@ pdf-extract = "0.7"
 lopdf = "0.34"
 quick-xml = { version = "0.37", features = ["serialize"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
-opencode-stats = { path = "../../opencode-stats" }
-
-[profile.release]
-strip = true
-lto = true
-codegen-units = 1
+opencode-stats = { path = "../opencode-stats" }
 
 [build-dependencies]
 winresource = "0.1"

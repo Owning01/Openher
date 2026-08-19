@@ -59,7 +59,7 @@ pub fn list_dir(path: &str) -> Result<serde_json::Value, String> {
             let path = e.path();
             let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
             let meta = e.metadata().ok();
-            let size = if is_dir { None } else { meta.as_ref().and_then(|m| Some(m.len())) };
+            let size = if is_dir { None } else { meta.as_ref().map(|m| m.len()) };
             let modified = meta
                 .as_ref()
                 .and_then(|m| m.modified().ok())
@@ -116,7 +116,7 @@ pub fn resolve(path: &str) -> serde_json::Value {
 pub fn reveal_in_explorer(path: &str) -> serde_json::Value {
     let p = PathBuf::from(path);
     let is_dir = p.is_dir();
-    let arg = if is_dir { crate::state::pstring(&p) } else { crate::state::pstring(&p) };
+    let arg = crate::state::pstring(&p);
     // Para archivos: /select,<path> abre la carpeta con el archivo seleccionado.
     let select = if is_dir { String::new() } else { format!("/select,{}", arg) };
     let mut cmd = std::process::Command::new("explorer.exe");
@@ -255,8 +255,8 @@ pub fn execute_file(path: &str) -> Result<serde_json::Value, String> {
                 c
             }
             "exe" => {
-                let c = Command::new(path);
-                c
+                
+                Command::new(path)
             }
             _ => {
                 let mut c = Command::new("cmd.exe");

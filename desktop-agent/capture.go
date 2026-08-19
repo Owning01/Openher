@@ -11,7 +11,6 @@ import (
 	"image/color"
 	"image/jpeg"
 	"math"
-	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -21,10 +20,7 @@ type frame struct {
 	Rect rect // región capturada en coordenadas de escritorio virtual
 }
 
-var (
-	captureMu sync.Mutex
-	lastFp    []byte
-)
+var lastFp []byte
 
 // ===== Primitivas GDI =====
 

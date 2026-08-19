@@ -29,10 +29,10 @@ import { ConfirmModal } from "./components/ConfirmModal"
 import { ErrorModal } from "./components/ErrorModal"
 import { ShortcutsModal } from "./components/ShortcutsModal"
 import { loadShortcutsConfig, matchesShortcut, type ShortcutItem } from "./shortcuts"
-import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, Question, PermissionRequest, QuestionInfo, FileDiff } from "./types"
+import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, FileDiff } from "./types"
 import type { LanguageCode } from "./i18n"
 import { formatLimit, extractPath, extractName, extractBranch, isSessionActive, filterByQuery } from "./utils"
-import { STORAGE_KEYS, QUESTION_POLL_INTERVAL_MS, DEFAULT_STATS_PORT } from "./constants"
+import { STORAGE_KEYS, DEFAULT_STATS_PORT } from "./constants"
 import { useBackButton } from "./hooks/useBackButton"
 import { useNetworkMode } from "./hooks/useNetworkMode"
 import { useMemoryCleanup } from "./hooks/useMemoryCleanup"
@@ -49,6 +49,7 @@ import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
+import { useQuestions } from "./hooks/useQuestions"
 import { useSSEHandler } from "./hooks/useSSEHandler"
 import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, StatsIcon, GlobeIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
@@ -722,95 +723,23 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current)
   }, [])
 
-  // ===== Questions =====
-  const [pendingQuestions, setPendingQuestions] = useState<Question[]>([])
-  const [dismissedQuestions, setDismissedQuestions] = useState<Set<string>>(new Set())
-  const notifiedQuestionIDs = useRef<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (!config || !flags.questionAuto) return
-    const poll = async () => {
-      try {
-        const qs = await api.listPendingQuestions(config, selectedSession?.directory)
-        const fresh = qs.filter((q) => !dismissedQuestions.has(q.id))
-        setPendingQuestions(fresh)
-        if (notifFlags.onQuestion) {
-          for (const q of fresh) {
-            if (notifiedQuestionIDs.current.has(q.id)) continue
-            notifiedQuestionIDs.current.add(q.id)
-            notify(t('notification.questionTitle'), (q as { question?: string }).question ?? (q as { questions?: QuestionInfo[] }).questions?.[0]?.question ?? "")
-          }
-        }
-      } catch { /* ignore */ }
-    }
-    poll()
-    const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [config, flags.questionAuto, selectedSession?.directory, dismissedQuestions, notifFlags.onQuestion, notify, t])
-
-  const handleQuestionReply = useCallback(async (requestID: string, answers: string[][]) => {
-    if (!config) return
-    try {
-      await api.questionReply(config, requestID, answers, selectedSession?.directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID)
-      setDismissedQuestions((prev) => new Set(prev).add(requestID))
-      setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
-    } catch { /* ignore */ }
-  }, [config, selectedSession?.directory, pendingQuestions])
-
-  const handleQuestionReject = useCallback(async (requestID: string) => {
-    if (!config) return
-    try {
-      await api.questionReject(config, requestID, selectedSession?.directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID)
-      setDismissedQuestions((prev) => new Set(prev).add(requestID))
-      setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
-    } catch { /* ignore */ }
-  }, [config, selectedSession?.directory, pendingQuestions])
-
-  const handleDismissQuestion = useCallback(() => {
-    setPendingQuestions((prev) => prev.slice(1))
-  }, [])
-
-  // ===== Permissions =====
-  const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null)
-  const notifiedPermissionIDs = useRef<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (!config || !flags.permissionUI) return
-    const poll = async () => {
-      try {
-        const perms = await api.listPermissions(config, selectedSession?.directory)
-        const pending = perms.find((p) => p.status === "pending")
-        if (pending) setPermissionRequest(pending)
-        if (pending && notifFlags.onQuestion && !notifiedPermissionIDs.current.has(pending.requestID)) {
-          notifiedPermissionIDs.current.add(pending.requestID)
-          notify(t('notification.permissionTitle'), pending.permission ?? "")
-        }
-      } catch { /* ignore */ }
-    }
-    poll()
-    const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [config, flags.permissionUI, selectedSession?.directory, notifFlags.onQuestion, notify, t])
-
-  const handlePermissionApprove = useCallback(async (requestID: string) => {
-    if (!config) return
-    try {
-      await api.permissionReply(config, requestID, true, selectedSession?.directory, permissionRequest?.sessionID)
-      setPermissionRequest(null)
-    } catch { /* ignore */ }
-  }, [config, selectedSession?.directory, permissionRequest])
-
-  const handlePermissionReject = useCallback(async (requestID: string) => {
-    if (!config) return
-    try {
-      await api.permissionReply(config, requestID, false, selectedSession?.directory, permissionRequest?.sessionID)
-      setPermissionRequest(null)
-    } catch { /* ignore */ }
-  }, [config, selectedSession?.directory, permissionRequest])
-
-  const handleDismissPermission = useCallback(() => {
-    setPermissionRequest(null)
-  }, [])
+  // ===== Questions & Permissions =====
+  const {
+    pendingQuestions,
+    permissionRequest,
+    handleQuestionReply,
+    handleQuestionReject,
+    handleDismissQuestion,
+    handlePermissionApprove,
+    handlePermissionReject,
+    handleDismissPermission,
+  } = useQuestions({
+    config,
+    directory: selectedSession?.directory,
+    enabled: flags.questionAuto || flags.permissionUI,
+    notify,
+    t,
+  })
 
   const isLastAssistantIncomplete = Boolean(
     selectedSession &&

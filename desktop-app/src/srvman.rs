@@ -53,7 +53,7 @@ impl ServerManager {
                 .spawn()
                 .map_err(|e| e.to_string())?
         } else {
-            let parts: Vec<&str> = cmd.trim().split_whitespace().collect();
+            let parts: Vec<&str> = cmd.split_whitespace().collect();
             if parts.is_empty() {
                 return Err("comando vacío".into());
             }

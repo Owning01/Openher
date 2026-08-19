@@ -73,7 +73,7 @@ impl Default for ServerConfigFile {
             host: "127.0.0.1".into(),
             port: 4096,
             username: "opencode".into(),
-            password: "octavio".into(),
+            password: String::new(),
             use_ssl: false,
         }
     }
@@ -182,8 +182,16 @@ pub fn docs_root(cfg: &ShellConfig) -> PathBuf {
             return p;
         }
     }
-    for base in ["G:\\Proyectos\\opencode", "C:\\Users\\Octavio\\opencode"] {
-        let p = PathBuf::from(base);
+    // Fallback portable: busca un checkout de opencode relativo al exe o en
+    // el home del usuario (OPENCODE_HOME/opencode), evitando rutas hard-codeadas.
+    if let Ok(home) = std::env::var("OPENCODE_HOME") {
+        let p = PathBuf::from(&home).join("opencode");
+        if p.exists() {
+            return p;
+        }
+    }
+    if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
+        let p = PathBuf::from(home).join("opencode");
         if p.exists() {
             return p;
         }

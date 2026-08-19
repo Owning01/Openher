@@ -7,15 +7,33 @@ const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE
 
 function toEmbeddableUrl(url: string): string {
   try {
-    const u = new URL(url)
-    if (u.hostname.includes("youtube.com")) {
+    let raw = url.trim()
+    if (!/^https?:\/\//i.test(raw)) {
+      raw = `https://${raw}`
+    }
+    const u = new URL(raw)
+    const host = u.hostname.toLowerCase()
+
+    if (host.includes("youtube.com") || host.includes("youtu.be")) {
       if (u.pathname.startsWith("/embed/")) return url
       const v = u.searchParams.get("v")
       if (v) return `https://www.youtube-nocookie.com/embed/${v}?autoplay=1`
+      if (host.includes("youtu.be")) {
+        const id = u.pathname.replace(/^\//, "")
+        if (id) return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1`
+      }
+      const q = u.searchParams.get("search_query") || u.searchParams.get("q")
+      if (q) return `https://piped.video/results?search_query=${encodeURIComponent(q)}`
+      if (host.includes("music.youtube.com")) {
+        return "https://piped.video/trending"
+      }
+      return "https://piped.video"
     }
-    if (u.hostname.includes("youtu.be")) {
-      const v = u.pathname.replace(/^\//, "")
-      if (v) return `https://www.youtube-nocookie.com/embed/${v}?autoplay=1`
+
+    if (host === "google.com" || host === "www.google.com") {
+      const q = u.searchParams.get("q")
+      if (q) return `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`
+      return "https://html.duckduckgo.com"
     }
   } catch {}
   return url
@@ -160,27 +178,56 @@ export const BrowserPanel = memo(function BrowserPanel({
     if (!IS_DESKTOP || !viewportRef.current) return
     const el = viewportRef.current
 
+    // getBoundingClientRect() da coordenadas viewport-relative (equivalentes
+    // a position:fixed del sub-WebView2). contentRect.x/y son relativos al
+    // elemento y quedan desfasados si el panel se mueve (resize ventana/split).
+    const syncBounds = () => {
+      const rect = el.getBoundingClientRect()
+      shell.browser.setBounds({
+        x: rect.left,
+        y: rect.top,
+        w: rect.width,
+        h: rect.height,
+      }).catch(() => {})
+    }
+
     // Open native sub-WebView with initial URL at the viewport bounds
     const rect = el.getBoundingClientRect()
-    const bounds = { x: rect.x, y: rect.y, w: rect.width, h: rect.height }
+    const bounds = { x: rect.left, y: rect.top, w: rect.width, h: rect.height }
     shell.browser.open(currentSrc, bounds).catch(() => {})
     nativeReady.current = true
 
-    // ResizeObserver: sync bounds in real time
+    // ResizeObserver: sync bounds en tiempo real (debounced)
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { x, y, width, height } = entry.contentRect
-        if (debounceTimer) clearTimeout(debounceTimer)
-        debounceTimer = setTimeout(() => {
-          shell.browser.setBounds({ x, y, w: width, h: height }).catch(() => {})
-        }, 50)
-      }
+    const ro = new ResizeObserver(() => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(syncBounds, 50)
     })
     ro.observe(el)
 
+    // Ciclo de vida de la ventana principal: al hacer resize/mover, el panel
+    // cambia de posición aunque su size no cambie — ResizeObserver no lo
+    // detecta, así que escuchamos window resize + scroll.
+    window.addEventListener("resize", syncBounds)
+    window.addEventListener("scroll", syncBounds, true)
+
+    // visibilitychange: ocultar el sub-WebView cuando la pestaña del browser
+    // no está activa (ahorra RAM ~3 MB con MemoryUsageLevel::Low)
+    const handleVis = () => {
+      if (document.visibilityState === "hidden") {
+        shell.browser.setVisibility(false).catch(() => {})
+      } else {
+        shell.browser.setVisibility(true).catch(() => {})
+        requestAnimationFrame(syncBounds)
+      }
+    }
+    document.addEventListener("visibilitychange", handleVis)
+
     return () => {
       ro.disconnect()
+      window.removeEventListener("resize", syncBounds)
+      window.removeEventListener("scroll", syncBounds, true)
+      document.removeEventListener("visibilitychange", handleVis)
       if (debounceTimer) clearTimeout(debounceTimer)
       shell.browser.close().catch(() => {})
       nativeReady.current = false
