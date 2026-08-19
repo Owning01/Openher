@@ -361,7 +361,7 @@ fn main() {
         std::process::exit(1);
     });
 
-    let (browser_tx, browser_rx) = std::sync::mpsc::channel();
+    let (browser_mgr, browser_rx) = browser_view::SubWebViewManager::new();
     let dist = web_dist_dir();
     let app_state = Arc::new(AppState {
         config: std::sync::RwLock::new(config.clone()),
@@ -372,9 +372,8 @@ fn main() {
         plugins: plugins::PluginRegistry::new(),
         servers: srvman::ServerManager::new(),
         stats: statsx::StatsManager::new(),
-        cache: std::sync::RwLock::new(std::collections::HashMap::new()),
         dist,
-        browser: browser_tx,
+        browser: browser_mgr,
     });
     state::save_config(&config);
     if !state::autostart_enabled() {

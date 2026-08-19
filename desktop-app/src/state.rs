@@ -97,11 +97,9 @@ pub struct AppState {
     pub plugins: crate::plugins::PluginRegistry,
     pub servers: crate::srvman::ServerManager,
     pub stats: crate::statsx::StatsManager,
-    #[allow(dead_code)]
-    pub cache: RwLock<std::collections::HashMap<String, String>>,
     pub dist: Option<PathBuf>,
-    /// Canal para enviar comandos al sub-WebView (main thread).
-    pub browser: std::sync::mpsc::Sender<crate::browser_view::BrowserCommand>,
+    /// Manager para enviar comandos al sub-WebView (main thread).
+    pub browser: crate::browser_view::SubWebViewManager,
 }
 
 /// data/ vive al lado del exe (portable, cero escrituras en C:).

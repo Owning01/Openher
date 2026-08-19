@@ -826,7 +826,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = std::io::Read::read_to_end(&mut reader, &mut body_bytes);
 
                 if content_type.contains("html") {
-                    if let Ok(mut html) = String::from_utf8(body_bytes) {
+                    if let Ok(mut html) = String::from_utf8(body_bytes.clone()) {
                         let base_tag = format!(r#"<base href="{}">"#, target_url);
                         if let Some(pos) = html.find("<head>") {
                             html.insert_str(pos + 6, &base_tag);
@@ -863,21 +863,18 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     // ============================== Browser (Sub-WebView2 nativo ultra-ligero)
     if path == "/shell/browser/open" && method == Method::Post {
         if let Ok(v) = read_body(&mut req) {
-            let url = v["url"].as_str().unwrap_or("about:blank").to_string();
-            let bx = v["bounds"]["x"].as_f64().unwrap_or(0.0) as f32;
-            let by = v["bounds"]["y"].as_f64().unwrap_or(0.0) as f32;
-            let bw = v["bounds"]["w"].as_f64().unwrap_or(800.0) as f32;
-            let bh = v["bounds"]["h"].as_f64().unwrap_or(600.0) as f32;
+            let url = v["url"].as_str().unwrap_or("about:blank");
+            let bx = v["bounds"]["x"].as_f64().unwrap_or(0.0);
+            let by = v["bounds"]["y"].as_f64().unwrap_or(0.0);
+            let bw = v["bounds"]["w"].as_f64().unwrap_or(800.0);
+            let bh = v["bounds"]["h"].as_f64().unwrap_or(600.0);
             let bounds = wry::Rect {
                 position: wry::dpi::LogicalPosition::new(bx, by).into(),
                 size: wry::dpi::LogicalSize::new(bw, bh).into(),
             };
-            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
-            let _ = state.browser.send(crate::browser_view::BrowserCommand::Open { url, bounds, reply: reply_tx });
-            let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
-                Ok(Err(e)) => json_err(500, &e),
-                Err(_) => json_err(504, "timeout"),
+            let resp = match state.browser.open(url, bounds) {
+                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+                Err(e) => json_err(500, &e),
             };
             let _ = req.respond(resp);
             return;
@@ -885,20 +882,17 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     }
     if path == "/shell/browser/bounds" && method == Method::Post {
         if let Ok(v) = read_body(&mut req) {
-            let bx = v["x"].as_f64().unwrap_or(0.0) as f32;
-            let by = v["y"].as_f64().unwrap_or(0.0) as f32;
-            let bw = v["w"].as_f64().unwrap_or(800.0) as f32;
-            let bh = v["h"].as_f64().unwrap_or(600.0) as f32;
+            let bx = v["x"].as_f64().unwrap_or(0.0);
+            let by = v["y"].as_f64().unwrap_or(0.0);
+            let bw = v["w"].as_f64().unwrap_or(800.0);
+            let bh = v["h"].as_f64().unwrap_or(600.0);
             let bounds = wry::Rect {
                 position: wry::dpi::LogicalPosition::new(bx, by).into(),
                 size: wry::dpi::LogicalSize::new(bw, bh).into(),
             };
-            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
-            let _ = state.browser.send(crate::browser_view::BrowserCommand::Bounds { bounds, reply: reply_tx });
-            let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
-                Ok(Err(e)) => json_err(500, &e),
-                Err(_) => json_err(504, "timeout"),
+            let resp = match state.browser.set_bounds(bounds) {
+                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+                Err(e) => json_err(500, &e),
             };
             let _ = req.respond(resp);
             return;
@@ -907,12 +901,9 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     if path == "/shell/browser/visibility" && method == Method::Post {
         if let Ok(v) = read_body(&mut req) {
             let visible = v["visible"].as_bool().unwrap_or(true);
-            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
-            let _ = state.browser.send(crate::browser_view::BrowserCommand::Visible { visible, reply: reply_tx });
-            let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
-                Ok(Err(e)) => json_err(500, &e),
-                Err(_) => json_err(504, "timeout"),
+            let resp = match state.browser.set_visible(visible) {
+                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+                Err(e) => json_err(500, &e),
             };
             let _ = req.respond(resp);
             return;
@@ -920,37 +911,28 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     }
     if path == "/shell/browser/navigate" && method == Method::Post {
         if let Ok(v) = read_body(&mut req) {
-            let url = v["url"].as_str().unwrap_or("").to_string();
-            let action = v["action"].as_str().map(|s| s.to_string());
-            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
-            let _ = state.browser.send(crate::browser_view::BrowserCommand::Navigate { url, action, reply: reply_tx });
-            let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
-                Ok(Err(e)) => json_err(500, &e),
-                Err(_) => json_err(504, "timeout"),
+            let url = v["url"].as_str().unwrap_or("");
+            let action = v["action"].as_str();
+            let resp = match state.browser.navigate(url, action) {
+                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+                Err(e) => json_err(500, &e),
             };
             let _ = req.respond(resp);
             return;
         }
     }
     if path == "/shell/browser/close" && method == Method::Post {
-        let (reply_tx, reply_rx) = std::sync::mpsc::channel();
-        let _ = state.browser.send(crate::browser_view::BrowserCommand::Close { reply: reply_tx });
-        let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(Ok(())) => json_ok(&serde_json::json!({ "ok": true })),
-            Ok(Err(e)) => json_err(500, &e),
-            Err(_) => json_err(504, "timeout"),
+        let resp = match state.browser.close() {
+            Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+            Err(e) => json_err(500, &e),
         };
         let _ = req.respond(resp);
         return;
     }
     if path == "/shell/browser/url" && method == Method::Get {
-        let (reply_tx, reply_rx) = std::sync::mpsc::channel();
-        let _ = state.browser.send(crate::browser_view::BrowserCommand::CurrentUrl { reply: reply_tx });
-        let resp = match reply_rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(Ok(url)) => json_ok(&serde_json::json!({ "url": url })),
-            Ok(Err(e)) => json_err(500, &e),
-            Err(_) => json_err(504, "timeout"),
+        let resp = match state.browser.current_url() {
+            Ok(url) => json_ok(&serde_json::json!({ "url": url })),
+            Err(e) => json_err(500, &e),
         };
         let _ = req.respond(resp);
         return;

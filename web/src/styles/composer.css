@@ -324,7 +324,7 @@
   flex-direction: column;
   gap: var(--space-3);
   width: min(560px, 100%);
-  max-height: 92vh;
+  max-height: 88vh;
   background: var(--surface-strong, #16161d);
   border: 1px solid var(--border-strong, #444);
   border-radius: var(--radius-lg);
@@ -338,6 +338,23 @@
   justify-content: space-between;
 }
 
+.image-editor-header button {
+  background: none;
+  border: none;
+  color: var(--text-muted, #999);
+  cursor: pointer;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  border-radius: 0;
+  min-width: auto;
+  min-height: auto;
+}
+
+.image-editor-header button:hover {
+  color: var(--text, #fff);
+}
+
 .image-editor-toolbar {
   display: flex;
   align-items: center;
@@ -347,7 +364,7 @@
 
 .image-editor-canvas {
   width: 100%;
-  max-height: 55vh;
+  max-height: 50vh;
   object-fit: contain;
   background: #0a0a0f;
   border-radius: var(--radius-md);

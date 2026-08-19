@@ -131,6 +131,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  width: 100%;
 }
 
 .panel.detail {

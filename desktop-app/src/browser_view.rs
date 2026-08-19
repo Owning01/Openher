@@ -173,12 +173,9 @@ fn cmd_open(
 
     let wv = WebViewBuilder::with_web_context(ctx)
         .with_url(url)
-        .with_focused(false)
+        .with_focused(true)
         .with_additional_browser_args(
-            "--process-per-site --renderer-process-limit=1 \
-             --disable-background-networking --disable-background-timer-throttling \
-             --disable-renderer-backgrounding \
-             --enable-gpu --ignore-gpu-blocklist \
+            "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-video-decode --enable-accelerated-2d-canvas \
              --disable-web-security --disable-site-isolation-trials \
              --disable-features=IsolateOrigins,site-per-process",
         )
