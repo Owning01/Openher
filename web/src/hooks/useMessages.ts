@@ -126,11 +126,27 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     const existingUserTexts = new Set(
       messages.filter((m) => m.info.role === "user").map((m) => `${m.info.sessionID}:${extractText(m).trim()}`)
     )
+    // Para mensajes solo-imagen, trackear por sesión + cantidad de partes imagen
+    const existingImageCounts = new Map<string, number>()
+    for (const m of messages.filter((m) => m.info.role === "user")) {
+      const imgCount = m.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+      if (imgCount > 0) {
+        existingImageCounts.set(m.info.sessionID, (existingImageCounts.get(m.info.sessionID) ?? 0) + imgCount)
+      }
+    }
     const pendingOptimistic = optimisticUserMessages.filter((opt) => {
       const key = `${opt.info.sessionID}:${extractText(opt).trim()}`
       if (existingUserTexts.has(key)) {
         existingUserTexts.delete(key)
         return false
+      }
+      // Para mensajes solo-imagen: si el server ya tiene mensajes de usuario
+      // con imágenes en la misma sesión, asumir que fue confirmado
+      if (!extractText(opt).trim()) {
+        const optImgCount = opt.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+        if (optImgCount > 0 && existingImageCounts.has(opt.info.sessionID)) {
+          return false
+        }
       }
       return true
     })
@@ -268,7 +284,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       //    fetch confirma a lo sumo el optimista MÁS VIEJO con ese texto — si
       //    se envió "hola" dos veces, el segundo espera su propio echo en vez
       //    de desaparecer junto con el primero.
+      //    Para mensajes solo-imagen (sin texto), se confirma por cantidad de
+      //    partes de imagen coincidente.
       const confirmedTexts = new Set(confirmedUsers.map((m) => extractText(m).trim()).filter(Boolean))
+      const confirmedImageCounts = new Map<string, number>()
+      for (const m of confirmedUsers) {
+        const imgCount = m.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+        if (imgCount > 0) {
+          const key = `${m.info.sessionID}:${extractText(m).trim()}`
+          confirmedImageCounts.set(key, imgCount)
+        }
+      }
       const removeIDs = new Set<string>(confirmedIDs)
       const matchedTexts = new Set<string>()
       for (const m of current) {
@@ -277,6 +303,15 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         if (t && confirmedTexts.has(t) && !matchedTexts.has(t)) {
           matchedTexts.add(t)
           removeIDs.add(m.info.id)
+        } else if (!t) {
+          // Mensaje solo-imagen: matchear por cantidad de partes imagen
+          const optImgCount = m.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+          const key = `${m.info.sessionID}:`
+          const serverImgCount = confirmedImageCounts.get(key)
+          if (serverImgCount !== undefined && serverImgCount === optImgCount) {
+            removeIDs.add(m.info.id)
+            confirmedImageCounts.delete(key)
+          }
         }
       }
       return current.filter((m) => m.info.sessionID !== sessionID || !removeIDs.has(m.info.id))

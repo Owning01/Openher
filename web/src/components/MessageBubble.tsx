@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useMemo, useRef } from "react"
-import { PencilIcon, UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon } from "../Icons"
+import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon } from "../Icons"
 import { formatTime } from "../utils"
 import { getTranslationOriginal } from "../hooks/useMessages"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
@@ -10,7 +10,6 @@ import { FileDiffs } from "./FileDiffs"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { Markdown } from "./Markdown"
 import { ImageLightbox } from "./ImageLightbox"
-import { ImageEditor } from "./ImageEditor"
 
 /** Extract base64 image data from a message part (handles both type:image and type:file). */
 function getPartImageData(p: { type: string; data?: string; url?: string; mimeType?: string; mime?: string }): string | null {
@@ -119,7 +118,6 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const [showConfirm, setShowConfirm] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-  const [editingImage, setEditingImage] = useState<{ id: string; src: string; mime: string } | null>(null)
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const moreWrapRef = useRef<HTMLSpanElement | null>(null)
   useOutsideClick(moreWrapRef, () => setMoreOpen(false), moreOpen)
@@ -266,32 +264,9 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             <div key={p.id} className="message-image-wrap">
               <img src={src} alt="" className="message-image" loading="lazy"
                 onClick={() => setLightboxSrc(src)} />
-              <button type="button" className="message-image-edit" title={t('image.editorTitle')}
-                onClick={(e) => { e.stopPropagation(); setEditingImage({ id: p.id, src, mime: p.mime || p.mimeType || "image/png" }) }}>
-                <PencilIcon size={12} />
-              </button>
             </div>
           )
         })}
-
-        {editingImage && (
-          <ImageEditor
-            src={editingImage.src}
-            mime={editingImage.mime}
-            onApply={(base64) => {
-              const updatedParts = message.parts.map((pp) => {
-                if (pp.id !== editingImage.id) return pp
-                return {
-                  ...pp,
-                  data: base64,
-                  url: `data:${editingImage.mime};base64,${base64.split(",")[1] || base64}`,
-                }
-              })
-              Object.assign(message, { parts: updatedParts })
-              setEditingImage(null)
-            }}
-            onClose={() => setEditingImage(null)} />
-        )}
 
         {showConfirm && (
           <div className="undo-confirm">

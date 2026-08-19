@@ -12,11 +12,6 @@ function toEmbeddableUrl(url: string): string {
       if (u.pathname.startsWith("/embed/")) return url
       const v = u.searchParams.get("v")
       if (v) return `https://www.youtube-nocookie.com/embed/${v}?autoplay=1`
-      const q = u.searchParams.get("search_query")
-      if (q) return `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(q)}`
-      if (u.pathname === "/" || !u.pathname || u.pathname === "") {
-        return "https://www.youtube-nocookie.com/embed?listType=playlist&list=PLrEnWoR732-BHrPp_AK4TCQTko55654xK"
-      }
     }
     if (u.hostname.includes("youtu.be")) {
       const v = u.pathname.replace(/^\//, "")
@@ -33,10 +28,7 @@ function getFrameSrc(url: string): string {
   }
   const embed = toEmbeddableUrl(url)
   if (embed !== url) return embed
-
-  // Para sitios externos con protección de iframe (X-Frame-Options/CSP), usar el proxy local
-  const base = typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:5900"
-  return `${base}/shell/proxy?url=${encodeURIComponent(url)}`
+  return url
 }
 
 type DeviceMode = "responsive" | "mobile" | "tablet" | "desktop"
@@ -528,7 +520,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             src={getFrameSrc(currentSrc)}
             title="Vista previa web"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-top-navigation-by-user-activation"
-            allow="clipboard-read; clipboard-write; geolocation; microphone; camera; midi; encrypted-media"
+            allow="accelerometer; autoplay; clipboard-read; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; microphone; camera"
             onLoad={() => setLoading(false)}
             onError={() => {
               setLoading(false)

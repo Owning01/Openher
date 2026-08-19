@@ -325,11 +325,16 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     if (disabled) return
     if (!value.trim() && images.length === 0) return
     const opts = tslEnabled ? { translate: true } : undefined
-    const ok = await onSend(images.length > 0 ? images : undefined, opts)
-    // Solo limpiar las imágenes si el envío fue exitoso: si falló (red o
-    // server) el usuario no pierde la imagen que pegó.
-    if (ok !== false) setImages([])
+    const imgs = images.length > 0 ? images : undefined
+    // Limpiar imágenes y texto INMEDIATAMENTE antes de esperar la respuesta
+    // del server (evita que la preview quede 10s en el composer).
+    setImages([])
     resizeTextarea()
+    const ok = await onSend(imgs, opts)
+    if (ok === false) {
+      // Si falló, restaurar las imágenes (best-effort)
+      if (imgs) setImages(imgs)
+    }
   }, [onSend, images, resizeTextarea, disabled, value, tslEnabled])
 
   const isCommandValid = useMemo(() => {
