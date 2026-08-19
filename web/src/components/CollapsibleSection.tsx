@@ -7,16 +7,25 @@ type Props = {
   subtitle?: ReactNode
   filePath?: string
   defaultOpen?: boolean
+  /** Modo controlado: si se pasa, el componente no maneja su propio estado. */
+  open?: boolean
+  onToggle?: () => void
+  className?: string
   children: ReactNode
 }
 
-export const CollapsibleSection = memo(function CollapsibleSection({ icon, title, subtitle, filePath, defaultOpen = false, children }: Props) {
-  const [open, setOpen] = useState(defaultOpen)
+export const CollapsibleSection = memo(function CollapsibleSection({ icon, title, subtitle, filePath, defaultOpen = false, open: controlledOpen, onToggle: controlledToggle, className, children }: Props) {
+  const [internalOpen, setInternalOpen] = useState(defaultOpen)
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen! : internalOpen
 
-  const handleToggle = useCallback(() => setOpen((v) => !v), [])
+  const handleToggle = useCallback(() => {
+    if (isControlled) { controlledToggle?.() }
+    else { setInternalOpen((v) => !v) }
+  }, [isControlled, controlledToggle])
 
   return (
-    <div className={`collapsible-section${open ? " open" : ""}`}>
+    <div className={`collapsible-section${open ? " open" : ""}${className ? " " + className : ""}`}>
       <button className="collapsible-toggle" onClick={handleToggle} aria-expanded={open}>
         <span className="collapsible-icon">{icon}</span>
         <span className="collapsible-title">{title}</span>

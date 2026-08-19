@@ -1289,9 +1289,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setTabStacks((prev) => {
       const next = prev.map((s) => [...s])
       while (next.length <= index) next.push([])
-      // Remove from other panels
+      // Remove from other panels ONLY — keep order within this panel intact
+      // so switching tabs doesn't move the clicked tab to the end of the bar.
       for (let i = 0; i < next.length; i++) {
-        next[i] = next[i].filter((sid) => sid !== id)
+        if (i !== index) next[i] = next[i].filter((sid) => sid !== id)
       }
       if (!next[index]) next[index] = []
       if (!next[index].includes(id)) {

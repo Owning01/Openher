@@ -1,4 +1,4 @@
-import { memo, useCallback, useState, useMemo, useRef } from "react"
+import { memo, useCallback, useState, useMemo, useRef, useEffect } from "react"
 import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon } from "../Icons"
 import { formatTime } from "../utils"
 import { getTranslationOriginal } from "../hooks/useMessages"
@@ -12,6 +12,28 @@ import { CollapsibleSection } from "./CollapsibleSection"
 import { Markdown } from "./Markdown"
 import { ImageLightbox } from "./ImageLightbox"
 import { ToolIcon, LoadingIcon } from "../Icons"
+
+/** Etiqueta corta para un tool (igual criterio que ToolPart.shortToolLabel). */
+function toolShortLabel(tool?: string): string {
+  if (!tool) return ""
+  const m = tool.match(/mcp__([^_]+)__(.+)/)
+  if (m) return `mcp · ${m[1]} · ${m[2]}`
+  return tool
+}
+
+/** Extrae el comando + args de un tool part (para el título en vivo). */
+function toolRunningLabel(state?: { input?: unknown; tool?: string }): string {
+  const inp = state?.input
+  if (inp && typeof inp === "object" && "command" in inp) {
+    const cmd = (inp as { command?: string }).command
+    const args = Array.isArray((inp as { args?: unknown[] }).args)
+      ? ((inp as { args?: unknown[] }).args as unknown[]).map(String).join(" ")
+      : ""
+    const full = args && cmd ? `${cmd} ${args}` : String(cmd ?? "")
+    if (full.trim()) return full.trim().slice(0, 60)
+  }
+  return toolShortLabel(state?.tool)
+}
 
 /** Extract base64 image data from a message part (handles both type:image and type:file). */
 function getPartImageData(p: { type: string; data?: string; url?: string; mimeType?: string; mime?: string }): string | null {
@@ -141,6 +163,12 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
     () => calcTokensPerSecond(message),
     [message],
   )
+
+  // Turno en curso (el agente sigue generando) vs terminado.
+  const isWorkingTurn = !message.info.time.completed
+  // El box de actividad se abre solo mientras trabaja y se colapsa al terminar.
+  const [activityOpen, setActivityOpen] = useState(isWorkingTurn)
+  useEffect(() => { if (!isWorkingTurn) setActivityOpen(false) }, [isWorkingTurn])
 
   const handleConfirmUndo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -319,21 +347,41 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           ) : null
 
           if (minimalistMode) {
-            const labels: string[] = []
-            if (hasThinking) labels.push(t('detail.activityThinking'))
-            if (hasTools) labels.push(`${message.toolParts.length} ${t('detail.activityTools')}`)
-            if (message.hasCompaction) labels.push(t('detail.activityCompaction'))
-            const streaming = (hasThinking && message.thinkingParts.some((p) => !p.time?.end)) ||
-              (hasTools && message.toolParts.some((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending"))
+            const thinkingStreaming = hasThinking && message.thinkingParts.some((p) => !p.time?.end)
+            const toolRunning = hasTools && message.toolParts.some((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending")
+            const isStreaming = thinkingStreaming || toolRunning
+
+            // Título en vivo mientras el agente trabaja (acción actual).
+            let liveTitle: string
+            if (thinkingStreaming) {
+              liveTitle = t('detail.thinking')
+            } else if (toolRunning) {
+              const running = message.toolParts.find((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending")
+              liveTitle = running ? toolRunningLabel(running.state ?? { tool: running.tool }) : t('detail.thinking')
+            } else {
+              liveTitle = t('detail.thinking')
+            }
+
+            // Título tenue para el turno ya completado (sin repetir "Actividad").
+            const completedParts: string[] = []
+            if (hasThinking) completedParts.push(t('detail.thought'))
+            if (hasTools) completedParts.push(`${message.toolParts.length} ${t('detail.activityTools')}`)
+            if (message.hasCompaction) completedParts.push(t('detail.activityCompaction'))
+            const completedTitle = completedParts.join(" · ")
+
+            const title = isWorkingTurn ? liveTitle : completedTitle
+            const subtitle = isWorkingTurn
+              ? <span className="thinking-streaming"><LoadingIcon size={12} className="animate-spin" />{isStreaming ? (thinkingStreaming ? t('detail.thinking') : t('detail.working')) : t('detail.working')}</span>
+              : null
+
             return (
-              <div className="activity-box">
+              <div className={`activity-box activity-box-${isWorkingTurn ? "working" : "completed"}`}>
                 <CollapsibleSection
                   icon={<ToolIcon size={14} />}
-                  title={t('detail.activity')}
-                  subtitle={streaming
-                    ? <span className="thinking-streaming"><LoadingIcon size={12} className="animate-spin" />{t('detail.thinking')}</span>
-                    : labels.join(" · ")}
-                  defaultOpen={false}
+                  title={title}
+                  subtitle={subtitle}
+                  open={activityOpen}
+                  onToggle={() => setActivityOpen((v) => !v)}
                 >
                   {thinkingEl}
                   {toolsEl}

@@ -117,6 +117,10 @@ pub fn state_path() -> PathBuf {
     data_dir().join("state.json")
 }
 
+pub fn geometry_path() -> PathBuf {
+    data_dir().join("window-geometry.json")
+}
+
 pub fn cache_dir() -> PathBuf {
     data_dir().join("cache")
 }
@@ -166,6 +170,28 @@ pub fn load_persisted() -> PersistedState {
 pub fn save_persisted(s: &PersistedState) {
     let _ = std::fs::create_dir_all(data_dir());
     let _ = std::fs::write(state_path(), serde_json::to_string_pretty(s).unwrap_or_default());
+}
+
+/// Geometría de la ventana (posición + tamaño en lógico) persistida entre
+/// ejecuciones para reabrir la app donde el usuario la dejó.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct WindowGeometry {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    /// Factor de escala (DPI) al que se midió la geometría.
+    pub scale: f64,
+}
+
+pub fn load_window_geometry() -> Option<WindowGeometry> {
+    let raw = std::fs::read_to_string(geometry_path()).ok()?;
+    serde_json::from_str::<WindowGeometry>(&raw).ok()
+}
+
+pub fn save_window_geometry(g: &WindowGeometry) {
+    let _ = std::fs::create_dir_all(data_dir());
+    let _ = std::fs::write(geometry_path(), serde_json::to_string_pretty(g).unwrap_or_default());
 }
 
 /// Raíz de docs de opencode: config -> env -> checkout local del repo.

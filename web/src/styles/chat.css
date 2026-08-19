@@ -747,6 +747,41 @@
 .activity-box .tool-parts {
   display: flex;
 }
+
+/* Turno en trabajo: el box se abre solo y resalta con el color de acento
+   para señalar que el agente está activo. */
+.activity-box-working .collapsible-toggle {
+  color: var(--chat-accent, var(--primary));
+}
+.activity-box-working .collapsible-title {
+  color: var(--chat-accent, var(--primary));
+  font-weight: 600;
+}
+.activity-box-working .collapsible-icon {
+  color: var(--chat-accent, var(--primary));
+}
+
+/* Turno completado: resumen tenue y pequeño, sin repetir "Actividad". */
+.activity-box-completed {
+  margin-top: 0.35rem;
+}
+.activity-box-completed .collapsible-toggle {
+  color: var(--muted);
+  font-size: 0.75rem;
+  opacity: 0.85;
+  padding-top: 0.12rem;
+  padding-bottom: 0.12rem;
+}
+.activity-box-completed .collapsible-title {
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--muted);
+}
+.activity-box-completed .collapsible-icon {
+  opacity: 0.7;
+}
 .message-footer .msg-footer-duration,
 .message-footer .msg-footer-model,
 .message-footer .msg-footer-mode,

@@ -71,6 +71,8 @@ struct App {
     _browser_tx: crossbeam_channel::Sender<browser_view::BrowserCommand>,
     /// Estado interno del sub-WebView (solo main thread).
     browser_inner: browser_view::SubWebViewInner,
+    /// Último instante en que se persistió la geometría (throttle de escritura).
+    last_geom_save: std::time::Instant,
 }
 
 enum AppEvent {
@@ -146,7 +148,14 @@ impl ApplicationHandler<AppEvent> for App {
         }
         let mut attributes = Window::default_attributes();
         attributes.title = "OpenCode Desktop".to_string();
-        attributes.inner_size = Some(LogicalSize::new(DEFAULT_W, DEFAULT_H).into());
+        // Restaurar geometría persistida (posición + tamaño) si existe.
+        if let Some(g) = state::load_window_geometry() {
+            let scale = if g.scale > 0.0 { g.scale } else { 1.0 };
+            attributes.position = Some(LogicalPosition::new(g.x / scale, g.y / scale).into());
+            attributes.inner_size = Some(LogicalSize::new(g.width, g.height).into());
+        } else {
+            attributes.inner_size = Some(LogicalSize::new(DEFAULT_W, DEFAULT_H).into());
+        }
         attributes.min_inner_size = Some(LogicalSize::new(720.0, 480.0).into());
         if let Ok(rgba) = load_window_icon() {
             attributes.window_icon = Some(rgba);
@@ -198,11 +207,38 @@ impl ApplicationHandler<AppEvent> for App {
                         size: LogicalSize::new(size.width, size.height).into(),
                     });
                 }
+                self.save_geometry();
+            }
+            WindowEvent::Moved(_pos) => {
+                self.save_geometry();
             }
             WindowEvent::CloseRequested => {
+                self.save_geometry();
                 event_loop.exit();
             }
             _ => {}
+        }
+    }
+
+    /// Persiste posición+tamaño de la ventana (throttle ~400ms) para reabrir
+    /// la app donde el usuario la dejó.
+    fn save_geometry(&mut self) {
+        if let Some(window) = &self.window {
+            let now = std::time::Instant::now();
+            if now.duration_since(self.last_geom_save).as_millis() < 400 {
+                return;
+            }
+            self.last_geom_save = now;
+            let sf = window.scale_factor();
+            let pos = window.outer_position().unwrap_or_default().to_logical::<f64>(sf);
+            let size = window.inner_size().to_logical::<f64>(sf);
+            state::save_window_geometry(&state::WindowGeometry {
+                x: pos.x,
+                y: pos.y,
+                width: size.width,
+                height: size.height,
+                scale: sf,
+            });
         }
     }
 
@@ -434,6 +470,7 @@ fn main() {
             url: String::new(),
             visible: false,
         },
+        last_geom_save: std::time::Instant::now(),
     };
     event_loop.run_app(&mut app).unwrap();
 }

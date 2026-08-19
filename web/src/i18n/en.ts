@@ -390,6 +390,7 @@ export default {
   'detail.modelDefault': 'default',
   'detail.modelRecent': 'Recent',
   'detail.thought': 'Thought',
+  'detail.working': 'Working…',
 'detail.thinking': 'Thinking…',
   'detail.modelAll': 'All models',
   'detail.modelProvider': 'Provider: {provider}',

@@ -390,6 +390,7 @@ export default {
   'detail.modelDefault': 'defecto',
   'detail.modelRecent': 'Recientes',
   'detail.thought': 'Thinking',
+  'detail.working': 'Trabajando…',
 'detail.thinking': 'Pensando…',
   'detail.modelAll': 'Todos los modelos',
   'detail.modelProvider': 'Proveedor: {provider}',
