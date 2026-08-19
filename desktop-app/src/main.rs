@@ -10,6 +10,7 @@
 
 mod api;
 mod browser_view;
+mod common;
 mod docsx;
 mod fsx;
 mod kanban;
@@ -30,7 +31,7 @@ use state::AppState;
 use tiny_http::Server;
 use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
 use winit::application::ApplicationHandler;
-use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
+use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
@@ -148,11 +149,44 @@ impl ApplicationHandler<AppEvent> for App {
         }
         let mut attributes = Window::default_attributes();
         attributes.title = "OpenCode Desktop".to_string();
-        // Restaurar geometría persistida (posición + tamaño) si existe.
+        // Restaurar geometría persistida si existe y es visible en algún monitor.
+        // Si la ventana quedó fuera de pantalla (segundo monitor desconectado,
+        // coordenadas inválidas), se ignora y se usa el default centrado.
+        let mut use_saved_geometry = false;
         if let Some(g) = state::load_window_geometry() {
-            attributes.position = Some(PhysicalPosition::new(g.x, g.y).into());
-            attributes.inner_size = Some(PhysicalSize::new(g.width, g.height).into());
-        } else {
+            if g.width >= 100.0 && g.height >= 100.0 && g.width <= 8000.0 && g.height <= 8000.0 {
+                let monitors: Vec<_> = event_loop.available_monitors().collect();
+                let saved_x = g.x;
+                let saved_y = g.y;
+                let saved_w = g.width;
+                let saved_h = g.height;
+                let visible = if monitors.is_empty() {
+                    // Sin info de monitores, al menos validar que no sea absurdamente off-screen
+                    saved_x > -10000.0 && saved_x < 10000.0 && saved_y > -10000.0 && saved_y < 10000.0
+                } else {
+                    monitors.iter().any(|m| {
+                        let pos = m.position().to_logical::<f64>(m.scale_factor());
+                        let size = m.size().to_logical::<f64>(m.scale_factor());
+                        let mx = pos.x;
+                        let my = pos.y;
+                        let mw = size.width;
+                        let mh = size.height;
+                        // Chequear intersección: ventana y monitor se solapan al menos 100px
+                        let overlap_x = (saved_x + saved_w).min(mx + mw) - saved_x.max(mx);
+                        let overlap_y = (saved_y + saved_h).min(my + mh) - saved_y.max(my);
+                        overlap_x > 100.0 && overlap_y > 100.0
+                    })
+                };
+                if visible {
+                    attributes.position = Some(LogicalPosition::new(g.x, g.y).into());
+                    attributes.inner_size = Some(LogicalSize::new(g.width, g.height).into());
+                    use_saved_geometry = true;
+                } else {
+                    eprintln!("opencode-desktop: geometría guardada fuera de pantalla ({},{} {}x{}), usando default", g.x, g.y, g.width, g.height);
+                }
+            }
+        }
+        if !use_saved_geometry {
             attributes.inner_size = Some(LogicalSize::new(DEFAULT_W, DEFAULT_H).into());
         }
         attributes.min_inner_size = Some(LogicalSize::new(720.0, 480.0).into());
@@ -177,6 +211,12 @@ impl ApplicationHandler<AppEvent> for App {
             );
         match builder.build_as_child(&window) {
             Ok(wv) => {
+                window.set_visible(true);
+                window.focus_window();
+                // Centrar si no se restauró geometría (primera vez)
+                if !use_saved_geometry {
+                    // Dejar que el WM centre la ventana (sin posición explícita)
+                }
                 self.webview = Some(wv);
                 self.window = Some(window);
             }

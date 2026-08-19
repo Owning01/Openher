@@ -107,11 +107,11 @@ function unwrapData<T>(raw: T): T {
   return raw
 }
 
-function authHeader(config: ServerConfig): string {
+export function authHeader(config: { username: string; password: string }): string {
   return `Basic ${toBase64(`${config.username}:${config.password}`)}`
 }
 
-export function baseUrl(config: ServerConfig): string {
+export function baseUrl(config: { host: string; port: number }): string {
   let host = config.host.trim()
   const schemeMatch = host.match(/^(https?):\/\//)
   const scheme = schemeMatch ? schemeMatch[1] : "http"
@@ -788,8 +788,9 @@ export const api = {
   },
 
   async loadMessages(config: ServerConfig, sessionID: string, directory?: string, limit = 100) {
-    const raw = await request<MessageEnvelope[] | V2Message[]>(config, withDirectory(`/session/${sessionID}/message?limit=${limit}`, directory))
-    const list = (await getApiVersion(config)) === "v2"
+    // readTimeout acotado: mensajes deben llegar rápido; 12s evita 30s de pantalla vacía en caída.
+    const raw = await request<MessageEnvelope[] | V2Message[]>(config, withDirectory(`/session/${sessionID}/message?limit=${limit}`, directory), { readTimeout: 12_000 })
+    const list = resolveApiVersion(config) === "v2"
       ? (raw as V2Message[]).map(toMessageEnvelopeV1)
       : raw as MessageEnvelope[]
     return (list ?? []).map((m) => ({

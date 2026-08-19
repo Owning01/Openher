@@ -25,14 +25,13 @@ impl ServerManager {
     pub fn status(&self, ports: &[u16]) -> serde_json::Value {
         let mut ports_up = Vec::new();
         for port in ports {
-            let url = format!("http://127.0.0.1:{port}/session");
-            if let Ok(resp) = ureq::get(&url)
-                .timeout(std::time::Duration::from_millis(1200))
-                .call()
-            {
-                if resp.status() == 200 || resp.status() == 401 {
-                    ports_up.push(port);
-                }
+            if crate::common::probe_http(
+                *port,
+                "/session",
+                std::time::Duration::from_millis(1200),
+                &[200, 401],
+            ) {
+                ports_up.push(port);
             }
         }
         serde_json::json!({
@@ -46,22 +45,7 @@ impl ServerManager {
         if cmd.trim().is_empty() {
             return Err("sin comando de arranque configurado".into());
         }
-        // "C:\ruta\algo.bat" o "comando.exe args"
-        let child = if cmd.trim().to_lowercase().ends_with(".bat") {
-            std::process::Command::new("cmd")
-                .args(["/c", cmd.trim()])
-                .spawn()
-                .map_err(|e| e.to_string())?
-        } else {
-            let parts: Vec<&str> = cmd.split_whitespace().collect();
-            if parts.is_empty() {
-                return Err("comando vacío".into());
-            }
-            std::process::Command::new(parts[0])
-                .args(&parts[1..])
-                .spawn()
-                .map_err(|e| e.to_string())?
-        };
+        let child = crate::common::spawn_detached(cmd, None)?;
         let pid = child.id();
         self.children.lock().unwrap().insert("server".into(), child);
         Ok(serde_json::json!({ "started": true, "pid": pid }))
@@ -84,10 +68,13 @@ impl ServerManager {
 pub fn probe_all(ports: &[u16]) -> serde_json::Value {
     let mut up = Vec::new();
     for port in ports {
-        let url = format!("http://127.0.0.1:{port}/session");
-        match ureq::get(&url).timeout(std::time::Duration::from_millis(900)).call() {
-            Ok(resp) if resp.status() == 200 || resp.status() == 401 => up.push(*port),
-            _ => {}
+        if crate::common::probe_http(
+            *port,
+            "/session",
+            std::time::Duration::from_millis(900),
+            &[200, 401],
+        ) {
+            up.push(*port);
         }
     }
     serde_json::json!({

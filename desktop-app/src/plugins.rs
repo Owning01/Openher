@@ -66,28 +66,7 @@ impl PluginRegistry {
     /// Sirve archivos de un plugin web desde data/plugins/<name>.
     pub fn serve_web(&self, name: &str, rel: &str) -> Option<(Vec<u8>, String)> {
         let root = crate::state::plugins_dir().join(name);
-        let rel_clean = rel.trim_start_matches('/');
-        let mut path = root.join(rel_clean);
-        if !path.starts_with(&root) {
-            return None;
-        }
-        if path.is_dir() {
-            path = path.join("index.html");
-        }
-        if !path.is_file() {
-            return None;
-        }
-        let bytes = std::fs::read(&path).ok()?;
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-        let mime = match ext.as_str() {
-            "html" => "text/html; charset=utf-8",
-            "js" | "mjs" => "text/javascript; charset=utf-8",
-            "css" => "text/css; charset=utf-8",
-            "json" => "application/json",
-            "svg" => "image/svg+xml",
-            "png" => "image/png",
-            _ => "application/octet-stream",
-        };
+        let (bytes, mime) = crate::common::serve_file(&root, rel)?;
         Some((bytes, mime.to_string()))
     }
 
@@ -95,21 +74,8 @@ impl PluginRegistry {
         let plugins = self.plugins.lock().unwrap();
         let m = plugins.iter().find(|p| p.name == name).ok_or("plugin no existe")?;
         let cmd = m.command.as_deref().ok_or("sin comando")?;
-        let child = if cmd.trim().to_lowercase().ends_with(".bat") {
-            std::process::Command::new("cmd").args(["/c", cmd.trim()]).spawn()
-        } else {
-            let parts: Vec<&str> = cmd.split_whitespace().collect();
-            if parts.is_empty() {
-                return Err("comando vacío".into());
-            }
-            let mut c = std::process::Command::new(parts[0]);
-            c.args(&parts[1..]);
-            if let Some(dir) = &m.cwd {
-                c.current_dir(dir);
-            }
-            c.spawn()
-        }
-        .map_err(|e| e.to_string())?;
+        let cwd = m.cwd.as_deref().map(Path::new);
+        let child = crate::common::spawn_detached(cmd, cwd)?;
         let pid = child.id();
         self.running.lock().unwrap().push((name.to_string(), child));
         Ok(serde_json::json!({ "started": true, "pid": pid }))
@@ -175,16 +141,8 @@ pub fn labs_start(state: &Arc<crate::state::AppState>, id: &str) -> Result<serde
     if path.trim().is_empty() {
         return Err("sin ruta configurada".into());
     }
-    let child = if path.trim().to_lowercase().ends_with(".bat") {
-        std::process::Command::new("cmd").args(["/c", path.trim()]).spawn()
-    } else {
-        let mut c = std::process::Command::new(&path);
-        if let Some(p) = Path::new(&path).parent() {
-            c.current_dir(p);
-        }
-        c.spawn()
-    }
-    .map_err(|e| format!("{title}: {e}"))?;
+    let cwd = Path::new(&path).parent();
+    let child = crate::common::spawn_detached(&path, cwd).map_err(|e| format!("{title}: {e}"))?;
     let pid = child.id();
     std::mem::forget(child); // detached a propósito
     Ok(serde_json::json!({ "started": true, "pid": pid }))

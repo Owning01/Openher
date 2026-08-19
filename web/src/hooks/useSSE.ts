@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
-import { toBase64, resolveApiVersion, onApiVersionChange } from "../api"
+import { authHeader, baseUrl, resolveApiVersion, onApiVersionChange } from "../api"
 import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS, SSE_CONNECT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
@@ -67,12 +67,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
     const abort = new AbortController()
     abortRef.current = abort
 
-    let host = config.host.trim()
-    const schemeMatch = host.match(/^(https?):\/\//)
-    const scheme = schemeMatch ? schemeMatch[1] : "http"
-    if (schemeMatch) host = host.slice(schemeMatch[0].length)
-    if (host.includes(":") && !host.startsWith("[")) host = `[${host}]`
-    let url = `${scheme}://${host}:${config.port}/${v2 ? "api/event" : "event"}`
+    let url = `${baseUrl(config)}/${v2 ? "api/event" : "event"}`
     const dir = directoryRef.current
     if (dir) {
       url += `?directory=${encodeURIComponent(dir.replace(/\\/g, "/"))}`
@@ -80,7 +75,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
 
     const headers: Record<string, string> = { Accept: "text/event-stream" }
     if (config.username && config.password) {
-      headers.Authorization = `Basic ${toBase64(`${config.username}:${config.password}`)}`
+      headers.Authorization = authHeader(config)
     }
 
     try {

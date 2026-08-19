@@ -3,7 +3,7 @@
 // /health, /info, /stream (MJPEG) y /input con Basic auth — mismo modelo de
 // conexión que el server opencode (Tailscale/LAN).
 
-import { toBase64 } from "./api"
+import { authHeader, baseUrl } from "./api"
 
 export type DesktopConfig = {
   host: string
@@ -70,14 +70,6 @@ export function saveDesktopConfig(cfg: DesktopConfig) {
 
 export function canTestDesktop(cfg: DesktopConfig): boolean {
   return Boolean(cfg.host?.trim() && cfg.port > 0)
-}
-
-function baseUrl(cfg: DesktopConfig): string {
-  return `http://${cfg.host.trim()}:${cfg.port}`
-}
-
-function authHeader(cfg: DesktopConfig): string {
-  return `Basic ${toBase64(`${cfg.username}:${cfg.password}`)}`
 }
 
 export function desktopStreamUrl(cfg: DesktopConfig, params: StreamParams): string {

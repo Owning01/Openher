@@ -560,7 +560,16 @@
   overflow: hidden;
 }
 
-.ade-diff-tabs-bar {
+/* ===== VS Code style tabs — genérico DRY (usado por diff y editor de archivos)
+   Paleta de la app: --surface-subtle = tabBar bg (#252526), --surface = tab activa
+   (#1E1E1E), --primary = línea activa (#10b981), --text/--muted.
+   Métricas idénticas a VS Code: 35px alto, 13px Segoe UI, línea 2px. */
+.file-editor-tab-bar {
+  justify-content: space-between;
+}
+
+.ade-diff-tabs-bar,
+.file-editor-tab-bar {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -571,28 +580,32 @@
   overflow-y: hidden;
   scrollbar-width: thin;
   flex-shrink: 0;
-  min-height: 34px;
+  min-height: 35px;
+  contain: layout style paint;
 }
 
-.ade-diff-tabs-bar::-webkit-scrollbar {
+.ade-diff-tabs-bar::-webkit-scrollbar,
+.file-editor-tab-bar::-webkit-scrollbar {
   height: 3px;
 }
 
-.ade-diff-tabs-bar::-webkit-scrollbar-thumb {
+.ade-diff-tabs-bar::-webkit-scrollbar-thumb,
+.file-editor-tab-bar::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 2px;
 }
 
-.ade-diff-tab {
+.ade-diff-tab,
+.file-editor-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  height: 34px;
+  height: 35px;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--text-muted, #999);
+  color: var(--muted, #969696);
   font-size: 0.78rem;
   font-family: inherit;
   font-weight: 500;
@@ -603,23 +616,70 @@
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.ade-diff-tab:hover {
+.ade-diff-tab:hover,
+.file-editor-tab:hover {
   background: var(--surface-hover, rgba(255, 255, 255, 0.04));
   color: var(--text);
 }
 
-.ade-diff-tab.active {
+.ade-diff-tab.active,
+.file-editor-tab.active {
   background: var(--surface, #252526);
   color: var(--text, #fff);
-  border-bottom-color: var(--primary, #007acc);
+  border-bottom-color: var(--primary);
   font-weight: 600;
 }
 
-.ade-diff-tab-name {
+.ade-diff-tab-name,
+.file-editor-tab-name {
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-editor-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.file-editor-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+}
+
+.file-editor-tab:hover .file-editor-tab-close,
+.file-editor-tab.active .file-editor-tab-close {
+  opacity: 0.7;
+}
+
+.file-editor-tab-close:hover {
+  background: var(--surface-strong);
+  color: var(--text);
+  opacity: 1 !important;
+}
+
+.file-editor-dirty {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex-shrink: 0;
 }
 
 .ade-diff-tab-stats {

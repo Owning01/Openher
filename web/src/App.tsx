@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, useCallback, useRef, memo } from "react"
+import { lazy, Suspense, useEffect, useMemo, useState, useCallback, useRef, memo, useTransition } from "react"
 import { api } from "./api"
 import { I18nProvider, useT, normalizeLanguage } from "./i18n-context"
 import { languageOptions } from "./i18n"
@@ -32,6 +32,7 @@ import { loadShortcutsConfig, matchesShortcut, type ShortcutItem } from "./short
 import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, FileDiff } from "./types"
 import type { LanguageCode } from "./i18n"
 import { formatLimit, extractPath, extractName, extractBranch, isSessionActive, filterByQuery } from "./utils"
+import { parseDragPayload, parseDockPayload } from "./utils/drag"
 import { STORAGE_KEYS, DEFAULT_STATS_PORT } from "./constants"
 import { useBackButton } from "./hooks/useBackButton"
 import { useNetworkMode } from "./hooks/useNetworkMode"
@@ -103,6 +104,9 @@ type DesktopLayout = {
   panelKinds: Array<ShellPanelKind | "editor">
   panelIds: Array<string>
   panelEditorPaths?: Record<number, string>
+  /** Multi-tab por celda de editor: índice de celda → lista de paths. DRY con tabStacks. */
+  panelEditorTabStacks?: Record<number, string[]>
+  panelEditorActive?: Record<number, number>
   panelBrowserUrls?: Record<number, string>
   colSizes: Array<number | null>
   rowSizes: Array<number | null>
@@ -148,9 +152,9 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
     const layout = raw?.layout
     if (layout && layout.cols >= 1 && layout.rows >= 1 && Array.isArray(layout.sessions) && layout.sessions.length === layout.cols * layout.rows) {
       const total = layout.cols * layout.rows
-      const kinds: Array<ShellPanelKind> =
+      const kinds: Array<ShellPanelKind | "editor"> =
         Array.isArray(layout.panelKinds) && layout.panelKinds.length === total
-          ? layout.panelKinds.map((k: any) => (k === "session" || k === "terminal" || k === "explorer" || k === "kanban" || k === "stats" || k === "config" ? k : "session"))
+          ? layout.panelKinds.map((k: any) => (k === "session" || k === "editor" || k === "terminal" || k === "explorer" || k === "kanban" || k === "stats" || k === "config" || k === "browser" || k === "doc" ? k : "session"))
           : new Array(total).fill("session")
       // Migrate old flat sessions to tab stacks
       const tabStacks: Array<Array<string>> = layout.sessions.map((s: any) => {
@@ -166,13 +170,45 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
       const panelIds: Array<string> = Array.isArray(rawPanelIds) && rawPanelIds.length === total
         ? rawPanelIds.map((p: any) => (typeof p === "string" ? p : genPanelId()))
         : new Array(total).fill(null).map(() => genPanelId())
+      // Migrar editor single-path → tabStacks (DRY, sin perder datos)
+      const rawEditorPaths = (layout as any).panelEditorPaths as Record<string, string> | undefined
+      const rawEditorTabStacks = (layout as any).panelEditorTabStacks as Record<string, string[]> | undefined
+      const rawEditorActive = (layout as any).panelEditorActive as Record<string, number> | undefined
+      const editorTabStacks: Record<number, string[]> = {}
+      const editorActive: Record<number, number> = {}
+      if (rawEditorTabStacks && typeof rawEditorTabStacks === "object") {
+        for (const [k, v] of Object.entries(rawEditorTabStacks)) {
+          if (Array.isArray(v)) editorTabStacks[Number(k)] = v.filter((s: any) => typeof s === "string")
+        }
+      }
+      if (rawEditorActive && typeof rawEditorActive === "object") {
+        for (const [k, v] of Object.entries(rawEditorActive)) editorActive[Number(k)] = Number(v) || 0
+      }
+      if (rawEditorPaths && typeof rawEditorPaths === "object") {
+        for (const [k, path] of Object.entries(rawEditorPaths)) {
+          const idx = Number(k)
+          if (!editorTabStacks[idx] && typeof path === "string") {
+            editorTabStacks[idx] = [path]
+            editorActive[idx] = 0
+          }
+        }
+      }
+      // Normalizar índices fuera de rango tras resize
+      for (const k of Object.keys(editorTabStacks)) {
+        if (Number(k) >= total) { delete editorTabStacks[Number(k)]; delete editorActive[Number(k)] }
+      }
       return {
         layout: {
           cols: layout.cols,
           rows: layout.rows,
           sessions: layout.sessions.map((s: any) => (typeof s === "string" ? s : null)),
-          panelKinds: kinds,
+          panelKinds: kinds as Array<ShellPanelKind | "editor">,
           panelIds,
+          panelEditorTabStacks: editorTabStacks,
+          panelEditorActive: editorActive,
+          // compat: mantener panelEditorPaths para lectores que aún lo usan
+          panelEditorPaths: rawEditorPaths,
+          panelBrowserUrls: (layout as any).panelBrowserUrls,
           colSizes: layout.cols === 1 ? [null] : (Array.isArray(layout.colSizes) && layout.colSizes.length === layout.cols ? layout.colSizes : new Array(layout.cols).fill(null)),
           rowSizes: layout.rows === 1 ? [null] : (Array.isArray(layout.rowSizes) && layout.rowSizes.length === layout.rows ? layout.rowSizes : new Array(layout.rows).fill(null)),
         },
@@ -195,6 +231,7 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
 
 const ShellPanelCell = memo(function ShellPanelCell({
   index,
+  panelId,
   kind,
   cwd,
   sessionID,
@@ -207,6 +244,7 @@ const ShellPanelCell = memo(function ShellPanelCell({
   onOpenFile,
 }: {
   index: number
+  panelId: string
   kind: Exclude<ShellPanelKind, "session">
   cwd?: string
   sessionID?: string | null
@@ -257,26 +295,23 @@ const ShellPanelCell = memo(function ShellPanelCell({
         }
         const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
         if (raw) {
-          if (raw.startsWith("panel:")) {
-            const parts = raw.split(":")
-            const fromIdx = Number(parts[1])
-            if (fromIdx !== index) {
+          const payload = parseDragPayload(raw)
+          if (payload.kind === "panel") {
+            if (payload.idx !== index) {
               if (zone === "center") {
-                onSwapPanels(fromIdx, index)
+                onSwapPanels(payload.idx, index)
               } else {
                 onSplitSession(index, zone, raw)
               }
             }
-          } else if (raw.startsWith("session:")) {
-            const sId = raw.replace("session:", "")
-            onSplitSession(index, zone, sId)
-          } else if (raw.startsWith("kind:")) {
+          } else if (payload.kind === "session") {
+            onSplitSession(index, zone, payload.id)
+          } else if (payload.kind === "kind") {
             onSplitSession(index, zone, raw)
-          } else if (raw.startsWith("tab:")) {
+          } else if (payload.kind === "tab") {
             // Ignorar tab suelto
-          } else if (raw.includes("/") || raw.includes("\\") || raw.includes(".")) {
-            // Archivo arrastrado
-            onOpenFile?.(raw, index, zone)
+          } else if (payload.kind === "file") {
+            onOpenFile?.(payload.path, index, zone)
           }
         }
       }}
@@ -315,7 +350,7 @@ const ShellPanelCell = memo(function ShellPanelCell({
       >
         ×
       </button>
-      <ShellPanel kind={kind} cwd={cwd} sessionID={sessionID} onOpenSessionDir={onOpenSessionDir} onOpenFile={(p) => onOpenFile?.(p, index, "center")} panelIndex={index} />
+      <ShellPanel kind={kind} cwd={cwd} sessionID={sessionID} onOpenSessionDir={onOpenSessionDir} onOpenFile={(p) => onOpenFile?.(p, index, "center")} panelIndex={index} panelId={panelId} />
     </div>
   )
 })
@@ -382,10 +417,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     runtimeError, setRuntimeError,
     renderedMessages, messageScrollSignature, pendingIndex,
     completionShouldPlayRef,
-    clearSession, loadSelected, send, abortSession,
+    clearSession, preloadMessages, loadSelected, send, abortSession,
     setMessages, undoMessage, redoMessage, compactSession,
     applyDelta, applyPart, compacting, setCompacting, messages
   } = useMessages(config)
+  const [, startTransition] = useTransition()
+  const handleComposerChange = useCallback((value: string) => {
+    startTransition(() => setComposer(value))
+  }, [setComposer])
 
   const {
     todos, diffFiles, projectDashboard, dashboardError,
@@ -395,20 +434,36 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     loadTodos, loadDiffs, loadDashboard, clearSidecar
   } = useSessionSidecar(config)
 
+  const { cacheSessions, getCachedSessions, cacheMessages, getCachedMessages } = useOfflineCache(flags)
+
   const loadSessionRef = useRef(0)
 
   const onLoadSelected = useCallback(async (id: string, dir: string) => {
     const reqId = ++loadSessionRef.current
     clearSession()
     clearSidecar()
-    await Promise.all([
-      loadSelected(id, dir),
-      loadAgents(dir).catch(() => undefined),
-      loadModels(dir).catch(() => undefined)
-    ])
+    // Cache-first: pinta historial local de inmediato sin esperar red (móvil y desktop).
+    // En v1 fijo no hay overhead de versión; el fetch de red mergea después.
+    if (flags.offlineCache) {
+      try {
+        const cached = await getCachedMessages(id)
+        if (cached && cached.length > 0 && reqId === loadSessionRef.current) {
+          preloadMessages(id, cached)
+        }
+      } catch { /* ignore — fallback a red */ }
+    }
+    // Agents/models no bloquean el chat; se precargan en background.
+    loadAgents(dir).catch(() => undefined)
+    loadModels(dir).catch(() => undefined)
+    try {
+      await loadSelected(id, dir)
+    } catch (e) {
+      // Si la red falla pero ya se pintó cache, no vaciar.
+      throw e
+    }
     if (reqId !== loadSessionRef.current) return
     loadTodos(id, dir)
-  }, [loadSelected, loadAgents, loadModels, loadTodos, clearSession, clearSidecar])
+  }, [loadSelected, loadAgents, loadModels, loadTodos, clearSession, clearSidecar, preloadMessages, flags.offlineCache, getCachedMessages])
 
   // Auto-refresh models when AI sheet opens
   useEffect(() => {
@@ -692,9 +747,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     return () => clearTimeout(t)
   }, [awaitingAssistantReply, sseState])
 
-  // ===== Offline cache =====
-  const { cacheSessions, getCachedSessions, cacheMessages, getCachedMessages } = useOfflineCache(flags)
-
+  // ===== Offline cache: persistencia de sesiones =====
   useEffect(() => {
     if (sessions.length > 0) {
       cacheSessions(sessions as unknown as import("./types").Session[])
@@ -881,9 +934,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [connectionState])
 
   // Poll rápido durante turnos activos (sin SSE en modos saver/ultra/miser):
-  // 3s cuando el server está generando, intervalo normal en idle.
+  // 3s cuando el server está generando O se está esperando respuesta, intervalo normal en idle.
   const baseInterval = dataMode === "full" ? (isStreamingActive ? 5000 : 3500) : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
-  const pollInterval = (selectedSession && isSessionActive(selectedSession)) ? Math.min(baseInterval, 3000) : baseInterval
+  const isActivePoll = Boolean(selectedSession && (isSessionActive(selectedSession) || awaitingAssistantReply))
+  const pollInterval = isActivePoll ? Math.min(baseInterval, 3000) : baseInterval
 
   const pollControl = usePolling(async () => {
     // Full refresh (per-directory hydration) solo en modo full SIN SSE activo.
@@ -921,7 +975,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "idle" } : s))
       }
     }
-  }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, streamState, selectedSession?.id, selectedSession?.status, isStreamingActive], isStreamingActive)
+  }, pollInterval, [config.host, config.port, config.username, config.password, dataMode, streamState, selectedSession?.id, selectedSession?.status, isStreamingActive, awaitingAssistantReply], isStreamingActive)
 
   useCompletionAudio(awaitingAssistantReply, completionShouldPlayRef, dataMode, chatSettings.completionSound, () => {
     if (selectedSession && dataMode !== "ultra" && dataMode !== "miser") {
@@ -1006,22 +1060,23 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang)
   }, [setLanguage])
 
-  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }) => {
+  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string) => {
     if (!selectedSession) return
+    const composerText = text ?? composer
     if (connectionState === "offline") {
-      queueAction({ type: "prompt", sessionID: selectedSession.id, directory: selectedSession.directory, payload: composer })
+      queueAction({ type: "prompt", sessionID: selectedSession.id, directory: selectedSession.directory, payload: composerText })
       setComposer("")
       setRuntimeError("Prompt queued - will send when connection is restored")
       return
     }
-    let textToSend = composer
+    let textToSend = composerText
     let originalText: string | null = null
-    if (options?.translate && composer.trim()) {
+    if (options?.translate && composerText.trim()) {
       try {
         const { translateToEnglish } = await import("./utils/translate")
-        const translated = await translateToEnglish(composer)
-        if (translated !== composer) {
-          originalText = composer
+        const translated = await translateToEnglish(composerText)
+        if (translated !== composerText) {
+          originalText = composerText
           textToSend = translated
           setComposer(translated)
         }
@@ -1047,7 +1102,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-      setCommands, setRuntimeError, images, textToSend !== composer ? textToSend : undefined, setLocalRevertID, originalText ?? undefined)
+      setCommands, setRuntimeError, images, textToSend !== composerText ? textToSend : undefined, setLocalRevertID, originalText ?? undefined)
     if (result === "help") { setHelpPage("commands"); navigate("help") }
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
     if (result === "connect") setShowConnectSheet(true)
@@ -1359,8 +1414,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [])
 
   // Agrega un panel nuevo (de cualquier tipo) al grid, expandiendo si está lleno.
+  // Singleton para stats: no abrir más de 1 vez (el botón lo cierra).
   const addPanel = useCallback((kind: ShellPanelKind) => {
     setDesktopLayout((prev) => {
+      if (kind === "stats" && prev.panelKinds.includes("stats")) return prev
       const total = prev.cols * prev.rows
       const emptySlot = prev.sessions.findIndex((s, i) => s === null && prev.panelKinds[i] === "session")
       if (emptySlot >= 0) {
@@ -1444,6 +1501,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             panelKinds: ["session"],
             panelIds: [genPanelId()],
             panelEditorPaths: {},
+            panelEditorTabStacks: {},
+            panelEditorActive: {},
             colSizes: [null],
             rowSizes: [null],
           }
@@ -1452,6 +1511,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
       if (activeRemaining.length === 1) {
         const targetIdx = activeRemaining[0]
+        const tabStacksForSingle: Record<number, string[]> = prev.panelEditorTabStacks?.[targetIdx] ? { 0: prev.panelEditorTabStacks[targetIdx] } : {}
+        const activeForSingle: Record<number, number> = prev.panelEditorActive?.[targetIdx] != null ? { 0: prev.panelEditorActive[targetIdx]! } : {}
         return {
           ...prevState,
           lastClosedPanel: closedInfo,
@@ -1463,6 +1524,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             panelKinds: [prev.panelKinds[targetIdx] ?? "session"],
             panelIds: [prev.panelIds[targetIdx]],
             panelEditorPaths: prev.panelEditorPaths?.[targetIdx] ? { 0: prev.panelEditorPaths[targetIdx] } : {},
+            panelEditorTabStacks: tabStacksForSingle,
+            panelEditorActive: activeForSingle,
             colSizes: [null],
             rowSizes: [null],
           }
@@ -1472,6 +1535,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       let sessions = [...prev.sessions]
       let panelKinds = [...prev.panelKinds]
       let panelIds = [...prev.panelIds]
+      const panelEditorPaths = { ...prev.panelEditorPaths } as Record<number, string>
+      const panelEditorTabStacks = { ...prev.panelEditorTabStacks } as Record<number, string[]>
+      const panelEditorActive = { ...prev.panelEditorActive } as Record<number, number>
+      delete panelEditorPaths[index]
+      delete panelEditorTabStacks[index]
+      delete panelEditorActive[index]
       sessions[index] = null
       panelKinds[index] = "session"
       let { cols, rows, colSizes, rowSizes } = prev
@@ -1513,7 +1582,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       return {
         ...prevState,
         lastClosedPanel: closedInfo,
-        layout: { ...prev, cols, rows, sessions, panelKinds, panelIds, colSizes, rowSizes }
+        layout: { ...prev, cols, rows, sessions, panelKinds, panelIds, panelEditorPaths, panelEditorTabStacks, panelEditorActive, colSizes, rowSizes }
       }
     })
     setActivePanel((prev) => (prev >= index ? Math.max(0, prev - 1) : prev))
@@ -1536,40 +1605,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (!rawId) return
     draggedSessionRef.current = null
 
-    let targetKind: ShellPanelKind | "editor" = "session"
-    let targetSessionId: string | null = null
-    let fromIndex: number | null = null
-
-    if (rawId.startsWith("panel:")) {
-      const parts = rawId.split(":")
-      fromIndex = Number(parts[1])
-      const payload = parts.slice(2).join(":")
-      if (payload.startsWith("kind:")) {
-        targetKind = payload.replace("kind:", "") as ShellPanelKind
-        targetSessionId = null
-      } else if (payload === "terminal" || payload === "explorer" || payload === "kanban" || payload === "stats") {
-        targetKind = payload as ShellPanelKind
-        targetSessionId = null
-      } else if (payload.startsWith("session:")) {
-        targetKind = "session"
-        targetSessionId = payload.replace("session:", "")
-      } else {
-        targetKind = "session"
-        targetSessionId = payload
-      }
-    } else if (rawId.startsWith("kind:")) {
-      targetKind = rawId.replace("kind:", "") as ShellPanelKind
-      targetSessionId = null
-    } else if (rawId === "terminal" || rawId === "explorer" || rawId === "kanban" || rawId === "stats") {
-      targetKind = rawId as ShellPanelKind
-      targetSessionId = null
-    } else if (rawId.startsWith("session:")) {
-      targetKind = "session"
-      targetSessionId = rawId.replace("session:", "")
-    } else {
-      targetKind = "session"
-      targetSessionId = rawId
-    }
+    const dock = parseDockPayload(rawId)
+    let targetKind = dock.targetKind as ShellPanelKind | "editor"
+    let targetSessionId = dock.targetSessionId
+    let fromIndex = dock.fromIndex
 
     if (dir === "center") {
       setDesktopLayout((prev) => {
@@ -1586,17 +1625,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             panelIds[existing] = genPanelId()
           }
         } else if (fromIndex !== null && fromIndex !== index) {
-          // Moving a non-session panel (terminal, explorer, etc.): clear source
+          // Moving a non-session panel (terminal, explorer, etc.): mover identidad
+          // para que React preserve la instancia y su estado (tabs + pty).
+          const movedId = panelIds[fromIndex]
           panelKinds[fromIndex] = "session"
           sessions[fromIndex] = null
           panelIds[fromIndex] = genPanelId()
+          panelIds[index] = movedId
         } else if (targetKind !== "session") {
           // Moving by kind: find and clear existing
           const existing = panelKinds.indexOf(targetKind)
           if (existing >= 0 && existing !== index) {
+            const movedId = panelIds[existing]
             panelKinds[existing] = "session"
             sessions[existing] = null
             panelIds[existing] = genPanelId()
+            panelIds[index] = movedId
           }
         }
         sessions[index] = targetSessionId
@@ -2220,47 +2264,71 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         if (zone === "center") {
           const panelKinds = [...prev.panelKinds]
           panelKinds[targetIndex] = "editor"
-          const panelEditorPaths = { ...prev.panelEditorPaths, [targetIndex]: filePath }
-          return { ...prev, panelKinds, panelEditorPaths }
+          const prevTabs = prev.panelEditorTabStacks?.[targetIndex] ?? (prev.panelEditorPaths?.[targetIndex] ? [prev.panelEditorPaths[targetIndex]] : [])
+          const isSameEditor = prev.panelKinds[targetIndex] === "editor"
+          const nextTabs = isSameEditor ? (prevTabs.includes(filePath) ? prevTabs : [...prevTabs, filePath]) : [filePath]
+          const nextActive = nextTabs.indexOf(filePath)
+          return {
+            ...prev,
+            panelKinds,
+            panelEditorTabStacks: { ...prev.panelEditorTabStacks, [targetIndex]: nextTabs },
+            panelEditorActive: { ...prev.panelEditorActive, [targetIndex]: nextActive },
+            panelEditorPaths: { ...prev.panelEditorPaths, [targetIndex]: filePath },
+          }
         }
-        if (zone === "left") {
+        if (zone === "left" || zone === "right") {
           const cols = prev.cols + 1
           const col = targetIndex % prev.cols
+          const insertCol = zone === "left" ? col : col + 1
           const sessions: Array<string | null> = []
           const panelKinds: Array<ShellPanelKind | "editor"> = []
+          const panelIds: Array<string> = []
           const panelEditorPaths: Record<number, string> = {}
+          const panelEditorTabStacks: Record<number, string[]> = {}
+          const panelEditorActive: Record<number, number> = {}
           for (let r = 0; r < prev.rows; r++) {
             for (let c = 0; c < cols; c++) {
-              if (c < col) {
+              if (c < insertCol) {
                 const oldIdx = r * prev.cols + c
                 sessions.push(prev.sessions[oldIdx] ?? null)
                 panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+                panelIds.push(prev.panelIds[oldIdx] ?? genPanelId())
                 if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
-              } else if (c === col) {
+                if (prev.panelEditorTabStacks?.[oldIdx]) panelEditorTabStacks[sessions.length - 1] = prev.panelEditorTabStacks[oldIdx]
+                if (prev.panelEditorActive?.[oldIdx] != null) panelEditorActive[sessions.length - 1] = prev.panelEditorActive[oldIdx]!
+              } else if (c === insertCol) {
                 sessions.push(null)
                 panelKinds.push("editor")
+                panelIds.push(genPanelId())
                 panelEditorPaths[sessions.length - 1] = filePath
+                panelEditorTabStacks[sessions.length - 1] = [filePath]
+                panelEditorActive[sessions.length - 1] = 0
               } else {
                 const oldIdx = r * prev.cols + (c - 1)
                 sessions.push(prev.sessions[oldIdx] ?? null)
                 panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+                panelIds.push(prev.panelIds[oldIdx] ?? genPanelId())
                 if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
+                if (prev.panelEditorTabStacks?.[oldIdx]) panelEditorTabStacks[sessions.length - 1] = prev.panelEditorTabStacks[oldIdx]
+                if (prev.panelEditorActive?.[oldIdx] != null) panelEditorActive[sessions.length - 1] = prev.panelEditorActive[oldIdx]!
               }
             }
           }
-          return { ...prev, cols, sessions, panelKinds, panelEditorPaths, colSizes: new Array(cols).fill(null) }
+          return { ...prev, cols, sessions, panelKinds, panelIds, panelEditorPaths, panelEditorTabStacks, panelEditorActive, colSizes: new Array(cols).fill(null) }
         }
       }
 
-      // 2. Si ya hay un editor abierto, actualizar su ruta
+      // 2. Si ya hay un editor abierto, agregar pestaña (VS Code: no reemplaza)
       const existingEditorIdx = prev.panelKinds.indexOf("editor")
       if (existingEditorIdx >= 0) {
+        const prevTabs = prev.panelEditorTabStacks?.[existingEditorIdx] ?? (prev.panelEditorPaths?.[existingEditorIdx] ? [prev.panelEditorPaths[existingEditorIdx]] : [])
+        const nextTabs = prevTabs.includes(filePath) ? prevTabs : [...prevTabs, filePath]
+        const nextActive = nextTabs.indexOf(filePath)
         return {
           ...prev,
-          panelEditorPaths: {
-            ...prev.panelEditorPaths,
-            [existingEditorIdx]: filePath,
-          }
+          panelEditorTabStacks: { ...prev.panelEditorTabStacks, [existingEditorIdx]: nextTabs },
+          panelEditorActive: { ...prev.panelEditorActive, [existingEditorIdx]: nextActive },
+          panelEditorPaths: { ...prev.panelEditorPaths, [existingEditorIdx]: filePath },
         }
       }
 
@@ -2275,7 +2343,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           rowSizes: [null],
           panelKinds: ["editor", "session"],
           sessions: [null, curSessionId],
+          panelIds: [genPanelId(), prev.panelIds[0] ?? genPanelId()],
           panelEditorPaths: { 0: filePath },
+          panelEditorTabStacks: { 0: [filePath] },
+          panelEditorActive: { 0: 0 },
         }
       }
 
@@ -2293,7 +2364,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           rowSizes: [null],
           panelKinds: ["explorer", "editor", "session"],
           sessions: [null, null, curSessionId],
+          panelIds: [prev.panelIds[0] ?? genPanelId(), genPanelId(), prev.panelIds[1] ?? genPanelId()],
           panelEditorPaths: { 1: filePath },
+          panelEditorTabStacks: { 1: [filePath] },
+          panelEditorActive: { 1: 0 },
         }
       }
 
@@ -2302,9 +2376,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       if (activeKind !== "session") {
         const panelKinds = [...prev.panelKinds]
         panelKinds[activePanel] = "editor"
+        const prevTabs = prev.panelEditorTabStacks?.[activePanel] ?? (prev.panelEditorPaths?.[activePanel] ? [prev.panelEditorPaths[activePanel]] : [])
+        const nextTabs = prevTabs.includes(filePath) ? prevTabs : [...prevTabs, filePath]
+        // si ya era editor, preserva tabs; si no, nuevo tab único
+        const tabs = prev.panelKinds[activePanel] === "editor" ? nextTabs : [filePath]
+        const active = tabs.indexOf(filePath)
         return {
           ...prev,
           panelKinds,
+          panelEditorTabStacks: { ...prev.panelEditorTabStacks, [activePanel]: tabs },
+          panelEditorActive: { ...prev.panelEditorActive, [activePanel]: active },
           panelEditorPaths: {
             ...prev.panelEditorPaths,
             [activePanel]: filePath,
@@ -2317,7 +2398,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       const col = activePanel % prev.cols
       const sessions: Array<string | null> = []
       const panelKinds: Array<ShellPanelKind | "editor"> = []
+      const panelIds: Array<string> = []
       const panelEditorPaths: Record<number, string> = {}
+      const panelEditorTabStacks: Record<number, string[]> = {}
+      const panelEditorActive: Record<number, number> = {}
 
       for (let r = 0; r < prev.rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -2325,16 +2409,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             const oldIdx = r * prev.cols + c
             sessions.push(prev.sessions[oldIdx] ?? null)
             panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+            panelIds.push(prev.panelIds[oldIdx] ?? genPanelId())
             if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
+            if (prev.panelEditorTabStacks?.[oldIdx]) panelEditorTabStacks[sessions.length - 1] = prev.panelEditorTabStacks[oldIdx]
+            if (prev.panelEditorActive?.[oldIdx] != null) panelEditorActive[sessions.length - 1] = prev.panelEditorActive[oldIdx]!
           } else if (c === col) {
             sessions.push(null)
             panelKinds.push("editor")
+            panelIds.push(genPanelId())
             panelEditorPaths[sessions.length - 1] = filePath
+            panelEditorTabStacks[sessions.length - 1] = [filePath]
+            panelEditorActive[sessions.length - 1] = 0
           } else {
             const oldIdx = r * prev.cols + (c - 1)
             sessions.push(prev.sessions[oldIdx] ?? null)
             panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+            panelIds.push(prev.panelIds[oldIdx] ?? genPanelId())
             if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
+            if (prev.panelEditorTabStacks?.[oldIdx]) panelEditorTabStacks[sessions.length - 1] = prev.panelEditorTabStacks[oldIdx]
+            if (prev.panelEditorActive?.[oldIdx] != null) panelEditorActive[sessions.length - 1] = prev.panelEditorActive[oldIdx]!
           }
         }
       }
@@ -2344,19 +2437,58 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         cols,
         sessions,
         panelKinds,
+        panelIds,
         panelEditorPaths,
+        panelEditorTabStacks,
+        panelEditorActive,
         colSizes: new Array(cols).fill(null),
       }
     })
   }, [isDesktop, selectedSession?.id, activePanel])
 
+  const handleEditorTabSelect = useCallback((panelIdx: number, path: string) => {
+    setDesktopLayout((prev) => {
+      const tabs = prev.panelEditorTabStacks?.[panelIdx] ?? (prev.panelEditorPaths?.[panelIdx] ? [prev.panelEditorPaths[panelIdx]] : [])
+      const active = tabs.indexOf(path)
+      if (active === -1) return prev
+      return { ...prev, panelEditorActive: { ...prev.panelEditorActive, [panelIdx]: active }, panelEditorPaths: { ...prev.panelEditorPaths, [panelIdx]: path } }
+    })
+    setActivePanel(panelIdx)
+  }, [])
+
+  const handleEditorTabClose = useCallback((panelIdx: number, path: string) => {
+    const tabs = desktopLayout.panelEditorTabStacks?.[panelIdx] ?? (desktopLayout.panelEditorPaths?.[panelIdx] ? [desktopLayout.panelEditorPaths[panelIdx]] : [])
+    if (tabs.length <= 1) {
+      closePanel(panelIdx)
+      return
+    }
+    setDesktopLayout((prev) => {
+      const prevTabs = [...(prev.panelEditorTabStacks?.[panelIdx] ?? [])]
+      const idx = prevTabs.indexOf(path)
+      if (idx === -1) return prev
+      const nextTabs = prevTabs.filter((t) => t !== path)
+      const prevActive = prev.panelEditorActive?.[panelIdx] ?? 0
+      let nextActive = prevActive
+      if (idx < prevActive) nextActive = prevActive - 1
+      else if (idx === prevActive) nextActive = Math.min(prevActive, nextTabs.length - 1)
+      const nextActivePath = nextTabs[nextActive]
+      return {
+        ...prev,
+        panelEditorTabStacks: { ...prev.panelEditorTabStacks, [panelIdx]: nextTabs },
+        panelEditorActive: { ...prev.panelEditorActive, [panelIdx]: nextActive },
+        panelEditorPaths: nextActivePath ? { ...prev.panelEditorPaths, [panelIdx]: nextActivePath } : prev.panelEditorPaths,
+      }
+    })
+  }, [desktopLayout.panelEditorTabStacks, desktopLayout.panelEditorPaths, closePanel])
+
   // Memoizado: un objeto literal por render re-renderiza todo el árbol del
   // chat (SessionChatPanel/ChatView) con cada setState global.
-  const baseChatProps: ChatViewProps = useMemo(() => ({
+  // composer/onComposerChange se pasan aparte para no invalidar el memo en cada keystroke.
+  const baseChatProps: Omit<ChatViewProps, 'composer' | 'onComposerChange'> = useMemo(() => ({
     selectedSession,
     revertID: localRevertID,
     messages: renderedMessages, pendingIndex, todos,
-    todosExpanded, composer,
+    todosExpanded,
     isWorking, showTypingBubble, isSending,
     loadingSessionID, selectedID,
     messageScrollSignature, view,
@@ -2377,8 +2509,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     onRenameChange: setRenameValue,
     onRenameConfirm: renameSession,
     onRenameCancel: cancelRename,
-    onComposerChange: setComposer,
-    onSend: (imgs, opts) => handleSend(imgs, opts),
+    onSend: (imgs, opts, text) => handleSend(imgs, opts, text),
     onAbort: handleAbort,
     onTodosToggle: () => setTodosExpanded((v) => !v),
     onBackToSessions: goBack,
@@ -2444,11 +2575,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     onChatSettingChange: setChatSetting,
     onResetChatSettings: resetChatSettings,
   }), [
-    selectedSession, localRevertID, renderedMessages, todos, todosExpanded, composer,
+    selectedSession, localRevertID, renderedMessages, todos, todosExpanded,
     isWorking, showTypingBubble, loadingSessionID, selectedID, messageScrollSignature,
     view, dataMode, renamingSessionID, renameValue, commands,
     activeAgent, activeAgentID, activeModelOption, activeModelVariants, selectedVariant, changeVariant, primaryAgentOptions, changeAgent,
-    projectName, startRename, setRenameValue, renameSession, cancelRename, setComposer,
+    projectName, startRename, setRenameValue, renameSession, cancelRename,
     handleSend, handleAbort, setTodosExpanded, goBack, setActiveDetailSheet,
     recentSessions, sessions, handleOpenSession, readingMode, setReadingMode,
     handleExportChat, handleExportMarkdown, handleSnapshot, setFileEditorPath, navigate,
@@ -2470,52 +2601,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     ?? null
   const activeSessionDir = currentActiveSession?.directory ?? selectedSession?.directory ?? sessions[0]?.directory ?? undefined
 
+  // DRY: reutiliza handleOpenFile (que ya gestiona tabs VS Code) en vez de duplicar lógica
   const handleOpenFileFromExplorer = useCallback((filePath: string) => {
-    if (isDesktop) {
-      const existingEditorIdx = desktopLayout.panelKinds.findIndex((k) => k === "editor")
-      if (existingEditorIdx >= 0) {
-        setDesktopLayout((prev) => ({
-          ...prev,
-          panelEditorPaths: { ...(prev.panelEditorPaths ?? {}), [existingEditorIdx]: filePath },
-        }))
-        setActivePanel(existingEditorIdx)
-        return
-      }
-
-      const hasActiveSession = desktopLayout.sessions.some(Boolean)
-      if (hasActiveSession) {
-        if (desktopLayout.cols === 1) {
-          setDesktopLayout((prev) => ({
-            ...prev,
-            cols: 2,
-            colSizes: [null, null],
-            panelKinds: [prev.panelKinds[0] ?? "session", "editor"],
-            panelEditorPaths: { ...(prev.panelEditorPaths ?? {}), 1: filePath },
-          }))
-          setActivePanel(1)
-        } else {
-          const targetPanel = activePanel === 0 ? 1 : activePanel
-          setDesktopLayout((prev) => ({
-            ...prev,
-            panelKinds: prev.panelKinds.map((k, idx) => (idx === targetPanel ? "editor" : k)),
-            panelEditorPaths: { ...(prev.panelEditorPaths ?? {}), [targetPanel]: filePath },
-          }))
-          setActivePanel(targetPanel)
-        }
-      } else {
-        setDesktopLayout((prev) => ({
-          ...prev,
-          cols: 1,
-          colSizes: [null],
-          panelKinds: ["editor"],
-          panelEditorPaths: { ...(prev.panelEditorPaths ?? {}), 0: filePath },
-        }))
-        setActivePanel(0)
-      }
-    } else {
-      setFileEditorPath(filePath)
-    }
-  }, [isDesktop, desktopLayout, activePanel])
+    handleOpenFile(filePath)
+  }, [handleOpenFile])
 
   const handleOpenBrowser = useCallback((url: string) => {
     if (isDesktop) {
@@ -2564,7 +2653,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [isDesktop, desktopLayout, activePanel])
 
-  const detailView = <ChatView {...baseChatProps} onOpenBrowser={handleOpenBrowser} />
+  const detailView = <ChatView {...baseChatProps} composer={composer} onComposerChange={handleComposerChange} onOpenBrowser={handleOpenBrowser} />
 
   return (
     <div className="app-shell" data-navbar="header" ref={shellRef}
@@ -2586,9 +2675,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <button type="button" className={`activity-btn${showTerminal ? " active" : ""}`} title={t('session.terminal')} aria-label={t('session.terminal')}
               onClick={() => setShowTerminal((v) => !v)}>
               <TerminalIcon size={18} /></button>
-            <button type="button" className={`activity-btn${activity === "stats" ? " active" : ""}`} title={t('shell.kindStats')} aria-label={t('shell.kindStats')}
+            <button type="button" className={`activity-btn${desktopLayout.panelKinds.includes("stats" as any) || activity === "stats" ? " active" : ""}`} title={t('shell.kindStats')} aria-label={t('shell.kindStats')}
               onClick={() => {
-                addPanel("stats")
+                const idx = desktopLayout.panelKinds.indexOf("stats" as any)
+                if (idx >= 0) {
+                  closePanel(idx)
+                } else {
+                  addPanel("stats")
+                }
               }}>
               <StatsIcon size={18} /></button>
             <button type="button" className="activity-btn" title="Navegador Web / Localhost" aria-label="Navegador Web"
@@ -2801,12 +2895,18 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 )
               }
               if (kind === "editor") {
-                const editorPath = desktopLayout.panelEditorPaths?.[i]
+                const editorTabs = desktopLayout.panelEditorTabStacks?.[i] ?? (desktopLayout.panelEditorPaths?.[i] ? [desktopLayout.panelEditorPaths[i]] : [])
+                const editorActiveIdx = desktopLayout.panelEditorActive?.[i] ?? 0
+                const editorPath = editorTabs[editorActiveIdx] ?? desktopLayout.panelEditorPaths?.[i] ?? ""
                 return (
                   <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
                     <FileEditorPanel
-                      path={editorPath || ""}
+                      path={editorPath}
+                      tabs={editorTabs}
+                      activePath={editorPath}
                       initialCwd={activeSessionDir}
+                      onTabSelect={(p) => handleEditorTabSelect(i, p)}
+                      onTabClose={(p) => handleEditorTabClose(i, p)}
                       onClose={() => closePanel(i)}
                     />
                   </div>
@@ -2828,6 +2928,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
                   <ShellPanelCell
                     index={i}
+                    panelId={panelId}
                     kind={kind}
                     cwd={kind === "terminal" ? (activeDir || activeSessionDir || selectedSession?.directory || sessions[0]?.directory) : (session?.directory || activeSessionDir || selectedSession?.directory || sessions[0]?.directory)}
                     sessionID={session?.id}

@@ -15,6 +15,25 @@ export function sameModel(a?: ModelSelection | null, b?: ModelSelection | null):
   return a.providerID === b.providerID && a.modelID === b.modelID
 }
 
+export function resolveModelOption(
+  options: ModelOption[],
+  selection: { providerID: string; modelID: string } | null,
+  variant: string | null
+): ModelOption | null {
+  const v = variant ?? undefined
+  if (selection) {
+    if (v) {
+      const exact = options.find((opt) => sameModel(opt, selection) && opt.variant === v)
+      if (exact) return exact
+    }
+    const base = options.find((opt) => sameModel(opt, selection) && !opt.variant)
+    if (base) return base
+    const any = options.find((opt) => sameModel(opt, selection))
+    if (any) return any
+  }
+  return options.find((opt) => opt.isDefault) ?? options[0] ?? null
+}
+
 export type VariantGroup = { base: ModelOption; variants: ModelOption[] }
 
 // Variantes de un modelo: SOLO las que el server reporta (model.variants),

@@ -30,12 +30,12 @@ impl StatsManager {
 }
 
 fn probe(port: u16) -> bool {
-    let url = format!("http://127.0.0.1:{port}/api/data?raw=1");
-    ureq::get(&url)
-        .timeout(std::time::Duration::from_millis(800))
-        .call()
-        .map(|r| r.status() == 200)
-        .unwrap_or(false)
+    crate::common::probe_http(
+        port,
+        "/api/data?raw=1",
+        std::time::Duration::from_millis(800),
+        &[200],
+    )
 }
 
 /// Arranca (si no está) el server de stats en un thread. Idempotente.

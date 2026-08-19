@@ -1,15 +1,10 @@
 import type { TokenUsage } from "../types"
+import { formatCompact as formatNum, formatCost } from "../utils"
 
 type Props = {
   tokens: TokenUsage
   cost?: number
   tps?: string
-}
-
-function formatNum(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
 }
 
 function bar(value: number, max: number, color: string) {
@@ -42,9 +37,4 @@ export function SessionTokenUsage({ tokens, cost, tps }: Props) {
       </div>
     </div>
   )
-}
-
-function formatCost(cost: number): string {
-  if (cost < 0.01) return `$${cost.toFixed(6)}`
-  return `$${cost.toFixed(4)}`
 }

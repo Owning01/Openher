@@ -7,7 +7,12 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon } from "../Icons"
-import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type ShellPanelKind } from "../shell"
+import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
+
+// Persistencia de terminales por panelId: al mover la terminal de celda
+// su estado (tabs) sobrevive al remount aunque React cree una nueva instancia.
+type TerminalPersist = { tabs: Array<{ id: string; title: string; shell: string }>; activeId: string }
+const terminalStore = new Map<string, TerminalPersist>()
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
@@ -200,6 +205,7 @@ export const TerminalPanel = memo(function TerminalPanel({
   shellName,
   hideHeader = false,
   panelIndex,
+  panelId,
   onToggleDock,
   isDocked,
   onMaximize,
@@ -210,6 +216,7 @@ export const TerminalPanel = memo(function TerminalPanel({
   shellName?: string
   hideHeader?: boolean
   panelIndex?: number
+  panelId?: string
   onToggleDock?: () => void
   isDocked?: boolean
   onMaximize?: () => void
@@ -218,10 +225,29 @@ export const TerminalPanel = memo(function TerminalPanel({
 }) {
   const [activeMainTab, setActiveMainTab] = useState<"problems" | "output" | "debug" | "terminal" | "ports">("terminal")
   const [currentShell, setCurrentShell] = useState<string>(shellName || "pwsh")
-  const [termTabs, setTermTabs] = useState<Array<{ id: string; title: string; shell: string }>>([
-    { id: "term-1", title: `${shellName || "pwsh"} 1`, shell: shellName || "pwsh" },
-  ])
-  const [activeTabId, setActiveTabId] = useState<string>("term-1")
+  const [termTabs, setTermTabs] = useState<Array<{ id: string; title: string; shell: string }>>(() => {
+    if (panelId && terminalStore.has(panelId)) return terminalStore.get(panelId)!.tabs
+    return [{ id: "term-1", title: `${shellName || "pwsh"} 1`, shell: shellName || "pwsh" }]
+  })
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    if (panelId && terminalStore.has(panelId)) return terminalStore.get(panelId)!.activeId
+    return "term-1"
+  })
+
+  // Persistir tabs al mover la terminal (panelId se mueve con el panel).
+  useEffect(() => {
+    if (!panelId) return
+    terminalStore.set(panelId, { tabs: termTabs, activeId: activeTabId })
+  }, [panelId, termTabs, activeTabId])
+
+  // Si el panelId cambia (movimiento), hidratar desde el store.
+  useEffect(() => {
+    if (panelId && terminalStore.has(panelId)) {
+      const saved = terminalStore.get(panelId)!
+      setTermTabs(saved.tabs)
+      setActiveTabId(saved.activeId)
+    }
+  }, [panelId])
 
   const handleAddTab = () => {
     const nextNum = termTabs.length + 1
@@ -1183,35 +1209,54 @@ export const ExplorerPanel = memo(function ExplorerPanel({
 export const FileEditorPanel = memo(function FileEditorPanel({
   path: initialPath,
   openPaths,
+  tabs: controlledTabs,
+  activePath: controlledActive,
+  onTabSelect,
+  onTabClose,
   onClose,
   initialCwd,
   onSelectFile,
 }: {
   path: string
   openPaths?: string[]
+  tabs?: string[]
+  activePath?: string
+  onTabSelect?: (path: string) => void
+  onTabClose?: (path: string) => void
   onClose?: () => void
   initialCwd?: string
   onSelectFile?: (path: string) => void
 }) {
-  const [tabs, setTabs] = useState<string[]>(() => {
+  const isControlled = Array.isArray(controlledTabs) && controlledActive !== undefined
+  const [internalTabs, setInternalTabs] = useState<string[]>(() => {
+    if (controlledTabs) return controlledTabs
     if (openPaths && openPaths.length > 0) {
       return openPaths.includes(initialPath) ? openPaths : [...openPaths, initialPath]
     }
     return initialPath ? [initialPath] : []
   })
-  const [activeTab, setActiveTab] = useState<string>(initialPath || "")
+  const [internalActive, setInternalActive] = useState<string>(controlledActive ?? initialPath ?? "")
+  const tabs = isControlled ? controlledTabs! : internalTabs
+  const activeTab = isControlled ? controlledActive! : internalActive
+  // Sincroniza tabs controlados si el caller cambia la lista (ej: abrir nuevo archivo)
+  useEffect(() => {
+    if (isControlled && controlledTabs) {
+      // no-op: tabs viene de props, React ya re-renderiza
+    }
+  }, [isControlled, controlledTabs])
   const [filesState, setFilesState] = useState<Record<string, { content: string; dirty: boolean; loading: boolean; error: string | null }>>({})
   const [saving, setSaving] = useState(false)
   const [mdViewMode, setMdViewMode] = useState<"edit" | "preview" | "split">("split")
 
   const isMarkdown = /\.(md|markdown|mdown|mkd)$/i.test(activeTab)
 
-  // Si cambia la prop inicial desde fuera (ej: clic en otro archivo)
+  // Si cambia la prop inicial desde fuera (solo no controlado, para no duplicar tabs)
   useEffect(() => {
+    if (isControlled) return
     if (!initialPath) return
-    setTabs((prev) => (prev.includes(initialPath) ? prev : [...prev, initialPath]))
-    setActiveTab(initialPath)
-  }, [initialPath])
+    setInternalTabs((prev) => (prev.includes(initialPath) ? prev : [...prev, initialPath]))
+    setInternalActive(initialPath)
+  }, [initialPath, isControlled])
 
   // Cargar contenido de la pestaña activa si no fue cargada aún
   useEffect(() => {
@@ -1284,20 +1329,28 @@ export const FileEditorPanel = memo(function FileEditorPanel({
 
   const handleCloseTab = (tabToClose: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (isControlled) {
+      if (onTabClose) onTabClose(tabToClose)
+      return
+    }
     const nextTabs = tabs.filter((t) => t !== tabToClose)
-    setTabs(nextTabs)
+    setInternalTabs(nextTabs)
     if (nextTabs.length === 0) {
       if (onClose) onClose()
     } else if (activeTab === tabToClose) {
       const idx = tabs.indexOf(tabToClose)
       const newActive = nextTabs[Math.max(0, idx - 1)]
-      setActiveTab(newActive)
+      setInternalActive(newActive)
       if (onSelectFile) onSelectFile(newActive)
     }
   }
 
   const handleSelectTab = (tabPath: string) => {
-    setActiveTab(tabPath)
+    if (isControlled) {
+      if (onTabSelect) onTabSelect(tabPath)
+      return
+    }
+    setInternalActive(tabPath)
     if (onSelectFile) onSelectFile(tabPath)
   }
 
@@ -1312,8 +1365,8 @@ export const FileEditorPanel = memo(function FileEditorPanel({
 
   return (
     <div className="file-editor-panel" style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
-      {/* Barra de pestañas tipo VS Code */}
-      <div className="file-editor-tab-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)", overflowX: "auto" }}>
+      {/* Barra de pestañas — VS Code style, colores de la app (DRY con .ade-diff-tabs) */}
+      <div className="file-editor-tab-bar">
         <div style={{ display: "flex", alignItems: "center", gap: "2px", minWidth: 0 }}>
           {tabs.map((tab) => {
             const name = tab.split(/[/\\]/).pop() || tab
@@ -1323,32 +1376,21 @@ export const FileEditorPanel = memo(function FileEditorPanel({
             return (
               <div
                 key={tab}
+                className={`file-editor-tab${isActive ? " active" : ""}`}
                 onClick={() => handleSelectTab(tab)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "6px 10px",
-                  cursor: "pointer",
-                  fontSize: "0.82rem",
-                  background: isActive ? "var(--surface)" : "transparent",
-                  borderBottom: isActive ? "2px solid var(--primary)" : "2px solid transparent",
-                  borderRight: "1px solid var(--border-subtle)",
-                  color: isActive ? "var(--text)" : "var(--muted)",
-                  fontWeight: isActive ? 600 : 400,
-                  maxWidth: "180px",
-                  minWidth: "80px",
-                }}
+                title={tab}
+                role="tab"
+                aria-selected={isActive}
               >
-                <span style={{ color: ic.color, fontSize: "0.9rem" }}>{ic.glyph}</span>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{name}</span>
-                {isDirty && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--primary)" }} title="Modificado (autoguardando...)" />}
+                <span className="file-editor-tab-icon" style={{ color: ic.color }}>{ic.glyph}</span>
+                <span className="file-editor-tab-name">{name}</span>
+                {isDirty && <span className="file-editor-dirty" title="Modificado (autoguardando...)" />}
                 <button
                   type="button"
-                  className="btn-icon compact"
+                  className="file-editor-tab-close"
                   onClick={(e) => handleCloseTab(tab, e)}
                   title="Cerrar pestaña"
-                  style={{ padding: "0 3px", fontSize: "11px", opacity: 0.7 }}
+                  aria-label={`Cerrar ${name}`}
                 >
                   ×
                 </button>
@@ -1508,191 +1550,259 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   )
 })
 
-// ============================================================== Kanban
+// ============================================================== Kanban — Premium
 
 export const KanbanPanel = memo(function KanbanPanel() {
   const t = useT()
   const [boards, setBoards] = useState<KanbanBoard[]>([])
   const [active, setActive] = useState<string | null>(null)
   const [drag, setDrag] = useState<string | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
   const [showNotes, setShowNotes] = useState<boolean>(true)
   const [boardNotes, setBoardNotes] = useState<string>("")
+  const [showAddBoard, setShowAddBoard] = useState(false)
+  const [newBoardName, setNewBoardName] = useState("")
+  const [showAddCard, setShowAddCard] = useState<{ column: string } | null>(null)
+  const [editingCard, setEditingCard] = useState<KanbanCard | null>(null)
+  const [cardTitle, setCardTitle] = useState("")
+  const [cardNotes, setCardNotes] = useState("")
+  const [cardColor, setCardColor] = useState(KANBAN_COLORS[0])
 
   const load = useCallback(() => {
     shell.kanban.all().then(({ boards }) => {
       setBoards(boards)
       setActive((a) => {
         const next = a && boards.some((b) => b.id === a) ? a : boards[0]?.id ?? null
-        if (next) {
-          setBoardNotes(localStorage.getItem(`opencode.kanban.notes.${next}`) || "")
-        }
+        if (next) setBoardNotes(localStorage.getItem(`opencode.kanban.notes.${next}`) || "")
         return next
       })
     })
   }, [])
   useEffect(load, [load])
-
-  useEffect(() => {
-    if (active) {
-      setBoardNotes(localStorage.getItem(`opencode.kanban.notes.${active}`) || "")
-    }
-  }, [active])
+  useEffect(() => { if (active) setBoardNotes(localStorage.getItem(`opencode.kanban.notes.${active}`) || "") }, [active])
 
   const handleNotesChange = (val: string) => {
     setBoardNotes(val)
-    if (active) {
-      localStorage.setItem(`opencode.kanban.notes.${active}`, val)
-    }
+    if (active) localStorage.setItem(`opencode.kanban.notes.${active}`, val)
   }
 
   const board = boards.find((b) => b.id === active) ?? null
-  const addCard = async (column: string) => {
-    if (!board) return
-    const title = window.prompt(t('shell.cardTitle'))
-    if (title) {
-      const color = KANBAN_COLORS[Math.floor(Math.random() * KANBAN_COLORS.length)]
-      await shell.kanban.addCard(board.id, column, title, "", color)
-      load()
+
+  const filteredCards = (colId: string) => {
+    if (!board) return []
+    let cards = board.cards.filter((c) => c.column === colId)
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      cards = cards.filter((c) => c.title.toLowerCase().includes(q) || c.notes.toLowerCase().includes(q))
     }
+    return cards
   }
+
+  const openAddCard = (column: string) => {
+    setCardTitle("")
+    setCardNotes("")
+    setCardColor(KANBAN_COLORS[Math.floor(Math.random() * KANBAN_COLORS.length)])
+    setShowAddCard({ column })
+  }
+
+  const submitAddCard = async () => {
+    if (!board || !showAddCard || !cardTitle.trim()) return
+    await shell.kanban.addCard(board.id, showAddCard.column, cardTitle.trim(), cardNotes.trim(), cardColor)
+    setShowAddCard(null)
+    load()
+  }
+
+  const openEditCard = (card: KanbanCard) => {
+    setEditingCard(card)
+    setCardTitle(card.title)
+    setCardNotes(card.notes)
+    setCardColor(card.color)
+  }
+
+  const submitEditCard = async () => {
+    if (!editingCard || !cardTitle.trim()) return
+    await shell.kanban.updateCard(editingCard.id, { title: cardTitle.trim(), notes: cardNotes.trim(), color: cardColor })
+    setEditingCard(null)
+    load()
+  }
+
   const drop = async (column: string) => {
     if (drag) {
       await shell.kanban.updateCard(drag, { column })
       setDrag(null)
+      setDragOverCol(null)
       load()
     }
   }
+
   const delCard = async (cardId: string) => {
+    if (!window.confirm(t('shell.deleteCard') ?? "¿Eliminar tarjeta?")) return
     await shell.kanban.delCard(cardId)
     load()
   }
-  const addBoard = async () => {
-    const name = window.prompt(t('shell.boardName'))
-    if (name) {
-      await shell.kanban.addBoard(name)
-      load()
-    }
+
+  const submitAddBoard = async () => {
+    if (!newBoardName.trim()) return
+    await shell.kanban.addBoard(newBoardName.trim())
+    setNewBoardName("")
+    setShowAddBoard(false)
+    load()
   }
 
   if (!board) {
     return (
       <div className="shell-kanban-empty">
-        <p>{t('shell.noBoards')}</p>
-        <button className="btn-primary" onClick={addBoard}>{t('shell.newBoard')}</button>
+        <div style={{ width: 64, height: 64, borderRadius: 16, background: "var(--primary-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🗂️</div>
+        <p style={{ fontWeight: 600 }}>{t('shell.noBoards')}</p>
+        <p style={{ fontSize: "0.82rem", color: "var(--muted)", textAlign: "center", maxWidth: 300 }}>Crea tu primer tablero para organizar tareas con columnas y tarjetas arrastrables.</p>
+        <button className="btn-primary" onClick={() => setShowAddBoard(true)}>{t('shell.newBoard')}</button>
+        {showAddBoard && (
+          <div className="shell-kanban-modal-overlay" onClick={() => setShowAddBoard(false)}>
+            <div className="shell-kanban-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="shell-kanban-modal-head"><h3>{t('shell.newBoard')}</h3><button className="btn-icon" onClick={() => setShowAddBoard(false)}>×</button></div>
+              <div className="shell-kanban-modal-body">
+                <label>Nombre del tablero<input value={newBoardName} onChange={(e) => setNewBoardName(e.target.value)} placeholder="Ej: Sprint 12, Roadmap Q4" autoFocus onKeyDown={(e) => e.key === "Enter" && submitAddBoard()} /></label>
+              </div>
+              <div className="shell-kanban-modal-foot"><button className="btn-secondary" onClick={() => setShowAddBoard(false)}>Cancelar</button><button className="btn-primary" onClick={submitAddBoard} disabled={!newBoardName.trim()}>Crear tablero</button></div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
 
+  const totalCards = board.cards.length
+  const colCount = board.columns.length
+
   return (
-    <div className="shell-kanban" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div className="shell-kanban-head" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px" }}>
-        <select value={active ?? ""} onChange={(e) => setActive(e.target.value)} style={{ flex: "0 0 auto" }}>
-          {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-        <button className="btn-secondary compact" onClick={addBoard}>{t('shell.newBoard')}</button>
-        <button
-          type="button"
-          className={`btn-secondary compact${showNotes ? " active" : ""}`}
-          onClick={() => setShowNotes((v) => !v)}
-          title="Mostrar/Ocultar notas del tablero"
-          style={{ marginLeft: "auto" }}
-        >
-          📝 Notas
-        </button>
-        <button className="btn-icon compact" title={t('shell.deleteBoard')} onClick={() => { if (board && window.confirm(t('shell.deleteBoard'))) shell.kanban.delBoard(board.id).then(load) }}>×</button>
+    <div className="shell-kanban">
+      {/* Header premium: tabs de tableros + búsqueda + acciones */}
+      <div className="shell-kanban-head">
+        <div className="shell-kanban-board-tabs">
+          {boards.map((b) => (
+            <button key={b.id} className={`shell-kanban-board-tab${b.id === active ? " active" : ""}`} onClick={() => setActive(b.id)} title={b.name}>
+              <span>{b.name}</span>
+              <span className="shell-kanban-board-tab-count">{b.cards.length}</span>
+            </button>
+          ))}
+          <button className="shell-kanban-board-tab" onClick={() => setShowAddBoard(true)} title={t('shell.newBoard')} style={{ borderStyle: "dashed" }}>+ {t('shell.newBoard')}</button>
+        </div>
+        <div className="shell-kanban-head-actions">
+          <div className="shell-kanban-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M20 20L16 16" /></svg>
+            <input type="search" placeholder="Buscar tarjetas..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <span style={{ fontSize: "0.72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>{totalCards} tarjetas · {colCount} columnas</span>
+          <button type="button" className={`btn-secondary compact${showNotes ? " active" : ""}`} onClick={() => setShowNotes((v) => !v)} title="Notas del tablero">📝</button>
+          <button className="btn-icon compact" title={t('shell.deleteBoard')} onClick={() => { if (board && window.confirm(t('shell.deleteBoard'))) shell.kanban.delBoard(board.id).then(load) }} style={{ color: "var(--muted)" }}>×</button>
+        </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div className="shell-kanban-cols" style={{ flex: showNotes ? "1 1 65%" : "1 1 100%", minHeight: 120 }}>
-          {board.columns.map((col) => (
-            <div key={col.id} className="shell-kanban-col"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => drop(col.id)}>
-              <div className="shell-kanban-col-title">{col.title}</div>
-              <div className="shell-kanban-cards">
-                {board.cards.filter((c) => c.column === col.id).map((c) => (
-                  <div key={c.id} className="shell-kanban-card" style={{ borderLeft: `3px solid ${c.color}` }}
-                    draggable onDragStart={() => setDrag(c.id)}
-                    title={c.notes || undefined}
-                    onDoubleClick={() => {
-                      const notes = window.prompt(t('shell.cardNotes'), c.notes)
-                      if (notes !== null) shell.kanban.updateCard(c.id, { notes }).then(load)
-                    }}>
-                    <span>{c.title}</span>
-                    <button className="btn-icon compact" onClick={() => delCard(c.id)}>×</button>
-                  </div>
-                ))}
-                <button className="shell-kanban-add" onClick={() => addCard(col.id)}>+ {t('shell.addCard')}</button>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", gap: 12 }}>
+        <div className="shell-kanban-cols">
+          {board.columns.map((col, colIdx) => {
+            const cards = filteredCards(col.id)
+            const isDragOver = dragOverCol === col.id
+            return (
+              <div key={col.id} className={`shell-kanban-col${isDragOver ? " drag-over" : ""}`}
+                onDragOver={(e) => { e.preventDefault(); setDragOverCol(col.id) }}
+                onDragLeave={() => setDragOverCol(null)}
+                onDrop={() => drop(col.id)}>
+                <div className="shell-kanban-col-head">
+                  <span className="shell-kanban-col-dot" style={{ color: KANBAN_COLORS[colIdx % KANBAN_COLORS.length], background: KANBAN_COLORS[colIdx % KANBAN_COLORS.length] }} />
+                  <span className="shell-kanban-col-title">{col.title}</span>
+                  <span className="shell-kanban-col-count">{cards.length}</span>
+                  <button className="shell-kanban-col-menu" title="Más opciones" onClick={() => {}}>⋯</button>
+                </div>
+                <div className="shell-kanban-cards">
+                  {cards.map((c) => (
+                    <div key={c.id} className={`shell-kanban-card${drag === c.id ? " dragging" : ""}`} style={{ "--card-color": c.color } as React.CSSProperties}
+                      draggable onDragStart={() => setDrag(c.id)} onDragEnd={() => { setDrag(null); setDragOverCol(null) }}
+                      onClick={() => openEditCard(c)}>
+                      <div className="shell-kanban-card-head">
+                        <span className="shell-kanban-card-title">{c.title}</span>
+                        <span className="shell-kanban-card-actions">
+                          <button onClick={(e) => { e.stopPropagation(); openEditCard(c) }} title="Editar">✎</button>
+                          <button className="danger" onClick={(e) => { e.stopPropagation(); delCard(c.id) }} title="Eliminar">×</button>
+                        </span>
+                      </div>
+                      {c.notes && <div className="shell-kanban-card-notes">{c.notes}</div>}
+                      <div className="shell-kanban-card-foot">
+                        <span className="shell-kanban-card-meta">
+                          {c.notes && <span className="shell-kanban-card-tag">nota</span>}
+                          <span className="shell-kanban-card-date">#{c.id.slice(0, 4)}</span>
+                        </span>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.color, flexShrink: 0 }} />
+                      </div>
+                    </div>
+                  ))}
+                  {cards.length === 0 && search && <div style={{ padding: 12, textAlign: "center", color: "var(--muted)", fontSize: "0.82rem" }}>Sin resultados</div>}
+                  <button className="shell-kanban-add" onClick={() => openAddCard(col.id)}>+ {t('shell.addCard')}</button>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
-        {/* Sección de Notas del Tablero */}
         {showNotes && (
-          <div style={{
-            flex: "0 0 auto",
-            maxHeight: "35%",
-            height: 140,
-            borderTop: "1px solid rgba(255,255,255,0.1)",
-            background: "#0d1117",
-            display: "flex",
-            flexDirection: "column",
-            padding: "6px 12px",
-            boxSizing: "border-box",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #8b949e)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                📌 Notas del Tablero ({board.name})
+          <div className="shell-kanban-notes">
+            <div className="shell-kanban-notes-head">
+              <span className="shell-kanban-notes-title">📌 Notas — {board.name}</span>
+              <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: "var(--muted)" }}>{boardNotes.length} caracteres</span>
+                <button type="button" className="btn-icon compact" title="Copiar" onClick={() => navigator.clipboard?.writeText(boardNotes)}>Copiar</button>
+                <button type="button" className="btn-icon compact" title="Limpiar" onClick={() => { if (window.confirm("¿Limpiar notas?")) handleNotesChange("") }}>Limpiar</button>
               </span>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span style={{ fontSize: 10, color: "var(--text-muted, #6e7681)" }}>{boardNotes.length} caracteres</span>
-                <button
-                  type="button"
-                  className="btn-icon compact"
-                  title="Copiar notas"
-                  onClick={() => navigator.clipboard?.writeText(boardNotes)}
-                  style={{ fontSize: 11, padding: "1px 6px" }}
-                >
-                  Copiar
-                </button>
-                <button
-                  type="button"
-                  className="btn-icon compact"
-                  title="Limpiar notas"
-                  onClick={() => {
-                    if (window.confirm("¿Limpiar las notas de este tablero?")) {
-                      handleNotesChange("")
-                    }
-                  }}
-                  style={{ fontSize: 11, padding: "1px 6px" }}
-                >
-                  Limpiar
-                </button>
-              </div>
             </div>
-            <textarea
-              value={boardNotes}
-              onChange={(e) => handleNotesChange(e.target.value)}
-              placeholder="Escribe notas, enlaces, recordatorios o ideas para este tablero (se guarda automáticamente)..."
-              style={{
-                flex: 1,
-                width: "100%",
-                resize: "none",
-                background: "rgba(255,255,255,0.03)",
-                color: "#e6edf3",
-                border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: 4,
-                padding: "6px 8px",
-                fontSize: 12,
-                fontFamily: "var(--font-mono, monospace)",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
+            <textarea value={boardNotes} onChange={(e) => handleNotesChange(e.target.value)} placeholder="Notas del tablero — se guardan automáticamente..." />
           </div>
         )}
       </div>
+
+      {/* Modal nuevo tablero */}
+      {showAddBoard && (
+        <div className="shell-kanban-modal-overlay" onClick={() => setShowAddBoard(false)}>
+          <div className="shell-kanban-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="shell-kanban-modal-head"><h3>{t('shell.newBoard')}</h3><button className="btn-icon" onClick={() => setShowAddBoard(false)}>×</button></div>
+            <div className="shell-kanban-modal-body">
+              <label>Nombre<input value={newBoardName} onChange={(e) => setNewBoardName(e.target.value)} placeholder="Ej: Backlog, En curso" autoFocus onKeyDown={(e) => e.key === "Enter" && submitAddBoard()} /></label>
+            </div>
+            <div className="shell-kanban-modal-foot"><button className="btn-secondary" onClick={() => setShowAddBoard(false)}>Cancelar</button><button className="btn-primary" onClick={submitAddBoard} disabled={!newBoardName.trim()}>Crear</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal nueva tarjeta */}
+      {showAddCard && (
+        <div className="shell-kanban-modal-overlay" onClick={() => setShowAddCard(null)}>
+          <div className="shell-kanban-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="shell-kanban-modal-head"><h3>Nueva tarjeta — {board.columns.find((c) => c.id === showAddCard.column)?.title}</h3><button className="btn-icon" onClick={() => setShowAddCard(null)}>×</button></div>
+            <div className="shell-kanban-modal-body">
+              <label>Título<input value={cardTitle} onChange={(e) => setCardTitle(e.target.value)} placeholder="Ej: Implementar login" autoFocus /></label>
+              <label>Notas<textarea value={cardNotes} onChange={(e) => setCardNotes(e.target.value)} placeholder="Detalles, checklist, enlaces..." rows={3} /></label>
+              <label>Color<div className="shell-kanban-color-pick">{KANBAN_COLORS.map((col) => <button key={col} className={`shell-kanban-color-dot${cardColor === col ? " active" : ""}`} style={{ background: col, color: col }} onClick={() => setCardColor(col)} aria-label={col} />)}</div></label>
+            </div>
+            <div className="shell-kanban-modal-foot"><button className="btn-secondary" onClick={() => setShowAddCard(null)}>Cancelar</button><button className="btn-primary" onClick={submitAddCard} disabled={!cardTitle.trim()}>Crear tarjeta</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar tarjeta */}
+      {editingCard && (
+        <div className="shell-kanban-modal-overlay" onClick={() => setEditingCard(null)}>
+          <div className="shell-kanban-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="shell-kanban-modal-head"><h3>Editar tarjeta</h3><button className="btn-icon" onClick={() => setEditingCard(null)}>×</button></div>
+            <div className="shell-kanban-modal-body">
+              <label>Título<input value={cardTitle} onChange={(e) => setCardTitle(e.target.value)} autoFocus /></label>
+              <label>Notas<textarea value={cardNotes} onChange={(e) => setCardNotes(e.target.value)} rows={4} /></label>
+              <label>Columna<select value={editingCard.column} onChange={(e) => setEditingCard({ ...editingCard, column: e.target.value })}>{board.columns.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}</select></label>
+              <label>Color<div className="shell-kanban-color-pick">{KANBAN_COLORS.map((col) => <button key={col} className={`shell-kanban-color-dot${cardColor === col ? " active" : ""}`} style={{ background: col, color: col }} onClick={() => setCardColor(col)} />)}</div></label>
+            </div>
+            <div className="shell-kanban-modal-foot"><button className="btn-secondary" onClick={() => setEditingCard(null)}>Cancelar</button><button className="btn-primary" onClick={submitEditCard}>Guardar</button></div>
+          </div>
+        </div>
+      )}
     </div>
   )
 })
@@ -1991,6 +2101,7 @@ export type ShellPanelProps = {
   sessionID?: string | null
   onOpenFile?: (path: string) => void
   panelIndex?: number
+  panelId?: string
 }
 
 // ============================================================== Session Stats (compacto)
@@ -2105,10 +2216,10 @@ export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID, on
   )
 })
 
-export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir, sessionID: _sessionID, onOpenFile, panelIndex }: ShellPanelProps) {
+export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir, sessionID: _sessionID, onOpenFile, panelIndex, panelId }: ShellPanelProps) {
   switch (kind) {
     case "terminal":
-      return <TerminalPanel cwd={cwd} panelIndex={panelIndex} />
+      return <TerminalPanel cwd={cwd} panelIndex={panelIndex} panelId={panelId} />
     case "explorer":
       return <ExplorerPanel onOpenSessionDir={onOpenSessionDir} initialCwd={cwd} onOpenFile={onOpenFile} />
     case "kanban":

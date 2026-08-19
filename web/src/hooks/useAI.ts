@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef } from "react"
 import type { ServerConfig, AgentOption, ModelOption } from "../types"
 import { api } from "../api"
-import { modelKey, sameModel, modelFromKey, groupModels, variantsOf } from "../utils/model-utils"
+import { modelKey, sameModel, modelFromKey, groupModels, variantsOf, resolveModelOption } from "../utils/model-utils"
 import { STORAGE_KEYS } from "../constants"
 import { useLocalStorage } from "./useLocalStorage"
 
@@ -70,22 +70,7 @@ export function useAI(config: ServerConfig) {
     const variant = sessionOverride ? (sessionOverride.variant ?? null) : selectedVariant
     const selected = key ? modelFromKey(key) : null
 
-    let resolvedOption: ModelOption | null = null
-    if (selected) {
-      if (variant) {
-        resolvedOption = modelOptions.find(
-          (opt) => sameModel(opt, selected) && opt.variant === variant
-        ) ?? null
-      }
-      if (!resolvedOption) {
-        resolvedOption = modelOptions.find(
-          (opt) => sameModel(opt, selected) && !opt.variant
-        ) ?? modelOptions.find((opt) => sameModel(opt, selected)) ?? null
-      }
-    }
-    if (!resolvedOption) {
-      resolvedOption = modelOptions.find((opt) => opt.isDefault) ?? modelOptions[0] ?? null
-    }
+    const resolvedOption = resolveModelOption(modelOptions, selected, variant)
 
     const resolvedVariant = resolvedOption?.variant ?? (variant || undefined)
     const activeModel = resolvedOption
@@ -119,21 +104,7 @@ export function useAI(config: ServerConfig) {
   const activeAgentID = activeAgent?.id ?? primaryAgentOptions[0]?.id ?? "build"
 
   const activeModelOption = useMemo(() => {
-    if (selectedModel) {
-      if (selectedVariant) {
-        const exact = modelOptions.find(
-          (opt) => sameModel(opt, selectedModel) && opt.variant === selectedVariant
-        )
-        if (exact) return exact
-      }
-      const base = modelOptions.find(
-        (opt) => sameModel(opt, selectedModel) && !opt.variant
-      )
-      if (base) return base
-      const any = modelOptions.find((opt) => sameModel(opt, selectedModel))
-      if (any) return any
-    }
-    return modelOptions.find((opt) => opt.isDefault) ?? modelOptions[0] ?? null
+    return resolveModelOption(modelOptions, selectedModel, selectedVariant)
   }, [modelOptions, selectedModel, selectedVariant])
 
   const activeModel = useMemo(() => {

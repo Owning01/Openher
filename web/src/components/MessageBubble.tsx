@@ -1,6 +1,6 @@
 import { memo, useCallback, useState, useMemo, useRef, useEffect } from "react"
 import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon } from "../Icons"
-import { formatTime } from "../utils"
+import { formatTime, isImagePart } from "../utils"
 import { getTranslationOriginal } from "../hooks/useMessages"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { useT } from "../i18n-context"
@@ -40,7 +40,7 @@ function getPartImageData(p: { type: string; data?: string; url?: string; mimeTy
   if (p.type === "image" && p.data) return p.data
   if (p.type === "file") {
     const mime = p.mime || p.mimeType || ""
-    if (!mime.startsWith("image/")) return null
+    if (!isImagePart({ type: p.type, mimeType: mime })) return null
     if (p.data) return p.data
     if (p.url) {
       if (p.url.startsWith("data:")) return p.url
@@ -346,8 +346,12 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             <FileDiffs diffs={message.summaryDiffs!} onOpenADEDiff={onOpenADEDiff} />
           ) : null
 
-          if (minimalistMode) {
-            const thinkingStreaming = hasThinking && message.thinkingParts.some((p) => !p.time?.end)
+          // Modo minimalista: el box agrupa thinking + tools + diffs SOLO
+          // cuando hay thinking. Si solo hay tools (sin thinking), se
+          // renderizan inline como en el modo normal — evita la repetición
+          // de una caja "tool" en cada mensaje.
+          if (minimalistMode && hasThinking) {
+            const thinkingStreaming = message.thinkingParts.some((p) => !p.time?.end)
             const toolRunning = hasTools && message.toolParts.some((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending")
             const isStreaming = thinkingStreaming || toolRunning
 
@@ -363,14 +367,17 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             }
 
             // --- Título tenue para el turno completado ---
-            // "Thinking" solo aparece si NO hay tools (si hay tools, thinking es implícito).
-            const toolCount = message.toolParts.length
-            const toolLabel = toolCount === 1 ? t('detail.activityTool') : `${toolCount} ${t('detail.activityTools')}`
+            // Nombres reales de los tools (bash, edit, read, etc.).
+            const toolNames = message.toolParts
+              .map((tp) => toolShortLabel(tp.tool))
+              .filter(Boolean)
+            const toolSummary = toolNames.length <= 2
+              ? toolNames.join(" · ")
+              : `${toolNames.slice(0, 2).join(" · ")} +${toolNames.length - 2}`
             const completedParts: string[] = []
-            if (hasTools) completedParts.push(toolLabel)
-            else if (hasThinking) completedParts.push(t('detail.thought'))
+            if (hasTools && toolSummary) completedParts.push(toolSummary)
             if (message.hasCompaction) completedParts.push(t('detail.activityCompaction'))
-            const completedTitle = completedParts.join(" · ") || t('detail.activity')
+            const completedTitle = completedParts.join(" · ") || t('detail.thought')
 
             const title = isWorkingTurn ? liveTitle : completedTitle
             const subtitle = isWorkingTurn

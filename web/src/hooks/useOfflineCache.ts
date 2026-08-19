@@ -194,9 +194,11 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
   }, [flags.offlineCache])
 
   const getCachedMessages = useCallback(async (sessionID: string): Promise<MessageEnvelope[] | null> => {
-    if (!dbRef.current || !flags.offlineCache) return null
+    if (!flags.offlineCache) return null
+    const db = await getDB()
+    if (!db) return null
     try {
-      const tx = dbRef.current.transaction(DB_STORES.messages, "readonly")
+      const tx = db.transaction(DB_STORES.messages, "readonly")
       const store = tx.objectStore(DB_STORES.messages)
       const raw = await new Promise<any>((resolve, reject) => {
         const req = store.get(sessionID)
@@ -206,12 +208,14 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
       if (!raw?.messages) return null
       return decryptMessages(raw.messages)
     } catch (err) { console.error("[OfflineCache] getCachedMessages:", err); return null }
-  }, [flags.offlineCache])
+  }, [flags.offlineCache, getDB])
 
   const searchMessages = useCallback(async (query: string): Promise<Array<{ sessionID: string; text: string; messageID: string }>> => {
-    if (!dbRef.current || !flags.offlineCache || !query.trim()) return []
+    if (!flags.offlineCache || !query.trim()) return []
+    const db = await getDB()
+    if (!db) return []
     try {
-      const tx = dbRef.current.transaction(DB_STORES.messages, "readonly")
+      const tx = db.transaction(DB_STORES.messages, "readonly")
       const store = tx.objectStore(DB_STORES.messages)
       const all = await new Promise<any[]>((resolve, reject) => {
         const req = store.getAll()
@@ -239,7 +243,7 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
       }
       return results
     } catch (err) { console.error("[OfflineCache] searchMessages:", err); return [] }
-  }, [flags.offlineCache])
+  }, [flags.offlineCache, getDB])
 
   return { cacheSessions, getCachedSessions, cacheMessages, getCachedMessages, searchMessages }
 }

@@ -3,6 +3,7 @@ import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedM
 import { api } from "../api"
 import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "../utils/parseCommand"
 import { computeRenderedMessages } from "../utils/rendered"
+import { isImagePart, countImageParts } from "../utils"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
@@ -137,7 +138,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       // Para mensajes solo-imagen, trackear por sesión + cantidad de partes imagen
       const existingImageCounts = new Map<string, number>()
       for (const m of messages.filter((m) => m.info.role === "user")) {
-        const imgCount = m.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+        const imgCount = countImageParts(m.parts)
         if (imgCount > 0) {
           existingImageCounts.set(m.info.sessionID, (existingImageCounts.get(m.info.sessionID) ?? 0) + imgCount)
         }
@@ -151,7 +152,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         // Para mensajes solo-imagen: si el server ya tiene mensajes de usuario
         // con imágenes en la misma sesión, asumir que fue confirmado
         if (!extractText(opt).trim()) {
-          const optImgCount = opt.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+          const optImgCount = opt.parts.filter((p) => isImagePart(p)).length
           if (optImgCount > 0 && existingImageCounts.has(opt.info.sessionID)) {
             return false
           }
@@ -226,6 +227,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     setOptimisticUserMessages([])
     setAwaitingAssistantReply(false)
     setRuntimeError(null)
+  }, [])
+
+  const preloadMessages = useCallback((sessionID: string, cached: MessageEnvelope[]) => {
+    if (!cached || cached.length === 0) return
+    loadedSessionIDRef.current = sessionID
+    setMessages((prev) => {
+      const map = new Map<string, MessageEnvelope>()
+      for (const m of cached) map.set(m.info.id, m)
+      for (const m of prev) if (m.info.sessionID === sessionID) map.set(m.info.id, m)
+      return [...map.values()].sort((a, b) => (a.info.time.created || 0) - (b.info.time.created || 0))
+    })
   }, [])
 
   const loadSelected = useCallback(async (sessionID: string, directory: string) => {
@@ -322,7 +334,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       const confirmedTexts = new Set(confirmedUsers.map((m) => extractText(m).trim()).filter(Boolean))
       const confirmedImageCounts = new Map<string, number>()
       for (const m of confirmedUsers) {
-        const imgCount = m.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+        const imgCount = countImageParts(m.parts)
         if (imgCount > 0) {
           const key = `${m.info.sessionID}:${extractText(m).trim()}`
           confirmedImageCounts.set(key, imgCount)
@@ -338,7 +350,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           removeIDs.add(m.info.id)
         } else if (!t) {
           // Mensaje solo-imagen: matchear por cantidad de partes imagen
-          const optImgCount = m.parts.filter((p) => p.type === "image" || (p.type === "file" && p.mimeType?.startsWith("image/"))).length
+          const optImgCount = m.parts.filter((p) => isImagePart(p)).length
           const key = `${m.info.sessionID}:`
           const serverImgCount = confirmedImageCounts.get(key)
           if (serverImgCount !== undefined && serverImgCount === optImgCount) {
@@ -807,7 +819,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     compacting, setCompacting,
     renderedMessages, messageScrollSignature, assistantResponseSignature, pendingIndex,
     completionShouldPlayRef,
-    clearSession, loadSelected, send: updateSend, abortSession,
+    clearSession, preloadMessages, loadSelected, send: updateSend, abortSession,
     undoMessage, redoMessage, compactSession, sendShell: sendShellCallback,
     applyDelta, applyPart
   }

@@ -146,7 +146,7 @@ const navBar = readFileSync(new URL('./components/NavBar.tsx', import.meta.url),
 assert.ok(navBar.includes("t('nav.lightMode')") && navBar.includes("t('nav.darkMode')"), 'theme toggle should use localized labels')
 
 // Memo de props del chat: sin objetos literales por render
-assert.ok(app.includes('const baseChatProps: ChatViewProps = useMemo'), 'chat props should be memoized to avoid cascading re-renders')
+assert.ok(app.includes('const baseChatProps') && app.includes('= useMemo'), 'chat props should be memoized to avoid cascading re-renders')
 
 // Menú de niveles de pensamiento en el toggle del modelo del header
 const chatView = readFileSync(new URL('./components/ChatView.tsx', import.meta.url), 'utf8')

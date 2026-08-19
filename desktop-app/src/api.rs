@@ -415,7 +415,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                     serde_json::json!({
                         "len": total_len,
                         "done": o.done.load(std::sync::atomic::Ordering::SeqCst),
-                        "data": base64_encode(delta),
+                        "data": crate::state::base64_encode(delta),
                     })
                 }
                 None => serde_json::json!({ "error": "no existe" }),
@@ -994,12 +994,6 @@ fn url_decode(s: &str) -> String {
         }
     }
     String::from_utf8_lossy(&out).to_string()
-}
-
-/// Base64 estándar (sin padding) para el buffer del pty.
-#[allow(dead_code)]
-fn base64_encode(data: &[u8]) -> String {
-    crate::state::base64_encode(data)
 }
 
 fn merge_config(cfg: &mut crate::state::ShellConfig, patch: &serde_json::Value) {

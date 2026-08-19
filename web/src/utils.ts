@@ -87,3 +87,32 @@ export function filterByQuery<T>(items: T[], query: string, fields: (item: T) =>
   const q = query.toLowerCase()
   return items.filter((item) => fields(item).some((f) => f.toLowerCase().includes(q)))
 }
+
+export function isImagePart(p: { type: string; mimeType?: string }): boolean {
+  return p.type === "image" || (p.type === "file" && !!p.mimeType?.startsWith("image/"))
+}
+
+export function countImageParts(parts: Array<{ type: string; mimeType?: string }>): number {
+  return parts.filter(isImagePart).length
+}
+
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    try {
+      const ta = document.createElement("textarea")
+      ta.value = text
+      ta.style.position = "fixed"
+      ta.style.opacity = "0"
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand("copy")
+      ta.remove()
+      return ok
+    } catch {
+      return false
+    }
+  }
+}

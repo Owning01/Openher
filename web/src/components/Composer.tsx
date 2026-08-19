@@ -1,4 +1,4 @@
-import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
+import { memo, useRef, useCallback, useEffect, useState, useMemo, useTransition } from "react"
 import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
@@ -63,7 +63,7 @@ type ComposerProps = {
   value: string
   commands: CommandInfo[]
   onChange: (value: string) => void
-  onSend: (images?: ImageAttachment[], options?: { translate?: boolean }) => void | boolean | Promise<boolean | void>
+  onSend: (images?: ImageAttachment[], options?: { translate?: boolean }, text?: string) => void | boolean | Promise<boolean | void>
   onShellSend?: (command: string) => void
   onAbort: () => void
   disabled: boolean
@@ -110,6 +110,18 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches,
     [],
   )
+
+  // Local value: input responde instantáneo sin re-render del padre (App).
+  //encil: typing → localValue inmediato (solo Composer re-render), parent via transition.
+  const [localValue, setLocalValue] = useState(value)
+  const [, startTransition] = useTransition()
+  useEffect(() => {
+    if (value !== localValue) setLocalValue(value)
+  }, [value])
+  const handleChange = useCallback((newValue: string) => {
+    setLocalValue(newValue)
+    startTransition(() => onChange(newValue))
+  }, [onChange])
 
   const promptHistoryRef = useRef<string[]>(loadHistory())
   const historyIndexRef = useRef(-1)
@@ -179,27 +191,27 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [commands])
 
   const slashFiltered = useMemo(() => {
-    if (!value.startsWith("/")) return allSlashCommands
-    const afterSlash = value.slice(1).split(" ")[0]?.toLowerCase() ?? ""
+    if (!localValue.startsWith("/")) return allSlashCommands
+    const afterSlash = localValue.slice(1).split(" ")[0]?.toLowerCase() ?? ""
     if (!afterSlash) return allSlashCommands
     return allSlashCommands.filter((c) => c.name.toLowerCase().includes(afterSlash))
-  }, [value, allSlashCommands])
+  }, [localValue, allSlashCommands])
 
   useEffect(() => {
     // Short-circuit: la mayoría de keystrokes no activan menúes.
     // Solo corre regex cuando el valor podría coincidir.
-    if (!value.startsWith("/") && !/(?:^|\s)@/.test(value)) {
+    if (!localValue.startsWith("/") && !/(?:^|\s)@/.test(localValue)) {
       if (showSlashMenu) setShowSlashMenu(false)
       if (showAtMenu) setShowAtMenu(false)
       return
     }
-    if (value.startsWith("/")) {
+    if (localValue.startsWith("/")) {
       setShowSlashMenu(true)
       setSlashIndex(0)
     } else {
       setShowSlashMenu(false)
     }
-    const atMatch = value.match(/(?:^|\s)@(\w*)$/)
+    const atMatch = localValue.match(/(?:^|\s)@(\w*)$/)
     if (atMatch) {
       setShowAtMenu(true)
       setAtQuery(atMatch[1] ?? "")
@@ -207,20 +219,20 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       setShowAtMenu(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value])
+  }, [localValue])
 
   useEffect(() => {
     setSlashIndex(0)
   }, [slashFiltered.length])
 
-  const isShellMode = value.startsWith("!")
+  const isShellMode = localValue.startsWith("!")
 
   const insertSnippet = useCallback((s: PromptSnippet) => {
-    const prefix = value && !value.endsWith("\n") ? `${value}\n` : value
-    onChange(prefix + s.text)
+    const prefix = localValue && !localValue.endsWith("\n") ? `${localValue}\n` : localValue
+    handleChange(prefix + s.text)
     setShowSnippetMenu(false)
     if (composerRef.current) composerRef.current.querySelector("textarea")?.focus()
-  }, [value, onChange])
+  }, [localValue, handleChange])
 
   const pushHistory = useCallback((text: string) => {
     const h = promptHistoryRef.current
@@ -231,20 +243,20 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [])
 
   const selectMention = useCallback((item: MentionItem) => {
-    const cleaned = value.replace(/(?:^|\s)@\w*$/, `@${item.name} `)
-    onChange(cleaned)
+    const cleaned = localValue.replace(/(?:^|\s)@\w*$/, `@${item.name} `)
+    handleChange(cleaned)
     setShowAtMenu(false)
     if (item.source === "agent" && composerRef.current) {
       onChangeAgent(item.id)
     }
     if (composerRef.current) composerRef.current.querySelector("textarea")?.focus()
-  }, [value, onChange, onChangeAgent])
+  }, [localValue, handleChange, onChangeAgent])
 
   const selectSlashCommand = useCallback((cmd: CommandInfo) => {
-    onChange(`/${cmd.name} `)
+    handleChange(`/${cmd.name} `)
     setShowSlashMenu(false)
     if (composerRef.current) composerRef.current.querySelector("textarea")?.focus()
-  }, [onChange])
+  }, [handleChange])
 
   const handleSlashKeys = useCallback((e: React.KeyboardEvent): boolean => {
     if (showAtMenu && mentionItems.length > 0) {
@@ -286,7 +298,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
   useEffect(() => {
     resizeTextarea()
-  }, [value, resizeTextarea])
+  }, [localValue, resizeTextarea])
 
   const handleFocus = useCallback(() => {
     // Scrollear SOLO el contenedor de mensajes de este panel (nunca
@@ -314,8 +326,8 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     } else if (!supported) {
       showMicNotice(t('voice.unavailable'))
     } else {
-      prefixRef.current = value
-      start((text) => onChange(prefixRef.current + (prefixRef.current && text ? " " : "") + text))
+      prefixRef.current = localValue
+      start((text) => handleChange(prefixRef.current + (prefixRef.current && text ? " " : "") + text))
         .catch((err: unknown) => {
           stop()
           const msg = (err as Error)?.message ?? ""
@@ -324,7 +336,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
             : (err as Error)?.message ?? t('voice.unavailable'))
         })
     }
-  }, [isListening, stop, supported, start, onChange, value, showMicNotice, t])
+  }, [isListening, stop, supported, start, handleChange, localValue, showMicNotice, t])
 
   useEffect(() => {
     return () => {
@@ -357,26 +369,31 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
   const handleSendWithImages = useCallback(async () => {
     if (disabled) return
-    if (!value.trim() && images.length === 0) return
+    if (!localValue.trim() && images.length === 0) return
     const opts = tslEnabled ? { translate: true } : undefined
     const imgs = images.length > 0 ? images : undefined
+    const textToSend = localValue
     // Limpiar imágenes y texto INMEDIATAMENTE antes de esperar la respuesta
     // del server (evita que la preview quede 10s en el composer).
     setImages([])
+    setLocalValue("")
+    startTransition(() => onChange(""))
     resizeTextarea()
-    const ok = await onSend(imgs, opts)
+    const ok = await onSend(imgs, opts, textToSend)
     if (ok === false) {
-      // Si falló, restaurar las imágenes (best-effort)
+      // Si falló, restaurar las imágenes y el texto (best-effort)
       if (imgs) setImages(imgs)
+      setLocalValue(textToSend)
+      startTransition(() => onChange(textToSend))
     }
-  }, [onSend, images, resizeTextarea, disabled, value, tslEnabled])
+  }, [onSend, images, resizeTextarea, disabled, localValue, tslEnabled, onChange])
 
   const isCommandValid = useMemo(() => {
-    if (!value.startsWith("/")) return false
-    const firstWord = value.slice(1).split(" ")[0]
+    if (!localValue.startsWith("/")) return false
+    const firstWord = localValue.slice(1).split(" ")[0]
     if (!firstWord) return false
     return allSlashCommands.some((c) => c.name.toLowerCase().startsWith(firstWord.toLowerCase()))
-  }, [value, allSlashCommands])
+  }, [localValue, allSlashCommands])
 
   const agentColorIdx = useMemo(() => {
     const visible = primaryAgentOptions.filter((a) => !a.hidden)
@@ -399,17 +416,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       const h = promptHistoryRef.current
       if (h.length === 0) return
       const idx = historyIndexRef.current
-      if (idx === -1 && !value) { e.preventDefault(); historyIndexRef.current = 0; onChange(h[0]) }
-      else if (idx === -1 && value) { e.preventDefault(); setHistoryDraft(value); historyIndexRef.current = 0; onChange(h[0]) }
-      else if (idx + 1 < h.length) { e.preventDefault(); historyIndexRef.current = idx + 1; onChange(h[idx + 1]) }
+      if (idx === -1 && !localValue) { e.preventDefault(); historyIndexRef.current = 0; handleChange(h[0]) }
+      else if (idx === -1 && localValue) { e.preventDefault(); setHistoryDraft(localValue); historyIndexRef.current = 0; handleChange(h[0]) }
+      else if (idx + 1 < h.length) { e.preventDefault(); historyIndexRef.current = idx + 1; handleChange(h[idx + 1]) }
       return
     }
 
     if (e.key === "ArrowDown" && !showSlashMenu && !showAtMenu) {
       const idx = historyIndexRef.current
       if (idx === -1) return
-      if (idx === 0 && historyDraft !== null) { e.preventDefault(); historyIndexRef.current = -1; onChange(historyDraft); setHistoryDraft(null) }
-      else if (idx > 0) { e.preventDefault(); historyIndexRef.current = idx - 1; onChange(promptHistoryRef.current[idx - 1]) }
+      if (idx === 0 && historyDraft !== null) { e.preventDefault(); historyIndexRef.current = -1; handleChange(historyDraft); setHistoryDraft(null) }
+      else if (idx > 0) { e.preventDefault(); historyIndexRef.current = idx - 1; handleChange(promptHistoryRef.current[idx - 1]) }
       return
     }
 
@@ -417,17 +434,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu) {
         if (isMobileInput) return
         e.preventDefault()
-        const cmd = value.slice(1).trim()
-        if (cmd && onShellSend) { pushHistory(value); historyIndexRef.current = -1; setHistoryDraft(null); onShellSend(cmd) }
+        const cmd = localValue.slice(1).trim()
+        if (cmd && onShellSend) { pushHistory(localValue); historyIndexRef.current = -1; setHistoryDraft(null); onShellSend(cmd) }
       }
       return
     }
 
-    if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu && value.trim().startsWith("/theme")) {
+    if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu && localValue.trim().startsWith("/theme")) {
       if (isMobileInput) return
       e.preventDefault()
-      onChange("")
-      pushHistory(value)
+      handleChange("")
+      pushHistory(localValue)
       historyIndexRef.current = -1; setHistoryDraft(null)
       onThemeCommand?.()
       return
@@ -436,11 +453,11 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu) {
       if (isMobileInput || isSending) return
       e.preventDefault()
-      if (value.trim()) pushHistory(value)
+      if (localValue.trim()) pushHistory(localValue)
       historyIndexRef.current = -1; setHistoryDraft(null)
       handleSendWithImages()
     }
-  }, [value, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, onChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput, isSending])
+  }, [localValue, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, handleChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput, isSending])
 
   const handleComposerDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -450,8 +467,8 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         if (f.type.startsWith("image/")) {
           downscaleImage(f).then((base64) => addImage(base64, f.type, f.name))
         } else {
-          const sep = value ? (value.endsWith(" ") ? "" : " ") : ""
-          onChange(value + sep + f.name)
+          const sep = localValue ? (localValue.endsWith(" ") ? "" : " ") : ""
+          handleChange(localValue + sep + f.name)
         }
       }
       return
@@ -459,10 +476,10 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     // 2. Elemento arrastrado desde el panel Explorador interno
     const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
     if (path) {
-      const sep = value ? (value.endsWith(" ") ? "" : " ") : ""
-      onChange(value + sep + path)
+      const sep = localValue ? (localValue.endsWith(" ") ? "" : " ") : ""
+      handleChange(localValue + sep + path)
     }
-  }, [value, onChange, addImage])
+  }, [localValue, handleChange, addImage])
 
   return (
     <div className={`composer${isCommandValid ? " composer-command-mode" : ""}${isShellMode ? " composer-shell-mode" : ""}`} ref={composerRef}>
@@ -555,14 +572,14 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         </button>
         <textarea
           ref={textareaRef}
-          value={value}
+          value={localValue}
           onChange={(event) => {
             // Edición manual: cancela la navegación por historial (↑/↓) en curso.
             if (historyIndexRef.current !== -1) {
               historyIndexRef.current = -1
               setHistoryDraft(null)
             }
-            onChange(event.target.value)
+            handleChange(event.target.value)
           }}
           onPaste={(e) => {
             const items = e.clipboardData?.items
@@ -608,7 +625,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           <button
             type="button"
             onClick={handleSendWithImages}
-            disabled={disabled || isSending || (!value.trim() && images.length === 0)}
+            disabled={disabled || isSending || (!localValue.trim() && images.length === 0)}
             className={`composer-inline-btn composer-send-btn${supported ? " with-mic" : ""}`}
             title={t('composer.send')}
             aria-label={t('composer.send')}
@@ -654,9 +671,9 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           {contextLabel && <span className="context-usage-label">{contextLabel}</span>}
         </div>
         <div className="composer-bar-right">
-          {value.length > 0 && (            <span className={`composer-char-count${charLimit > 0 && value.length >= charLimit ? " over" : ""}`}
-              title={charLimit > 0 ? `${value.length}/${charLimit}` : `${value.length} chars`}>
-              {charLimit > 0 ? `${value.length}/${charLimit}` : value.length}
+          {localValue.length > 0 && (            <span className={`composer-char-count${charLimit > 0 && localValue.length >= charLimit ? " over" : ""}`}
+              title={charLimit > 0 ? `${localValue.length}/${charLimit}` : `${localValue.length} chars`}>
+              {charLimit > 0 ? `${localValue.length}/${charLimit}` : localValue.length}
             </span>
           )}
         </div>

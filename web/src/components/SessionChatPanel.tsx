@@ -5,18 +5,20 @@ import { SessionStatsPanel } from "./shellPanels"
 import { useMessages } from "../hooks/useMessages"
 import { useSSE } from "../hooks/useSSE"
 import { useSSEHandler } from "../hooks/useSSEHandler"
+import { useQuestions } from "../hooks/useQuestions"
+import { useOfflineCache } from "../hooks/useOfflineCache"
 import { api } from "../api"
-import { QUESTION_POLL_INTERVAL_MS } from "../constants"
 import { isSessionActive } from "../utils"
+import { parseDragPayload } from "../utils/drag"
 import { TabBar } from "./TabBar"
 import type { ChatViewProps } from "./ChatView"
-import type { ServerConfig, DataMode, SessionView, CommandInfo, Question, PermissionRequest } from "../types"
+import type { ServerConfig, DataMode, SessionView, CommandInfo } from "../types"
 
 type Props = {
   session: SessionView
   config: ServerConfig
   dataMode: DataMode
-  baseProps: ChatViewProps
+  baseProps: Omit<ChatViewProps, "composer" | "onComposerChange">
   active: boolean
   connectionState: string
   panelIndex: number
@@ -55,13 +57,24 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove
 }: Props) {
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
+  const { getCachedMessages } = useOfflineCache(baseProps.flags)
   const [localRevertID, setLocalRevertID] = useState<string | null>(null)
   const [stopGenerationRef] = useState(() => ({ current: false }))
   const [showStats, setShowStats] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     msgs.clearSession()
+    // Cache-first en desktop igual que móvil: pinta historial local de inmediato.
+    if (baseProps.flags.offlineCache) {
+      getCachedMessages(session.id).then((cached) => {
+        if (!cancelled && cached && cached.length > 0) {
+          msgs.preloadMessages(session.id, cached)
+        }
+      }).catch(() => {})
+    }
     msgs.loadSelected(session.id, session.directory).catch(() => undefined)
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id, session.directory])
 
@@ -94,77 +107,24 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     session.id
   )
 
-  // ===== Questions (por panel/directorio) =====
-  const [pendingQuestions, setPendingQuestions] = useState<Question[]>([])
-  const [dismissedQuestions, setDismissedQuestions] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (!config || !baseProps.flags.questionAuto) return
-    const poll = async () => {
-      try {
-        const qs = await api.listPendingQuestions(config, session.directory)
-        setPendingQuestions(qs.filter((q) => !dismissedQuestions.has(q.id)))
-      } catch { /* ignore */ }
-    }
-    poll()
-    const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [config, baseProps.flags.questionAuto, session.directory, dismissedQuestions])
-
-  const handleQuestionReply = useCallback(async (requestID: string, answers: string[][]) => {
-    if (!config) return
-    try {
-      await api.questionReply(config, requestID, answers, session.directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID ?? session.id)
-      setDismissedQuestions((prev) => new Set(prev).add(requestID))
-      setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
-    } catch { /* ignore */ }
-  }, [config, session.directory, session.id, pendingQuestions])
-
-  const handleQuestionReject = useCallback(async (requestID: string) => {
-    if (!config) return
-    try {
-      await api.questionReject(config, requestID, session.directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID ?? session.id)
-      setDismissedQuestions((prev) => new Set(prev).add(requestID))
-      setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
-    } catch { /* ignore */ }
-  }, [config, session.directory, session.id, pendingQuestions])
-
-  const handleDismissQuestion = useCallback(() => {
-    setPendingQuestions((prev) => prev.slice(1))
-  }, [])
-
-  // ===== Permissions =====
-  const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null)
-
-  useEffect(() => {
-    if (!config || !baseProps.flags.permissionUI) return
-    let cancelled = false
-    const poll = async () => {
-      try {
-        const perms = await api.listPermissions(config, session.directory)
-        if (!cancelled) setPermissionRequest(perms?.[0] ?? null)
-      } catch { /* ignore */ }
-    }
-    poll()
-    const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
-    return () => { cancelled = true; clearInterval(id) }
-  }, [config, baseProps.flags.permissionUI, session.directory])
-
-  const handlePermissionApprove = useCallback(async (requestID: string) => {
-    if (!config) return
-    try {
-      await api.permissionReply(config, requestID, true, session.directory, permissionRequest?.sessionID ?? session.id)
-    } catch { /* ignore */ }
-    setPermissionRequest(null)
-  }, [config, session.directory, session.id, permissionRequest])
-
-  const handlePermissionReject = useCallback(async (requestID: string) => {
-    if (!config) return
-    try {
-      await api.permissionReply(config, requestID, false, session.directory, permissionRequest?.sessionID ?? session.id)
-    } catch { /* ignore */ }
-    setPermissionRequest(null)
-  }, [config, session.directory, session.id, permissionRequest])
+  // ===== Questions & Permissions (DRY via useQuestions) =====
+  const {
+    pendingQuestions,
+    permissionRequest,
+    handleQuestionReply,
+    handleQuestionReject,
+    handleDismissQuestion,
+    handlePermissionApprove,
+    handlePermissionReject,
+    handleDismissPermission,
+  } = useQuestions({
+    config,
+    directory: session.directory,
+    enabled: Boolean(baseProps.flags.questionAuto || baseProps.flags.permissionUI),
+    enabledQuestions: Boolean(baseProps.flags.questionAuto),
+    enabledPermissions: Boolean(baseProps.flags.permissionUI),
+    fallbackSessionID: session.id,
+  })
 
   // ===== Acciones =====
   const refresh = useCallback(() => Promise.resolve(onRefreshSessions()), [onRefreshSessions])
@@ -321,7 +281,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     onDismissQuestion: handleDismissQuestion,
     onPermissionApprove: handlePermissionApprove,
     onPermissionReject: handlePermissionReject,
-    onDismissPermission: () => setPermissionRequest(null),
+    onDismissPermission: handleDismissPermission,
     onShellSend: (cmd) => onShellExecute(cmd, session.id, session.directory),
     onChangeAgent: (id) => onChangeAgentGlobal(id, session.directory),
     onBackToSessions: () => undefined,
@@ -333,7 +293,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     permissionRequest, handleSend, handleAbort, handleUndo,
     handleRedo, handleCompact, handleRevertToMessage, handleEditMessage,
     handleQuestionReply, handleQuestionReject, handleDismissQuestion,
-    handlePermissionApprove, handlePermissionReject, onShellExecute,
+    handlePermissionApprove, handlePermissionReject, handleDismissPermission, onShellExecute,
     onChangeAgentGlobal, onOpenInThisPanel, onOpenBrowser,
   ])
 
@@ -377,26 +337,23 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         }
         const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
         if (raw) {
-          if (raw.startsWith("panel:")) {
-            const parts = raw.split(":")
-            const fromIdx = Number(parts[1])
-            if (fromIdx !== panelIndex) {
+          const payload = parseDragPayload(raw)
+          if (payload.kind === "panel") {
+            if (payload.idx !== panelIndex) {
               if (zone === "center") {
-                onSwapPanels(fromIdx, panelIndex)
+                onSwapPanels(payload.idx, panelIndex)
               } else {
                 onSplitSession(panelIndex, zone, raw)
               }
             }
-          } else if (raw.startsWith("session:")) {
-            const sId = raw.replace("session:", "")
-            onSplitSession(panelIndex, zone, sId)
-          } else if (raw.startsWith("kind:")) {
+          } else if (payload.kind === "session") {
+            onSplitSession(panelIndex, zone, payload.id)
+          } else if (payload.kind === "kind") {
             onSplitSession(panelIndex, zone, raw)
-          } else if (raw.startsWith("tab:")) {
+          } else if (payload.kind === "tab") {
             // Ignorar tab suelto
-          } else if (raw.includes("/") || raw.includes("\\") || raw.includes(".")) {
-            // Archivo arrastrado desde el explorador interno o texto con ruta
-            onOpenFile?.(raw, panelIndex, zone)
+          } else if (payload.kind === "file") {
+            onOpenFile?.(payload.path, panelIndex, zone)
           }
         }
       }}
