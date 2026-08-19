@@ -226,12 +226,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   }, [msgs, session, refresh])
 
   const handleCompact = useCallback(async () => {
-    msgs.setCompacting(true)
+    msgs.setCompacting(true, session.id)
     msgs.setAwaitingAssistantReply(true)
     try {
       await msgs.compactSession(session.id, session.directory, panelModelOption?.providerID ?? "", panelModelOption?.modelID ?? "", refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined))
     } finally {
-      msgs.setCompacting(false)
+      msgs.setCompacting(false, session.id)
       msgs.setAwaitingAssistantReply(false)
     }
   }, [msgs, session, panelModelOption, refresh])

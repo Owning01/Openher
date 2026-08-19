@@ -2165,13 +2165,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleCompact = useCallback(async () => {
     if (!selectedSession || !activeModel) return
-    setCompacting(true)
+    setCompacting(true, selectedSession.id)
     setAwaitingAssistantReply(true)
     completionShouldPlayRef.current = true
     try {
       await compactSession(selectedSession.id, selectedSession.directory, activeModel.providerID, activeModel.modelID, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory))
     } finally {
-      setCompacting(false)
+      setCompacting(false, selectedSession.id)
       setAwaitingAssistantReply(false)
     }
   }, [selectedSession, activeModel, compactSession, refreshSessions, loadSelected, setCompacting, setAwaitingAssistantReply, completionShouldPlayRef])

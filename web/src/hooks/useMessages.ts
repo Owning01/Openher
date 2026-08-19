@@ -50,7 +50,22 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const [composer, setComposer] = useState(() => localStorage.getItem(storageKey) ?? "")
   const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
-  const [compacting, setCompacting] = useState(false)
+  // Compacting por sesión: usa Set para no filtrar estado entre sesiones.
+  // Antes era boolean global → al cambiar de sesión la otra aparecía como
+  // "Compacting" aunque no lo estuviera. Ahora se rastrea por sessionID.
+  const [compactingIds, setCompactingIds] = useState<Set<string>>(() => new Set())
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const compacting = useMemo(() => currentSessionId ? compactingIds.has(currentSessionId) : false, [compactingIds, currentSessionId])
+  const setCompacting = useCallback((value: boolean, sessionID?: string) => {
+    const sid = sessionID ?? currentSessionId ?? loadedSessionIDRef.current
+    if (!sid) return
+    setCompactingIds((prev) => {
+      const next = new Set(prev)
+      if (value) next.add(sid)
+      else next.delete(sid)
+      return next
+    })
+  }, [currentSessionId])
 
   const composerRef = useRef(composer)
   composerRef.current = composer
@@ -222,6 +237,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
   const clearSession = useCallback(() => {
     loadedSessionIDRef.current = null
+    setCurrentSessionId(null)
     subagentAnchorRef.current.clear()
     setMessages([])
     setOptimisticUserMessages([])
@@ -232,6 +248,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const preloadMessages = useCallback((sessionID: string, cached: MessageEnvelope[]) => {
     if (!cached || cached.length === 0) return
     loadedSessionIDRef.current = sessionID
+    setCurrentSessionId(sessionID)
     setMessages((prev) => {
       const map = new Map<string, MessageEnvelope>()
       for (const m of cached) map.set(m.info.id, m)
@@ -245,6 +262,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // Seteo ANTES del await: los deltas que lleguen durante el fetch de esta
     // sesión ya se aplican (el merge por id conserva lo streamed local).
     loadedSessionIDRef.current = sessionID
+    setCurrentSessionId(sessionID)
     const limit = dataMode === "ultra" ? 100 : dataMode === "miser" ? 50 : 500
 
     const raw = await api.loadMessages(config, sessionID, directory, limit)
@@ -750,13 +768,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (parsed?.type === "compact") {
       setComposer("")
       if (activeModel) {
-        setCompacting(true)
+        setCompacting(true, selectedSession.id)
         setAwaitingAssistantReply(true)
         completionShouldPlayRef.current = true
         try {
           await compactSession(selectedSession.id, selectedSession.directory, activeModel.providerID, activeModel.modelID, onRefreshSessions, onLoadSelected)
         } finally {
-          setCompacting(false)
+          setCompacting(false, selectedSession.id)
           setAwaitingAssistantReply(false)
         }
       } else {
