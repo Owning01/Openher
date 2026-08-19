@@ -37,7 +37,7 @@ export function SessionTokenUsage({ tokens, cost, tps }: Props) {
         <span className="token-stat token-stat-output">{formatNum(tokens.output)} out</span>
         {tokens.reasoning > 0 && <span className="token-stat token-stat-reasoning">{formatNum(tokens.reasoning)} thought</span>}
         <span className="token-stat token-stat-total">{formatNum(total)} total</span>
-        {tps && <span className="token-stat token-stat-tps" style={{ color: "var(--primary)", fontWeight: 700 }}>⚡ {tps}</span>}
+        {tps && <span className="token-stat token-stat-tps" style={{ color: "var(--primary)", fontWeight: 700 }}>{tps} tok/s</span>}
         {cost !== undefined && cost > 0 && <span className="token-stat token-stat-cost">{formatCost(cost)}</span>}
       </div>
     </div>

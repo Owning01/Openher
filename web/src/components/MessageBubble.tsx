@@ -8,8 +8,10 @@ import { useOutsideClick } from "../hooks/useOutsideClick"
 import ToolPart from "./ToolPart"
 import { FileDiffs } from "./FileDiffs"
 import { ThinkingBlock } from "./ThinkingBlock"
+import { CollapsibleSection } from "./CollapsibleSection"
 import { Markdown } from "./Markdown"
 import { ImageLightbox } from "./ImageLightbox"
+import { ToolIcon, LoadingIcon } from "../Icons"
 
 /** Extract base64 image data from a message part (handles both type:image and type:file). */
 function getPartImageData(p: { type: string; data?: string; url?: string; mimeType?: string; mime?: string }): string | null {
@@ -279,34 +281,78 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           </div>
         )}
 
-        {message.thinkingParts && message.thinkingParts.length > 0 && (
-          <div className="thinking-block">
-            <ThinkingBlock
-              key={thinkingDefault}
-              parts={message.thinkingParts}
-              duration={duration}
-              defaultOpen={thinkingDefault === "expanded" || (thinkingDefault === "auto" && message.thinkingParts.some((p) => !p.time?.end))}
-            />
-          </div>
-        )}
-        {message.toolParts.length > 0 && (
-          <div className="tool-parts">
-            {message.toolParts.map((tp) => (
-              <ToolPart
-                key={tp.id}
-                part={tp}
-                config={config}
-                directory={directory}
-                onViewSubagents={onViewSubagents}
-                compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
-              />
-            ))}
-          </div>
-        )}
+        {(() => {
+          const hasThinking = !!message.thinkingParts && message.thinkingParts.length > 0
+          const hasTools = message.toolParts.length > 0
+          const hasDiffs = !!message.summaryDiffs && message.summaryDiffs.length > 0
+          const hasActivity = hasThinking || hasTools || hasDiffs || message.hasCompaction
+          if (!hasActivity) return null
 
-        {message.summaryDiffs && message.summaryDiffs.length > 0 && (
-          <FileDiffs diffs={message.summaryDiffs} onOpenADEDiff={onOpenADEDiff} />
-        )}
+          const thinkingEl = hasThinking ? (
+            <div className="thinking-block">
+              <ThinkingBlock
+                key={thinkingDefault}
+                parts={message.thinkingParts}
+                duration={duration}
+                defaultOpen={thinkingDefault === "expanded" || (thinkingDefault === "auto" && message.thinkingParts.some((p) => !p.time?.end))}
+              />
+            </div>
+          ) : null
+
+          const toolsEl = hasTools ? (
+            <div className="tool-parts">
+              {message.toolParts.map((tp) => (
+                <ToolPart
+                  key={tp.id}
+                  part={tp}
+                  config={config}
+                  directory={directory}
+                  onViewSubagents={onViewSubagents}
+                  compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
+                />
+              ))}
+            </div>
+          ) : null
+
+          const diffsEl = hasDiffs ? (
+            <FileDiffs diffs={message.summaryDiffs!} onOpenADEDiff={onOpenADEDiff} />
+          ) : null
+
+          if (minimalistMode) {
+            const labels: string[] = []
+            if (hasThinking) labels.push(t('detail.activityThinking'))
+            if (hasTools) labels.push(`${message.toolParts.length} ${t('detail.activityTools')}`)
+            if (message.hasCompaction) labels.push(t('detail.activityCompaction'))
+            const streaming = (hasThinking && message.thinkingParts.some((p) => !p.time?.end)) ||
+              (hasTools && message.toolParts.some((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending"))
+            return (
+              <div className="activity-box">
+                <CollapsibleSection
+                  icon={<ToolIcon size={14} />}
+                  title={t('detail.activity')}
+                  subtitle={streaming
+                    ? <span className="thinking-streaming"><LoadingIcon size={12} className="animate-spin" />{t('detail.thinking')}</span>
+                    : labels.join(" · ")}
+                  defaultOpen={false}
+                >
+                  {thinkingEl}
+                  {toolsEl}
+                  {diffsEl}
+                  {message.hasCompaction && <div className="compaction-checkpoint" />}
+                </CollapsibleSection>
+              </div>
+            )
+          }
+
+          return (
+            <>
+              {thinkingEl}
+              {toolsEl}
+              {diffsEl}
+            </>
+          )
+        })()
+        }
 
         {isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || duration || tokensPerSecond || message.info.finish === "aborted") && (
           <div className="message-footer">
@@ -362,7 +408,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           </div>
         )}
 
-        {message.hasCompaction && <div className="compaction-checkpoint" />}
+        {!minimalistMode && message.hasCompaction && <div className="compaction-checkpoint" />}
       </article>
 
       {lightboxSrc && (

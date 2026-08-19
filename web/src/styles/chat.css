@@ -736,6 +736,17 @@
 .thinking-block {
   display: var(--chat-thinking-vis, block);
 }
+.activity-box {
+  margin-top: 0.5rem;
+}
+/* En modo minimalista el box es el mecanismo de visibilidad: el thinking y
+   los tools se muestran adentro sin importar los toggles globales. */
+.activity-box .thinking-block {
+  display: block;
+}
+.activity-box .tool-parts {
+  display: flex;
+}
 .message-footer .msg-footer-duration,
 .message-footer .msg-footer-model,
 .message-footer .msg-footer-mode,

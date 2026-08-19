@@ -309,7 +309,7 @@ export const ChatView = memo(function ChatView({
     const limit = activeModelOption?.contextLimit
     const pct = limit && limit > 0 && total > 0 ? Math.round((total / limit) * 100) : null
     let label = total > 0 ? (formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")) : ""
-    if (lastTps) label = label ? `${label} · ⚡ ${lastTps}` : `⚡ ${lastTps}`
+    if (lastTps) label = label ? `${label} · ${lastTps} tok/s` : `${lastTps} tok/s`
     if (cost > 0) label = label ? `${label} · ${formatCost(cost)}` : (label ? `${label} · $0.00` : "")
     return { total, pct, limit, cost, lastTps, label }
   }, [messages, activeModelOption?.contextLimit, selectedSession?.tokens, selectedSession?.cost])
@@ -545,7 +545,6 @@ export const ChatView = memo(function ChatView({
                   )}
                   {onInsertPrompt && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowPrompts(true) }}>
-                      <span style={{ fontSize: 13 }}>⚡</span>
                       {t('chat.prompts')}
                     </button>
                   )}
