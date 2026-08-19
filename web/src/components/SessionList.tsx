@@ -342,7 +342,16 @@ export const SessionList = memo(function SessionList({
       }
     })
 
-    const renderCard = (session: SessionView, isChild = false) => (
+    const renderCard = (
+      session: SessionView,
+      isChild = false,
+      parentOpts?: {
+        hasChildren: boolean
+        isCollapsed: boolean
+        onToggleCollapse: () => void
+        onOpenParent: () => void
+      }
+    ) => (
       <SessionCard
         key={session.id}
         session={session}
@@ -351,6 +360,10 @@ export const SessionList = memo(function SessionList({
         isRenaming={renamingSessionID === session.id}
         renameValue={renameValue}
         isFavorite={favorites.has(session.id)}
+        hasChildren={parentOpts?.hasChildren}
+        isCollapsed={parentOpts?.isCollapsed}
+        onToggleCollapse={parentOpts?.onToggleCollapse}
+        onOpenParent={parentOpts?.onOpenParent}
         onOpen={onOpen}
         onStartRename={onStartRename}
         onRenameChange={onRenameChange}
@@ -374,36 +387,23 @@ export const SessionList = memo(function SessionList({
       <div className="session-cards-hierarchical">
         {parents.map((parent) => {
           const children = childrenByParent.get(parent.id)
-          const hasChildren = children && children.length > 0
+          const hasChildren = !!children && children.length > 0
           const isCollapsed = collapsedParents.has(parent.id)
           return (
             <div key={parent.id} className="session-group">
-              <div
-                className={`session-parent-wrap${hasChildren ? " has-children" : ""}`}
-                onClick={(e) => {
-                  if (!hasChildren || selectMode) return
-                  e.stopPropagation()
+              {renderCard(parent, false, hasChildren ? {
+                hasChildren,
+                isCollapsed,
+                onToggleCollapse: () => {
                   setCollapsedParents((prev) => {
                     const next = new Set(prev)
                     if (next.has(parent.id)) next.delete(parent.id)
                     else next.add(parent.id)
                     return next
                   })
-                }}
-                onDoubleClick={(e) => {
-                  if (!hasChildren) return
-                  e.stopPropagation()
-                  onOpen(parent.id, parent.directory)
-                }}
-                style={{ cursor: hasChildren ? "pointer" : undefined }}
-              >
-                {hasChildren && (
-                  <span className={`session-expand-icon${isCollapsed ? "" : " expanded"}`}>
-                    <ChevronIcon size={14} />
-                  </span>
-                )}
-                {renderCard(parent, false)}
-              </div>
+                },
+                onOpenParent: () => onOpen(parent.id, parent.directory)
+              } : undefined)}
               {hasChildren && !isCollapsed && children.map((child) => (
                 <div key={child.id} className="session-child-wrap" style={{ paddingLeft: "16px" }}>
                   {renderCard(child, true)}

@@ -23,6 +23,7 @@ const DEFAULTS: ChatSettings = {
   messageMaxWidth: "full",
   fontFamily: "system",
   compactTools: false,
+  minimalistMode: false,
   completionSound: true,
   composerCharLimit: 0,
   desktopGutter: 12,

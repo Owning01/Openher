@@ -406,6 +406,7 @@ export type ChatSettings = {
   messageMaxWidth: "normal" | "wide" | "full"
   fontFamily: "system" | "serif" | "mono"
   compactTools: boolean
+  minimalistMode: boolean
   completionSound: boolean
   composerCharLimit: number
   /** Margen lateral del chat en vista escritorio en px (solo aplica en desktop). */

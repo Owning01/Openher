@@ -40,6 +40,7 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
     { key: "showCompactionCheckpoint", labelKey: "settings.chatShowCompaction" },
     { key: "showImages", labelKey: "settings.chatShowImages" },
     { key: "compactTools", labelKey: "settings.chatCompactTools" },
+    { key: "minimalistMode", labelKey: "settings.chatMinimalistMode" },
     { key: "completionSound", labelKey: "settings.chatCompletionSound" },
   ]
 

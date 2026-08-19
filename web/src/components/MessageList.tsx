@@ -29,6 +29,7 @@ type MessageListProps = {
   highlight?: string
   scrollToMessageID?: string | null
   compactTools?: boolean
+  minimalistMode?: boolean
   thinkingDefault?: "auto" | "expanded" | "collapsed"
   onRegenerate?: () => void
   onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
@@ -36,7 +37,7 @@ type MessageListProps = {
 
 export const MessageList = memo(function MessageList({
   messages, pendingIndex, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, compactTools, thinkingDefault, onRegenerate, onOpenADEDiff
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen,   highlight, scrollToMessageID, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -161,6 +162,7 @@ export const MessageList = memo(function MessageList({
                   todosOpen={todosOpen}
                   highlight={highlight}
                   compactTools={compactTools}
+                  minimalistMode={minimalistMode}
                   thinkingDefault={thinkingDefault}
                   onRegenerate={onRegenerate}
                   onOpenADEDiff={onOpenADEDiff}

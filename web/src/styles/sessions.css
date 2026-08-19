@@ -821,23 +821,21 @@
 }
 
 .session-expand-icon {
-  position: absolute;
-  left: -2px;
-  top: 50%;
-  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   width: 16px;
   height: 16px;
+  margin-right: 2px;
   color: var(--muted, rgba(255, 255, 255, 0.5));
+  transform: rotate(0deg);
   transition: transform 0.15s ease;
   pointer-events: none;
-  z-index: 1;
 }
 
 .session-expand-icon.expanded {
-  transform: translateY(-50%) rotate(90deg);
+  transform: rotate(90deg);
 }
 
 

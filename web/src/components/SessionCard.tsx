@@ -1,5 +1,5 @@
-import { memo, useCallback } from "react"
-import { StarIcon } from "../Icons"
+import { memo, useCallback, useRef } from "react"
+import { StarIcon, ChevronIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { formatTime } from "../utils"
 import { InlineRename } from "./InlineRename"
@@ -12,6 +12,10 @@ type SessionCardProps = {
   renameValue: string
   isFavorite: boolean
   isChild?: boolean
+  hasChildren?: boolean
+  isCollapsed?: boolean
+  onToggleCollapse?: () => void
+  onOpenParent?: () => void
   onOpen: (id: string, dir: string) => void
   onStartRename: (session: SessionView) => void
   onRenameChange: (value: string) => void
@@ -32,11 +36,13 @@ type SessionCardProps = {
 
 export const SessionCard = memo(function SessionCard({
   session, isSelected, isRenaming, renameValue, isFavorite, isChild = false,
+  hasChildren = false, isCollapsed = false, onToggleCollapse, onOpenParent,
   onOpen, onStartRename: _onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   onToggleFavorite, onDragStartSession, onContextMenu,
   selectMode = false, isChecked = false, onToggleCheck
 }: SessionCardProps) {
   const t = useT()
+  const clickTimer = useRef<number | null>(null)
 
   const handleOpen = useCallback(() => onOpen(session.id, session.directory), [session.id, session.directory, onOpen])
   const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
@@ -46,15 +52,39 @@ export const SessionCard = memo(function SessionCard({
 
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    if (selectMode) onToggleCheck?.()
-    else handleOpen()
-  }, [selectMode, onToggleCheck, handleOpen])
+    if (selectMode) {
+      onToggleCheck?.()
+      return
+    }
+    if (hasChildren && onToggleCollapse) {
+      // Evita que el doble-click dispare el toggle: el segundo click se
+      // ignora y el onDoubleClick cancella el timer y abre el padre.
+      if (clickTimer.current) return
+      clickTimer.current = window.setTimeout(() => {
+        clickTimer.current = null
+        onToggleCollapse()
+      }, 220)
+      return
+    }
+    handleOpen()
+  }, [selectMode, onToggleCheck, hasChildren, onToggleCollapse, handleOpen])
+
+  const handleCardDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (!hasChildren || !onOpenParent) return
+    e.stopPropagation()
+    if (clickTimer.current) {
+      window.clearTimeout(clickTimer.current)
+      clickTimer.current = null
+    }
+    onOpenParent()
+  }, [hasChildren, onOpenParent])
 
   return (
     <article
-      className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${isChild ? "is-child-session" : ""} ${selectMode ? "select-mode" : ""} ${isChecked ? "checked" : ""} fade-in`}
+      className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${isChild ? "is-child-session" : ""} ${hasChildren ? "has-children" : ""} ${selectMode ? "select-mode" : ""} ${isChecked ? "checked" : ""} fade-in`}
       draggable={!!onDragStartSession && !selectMode}
       onClick={handleCardClick}
+      onDoubleClick={handleCardDoubleClick}
       onContextMenu={(e) => {
         if (onContextMenu) {
           e.preventDefault()
@@ -71,6 +101,11 @@ export const SessionCard = memo(function SessionCard({
     >
       <div className="session-card-header">
         <div className="session-card-title-group">
+          {hasChildren && (
+            <span className={`session-expand-icon${isCollapsed ? "" : " expanded"}`} aria-hidden="true">
+              <ChevronIcon size={14} />
+            </span>
+          )}
           {selectMode ? (
             <span className={`session-checkbox${isChecked ? " checked" : ""}`} aria-hidden="true">
               {isChecked && <span>✓</span>}

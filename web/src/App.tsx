@@ -2424,6 +2424,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     snippets: promptSnippets,
     charLimit: chatSettings.composerCharLimit,
     compactTools: chatSettings.compactTools,
+    minimalistMode: chatSettings.minimalistMode,
     thinkingDefault: chatSettings.thinkingDefault,
     onRegenerate: handleRegenerate,
     onInsertPrompt: handleInsertPrompt,
