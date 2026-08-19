@@ -361,6 +361,18 @@
     border-left-color: var(--primary);
   }
 
+  .activity-ram-chip {
+    font-size: 0.6rem;
+    color: var(--muted, #888);
+    font-family: var(--font-mono, monospace);
+    padding: 2px 0;
+    text-align: center;
+    letter-spacing: -0.02em;
+    opacity: 0.6;
+    user-select: none;
+    line-height: 1;
+  }
+
   /* Paneles shell dentro del sidebar: llenan la altura del body */
   .desktop-sidebar-body > .shell-explorer,
   .desktop-sidebar-body > .shell-kanban,

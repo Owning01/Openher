@@ -36,6 +36,7 @@ import { STORAGE_KEYS, QUESTION_POLL_INTERVAL_MS, DEFAULT_STATS_PORT } from "./c
 import { useBackButton } from "./hooks/useBackButton"
 import { useNetworkMode } from "./hooks/useNetworkMode"
 import { useMemoryCleanup } from "./hooks/useMemoryCleanup"
+import { useMemoryUsage, formatBytes } from "./hooks/useMemoryUsage"
 import { useBlockedModels } from "./hooks/useBlockedModels"
 import { useFeatureFlags } from "./hooks/useFeatureFlags"
 import { useProviderManager } from "./hooks/useProviderManager"
@@ -1023,6 +1024,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [config.host, config.port, config.username, config.password, dataMode])
 
   useMemoryCleanup(selectedSession?.id ?? null, setMessages)
+  const memInfo = useMemoryUsage(5000)
 
   useEffect(() => {
     if (!hasConfiguredServer) setView("settings")
@@ -2656,6 +2658,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               <LayersIcon size={18} /></button>
           </div>
           <div className="app-desktop-activity-bottom">
+            {memInfo && (
+              <div className="activity-ram-chip" title={`JS Heap: ${formatBytes(memInfo.jsHeapUsed)} / ${formatBytes(memInfo.jsHeapTotal)}`}>
+                {formatBytes(memInfo.jsHeapUsed)}
+              </div>
+            )}
             <button type="button" className={`activity-btn${view === "settings" ? " active" : ""}`} title={t('nav.settings') || "Configuración"} aria-label={t('nav.settings') || "Configuración"}
               onClick={() => {
                 if (view === "settings") {

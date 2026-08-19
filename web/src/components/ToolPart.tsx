@@ -95,6 +95,36 @@ function shortToolLabel(tool: string): string {
 function formatInput(input: unknown): string {
   if (input == null) return ""
   if (typeof input === "string") return input
+  if (typeof input === "object" && !Array.isArray(input)) {
+    const obj = input as Record<string, unknown>
+    // Shell tool: render as command line
+    if ("command" in obj) {
+      const cmd = typeof obj.command === "string" ? obj.command : String(obj.command ?? "")
+      const args = Array.isArray(obj.args) ? obj.args.filter((a: unknown) => typeof a === "string").join(" ") : ""
+      const base = args ? `${cmd} ${args}` : cmd
+      const extra: string[] = []
+      if (typeof obj.workdir === "string" && obj.workdir) extra.push(`workdir: ${obj.workdir}`)
+      if (typeof obj.title === "string" && obj.title) extra.push(`title: ${obj.title}`)
+      if (typeof obj.description === "string" && obj.description) extra.push(`description: ${obj.description}`)
+      if (typeof obj.notifyOnExit === "boolean") extra.push(`notifyOnExit: ${obj.notifyOnExit}`)
+      if (typeof obj.timeoutSeconds === "number") extra.push(`timeout: ${obj.timeoutSeconds}s`)
+      return extra.length ? `${base}\n${extra.join("\n")}` : base
+    }
+    // Generic object: key: value lines
+    const lines: string[] = []
+    for (const [k, v] of Object.entries(obj)) {
+      if (v == null || v === false) continue
+      if (v === true) { lines.push(k); continue }
+      if (typeof v === "string") { lines.push(v.includes("\n") ? `${k}:\n${v}` : `${k}: ${v}`); continue }
+      if (Array.isArray(v)) {
+        const items = v.map((x: unknown) => typeof x === "string" ? x : JSON.stringify(x)).join(", ")
+        lines.push(`${k}: ${items}`)
+        continue
+      }
+      lines.push(`${k}: ${JSON.stringify(v)}`)
+    }
+    if (lines.length) return lines.join("\n")
+  }
   try {
     return JSON.stringify(input, null, 2)
   } catch {
@@ -368,8 +398,13 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     if (!isShellTool) return null
     const input = part.state?.input
     if (input && typeof input === "object" && "command" in input) {
-      const cmd = (input as { command?: string }).command
-      if (typeof cmd === "string" && cmd.trim()) return cmd.trim().slice(0, 80)
+      const obj = input as { command?: string; args?: string[] }
+      const cmd = obj.command
+      if (typeof cmd === "string" && cmd.trim()) {
+        const args = Array.isArray(obj.args) ? obj.args.join(" ") : ""
+        const full = args ? `${cmd} ${args}` : cmd
+        return full.trim().slice(0, 80)
+      }
     }
     return null
   }, [isShellTool, part.state?.input])
