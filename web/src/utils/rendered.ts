@@ -26,7 +26,6 @@ export function computeRenderedMessages(
   const out: RenderedMessage[] = []
   const seenIds = new Set<string>()
   let pendingDiffs: FileDiff[] | undefined
-  let lastAssistantId: string | null = null
   const diffForMessage = new Map<string, FileDiff[]>()
   const turnModeForUser = new Map<string, string>()
   let lastUserID: string | null = null
@@ -35,13 +34,10 @@ export function computeRenderedMessages(
     seenIds.add(message.info.id)
     if (message.info.role === "user") {
       pendingDiffs = message.info.summary?.diffs
-      lastAssistantId = null
       lastUserID = message.info.id
     } else {
       if (pendingDiffs && pendingDiffs.length > 0) {
-        if (lastAssistantId) diffForMessage.delete(lastAssistantId)
         diffForMessage.set(message.info.id, pendingDiffs)
-        lastAssistantId = message.info.id
       }
       if (lastUserID && message.info.mode && !turnModeForUser.has(lastUserID)) {
         turnModeForUser.set(lastUserID, message.info.mode)

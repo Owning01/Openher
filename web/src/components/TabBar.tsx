@@ -123,6 +123,8 @@ export const TabBar = memo(function TabBar({
     <div
       className="tab-bar"
       ref={barRef}
+      role="tablist"
+      aria-label="Tabs"
       onWheel={(e) => {
         if (e.deltaY) {
           e.currentTarget.scrollLeft += e.deltaY
@@ -138,9 +140,19 @@ export const TabBar = memo(function TabBar({
         return (
           <div
             key={id}
+            role="tab"
+            aria-selected={i === activeIndex}
+            aria-label={getLabel(id)}
+            tabIndex={i === activeIndex ? 0 : -1}
             className={`tab${i === activeIndex ? " active" : ""}${isDragging ? " tab-dragging" : ""}${isDragOver ? " tab-drag-over" : ""}`}
             draggable
             onClick={() => onSwitch(i)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSwitch(i) }
+              else if (e.key === "ArrowRight") { e.preventDefault(); const n = barRef.current?.querySelectorAll('[role="tab"]'); (n?.[Math.min(i + 1, tabs.length - 1)] as HTMLElement)?.focus() }
+              else if (e.key === "ArrowLeft") { e.preventDefault(); const n = barRef.current?.querySelectorAll('[role="tab"]'); (n?.[Math.max(i - 1, 0)] as HTMLElement)?.focus() }
+              else if (e.key === "Delete") { e.preventDefault(); onClose(i) }
+            }}
             onDragStart={(e) => handleDragStart(e, i)}
             onDragOver={(e) => handleDragOver(e, i)}
             onDrop={(e) => handleDrop(e, i)}

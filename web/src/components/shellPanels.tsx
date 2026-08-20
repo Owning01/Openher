@@ -872,10 +872,15 @@ export const ExplorerPanel = memo(function ExplorerPanel({
 
   const handleCreateFile = async (parentDir: string) => {
     setContextMenu(null)
-    const name = window.prompt("Nombre del nuevo archivo (ej: app.ts):")
-    if (!name || !name.trim()) return
+    const raw = window.prompt("Nombre del nuevo archivo (ej: app.ts):")
+    if (!raw || !raw.trim()) return
+    const name = raw.trim().replace(/[\/\\]/g, "").replace(/\0/g, "")
+    if (!name || name === ".." || name.includes(":") || name.includes("..")) {
+      showNotice("Nombre de archivo inválido")
+      return
+    }
     const sep = parentDir.includes("\\") ? "\\" : "/"
-    const fullPath = `${parentDir}${parentDir.endsWith(sep) ? "" : sep}${name.trim()}`
+    const fullPath = `${parentDir}${parentDir.endsWith(sep) ? "" : sep}${name}`
     try {
       await shell.fs.write(fullPath, "")
       showNotice(`Archivo creado: ${name}`)
@@ -888,10 +893,15 @@ export const ExplorerPanel = memo(function ExplorerPanel({
 
   const handleCreateFolder = async (parentDir: string) => {
     setContextMenu(null)
-    const name = window.prompt("Nombre de la nueva carpeta:")
-    if (!name || !name.trim()) return
+    const raw = window.prompt("Nombre de la nueva carpeta:")
+    if (!raw || !raw.trim()) return
+    const name = raw.trim().replace(/[\/\\]/g, "").replace(/\0/g, "")
+    if (!name || name === ".." || name.includes(":") || name.includes("..")) {
+      showNotice("Nombre de carpeta inválido")
+      return
+    }
     const sep = parentDir.includes("\\") ? "\\" : "/"
-    const fullPath = `${parentDir}${parentDir.endsWith(sep) ? "" : sep}${name.trim()}`
+    const fullPath = `${parentDir}${parentDir.endsWith(sep) ? "" : sep}${name}`
     try {
       await shell.fs.mkdir(fullPath)
       showNotice(`Carpeta creada: ${name}`)

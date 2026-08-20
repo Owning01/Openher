@@ -263,7 +263,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // sesión ya se aplican (el merge por id conserva lo streamed local).
     loadedSessionIDRef.current = sessionID
     setCurrentSessionId(sessionID)
-    const limit = dataMode === "ultra" ? 100 : dataMode === "miser" ? 50 : 500
+    const limit = dataMode === "ultra" ? 100 : dataMode === "miser" ? 100 : 500
 
     const raw = await api.loadMessages(config, sessionID, directory, limit)
     if (requestID !== loadSelectedRequestRef.current) return
