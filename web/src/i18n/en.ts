@@ -771,13 +771,17 @@ export default {
   'quickchat.model': 'Model',
   'quickchat.provider': 'Provider',
   'quickchat.providerCerebras': 'Cerebras',
+  'quickchat.providerGroq': 'Groq',
   'quickchat.providerOpencode': 'OpenCode',
   'quickchat.empty': 'No messages yet — ask a quick question.',
   'quickchat.cached': 'cached',
   'quickchat.thinking': 'Thinking…',
   'quickchat.errorRateLimit': 'Rate limit (5/min) — wait a moment.',
   'quickchat.errorNoKey': 'Set your Cerebras API key in Settings.',
+  'quickchat.errorNoKeyGroq': 'Set your Groq API key in Settings.',
   'quickchat.settingsKey': 'Cerebras API key',
-  'quickchat.settingsKeyPlaceholder': 'csk-…',
+  'quickchat.settingsKeyPlaceholder': 'csk-.',
+  'quickchat.settingsKeyGroq': 'Groq API key',
+  'quickchat.settingsKeyGroqPlaceholder': 'gsk_...',
   'quickchat.noResults': 'No web results'
 }

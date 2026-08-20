@@ -1,30 +1,58 @@
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useMemo } from "react"
 import { useT } from "../i18n-context"
 import { useQuickChat } from "../hooks/useQuickChat"
 import { STORAGE_KEYS } from "../constants"
 import { CEREBRAS_MODELS } from "../providers/cerebras"
+import { GROQ_MODELS } from "../providers/groq"
 import type { QuickChatProviderId } from "../providers/types"
-import type { ServerConfig } from "../types"
+import type { ModelOption, ProviderInfo } from "../types"
 import { Markdown } from "./Markdown"
+import { BrainIcon, SettingsIcon, TrashIcon } from "../Icons"
+import "../styles/quickchat.css"
 
-export function QuickChatPanel(props: { cerebrasKey: string; config: ServerConfig | null }) {
+type Props = {
+  cerebrasKey: string
+  groqKey?: string
+  config: any
+  modelOptions?: ModelOption[]
+  providers?: ProviderInfo[]
+  onOpenSettings?: () => void
+}
+
+export function QuickChatPanel({ cerebrasKey, groqKey = "", config, modelOptions = [], providers = [], onOpenSettings }: Props) {
   const t = useT()
-  const [provider, setProvider] = useState<QuickChatProviderId>(() => (localStorage.getItem(STORAGE_KEYS.QUICKCHAT_PROVIDER) as QuickChatProviderId) || "cerebras")
-  const [model, setModel] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_MODEL) || CEREBRAS_MODELS[0].id)
+  const [provider, setProvider] = useState<QuickChatProviderId>(() => (localStorage.getItem(STORAGE_KEYS.QUICKCHAT_PROVIDER) as QuickChatProviderId) || "groq")
+  const [model, setModel] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_MODEL) || GROQ_MODELS[0].id)
   const [searchEnabled, setSearchEnabled] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_SEARCH) === "1")
   const [input, setInput] = useState("")
+  const [showKeyInput, setShowKeyInput] = useState(false)
+  const [tempKey, setTempKey] = useState(provider === "groq" ? groqKey : cerebrasKey)
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.QUICKCHAT_PROVIDER, provider) } catch {} }, [provider])
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.QUICKCHAT_MODEL, model) } catch {} }, [model])
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.QUICKCHAT_SEARCH, searchEnabled ? "1" : "0") } catch {} }, [searchEnabled])
+  useEffect(() => setTempKey(provider === "groq" ? groqKey : cerebrasKey), [cerebrasKey, groqKey, provider])
 
-  const { messages, send, clear, abort, busy, error } = useQuickChat({ provider, model, cerebrasKey: props.cerebrasKey, config: props.config, searchEnabled })
+  const { messages, send, clear, abort, busy, error } = useQuickChat({ provider, model, cerebrasKey, groqKey, config, searchEnabled })
 
+  // Derive models for active provider — only expose what API has
+  const availableModels = useMemo(() => {
+    if (provider === "cerebras") return CEREBRAS_MODELS
+    if (provider === "groq") return GROQ_MODELS
+    const filtered = modelOptions.filter(m => m.providerID === provider || (m.providerID === "opencode-go" && provider === "opencode-go"))
+    if (filtered.length === 0 && provider === "opencode-go") {
+      return [{ id: "opencode-go/muse-spark-1.2-contributor", label: "Muse Spark" } as any]
+    }
+    if (filtered.length === 0) return []
+    return filtered.map(m => ({ id: `${m.providerID}/${m.modelID}`, label: m.modelName || m.modelID, provider: m.providerID }))
+  }, [provider, modelOptions])
+
+  // Keep selected model valid for current provider
   useEffect(() => {
-    const validIds = provider === "cerebras" ? CEREBRAS_MODELS.map(m => m.id) : ["opencode-go/muse-spark-1.2-contributor", "opencode-go/deepseek-v4-flash"]
-    if (!validIds.includes(model)) setModel(validIds[0])
-  }, [provider])
+    const ids = availableModels.map((m: any) => m.id)
+    if (ids.length && !ids.includes(model)) setModel(ids[0])
+  }, [provider, availableModels])
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }) }, [messages, busy])
 
@@ -35,76 +63,119 @@ export function QuickChatPanel(props: { cerebrasKey: string; config: ServerConfi
     void send(v)
   }
 
-  const models = provider === "cerebras" ? CEREBRAS_MODELS : [{ id: "opencode-go", label: "OpenCode Go" }]
+  const needsCerebrasKey = provider === "cerebras" && !cerebrasKey
+  const needsGroqKey = provider === "groq" && !groqKey
+  const providerInfo = providers.find(p => p.id === provider)
+  const needsProviderConfig = provider !== "cerebras" && provider !== "groq" && providerInfo && !providerInfo.connected && availableModels.length === 0
+
+  const handleSaveKey = async () => {
+    if (!tempKey.trim()) return
+    try {
+      const { shell } = await import("../shell")
+      const patch = provider === "groq" ? { groq_api_key: tempKey.trim() } : { cerebras_api_key: tempKey.trim() }
+      await shell.config.patch(patch as any)
+      setShowKeyInput(false)
+      window.location.reload()
+    } catch {}
+  }
 
   return (
-    <div className="qc-panel" style={{ display: "flex", flexDirection: "column", height: "100%", gap: 8, padding: 10 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <strong style={{ fontSize: 13 }}>{t("quickchat.title")}</strong>
-        <span style={{ fontSize: 12, opacity: 0.6 }}>{t("quickchat.subtitle")}</span>
-        <span style={{ flex: 1 }} />
-        <button className="btn-icon" onClick={clear} title={t("quickchat.clear")} aria-label={t("quickchat.clear")} style={{ fontSize: 12 }}>✕</button>
+    <div className="qc-panel">
+      <div className="qc-header">
+        <div className="qc-header-icon"><BrainIcon size={18} /></div>
+        <div className="qc-header-text">
+          <div className="qc-header-title">{t("quickchat.title")}</div>
+          <div className="qc-header-subtitle">{t("quickchat.subtitle")}</div>
+        </div>
+        <div className="qc-header-actions">
+          <button className="qc-icon-btn" onClick={clear} title={t("quickchat.clear")} aria-label={t("quickchat.clear")}><TrashIcon size={14} /></button>
+          {onOpenSettings && <button className="qc-icon-btn" onClick={onOpenSettings} title={t("nav.settings")} aria-label={t("nav.settings")}><SettingsIcon size={14} /></button>}
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-        <label style={{ fontSize: 12, display: "flex", gap: 4, alignItems: "center" }}>
-          {t("quickchat.provider")}
-          <select value={provider} onChange={e => setProvider(e.target.value as QuickChatProviderId)} style={{ fontSize: 12, padding: "2px 4px" }}>
+      <div className="qc-controls">
+        <label className="qc-control-group">
+          <span>{t("quickchat.provider")}</span>
+          <select className="qc-select" value={provider} onChange={e => setProvider(e.target.value as QuickChatProviderId)}>
+            <option value="groq">{t("quickchat.providerGroq")}</option>
             <option value="cerebras">{t("quickchat.providerCerebras")}</option>
-            <option value="opencode-go">{t("quickchat.providerOpencode")}</option>
+            {providers.filter(p => p.connected && p.id !== "groq" && p.id !== "cerebras").map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {!providers.some(p => p.id === "opencode-go") && <option value="opencode-go">{t("quickchat.providerOpencode")}</option>}
           </select>
         </label>
-        <label style={{ fontSize: 12, display: "flex", gap: 4, alignItems: "center" }}>
-          {t("quickchat.model")}
-          <select value={model} onChange={e => setModel(e.target.value)} style={{ fontSize: 12, padding: "2px 4px", maxWidth: 160 }}>
-            {models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+        <label className="qc-control-group">
+          <span>{t("quickchat.model")}</span>
+          <select className="qc-select" value={model} onChange={e => setModel(e.target.value)}>
+            {availableModels.length === 0 ? <option value="">{t("settings.noProviders")}</option> : availableModels.map((m: any) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
         </label>
-        <label style={{ fontSize: 12, display: "flex", gap: 4, alignItems: "center", cursor: "pointer" }}>
-          <input type="checkbox" className="switch-checkbox" checked={searchEnabled} onChange={e => setSearchEnabled(e.target.checked)} />
-          {t("quickchat.search")} <span style={{ opacity: 0.7, fontSize: 11 }}>{searchEnabled ? t("quickchat.searchOn") : t("quickchat.searchOff")}</span>
+        <label className="qc-switch">
+          <input type="checkbox" checked={searchEnabled} onChange={e => setSearchEnabled(e.target.checked)} />
+          <span>{t("quickchat.search")}</span>
+          <span style={{ opacity: 0.6, fontSize: 11 }}>{searchEnabled ? t("quickchat.searchOn") : t("quickchat.searchOff")}</span>
         </label>
       </div>
 
-      <div ref={listRef} style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, padding: "6px 2px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-muted, #fafafa)" }}>
-        {messages.length === 0 && <div style={{ fontSize: 13, opacity: 0.6, padding: 12, textAlign: "center" }}>{t("quickchat.empty")}</div>}
+      {(needsCerebrasKey || needsGroqKey) && (
+        <div className="qc-config-banner">
+          <span>⚠️ {needsGroqKey ? t("quickchat.errorNoKeyGroq") : t("quickchat.errorNoKey")}</span>
+          {!showKeyInput ? (
+            <button className="qc-config-btn" onClick={() => setShowKeyInput(true)}>{t("settings.connect")}</button>
+          ) : (
+            <span style={{ display: "flex", gap: 6, flex: 1 }}>
+              <input value={tempKey} onChange={e => setTempKey(e.target.value)} placeholder={needsGroqKey ? t("quickchat.settingsKeyGroqPlaceholder") : t("quickchat.settingsKeyPlaceholder")} style={{ flex: 1, minHeight: 32, fontSize: 12 }} />
+              <button className="qc-send" style={{ minHeight: 32, padding: "0 12px" }} onClick={handleSaveKey}>{t("settings.save")}</button>
+            </span>
+          )}
+          {onOpenSettings && <button className="qc-config-btn" onClick={onOpenSettings}>{t("settings.title")}</button>}
+        </div>
+      )}
+
+      {needsProviderConfig && (
+        <div className="qc-config-banner">
+          <span>{t("settings.notConnected")} — {provider}</span>
+          {onOpenSettings && <button className="qc-config-btn" onClick={onOpenSettings}>{t("settings.connect")}</button>}
+        </div>
+      )}
+
+      <div ref={listRef} className="qc-messages">
+        {messages.length === 0 && (
+          <div className="qc-empty">
+            <div className="qc-empty-icon">💬</div>
+            <div className="qc-empty-text">{t("quickchat.empty")}</div>
+          </div>
+        )}
         {messages.map(m => (
-          <div key={m.id} style={{
-            alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-            maxWidth: "85%", padding: "8px 10px", borderRadius: 12,
-            background: m.role === "user" ? "var(--accent, #3b82f6)" : "var(--card, #fff)",
-            color: m.role === "user" ? "#fff" : "inherit",
-            fontSize: 13, lineHeight: 1.4, boxShadow: "0 1px 2px rgba(0,0,0,0.06)"
-          }}>
+          <div key={m.id} className={`qc-bubble ${m.role === "user" ? "user" : "assistant"}`}>
             <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
               {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
             </div>
-            {m.cached && <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4 }}>{t("quickchat.cached")}</div>}
+            {m.cached && <div className="qc-bubble-meta"><span className="qc-badge">{t("quickchat.cached")}</span></div>}
             {m.searchResults && m.searchResults.length > 0 && (
-              <div style={{ marginTop: 6, fontSize: 11, opacity: 0.8 }}>
-                {m.searchResults.map(r => <div key={r.url}><a href={r.url} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>{r.title}</a></div>)}
+              <div className="qc-search-results">
+                {m.searchResults.map(r => <a key={r.url} href={r.url} target="_blank" rel="noreferrer" className="qc-search-link">↗ {r.title}</a>)}
               </div>
             )}
           </div>
         ))}
-        {busy && <div style={{ fontSize: 12, opacity: 0.6, padding: "4px 8px" }}>{t("quickchat.thinking")}</div>}
-        {error && <div style={{ fontSize: 12, color: "var(--danger, #ef4444)", padding: "4px 8px" }}>{t(error as any) || error}</div>}
+        {busy && <div className="qc-thinking">{t("quickchat.thinking")}</div>}
+        {error && <div className="qc-error">{t(error as any) || error}</div>}
       </div>
 
-      <div style={{ display: "flex", gap: 6 }}>
+      <div className="qc-composer">
         <textarea
+          className="qc-input"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend() } }}
           placeholder={t("quickchat.placeholder")}
-          rows={2}
-          style={{ flex: 1, resize: "none", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 13 }}
+          rows={1}
           aria-label={t("quickchat.placeholder")}
         />
         {busy ? (
-          <button onClick={abort} style={{ padding: "0 12px", borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer" }}>{t("composer.stop")}</button>
+          <button className="qc-stop" onClick={abort}>{t("composer.stop")}</button>
         ) : (
-          <button onClick={onSend} disabled={!input.trim()} style={{ padding: "0 14px", borderRadius: 8, border: "none", background: "var(--accent, #3b82f6)", color: "#fff", cursor: input.trim() ? "pointer" : "not-allowed", opacity: input.trim() ? 1 : 0.6 }}>{t("quickchat.send")}</button>
+          <button className="qc-send" onClick={onSend} disabled={!input.trim()}>{t("quickchat.send")} →</button>
         )}
       </div>
     </div>

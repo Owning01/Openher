@@ -26,6 +26,7 @@ export type ShellConfig = {
   desktop_agent_path: string
   labs_apps: { id: string; title: string; path: string }[]
   cerebras_api_key: string
+  groq_api_key: string
   quickchat_provider: string
   quickchat_model: string
 }

@@ -120,13 +120,14 @@ export const SettingsPanel = memo(function SettingsPanel({
   // Sección de servidores abierta por defecto: el botón + y los servers visibles.
   const [serversOpen, setServersOpen] = useState(true)
   const [qcKey, setQcKey] = useState("")
+  const [qcGroqKey, setQcGroqKey] = useState("")
   const [qcKeyLoaded, setQcKeyLoaded] = useState(false)
   const [qcSaving, setQcSaving] = useState(false)
   const [qcNotice, setQcNotice] = useState<string | null>(null)
   useEffect(() => {
     if (!isDesktop || qcKeyLoaded) return
     import("../shell").then(({ shell }) => {
-      shell.config.get().then((c: any) => { setQcKey(c?.cerebras_api_key ?? ""); setQcKeyLoaded(true) }).catch(() => setQcKeyLoaded(true))
+      shell.config.get().then((c: any) => { setQcKey(c?.cerebras_api_key ?? ""); setQcGroqKey((c as any)?.groq_api_key ?? ""); setQcKeyLoaded(true) }).catch(() => setQcKeyLoaded(true))
     })
   }, [isDesktop, qcKeyLoaded])
 
@@ -769,20 +770,27 @@ export const SettingsPanel = memo(function SettingsPanel({
           <div style={{ display: "flex", gap: 6 }}>
             <input type={showPassword ? "text" : "password"} value={qcKey} onChange={e => setQcKey(e.target.value)} placeholder={t('quickchat.settingsKeyPlaceholder')} style={{ flex: 1 }} />
             <button type="button" className="btn-icon" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "hide" : "show"}>{showPassword ? "🙈" : "👁"}</button>
-            <button type="button" className="btn-primary" disabled={qcSaving} onClick={async () => {
+          </div>
+        </label>
+        <label className="settings-field">
+          <span>{t('quickchat.settingsKeyGroq')}</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input type={showPassword ? "text" : "password"} value={qcGroqKey} onChange={e => setQcGroqKey(e.target.value)} placeholder={t('quickchat.settingsKeyGroqPlaceholder')} style={{ flex: 1 }} />
+            <button type="button" className="btn-icon" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "hide" : "show"}>{showPassword ? "🙈" : "👁"}</button>
+          </div>
+        </label>
+        <button type="button" className="btn-primary" disabled={qcSaving} onClick={async () => {
               setQcSaving(true)
               try {
                 const { shell } = await import("../shell")
-                await shell.config.patch({ cerebras_api_key: qcKey } as any)
+                await shell.config.patch({ cerebras_api_key: qcKey, groq_api_key: qcGroqKey } as any)
                 setQcNotice("Guardado")
                 setTimeout(() => setQcNotice(null), 2000)
               } catch (e: any) { setQcNotice(e?.message ?? "Error") }
               setQcSaving(false)
             }}>{qcSaving ? t('settings.saving') : t('settings.save')}</button>
-          </div>
-        </label>
         {qcNotice && <p className="subtle" style={{ color: "var(--accent)" }}>{qcNotice}</p>}
-        <p className="subtle" style={{ fontSize: 11 }}>{t('quickchat.providerCerebras')} · {t('quickchat.search')} {t('quickchat.searchOn')}/{t('quickchat.searchOff')} + cache 24h · 5 req/min</p>
+        <p className="subtle" style={{ fontSize: 11 }}>{t('quickchat.providerGroq')} · {t('quickchat.providerCerebras')} · qwen/qwen3.6-27b (Groq streaming) · {t('quickchat.search')} + cache 24h</p>
       </SettingsSection>
       )}
 

@@ -21,7 +21,7 @@ function loadStored(): QCState[] {
   } catch { return [] }
 }
 
-export function useQuickChat(opts: { provider: QuickChatProviderId; model: string; cerebrasKey: string; config: ServerConfig | null; searchEnabled: boolean }) {
+export function useQuickChat(opts: { provider: QuickChatProviderId; model: string; cerebrasKey: string; groqKey?: string; config: ServerConfig | null; searchEnabled: boolean }) {
   const [messages, setMessages] = useState<QCState[]>(() => loadStored())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +32,7 @@ export function useQuickChat(opts: { provider: QuickChatProviderId; model: strin
     try { localStorage.setItem(STORAGE_KEYS.QUICKCHAT, JSON.stringify(messages.slice(-30))) } catch {}
   }, [messages])
 
-  const provider = useMemo(() => getQuickChatProvider(opts.provider, { cerebrasKey: opts.cerebrasKey, config: opts.config }), [opts.provider, opts.cerebrasKey, opts.config])
+  const provider = useMemo(() => getQuickChatProvider(opts.provider, { cerebrasKey: opts.cerebrasKey, groqKey: opts.groqKey ?? "", config: opts.config }), [opts.provider, opts.cerebrasKey, opts.groqKey, opts.config])
 
   // simple answer cache in localStorage (hash -> {text,time})
   const getCachedAnswer = useCallback((question: string, searchSnippets: string): string | null => {
@@ -83,17 +83,32 @@ export function useQuickChat(opts: { provider: QuickChatProviderId; model: strin
     abortRef.current = ac
     try {
       const hist: QuickChatMessage[] = [...messages, userMsg].map(m => ({ role: m.role as any, content: m.content }))
-      // inject search context as system message if present (token-min: only top3 snippets ~200 tokens)
       const toSend: QuickChatMessage[] = searchBlock
         ? [{ role: "system", content: `Contexto web (usa si responde la pregunta, cita URLs si es útil):\n${searchBlock}` }, ...hist.slice(-6)]
         : hist.slice(-8)
-      // token-min: if using cerebras, provider will trim further
-      const res = await provider.chat(toSend, { model: opts.model, signal: ac.signal })
-      setCachedAnswer(q, searchBlock, res.text)
-      setMessages(prev => [...prev, { id: `a${Date.now()}`, role: "assistant", content: res.text, searchResults }])
+      if (opts.provider === "groq") {
+        const assistantId = `a${Date.now()}`
+        setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", searchResults }])
+        let acc = ""
+        const res = await provider.chat(toSend, {
+          model: opts.model,
+          signal: ac.signal,
+          onChunk: (chunk: string) => {
+            acc += chunk
+            setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: acc } : m))
+          },
+        })
+        const finalText = (res.text || acc).trim()
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: finalText } : m))
+        setCachedAnswer(q, searchBlock, finalText)
+      } else {
+        const res = await provider.chat(toSend, { model: opts.model, signal: ac.signal })
+        setCachedAnswer(q, searchBlock, res.text)
+        setMessages(prev => [...prev, { id: `a${Date.now()}`, role: "assistant", content: res.text, searchResults }])
+      }
     } catch (e: any) {
       const msg = e?.message ?? String(e)
-      if (msg === "NO_KEY") setError("quickchat.errorNoKey")
+      if (msg === "NO_KEY" || msg === "NO_KEY_GROQ") setError(provider.id === "groq" ? "quickchat.errorNoKeyGroq" : "quickchat.errorNoKey")
       else if (msg.includes("Rate limit")) setError("quickchat.errorRateLimit")
       else setError(msg)
     } finally {

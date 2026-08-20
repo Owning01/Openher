@@ -305,6 +305,7 @@
   }
 
   .app-desktop-sidebar {
+    position: relative;
     min-height: 0;
     overflow: hidden;
     background: var(--surface);
@@ -773,6 +774,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-gutter: stable;
     display: flex;
     flex-direction: column;
   }
@@ -798,12 +800,12 @@
   .desktop-sidebar-resizer {
     position: absolute;
     top: 0;
-    right: 0;
+    right: -3px;
     bottom: 0;
-    width: 4px;
+    width: 6px;
     cursor: col-resize;
     touch-action: none;
-    z-index: 2;
+    z-index: 3;
   }
 
   .desktop-sidebar-resizer::after {
@@ -811,8 +813,8 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 1px;
-    right: 1px;
+    left: 2px;
+    right: 2px;
     background: var(--border-subtle);
     transition: background 0.12s;
   }

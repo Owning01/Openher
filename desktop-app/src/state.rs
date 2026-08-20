@@ -32,6 +32,7 @@ pub struct ShellConfig {
     pub github_repos: Vec<String>,
     /// API key Cerebras para Quick Chat
     pub cerebras_api_key: String,
+    pub groq_api_key: String,
     pub quickchat_provider: String,
     pub quickchat_model: String,
 }
@@ -68,6 +69,7 @@ impl Default for ShellConfig {
             desktop_agent_path: String::new(),
             github_repos: vec!["sst/opencode".into()],
             cerebras_api_key: String::new(),
+            groq_api_key: String::new(),
             quickchat_provider: "cerebras".into(),
             quickchat_model: "gpt-oss-120b".into(),
         }

@@ -1177,6 +1177,9 @@ fn merge_config(cfg: &mut crate::state::ShellConfig, patch: &serde_json::Value) 
     if let Some(s) = patch.get("cerebras_api_key").and_then(|v| v.as_str()) {
         cfg.cerebras_api_key = s.to_string();
     }
+    if let Some(s) = patch.get("groq_api_key").and_then(|v| v.as_str()) {
+        cfg.groq_api_key = s.to_string();
+    }
     if let Some(s) = patch.get("quickchat_provider").and_then(|v| v.as_str()) {
         cfg.quickchat_provider = s.to_string();
     }

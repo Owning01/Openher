@@ -730,6 +730,7 @@ type TranslationKey =
   | 'quickchat.model'
   | 'quickchat.provider'
   | 'quickchat.providerCerebras'
+  | 'quickchat.providerGroq'
   | 'quickchat.providerOpencode'
   | 'quickchat.empty'
   | 'quickchat.cached'
@@ -738,6 +739,9 @@ type TranslationKey =
   | 'quickchat.errorNoKey'
   | 'quickchat.settingsKey'
   | 'quickchat.settingsKeyPlaceholder'
+  | 'quickchat.settingsKeyGroq'
+  | 'quickchat.settingsKeyGroqPlaceholder'
+  | 'quickchat.errorNoKeyGroq'
   | 'quickchat.noResults'
 
 // Partial: los idiomas pueden omitir keys — createTranslator cae al EN

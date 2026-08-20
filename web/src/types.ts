@@ -311,7 +311,7 @@ export type NoticeType = "info" | "success" | "error"
 
 export type ThemePreference = "system" | "light" | "dark" | "scheduled"
 
-export type ViewType = "settings" | "sessions" | "detail" | "help" | "stats"
+export type ViewType = "settings" | "sessions" | "detail" | "help" | "stats" | "quickchat"
 
 export type HelpPage = "overview" | "server" | "network" | "troubleshooting" | "commands"
 
