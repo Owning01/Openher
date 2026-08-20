@@ -22,14 +22,14 @@ describe("buildSSEUrl", () => {
     expect(url).toBe("http://localhost:3000/event?directory=%2Ftmp%2Fproject")
   })
 
-  it("uses location[directory] when directory contains 'location'", () => {
-    const url = buildSSEUrl(cfg(), "/tmp/location/foo")
-    expect(url).toContain("location%5Bdirectory%5D=")
+  it("uses location[directory] when apiVersion is v2", () => {
+    const url = buildSSEUrl(cfg({ apiVersion: "v2" }), "/tmp/project")
+    expect(url).toContain("location%5Bdirectory%5D=%2Ftmp%2Fproject")
     expect(url).not.toContain("?directory=")
   })
 
-  it("uses location[directory] key when directory string is exactly 'location'", () => {
-    const url = buildSSEUrl(cfg(), "location")
+  it("uses location[directory] key when directory string is exactly 'location' in v2", () => {
+    const url = buildSSEUrl(cfg({ apiVersion: "v2" }), "location")
     expect(url).toContain("location%5Bdirectory%5D=location")
   })
 
@@ -50,9 +50,9 @@ describe("buildSSEUrl", () => {
     expect(buildSSEUrl(cfg({ apiVersion: "v2" }))).toBe("http://localhost:3000/api/event")
   })
 
-  it("builds v2 url with directory and sessionID", () => {
+  it("builds v2 url with directory and sessionID using location[directory]", () => {
     const url = buildSSEUrl(cfg({ apiVersion: "v2" }), "/my/dir", "s1")
-    expect(url).toBe("http://localhost:3000/api/event?directory=%2Fmy%2Fdir&sessionID=s1")
+    expect(url).toBe("http://localhost:3000/api/event?location%5Bdirectory%5D=%2Fmy%2Fdir&sessionID=s1")
   })
 
   it("respects explicit v1 version (no /api prefix)", () => {

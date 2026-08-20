@@ -34,9 +34,9 @@ export interface IMessageRepository {
 }
 
 export interface IMessageCache {
-  get(sessionID: string): MessageEnvelope[] | null
-  set(sessionID: string, messages: MessageEnvelope[]): void
-  clear(sessionID?: string): void
+  get(sessionID: string): Promise<MessageEnvelope[] | null>
+  set(sessionID: string, messages: MessageEnvelope[]): Promise<void>
+  clear(sessionID?: string): Promise<void>
 }
 
 // ---------------------------------------------------------------------------

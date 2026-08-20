@@ -1,13 +1,16 @@
 import type { ServerConfig, SSEEvent, StreamState } from "../../types"
 import { baseUrl } from "../api/client"
-import { resolveApiVersion, unwrapData } from "../api/version"
+import { ensureVersionDetected, resolveApiVersion, unwrapData } from "../api/version"
 
 export function buildSSEUrl(config: ServerConfig, directory?: string, sessionID?: string): string {
   const base = baseUrl(config)
   const version = resolveApiVersion(config)
   const prefix = version === "v2" ? "/api" : ""
   const params = new URLSearchParams()
-  if (directory) params.set(directory.includes("location") ? "location[directory]" : "directory", directory)
+  if (directory) {
+    const key = version === "v2" ? "location[directory]" : "directory"
+    params.set(key, directory)
+  }
   if (sessionID) params.set("sessionID", sessionID)
   const qs = params.toString()
   return `${base}${prefix}/event${qs ? `?${qs}` : ""}`
@@ -53,6 +56,7 @@ export function createSSEClient(opts: SSEClientOptions) {
   let es: EventSource | null = null
   let state: StreamState = "polling"
   let attempt = 0
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
   const connect = () => {
     const url = buildSSEUrl(opts.config, opts.directory, opts.sessionID)
@@ -68,7 +72,11 @@ export function createSSEClient(opts: SSEClientOptions) {
         state = "reconnecting"
         opts.onStateChange?.(state)
         es?.close()
-        if (shouldReconnect(state, attempt++)) setTimeout(connect, 1000 * attempt)
+        if (shouldReconnect(state, attempt)) {
+          const delay = 1000 * Math.min(attempt + 1, 10)
+          attempt++
+          reconnectTimer = setTimeout(connect, delay)
+        }
       }
     } catch {
       state = "reconnecting"
@@ -77,9 +85,14 @@ export function createSSEClient(opts: SSEClientOptions) {
   }
 
   const disconnect = () => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
     es?.close()
     es = null
     state = "polling"
+    attempt = 0
     opts.onStateChange?.(state)
   }
 

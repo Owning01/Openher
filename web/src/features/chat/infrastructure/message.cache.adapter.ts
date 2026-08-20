@@ -1,6 +1,11 @@
 import type { MessageEnvelope } from "../../../entities/message/model"
 import type { IMessageCache } from "../application/ports"
 
+/**
+ * In-memory LRU cache adapter — evicts oldest entry when >50 sessions.
+ * Uses Map insertion-order: get() re-inserts the key at the end,
+ * so keys().next() always yields the least-recently-used entry.
+ */
 export function createMessageCacheAdapter(): IMessageCache {
   const mem = new Map<string, MessageEnvelope[]>()
   const MAX = 50
@@ -20,8 +25,9 @@ export function createMessageCacheAdapter(): IMessageCache {
         if (first) mem.delete(first)
       }
     },
-    clear: async (sessionID: string) => {
-      mem.delete(sessionID)
+    clear: async (sessionID?: string) => {
+      if (sessionID) mem.delete(sessionID)
+      else mem.clear()
     },
   }
 }
@@ -39,8 +45,13 @@ export function createPersistentCacheAdapter(prefix = "opencode.chat.cache"): IM
     set: async (sessionID: string, messages: MessageEnvelope[]) => {
       try { localStorage.setItem(`${prefix}:${sessionID}`, JSON.stringify(messages)) } catch {}
     },
-    clear: async (sessionID: string) => {
-      try { localStorage.removeItem(`${prefix}:${sessionID}`) } catch {}
+    clear: async (sessionID?: string) => {
+      if (sessionID) {
+        try { localStorage.removeItem(`${prefix}:${sessionID}`) } catch {}
+      } else {
+        const keys = Object.keys(localStorage).filter((k) => k.startsWith(`${prefix}:`))
+        for (const k of keys) localStorage.removeItem(k)
+      }
     },
   }
 }
