@@ -30,6 +30,10 @@ pub struct ShellConfig {
     pub desktop_agent_path: String,
     /// Cuentas GitHub (repo/repo) para el feed de updates.
     pub github_repos: Vec<String>,
+    /// API key Cerebras para Quick Chat
+    pub cerebras_api_key: String,
+    pub quickchat_provider: String,
+    pub quickchat_model: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -63,6 +67,9 @@ impl Default for ShellConfig {
             labs_apps: Vec::new(),
             desktop_agent_path: String::new(),
             github_repos: vec!["sst/opencode".into()],
+            cerebras_api_key: String::new(),
+            quickchat_provider: "cerebras".into(),
+            quickchat_model: "llama-4-scout".into(),
         }
     }
 }

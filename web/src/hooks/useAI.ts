@@ -155,12 +155,17 @@ export function useAI(config: ServerConfig) {
     return { recentModels, allGroups }
   }, [filteredModelOptions, recentModels])
 
-  const loadAgents = useCallback(async (directory?: string) => {
+  const loadAgents = useCallback(async (directory?: string, attempt = 0) => {
     if (!config.host || config.port <= 0) return
     try {
       const list = await api.listAgents(config, directory)
+      if (list.length === 0 && attempt < 2) {
+        // Server puede devolver [] si aún no inicializó agentes — reintentar
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+        return loadAgents(directory, attempt + 1)
+      }
       setAgentOptions(list)
-      setAgentLoadError(null)
+      setAgentLoadError(list.length === 0 ? "No agents returned — retrying" : null)
       const saved = localStorage.getItem(STORAGE_KEYS.AGENT) || localStorage.getItem(agentStorageKey(directory)) || ""
       const primary = filterPrimary(list)
       const next = primary.find((agent) => agent.id === saved) ?? primary[0]
@@ -172,16 +177,25 @@ export function useAI(config: ServerConfig) {
         }
       }
     } catch (err) {
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+        return loadAgents(directory, attempt + 1)
+      }
+      // No limpiar agentOptions previos — evita "agente no anda" falso cuando el server sí anda pero hubo glitch de red
       setAgentLoadError((err as Error).message)
     }
   }, [config])
 
-  const loadModels = useCallback(async (directory?: string) => {
+  const loadModels = useCallback(async (directory?: string, attempt = 0) => {
     if (!config.host || config.port <= 0) return
     try {
       const list = await api.listModels(config, directory)
+      if (list.length === 0 && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+        return loadModels(directory, attempt + 1)
+      }
       setModelOptions(list)
-      setModelLoadError(null)
+      setModelLoadError(list.length === 0 ? "No models returned — retrying" : null)
       const saved = selectedModelKey ? modelFromKey(selectedModelKey) : null
       if (saved && list.some((option) => sameModel(option, saved))) {
         if (selectedVariant && !list.some((option) => sameModel(option, saved) && option.variant === selectedVariant)) {
@@ -191,10 +205,6 @@ export function useAI(config: ServerConfig) {
         modelsLoadedRef.current = true
         return
       }
-      // BUG fix: solo caer al default en la primera carga. En cargas
-      // posteriores (session switch, provider connect), preservar la
-      // selección del usuario — si no, cambiar de modelo se sobreescribe
-      // silenciosamente cuando loadModels se llama de nuevo.
       if (!modelsLoadedRef.current) {
         const fallback = list.find((option) => option.isDefault) ?? list[0]
         if (fallback) {
@@ -205,6 +215,10 @@ export function useAI(config: ServerConfig) {
       }
       modelsLoadedRef.current = true
     } catch (err) {
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+        return loadModels(directory, attempt + 1)
+      }
       setModelLoadError((err as Error).message)
     }
   }, [config, selectedModelKey, selectedVariant])

@@ -119,6 +119,16 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [showPairModal, setShowPairModal] = useState(false)
   // Sección de servidores abierta por defecto: el botón + y los servers visibles.
   const [serversOpen, setServersOpen] = useState(true)
+  const [qcKey, setQcKey] = useState("")
+  const [qcKeyLoaded, setQcKeyLoaded] = useState(false)
+  const [qcSaving, setQcSaving] = useState(false)
+  const [qcNotice, setQcNotice] = useState<string | null>(null)
+  useEffect(() => {
+    if (!isDesktop || qcKeyLoaded) return
+    import("../shell").then(({ shell }) => {
+      shell.config.get().then((c: any) => { setQcKey(c?.cerebras_api_key ?? ""); setQcKeyLoaded(true) }).catch(() => setQcKeyLoaded(true))
+    })
+  }, [isDesktop, qcKeyLoaded])
 
   // ===== Remote desktop (agente en la PC, puerto default 5901) =====
   const [desktopCfg, setDesktopCfg] = useState<DesktopConfig>(() =>
@@ -747,6 +757,32 @@ export const SettingsPanel = memo(function SettingsPanel({
           onConnect={onConnectProvider}
           onDisconnect={onDisconnectProvider}
         />
+      </SettingsSection>
+      )}
+
+      {/* Quick Chat */}
+      {isDesktop && (
+      <SettingsSection title={t('quickchat.title')}>
+        <p className="subtle">{t('quickchat.subtitle')}</p>
+        <label className="settings-field">
+          <span>{t('quickchat.settingsKey')}</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input type={showPassword ? "text" : "password"} value={qcKey} onChange={e => setQcKey(e.target.value)} placeholder={t('quickchat.settingsKeyPlaceholder')} style={{ flex: 1 }} />
+            <button type="button" className="btn-icon" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "hide" : "show"}>{showPassword ? "🙈" : "👁"}</button>
+            <button type="button" className="btn-primary" disabled={qcSaving} onClick={async () => {
+              setQcSaving(true)
+              try {
+                const { shell } = await import("../shell")
+                await shell.config.patch({ cerebras_api_key: qcKey } as any)
+                setQcNotice("Guardado")
+                setTimeout(() => setQcNotice(null), 2000)
+              } catch (e: any) { setQcNotice(e?.message ?? "Error") }
+              setQcSaving(false)
+            }}>{qcSaving ? t('settings.saving') : t('settings.save')}</button>
+          </div>
+        </label>
+        {qcNotice && <p className="subtle" style={{ color: "var(--accent)" }}>{qcNotice}</p>}
+        <p className="subtle" style={{ fontSize: 11 }}>{t('quickchat.providerCerebras')} · {t('quickchat.search')} {t('quickchat.searchOn')}/{t('quickchat.searchOff')} + cache 24h · 5 req/min</p>
       </SettingsSection>
       )}
 

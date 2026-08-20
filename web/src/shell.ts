@@ -1,9 +1,9 @@
 // Cliente de la API de la shell (/shell/*) + utilidades del explorador.
 // Solo disponible cuando la app la sirve el exe de escritorio (mismo origen).
 
-export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser" | "doc" | "design"
+export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser" | "doc" | "design" | "quickchat"
 
-export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser", "doc", "design"]
+export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser", "doc", "design", "quickchat"]
 
 export type FsEntry = { name: string; path: string; is_dir: boolean; size: number | null; modified: number | null }
 
@@ -25,6 +25,9 @@ export type ShellConfig = {
   github_repos: string[]
   desktop_agent_path: string
   labs_apps: { id: string; title: string; path: string }[]
+  cerebras_api_key: string
+  quickchat_provider: string
+  quickchat_model: string
 }
 
 let resolvedBase: string | null = null
@@ -172,6 +175,9 @@ export const shell = {
     patch: (patch: Partial<ShellConfig>) => post<{ ok: boolean; config: ShellConfig }>("/shell/config", patch),
     export: () => get<{ config: ShellConfig }>("/shell/config/export"),
     import: (config: ShellConfig) => post("/shell/config/import", { config }),
+  },
+  search: {
+    query: (q: string) => get<{ results: { title: string; url: string; snippet: string }[]; cached: boolean }>(`/shell/search?q=${encodeURIComponent(q)}`),
   },
 }
 

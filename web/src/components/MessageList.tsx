@@ -85,22 +85,37 @@ export const MessageList = memo(function MessageList({
       { root, threshold: 0 }
     )
     observer.observe(el)
-    return () => observer.disconnect()
+    const onScroll = () => {
+      const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 120
+      // Solo actualizar a true cuando realmente está cerca del final (evita
+      // que el botón aparezca al enviar si el observer aún no actualizó)
+      if (nearBottom) setIsAtBottom(true)
+    }
+    root.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      observer.disconnect()
+      root.removeEventListener("scroll", onScroll)
+    }
   }, [messages.length, loadingSessionID, selectedID])
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setIsAtBottom(true)
-    // Doble rAF: asegura que el DOM (y las imágenes/markdown) hayan hecho layout
-    // antes de medir scrollHeight. Sin esto, con 500 mensajes el primer scroll
-    // usa altura estimada y no llega al final.
-    requestAnimationFrame(() => {
+    const container = messagesRef.current
+    if (container) {
+      // Intento inmediato + rAF de respaldo (cubre markdown/imágenes que aún hacen layout)
+      container.scrollTo({ top: container.scrollHeight, behavior })
       requestAnimationFrame(() => {
-        const container = messagesRef.current
-        if (container) {
-          container.scrollTo({ top: container.scrollHeight, behavior })
-        }
+        const c = messagesRef.current
+        if (c) c.scrollTo({ top: c.scrollHeight, behavior })
       })
-    })
+    } else {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const c = messagesRef.current
+          if (c) c.scrollTo({ top: c.scrollHeight, behavior })
+        })
+      })
+    }
   }
 
   // Scroll al entrar a la sesión (móvil: cambio de vista, desktop: cambio de selectedID)

@@ -52,7 +52,7 @@ import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
 import { useQuestions } from "./hooks/useQuestions"
 import { useSSEHandler } from "./hooks/useSSEHandler"
-import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, StatsIcon, GlobeIcon, PencilIcon } from "./Icons"
+import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, StatsIcon, GlobeIcon, PencilIcon, BrainIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -95,8 +95,9 @@ const FavoritesManager = lazyRetry(() => import("./components/FavoritesManager")
 const FileBrowser = lazyRetry(() => import("./components/FileBrowser").then((m) => ({ default: m.FileBrowser })))
 const HelpPage = lazyRetry(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const FolderPicker = lazyRetry(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
+const QuickChatPanel = lazyRetry(() => import("./components/QuickChatPanel").then((m) => ({ default: m.QuickChatPanel })))
 
-type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config"
+type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat"
 
 type DesktopLayout = {
   cols: number
@@ -155,7 +156,7 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
       const total = layout.cols * layout.rows
       const kinds: Array<ShellPanelKind | "editor"> =
         Array.isArray(layout.panelKinds) && layout.panelKinds.length === total
-          ? layout.panelKinds.map((k: any) => (k === "session" || k === "editor" || k === "terminal" || k === "explorer" || k === "kanban" || k === "stats" || k === "config" || k === "browser" || k === "doc" ? k : "session"))
+          ? layout.panelKinds.map((k: any) => (k === "session" || k === "editor" || k === "terminal" || k === "explorer" || k === "kanban" || k === "stats" || k === "config" || k === "browser" || k === "doc" || k === "quickchat" ? k : "session"))
           : new Array(total).fill("session")
       // Migrate old flat sessions to tab stacks
       const tabStacks: Array<Array<string>> = layout.sessions.map((s: any) => {
@@ -370,6 +371,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const isLight = document.documentElement.getAttribute("data-theme") === "light"
     setTheme(isLight ? "dark" : "light")
   }, [setTheme])
+  const [quickChatKey, setQuickChatKey] = useState("")
+  useEffect(() => {
+    // fetch cerebras key from shell config (if desktop)
+    import("./shell").then(({ shell }) => {
+      shell.config.get().then(c => setQuickChatKey((c as any)?.cerebras_api_key ?? "")).catch(() => {})
+    })
+  }, [])
   const [localRevertID, setLocalRevertID] = useState<string | null>(null)
 
   const [view, setView] = useState<ViewType>(() => config.host && config.port > 0 ? "sessions" : "settings")
@@ -1173,17 +1181,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const handleAbort = useCallback(async () => {    if (!selectedSession) return
     stopGenerationRef.current = true
     setAwaitingAssistantReply(false)
+    // Optimista: pasar a idle inmediato en UI
+    setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "idle" as const } : s))
     const sid = selectedSession.id
     const dir = selectedSession.directory
-    try {
-      await Promise.race([
-        abortSession(sid, dir),
-        new Promise((resolve) => setTimeout(resolve, 4500))
-      ])
-    } catch { /* ignore */ }
-    await loadSelected(sid, dir).catch(() => undefined)
-    await settleSession(sid, dir).catch(() => undefined)
-    setTimeout(() => { stopGenerationRef.current = false }, 800)
+    abortSession(sid, dir).catch(() => {})
+    // Refrescos en background, sin bloquear UI
+    loadSelected(sid, dir).catch(() => undefined)
+    settleSession(sid, dir).catch(() => undefined)
+    setTimeout(() => { stopGenerationRef.current = false }, 400)
   }, [selectedSession, abortSession, loadSelected, settleSession])
 
   const handleCreateSession = useCallback(async (directory?: string) => {
@@ -2809,6 +2815,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <button type="button" className={`activity-btn${activity === "kanban" ? " active" : ""}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
               onClick={() => { if (activity === "kanban") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("kanban"); setSidebarCollapsed(false) } }}>
               <LayersIcon size={18} /></button>
+            <button type="button" className={`activity-btn${activity === "quickchat" ? " active" : ""}`} title={t('quickchat.title')} aria-label={t('quickchat.title')}
+              onClick={() => { if (activity === "quickchat") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("quickchat"); setSidebarCollapsed(false) } }}>
+              <BrainIcon size={18} /></button>
             <button type="button" className={`activity-btn${(tabStacks?.some((s) => s.includes("__design__")) || desktopLayout.sessions.includes("__design__") || desktopLayout.panelKinds.includes("design" as any) ? " active" : "")}`} title="Open Design" aria-label="Open Design"
               onClick={handleOpenDesign}>
               <PencilIcon size={18} /></button>
@@ -2848,6 +2857,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     : activity === "explorer" ? t('shell.kindExplorer')
                     : activity === "stats" ? t('shell.kindStats')
                     : activity === "kanban" ? t('shell.kindKanban')
+                    : activity === "quickchat" ? t('quickchat.title')
                     : t('shell.kindConfig')}
                 </span>
                 <span className="desktop-sidebar-actions">
@@ -2859,6 +2869,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                   : activity === "stats" ? <StatsPanel />
                   : activity === "kanban" ? <KanbanPanel />
+                  : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} config={config} />
                   : <ConfigPanel />}
               </div>
               <div className="desktop-sidebar-resizer" onPointerDown={startSidebarResize} title={t('desktop.resizeSidebar')} />
@@ -3136,6 +3147,21 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       initialUrl={browserUrl}
                       onClose={() => closePanel(i)}
                     />
+                  </div>
+                )
+              }
+              if (kind === "quickchat") {
+                return (
+                  <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
+                    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
+                        <span>{t('quickchat.title')}</span>
+                        <button className="btn-icon compact" onClick={() => closePanel(i)} aria-label={t('panel.close')}>×</button>
+                      </div>
+                      <div style={{ flex: 1, minHeight: 0 }}>
+                        <QuickChatPanel cerebrasKey={quickChatKey} config={config} />
+                      </div>
+                    </div>
                   </div>
                 )
               }

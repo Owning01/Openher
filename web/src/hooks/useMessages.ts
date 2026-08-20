@@ -280,12 +280,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       const seen = new Set<string>()
       let changed = prev.some((m) => m.info.sessionID !== sessionID)
       const msgMap = new Map(safe.map((m) => [m.info.id, m]))
-      // Ventana del fetch (ids msg_<hex> lexicográficos): sirve para distinguir
-      // el historial viejo (más allá del limit) del turno actual.
-      const hasRemote = safe.length > 0
-      const sortedIDs = hasRemote ? safe.map((m) => m.info.id).sort() : []
-      const firstRemoteID = sortedIDs[0] ?? ""
-      const lastRemoteID = sortedIDs[sortedIDs.length - 1] ?? ""
       const merged: MessageEnvelope[] = []
       for (const m of prev) {
         if (m.info.sessionID !== sessionID) continue
@@ -309,19 +303,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           msgMap.delete(m.info.id)
           if (updated.info.time.completed !== m.info.time.completed || updated.info.role !== m.info.role) changed = true
         } else {
-          // El server ya no devuelve este mensaje. Conservar SOLO:
-          // - el historial más viejo que la ventana del fetch (limit acotado);
-          // - el turno en curso streamed por SSE (incompleto / más nuevo que
-          //   lo último remoto — el próximo fetch lo confirma).
-          // Los completos DENTRO de la ventana que el server dejó de devolver
-          // fueron revertidos/compactados por el server: descartarlos. Antes
-          // se conservaban para siempre y reaparecían tras revert + envío
-          // (cuando el server resuelve el revert, el CSS revert-hidden se apaga).
-          const inWindow = m.info.id >= firstRemoteID && m.info.id <= lastRemoteID
-          if (hasRemote && inWindow && m.info.time?.completed) {
-            changed = true
-            continue
-          }
+          // Conservar todo lo local no devuelto por el server: el fetch acotado
+          // (limit 500) puede no incluir mensajes aún no persistidos; descartar
+          // solo si el server confirma revert/compact via session.revert. No cortar
+          // mensajes completos dentro de la ventana por timing.
           merged.push(m)
         }
       }
@@ -398,15 +383,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
   const abortSession = useCallback(async (sessionID: string, directory: string) => {
     setAwaitingAssistantReply(false)
-    try {
-      await Promise.race([
-        api.abort(config, sessionID, directory),
-        new Promise((resolve) => setTimeout(resolve, 4000))
-      ])
-    } catch (err) {
-      setRuntimeError((err as Error).message)
-    }
     completionShouldPlayRef.current = false
+    // Fire-and-forget: no await race, UI ya está en idle
+    api.abort(config, sessionID, directory).catch(() => {})
   }, [config])
 
   const isUndoingRef = useRef(false)
@@ -550,7 +529,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
             changed = true
             return { ...p, text, type: keepType }
           }
-          if (p.text?.endsWith(text)) return p
+          // Sin dedupe por suffix: deltas reales pueden repetir sufijos y se cortaba el stream
           changed = true
           return { ...p, text: (p.text ?? "") + text, type: keepType }
         })

@@ -52,6 +52,9 @@ function openDB(): Promise<IDBDatabase> {
     if (!db.objectStoreNames.contains(DB_STORES.messages)) {
       db.createObjectStore(DB_STORES.messages, { keyPath: "sessionID" })
     }
+    if (!(DB_STORES as any).quickchat || !db.objectStoreNames.contains((DB_STORES as any).quickchat)) {
+      if (!db.objectStoreNames.contains("quickchat")) db.createObjectStore("quickchat", { keyPath: "id" })
+    }
   }
 
   return openDatabase(DB_NAME, DB_VERSION, upgrade).then((db) => {

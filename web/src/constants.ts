@@ -18,7 +18,11 @@ export const STORAGE_KEYS = {
   RECENT_DISMISS: "opencode.mobile.recentDismiss",
   MODEL_VARIANT: "opencode.mobile.modelVariant",
   SERVERS: "opencode.mobile.servers",
-  STATS_PORT: "opencode.remote.statsPort"
+  STATS_PORT: "opencode.remote.statsPort",
+  QUICKCHAT_PROVIDER: "opencode.mobile.quickchat.provider",
+  QUICKCHAT_MODEL: "opencode.mobile.quickchat.model",
+  QUICKCHAT_SEARCH: "opencode.mobile.quickchat.search",
+  QUICKCHAT: "opencode.mobile.quickchat.messages"
 }
 
 export const DEFAULT_STATS_PORT = 8765
@@ -34,7 +38,7 @@ export const DEFAULT_POLL_INTERVALS: Record<string, number> = {
 export const SSE_CONNECT_TIMEOUT_MS = 8_000
 export const SSE_RECONNECT_BASE_MS = 1_000
 export const SSE_RECONNECT_MAX_MS = 30_000
-export const SSE_HEARTBEAT_TIMEOUT_MS = 35_000
+export const SSE_HEARTBEAT_TIMEOUT_MS = 70_000
 export const POLL_BACKOFF_BASE_MS = 1_000
 export const POLL_BACKOFF_MAX_MS = 60_000
 export const POLL_BACKOFF_JITTER = 0.3
@@ -42,5 +46,9 @@ export const POLL_MAX_RETRIES = 5
 export const QUESTION_POLL_INTERVAL_MS = 15_000
 
 export const DB_NAME = "opencode-mobile"
-export const DB_VERSION = 2
-export const DB_STORES = { sessions: "sessions", messages: "messages" } as const
+export const DB_VERSION = 3
+export const DB_STORES = { sessions: "sessions", messages: "messages", quickchat: "quickchat" } as const
+export const QUICKCHAT_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+export const QUICKCHAT_MAX_TOKENS = 500
+export const CEREBRAS_RPM = 5
+export const CEREBRAS_TPM = 90_000

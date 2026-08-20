@@ -403,7 +403,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
       if (typeof cmd === "string" && cmd.trim()) {
         const args = Array.isArray(obj.args) ? obj.args.join(" ") : ""
         const full = args ? `${cmd} ${args}` : cmd
-        return full.trim().slice(0, 80)
+        return full.trim()
       }
     }
     return null
@@ -516,9 +516,44 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   const title = toolName ? shortToolLabel(toolName) : label
   const body = (isDone && outputText) ? outputText : inputText
 
-  // Modo compacto (toggle "tools compactos" o dataMode ultra/miser): una sola
-  // línea con icono + nombre + estado, sin botón de expandir.
+  // Modo compacto: file tools siguen mostrando archivo + diff stat y son expandibles
   if (compact) {
+    if (isFileTool && fileDiff) {
+      return (
+        <div className={`tool-part tool-${toolName}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
+          <button type="button" className="tool-part-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+            <span className="tool-part-icon">{headerIcon}</span>
+            <span className="tool-part-label">{fileActionLabel}</span>
+            <DiffStatBadge add={fileDiff.add} del={fileDiff.del} />
+            {statusIcon}
+            <span className="tool-part-chevron">{expanded ? "▾" : "▸"}</span>
+          </button>
+          {expanded && fileDiff.patch ? (
+            <div className="tool-part-body">
+              <DiffView patch={fileDiff.patch} />
+            </div>
+          ) : null}
+        </div>
+      )
+    }
+    // No truncar comando bash en compacto — mostrar completo y dejar expandir
+    if (isShellTool) {
+      return (
+        <div className={`tool-part tool-${toolName ?? "unknown"}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
+          <button type="button" className="tool-part-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+            <span className="tool-part-icon">{headerIcon}</span>
+            <span className="tool-part-label">{title}{bashCommand ? <span className="tool-part-arg"> · {bashCommand}</span> : null}</span>
+            {statusIcon}
+            <span className="tool-part-chevron">{expanded ? "▾" : "▸"}</span>
+          </button>
+          {expanded && body ? (
+            <div className="tool-part-body">
+              <pre className="tool-part-pre">{previewLines(body, 60)}</pre>
+            </div>
+          ) : null}
+        </div>
+      )
+    }
     return (
       <div className={`tool-part tool-part-minimal tool-${toolName ?? "unknown"}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
         <div className="tool-part-toggle" style={{ cursor: "default" }}>

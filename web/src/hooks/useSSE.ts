@@ -158,10 +158,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
             currentEvent = {}
           }
         }
-        if (currentEvent.type) {
-          touch()
-          dispatch(currentEvent)
-        }
+        // No despachar evento incompleto al final del chunk: queda en buffer hasta próximo \n\n
       }
 
       const pump = async () => {
