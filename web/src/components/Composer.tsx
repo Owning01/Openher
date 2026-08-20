@@ -143,26 +143,31 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const lastExternalRef = useRef(value)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
-  const composerOnChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Sync desde padre: solo si es un cambio externo (clear, snippet, historial). Evita revertir lo tipeado.
   useEffect(() => {
     if (value !== lastExternalRef.current) {
+      // value=="" es clear tras send → siempre sincronizar
+      if (value === "") {
+        lastExternalRef.current = value
+        setLocalValue(value)
+        return
+      }
+      // Si el usuario tipea por delante del value stale, no revertir
+      const typedAhead = localValue.length > value.length && localValue.startsWith(value)
+      if (typedAhead) {
+        // Mantener lo tipeado, pero actualizar ref para no loop; el debounce de App lo alcanzará
+        lastExternalRef.current = value
+        return
+      }
       lastExternalRef.current = value
       setLocalValue(value)
     }
-  }, [value])
-  useEffect(() => () => { if (composerOnChangeTimerRef.current) clearTimeout(composerOnChangeTimerRef.current) }, [])
+  }, [value, localValue]) // localValue necesario para typedAhead check
   const handleChange = useCallback((newValue: string) => {
-    const prevLen = lastExternalRef.current.length
     setLocalValue(newValue)
     lastExternalRef.current = newValue
-    if (composerOnChangeTimerRef.current) clearTimeout(composerOnChangeTimerRef.current)
-    // flush inmediato si es comando/borrado/paste largo, si no debounce leve (80ms) para no bloquear typing
-    const isCmd = newValue.startsWith("/") || newValue === "" || Math.abs(newValue.length - prevLen) > 20
-    if (isCmd) {
-      onChangeRef.current(newValue)
-    } else {
-      composerOnChangeTimerRef.current = setTimeout(() => onChangeRef.current(newValue), 80)
-    }
+    // Sin debounce local: delegar debounce a App (350ms). Evita doble timer que deja texto trunco al enviar rápido.
+    onChangeRef.current(newValue)
   }, [])
 
   const promptHistoryRef = useRef<string[]>(loadHistory())
@@ -423,7 +428,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     setImages([])
     setLocalValue("")
     lastExternalRef.current = ""
-    if (composerOnChangeTimerRef.current) clearTimeout(composerOnChangeTimerRef.current)
     onChangeRef.current("")
     resizeTextarea()
     const ok = await onSend(imgs, opts, textToSend)

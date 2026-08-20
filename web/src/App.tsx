@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, useCallback, useRef, memo, useTransition } from "react"
+import { lazy, Suspense, useEffect, useMemo, useState, useCallback, useRef, memo } from "react"
 import { api } from "./api"
 import { I18nProvider, useT, normalizeLanguage } from "./i18n-context"
 import { languageOptions } from "./i18n"
@@ -437,7 +437,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setMessages, undoMessage, redoMessage, compactSession,
     applyDelta, applyPart, compacting, setCompacting, messages
   } = useMessages(config)
-  const [, startTransition] = useTransition()
   const composerRef = useRef(composer)
   useEffect(() => { composerRef.current = composer }, [composer])
   const composerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -446,11 +445,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     composerRef.current = value
     if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
     if (value === "" || Math.abs(value.length - prev.length) > 12 || value.startsWith("/")) {
-      startTransition(() => setComposer(value))
+      setComposer(value)
       return
     }
     composerDebounceRef.current = setTimeout(() => {
-      startTransition(() => setComposer(value))
+      setComposer(value)
     }, 350)
   }, [setComposer])
   useEffect(() => () => {
@@ -1093,6 +1092,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string) => {
     if (!selectedSession) return
+    // Flush debounce pendiente: evita que un timer stale pise el clear y deje el prompt cortado
+    if (composerDebounceRef.current) {
+      clearTimeout(composerDebounceRef.current)
+      composerDebounceRef.current = null
+    }
     const composerText = text ?? composerRef.current
     if (connectionState === "offline") {
       queueAction({ type: "prompt", sessionID: selectedSession.id, directory: selectedSession.directory, payload: composerText })
