@@ -1170,7 +1170,7 @@ export const api = {
     }
     return request<boolean>(config, withDirectory("/file", directory), {
       method: "POST",
-      body: { path: normalizeSlashes(path), content }
+      body: { path: toServerRelative(path, directory), content }
     })
   },
 

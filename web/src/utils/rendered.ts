@@ -1,5 +1,5 @@
 import type { MessageEnvelope, RenderedMessage, DataMode, FileDiff } from "../types"
-import { isImagePart } from "../utils"
+import { isImagePart } from "../utils.ts"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
