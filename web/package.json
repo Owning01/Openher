@@ -16,6 +16,8 @@
     "test:ui": "node src/ui-regression.test.mjs",
     "test:settings": "node src/settings-regression.test.mjs",
     "test:model": "node src/model-regression.test.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:rendered": "node --experimental-strip-types src/rendered.test.mjs",
     "check:contrast": "node --experimental-strip-types src/theme-contrast.mjs",
     "benchmark": "node benchmarks/runner.mjs",
@@ -50,12 +52,17 @@
   "devDependencies": {
     "@babel/core": "^8.0.1",
     "@rolldown/plugin-babel": "^0.2.3",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.1",
+    "@testing-library/user-event": "14.6.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
     "babel-plugin-react-compiler": "^1.0.0",
+    "jsdom": "27.3.0",
     "sharp": "^0.35.3",
     "typescript": "7.0.2",
-    "vite": "^8.2.1"
+    "vite": "^8.2.1",
+    "vitest": "4.1.8"
   }
 }
