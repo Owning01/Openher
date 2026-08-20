@@ -147,6 +147,39 @@ en `G:\Proyectos\opencode-stats`.
 7. **Compartir APK**: `tmpfiles.org` via `POST /api/v1/upload` (multipart, campo
    `file`); descarga directa en `https://tmpfiles.org/dl/<id>/<nombre>`.
 
+## Arquitectura FSD + Hexagonal (Refactor 2026-01-27)
+
+```
+web/src/
+├── app/                      # Composition Root (wiring)
+├── pages/                    # Thin pages
+├── widgets/                  # Multi-feature orchestration
+├── features/                 # Vertical slices
+│   ├── chat/ (domain, application/ports+usecases, infrastructure/adapters, presentation)
+│   ├── manage-sessions/
+│   ├── edit-file/
+│   ├── run-terminal/
+│   └── quick-chat/
+├── entities/                 # Pure domain (message, session, agent, file, config, ui)
+└── shared/                   # Agnostic primitives
+    ├── api/ (client, version, mappers)
+    ├── sse/ (client, handler)
+    ├── storage/
+    ├── ui/
+    ├── lib/
+    └── config/
+types.ts = BARREL -> export * from "./entities/*" (no añadir tipos aquí)
+desktop-app/src/ domain/ + infrastructure/http/*_router.rs
+```
+
+**Reglas (VIOLACIÓN = RECHAZO PR)**
+1. Flujo: `app -> pages -> widgets -> features -> entities -> shared` (unidireccional, entities no importa React/fetch)
+2. Ubicación: UI genérico -> `shared/ui`, modelo puro -> `entities/<domain>/model.ts`, caso uso -> `features/<kebab>/`, orquesta -> `widgets/`
+3. Infra aislada: PROHIBIDO `fetch/CapacitorHttp` en componentes/hooks -> usar `ports.ts` + `infrastructure/adapter.ts` o `shared/api`
+4. Tamaño: ningún archivo >350 líneas, cada feature exporta sus tipos
+5. Rust: PROHIBIDO `if path == "/shell/..."` en `api.rs` -> `infrastructure/http/*_router.rs`
+6. Tests: todo `domain/application` puro debe tener `.test.ts` (>=15 tests), `pnpm exec vitest run` + `tsc --noEmit` + `cargo check` verdes antes de commit
+
 ## Convenciones
 
 - named exports, `import type` para tipos, React 19 + Vite + TS.
