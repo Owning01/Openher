@@ -2137,16 +2137,32 @@ export const ConfigPanel = memo(function ConfigPanel() {
 
 // ============================================================== Open Design (desktop only, nativo — sin localhost visible)
 export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUrl?: string }) {
-  // URL interna oculta — el usuario no ve localhost, es como otra sección de la app
-  const [url] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "http://localhost:3000")
+  const [url, setUrl] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "http://localhost:3000")
   const [iframeKey, setIframeKey] = useState(0)
   const [status, setStatus] = useState<"loading" | "ready" | "offline">("loading")
   useEffect(() => {
     let cancelled = false
     setStatus("loading")
-    // Intento silencioso contra el daemon/Next; si no responde, mostramos estado offline nativo
-    fetch(url, { mode: "no-cors", cache: "no-store" }).then(() => { if (!cancelled) setStatus("ready") }).catch(() => { if (!cancelled) setStatus("offline") })
-    const t = window.setTimeout(() => { if (!cancelled) setStatus((s) => (s === "loading" ? "offline" : s)) }, 2000)
+    // Consultar al shell el estado real del daemon (puerto dinámico, si está corriendo)
+    shell.design.status().then((r: any) => {
+      if (cancelled) return
+      const discovered = r?.url as string | undefined
+      const running = !!r?.running
+      if (discovered && discovered !== url) {
+        setUrl(discovered)
+        try { localStorage.setItem("od.web.url", discovered) } catch {}
+      }
+      if (running && discovered) {
+        setStatus("ready")
+        return
+      }
+      // fallback: probar fetch directo (por si el endpoint del shell no está disponible)
+      fetch(discovered || url, { mode: "no-cors", cache: "no-store" }).then(() => { if (!cancelled) setStatus("ready") }).catch(() => { if (!cancelled) setStatus("offline") })
+    }).catch(() => {
+      if (cancelled) return
+      fetch(url, { mode: "no-cors", cache: "no-store" }).then(() => { if (!cancelled) setStatus("ready") }).catch(() => { if (!cancelled) setStatus("offline") })
+    })
+    const t = window.setTimeout(() => { if (!cancelled) setStatus((s) => (s === "loading" ? "offline" : s)) }, 3000)
     return () => { cancelled = true; window.clearTimeout(t) }
   }, [url, iframeKey])
   const reload = () => setIframeKey((k) => k + 1)

@@ -2828,6 +2828,47 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     addPanel("design")
   }, [isDesktop, desktopLayout, activePanel, tabStacks, addPanel, setTabStacks, setDesktopLayout])
 
+  const handleOpenKanban = useCallback(() => {
+    if (!isDesktop) return
+    const existingPanelIdx = desktopLayout.panelKinds.findIndex((k) => k === "kanban")
+    if (existingPanelIdx >= 0) {
+      setActivePanel(existingPanelIdx)
+      return
+    }
+    const kanbanTabPanelIdx = tabStacks?.findIndex((stack) => stack.includes("__kanban__"))
+    if (kanbanTabPanelIdx !== undefined && kanbanTabPanelIdx >= 0) {
+      setActivePanel(kanbanTabPanelIdx)
+      setDesktopLayout((prev) => {
+        const sessions = [...prev.sessions]
+        sessions[kanbanTabPanelIdx] = "__kanban__"
+        const panelKinds = [...prev.panelKinds] as Array<ShellPanelKind | "editor">
+        panelKinds[kanbanTabPanelIdx] = "session"
+        return { ...prev, sessions, panelKinds }
+      })
+      return
+    }
+    const hasSession = desktopLayout.sessions.some(Boolean)
+    if (hasSession) {
+      const targetIdx = Math.min(activePanel, desktopLayout.cols * desktopLayout.rows - 1)
+      setTabStacks((prev) => {
+        const next = (prev ?? []).map((s) => [...s])
+        while (next.length <= targetIdx) next.push([])
+        if (!next[targetIdx].includes("__kanban__")) next[targetIdx] = [...next[targetIdx], "__kanban__"]
+        return next
+      })
+      setDesktopLayout((prev) => {
+        const sessions = [...prev.sessions]
+        sessions[targetIdx] = "__kanban__"
+        const panelKinds = [...prev.panelKinds] as Array<ShellPanelKind | "editor">
+        panelKinds[targetIdx] = "session"
+        return { ...prev, sessions, panelKinds }
+      })
+      setActivePanel(targetIdx)
+      return
+    }
+    addPanel("kanban")
+  }, [isDesktop, desktopLayout, activePanel, tabStacks, addPanel, setTabStacks, setDesktopLayout])
+
   const detailView = <ChatView {...baseChatProps} composer={composer} onComposerChange={handleComposerChange} onOpenBrowser={handleOpenBrowser} />
 
   return (
@@ -2865,8 +2906,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 handleOpenBrowser("http://localhost:5173")
               }}>
               <GlobeIcon size={18} /></button>
-            <button type="button" className={`activity-btn${activity === "kanban" ? " active" : ""}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
-              onClick={() => { if (activity === "kanban") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("kanban"); setSidebarCollapsed(false) } }}>
+            <button type="button" className={`activity-btn${(tabStacks?.some((s) => s.includes("__kanban__")) || desktopLayout.sessions.includes("__kanban__") || desktopLayout.panelKinds.includes("kanban" as any) ? " active" : "")}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
+              onClick={handleOpenKanban}>
               <LayersIcon size={18} /></button>
             <button type="button" className={`activity-btn${activity === "quickchat" ? " active" : ""}`} title={t('quickchat.title')} aria-label={t('quickchat.title')}
               onClick={() => { if (activity === "quickchat") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("quickchat"); setSidebarCollapsed(false) } }}>
@@ -2909,7 +2950,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   {activity === "sessions" ? "Opencode"
                     : activity === "explorer" ? t('shell.kindExplorer')
                     : activity === "stats" ? t('shell.kindStats')
-                    : activity === "kanban" ? t('shell.kindKanban')
                     : activity === "quickchat" ? t('quickchat.title')
                     : t('shell.kindConfig')}
                 </span>
@@ -2921,7 +2961,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 {activity === "sessions" ? sessionsView
                   : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                   : activity === "stats" ? <StatsPanel />
-                  : activity === "kanban" ? <KanbanPanel />
                   : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
                   : <ConfigPanel />}
               </div>
@@ -3075,6 +3114,50 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       </div>
                     )
                   }
+                  if (sid === "__kanban__") {
+                    const stack = tabStacks?.[i] ?? ["__kanban__"]
+                    const allWithKanban = [...sessions, { id: "__kanban__", title: "Kanban", directory: "" } as any]
+                    return (
+                      <div key={panelId} style={placement} className="desktop-cell">
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                          <TabBar tabs={stack} activeIndex={stack.indexOf("__kanban__")} sessions={allWithKanban} busySessionIds={busySessions} onSwitch={(idx) => {
+                            const tabId = stack[idx]
+                            if (tabId === "__kanban__") {
+                              setDesktopLayout((prev) => {
+                                const sessions = [...prev.sessions]
+                                sessions[i] = "__kanban__"
+                                return { ...prev, sessions }
+                              })
+                              setActivePanel(i)
+                            } else {
+                              switchTab(i, idx)
+                            }
+                          }} onClose={(idx) => {
+                            const tabId = stack[idx]
+                            if (tabId === "__kanban__") {
+                              setTabStacks((prev) => {
+                                const next = (prev ?? []).map((s) => [...s])
+                                if (next[i]) next[i] = next[i].filter((id) => id !== "__kanban__")
+                                return next
+                              })
+                              const nextStack = (tabStacks?.[i] ?? []).filter((id) => id !== "__kanban__")
+                              const nextSid = nextStack[0] ?? null
+                              setDesktopLayout((prev) => {
+                                const sessions = [...prev.sessions]
+                                sessions[i] = nextSid
+                                return { ...prev, sessions }
+                              })
+                            } else {
+                              removeTab(i, idx)
+                            }
+                          }} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} />
+                          <div style={{ flex: 1, minHeight: 0 }}>
+                            <KanbanPanel />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
                   // Si el tab activo es un terminal (compartido en el mismo tabset), renderizar TerminalPanel
                 if (sid && sid.startsWith("terminal")) {
                   const termCwd = activeDir || activeSessionDir || selectedSession?.directory || sessions[0]?.directory
@@ -3139,15 +3222,21 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onOpenConnect={() => setShowConnectSheet(true)}
                       onOpenBrowser={handleOpenBrowser}
                         tabStack={tabStacks?.[i] ?? (session ? [session.id] : [])}
-                        allSessions={(tabStacks?.[i] ?? (session ? [session.id] : [])).includes("__design__") ? [...sessions, { id: "__design__", title: "Open Design", directory: "" } as any] : sessions}
+                        allSessions={(() => {
+                          const stack = tabStacks?.[i] ?? (session ? [session.id] : [])
+                          const extra: any[] = []
+                          if (stack.includes("__design__")) extra.push({ id: "__design__", title: "Open Design", directory: "" })
+                          if (stack.includes("__kanban__")) extra.push({ id: "__kanban__", title: "Kanban", directory: "" })
+                          return extra.length ? [...sessions, ...extra] : sessions
+                        })()}
                         busySessionIds={busySessions}
                         onTabSwitch={(panelIdx, tabIdx) => {
                           const stack = tabStacks?.[panelIdx] ?? []
                           const tabId = stack[tabIdx] ?? (tabIdx === 0 && session ? session.id : undefined)
-                          if (tabId === "__design__") {
+                          if (tabId === "__design__" || tabId === "__kanban__") {
                             setDesktopLayout((prev) => {
                               const sessions = [...prev.sessions]
-                              sessions[panelIdx] = "__design__"
+                              sessions[panelIdx] = tabId
                               return { ...prev, sessions }
                             })
                             setActivePanel(panelIdx)
@@ -3158,10 +3247,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                         onTabClose={(panelIdx, tabIdx) => {
                           const stack = tabStacks?.[panelIdx] ?? []
                           const tabId = stack[tabIdx]
-                          if (tabId === "__design__") {
+                          if (tabId === "__design__" || tabId === "__kanban__") {
                             setTabStacks((prev) => {
                               const next = (prev ?? []).map((s) => [...s])
-                              if (next[panelIdx]) next[panelIdx] = next[panelIdx].filter((id) => id !== "__design__")
+                              if (next[panelIdx]) next[panelIdx] = next[panelIdx].filter((id) => id !== tabId)
                               return next
                             })
                           } else {

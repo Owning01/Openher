@@ -95,7 +95,8 @@ export function QuickChatPanel({ cerebrasKey, groqKey = "", goKey = "", config, 
         await shell.config.patch(patch as any)
       }
       setShowKeyInput(false)
-      window.location.reload()
+      // sin reload: el App refresca providers/config por polling; forzar micro-delay para que se refleje
+      window.setTimeout(() => { try { window.dispatchEvent(new CustomEvent("quickchat:key-saved")) } catch {} }, 100)
     } catch {}
   }
 
