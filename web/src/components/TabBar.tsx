@@ -19,6 +19,8 @@ export const TabBar = memo(function TabBar({
   onClose,
   onAdd,
   onMoveTab,
+  panelIndex,
+  onDropTerminal,
 }: {
   tabs: Array<string>
   activeIndex: number
@@ -28,6 +30,8 @@ export const TabBar = memo(function TabBar({
   onClose: (index: number) => void
   onAdd: () => void
   onMoveTab: (fromIndex: number, toIndex: number) => void
+  panelIndex?: number
+  onDropTerminal?: (panelIndex: number, targetIndex?: number) => void
 }) {
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
@@ -47,6 +51,7 @@ export const TabBar = memo(function TabBar({
     if (id === "kanban") return "📋 Kanban"
     if (id === "docs") return "📖 Docs"
     if (id === "labs") return "🧪 Labs"
+    if (id === "__design__") return "◈ Open Design"
 
     const session = sessions.find((s) => s.id === id)
     if (session?.title && session.title !== "New Session") return session.title
@@ -75,6 +80,16 @@ export const TabBar = memo(function TabBar({
 
   const handleDrop = useCallback((e: React.DragEvent, toIndex: number) => {
     e.preventDefault()
+    // Si es un drop externo de terminal, crear terminal en este tabset
+    const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain") || ""
+    if (path.includes("kind:terminal") || path === "kind:terminal") {
+      if (panelIndex !== undefined && onDropTerminal) {
+        onDropTerminal(panelIndex, toIndex)
+      }
+      setDragIdx(null)
+      setDragOverIdx(null)
+      return
+    }
     const tabIdx = e.dataTransfer.getData("application/x-opencode-tab-index")
     const fromIndex = tabIdx ? parseInt(tabIdx, 10) : NaN
     if (!isNaN(fromIndex) && fromIndex !== toIndex) {
@@ -82,12 +97,27 @@ export const TabBar = memo(function TabBar({
     }
     setDragIdx(null)
     setDragOverIdx(null)
-  }, [onMoveTab])
+  }, [onMoveTab, panelIndex, onDropTerminal])
 
   const handleDragEnd = useCallback(() => {
     setDragIdx(null)
     setDragOverIdx(null)
   }, [])
+
+  const handleBarDragOver = useCallback((e: React.DragEvent) => {
+    // Solo permitir drop externo de terminal; el reorden interno se maneja por tab
+    if (e.dataTransfer.types.includes("application/x-opencode-tab-index")) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "copy"
+  }, [])
+
+  const handleBarDrop = useCallback((e: React.DragEvent) => {
+    const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain") || ""
+    if ((path.includes("kind:terminal") || path === "kind:terminal") && panelIndex !== undefined && onDropTerminal) {
+      e.preventDefault()
+      onDropTerminal(panelIndex, tabs.length)
+    }
+  }, [panelIndex, onDropTerminal, tabs.length])
 
   return (
     <div
@@ -98,6 +128,8 @@ export const TabBar = memo(function TabBar({
           e.currentTarget.scrollLeft += e.deltaY
         }
       }}
+      onDragOver={handleBarDragOver}
+      onDrop={handleBarDrop}
     >
       {tabs.map((id, i) => {
         const busy = busySessionIds?.has(id)

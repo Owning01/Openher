@@ -47,6 +47,7 @@ type Props = {
   onTabClose?: (panelIndex: number, tabIndex: number) => void
   onTabAdd?: (panelIndex: number) => void
   onTabMove?: (panelIndex: number, fromIndex: number, toIndex: number) => void
+  onDropTerminal?: (panelIndex: number, targetIndex?: number) => void
 }
 
 export const SessionChatPanel = memo(function SessionChatPanel({
@@ -55,7 +56,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
   onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels,
   onOpenFile, onOpenConnect, onOpenBrowser,
-  tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove
+  tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove, onDropTerminal
 }: Props) {
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
   const composerRef = useRef(msgs.composer)
@@ -412,13 +413,15 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       {(tabStack && tabStack.length > 0) ? (
         <TabBar
           tabs={tabStack}
-          activeIndex={tabStack.indexOf(session.id)}
+          activeIndex={Math.max(0, tabStack.indexOf(session.id) >= 0 ? tabStack.indexOf(session.id) : tabStack.findIndex((id) => id.startsWith("terminal")) >= 0 ? tabStack.findIndex((id) => id.startsWith("terminal")) : 0)}
           sessions={allSessions ?? []}
           busySessionIds={busySessionIds}
           onSwitch={(i) => onTabSwitch?.(panelIndex, i)}
           onClose={(i) => onTabClose?.(panelIndex, i)}
           onAdd={() => onTabAdd?.(panelIndex)}
           onMoveTab={(from, to) => onTabMove?.(panelIndex, from, to)}
+          panelIndex={panelIndex}
+          onDropTerminal={onDropTerminal}
         />
       ) : null}
       {showStats && (

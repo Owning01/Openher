@@ -2124,28 +2124,45 @@ export const ConfigPanel = memo(function ConfigPanel() {
   )
 })
 
-// ============================================================== Open Design (desktop only, embebido)
+// ============================================================== Open Design (desktop only, nativo — sin localhost visible)
 export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUrl?: string }) {
-  const [url, setUrl] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "http://localhost:3000")
-  const [input, setInput] = useState(url)
+  // URL interna oculta — el usuario no ve localhost, es como otra sección de la app
+  const [url] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "http://localhost:3000")
   const [iframeKey, setIframeKey] = useState(0)
-  const save = () => {
-    const next = input.trim() || "http://localhost:3000"
-    localStorage.setItem("od.web.url", next)
-    setUrl(next)
-    setIframeKey((k) => k + 1)
-  }
+  const [status, setStatus] = useState<"loading" | "ready" | "offline">("loading")
+  useEffect(() => {
+    let cancelled = false
+    setStatus("loading")
+    // Intento silencioso contra el daemon/Next; si no responde, mostramos estado offline nativo
+    fetch(url, { mode: "no-cors", cache: "no-store" }).then(() => { if (!cancelled) setStatus("ready") }).catch(() => { if (!cancelled) setStatus("offline") })
+    const t = window.setTimeout(() => { if (!cancelled) setStatus((s) => (s === "loading" ? "offline" : s)) }, 2000)
+    return () => { cancelled = true; window.clearTimeout(t) }
+  }, [url, iframeKey])
+  const reload = () => setIframeKey((k) => k + 1)
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} placeholder="http://localhost:3000" style={{ flex: 1, minWidth: 0, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12 }} />
-        <button className="btn-primary compact" onClick={save} title="Recargar embebido">Ir</button>
-        <button className="btn-secondary compact" onClick={() => window.open(url, "_blank")} title="Abrir en navegador externo (opcional)">↗</button>
+      {/* Header nativo — sin URL, como cualquier otra sección (explorer/kanban) */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)", flexShrink: 0 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>Open Design</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: status === "ready" ? "#3fb950" : status === "offline" ? "#f85149" : "#8b949e", display: "inline-block" }} />
+          <button className="btn-secondary compact" onClick={reload} title="Recargar">↻</button>
+        </div>
       </div>
-      <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--muted)", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)", lineHeight: 1.4 }}>
-        Si ves página en blanco, iniciá <b>od-web</b>: abrí terminal en <code>G:\Proyectos\opencode-remote-android\od-web</code> y ejecutá <code>pnpm tools-dev</code> (Node 24). Luego clic <b>Ir</b> para recargar el panel. El botón <b>↗</b> solo abre en navegador externo si lo preferís — la vista principal es el iframe de abajo.
-      </div>
-      <iframe key={iframeKey} src={url} style={{ flex: 1, border: "none", background: "#fff" }} title="Open Design" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals" allow="clipboard-read; clipboard-write" />
+      {status === "offline" ? (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 24, textAlign: "center" }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--surface-subtle)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>◈</div>
+          <div style={{ maxWidth: 360 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Open Design no está iniciado</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
+              Esta sección carga la app de diseño como si fuera nativa. Para iniciarla, abrí una terminal en <code>od-web</code> y ejecutá <code>pnpm tools-dev</code> (Node 24), luego recargá.
+            </div>
+          </div>
+          <button className="btn-primary compact" onClick={reload}>Reintentar</button>
+        </div>
+      ) : (
+        <iframe key={iframeKey} src={url} onLoad={() => setStatus("ready")} style={{ flex: 1, border: "none", background: "#fff" }} title="Open Design" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals" allow="clipboard-read; clipboard-write" />
+      )}
     </div>
   )
 })

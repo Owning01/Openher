@@ -61,7 +61,8 @@ import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
 import { shell } from "./shell"
-import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, ConfigPanel, FileEditorPanel, BrowserPanel, DesignPanel } from "./components/shellPanels"
+import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, ConfigPanel, FileEditorPanel, BrowserPanel, DesignPanel, TerminalPanel } from "./components/shellPanels"
+import { TabBar } from "./components/TabBar"
 import type { ServerProfile } from "./types"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
@@ -95,7 +96,7 @@ const FileBrowser = lazyRetry(() => import("./components/FileBrowser").then((m) 
 const HelpPage = lazyRetry(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const FolderPicker = lazyRetry(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
 
-type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "design"
+type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config"
 
 type DesktopLayout = {
   cols: number
@@ -1306,13 +1307,24 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [])
 
   const removeTab = useCallback((panelIndex: number, tabIndex: number) => {
+    const tabId = tabStacks?.[panelIndex]?.[tabIndex]
+    const wasActive = tabId ? desktopLayout.sessions[panelIndex] === tabId : false
     setTabStacks((prev) => {
       const next = prev.map((s) => [...s])
       if (!next[panelIndex]) return next
       next[panelIndex] = next[panelIndex].filter((_, i) => i !== tabIndex)
       return next
     })
-  }, [setTabStacks])
+    if (wasActive) {
+      setDesktopLayout((prev) => {
+        const sessions = [...prev.sessions]
+        const remaining = tabStacks?.[panelIndex]?.filter((_, i) => i !== tabIndex) ?? []
+        // Si quedaba otro tab, activar el siguiente; si no, limpiar celda
+        sessions[panelIndex] = remaining.length > 0 ? remaining[Math.min(tabIndex, remaining.length - 1)] ?? null : null
+        return { ...prev, sessions }
+      })
+    }
+  }, [setTabStacks, tabStacks, desktopLayout.sessions])
 
   const moveTab = useCallback((panelIndex: number, fromIndex: number, toIndex: number) => {
     setTabStacks((prev) => {
@@ -1386,9 +1398,39 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const switchTab = useCallback((panelIndex: number, tabIndex: number) => {
     const stack = tabStacks?.[panelIndex]
     if (!stack || tabIndex < 0 || tabIndex >= stack.length) return
-    const sessionId = stack[tabIndex]
-    openInPanel(panelIndex, sessionId)
+    const id = stack[tabIndex]
+    if (id.startsWith("terminal")) {
+      setDesktopLayout((prev) => {
+        const sessions = [...prev.sessions]
+        sessions[panelIndex] = id
+        return { ...prev, sessions }
+      })
+      setActivePanel(panelIndex)
+      return
+    }
+    openInPanel(panelIndex, id)
   }, [tabStacks, openInPanel])
+
+  const addTerminalToPanel = useCallback((panelIndex: number, _targetIndex?: number) => {
+    const terminalId = `terminal:${Date.now()}`
+    setTabStacks((prev) => {
+      const next = prev.map((s) => [...s])
+      while (next.length <= panelIndex) next.push([])
+      if (!next[panelIndex]) next[panelIndex] = []
+      for (let i = 0; i < next.length; i++) {
+        if (i !== panelIndex) next[i] = next[i].filter((tid) => tid !== terminalId)
+      }
+      next[panelIndex] = [...next[panelIndex], terminalId]
+      return next
+    })
+    setDesktopLayout((prev) => {
+      const sessions = [...prev.sessions]
+      while (sessions.length <= panelIndex) sessions.push(null)
+      sessions[panelIndex] = terminalId
+      return { ...prev, sessions }
+    })
+    setActivePanel(panelIndex)
+  }, [setTabStacks])
 
   const splitPanel = useCallback((index: number, dir: "right" | "bottom") => {
     setDesktopLayout((prev) => {
@@ -2160,15 +2202,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
       }
       const sid = selectedSession.id
-      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id <= messageID))
-      setLocalRevertID(messageID)
-      await api.revert(config, sid, messageID, selectedSession.directory).catch(() => {})
+      // Para editar: revertir ANTES del mensaje elegido (no incluirlo),
+      // así el reenvío corregido lo reemplaza y no duplica.
+      const prevId = [...messages]
+        .filter((m) => m.info.sessionID === sid && m.info.id < messageID)
+        .pop()?.info.id ?? null
+      const revertTarget = prevId ?? messageID
+      // Filtro local instantáneo: excluir el mensaje editado ( < messageID)
+      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id < messageID))
+      setLocalRevertID(revertTarget)
+      await api.revert(config, sid, revertTarget, selectedSession.directory).catch(() => {})
       await loadSelected(sid, selectedSession.directory).catch(() => {})
       setComposer(text)
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
-  }, [selectedSession, config, awaitingAssistantReply, loadSelected, setMessages])
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, setMessages, messages])
   const handleUndo = useCallback(() => {
     if (!selectedSession) return
     // S3+S5: patch local instantáneo — el undo se siente en ~0ms.
@@ -2677,6 +2726,49 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [isDesktop, desktopLayout, activePanel])
 
+  const handleOpenDesign = useCallback(() => {
+    if (!isDesktop) return
+    const existingPanelIdx = desktopLayout.panelKinds.findIndex((k) => k === "design")
+    if (existingPanelIdx >= 0) {
+      setActivePanel(existingPanelIdx)
+      return
+    }
+    // Si ya hay un tab __design__ en algún panel de sesiones, enfocarlo
+    const designTabPanelIdx = tabStacks?.findIndex((stack) => stack.includes("__design__"))
+    if (designTabPanelIdx !== undefined && designTabPanelIdx >= 0) {
+      setActivePanel(designTabPanelIdx)
+      setDesktopLayout((prev) => {
+        const sessions = [...prev.sessions]
+        sessions[designTabPanelIdx] = "__design__"
+        const panelKinds = [...prev.panelKinds] as Array<ShellPanelKind | "editor">
+        panelKinds[designTabPanelIdx] = "session"
+        return { ...prev, sessions, panelKinds }
+      })
+      return
+    }
+    const hasSession = desktopLayout.sessions.some(Boolean)
+    if (hasSession) {
+      const targetIdx = Math.min(activePanel, desktopLayout.cols * desktopLayout.rows - 1)
+      // Abrir como pestaña más dentro de las pestañas de sesiones (si hay sesión abierta)
+      setTabStacks((prev) => {
+        const next = (prev ?? []).map((s) => [...s])
+        while (next.length <= targetIdx) next.push([])
+        if (!next[targetIdx].includes("__design__")) next[targetIdx] = [...next[targetIdx], "__design__"]
+        return next
+      })
+      setDesktopLayout((prev) => {
+        const sessions = [...prev.sessions]
+        sessions[targetIdx] = "__design__"
+        const panelKinds = [...prev.panelKinds] as Array<ShellPanelKind | "editor">
+        panelKinds[targetIdx] = "session"
+        return { ...prev, sessions, panelKinds }
+      })
+      setActivePanel(targetIdx)
+      return
+    }
+    addPanel("design")
+  }, [isDesktop, desktopLayout, activePanel, tabStacks, addPanel, setTabStacks, setDesktopLayout])
+
   const detailView = <ChatView {...baseChatProps} composer={composer} onComposerChange={handleComposerChange} onOpenBrowser={handleOpenBrowser} />
 
   return (
@@ -2717,8 +2809,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <button type="button" className={`activity-btn${activity === "kanban" ? " active" : ""}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
               onClick={() => { if (activity === "kanban") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("kanban"); setSidebarCollapsed(false) } }}>
               <LayersIcon size={18} /></button>
-            <button type="button" className={`activity-btn${activity === "design" ? " active" : ""}`} title="Open Design" aria-label="Open Design"
-              onClick={() => { if (activity === "design") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("design"); setSidebarCollapsed(false) } }}>
+            <button type="button" className={`activity-btn${(tabStacks?.some((s) => s.includes("__design__")) || desktopLayout.sessions.includes("__design__") || desktopLayout.panelKinds.includes("design" as any) ? " active" : "")}`} title="Open Design" aria-label="Open Design"
+              onClick={handleOpenDesign}>
               <PencilIcon size={18} /></button>
           </div>
           <div className="app-desktop-activity-bottom">
@@ -2756,7 +2848,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     : activity === "explorer" ? t('shell.kindExplorer')
                     : activity === "stats" ? t('shell.kindStats')
                     : activity === "kanban" ? t('shell.kindKanban')
-                    : activity === "design" ? "Open Design"
                     : t('shell.kindConfig')}
                 </span>
                 <span className="desktop-sidebar-actions">
@@ -2768,7 +2859,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                   : activity === "stats" ? <StatsPanel />
                   : activity === "kanban" ? <KanbanPanel />
-                  : activity === "design" ? <DesignPanel />
                   : <ConfigPanel />}
               </div>
               <div className="desktop-sidebar-resizer" onPointerDown={startSidebarResize} title={t('desktop.resizeSidebar')} />
@@ -2876,7 +2966,78 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
               // su propia sesión).
               const activeSid = desktopLayout.sessions[Math.min(activePanel, desktopLayout.sessions.length - 1)]
               const activeDir = activeSid ? sessions.find((s) => s.id === activeSid)?.directory ?? undefined : undefined
-              if (kind === "session") {
+                if (kind === "session") {
+                  if (sid === "__design__") {
+                    const stack = tabStacks?.[i] ?? ["__design__"]
+                    const allWithDesign = [...sessions, { id: "__design__", title: "Open Design", directory: "" } as any]
+                    return (
+                      <div key={panelId} style={placement} className="desktop-cell">
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                          <TabBar tabs={stack} activeIndex={stack.indexOf("__design__")} sessions={allWithDesign} busySessionIds={busySessions} onSwitch={(idx) => {
+                            const tabId = stack[idx]
+                            if (tabId === "__design__") {
+                              setDesktopLayout((prev) => {
+                                const sessions = [...prev.sessions]
+                                sessions[i] = "__design__"
+                                return { ...prev, sessions }
+                              })
+                              setActivePanel(i)
+                            } else {
+                              switchTab(i, idx)
+                            }
+                          }} onClose={(idx) => {
+                            const tabId = stack[idx]
+                            if (tabId === "__design__") {
+                              setTabStacks((prev) => {
+                                const next = (prev ?? []).map((s) => [...s])
+                                if (next[i]) next[i] = next[i].filter((id) => id !== "__design__")
+                                return next
+                              })
+                              const nextStack = (tabStacks?.[i] ?? []).filter((id) => id !== "__design__")
+                              const nextSid = nextStack[0] ?? null
+                              setDesktopLayout((prev) => {
+                                const sessions = [...prev.sessions]
+                                sessions[i] = nextSid
+                                return { ...prev, sessions }
+                              })
+                            } else {
+                              removeTab(i, idx)
+                            }
+                          }} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} />
+                          <div style={{ flex: 1, minHeight: 0 }}>
+                            <DesignPanel />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                  // Si el tab activo es un terminal (compartido en el mismo tabset), renderizar TerminalPanel
+                if (sid && sid.startsWith("terminal")) {
+                  const termCwd = activeDir || activeSessionDir || selectedSession?.directory || sessions[0]?.directory
+                  const tStack = tabStacks?.[i] ?? [sid]
+                  const tActiveIdx = Math.max(0, tStack.indexOf(sid))
+                  return (
+                    <div key={panelId} style={placement} className="desktop-cell">
+                      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                        <TabBar
+                          tabs={tStack}
+                          activeIndex={tActiveIdx}
+                          sessions={sessions}
+                          busySessionIds={busySessions}
+                          onSwitch={(idx) => switchTab(i, idx)}
+                          onClose={(idx) => removeTab(i, idx)}
+                          onAdd={() => addTerminalToPanel(i)}
+                          onMoveTab={(from, to) => moveTab(i, from, to)}
+                          panelIndex={i}
+                          onDropTerminal={addTerminalToPanel}
+                        />
+                        <div style={{ flex: 1, minHeight: 0 }}>
+                          <TerminalPanel cwd={termCwd} panelId={`${panelId}-term`} />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
                 if (!session) {
                   return (
                     <div key={panelId} className="desktop-cell-placeholder" style={placement} onClick={() => setActivePanel(i)}>
@@ -2913,13 +3074,39 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onOpenFile={handleOpenFile}
                       onOpenConnect={() => setShowConnectSheet(true)}
                       onOpenBrowser={handleOpenBrowser}
-                      tabStack={tabStacks?.[i]?.length ? tabStacks[i] : (session ? [session.id] : [])}
-                      allSessions={sessions}
-                      busySessionIds={busySessions}
-                      onTabSwitch={switchTab}
-                      onTabClose={removeTab}
+                        tabStack={tabStacks?.[i] ?? (session ? [session.id] : [])}
+                        allSessions={(tabStacks?.[i] ?? (session ? [session.id] : [])).includes("__design__") ? [...sessions, { id: "__design__", title: "Open Design", directory: "" } as any] : sessions}
+                        busySessionIds={busySessions}
+                        onTabSwitch={(panelIdx, tabIdx) => {
+                          const stack = tabStacks?.[panelIdx] ?? []
+                          const tabId = stack[tabIdx] ?? (tabIdx === 0 && session ? session.id : undefined)
+                          if (tabId === "__design__") {
+                            setDesktopLayout((prev) => {
+                              const sessions = [...prev.sessions]
+                              sessions[panelIdx] = "__design__"
+                              return { ...prev, sessions }
+                            })
+                            setActivePanel(panelIdx)
+                          } else {
+                            switchTab(panelIdx, tabIdx)
+                          }
+                        }}
+                        onTabClose={(panelIdx, tabIdx) => {
+                          const stack = tabStacks?.[panelIdx] ?? []
+                          const tabId = stack[tabIdx]
+                          if (tabId === "__design__") {
+                            setTabStacks((prev) => {
+                              const next = (prev ?? []).map((s) => [...s])
+                              if (next[panelIdx]) next[panelIdx] = next[panelIdx].filter((id) => id !== "__design__")
+                              return next
+                            })
+                          } else {
+                            removeTab(panelIdx, tabIdx)
+                          }
+                        }}
                       onTabAdd={() => {}} // TODO: open session picker
-                      onTabMove={(from, to) => moveTab(i, from, to)} />
+                      onTabMove={(from, to) => moveTab(i, from, to)}
+                      onDropTerminal={addTerminalToPanel} />
                   </div>
                 )
               }
