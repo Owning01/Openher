@@ -386,6 +386,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       }).catch(() => {})
     })
   }, [])
+  // Recargar keys cuando QuickChatPanel guarda (sin reload) — fix "no se guarda"
+  useEffect(() => {
+    const reloadKeys = () => {
+      import("./goUsage").then(({ loadGoAccounts }) => {
+        loadGoAccounts().then(keys => setQuickChatGoKey(keys[0] ?? "")).catch(() => {})
+      })
+      import("./shell").then(({ shell }) => {
+        shell.config.get().then(c => {
+          setQuickChatKey((c as any)?.cerebras_api_key ?? "")
+          setQuickChatGroqKey((c as any)?.groq_api_key ?? "")
+        }).catch(() => {})
+      })
+    }
+    window.addEventListener("quickchat:key-saved", reloadKeys)
+    return () => window.removeEventListener("quickchat:key-saved", reloadKeys)
+  }, [])
   const [localRevertID, setLocalRevertID] = useState<string | null>(null)
 
   const [view, setView] = useState<ViewType>(() => config.host && config.port > 0 ? "sessions" : "settings")
