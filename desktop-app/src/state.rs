@@ -69,7 +69,7 @@ impl Default for ShellConfig {
             github_repos: vec!["sst/opencode".into()],
             cerebras_api_key: String::new(),
             quickchat_provider: "cerebras".into(),
-            quickchat_model: "llama-4-scout".into(),
+            quickchat_model: "gpt-oss-120b".into(),
         }
     }
 }

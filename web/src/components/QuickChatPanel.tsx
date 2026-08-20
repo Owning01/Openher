@@ -21,6 +21,11 @@ export function QuickChatPanel(props: { cerebrasKey: string; config: ServerConfi
 
   const { messages, send, clear, abort, busy, error } = useQuickChat({ provider, model, cerebrasKey: props.cerebrasKey, config: props.config, searchEnabled })
 
+  useEffect(() => {
+    const validIds = provider === "cerebras" ? CEREBRAS_MODELS.map(m => m.id) : ["opencode-go/muse-spark-1.2-contributor", "opencode-go/deepseek-v4-flash"]
+    if (!validIds.includes(model)) setModel(validIds[0])
+  }, [provider])
+
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }) }, [messages, busy])
 
   const onSend = () => {

@@ -418,12 +418,38 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       onSetRevertID?.(target.info.id)
       onPatchSession?.({ revert: { messageID: target.info.id } })
       if (awaitingAssistantReply || messages.some((m) => m.info.role !== "user" && !m.info.time.completed)) {
-        await api.abort(config, sessionID, directory).catch(() => {})
+        await Promise.race([
+          api.abort(config, sessionID, directory).catch(() => {}),
+          new Promise((r) => setTimeout(r, 2500)),
+        ])
+        // Esperar a que el server pase a idle (assertNotBusy del revert)
+        await new Promise((r) => setTimeout(r, 400))
       }
-      const revertResult = await api.revert(config, sessionID, target.info.id, directory).catch((err: Error) => {
-        setRuntimeError(`Revert failed: ${err.message || "server error"}`)
-        return null
-      })
+      let revertResult: unknown = null
+      let lastErr: unknown = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          revertResult = await api.revert(config, sessionID, target.info.id, directory)
+          lastErr = null
+          break
+        } catch (err: any) {
+          lastErr = err
+          const msg = String(err?.message ?? "")
+          const isBusy = /busy/i.test(msg) || /BusyError/i.test(msg)
+          if (isBusy && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
+            continue
+          }
+          setRuntimeError(`Revert failed: ${msg || "server error"}`)
+          revertResult = null
+          break
+        }
+      }
+      if (lastErr && revertResult === null) {
+        // Revertir optimista si falló definitivamente (evitar que el mensaje quede oculto fantasma)
+        await onLoadSelected().catch(() => {})
+        return
+      }
       if (revertResult === null) return
       await onLoadSelected().catch(() => {})
     } catch (err) {

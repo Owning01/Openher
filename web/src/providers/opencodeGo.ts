@@ -1,17 +1,19 @@
 import type { QuickChatMessage, QuickChatProvider } from "./types"
 import { api } from "../api"
-import type { ServerConfig } from "../types"
 
-export function createOpencodeGoProvider(config: ServerConfig | null): QuickChatProvider {
+export function createOpencodeGoProvider(config: any): QuickChatProvider {
   return {
     id: "opencode-go",
     labelKey: "quickchat.providerOpencode",
     async listModels() {
-      // Reuse server models if available, else fallback
-      return [{ id: "opencode-go", label: "OpenCode Go" }]
+      return [
+        { id: "opencode-go/muse-spark-1.2-contributor", label: "Muse Spark 1.2" },
+        { id: "opencode-go/deepseek-v4-flash", label: "DeepSeek V4 Flash" },
+      ]
     },
     async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal }) {
       if (!config) throw new Error("No config")
+      if (!opts.model) throw new Error("Seleccioná un modelo (no hay default)")
       // Build a prompt from messages (token-min: only last question + brief context)
       const last = messages.filter(m => m.role !== "system").slice(-6)
       const prompt = last.map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n")
@@ -20,8 +22,10 @@ export function createOpencodeGoProvider(config: ServerConfig | null): QuickChat
       const sess = await api.createSession(config, undefined)
       const id = (sess as any)?.data?.id ?? (sess as any)?.id
       if (!id) throw new Error("No session id")
-      // Fire prompt via api.sendPrompt (uses model/agent from config)
-      const model = opts.model ? { providerID: opts.model.split("/")[0] ?? "", modelID: opts.model } as any : undefined
+      const parts = opts.model.split("/")
+      const providerID = parts[0] ?? "opencode-go"
+      const modelID = parts.slice(1).join("/") || opts.model
+      const model = { providerID, modelID } as any
       await api.sendPrompt(config as any, id, prompt, undefined, model, undefined)
       // Poll messages quickly (server is busy -> we wait)
       // Simple: fetch messages after 1.5s; real streaming handled by SSE in main app but for quickchat we poll once

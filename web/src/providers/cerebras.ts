@@ -2,11 +2,12 @@ import type { QuickChatMessage, QuickChatProvider, QuickChatResult } from "./typ
 
 // Cerebras OpenAI-compatible. Limits: 5 RPM, 90k TPM, 30k uncached TPM
 const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
-// Models offered (user said gemma 4 + gpt oss 120b; map to cerebras ids)
+// Models offered by Cerebras per user: gemma 4 + gpt oss 120b. No default silent fallback to deepseek.
 const MODELS = [
-  { id: "llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout (rápido)" },
   { id: "gpt-oss-120b", label: "GPT-OSS 120B" },
-  { id: "llama3.1-8b", label: "Llama 3.1 8B" },
+  { id: "cerebras/gpt-oss-120b", label: "GPT-OSS 120B (cerebras/)" },
+  { id: "gemma-4", label: "Gemma 4" },
+  { id: "llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout" },
 ]
 
 // Simple client-side rate limit: 5 req/min
@@ -38,12 +39,13 @@ export function createCerebrasProvider(apiKey: string): QuickChatProvider {
         // drop oldest user/assistant keeping system
         trimmed.splice(1, Math.max(1, trimmed.length - 6))
       }
+      if (!opts.model) throw new Error("Seleccioná un modelo")
       recordRequest()
       const res = await fetch(CEREBRAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: opts.model || MODELS[0].id,
+          model: opts.model,
           messages: trimmed.map(m => ({ role: m.role, content: m.content })),
           max_completion_tokens: 500,
           temperature: 0.3,

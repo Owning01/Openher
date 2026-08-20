@@ -2186,18 +2186,41 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (!selectedSession) return
     try {
       if (awaitingAssistantReply) {
-        await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
+        await Promise.race([
+          api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {}),
+          new Promise((r) => setTimeout(r, 2500)),
+        ])
+        await new Promise((r) => setTimeout(r, 400))
       }
       const target = renderedMessages.find((m) => m.info.id === messageID)
       // S3: filtro optimista instantáneo.
       const sid = selectedSession.id
       setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id <= messageID))
       setLocalRevertID(messageID)
-      await api.revert(config, sid, messageID, selectedSession.directory).catch(() => {})
+      let ok = false
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await api.revert(config, sid, messageID, selectedSession.directory)
+          ok = true
+          break
+        } catch (err: any) {
+          const msg = String(err?.message ?? "")
+          if (/busy/i.test(msg) && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
+            continue
+          }
+          throw err
+        }
+      }
+      if (!ok) {
+        await loadSelected(sid, selectedSession.directory).catch(() => {})
+        return
+      }
       await loadSelected(sid, selectedSession.directory).catch(() => {})
       if (target?.text) setComposer(target.text)
     } catch (err) {
       setRuntimeError((err as Error).message)
+      await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
     }
   }, [selectedSession, config, awaitingAssistantReply, loadSelected, renderedMessages, setMessages])
 
@@ -2205,7 +2228,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (!selectedSession) return
     try {
       if (awaitingAssistantReply) {
-        await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
+        await Promise.race([
+          api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {}),
+          new Promise((r) => setTimeout(r, 2500)),
+        ])
+        await new Promise((r) => setTimeout(r, 400))
       }
       const sid = selectedSession.id
       // Para editar: revertir ANTES del mensaje elegido (no incluirlo),
@@ -2217,11 +2244,30 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       // Filtro local instantáneo: excluir el mensaje editado ( < messageID)
       setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id < messageID))
       setLocalRevertID(revertTarget)
-      await api.revert(config, sid, revertTarget, selectedSession.directory).catch(() => {})
+      let ok = false
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await api.revert(config, sid, revertTarget, selectedSession.directory)
+          ok = true
+          break
+        } catch (err: any) {
+          const msg = String(err?.message ?? "")
+          if (/busy/i.test(msg) && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
+            continue
+          }
+          throw err
+        }
+      }
+      if (!ok) {
+        await loadSelected(sid, selectedSession.directory).catch(() => {})
+        return
+      }
       await loadSelected(sid, selectedSession.directory).catch(() => {})
       setComposer(text)
     } catch (err) {
       setRuntimeError((err as Error).message)
+      await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
     }
   }, [selectedSession, config, awaitingAssistantReply, loadSelected, setMessages, messages])
   const handleUndo = useCallback(() => {
