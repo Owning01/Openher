@@ -264,10 +264,10 @@ const ShellPanelCell = memo(function ShellPanelCell({
     const y = e.clientY - rect.top
     const w = rect.width
     const h = rect.height
-    if (y < h * 0.2) return "top"
-    if (y > h * 0.8) return "bottom"
-    if (x < w * 0.25) return "left"
-    if (x > w * 0.75) return "right"
+    if (y < h * 0.15) return "top"
+    if (y > h * 0.85) return "bottom"
+    if (x < w * 0.15) return "left"
+    if (x > w * 0.85) return "right"
     return "center"
   }
 
@@ -2780,7 +2780,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       <main className={isDesktop ? "app-desktop-content" : "app-mobile-content"}>
         {view === "sessions" && !isDesktop && sessionsView}
 
-        {isDesktop && (view === "sessions" || view === "detail") && (
+        {isDesktop && (view === "sessions" || view === "detail" || view === "settings" || view === "help") && (
           (() => {
             const gridCols: Array<number | null | "handle"> = []
             if (desktopLayout.cols === 1) {
@@ -3044,6 +3044,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         {view === "detail" && !isDesktop && detailView}
 
       {view === "settings" && (
+        <div className={`settings-view${isDesktop ? " settings-overlay" : ""}`}>
         <SettingsPanel
           draftConfig={draftConfig} onChange={setDraftConfig}
           onTest={handleTest}
@@ -3111,9 +3112,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             if (navStackRef.current.length > 0) goBack()
             else handleNavigate(desktopLayout.sessions.some(Boolean) ? "detail" : "sessions")
           }} />
+        </div>
       )}
 
       {view === "help" && (
+        <div className={`help-view${isDesktop ? " settings-overlay" : ""}`}>
         <Suspense fallback={null}>
           <HelpPage
             helpPage={helpPage}
@@ -3122,6 +3125,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             commandFilter={commandFilter}
             onCommandFilterChange={setCommandFilter} />
         </Suspense>
+        </div>
       )}
 
         {isDesktop && showTerminal && terminalDocked && (

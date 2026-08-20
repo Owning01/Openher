@@ -117,16 +117,14 @@ export const TabBar = memo(function TabBar({
           >
             <span className="tab-label">{getLabel(id)}</span>
             {busy && <span className="tab-busy" />}
-            {tabs.length > 1 && (
-              <button
-                type="button"
-                className="tab-close"
-                onClick={(e) => { e.stopPropagation(); onClose(i) }}
-                aria-label="Close tab"
-              >
-                <CloseIcon size={10} />
-              </button>
-            )}
+            <button
+              type="button"
+              className="tab-close"
+              onClick={(e) => { e.stopPropagation(); onClose(i) }}
+              aria-label="Close tab"
+            >
+              <CloseIcon size={10} />
+            </button>
           </div>
         )
       })}

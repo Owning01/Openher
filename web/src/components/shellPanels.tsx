@@ -11,7 +11,7 @@ import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoa
 
 // Persistencia de terminales por panelId: al mover la terminal de celda
 // su estado (tabs) sobrevive al remount aunque React cree una nueva instancia.
-type TerminalPersist = { tabs: Array<{ id: string; title: string; shell: string }>; activeId: string }
+type TerminalPersist = { tabs: Array<{ id: string; title: string; shell: string }>; activeId: string; splitId?: string | null }
 const terminalStore = new Map<string, TerminalPersist>()
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
@@ -121,39 +121,57 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
         return
       }
       ptyId = res.id
-      try {
-        const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:"
-        const wsHost = window.location.hostname || "localhost"
-        ws = new WebSocket(`${wsProto}//${wsHost}:${res.ws_port}`)
-        ws.binaryType = "arraybuffer"
-        ws.onopen = () => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ cmd: "attach", id: res.id }))
+      let reconnectAttempts = 0
+      const maxReconnect = 5
+
+      const connectWs = () => {
+        if (disposed || !ptyId) return
+        try {
+          const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:"
+          const wsHost = window.location.hostname || "localhost"
+          const sock = new WebSocket(`${wsProto}//${wsHost}:${res.ws_port}`)
+          sock.binaryType = "arraybuffer"
+          sock.onopen = () => {
+            if (disposed) { sock.close(); return }
+            reconnectAttempts = 0
+            ws = sock
+            sock.send(JSON.stringify({ cmd: "attach", id: ptyId }))
             sendResize()
           }
-        }
-        ws.onmessage = (e) => {
-          if (disposed) return
-          if (e.data instanceof ArrayBuffer) {
-            term.write(new Uint8Array(e.data))
-          } else if (typeof e.data === "string") {
-            term.write(e.data)
+          sock.onmessage = (e) => {
+            if (disposed) return
+            if (e.data instanceof ArrayBuffer) {
+              term.write(new Uint8Array(e.data))
+            } else if (typeof e.data === "string") {
+              term.write(e.data)
+            }
           }
-        }
-        ws.onerror = () => {
-          polling = true
-          poll()
-        }
-        ws.onclose = () => {
-          if (!disposed) {
+          sock.onerror = () => {
+            try { sock.close() } catch { /* ignore */ }
+          }
+          sock.onclose = () => {
+            if (disposed) return
+            // Reintentar reconexión al mismo PTY antes de caer a polling.
+            if (reconnectAttempts < maxReconnect) {
+              reconnectAttempts += 1
+              window.setTimeout(connectWs, 400 * reconnectAttempts)
+            } else {
+              polling = true
+              poll()
+            }
+          }
+        } catch {
+          if (reconnectAttempts < maxReconnect) {
+            reconnectAttempts += 1
+            window.setTimeout(connectWs, 400 * reconnectAttempts)
+          } else {
             polling = true
             poll()
           }
         }
-      } catch {
-        polling = true
-        poll()
       }
+
+      connectWs()
     }).catch(() => {
       term.writeln("\r\n\x1b[31m[Terminal] No se pudo iniciar el proceso ConPTY. Verifique que el ejecutable de escritorio esté en ejecución.\x1b[0m\r\n")
     })
@@ -223,8 +241,8 @@ export const TerminalPanel = memo(function TerminalPanel({
   maximized?: boolean
   onClose?: () => void
 }) {
-  const [activeMainTab, setActiveMainTab] = useState<"problems" | "output" | "debug" | "terminal" | "ports">("terminal")
   const [currentShell, setCurrentShell] = useState<string>(shellName || "pwsh")
+  const [splitTabId, setSplitTabId] = useState<string | null>(null)
   const [termTabs, setTermTabs] = useState<Array<{ id: string; title: string; shell: string }>>(() => {
     if (panelId && terminalStore.has(panelId)) return terminalStore.get(panelId)!.tabs
     return [{ id: "term-1", title: `${shellName || "pwsh"} 1`, shell: shellName || "pwsh" }]
@@ -237,8 +255,8 @@ export const TerminalPanel = memo(function TerminalPanel({
   // Persistir tabs al mover la terminal (panelId se mueve con el panel).
   useEffect(() => {
     if (!panelId) return
-    terminalStore.set(panelId, { tabs: termTabs, activeId: activeTabId })
-  }, [panelId, termTabs, activeTabId])
+    terminalStore.set(panelId, { tabs: termTabs, activeId: activeTabId, splitId: splitTabId })
+  }, [panelId, termTabs, activeTabId, splitTabId])
 
   // Si el panelId cambia (movimiento), hidratar desde el store.
   useEffect(() => {
@@ -246,6 +264,7 @@ export const TerminalPanel = memo(function TerminalPanel({
       const saved = terminalStore.get(panelId)!
       setTermTabs(saved.tabs)
       setActiveTabId(saved.activeId)
+      if (saved.splitId) setSplitTabId(saved.splitId)
     }
   }, [panelId])
 
@@ -256,13 +275,39 @@ export const TerminalPanel = memo(function TerminalPanel({
     setActiveTabId(newId)
   }
 
+  const handleSplit = () => {
+    const nextNum = termTabs.length + 1
+    const newId = `term-${Date.now()}`
+    const newTab = { id: newId, title: `${currentShell} ${nextNum}`, shell: currentShell }
+    setTermTabs((prev) => [...prev, newTab])
+    // Mostrar split: mantener el tab activo actual a la izquierda y el nuevo a la derecha
+    if (!splitTabId) {
+      setSplitTabId(newId)
+    } else {
+      // Si ya hay split, reemplazar el panel derecho y enfocar el nuevo
+      setSplitTabId(newId)
+      setActiveTabId(newId)
+    }
+  }
+
   const handleCloseTab = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
     if (termTabs.length <= 1) return
     const nextTabs = termTabs.filter((t) => t.id !== id)
     setTermTabs(nextTabs)
+    if (splitTabId === id) {
+      setSplitTabId(null)
+    }
     if (activeTabId === id) {
-      setActiveTabId(nextTabs[nextTabs.length - 1].id)
+      // Si se cerró el tab activo y había split, promover el split a activo
+      if (splitTabId && splitTabId !== id) {
+        setActiveTabId(splitTabId)
+        setSplitTabId(null)
+      } else {
+        setActiveTabId(nextTabs[nextTabs.length - 1].id)
+      }
+    } else if (splitTabId && activeTabId === splitTabId) {
+      // Caso borde: active es el split y se cerró otro tab
     }
   }
 
@@ -271,9 +316,10 @@ export const TerminalPanel = memo(function TerminalPanel({
       {/* Barra superior estilo VS Code */}
       {!hideHeader && (
         <div className="terminal-header-bar"
-          draggable
-          style={{ cursor: "grab" }}
+          draggable={!isDocked}
+          style={{ cursor: isDocked ? "default" : "grab" }}
           onDragStart={(e) => {
+            if (isDocked) { e.preventDefault(); return }
             const dragPayload = panelIndex !== undefined ? `panel:${panelIndex}:kind:terminal` : "kind:terminal"
             e.dataTransfer.setData("text/plain", dragPayload)
             e.dataTransfer.setData("application/x-opencode-path", dragPayload)
@@ -281,21 +327,9 @@ export const TerminalPanel = memo(function TerminalPanel({
           }}
         >
           <div className="terminal-tabs-group">
-            <div className={`terminal-tab${activeMainTab === "problems" ? " active" : ""}`} onClick={() => setActiveMainTab("problems")}>
-              <span>PROBLEMS</span>
-            </div>
-            <div className={`terminal-tab${activeMainTab === "output" ? " active" : ""}`} onClick={() => setActiveMainTab("output")}>
-              <span>OUTPUT</span>
-            </div>
-            <div className={`terminal-tab${activeMainTab === "debug" ? " active" : ""}`} onClick={() => setActiveMainTab("debug")}>
-              <span>DEBUG CONSOLE</span>
-            </div>
-            <div className={`terminal-tab${activeMainTab === "terminal" ? " active" : ""}`} onClick={() => setActiveMainTab("terminal")}>
+            <div className="terminal-tab active">
               <span className="terminal-status-dot" />
               <span>TERMINAL</span>
-            </div>
-            <div className={`terminal-tab${activeMainTab === "ports" ? " active" : ""}`} onClick={() => setActiveMainTab("ports")}>
-              <span>PORTS</span>
             </div>
           </div>
 
@@ -330,7 +364,7 @@ export const TerminalPanel = memo(function TerminalPanel({
             <button
               type="button"
               className="terminal-action-btn"
-              onClick={handleAddTab}
+              onClick={handleSplit}
               title="Dividir terminal"
               aria-label="Dividir terminal"
             >
@@ -401,7 +435,37 @@ export const TerminalPanel = memo(function TerminalPanel({
 
       {/* Contenedor principal de terminales con columna de pestañas estilo VS Code */}
       <div className="terminal-body-wrapper">
-        {activeMainTab === "terminal" ? (
+        {splitTabId ? (
+          <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 1, background: "#30363d" }}>
+            {(() => {
+              const leftTab = termTabs.find((t) => t.id === activeTabId) ?? termTabs[0]
+              const rightTab = termTabs.find((t) => t.id === splitTabId)
+              if (!leftTab || !rightTab) return null
+              return (
+                <>
+                  <div style={{ flex: 1, position: "relative", background: "#0d1117", display: "flex", flexDirection: "column" }}>
+                    <div style={{ flex: 1, position: "relative" }}>
+                      <SingleTerminal cwd={cwd} shellName={leftTab.shell} />
+                    </div>
+                    <div style={{ padding: "2px 6px", fontSize: 11, color: "#8b949e", background: "#161b22", borderTop: "1px solid #30363d", display: "flex", justifyContent: "space-between" }}>
+                      <span>{leftTab.title}</span>
+                      <button onClick={() => setSplitTabId(null)} style={{ background: "transparent", border: "none", color: "#8b949e", cursor: "pointer" }} title="Cerrar split">×</button>
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, position: "relative", background: "#0d1117", display: "flex", flexDirection: "column" }}>
+                    <div style={{ flex: 1, position: "relative" }}>
+                      <SingleTerminal cwd={cwd} shellName={rightTab.shell} />
+                    </div>
+                    <div style={{ padding: "2px 6px", fontSize: 11, color: "#8b949e", background: "#161b22", borderTop: "1px solid #30363d", display: "flex", justifyContent: "space-between" }}>
+                      <span>{rightTab.title}</span>
+                      <button onClick={() => setSplitTabId(null)} style={{ background: "transparent", border: "none", color: "#8b949e", cursor: "pointer" }} title="Cerrar split">×</button>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        ) : (
           <>
             {/* Viewport de xterm: todas las terminales montadas para no perder procesos */}
             <div className="terminal-viewport-container">
@@ -423,11 +487,12 @@ export const TerminalPanel = memo(function TerminalPanel({
 
             {/* Columna lateral de terminales activas estilo VS Code */}
             <div className="terminal-tabs-column">
-              <div
+                <div
                 className="terminal-tabs-column-head"
-                draggable
-                style={{ cursor: "grab" }}
+                draggable={!isDocked}
+                style={{ cursor: isDocked ? "default" : "grab" }}
                 onDragStart={(e) => {
+                  if (isDocked) { e.preventDefault(); return }
                   const dragPayload = panelIndex !== undefined ? `panel:${panelIndex}:kind:terminal` : "kind:terminal"
                   e.dataTransfer.setData("text/plain", dragPayload)
                   e.dataTransfer.setData("application/x-opencode-path", dragPayload)
@@ -476,10 +541,6 @@ export const TerminalPanel = memo(function TerminalPanel({
               ))}
             </div>
           </>
-        ) : (
-          <div style={{ padding: "16px", color: "#8b949e", fontSize: "12px", fontFamily: "monospace" }}>
-            No hay elementos en la vista {activeMainTab.toUpperCase()}.
-          </div>
         )}
       </div>
     </div>
@@ -2063,40 +2124,28 @@ export const ConfigPanel = memo(function ConfigPanel() {
   )
 })
 
-// ============================================================== Open Design (Rust-compatible, desktop only)
+// ============================================================== Open Design (desktop only, embebido)
 export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUrl?: string }) {
-  const t = useT()
   const [url, setUrl] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "http://localhost:3000")
   const [input, setInput] = useState(url)
-  const [status, setStatus] = useState<"checking" | "ok" | "offline">("checking")
-  useEffect(() => {
-    let cancelled = false
-    setStatus("checking")
-    // Rust WebView2 puede cargar http externo; no requiere Electron IPC
-    fetch(url, { mode: "no-cors", cache: "no-store" }).then(() => { if (!cancelled) setStatus("ok") }).catch(() => { if (!cancelled) setStatus("offline") })
-    const id = window.setTimeout(() => { if (!cancelled) setStatus((s) => (s === "checking" ? "offline" : s)) }, 2500)
-    return () => { cancelled = true; window.clearTimeout(id) }
-  }, [url])
+  const [iframeKey, setIframeKey] = useState(0)
   const save = () => {
     const next = input.trim() || "http://localhost:3000"
     localStorage.setItem("od.web.url", next)
     setUrl(next)
+    setIframeKey((k) => k + 1)
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", whiteSpace: "nowrap" }}>OD_WEB</span>
         <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} placeholder="http://localhost:3000" style={{ flex: 1, minWidth: 0, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12 }} />
-        <button className="btn-primary compact" onClick={save} title={t('shell.openSession')}>{t('shell.openSession') === 'Abrir sesión' ? 'Ir' : 'Go'}</button>
-        <button className="btn-secondary compact" onClick={() => window.open(url, "_blank")} title="Abrir externo">↗</button>
-        <span style={{ fontSize: 11, color: status === "ok" ? "var(--success, #3fb950)" : status === "offline" ? "var(--danger)" : "var(--muted)", whiteSpace: "nowrap" }}>{status === "ok" ? "● online" : status === "offline" ? "○ offline" : "… checking"}</span>
+        <button className="btn-primary compact" onClick={save} title="Recargar embebido">Ir</button>
+        <button className="btn-secondary compact" onClick={() => window.open(url, "_blank")} title="Abrir en navegador externo (opcional)">↗</button>
       </div>
-      {status === "offline" && (
-        <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--muted)", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)" }}>
-          No se detectó <b>od-web</b> en <code>{url}</code>. Levantalo con <code>pnpm tools-dev</code> en <code>od-web</code> (usa Node 24 / pnpm 10.33). Rust WebView2 carga http externo sin Electron — JS puro donde Rust no alcanza.
-        </div>
-      )}
-      <iframe src={url} style={{ flex: 1, border: "none", background: "#fff" }} title="Open Design" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals" allow="clipboard-read; clipboard-write" />
+      <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--muted)", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)", lineHeight: 1.4 }}>
+        Si ves página en blanco, iniciá <b>od-web</b>: abrí terminal en <code>G:\Proyectos\opencode-remote-android\od-web</code> y ejecutá <code>pnpm tools-dev</code> (Node 24). Luego clic <b>Ir</b> para recargar el panel. El botón <b>↗</b> solo abre en navegador externo si lo preferís — la vista principal es el iframe de abajo.
+      </div>
+      <iframe key={iframeKey} src={url} style={{ flex: 1, border: "none", background: "#fff" }} title="Open Design" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals" allow="clipboard-read; clipboard-write" />
     </div>
   )
 })
