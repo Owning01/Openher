@@ -4,6 +4,7 @@ import { useQuickChat } from "../hooks/useQuickChat"
 import { STORAGE_KEYS } from "../constants"
 import { CEREBRAS_MODELS } from "../providers/cerebras"
 import { GROQ_MODELS } from "../providers/groq"
+import { createOpencodeGoProvider } from "../providers/opencodeGo"
 import type { QuickChatProviderId } from "../providers/types"
 import type { ModelOption, ProviderInfo } from "../types"
 import { Markdown } from "./Markdown"
@@ -13,67 +14,86 @@ import "../styles/quickchat.css"
 type Props = {
   cerebrasKey: string
   groqKey?: string
+  goKey?: string
   config: any
   modelOptions?: ModelOption[]
   providers?: ProviderInfo[]
   onOpenSettings?: () => void
 }
 
-export function QuickChatPanel({ cerebrasKey, groqKey = "", config, modelOptions = [], providers = [], onOpenSettings }: Props) {
+export function QuickChatPanel({ cerebrasKey, groqKey = "", goKey = "", config, modelOptions = [], providers = [], onOpenSettings }: Props) {
   const t = useT()
   const [provider, setProvider] = useState<QuickChatProviderId>(() => (localStorage.getItem(STORAGE_KEYS.QUICKCHAT_PROVIDER) as QuickChatProviderId) || "groq")
-  const [model, setModel] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_MODEL) || GROQ_MODELS[0].id)
+  const [model, setModel] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_MODEL) || "")
+  const [goModels, setGoModels] = useState<{ id: string; label: string }[]>([])
   const [searchEnabled, setSearchEnabled] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_SEARCH) === "1")
   const [input, setInput] = useState("")
   const [showKeyInput, setShowKeyInput] = useState(false)
-  const [tempKey, setTempKey] = useState(provider === "groq" ? groqKey : cerebrasKey)
+  const [tempKey, setTempKey] = useState(() => {
+    if (provider === "groq") return groqKey
+    if (provider === "opencode-go") return goKey
+    return cerebrasKey
+  })
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.QUICKCHAT_PROVIDER, provider) } catch {} }, [provider])
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.QUICKCHAT_MODEL, model) } catch {} }, [model])
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.QUICKCHAT_SEARCH, searchEnabled ? "1" : "0") } catch {} }, [searchEnabled])
-  useEffect(() => setTempKey(provider === "groq" ? groqKey : cerebrasKey), [cerebrasKey, groqKey, provider])
+  useEffect(() => {
+    const key = provider === "groq" ? groqKey : provider === "opencode-go" ? goKey : cerebrasKey
+    setTempKey(key)
+  }, [cerebrasKey, groqKey, goKey, provider])
 
-  const { messages, send, clear, abort, busy, error } = useQuickChat({ provider, model, cerebrasKey, groqKey, config, searchEnabled })
+  const { messages, send, clear, abort, busy, error } = useQuickChat({ provider, model, cerebrasKey, groqKey, goKey, config, searchEnabled })
+
+  // Fetch Go models when needed
+  useEffect(() => {
+    if (provider !== "opencode-go" || !goKey) { setGoModels([]); return }
+    createOpencodeGoProvider(goKey).listModels().then(setGoModels).catch(() => setGoModels([]))
+  }, [provider, goKey])
 
   // Derive models for active provider — only expose what API has
   const availableModels = useMemo(() => {
     if (provider === "cerebras") return CEREBRAS_MODELS
     if (provider === "groq") return GROQ_MODELS
-    const filtered = modelOptions.filter(m => m.providerID === provider || (m.providerID === "opencode-go" && provider === "opencode-go"))
-    if (filtered.length === 0 && provider === "opencode-go") {
-      return [{ id: "opencode-go/muse-spark-1.2-contributor", label: "Muse Spark" } as any]
-    }
+    if (provider === "opencode-go") return goModels
+    const filtered = modelOptions.filter(m => m.providerID === provider)
     if (filtered.length === 0) return []
     return filtered.map(m => ({ id: `${m.providerID}/${m.modelID}`, label: m.modelName || m.modelID, provider: m.providerID }))
-  }, [provider, modelOptions])
+  }, [provider, modelOptions, goModels])
 
-  // Keep selected model valid for current provider
+  // No default — user chooses. If current model not valid for provider, clear.
   useEffect(() => {
     const ids = availableModels.map((m: any) => m.id)
-    if (ids.length && !ids.includes(model)) setModel(ids[0])
+    if (model && ids.length && !ids.includes(model)) setModel("")
   }, [provider, availableModels])
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }) }, [messages, busy])
 
   const onSend = () => {
     const v = input.trim()
-    if (!v) return
+    if (!v || !model) return
     setInput("")
     void send(v)
   }
 
   const needsCerebrasKey = provider === "cerebras" && !cerebrasKey
   const needsGroqKey = provider === "groq" && !groqKey
+  const needsGoKey = provider === "opencode-go" && !goKey
   const providerInfo = providers.find(p => p.id === provider)
-  const needsProviderConfig = provider !== "cerebras" && provider !== "groq" && providerInfo && !providerInfo.connected && availableModels.length === 0
+  const needsProviderConfig = provider !== "cerebras" && provider !== "groq" && provider !== "opencode-go" && providerInfo && !providerInfo.connected && availableModels.length === 0
 
   const handleSaveKey = async () => {
     if (!tempKey.trim()) return
     try {
-      const { shell } = await import("../shell")
-      const patch = provider === "groq" ? { groq_api_key: tempKey.trim() } : { cerebras_api_key: tempKey.trim() }
-      await shell.config.patch(patch as any)
+      if (provider === "opencode-go") {
+        const { saveGoAccounts } = await import("../goUsage")
+        await saveGoAccounts([tempKey.trim()])
+      } else {
+        const { shell } = await import("../shell")
+        const patch = provider === "groq" ? { groq_api_key: tempKey.trim() } : { cerebras_api_key: tempKey.trim() }
+        await shell.config.patch(patch as any)
+      }
       setShowKeyInput(false)
       window.location.reload()
     } catch {}
@@ -106,7 +126,8 @@ export function QuickChatPanel({ cerebrasKey, groqKey = "", config, modelOptions
         <label className="qc-control-group">
           <span>{t("quickchat.model")}</span>
           <select className="qc-select" value={model} onChange={e => setModel(e.target.value)}>
-            {availableModels.length === 0 ? <option value="">{t("settings.noProviders")}</option> : availableModels.map((m: any) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            <option value="" disabled>{availableModels.length === 0 ? t("settings.noProviders") : t("detail.modelSelectLabel")}</option>
+            {availableModels.map((m: any) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
         </label>
         <label className="qc-switch">
@@ -116,14 +137,14 @@ export function QuickChatPanel({ cerebrasKey, groqKey = "", config, modelOptions
         </label>
       </div>
 
-      {(needsCerebrasKey || needsGroqKey) && (
+      {(needsCerebrasKey || needsGroqKey || needsGoKey) && (
         <div className="qc-config-banner">
-          <span>⚠️ {needsGroqKey ? t("quickchat.errorNoKeyGroq") : t("quickchat.errorNoKey")}</span>
+          <span>⚠️ {needsGoKey ? (t("quickchat.errorNoKeyGo") as string) || "Set your Go API key" : needsGroqKey ? t("quickchat.errorNoKeyGroq") : t("quickchat.errorNoKey")}</span>
           {!showKeyInput ? (
             <button className="qc-config-btn" onClick={() => setShowKeyInput(true)}>{t("settings.connect")}</button>
           ) : (
             <span style={{ display: "flex", gap: 6, flex: 1 }}>
-              <input value={tempKey} onChange={e => setTempKey(e.target.value)} placeholder={needsGroqKey ? t("quickchat.settingsKeyGroqPlaceholder") : t("quickchat.settingsKeyPlaceholder")} style={{ flex: 1, minHeight: 32, fontSize: 12 }} />
+              <input value={tempKey} onChange={e => setTempKey(e.target.value)} placeholder={needsGoKey ? "opencode-go-..." : needsGroqKey ? t("quickchat.settingsKeyGroqPlaceholder") : t("quickchat.settingsKeyPlaceholder")} style={{ flex: 1, minHeight: 32, fontSize: 12 }} />
               <button className="qc-send" style={{ minHeight: 32, padding: "0 12px" }} onClick={handleSaveKey}>{t("settings.save")}</button>
             </span>
           )}
@@ -175,7 +196,7 @@ export function QuickChatPanel({ cerebrasKey, groqKey = "", config, modelOptions
         {busy ? (
           <button className="qc-stop" onClick={abort}>{t("composer.stop")}</button>
         ) : (
-          <button className="qc-send" onClick={onSend} disabled={!input.trim()}>{t("quickchat.send")} →</button>
+          <button className="qc-send" onClick={onSend} disabled={!input.trim() || !model}>{t("quickchat.send")} →</button>
         )}
       </div>
     </div>

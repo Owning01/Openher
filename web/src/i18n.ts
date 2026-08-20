@@ -742,6 +742,9 @@ type TranslationKey =
   | 'quickchat.settingsKeyGroq'
   | 'quickchat.settingsKeyGroqPlaceholder'
   | 'quickchat.errorNoKeyGroq'
+  | 'quickchat.errorNoKeyGo'
+  | 'quickchat.settingsKeyGo'
+  | 'quickchat.settingsKeyGoPlaceholder'
   | 'quickchat.noResults'
 
 // Partial: los idiomas pueden omitir keys — createTranslator cae al EN

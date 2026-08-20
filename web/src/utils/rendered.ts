@@ -1,4 +1,5 @@
 import type { MessageEnvelope, RenderedMessage, DataMode, FileDiff } from "../types"
+import { isImagePart } from "../utils"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
@@ -100,7 +101,7 @@ export function computeRenderedMessages(
     text = textBlocks.join("\n\n").trim()
     // Filtro: no renderizar notificaciones internas del sistema (pty tool)
     if (text.includes("<pty_exited>") || text.includes("Use pty_read to check")) continue
-    const hasImages = message.parts.some((p) => p.type === "image")
+    const hasImages = message.parts.some((p) => isImagePart(p as any))
     if (text || thinkingParts.length > 0 || toolParts.length > 0 || hasImages) {
       const rendered: RenderedMessage = { ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffs, dataMode, turnMode }
       out.push(rendered)

@@ -88,11 +88,12 @@ export function filterByQuery<T>(items: T[], query: string, fields: (item: T) =>
   return items.filter((item) => fields(item).some((f) => f.toLowerCase().includes(q)))
 }
 
-export function isImagePart(p: { type: string; mimeType?: string }): boolean {
-  return p.type === "image" || (p.type === "file" && !!p.mimeType?.startsWith("image/"))
+export function isImagePart(p: { type: string; mimeType?: string; mime?: string }): boolean {
+  const mime = p.mimeType ?? p.mime ?? ""
+  return p.type === "image" || (p.type === "file" && mime.startsWith("image/"))
 }
 
-export function countImageParts(parts: Array<{ type: string; mimeType?: string }>): number {
+export function countImageParts(parts: Array<{ type: string; mimeType?: string; mime?: string }>): number {
   return parts.filter(isImagePart).length
 }
 

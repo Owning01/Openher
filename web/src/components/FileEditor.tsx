@@ -4,6 +4,7 @@ import { shell } from "../shell"
 import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import { basename } from "../utils"
+import { sanitizeHtml, sanitizeClassName } from "../utils/sanitize"
 import { lowlight, langFromFilename } from "../utils/highlight"
 import type { ServerConfig } from "../types"
 
@@ -20,11 +21,11 @@ function serializeHast(nodes: unknown[]): string {
     if (n.type === "text") {
       out += (n.value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     } else if (n.type === "element" && n.tagName) {
-      const cls = n.properties?.className?.join(" ") ?? ""
+      const cls = sanitizeClassName(n.properties?.className?.join(" ") ?? "")
       out += `<${n.tagName}${cls ? ` class="${cls}"` : ""}>${serializeHast(n.children ?? [])}</${n.tagName}>`
     }
   }
-  return out
+  return sanitizeHtml(out)
 }
 
 export const FileEditor = memo(function FileEditor({ config, path, directory, onClose }: Props) {
@@ -98,21 +99,22 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
         const b64 = btoa(unescape(encodeURIComponent(textToSave)))
         await shell.fs.write(path, b64)
       } else {
-        try {
-          const b64 = btoa(unescape(encodeURIComponent(textToSave)))
-          await shell.fs.write(path, b64)
-        } catch {
-          // ignore
-        }
+        await api.writeFile(config, path, textToSave, directory)
       }
       setDirty(false)
       setLastSaved(new Date())
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar archivo")
+      const msg = err instanceof Error ? err.message : "Error al guardar archivo"
+      // v2 no tiene writeFile: mostrar error claro en vez de fallar silencioso
+      if (/v2.*writeFile|writeFile.*v2/i.test(msg)) {
+        setError("Guardar no disponible en API v2 (solo desktop).")
+      } else {
+        setError(msg)
+      }
     } finally {
       setSaving(false)
     }
-  }, [path, saving])
+  }, [config, path, directory, saving])
 
   // Autoguardado con debounce de 1000ms
   useEffect(() => {

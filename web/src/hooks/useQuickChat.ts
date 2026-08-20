@@ -21,7 +21,7 @@ function loadStored(): QCState[] {
   } catch { return [] }
 }
 
-export function useQuickChat(opts: { provider: QuickChatProviderId; model: string; cerebrasKey: string; groqKey?: string; config: ServerConfig | null; searchEnabled: boolean }) {
+export function useQuickChat(opts: { provider: QuickChatProviderId; model: string; cerebrasKey: string; groqKey?: string; goKey?: string; config: ServerConfig | null; searchEnabled: boolean }) {
   const [messages, setMessages] = useState<QCState[]>(() => loadStored())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +32,7 @@ export function useQuickChat(opts: { provider: QuickChatProviderId; model: strin
     try { localStorage.setItem(STORAGE_KEYS.QUICKCHAT, JSON.stringify(messages.slice(-30))) } catch {}
   }, [messages])
 
-  const provider = useMemo(() => getQuickChatProvider(opts.provider, { cerebrasKey: opts.cerebrasKey, groqKey: opts.groqKey ?? "", config: opts.config }), [opts.provider, opts.cerebrasKey, opts.groqKey, opts.config])
+  const provider = useMemo(() => getQuickChatProvider(opts.provider, { cerebrasKey: opts.cerebrasKey, groqKey: opts.groqKey ?? "", goKey: opts.goKey ?? "", config: opts.config }), [opts.provider, opts.cerebrasKey, opts.groqKey, opts.goKey, opts.config])
 
   // simple answer cache in localStorage (hash -> {text,time})
   const getCachedAnswer = useCallback((question: string, searchSnippets: string): string | null => {

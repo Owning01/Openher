@@ -783,5 +783,8 @@ export default {
   'quickchat.settingsKeyPlaceholder': 'csk-.',
   'quickchat.settingsKeyGroq': 'Groq API key',
   'quickchat.settingsKeyGroqPlaceholder': 'gsk_...',
+  'quickchat.errorNoKeyGo': 'Set your OpenCode Go API key in Settings.',
+  'quickchat.settingsKeyGo': 'OpenCode Go API key',
+  'quickchat.settingsKeyGoPlaceholder': 'opencode-go-...',
   'quickchat.noResults': 'No web results'
 }

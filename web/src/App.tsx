@@ -373,7 +373,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [setTheme])
   const [quickChatKey, setQuickChatKey] = useState("")
   const [quickChatGroqKey, setQuickChatGroqKey] = useState("")
+  const [quickChatGoKey, setQuickChatGoKey] = useState("")
   useEffect(() => {
+    import("./goUsage").then(({ loadGoAccounts }) => {
+      loadGoAccounts().then(keys => setQuickChatGoKey(keys[0] ?? "")).catch(() => {})
+    })
     import("./shell").then(({ shell }) => {
       shell.config.get().then(c => {
         setQuickChatKey((c as any)?.cerebras_api_key ?? "")
@@ -2918,7 +2922,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                   : activity === "stats" ? <StatsPanel />
                   : activity === "kanban" ? <KanbanPanel />
-                  : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
+                  : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
                   : <ConfigPanel />}
               </div>
               <div className="desktop-sidebar-resizer" onPointerDown={startSidebarResize} title={t('desktop.resizeSidebar')} />
@@ -3208,7 +3212,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                         <button className="btn-icon compact" onClick={() => closePanel(i)} aria-label={t('panel.close')}>×</button>
                       </div>
                       <div style={{ flex: 1, minHeight: 0 }}>
-                        <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
+                        <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
                       </div>
                     </div>
                   </div>
@@ -3393,7 +3397,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       {view === "quickchat" && (
         <div className={`quickchat-view${isDesktop ? " settings-overlay" : ""}`} style={{ height: isDesktop ? "100%" : "calc(100dvh - 56px)", display: "flex", flexDirection: "column" }}>
           <Suspense fallback={null}>
-            <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
+            <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
           </Suspense>
         </div>
       )}

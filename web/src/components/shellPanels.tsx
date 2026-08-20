@@ -18,6 +18,7 @@ import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
 import { BrowserPanel } from "./BrowserPanel"
 import { DocEditorPanel } from "./DocEditorPanel"
+import { sanitizeHtml } from "../utils/sanitize"
 export { BrowserPanel, DocEditorPanel }
 
 // ============================================================== Terminal
@@ -1909,7 +1910,7 @@ export const DocsPanel = memo(function DocsPanel() {
             </div>
           ))}
         </div>
-        <div className="shell-docs-content" dangerouslySetInnerHTML={doc ? { __html: doc.html } : undefined}>
+        <div className="shell-docs-content" dangerouslySetInnerHTML={doc ? { __html: sanitizeHtml(doc.html) } : undefined}>
           {!doc && <div className="shell-empty">{t('shell.selectDoc')}<br /><small>{root}</small></div>}
         </div>
       </div>
