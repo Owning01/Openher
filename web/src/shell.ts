@@ -1,9 +1,9 @@
 // Cliente de la API de la shell (/shell/*) + utilidades del explorador.
 // Solo disponible cuando la app la sirve el exe de escritorio (mismo origen).
 
-export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser" | "doc"
+export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser" | "doc" | "design"
 
-export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser", "doc"]
+export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser", "doc", "design"]
 
 export type FsEntry = { name: string; path: string; is_dir: boolean; size: number | null; modified: number | null }
 
@@ -149,6 +149,11 @@ export const shell = {
       post<{ ok: boolean; src: string; dest: string; format: string; size: number; preview: string }>("/shell/doc/convert", { src, target, dest }),
     save: (path: string, content: string, format: "md" | "docx" | "pdf") =>
       post<{ ok: boolean; path: string }>("/shell/doc/save", { path, content, format }),
+  },
+  // Open Design (od-web) — Rust side puede proxear a daemon/Next, fallback a iframe directo
+  design: {
+    status: () => get<{ running: boolean; url: string }>("/shell/design/status").catch(() => ({ running: false, url: "http://localhost:3000" } as any)),
+    openExternal: (url: string) => post<{ ok: boolean }>("/shell/design/open", { url }).catch(() => ({ ok: false } as any)),
   },
   browser: {
     open: (url: string, bounds: { x: number; y: number; w: number; h: number }) =>

@@ -90,14 +90,21 @@ export const MessageList = memo(function MessageList({
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setIsAtBottom(true)
+    // Doble rAF: asegura que el DOM (y las imágenes/markdown) hayan hecho layout
+    // antes de medir scrollHeight. Sin esto, con 500 mensajes el primer scroll
+    // usa altura estimada y no llega al final.
     requestAnimationFrame(() => {
-      const container = messagesRef.current
-      if (container) {
-        container.scrollTo({ top: container.scrollHeight, behavior })
-      }
+      requestAnimationFrame(() => {
+        const container = messagesRef.current
+        if (container) {
+          container.scrollTo({ top: container.scrollHeight, behavior })
+        }
+      })
     })
   }
 
+  // Scroll al entrar a la sesión (móvil: cambio de vista, desktop: cambio de selectedID)
+  // Fuerza scroll incluso si messages.length no cambió entre cache y red.
   useEffect(() => {
     if (view !== "detail") return
     setIsAtBottom(true)
@@ -110,6 +117,14 @@ export const MessageList = memo(function MessageList({
     if (messages.length > 0) scrollToBottom("auto")
   }, [view, loadingSessionID, selectedID, messages.length])
 
+  // Desktop: selectedID cambia sin que view cambie. Fuerza scroll al cambiar de sesión.
+  useEffect(() => {
+    if (!selectedID) return
+    // Pequeño delay para que los mensajes del cache se pinten antes de medir
+    const t = setTimeout(() => scrollToBottom("auto"), 80)
+    return () => clearTimeout(t)
+  }, [selectedID])
+
   // Navegación del buscador: centra el mensaje con la coincidencia actual.
   useEffect(() => {
     if (!scrollToMessageID || view !== "detail") return
@@ -119,10 +134,19 @@ export const MessageList = memo(function MessageList({
     }
   }, [scrollToMessageID, view])
 
+  // Durante streaming, seguir al final solo si el usuario no scrolleó hacia arriba.
+  // Para mensajes ya en memoria (polling), forzar scroll al final en cada firma nueva
+  // aunque isAtBottom sea false brevemente por el IntersectionObserver (evita que se quede arriba al entrar).
   useEffect(() => {
     if (view !== "detail") return
     if (isAtBottom) {
       scrollToBottom("auto")
+    } else if (messages.length > 0 && messageScrollSignature) {
+      // Si el último mensaje es nuevo (id diferente) y estamos cerca del final, forzar
+      const container = messagesRef.current
+      if (container && container.scrollHeight - container.scrollTop - container.clientHeight < 400) {
+        scrollToBottom("auto")
+      }
     }
   }, [messageScrollSignature, isWorking, showTypingBubble])
 

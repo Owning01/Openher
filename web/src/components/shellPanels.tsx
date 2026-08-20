@@ -2063,6 +2063,44 @@ export const ConfigPanel = memo(function ConfigPanel() {
   )
 })
 
+// ============================================================== Open Design (Rust-compatible, desktop only)
+export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUrl?: string }) {
+  const t = useT()
+  const [url, setUrl] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "http://localhost:3000")
+  const [input, setInput] = useState(url)
+  const [status, setStatus] = useState<"checking" | "ok" | "offline">("checking")
+  useEffect(() => {
+    let cancelled = false
+    setStatus("checking")
+    // Rust WebView2 puede cargar http externo; no requiere Electron IPC
+    fetch(url, { mode: "no-cors", cache: "no-store" }).then(() => { if (!cancelled) setStatus("ok") }).catch(() => { if (!cancelled) setStatus("offline") })
+    const id = window.setTimeout(() => { if (!cancelled) setStatus((s) => (s === "checking" ? "offline" : s)) }, 2500)
+    return () => { cancelled = true; window.clearTimeout(id) }
+  }, [url])
+  const save = () => {
+    const next = input.trim() || "http://localhost:3000"
+    localStorage.setItem("od.web.url", next)
+    setUrl(next)
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", whiteSpace: "nowrap" }}>OD_WEB</span>
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} placeholder="http://localhost:3000" style={{ flex: 1, minWidth: 0, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12 }} />
+        <button className="btn-primary compact" onClick={save} title={t('shell.openSession')}>{t('shell.openSession') === 'Abrir sesión' ? 'Ir' : 'Go'}</button>
+        <button className="btn-secondary compact" onClick={() => window.open(url, "_blank")} title="Abrir externo">↗</button>
+        <span style={{ fontSize: 11, color: status === "ok" ? "var(--success, #3fb950)" : status === "offline" ? "var(--danger)" : "var(--muted)", whiteSpace: "nowrap" }}>{status === "ok" ? "● online" : status === "offline" ? "○ offline" : "… checking"}</span>
+      </div>
+      {status === "offline" && (
+        <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--muted)", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)" }}>
+          No se detectó <b>od-web</b> en <code>{url}</code>. Levantalo con <code>pnpm tools-dev</code> en <code>od-web</code> (usa Node 24 / pnpm 10.33). Rust WebView2 carga http externo sin Electron — JS puro donde Rust no alcanza.
+        </div>
+      )}
+      <iframe src={url} style={{ flex: 1, border: "none", background: "#fff" }} title="Open Design" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals" allow="clipboard-read; clipboard-write" />
+    </div>
+  )
+})
+
 // ============================================================== Wrapper
 
 export type ShellPanelProps = {
@@ -2209,6 +2247,8 @@ export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir
       return <BrowserPanel initialUrl={cwd?.startsWith("http") ? cwd : "http://localhost:5173"} />
     case "doc":
       return <DocEditorPanel initialPath={cwd} />
+    case "design":
+      return <DesignPanel initialUrl={cwd?.startsWith("http") ? cwd : undefined} />
     default:
       return null
   }

@@ -52,7 +52,7 @@ import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
 import { useQuestions } from "./hooks/useQuestions"
 import { useSSEHandler } from "./hooks/useSSEHandler"
-import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, StatsIcon, GlobeIcon } from "./Icons"
+import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, StatsIcon, GlobeIcon, PencilIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -61,7 +61,7 @@ import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
 import { shell } from "./shell"
-import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, ConfigPanel, FileEditorPanel, BrowserPanel } from "./components/shellPanels"
+import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, ConfigPanel, FileEditorPanel, BrowserPanel, DesignPanel } from "./components/shellPanels"
 import type { ServerProfile } from "./types"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
@@ -95,7 +95,7 @@ const FileBrowser = lazyRetry(() => import("./components/FileBrowser").then((m) 
 const HelpPage = lazyRetry(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const FolderPicker = lazyRetry(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
 
-type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config"
+type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "design"
 
 type DesktopLayout = {
   cols: number
@@ -215,7 +215,7 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
         tabStacks: finalTabStacks,
         sidebarWidth: Math.max(200, Math.min(480, raw?.sidebarWidth ?? 340)),
         sidebarCollapsed: !!raw?.sidebarCollapsed,
-        activity: (["sessions", "explorer", "stats", "kanban", "config"].includes(raw?.activity ?? "") ? raw!.activity! : "sessions") as DesktopActivity,
+        activity: (["sessions", "explorer", "stats", "kanban", "config", "design"].includes(raw?.activity ?? "") ? raw!.activity! : "sessions") as DesktopActivity,
         activePanel: typeof raw?.activePanel === "number" ? raw.activePanel : 0,
         desktopDiffOpen: !!raw?.desktopDiffOpen,
         desktopDiffWidth: Math.max(280, Math.min(800, raw?.desktopDiffWidth ?? 440)),
@@ -2717,6 +2717,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <button type="button" className={`activity-btn${activity === "kanban" ? " active" : ""}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
               onClick={() => { if (activity === "kanban") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("kanban"); setSidebarCollapsed(false) } }}>
               <LayersIcon size={18} /></button>
+            <button type="button" className={`activity-btn${activity === "design" ? " active" : ""}`} title="Open Design" aria-label="Open Design"
+              onClick={() => { if (activity === "design") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("design"); setSidebarCollapsed(false) } }}>
+              <PencilIcon size={18} /></button>
           </div>
           <div className="app-desktop-activity-bottom">
             {memInfo && (
@@ -2753,6 +2756,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     : activity === "explorer" ? t('shell.kindExplorer')
                     : activity === "stats" ? t('shell.kindStats')
                     : activity === "kanban" ? t('shell.kindKanban')
+                    : activity === "design" ? "Open Design"
                     : t('shell.kindConfig')}
                 </span>
                 <span className="desktop-sidebar-actions">
@@ -2764,6 +2768,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                   : activity === "stats" ? <StatsPanel />
                   : activity === "kanban" ? <KanbanPanel />
+                  : activity === "design" ? <DesignPanel />
                   : <ConfigPanel />}
               </div>
               <div className="desktop-sidebar-resizer" onPointerDown={startSidebarResize} title={t('desktop.resizeSidebar')} />

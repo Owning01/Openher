@@ -173,6 +173,10 @@ export const ChatView = memo(function ChatView({
   const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
   const messagesWrapRef = useRef<HTMLDivElement | null>(null)
   const devServer = useDevServer(selectedSession?.directory)
+  // Mantener último modelo visible para evitar flicker cuando recarga
+  const prevModelRef = useRef(activeModelOption)
+  useEffect(() => { if (activeModelOption) prevModelRef.current = activeModelOption }, [activeModelOption])
+  const displayModelOption = activeModelOption ?? prevModelRef.current
 
   // Copiar selección: aparece solo cuando hay texto seleccionado dentro del chat;
   // cualquier scroll lo oculta. Throttled + RAF para no bloquear typing.
@@ -351,7 +355,7 @@ export const ChatView = memo(function ChatView({
         {selectedSession && (
           <div className="detail-header-actions">
             {pendingCount > 0 && <span className="pending-badge" title={t('session.pendingCount', { count: pendingCount })}>{pendingCount}</span>}
-            {activeModelOption && (
+            {displayModelOption && (
               <div className="header-model-wrap" ref={modelMenuRef} style={{ position: "relative", flexShrink: 0 }}>
                 <button
                   ref={modelToggleRef}
@@ -361,10 +365,10 @@ export const ChatView = memo(function ChatView({
                   aria-expanded={showModelMenu}
                   aria-haspopup="true"
                   aria-controls="header-model-menu"
-                  title={`${activeModelOption.modelName ?? t('detail.modelLoading')}${activeModelOption.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}>
+                  title={`${displayModelOption.modelName ?? t('detail.modelLoading')}${displayModelOption.variant ? ` · ${t('detail.modelVariant', { variant: displayModelOption.variant })}` : ""}`}>
                   <span className="header-model-name">
-                    {activeModelOption.modelName ?? t('detail.modelLoading')}
-                    {activeModelOption.variant ? <span className="header-model-variant"> · {activeModelOption.variant}</span> : ""}
+                    {displayModelOption.modelName ?? t('detail.modelLoading')}
+                    {displayModelOption.variant ? <span className="header-model-variant"> · {displayModelOption.variant}</span> : ""}
                   </span>
                 </button>
                 {showModelMenu && createPortal(
@@ -372,16 +376,16 @@ export const ChatView = memo(function ChatView({
                     <div className="model-modal" ref={modelMenuRef}>
                       <div className="model-modal-header">
                         <div className="model-modal-title">
-                          <strong>{activeModelOption.modelName ?? t('detail.modelLoading')}</strong>
-                          {activeModelOption.providerName && <small>{activeModelOption.providerName}</small>}
+                          <strong>{displayModelOption.modelName ?? t('detail.modelLoading')}</strong>
+                          {displayModelOption.providerName && <small>{displayModelOption.providerName}</small>}
                         </div>
                         <button type="button" className="model-modal-close" onClick={() => { setShowModelMenu(false); modelToggleRef.current?.focus() }} aria-label="Close">
                           <CloseIcon />
                         </button>
                       </div>
-                      {activeModelVariants.length > 0 ? (
+                      {(displayModelOption ? activeModelVariants : []).length > 0 && displayModelOption ? (
                         <ThinkingLevels
-                          base={activeModelOption}
+                          base={displayModelOption}
                           variants={activeModelVariants}
                           activeVariant={selectedVariant}
                           onChange={(_key, variant) => {

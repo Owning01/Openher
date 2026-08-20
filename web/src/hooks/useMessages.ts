@@ -687,6 +687,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       try {
         setComposer("")
         setOptimisticUserMessages((current) => [...current, optimisticMessage])
+        // Sync refs inmediato: evita race donde el while loop no ve el optimistic (effect aún no corrió)
+        optimisticIDsRef.current = new Set([...optimisticIDsRef.current, optimisticMessage.info.id])
+        const t = extractText(optimisticMessage).trim()
+        if (t) optimisticTextsRef.current = new Set([...optimisticTextsRef.current, t])
         awaitingAssistantBaselineRef.current = assistantResponseSignature
         completionShouldPlayRef.current = true
         setAwaitingAssistantReply(true)
@@ -721,6 +725,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         // (merge por id de loadSelected / echo SSE) o expire el deadline.
         // NOTA: isSendingRef ya es false aquí — no bloquea envíos rápidos.
         try {
+          // Al menos un fetch inmediato para traer el assistant aunque el optimistic ya haya sido confirmado por SSE
+          await then().catch(() => undefined)
           const hasImages = Boolean(images && images.length > 0)
           const deadline = Date.now() + 8000 + (hasImages ? 12000 : 0)
           while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {

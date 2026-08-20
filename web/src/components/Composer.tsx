@@ -134,10 +134,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const historyIndexRef = useRef(-1)
   const [historyDraft, setHistoryDraft] = useState<string | null>(null)
 
-  const visibleAgents = useMemo(
+  const visibleAgentsRaw = useMemo(
     () => (allAgentOptions ?? primaryAgentOptions).filter((a) => !a.hidden),
     [allAgentOptions, primaryAgentOptions],
   )
+  const prevAgentsRef = useRef(visibleAgentsRaw)
+  useEffect(() => { if (visibleAgentsRaw.length > 0) prevAgentsRef.current = visibleAgentsRaw }, [visibleAgentsRaw])
+  const visibleAgents = visibleAgentsRaw.length > 0 ? visibleAgentsRaw : prevAgentsRef.current
 
   const [mentionItems, setMentionItems] = useState<MentionItem[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)

@@ -11,6 +11,7 @@ import { api } from "../api"
 import { isSessionActive } from "../utils"
 import { parseDragPayload } from "../utils/drag"
 import { TabBar } from "./TabBar"
+import { usePolling } from "../hooks/usePolling"
 import type { ChatViewProps } from "./ChatView"
 import type { ServerConfig, DataMode, SessionView, CommandInfo } from "../types"
 
@@ -265,6 +266,15 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     }
     return false
   }, [msgs.awaitingAssistantReply, msgs.renderedMessages, session])
+
+  // Polling para desktop: cuando SSE está deshabilitado (saver/ultra/miser) no hay updates en vivo.
+  // Sin esto, el assistant no aparece hasta re-entrar a la sesión.
+  const isStreamingActive = streamState === "streaming"
+  const pollInterval = isWorking ? 3000 : dataMode === "full" ? 5000 : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
+  usePolling(async () => {
+    if (!isWorking) return
+    await msgs.loadSelected(session.id, session.directory).catch(() => undefined)
+  }, pollInterval, [session.id, session.directory, dataMode, isWorking, isStreamingActive], isStreamingActive)
 
   const chatProps: ChatViewProps = useMemo(() => ({
     ...baseProps,

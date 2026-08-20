@@ -568,8 +568,7 @@
   box-shadow: var(--shadow-sm);
   transition: border-color 0.15s;
   margin-bottom: var(--chat-message-gap, var(--space-3));
-  content-visibility: auto;
-  contain-intrinsic-size: auto 240px;
+  /* content-visibility removido: rompía scrollToBottom y ocultaba mensajes nuevos hasta scroll manual */
   /* Entrada suave al montar (nuevos mensajes / carga de la sesión). La
      animación corre una sola vez por montaje — los mensajes en vivo no
      se remontan, así que no re-anima en cada delta. */
