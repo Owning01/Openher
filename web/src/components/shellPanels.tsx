@@ -99,6 +99,34 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
     let since = 0
     let polling = false
 
+    // Cola de escritura para no congelar el hilo principal con TUI a 60fps (500KB burst)
+    let writeQueue: (string | Uint8Array)[] = []
+    let flushScheduled = false
+    const scheduleFlush = () => {
+      if (flushScheduled) return
+      flushScheduled = true
+      requestAnimationFrame(() => {
+        flushScheduled = false
+        let budget = 0
+        while (writeQueue.length > 0 && budget < 32) {
+          const chunk = writeQueue.shift()!
+          if (chunk instanceof Uint8Array) term.write(chunk)
+          else term.write(chunk)
+          budget++
+          // ceder si cola sigue grande para no bloquear animaciones/scroll
+          if (writeQueue.length > 50 && budget % 16 === 0) break
+        }
+        if (writeQueue.length > 0) scheduleFlush()
+      })
+    }
+    const queueWrite = (data: string | Uint8Array) => {
+      writeQueue.push(data)
+      scheduleFlush()
+    }
+    const queueWriteB64 = (b64: string) => {
+      try { queueWrite(b64decode(b64)) } catch { /* ignore */ }
+    }
+
     const sendResize = () => {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ cmd: "resize", cols: term.cols, rows: term.rows }))
@@ -112,7 +140,7 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
         const r = await shell.pty.poll(ptyId, since)
         if (!disposed && r.data) {
           since = r.len
-          term.write(b64decode(r.data))
+          queueWriteB64(r.data)
         }
       } catch {
         /* ignore */
@@ -149,9 +177,9 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
           sock.onmessage = (e) => {
             if (disposed) return
             if (e.data instanceof ArrayBuffer) {
-              term.write(new Uint8Array(e.data))
+              queueWrite(new Uint8Array(e.data))
             } else if (typeof e.data === "string") {
-              term.write(e.data)
+              queueWrite(e.data)
             }
           }
           sock.onerror = () => { try { sock.close() } catch { /* ignore */ } }
@@ -182,12 +210,12 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
     if (existing) {
       ptyId = existing.ptyId
       wsPort = existing.wsPort
-      // Restaurar buffer histórico sin matar PTY
+      // Restaurar buffer histórico sin matar PTY (en cola para no bloquear)
       shell.pty.poll(ptyId, 0).then((r) => {
         if (disposed) return
         if (r.data) {
           since = r.len
-          term.write(b64decode(r.data))
+          queueWriteB64(r.data)
         }
       }).catch(() => {})
       // Si wsPort no está guardado (migración), derivar de location.port+1
@@ -221,7 +249,7 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
         } catch {
           /* ignore */
         }
-      }, 30)
+      }, 80)
     })
     ro.observe(el)
     window.setTimeout(() => {

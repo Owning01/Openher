@@ -15,12 +15,15 @@ import { GitToolbar } from "./GitToolbar"
 import { AutoQuestionPrompt } from "./AutoQuestionPrompt"
 import { PermissionPrompt } from "./PermissionPrompt"
 import { ChatCustomizerModal } from "./ChatCustomizerModal"
+import { SelectionBar } from "./SelectionBar"
+import type { VisualSelection } from "../hooks/useVisualSelection"
 
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { useDevServer } from "../hooks/useDevServer"
 import { formatCompact, formatCost } from "../utils"
-import type { SessionView, RenderedMessage, TodoItem, AgentOption, ModelOption, DataMode, CommandInfo,
+import type { SessionView, RenderedMessage, AgentOption, ModelOption, DataMode, CommandInfo,
   ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, PromptSnippet, ChatSettings, TokenUsage } from "../types"
+type TodoItem = any
 
 export type ChatViewProps = {
   selectedSession: SessionView | null
@@ -116,6 +119,9 @@ export type ChatViewProps = {
   onResetChatSettings?: () => void
   onOpenADEDiff?: (diffs?: FileDiff[], file?: string) => void
   onOpenBrowser?: (url: string) => void
+  visualSelection?: VisualSelection | null
+  onClearVisualSelection?: () => void
+  onFocusVisualFile?: (path: string) => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -138,7 +144,8 @@ export const ChatView = memo(function ChatView({
   compacting, revertID,
   onExportMarkdown, onEditFile,
   snippets, charLimit, compactTools, minimalistMode, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt,
-  chatSettings, onChatSettingChange, onResetChatSettings, onOpenADEDiff
+  chatSettings, onChatSettingChange, onResetChatSettings, onOpenADEDiff,
+  visualSelection, onClearVisualSelection, onFocusVisualFile
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -713,6 +720,12 @@ export const ChatView = memo(function ChatView({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {visualSelection && onClearVisualSelection && (
+        <div style={{ padding: "0 12px" }}>
+          <SelectionBar selection={visualSelection} onClear={onClearVisualSelection} onFocusFile={onFocusVisualFile} />
         </div>
       )}
 

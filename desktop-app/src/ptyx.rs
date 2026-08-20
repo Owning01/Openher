@@ -351,8 +351,12 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                         let delta = data[consumed..].to_vec();
                         consumed = data.len();
                         drop(data);
-                        if ws_write_locked(&write_sock, 0x2, &delta).is_err() {
-                            return;
+                        // Chunk en frames de 16KB para no congelar el hilo UI del WebView (TUI a 60fps)
+                        const CHUNK: usize = 16 * 1024;
+                        for chunk in delta.chunks(CHUNK) {
+                            if ws_write_locked(&write_sock, 0x2, chunk).is_err() {
+                                return;
+                            }
                         }
                         continue;
                     }

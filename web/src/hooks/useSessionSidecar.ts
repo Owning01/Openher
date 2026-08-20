@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react"
-import type { ServerConfig, TodoItem, DiffFile, ProjectDashboard } from "../types"
+import type { ServerConfig, DiffFile, ProjectDashboard } from "../types"
+type TodoItem = any
 import { api } from "../api"
 
 function toFileStatusList(input: unknown[] | Record<string, unknown>): Array<{ path: string; [key: string]: unknown }> {

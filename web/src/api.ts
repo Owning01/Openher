@@ -13,9 +13,9 @@ import type {
   ServerProviderList,
   Session,
   SessionStatus,
-  TodoItem,
   VcsStatus
 } from "./types"
+type TodoItem = any
 import {
   arrayBufferToBase64,
   baseUrl,
