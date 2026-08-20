@@ -1,4 +1,4 @@
-import { memo, useRef, useCallback, useEffect, useState, useMemo, useTransition } from "react"
+import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
 import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
@@ -131,28 +131,38 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const [editingImage, setEditingImage] = useState<ImageAttachment | null>(null)
 
   // En móvil (táctil) Enter = nueva línea; en desktop Enter envía.
+  // En wry desktop (WebView2) forzamos desktop aunque el device reporte pointer:coarse (laptop táctil)
   const isMobileInput = useMemo(
-    () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches,
+    () => typeof window !== "undefined" && !(window as any).__OPENCODE_DESKTOP__ && window.matchMedia("(pointer: coarse)").matches,
     [],
   )
 
   // Local value: input responde instantáneo sin re-render del padre (App).
-  // Typing → solo Composer re-render; parent se actualiza debounced en App.
+  // Typing → solo Composer re-render; parent se actualiza via App debounced (350ms)
   const [localValue, setLocalValue] = useState(value)
-  const [, startTransition] = useTransition()
   const lastExternalRef = useRef(value)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const composerOnChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (value !== lastExternalRef.current) {
       lastExternalRef.current = value
       setLocalValue(value)
     }
   }, [value])
+  useEffect(() => () => { if (composerOnChangeTimerRef.current) clearTimeout(composerOnChangeTimerRef.current) }, [])
   const handleChange = useCallback((newValue: string) => {
+    const prevLen = lastExternalRef.current.length
     setLocalValue(newValue)
     lastExternalRef.current = newValue
-    startTransition(() => onChangeRef.current(newValue))
+    if (composerOnChangeTimerRef.current) clearTimeout(composerOnChangeTimerRef.current)
+    // flush inmediato si es comando/borrado/paste largo, si no debounce leve (80ms) para no bloquear typing
+    const isCmd = newValue.startsWith("/") || newValue === "" || Math.abs(newValue.length - prevLen) > 20
+    if (isCmd) {
+      onChangeRef.current(newValue)
+    } else {
+      composerOnChangeTimerRef.current = setTimeout(() => onChangeRef.current(newValue), 80)
+    }
   }, [])
 
   const promptHistoryRef = useRef<string[]>(loadHistory())
@@ -412,16 +422,19 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     // del server (evita que la preview quede 10s en el composer).
     setImages([])
     setLocalValue("")
-    startTransition(() => onChange(""))
+    lastExternalRef.current = ""
+    if (composerOnChangeTimerRef.current) clearTimeout(composerOnChangeTimerRef.current)
+    onChangeRef.current("")
     resizeTextarea()
     const ok = await onSend(imgs, opts, textToSend)
     if (ok === false) {
       // Si falló, restaurar las imágenes y el texto (best-effort)
       if (imgs) setImages(imgs)
       setLocalValue(textToSend)
-      startTransition(() => onChange(textToSend))
+      lastExternalRef.current = textToSend
+      onChangeRef.current(textToSend)
     }
-  }, [onSend, images, resizeTextarea, disabled, localValue, tslEnabled, onChange])
+  }, [onSend, images, resizeTextarea, disabled, localValue, tslEnabled])
 
   const isCommandValid = useMemo(() => {
     if (!localValue.startsWith("/")) return false
