@@ -46,7 +46,22 @@ function getFrameSrc(url: string): string {
   }
   const embed = toEmbeddableUrl(url)
   if (embed !== url) return embed
-  return url
+  // X-Frame-Options / CSP frame-ancestors bloquean iframe directo para la mayoría de sitios.
+  // En desktop la navegación va por sub-WebView nativo (no iframe), pero en web/mobile usamos el
+  // puente Rust /shell/proxy que limpia X-Frame-Options/CSP y añade CORS (mismo origen).
+  // El proxy hace fetch en Rust y reinyecta <base>, por lo que el iframe ve contenido same-origin.
+  try {
+    // Si estamos servidos desde el shell (127.0.0.1), el proxy existe
+    if (typeof window !== "undefined" && window.location.hostname === "127.0.0.1") {
+      return `/shell/proxy?url=${encodeURIComponent(url)}`
+    }
+    // IS_DESKTOP usa sub-WebView nativo (no iframe), pero por si se renderiza iframe en algún fallback
+    if (IS_DESKTOP) return url
+    // Fallback web sin shell: intentar proxy relativo (si no existe, el iframe mostrará error legible del proxy en vez de bloqueo silencioso)
+    return `/shell/proxy?url=${encodeURIComponent(url)}`
+  } catch {
+    return url
+  }
 }
 
 type DeviceMode = "responsive" | "mobile" | "tablet" | "desktop"

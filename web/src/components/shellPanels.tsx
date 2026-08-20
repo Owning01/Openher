@@ -8,11 +8,22 @@ import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
+import { VisualSelectOverlay } from "./VisualSelectOverlay"
+import type { VisualSelection } from "../hooks/useVisualSelection"
 
 // Persistencia de terminales por panelId: al mover la terminal de celda
 // su estado (tabs) sobrevive al remount aunque React cree una nueva instancia.
 type TerminalPersist = { tabs: Array<{ id: string; title: string; shell: string }>; activeId: string; splitId?: string | null }
 const terminalStore = new Map<string, TerminalPersist>()
+// PTYs vivos por tabId: sobreviven a hide/resize/tab-switch; solo se matan con X explícita.
+const terminalPtyStore = new Map<string, { ptyId: string; wsPort: number }>()
+export function killTerminalPty(tabId: string) {
+  const entry = terminalPtyStore.get(tabId)
+  if (entry) {
+    shell.pty.kill(entry.ptyId).catch(() => {})
+    terminalPtyStore.delete(tabId)
+  }
+}
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
@@ -25,7 +36,7 @@ export { BrowserPanel, DocEditorPanel }
 
 // ============================================================== Terminal (Multi-Pestaña)
 
-const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: string; shellName?: string }) {
+const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: { cwd?: string; shellName?: string; tabId: string }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const initialCwdRef = useRef(cwd)
   const initialShellRef = useRef(shellName)
@@ -83,6 +94,7 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
     let disposed = false
     let ws: WebSocket | null = null
     let ptyId = ""
+    let wsPort = 0
     let pollTimer = 0
     let since = 0
     let polling = false
@@ -116,27 +128,22 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
       }
     })
 
-    shell.pty.create(initialCwdRef.current, initialShellRef.current).then((res) => {
-      if (disposed) {
-        shell.pty.kill(res.id)
-        return
-      }
-      ptyId = res.id
+    // Conexión WS reutilizable
+    const connectWs = (port: number, id: string) => {
       let reconnectAttempts = 0
       const maxReconnect = 5
-
-      const connectWs = () => {
-        if (disposed || !ptyId) return
+      const tryConnect = () => {
+        if (disposed || !id) return
         try {
           const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:"
           const wsHost = window.location.hostname || "localhost"
-          const sock = new WebSocket(`${wsProto}//${wsHost}:${res.ws_port}`)
+          const sock = new WebSocket(`${wsProto}//${wsHost}:${port}`)
           sock.binaryType = "arraybuffer"
           sock.onopen = () => {
             if (disposed) { sock.close(); return }
             reconnectAttempts = 0
             ws = sock
-            sock.send(JSON.stringify({ cmd: "attach", id: ptyId }))
+            sock.send(JSON.stringify({ cmd: "attach", id }))
             sendResize()
           }
           sock.onmessage = (e) => {
@@ -147,15 +154,12 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
               term.write(e.data)
             }
           }
-          sock.onerror = () => {
-            try { sock.close() } catch { /* ignore */ }
-          }
+          sock.onerror = () => { try { sock.close() } catch { /* ignore */ } }
           sock.onclose = () => {
             if (disposed) return
-            // Reintentar reconexión al mismo PTY antes de caer a polling.
             if (reconnectAttempts < maxReconnect) {
               reconnectAttempts += 1
-              window.setTimeout(connectWs, 400 * reconnectAttempts)
+              window.setTimeout(tryConnect, 400 * reconnectAttempts)
             } else {
               polling = true
               poll()
@@ -164,18 +168,47 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
         } catch {
           if (reconnectAttempts < maxReconnect) {
             reconnectAttempts += 1
-            window.setTimeout(connectWs, 400 * reconnectAttempts)
+            window.setTimeout(tryConnect, 400 * reconnectAttempts)
           } else {
             polling = true
             poll()
           }
         }
       }
+      tryConnect()
+    }
 
-      connectWs()
-    }).catch(() => {
-      term.writeln("\r\n\x1b[31m[Terminal] No se pudo iniciar el proceso ConPTY. Verifique que el ejecutable de escritorio esté en ejecución.\x1b[0m\r\n")
-    })
+    const existing = terminalPtyStore.get(tabId)
+    if (existing) {
+      ptyId = existing.ptyId
+      wsPort = existing.wsPort
+      // Restaurar buffer histórico sin matar PTY
+      shell.pty.poll(ptyId, 0).then((r) => {
+        if (disposed) return
+        if (r.data) {
+          since = r.len
+          term.write(b64decode(r.data))
+        }
+      }).catch(() => {})
+      // Si wsPort no está guardado (migración), derivar de location.port+1
+      if (!wsPort) wsPort = Number(window.location.port || 0) + 1 || 0
+      if (wsPort) connectWs(wsPort, ptyId)
+      else { polling = true; poll() }
+    } else {
+      shell.pty.create(initialCwdRef.current, initialShellRef.current).then((res) => {
+        if (disposed) {
+          // No matar: guardar para futura reconexión si el usuario ocultó rápido
+          terminalPtyStore.set(tabId, { ptyId: res.id, wsPort: res.ws_port })
+          return
+        }
+        ptyId = res.id
+        wsPort = res.ws_port
+        terminalPtyStore.set(tabId, { ptyId: res.id, wsPort: res.ws_port })
+        connectWs(wsPort, ptyId)
+      }).catch(() => {
+        term.writeln("\r\n\x1b[31m[Terminal] No se pudo iniciar el proceso ConPTY. Verifique que el ejecutable de escritorio esté en ejecución.\x1b[0m\r\n")
+      })
+    }
 
     let resizeTimer = 0
     const ro = new ResizeObserver(() => {
@@ -211,10 +244,10 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName }: { cwd?: 
       } catch {
         /* ignore */
       }
-      if (ptyId) shell.pty.kill(ptyId)
+      // NO matar PTY: sobrevive a hide/resize/tab-switch; solo killTerminalPty() con X lo mata
       term.dispose()
     }
-  }, [])
+  }, [tabId])
 
   return <div ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6 }} />
 })
@@ -296,6 +329,8 @@ export const TerminalPanel = memo(function TerminalPanel({
     if (termTabs.length <= 1) return
     const nextTabs = termTabs.filter((t) => t.id !== id)
     setTermTabs(nextTabs)
+    // Solo X explícita mata la PTY; hide/resize no la toca
+    killTerminalPty(id)
     if (splitTabId === id) {
       setSplitTabId(null)
     }
@@ -446,7 +481,7 @@ export const TerminalPanel = memo(function TerminalPanel({
                 <>
                   <div style={{ flex: 1, position: "relative", background: "#0d1117", display: "flex", flexDirection: "column" }}>
                     <div style={{ flex: 1, position: "relative" }}>
-                      <SingleTerminal cwd={cwd} shellName={leftTab.shell} />
+                      <SingleTerminal cwd={cwd} shellName={leftTab.shell} tabId={leftTab.id} />
                     </div>
                     <div style={{ padding: "2px 6px", fontSize: 11, color: "#8b949e", background: "#161b22", borderTop: "1px solid #30363d", display: "flex", justifyContent: "space-between" }}>
                       <span>{leftTab.title}</span>
@@ -455,7 +490,7 @@ export const TerminalPanel = memo(function TerminalPanel({
                   </div>
                   <div style={{ flex: 1, position: "relative", background: "#0d1117", display: "flex", flexDirection: "column" }}>
                     <div style={{ flex: 1, position: "relative" }}>
-                      <SingleTerminal cwd={cwd} shellName={rightTab.shell} />
+                      <SingleTerminal cwd={cwd} shellName={rightTab.shell} tabId={rightTab.id} />
                     </div>
                     <div style={{ padding: "2px 6px", fontSize: 11, color: "#8b949e", background: "#161b22", borderTop: "1px solid #30363d", display: "flex", justifyContent: "space-between" }}>
                       <span>{rightTab.title}</span>
@@ -481,7 +516,7 @@ export const TerminalPanel = memo(function TerminalPanel({
                     zIndex: tab.id === activeTabId ? 1 : 0,
                   }}
                 >
-                  <SingleTerminal cwd={cwd} shellName={tab.shell} />
+                  <SingleTerminal cwd={cwd} shellName={tab.shell} tabId={tab.id} />
                 </div>
               ))}
             </div>
@@ -1288,6 +1323,11 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   onClose,
   initialCwd,
   onSelectFile,
+  visualSelection,
+  inspectMode,
+  onVisualSelect,
+  onVisualClear,
+  onToggleInspect,
 }: {
   path: string
   openPaths?: string[]
@@ -1298,6 +1338,11 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   onClose?: () => void
   initialCwd?: string
   onSelectFile?: (path: string) => void
+  visualSelection?: VisualSelection | null
+  inspectMode?: boolean
+  onVisualSelect?: (payload: { selectedText: string; lineStart: number | null; lineEnd: number | null; surroundingContext: string; boundingRect?: { x: number; y: number; w: number; h: number } }) => void
+  onVisualClear?: () => void
+  onToggleInspect?: () => void
 }) {
   const isControlled = Array.isArray(controlledTabs) && controlledActive !== undefined
   const [internalTabs, setInternalTabs] = useState<string[]>(() => {
@@ -1471,6 +1516,23 @@ export const FileEditorPanel = memo(function FileEditorPanel({
           })}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "4px", padding: "0 4px", flexShrink: 0 }}>
+          {onVisualSelect && onToggleInspect && (
+            <button
+              type="button"
+              className={`btn-icon compact${inspectMode ? " active" : ""}${visualSelection ? " has-selection" : ""}`}
+              onClick={onToggleInspect}
+              title={inspectMode ? "Salir modo selección (Esc)" : visualSelection ? `Zona: ${visualSelection.fileName ?? ""}:${visualSelection.lineStart ?? ""} — clic para cambiar` : "Seleccionar zona para el agente (Ctrl+Shift+C)"}
+              aria-label="Seleccionar zona"
+              style={visualSelection ? { color: "#58a6ff", borderColor: "rgba(88,166,255,0.35)" } : undefined}
+            >
+              <span style={{ fontSize: 13, lineHeight: 1 }}>◈</span>
+            </button>
+          )}
+          {visualSelection && onVisualClear && (
+            <button type="button" className="btn-icon compact" onClick={onVisualClear} title={`Quitar selección ${visualSelection.fileName ?? ""}`} aria-label="Quitar selección">
+              ×
+            </button>
+          )}
           {onClose && (
             <button type="button" className="btn-icon compact" onClick={onClose} title="Cerrar panel de editor">
               ×
@@ -1495,6 +1557,14 @@ export const FileEditorPanel = memo(function FileEditorPanel({
 
       {/* Cuerpo del editor de código / Markdown */}
       <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex" }}>
+        {onVisualSelect && onToggleInspect && (
+          <VisualSelectOverlay
+            enabled={!!inspectMode}
+            filePath={activeTab}
+            onSelect={(payload) => onVisualSelect(payload)}
+            onExit={onToggleInspect}
+          />
+        )}
         {activeFile?.loading ? (
           <div style={{ padding: 16, color: "var(--muted)" }}>Cargando archivo...</div>
         ) : activeFile?.error ? (
@@ -1507,6 +1577,8 @@ export const FileEditorPanel = memo(function FileEditorPanel({
           <div style={{ flex: 1, display: "flex", minHeight: 0, width: "100%" }}>
             <div style={{ flex: 1, minWidth: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
               <textarea
+                data-vs-path={activeTab}
+                className="file-editor-textarea"
                 style={{
                   width: "100%",
                   height: "100%",
@@ -1545,6 +1617,8 @@ export const FileEditorPanel = memo(function FileEditorPanel({
           </div>
         ) : (
           <textarea
+            data-vs-path={activeTab}
+            className="file-editor-textarea"
             style={{
               width: "100%",
               height: "100%",

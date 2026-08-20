@@ -1,4 +1,19 @@
 import type { QuickChatMessage, QuickChatProvider, QuickChatResult } from "./types"
+import { shell } from "../shell"
+
+async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (e: any) {
+    const msg = String(e?.message ?? e)
+    if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("CORS") || msg.includes("Load failed")) {
+      try {
+        return await shell.proxy.fetch(url, init)
+      } catch {}
+    }
+    throw e
+  }
+}
 
 // Cerebras OpenAI-compatible. Limits: 5 RPM, 90k TPM, 30k uncached TPM
 const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
@@ -41,7 +56,7 @@ export function createCerebrasProvider(apiKey: string): QuickChatProvider {
       }
       if (!opts.model) throw new Error("Seleccioná un modelo")
       recordRequest()
-      const res = await fetch(CEREBRAS_URL, {
+      const res = await proxyAwareFetch(CEREBRAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({

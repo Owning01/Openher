@@ -180,6 +180,16 @@ export const shell = {
   search: {
     query: (q: string) => get<{ results: { title: string; url: string; snippet: string }[]; cached: boolean }>(`/shell/search?q=${encodeURIComponent(q)}`),
   },
+  proxy: {
+    /** URL para iframe same-origin que bypasea X-Frame-Options/CSP */
+    iframeUrl: (target: string) => `/shell/proxy?url=${encodeURIComponent(target)}`,
+    /** Fetch robusto vía Rust: bypasea CORS preflight sin --disable-web-security */
+    fetch: async (target: string, init?: RequestInit): Promise<Response> => {
+      const base = await resolveShellBase()
+      const url = `${base}/shell/proxy?url=${encodeURIComponent(target)}`
+      return fetch(url, init as any)
+    },
+  },
 }
 
 // ================================================================ Base64

@@ -1,4 +1,19 @@
 import type { QuickChatMessage, QuickChatProvider, QuickChatResult } from "./types"
+import { shell } from "../shell"
+
+async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (e: any) {
+    const msg = String(e?.message ?? e)
+    if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("CORS") || msg.includes("Load failed")) {
+      try {
+        return await shell.proxy.fetch(url, init)
+      } catch {}
+    }
+    throw e
+  }
+}
 
 // OpenCode Go — direct API, no opencode session. OpenAI-compatible.
 // User configures API key via Settings → Go (loadGoAccounts) or shell config.
@@ -26,10 +41,10 @@ export function createOpencodeGoProvider(apiKey: string): QuickChatProvider {
       if (!apiKey) return []
       // Try to list via Go models endpoint (OpenAI-compatible)
       try {
-        const res = await fetch(GO_MODELS_URL, {
+        const res = await proxyAwareFetch(GO_MODELS_URL, {
           headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
           cache: "no-store",
-        })
+        } as any)
         if (res.ok) {
           const data = await res.json() as any
           const list = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : []
@@ -61,7 +76,7 @@ export function createOpencodeGoProvider(apiKey: string): QuickChatProvider {
         stream: useStream,
       }
 
-      const doFetch = async (url: string) => fetch(url, {
+      const doFetch = async (url: string) => proxyAwareFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify(body),

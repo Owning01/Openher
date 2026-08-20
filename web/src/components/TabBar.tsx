@@ -181,6 +181,17 @@ export const TabBar = memo(function TabBar({
       >
         <PlusIcon size={12} />
       </button>
+      {onDropTerminal && panelIndex !== undefined && (
+        <button
+          type="button"
+          className="tab-add"
+          onClick={() => onDropTerminal(panelIndex, tabs.length)}
+          title="Nueva terminal como pestaña"
+          aria-label="Nueva terminal"
+        >
+          💻
+        </button>
+      )}
     </div>
   )
 })

@@ -74,6 +74,7 @@ struct App {
     browser_inner: browser_view::SubWebViewInner,
     /// Último instante en que se persistió la geometría (throttle de escritura).
     last_geom_save: std::time::Instant,
+    modifiers: winit::keyboard::ModifiersState,
 }
 
 enum AppEvent {
@@ -204,10 +205,11 @@ impl ApplicationHandler<AppEvent> for App {
         let ctx: &mut WebContext = self.web_context.get_or_insert(context);
         let builder = WebViewBuilder::with_web_context(ctx)
             .with_url(&self.url)
+            .with_devtools(true)
             .with_initialization_script("window.__OPENCODE_DESKTOP__ = true;")
-            // Aceleración por GPU + Desactivar bloqueo de X-Frame-Options/CORS en iframe incrustado.
+            // GPU + autoplay; sin --disable-web-security (inestable). CORS/X-Frame se resuelve vía /shell/proxy.
             .with_additional_browser_args(
-                "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-accelerated-video-decode --enable-gpu-rasterization --enable-zero-copy --disable-web-security --disable-site-isolation-trials --disable-features=IsolateOrigins,site-per-process",
+                "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-accelerated-video-decode --enable-gpu-rasterization --enable-zero-copy --autoplay-policy=no-user-gesture-required",
             );
         match builder.build_as_child(&window) {
             Ok(wv) => {
@@ -254,6 +256,22 @@ impl ApplicationHandler<AppEvent> for App {
             WindowEvent::CloseRequested => {
                 self.save_geometry();
                 event_loop.exit();
+            }
+            WindowEvent::ModifiersChanged(m) => {
+                self.modifiers = m.state();
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if event.state == winit::event::ElementState::Pressed {
+                    let is_f12 = matches!(event.physical_key, winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F12));
+                    let is_i = matches!(event.physical_key, winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyI));
+                    let ctrl = self.modifiers.control_key();
+                    let shift = self.modifiers.shift_key();
+                    if is_f12 || (is_i && ctrl && shift) {
+                        if let Some(wv) = &self.webview {
+                            wv.open_devtools();
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -512,6 +530,7 @@ fn main() {
             visible: false,
         },
         last_geom_save: std::time::Instant::now(),
+        modifiers: winit::keyboard::ModifiersState::empty(),
     };
     event_loop.run_app(&mut app).unwrap();
 }

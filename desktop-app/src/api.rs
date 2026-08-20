@@ -648,6 +648,59 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         }
         return;
     }
+    // ============================== Open Design (od-web) — estado + abrir externo
+    if path == "/shell/design/status" {
+        // Probar puertos típicos de od-web (tools-dev por defecto usa 3000)
+        let candidates = [
+            "http://127.0.0.1:3000",
+            "http://localhost:3000",
+            "http://127.0.0.1:3001",
+            "http://localhost:3001",
+            "http://127.0.0.1:5173",
+        ];
+        let mut found: Option<&str> = None;
+        for c in candidates {
+            let ok = ureq::builder()
+                .timeout(std::time::Duration::from_millis(600))
+                .build()
+                .get(c)
+                .call()
+                .is_ok();
+            if ok {
+                found = Some(c);
+                break;
+            }
+        }
+        if let Some(url) = found {
+            let _ = req.respond(json_ok(&serde_json::json!({ "running": true, "url": url })));
+        } else {
+            let _ = req.respond(json_ok(&serde_json::json!({ "running": false, "url": "http://localhost:3000" })));
+        }
+        return;
+    }
+    if path == "/shell/design/open" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let url = b["url"].as_str().unwrap_or("http://localhost:3000").to_string();
+                // Validar esquema
+                if !url.starts_with("http://") && !url.starts_with("https://") {
+                    let _ = req.respond(json_err(400, "URL debe ser http(s)"));
+                    return;
+                }
+                let url_c = url.clone();
+                // Abrir en navegador por defecto (Windows)
+                let _ = std::process::Command::new("cmd")
+                    .args(["/c", "start", "", &url_c])
+                    .spawn();
+                let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "url": url })));
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+
     // ============================== Plugins + Labs
     if path == "/shell/plugins" {
         state.plugins.scan();
@@ -819,11 +872,29 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         return;
     }
 
-    // ============================== Proxy (para iframe de páginas externas sin bloqueo CORS / X-Frame-Options)
+    // ============================== Proxy robusto (bypass CORS/CSP/X-Frame-Options sin --disable-web-security)
+    // Usa tiny_http como puente: el WebView pide mismo origen (127.0.0.1), Rust hace el fetch externo,
+    // limpia headers restrictivos y reinyecta CORS. Soporta GET/POST/PUT/PATCH/DELETE y preflight OPTIONS.
+    // Frontend debe usar: /shell/proxy?url=encodeURIComponent(target)
     if path == "/shell/proxy" {
+        // Preflight CORS
+        if method == Method::Options {
+            let origin = req.headers().iter().find(|h| h.field.as_str() == "Origin").map(|h| h.value.as_str().to_string()).unwrap_or("*".to_string());
+            let req_headers = req.headers().iter().find(|h| h.field.as_str() == "Access-Control-Request-Headers").map(|h| h.value.as_str().to_string()).unwrap_or("Content-Type, Authorization, X-Requested-With".to_string());
+            let _ = req.respond(
+                Response::from_string("")
+                    .with_status_code(StatusCode(204))
+                    .with_header(Header::from_bytes("Access-Control-Allow-Origin", origin.as_bytes()).unwrap())
+                    .with_header(Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap())
+                    .with_header(Header::from_bytes("Access-Control-Allow-Headers", req_headers.as_bytes()).unwrap())
+                    .with_header(Header::from_bytes("Access-Control-Max-Age", "86400").unwrap()),
+            );
+            return;
+        }
         let url_param = q("url");
         if url_param.is_empty() {
-            let _ = req.respond(json_err(400, "Falta parámetro url"));
+            // También soporta POST body {"url": "..."}
+            let _ = req.respond(json_err(400, "Falta parámetro url (?url=)"));
             return;
         }
         let target_url = if !url_param.starts_with("http://") && !url_param.starts_with("https://") {
@@ -831,53 +902,119 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         } else {
             url_param
         };
-
+        // Validar esquema para evitar SSRF a file:// etc.
+        if !target_url.starts_with("http://") && !target_url.starts_with("https://") {
+            let _ = req.respond(json_err(400, "URL debe ser http(s)"));
+            return;
+        }
+        // Leer body crudo si hay (para POST/PUT/PATCH que vienen via proxy)
+        let mut fwd_body: Vec<u8> = Vec::new();
+        let has_body = matches!(method, Method::Post | Method::Put | Method::Patch);
+        if has_body {
+            let mut buf = Vec::new();
+            let reader = req.as_reader();
+            let mut chunk = [0u8; 8192];
+            let mut total = 0usize;
+            loop {
+                match reader.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        total += n;
+                        if total > 16 * 1024 * 1024 { break; }
+                        buf.extend_from_slice(&chunk[..n]);
+                    }
+                    Err(_) => break,
+                }
+            }
+            fwd_body = buf;
+        }
+        // Headers a reenviar (whitelist)
+        let mut fwd_content_type: Option<String> = None;
+        let mut fwd_auth: Option<String> = None;
+        let mut fwd_accept: Option<String> = None;
+        for h in req.headers() {
+            let k = h.field.as_str().to_ascii_lowercase();
+            let v = h.value.as_str().to_string();
+            match k.as_str() {
+                "content-type" => fwd_content_type = Some(v),
+                "authorization" => fwd_auth = Some(v),
+                "accept" => fwd_accept = Some(v),
+                _ => {}
+            }
+        }
         let client = ureq::builder()
-            .timeout(std::time::Duration::from_secs(12))
+            .timeout(std::time::Duration::from_secs(15))
             .redirects(5)
             .build();
-
-        match client.get(&target_url)
-            .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-            .call() {
+        let method_str = method.as_str().to_string();
+        let mut ureq_req = client.request(&method_str, &target_url);
+        ureq_req = ureq_req.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+        ureq_req = ureq_req.set("Accept", fwd_accept.as_deref().unwrap_or("*/*"));
+        ureq_req = ureq_req.set("Accept-Language", "en-US,en;q=0.9,es;q=0.8");
+        if let Some(ct) = &fwd_content_type { ureq_req = ureq_req.set("Content-Type", ct); }
+        if let Some(auth) = &fwd_auth { ureq_req = ureq_req.set("Authorization", auth); }
+        // Ejecutar
+        let ureq_resp = if has_body && !fwd_body.is_empty() {
+            ureq_req.send_bytes(&fwd_body)
+        } else {
+            ureq_req.call()
+        };
+        match ureq_resp {
             Ok(resp) => {
-                let content_type = resp.header("Content-Type").unwrap_or("text/html; charset=utf-8").to_string();
                 let status = resp.status();
+                let ct = resp.header("Content-Type").unwrap_or("text/html; charset=utf-8").to_string();
                 let mut reader = resp.into_reader();
                 let mut body_bytes = Vec::new();
                 let _ = std::io::Read::read_to_end(&mut reader, &mut body_bytes);
-
-                if content_type.contains("html") {
-                    if let Ok(mut html) = String::from_utf8(body_bytes.clone()) {
-                        let base_tag = format!(r#"<base href="{}">"#, target_url);
-                        if let Some(pos) = html.find("<head>") {
-                            html.insert_str(pos + 6, &base_tag);
-                        } else {
-                            html.insert_str(0, &base_tag);
-                        }
-                        let clean_html = html.replace("top.location", "self.location")
-                                             .replace("parent.location", "self.location")
-                                             .replace("window.top", "window.self");
+                // Limpiar/transformar HTML
+                let is_html = ct.to_ascii_lowercase().contains("html") || ct.to_ascii_lowercase().contains("text/") && body_bytes.len() < 10*1024*1024 && String::from_utf8_lossy(&body_bytes).contains("<html");
+                if is_html {
+                    if let Ok(html) = String::from_utf8(body_bytes.clone()) {
+                        let cleaned = sanitize_proxy_html(html, &target_url);
                         let _ = req.respond(
-                            Response::from_string(clean_html)
+                            Response::from_string(cleaned)
                                 .with_status_code(StatusCode(status))
-                                .with_header(Header::from_bytes("Content-Type", content_type.as_bytes()).unwrap())
-                                .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap()),
+                                .with_header(Header::from_bytes("Content-Type", ct.as_bytes()).unwrap())
+                                .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+                                .with_header(Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap())
+                                .with_header(Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept").unwrap())
+                                .with_header(Header::from_bytes("Access-Control-Expose-Headers", "Content-Length, Content-Type").unwrap())
+                                .with_header(Header::from_bytes("Cache-Control", "no-cache").unwrap()),
                         );
                         return;
                     }
                 }
-
+                // Respuesta binaria / no-html: reenviar tal cual pero con CORS y sin headers bloqueantes
+                // Filtrar headers restrictivos del origen ya no se reenvían; solo ponemos CORS
                 let _ = req.respond(
                     Response::from_data(body_bytes)
                         .with_status_code(StatusCode(status))
-                        .with_header(Header::from_bytes("Content-Type", content_type.as_bytes()).unwrap())
+                        .with_header(Header::from_bytes("Content-Type", ct.as_bytes()).unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept").unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Expose-Headers", "Content-Length, Content-Type").unwrap()),
+                );
+            }
+            Err(ureq::Error::Status(code, resp)) => {
+                let status = code;
+                let ct = resp.header("Content-Type").unwrap_or("text/html; charset=utf-8").to_string();
+                let mut reader = resp.into_reader();
+                let mut body_bytes = Vec::new();
+                let _ = std::io::Read::read_to_end(&mut reader, &mut body_bytes);
+                let is_html = ct.contains("html");
+                let body_str = if is_html { String::from_utf8_lossy(&body_bytes).to_string() } else { format!("<pre>{}</pre>", String::from_utf8_lossy(&body_bytes)) };
+                let sanitized = if is_html { sanitize_proxy_html(body_str, &target_url) } else { body_str };
+                let _ = req.respond(
+                    Response::from_string(sanitized)
+                        .with_status_code(StatusCode(status))
+                        .with_header(Header::from_bytes("Content-Type", ct.as_bytes()).unwrap())
                         .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap()),
                 );
             }
             Err(e) => {
                 let err_html = format!(
-                    "<!DOCTYPE html><html><body style='font-family:sans-serif;padding:30px;background:#1e1e1e;color:#fff;'><h3>No se pudo cargar: {}</h3><p style='color:#ef4444;'>{}</p></body></html>",
+                    "<!DOCTYPE html><html><body style='font-family:sans-serif;padding:30px;background:#1e1e1e;color:#fff;'><h3>No se pudo cargar: {}</h3><p style='color:#ef4444;'>{}</p><p style='color:#888;'>Proxy: /shell/proxy?url=encodeURIComponent(target)</p></body></html>",
                     target_url, e
                 );
                 let _ = req.respond(
@@ -1054,6 +1191,50 @@ fn mime_for(path: &Path) -> &'static str {
         .find(|(e, _)| *e == ext)
         .map(|(_, m)| *m)
         .unwrap_or("application/octet-stream")
+}
+
+fn sanitize_proxy_html(mut html: String, base_url: &str) -> String {
+    // Inyectar <base> para que recursos relativos resuelvan al origen real
+    let base_tag = format!(r#"<base href="{}">"#, base_url);
+    let lower = html.to_ascii_lowercase();
+    if let Some(pos) = lower.find("<head>") {
+        html.insert_str(pos + 6, &base_tag);
+    } else if let Some(pos) = lower.find("<head ") {
+        if let Some(end) = html[pos..].find('>') {
+            html.insert_str(pos + end + 1, &base_tag);
+        } else {
+            html.insert_str(0, &base_tag);
+        }
+    } else {
+        html.insert_str(0, &base_tag);
+    }
+    // Eliminar meta CSP / X-Frame que bloquean framing en el HTML mismo
+    let mut search_start = 0usize;
+    loop {
+        if search_start >= html.len() { break; }
+        let slice_low = html[search_start..].to_ascii_lowercase();
+        let Some(rel) = slice_low.find("<meta") else { break; };
+        let start = search_start + rel;
+        let end = html[start..].find('>').map(|i| start + i + 1).unwrap_or((start + 6).min(html.len()));
+        let tag_low = html[start..end].to_ascii_lowercase();
+        if tag_low.contains("http-equiv") && (tag_low.contains("content-security-policy") || tag_low.contains("x-frame-options")) {
+            html.replace_range(start..end, "");
+            search_start = start;
+            continue;
+        } else {
+            search_start = end;
+            continue;
+        }
+    }
+    let cleaned = html
+        .replace("top.location", "self.location")
+        .replace("parent.location", "self.location")
+        .replace("window.top", "window.self")
+        .replace("window.parent", "window.self")
+        .replace("if (top != self)", "if (false)")
+        .replace("if(top!=self)", "if(false)")
+        .replace("if (parent != self)", "if (false)");
+    cleaned
 }
 
 fn inject_config_script(cfg: &crate::state::ShellConfig) -> String {

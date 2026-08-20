@@ -64,6 +64,7 @@ import { shell } from "./shell"
 import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, ConfigPanel, FileEditorPanel, BrowserPanel, DesignPanel, TerminalPanel } from "./components/shellPanels"
 import { TabBar } from "./components/TabBar"
 import type { ServerProfile } from "./types"
+import { useVisualSelection, formatSelectionForPrompt } from "./hooks/useVisualSelection"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
 
@@ -417,6 +418,30 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     variantGroups, selectedModelKey, selectedVariant: globalSelectedVariant, changeVariant, activeModelVariants: globalActiveModelVariants, getModelForSession, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
   const blockedModels = useBlockedModels(modelOptions)
   const { flags, toggleFlag, setFlag } = useFeatureFlags()
+  const vs = useVisualSelection()
+
+  // Atajo global Ctrl+Shift+C (o Cmd+Shift+C) para modo selección; Esc limpia
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isMod = e.ctrlKey || e.metaKey
+      if (isMod && e.shiftKey && e.key.toLowerCase() === "c" && !e.altKey) {
+        e.preventDefault()
+        vs.toggleInspect()
+      } else if (e.key === "Escape" && vs.hasSelection) {
+        // Esc limpia selección si está activa, si no deja pasar al handler global
+        if (!vs.inspectMode) {
+          // solo limpiar si no está en inspectMode (inspectMode ya maneja Esc)
+          // evitar conflicto con modales: solo si no hay modal abierto
+          const hasModal = document.querySelector(".modal, .modal-dropdown")
+          if (!hasModal) {
+            vs.clear()
+          }
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [vs])
 
   const filteredVariantGroups = useMemo(() => {
     const bs = blockedModels.blocked
@@ -1120,6 +1145,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         return
       }
     }
+    // Scropear prompt a zona seleccionada visualmente (si existe)
+    const hadVisualSelection = vs.hasSelection && !!vs.promptContext
+    if (hadVisualSelection) {
+      textToSend = formatSelectionForPrompt(textToSend, vs.promptContext)
+    }
     recordPrompt(textToSend)
     stopGenerationRef.current = false
     // Consumir un revert pendiente: el server elimina los mensajes revertidos
@@ -1137,12 +1167,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-      setCommands, setRuntimeError, images, textToSend !== composerText ? textToSend : undefined, setLocalRevertID, originalText ?? undefined)
+      setCommands, setRuntimeError, images, textToSend !== composerText ? textToSend : (hadVisualSelection ? textToSend : undefined), setLocalRevertID, originalText ?? undefined)
+    if (hadVisualSelection && result !== false) vs.clear()
     if (result === "help") { setHelpPage("commands"); navigate("help") }
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
     if (result === "connect") setShowConnectSheet(true)
     return typeof result === "boolean" ? result : true
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker, setShowConnectSheet])
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker, setShowConnectSheet, vs])
 
   const handleRegenerate = useCallback(async () => {
     if (!selectedSession) return
@@ -2710,6 +2741,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     chatSettings,
     onChatSettingChange: setChatSetting,
     onResetChatSettings: resetChatSettings,
+    visualSelection: vs.selection,
+    onClearVisualSelection: vs.clear,
+    onFocusVisualFile: (path: string) => handleOpenFile(path),
   }), [
     selectedSession, localRevertID, renderedMessages, todos, todosExpanded,
     isWorking, showTypingBubble, loadingSessionID, selectedID, messageScrollSignature,
@@ -2727,6 +2761,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     handleRedo, handleCompact, handleCreateSession, fb, setShowTerminal,
     setShowMCPBrowser, setShowRemoteDesktop, chatSettings, setChatSetting, resetChatSettings,
     promptSnippets, handleRegenerate, handleInsertPrompt, handleSendPrompt,
+    vs.selection, vs.clear, handleOpenFile,
   ])
 
   const activeSessionSid = isDesktop ? desktopLayout.sessions[Math.min(activePanel, desktopLayout.sessions.length - 1)] : selectedSession?.id
@@ -2872,6 +2907,19 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
     addPanel("kanban")
   }, [isDesktop, desktopLayout, activePanel, tabStacks, addPanel, setTabStacks, setDesktopLayout])
+
+  const handleVisualSelect = useCallback((filePath: string, payload: { selectedText: string; lineStart: number | null; lineEnd: number | null; surroundingContext: string; boundingRect?: { x: number; y: number; w: number; h: number } }) => {
+    const fileName = filePath.split(/[/\\]/).pop() || filePath
+    vs.select({
+      filePath,
+      fileName,
+      lineStart: payload.lineStart,
+      lineEnd: payload.lineEnd,
+      selectedText: payload.selectedText,
+      surroundingContext: payload.surroundingContext,
+      boundingRect: payload.boundingRect,
+    })
+  }, [vs])
 
   const detailView = <ChatView {...baseChatProps} composer={composer} onComposerChange={handleComposerChange} onOpenBrowser={handleOpenBrowser} />
 
@@ -3263,7 +3311,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                         }}
                       onTabAdd={() => {}} // TODO: open session picker
                       onTabMove={(from, to) => moveTab(i, from, to)}
-                      onDropTerminal={addTerminalToPanel} />
+                      onDropTerminal={addTerminalToPanel}
+                      visualSelection={vs.selection}
+                      visualPromptContext={vs.promptContext}
+                      onClearVisualSelection={vs.clear}
+                      onFocusVisualFile={handleOpenFile} />
                   </div>
                 )
               }
@@ -3281,6 +3333,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onTabSelect={(p) => handleEditorTabSelect(i, p)}
                       onTabClose={(p) => handleEditorTabClose(i, p)}
                       onClose={() => closePanel(i)}
+                      visualSelection={vs.selection}
+                      inspectMode={vs.inspectMode}
+                      onVisualSelect={(payload) => handleVisualSelect(editorPath, payload)}
+                      onVisualClear={vs.clear}
+                      onToggleInspect={vs.toggleInspect}
                     />
                   </div>
                 )
@@ -3381,7 +3438,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onTabSwitch={switchTab}
                       onTabClose={removeTab}
                       onTabAdd={() => {}}
-                      onTabMove={(from, to) => moveTab(maximizedIndex, from, to)} />
+                      onTabMove={(from, to) => moveTab(maximizedIndex, from, to)}
+                      visualSelection={vs.selection}
+                      visualPromptContext={vs.promptContext}
+                      onClearVisualSelection={vs.clear}
+                      onFocusVisualFile={handleOpenFile} />
                   </div>
                 ) : (
                   <div className="desktop-grid" ref={gridRef}

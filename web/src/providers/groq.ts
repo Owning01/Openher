@@ -1,4 +1,19 @@
 import type { QuickChatMessage, QuickChatProvider, QuickChatResult } from "./types"
+import { shell } from "../shell"
+
+async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (e: any) {
+    const msg = String(e?.message ?? e)
+    if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("CORS") || msg.includes("Load failed")) {
+      try {
+        return await shell.proxy.fetch(url, init)
+      } catch {}
+    }
+    throw e
+  }
+}
 
 // Groq OpenAI-compatible. Ultra-low latency, native streaming.
 // Docs: https://console.groq.com/docs/quickstart — baseURL https://api.groq.com/openai/v1
@@ -50,7 +65,7 @@ export function createGroqProvider(apiKey: string): QuickChatProvider {
         stream: useStream,
       }
 
-      const res = await fetch(GROQ_URL, {
+      const res = await proxyAwareFetch(GROQ_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify(body),
