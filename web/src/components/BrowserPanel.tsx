@@ -338,7 +338,13 @@ export const BrowserPanel = memo(function BrowserPanel({
           }
         }
       } catch {}
-      if (!stopped) setTimeout(tick, 350)
+      if (!stopped) {
+        // Polling adaptativo: rápido solo mientras inspeccionamos (picks en vivo);
+        // con anotaciones, medio segundo basta para escuchar removes de badges;
+        // idle total, 2.5s. Evita un HTTP GET cada 350ms para siempre.
+        const delay = inspectRef.current ? 350 : annRef.current.length > 0 ? 900 : 2500
+        setTimeout(tick, delay)
+      }
     }
     tick()
     return () => { stopped = true }

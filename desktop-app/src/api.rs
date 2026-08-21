@@ -1159,6 +1159,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_err(400, "missing code"));
                 return;
             }
+            // Cap defensivo: el overlay inyectado ronda los 14KB; nada legítimo
+            // supera 256KB. Sin tope, un bug del host podría OOMear el WebView.
+            if code.len() > 256 * 1024 {
+                let _ = req.respond(json_err(413, "code too large"));
+                return;
+            }
             let resp = match state.browser.eval(code) {
                 Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
                 Err(e) => json_err(500, &e),
@@ -1173,9 +1179,14 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     // sub-WebView), GET drena la cola hacia el host.
     if path == "/shell/browser/pick" && method == Method::Post {
         if let Ok(v) = read_body(&mut req) {
+            let serialized = v.to_string();
+            if serialized.len() > 128 * 1024 {
+                let _ = req.respond(json_err(413, "pick too large"));
+                return;
+            }
             let mut queue = state.browser_picks.lock().unwrap_or_else(|e| e.into_inner());
             if queue.len() < 64 {
-                queue.push(v.to_string());
+                queue.push(serialized);
             }
             let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
             return;

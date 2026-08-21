@@ -365,13 +365,23 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
     setShowPicker(true)
     const i = await refreshInfo()
     if (!i) return
+    // Revocar URLs de la apertura anterior (blob JPEGs sin revoke = fuga)
+    setThumbnails((prev) => {
+      for (const url of Object.values(prev)) {
+        try { URL.revokeObjectURL(url) } catch { /* ignore */ }
+      }
+      return {}
+    })
     const thumbs: Record<number, string> = {}
     const stamps: Record<number, number> = {}
     for (const win of i.windows.slice(0, 12)) {
       const hwnd = win.hwnd
       desktopThumb(config, hwnd, 200)
         .then((url) => {
-          if (stamps[hwnd] !== undefined) return
+          if (stamps[hwnd] !== undefined) {
+            try { URL.revokeObjectURL(url) } catch { /* ignore */ }
+            return
+          }
           stamps[hwnd] = 1
           thumbs[hwnd] = url
           setThumbnails({ ...thumbs })
@@ -379,6 +389,18 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
         .catch(() => undefined)
     }
   }, [config, refreshInfo])
+
+  // Unmount: liberar todas las thumbnails pendientes
+  useEffect(() => {
+    return () => {
+      setThumbnails((prev) => {
+        for (const url of Object.values(prev)) {
+          try { URL.revokeObjectURL(url) } catch { /* ignore */ }
+        }
+        return prev
+      })
+    }
+  }, [])
 
   const pickSource = useCallback((s: Source) => {
     setSource(s)

@@ -16,7 +16,21 @@ import type { VisualSelection } from "../hooks/useVisualSelection"
 type TerminalPersist = { tabs: Array<{ id: string; title: string; shell: string }>; activeId: string; splitId?: string | null }
 const terminalStore = new Map<string, TerminalPersist>()
 // PTYs vivos por tabId: sobreviven a hide/resize/tab-switch; solo se matan con X explícita.
+// LRU cap: cada PTY ConPTY vivo cuesta RAM + threads del shell; sin tope, abrir
+// muchas terminales a lo largo de la sesión degrada todo (creep silencioso).
+const MAX_PERSISTED_PTYS = 8
 const terminalPtyStore = new Map<string, { ptyId: string; wsPort: number }>()
+function rememberTerminalPty(tabId: string, entry: { ptyId: string; wsPort: number }) {
+  terminalPtyStore.delete(tabId)
+  terminalPtyStore.set(tabId, entry)
+  while (terminalPtyStore.size > MAX_PERSISTED_PTYS) {
+    const oldest = terminalPtyStore.keys().next().value as string | undefined
+    if (!oldest) break
+    const victim = terminalPtyStore.get(oldest)
+    terminalPtyStore.delete(oldest)
+    if (victim) shell.pty.kill(victim.ptyId).catch(() => {})
+  }
+}
 export function killTerminalPty(tabId: string) {
   const entry = terminalPtyStore.get(tabId)
   if (entry) {
@@ -258,12 +272,12 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
       shell.pty.create(initialCwdRef.current, initialShellRef.current).then((res) => {
         if (disposed) {
           // No matar: guardar para futura reconexión si el usuario ocultó rápido
-          terminalPtyStore.set(tabId, { ptyId: res.id, wsPort: res.ws_port })
+          rememberTerminalPty(tabId, { ptyId: res.id, wsPort: res.ws_port })
           return
         }
         ptyId = res.id
         wsPort = res.ws_port
-        terminalPtyStore.set(tabId, { ptyId: res.id, wsPort: res.ws_port })
+        rememberTerminalPty(tabId, { ptyId: res.id, wsPort: res.ws_port })
         connectWs(wsPort, ptyId)
       }).catch(() => {
         term.writeln("\r\n\x1b[31m[Terminal] No se pudo iniciar el proceso ConPTY. Verifique que el ejecutable de escritorio esté en ejecución.\x1b[0m\r\n")
