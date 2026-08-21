@@ -104,7 +104,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // setMessages por requestAnimationFrame (máx. 60 renders/s, agrupando el
   // trabajo). Al desmontar se drena lo pendiente de forma síncrona para no
   // perder el último tramo del stream.
-  const messageBatchRef = useRef<Array<(prev: MessageEnvelope[]) => MessageEnvelope[]>>([])
+  const messageBatchRef = useRef<Array<{ sid: string | null; patch: (prev: MessageEnvelope[]) => MessageEnvelope[] }>>([])
   const batchFrameRef = useRef<number | null>(null)
   const batchMountedRef = useRef(true)
 
@@ -113,11 +113,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (messageBatchRef.current.length === 0) return
     const batch = messageBatchRef.current
     messageBatchRef.current = []
-    setMessages((prev) => batch.reduce((acc, patch) => patch(acc), prev))
+    setMessages((prev) => {
+      const loaded = loadedSessionIDRef.current
+      // Patch encolado para una sesión distinta a la cargada = raza de switch:
+      // llegó tarde y ya fue purgada por loadSelected. Descartarlo, nunca
+      // re-inyectarlo (era la ventana que mostraba el chat del otro).
+      return batch.reduce((acc, entry) => entry.sid && loaded && entry.sid !== loaded ? acc : entry.patch(acc), prev)
+    })
   }, [])
 
-  const queueMessageUpdate = useCallback((patch: (prev: MessageEnvelope[]) => MessageEnvelope[]) => {
-    messageBatchRef.current.push(patch)
+  const queueMessageUpdate = useCallback((patch: (prev: MessageEnvelope[]) => MessageEnvelope[], sid: string | null = null) => {
+    messageBatchRef.current.push({ sid, patch })
     if (batchFrameRef.current === null && batchMountedRef.current) {
       batchFrameRef.current = requestAnimationFrame(flushMessageBatch)
     }
@@ -133,7 +139,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       if (messageBatchRef.current.length > 0) {
         const batch = messageBatchRef.current
         messageBatchRef.current = []
-        setMessages((prev) => batch.reduce((acc, patch) => patch(acc), prev))
+        setMessages((prev) => {
+          const loaded = loadedSessionIDRef.current
+          return batch.reduce((acc, entry) => entry.sid && loaded && entry.sid !== loaded ? acc : entry.patch(acc), prev)
+        })
       }
     }
   }, [])
@@ -566,7 +575,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         return { ...m, parts: nextParts }
       })
       return changed ? next : prev
-    })
+    }, sessionID)
   }, [queueMessageUpdate])
 
   // Materializa un part emitido por `message.part.updated`: crea el mensaje/part
@@ -575,20 +584,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (!part.id) return
     const visible = loadedSessionIDRef.current
     if (visible && visible !== sessionID) {
-      // Tool part de un subagente (task): solo la tarjeta de invocación (task/subagent)
-      // pertenece al chat del padre. Las tools internas (read, bash, grep...) de la
-      // sesión hija NO deben anclarse al mensaje del padre para evitar duplicación.
+      // Tool part de una sesión distinta a la visible (subagente en background):
+      // SOLO se acepta si existe un ancla previa que apunte al chat visible.
+      // El fallback anterior ("sessionID = visible; messageID = ''") adivinaba
+      // el último assistant del chat abierto e INYECTABA contenido de otro chat.
       const isTaskPart = part.tool === "task" || part.tool === "subagent" ||
         (part.state && typeof part.state === "object" && (Boolean((part.state as any).input?.subagent_type) || Boolean((part.state as any).metadata?.subagent)))
       if (!isTaskPart) return
       const anchor = subagentAnchorRef.current.get(part.id)
-      if (anchor) {
-        sessionID = anchor.sessionID
-        messageID = anchor.messageID
-      } else {
-        sessionID = visible
-        messageID = ""
-      }
+      if (!anchor || anchor.sessionID !== visible) return
+      sessionID = anchor.sessionID
+      messageID = anchor.messageID
     }
     queueMessageUpdate((prev) => {
       let targetMessageID = messageID
@@ -649,7 +655,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         return { ...m, parts: nextParts }
       })
       return changed ? next : prev
-    })
+    }, sessionID)
   }, [queueMessageUpdate])
 
   const updateSend = useCallback(async (

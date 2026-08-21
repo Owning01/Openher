@@ -2673,7 +2673,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const baseChatProps: Omit<ChatViewProps, 'composer' | 'onComposerChange'> = useMemo(() => ({
     selectedSession,
     revertID: localRevertID,
-    messages: renderedMessages, pendingIndex, todos,
+    // Cinturón y tiradores: el estado de mensajes debe contener una sola
+    // conversación, pero cualquier raza de switch residual (patch SSE tarde,
+    // parte foránea) NUNCA debe cruzar la frontera de render.
+    messages: selectedSession ? renderedMessages.filter((m) => m.info.sessionID === selectedSession.id) : renderedMessages,
+    pendingIndex, todos,
     todosExpanded,
     isWorking, showTypingBubble, isSending,
     loadingSessionID, selectedID,
