@@ -17,8 +17,21 @@ export type VisualSelection = {
 
 export type VisualSource = { file: string; line: number | null } | null
 
+export type VisualMember = {
+  tmpId?: string
+  tag: string
+  selector: string
+  outerHTML: string
+  innerText?: string
+  boundingRect?: { x: number; y: number; w: number; h: number }
+  source?: VisualSource
+}
+
 export type VisualAnnotation = {
   id: string
+  tmpId?: string
+  mode?: "picker" | "pod"
+  members?: VisualMember[]
   tag: string
   selector: string
   xpath?: string
@@ -30,6 +43,8 @@ export type VisualAnnotation = {
   url: string
   source?: VisualSource
   comment: string
+  styleDraft?: Record<string, string>
+  styleBefore?: Record<string, string | null>
   timestamp: number
 }
 
@@ -81,14 +96,43 @@ export function formatAnnotationZone(a: VisualAnnotation, idx: number): string {
     ? `${a.source.file}${a.source.line != null ? `:${a.source.line}` : ""}`
     : a.selector
   const note = a.comment.trim() ? `\nNota del usuario: "${a.comment.trim()}"` : "\nNota del usuario: (sin nota — inferir qué falta de la zona)"
+  const styleLines = styleDiffLines(a)
+  const styleBlock = styleLines.length > 0
+    ? `\nAjustes visuales aplicados en el preview (intent del usuario — replicar en el código fuente):\n${styleLines.map((l) => `- ${l}`).join("\n")}`
+    : ""
+  if (a.members && a.members.length > 0) {
+    // Zona pod: múltiples elementos enclosed
+    const list = a.members.slice(0, 6).map((m, i) => {
+      const mloc = m.source?.file ? ` · \`${m.source.file}${m.source.line != null ? `:${m.source.line}` : ""}\`` : ""
+      return `${i + 1}. <${m.tag}> selector \`${m.selector}\`${mloc}`
+    }).join("\n")
+    const htmls = a.members.slice(0, 6).map((m) => m.outerHTML.trim().slice(0, 800)).join("\n")
+    const extra = a.members.length > 6 ? `\n(+${a.members.length - 6} elementos más en la misma área)` : ""
+    return [
+      `Zona ${icon} (área arrastrada) · \`${loc}\`${note}${styleBlock}`,
+      `Elementos dentro del área:\n${list}${extra}`,
+      "HTML:",
+      "```html",
+      htmls,
+      "```",
+    ].join("\n")
+  }
   const html = a.outerHTML.trim().slice(0, 2500)
   return [
-    `Zona ${icon} <${a.tag}> · \`${loc}\`${note}`,
+    `Zona ${icon} <${a.tag}> · \`${loc}\`${note}${styleBlock}`,
     "HTML:",
     "```html",
     html,
     "```",
   ].join("\n")
+}
+
+function styleDiffLines(a: VisualAnnotation): string[] {
+  if (!a.styleDraft) return []
+  const before = a.styleBefore ?? {}
+  return Object.entries(a.styleDraft)
+    .filter(([k, v]) => v && String(v).trim() !== "" && before[k] !== String(v))
+    .map(([k, v]) => `${k}: ${before[k] ?? "(valor inicial)"} → ${v}`)
 }
 
 function buildAnnotationsPrompt(annotations: VisualAnnotation[]): string {
@@ -103,6 +147,7 @@ export function useVisualSelection() {
   const [selection, setSelection] = useState<VisualSelection | null>(null)
   const [annotations, setAnnotations] = useState<VisualAnnotation[]>([])
   const [inspectMode, setInspectMode] = useState(false)
+  const [inspectTool, setInspectTool] = useState<"picker" | "pod">("picker")
 
   const select = useCallback((sel: Omit<VisualSelection, "id" | "timestamp">) => {
     setSelection({
@@ -116,14 +161,24 @@ export function useVisualSelection() {
   const clear = useCallback(() => setSelection(null), [])
   const toggleInspect = useCallback(() => setInspectMode((v) => !v), [])
 
-  const addAnnotation = useCallback((a: Omit<VisualAnnotation, "id" | "comment" | "timestamp">) => {
-    const id = `ann-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-    setAnnotations((prev) => prev.length >= 9 ? prev : [...prev, { ...a, id, comment: "", timestamp: Date.now() }])
+  const addAnnotation = useCallback((a: Omit<VisualAnnotation, "comment" | "timestamp"> & { comment?: string }) => {
+    // El bridge ya etiquetó el elemento con data-oc-tmp=tmpId: usarlo como id
+    // para que applyStyle/removeBadge lo encuentren en el DOM.
+    const id = a.id || a.tmpId || `ann-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    setAnnotations((prev) => prev.length >= 9 ? prev : [...prev, { ...a, id, comment: a.comment ?? "", timestamp: Date.now() }])
     return id
   }, [])
 
   const setAnnotationComment = useCallback((id: string, comment: string) => {
     setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, comment } : a)))
+  }, [])
+
+  const setAnnotationStyle = useCallback((id: string, draft: Record<string, string>) => {
+    setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, styleDraft: draft } : a)))
+  }, [])
+
+  const setAnnotationStyleBefore = useCallback((id: string, before: Record<string, string | null>) => {
+    setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, styleBefore: before } : a)))
   }, [])
 
   const removeAnnotation = useCallback((id: string) => {
@@ -146,12 +201,16 @@ export function useVisualSelection() {
     zoneIcon,
     hasSelection,
     inspectMode,
+    inspectTool,
     setInspectMode,
+    setInspectTool,
     toggleInspect,
     select,
     clear,
     addAnnotation,
     setAnnotationComment,
+    setAnnotationStyle,
+    setAnnotationStyleBefore,
     removeAnnotation,
     clearAnnotations,
     promptContext,

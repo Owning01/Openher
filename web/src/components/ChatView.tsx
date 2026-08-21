@@ -452,7 +452,7 @@ export const ChatView = memo(function ChatView({
                 ) : (
                   <>
                     <span style={{ fontSize: "0.75rem" }}>▶</span>
-                    <span>{devServer.devCommand || "Run Web"}</span>
+                    <span>Abrir proyecto</span>
                   </>
                 )}
               </button>

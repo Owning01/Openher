@@ -11,11 +11,42 @@ export type DevServerInfo = {
 }
 
 // Global registry of running dev servers keyed by directory
-const runningServers = new Map<string, { ptyId: string; url: string; command: string }>()
+const runningServers = new Map<string, { ptyId: string; url: string; command: string; cwd: string | null }>()
 
-export function useDevServer(directory?: string | null): DevServerInfo {
+// Subdirectorios típicos de monorepos donde vive el package.json con scripts.dev.
+// La raíz de un monorepo suele NO tener script dev propio (ej: opencode-remote-android/web).
+const SUBDIR_PRIORITY = ["web", "app", "client", "frontend", "ui", "www", "apps/web", "packages/web"]
+const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".next", ".vite", ".git", "target", "vendor", "out", ".output"])
+
+async function detectCmdInPkg(dir: string): Promise<{ cmd: string } | null> {
+  try {
+    const res = await shell.fs.read(`${dir}/package.json`)
+    if (!res?.content) return null
+    const pkg = JSON.parse(res.content)
+    const scripts = pkg.scripts || {}
+    let pm = "npm run"
+    try {
+      const list = await shell.fs.list(dir)
+      const files = (list.files || []).map((f: { name: string }) => f.name.toLowerCase())
+      if (files.includes("pnpm-lock.yaml")) pm = "pnpm"
+      else if (files.includes("bun.lockb") || files.includes("bun.lock")) pm = "bun"
+      else if (files.includes("yarn.lock")) pm = "yarn"
+    } catch {
+      /* ignore */
+    }
+    if (scripts.dev) return { cmd: pm === "npm run" ? "npm run dev" : `${pm} dev` }
+    if (scripts.start) return { cmd: pm === "npm run" ? "npm start" : `${pm} start` }
+    if (scripts.serve) return { cmd: pm === "npm run" ? "npm run serve" : `${pm} serve` }
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+export function useDevServer(directory?: string | null): DevServerInfo & { devCwd: string | null } {
   const [hasDevServer, setHasDevServer] = useState(false)
   const [devCommand, setDevCommand] = useState<string | null>(null)
+  const [devCwd, setDevCwd] = useState<string | null>(null)
   const [status, setStatus] = useState<"idle" | "starting" | "running" | "error">("idle")
   const [serverUrl, setServerUrl] = useState<string | null>(null)
   const pollRef = useRef<number | null>(null)
@@ -25,6 +56,7 @@ export function useDevServer(directory?: string | null): DevServerInfo {
     if (!directory) {
       setHasDevServer(false)
       setDevCommand(null)
+      setDevCwd(null)
       setStatus("idle")
       setServerUrl(null)
       return
@@ -34,6 +66,7 @@ export function useDevServer(directory?: string | null): DevServerInfo {
     if (running) {
       setHasDevServer(true)
       setDevCommand(running.command)
+      setDevCwd(running.cwd)
       setStatus("running")
       setServerUrl(running.url)
     }
@@ -43,8 +76,9 @@ export function useDevServer(directory?: string | null): DevServerInfo {
     const checkProject = async () => {
       try {
         const sep = directory.includes("\\") ? "\\" : "/"
-        const pkgPath = `${directory}${directory.endsWith(sep) ? "" : sep}package.json`
-        
+        const base = directory.endsWith(sep) ? directory.slice(0, -1) : directory
+        const pkgPath = `${base}${sep}package.json`
+
         let pkgContent: string | null = null
         try {
           const res = await shell.fs.read(pkgPath)
@@ -80,6 +114,7 @@ export function useDevServer(directory?: string | null): DevServerInfo {
             if (cmd) {
               setHasDevServer(true)
               setDevCommand(cmd)
+              setDevCwd(null)
               return
             }
           } catch {
@@ -94,11 +129,52 @@ export function useDevServer(directory?: string | null): DevServerInfo {
           if (fileNames.some((f) => f.startsWith("vite.config") || f === "index.html")) {
             setHasDevServer(true)
             setDevCommand("npx vite")
+            setDevCwd(null)
             return
           }
           if (fileNames.includes("trunk.toml")) {
             setHasDevServer(true)
             setDevCommand("trunk serve")
+            setDevCwd(null)
+            return
+          }
+        } catch {
+          /* ignore */
+        }
+
+        // Monorepo: la raíz no tiene script dev propio → escanear UN nivel de
+        // subdirectorios (web/, apps/*, etc.) buscando package.json con dev/start/serve.
+        try {
+          const list = await shell.fs.list(directory)
+          const dirNames = ((list.files || []) as Array<{ name: string; is_dir: boolean }>)
+            .filter((f) => f.is_dir && !SKIP_DIRS.has(f.name.toLowerCase()))
+            .map((f) => f.name)
+
+          const trySub = async (name: string): Promise<string | null> => {
+            const r = await detectCmdInPkg(`${base}${sep}${name}`)
+            return r ? r.cmd : null
+          }
+
+          let found: { sub: string; cmd: string } | null = null
+          for (const cand of SUBDIR_PRIORITY) {
+            if (!dirNames.includes(cand)) continue
+            const cmd = await trySub(cand)
+            if (cmd) { found = { sub: cand, cmd }; break }
+          }
+          if (!found) {
+            let n = 0
+            for (const name of dirNames) {
+              if (++n > 24) break
+              if (SUBDIR_PRIORITY.includes(name)) continue
+              const cmd = await trySub(name)
+              if (cmd) { found = { sub: name, cmd }; break }
+            }
+          }
+          if (cancelled) return
+          if (found) {
+            setHasDevServer(true)
+            setDevCommand(found.cmd)
+            setDevCwd(`${base}${sep}${found.sub}`)
             return
           }
         } catch {
@@ -108,11 +184,13 @@ export function useDevServer(directory?: string | null): DevServerInfo {
         if (!running) {
           setHasDevServer(false)
           setDevCommand(null)
+          setDevCwd(null)
         }
       } catch {
         if (!cancelled && !running) {
           setHasDevServer(false)
           setDevCommand(null)
+          setDevCwd(null)
         }
       }
     }
@@ -154,9 +232,12 @@ export function useDevServer(directory?: string | null): DevServerInfo {
       return existing.url
     }
 
+    // En monorepos el comando corre en el subdirectorio detectado, no en la raíz
+    const cwd = devCwd ?? directory
+
     setStatus("starting")
     try {
-      const ptyRes = await shell.pty.create(directory)
+      const ptyRes = await shell.pty.create(cwd)
       const ptyId = ptyRes.id
 
       // Send the dev command to PTY
@@ -191,7 +272,7 @@ export function useDevServer(directory?: string | null): DevServerInfo {
               window.clearInterval(pollRef.current)
               pollRef.current = null
             }
-            runningServers.set(directory, { ptyId, url: foundUrl, command: devCommand })
+            runningServers.set(directory, { ptyId, url: foundUrl, command: devCommand, cwd })
             setStatus("running")
             setServerUrl(foundUrl)
             resolve(foundUrl)
@@ -205,7 +286,7 @@ export function useDevServer(directory?: string | null): DevServerInfo {
               pollRef.current = null
             }
             const fallbackUrl = "http://localhost:5173"
-            runningServers.set(directory, { ptyId, url: fallbackUrl, command: devCommand })
+            runningServers.set(directory, { ptyId, url: fallbackUrl, command: devCommand, cwd })
             setStatus("running")
             setServerUrl(fallbackUrl)
             resolve(fallbackUrl)
@@ -218,11 +299,12 @@ export function useDevServer(directory?: string | null): DevServerInfo {
       setStatus("error")
       throw err
     }
-  }, [directory, devCommand])
+  }, [directory, devCommand, devCwd])
 
   return {
     hasDevServer,
     devCommand,
+    devCwd,
     status,
     serverUrl,
     startDevServer,

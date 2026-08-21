@@ -99,9 +99,13 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
     let since = 0
     let polling = false
 
-    // Cola de escritura para no congelar el hilo principal con TUI a 60fps (500KB burst)
+    // Cola de escritura para no congelar el hilo principal con TUI a 60fps (500KB burst).
+    // CAP duro: con la ventana oculta rAF no corre y la cola crecería sin límite
+    // (TUI escupiendo MBs → ~1GB RAM). Al superar MAX_QUEUE se descarta lo viejo.
     let writeQueue: (string | Uint8Array)[] = []
     let flushScheduled = false
+    let queueTruncated = false
+    const TRUNCATE_MARKER = "\r\n\x1b[33m[terminal: salida omitida mientras estaba en segundo plano]\x1b[0m\r\n"
     const scheduleFlush = () => {
       if (flushScheduled) return
       flushScheduled = true
@@ -116,16 +120,42 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
           // ceder si cola sigue grande para no bloquear animaciones/scroll
           if (writeQueue.length > 50 && budget % 16 === 0) break
         }
+        if (writeQueue.length === 0 && queueTruncated) {
+          queueTruncated = false
+          term.write(TRUNCATE_MARKER)
+        }
         if (writeQueue.length > 0) scheduleFlush()
       })
     }
     const queueWrite = (data: string | Uint8Array) => {
       writeQueue.push(data)
+      if (writeQueue.length > 240) {
+        const drop = writeQueue.length - 240
+        writeQueue.splice(0, drop)
+        queueTruncated = true
+      }
       scheduleFlush()
     }
     const queueWriteB64 = (b64: string) => {
       try { queueWrite(b64decode(b64)) } catch { /* ignore */ }
     }
+
+    // Oculto → cerrar WS y vaciar cola: el ring buffer del server (2MB) acota el
+    // historial y al volver reconectamos + replay acotado. Evita acumular en renderer.
+    const onVisChange = () => {
+      if (document.visibilityState === "hidden") {
+        polling = false
+        window.clearTimeout(pollTimer)
+        try { ws?.close() } catch { /* ignore */ }
+        ws = null
+        writeQueue.length = 0
+        queueTruncated = false
+      } else if (!disposed && ptyId) {
+        if (wsPort) connectWs(wsPort, ptyId)
+        else { polling = true; poll() }
+      }
+    }
+    document.addEventListener("visibilitychange", onVisChange)
 
     const sendResize = () => {
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -185,6 +215,8 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
           sock.onerror = () => { try { sock.close() } catch { /* ignore */ } }
           sock.onclose = () => {
             if (disposed) return
+            // Oculto: no reconectar (onVisChange lo hace al volver)
+            if (document.visibilityState === "hidden") return
             if (reconnectAttempts < maxReconnect) {
               reconnectAttempts += 1
               window.setTimeout(tryConnect, 400 * reconnectAttempts)
@@ -265,6 +297,7 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
       disposed = true
       window.clearTimeout(pollTimer)
       window.clearTimeout(resizeTimer)
+      document.removeEventListener("visibilitychange", onVisChange)
       ro.disconnect()
       onData.dispose()
       try {

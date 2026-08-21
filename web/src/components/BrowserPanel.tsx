@@ -4,11 +4,25 @@ import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
 import { BrowserVisualOverlay, type BrowserPickedElement } from "./BrowserVisualOverlay"
 import type { VisualSelection, VisualAnnotation } from "../hooks/useVisualSelection"
-import { buildOverlayScript, badgeScript, removeBadgeScript, clearBadgesScript, cleanupOverlayScript } from "./browserOverlayScript"
+import {
+  buildOverlayScript, badgeScript, removeBadgeScript, clearBadgesScript,
+  cleanupOverlayScript, applyStyleScript, unbindScript, setToolScript,
+  type InspectTool,
+} from "./browserOverlayScript"
 
 const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
 
 const ZONE_ICONS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"]
+
+const STYLE_FIELDS: Array<{ prop: string; label: string; kind: "color" | "number" | "select"; options?: string[]; unit?: string }> = [
+  { prop: "color", label: "Texto", kind: "color" },
+  { prop: "background-color", label: "Fondo", kind: "color" },
+  { prop: "font-size", label: "Fuente", kind: "number", unit: "px" },
+  { prop: "font-weight", label: "Grosor", kind: "select", options: ["", "normal", "bold", "300", "400", "500", "600", "700", "800"] },
+  { prop: "text-align", label: "Alineación", kind: "select", options: ["", "left", "center", "right"] },
+  { prop: "padding", label: "Padding", kind: "number", unit: "px" },
+  { prop: "border-radius", label: "Radio", kind: "number", unit: "px" },
+]
 
 function toEmbeddableUrl(url: string): string {
   try {
@@ -144,6 +158,10 @@ export const BrowserPanel = memo(function BrowserPanel({
   annotations = [],
   onAnnotationComment,
   onRemoveAnnotation,
+  onAnnotationStyle,
+  onAnnotationStyleBefore,
+  inspectTool = "picker",
+  onToggleInspectTool,
 }: {
   initialUrl?: string
   onClose?: () => void
@@ -155,6 +173,10 @@ export const BrowserPanel = memo(function BrowserPanel({
   annotations?: VisualAnnotation[]
   onAnnotationComment?: (id: string, text: string) => void
   onRemoveAnnotation?: (id: string) => void
+  onAnnotationStyle?: (id: string, draft: Record<string, string>) => void
+  onAnnotationStyleBefore?: (id: string, before: Record<string, string | null>) => void
+  inspectTool?: InspectTool
+  onToggleInspectTool?: (tool: InspectTool) => void
 }) {
   const [tabs, setTabs] = useState<BrowserTabItem[]>(() => [
     {
@@ -172,6 +194,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("responsive")
   const [showTuneDropdown, setShowTuneDropdown] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const nativeReady = useRef(false)
@@ -280,10 +303,12 @@ export const BrowserPanel = memo(function BrowserPanel({
   // Modo selección en desktop: el overlay se INYECTA dentro del sub-WebView
   // nativo vía eval (sin recargar ni ocultar la página — cero pérdida de estado).
   // Los picks vuelven por HTTP (/shell/browser/pick) y el host los drena aquí.
-  const cbRef = useRef({ onVisualPick, onRemoveAnnotation, onToggleInspect })
-  cbRef.current = { onVisualPick, onRemoveAnnotation, onToggleInspect }
+  const cbRef = useRef({ onVisualPick, onRemoveAnnotation, onToggleInspect, onAnnotationStyleBefore })
+  cbRef.current = { onVisualPick, onRemoveAnnotation, onToggleInspect, onAnnotationStyleBefore }
   const inspectRef = useRef(!!inspectMode)
   inspectRef.current = !!inspectMode
+  const toolRef = useRef<InspectTool>(inspectTool)
+  toolRef.current = inspectTool
 
   useEffect(() => {
     if (!IS_DESKTOP) return
@@ -298,7 +323,7 @@ export const BrowserPanel = memo(function BrowserPanel({
         // idempotente (self-guard) y sobrevive navegaciones/recargas de la página.
         if (inspectRef.current && now - lastInject > 2200) {
           lastInject = now
-          await shell.browser.eval(buildOverlayScript(apiBase))
+          await shell.browser.eval(buildOverlayScript(apiBase, toolRef.current))
         }
         const r = await shell.browser.drainPicks()
         for (const p of r?.picks ?? []) {
@@ -306,6 +331,8 @@ export const BrowserPanel = memo(function BrowserPanel({
             cbRef.current.onRemoveAnnotation?.(String(p.id))
           } else if (p?.type === "escape") {
             if (inspectRef.current) cbRef.current.onToggleInspect?.()
+          } else if (p?.type === "style-snapshot" && p.id) {
+            cbRef.current.onAnnotationStyleBefore?.(String(p.id), p.before ?? {})
           } else if (p?.type === "pick") {
             cbRef.current.onVisualPick?.(p as BrowserPickedElement)
           }
@@ -316,6 +343,23 @@ export const BrowserPanel = memo(function BrowserPanel({
     tick()
     return () => { stopped = true }
   }, [])
+
+  // Sincronizar herramienta picker/pod con el bridge inyectado
+  useEffect(() => {
+    if (!IS_DESKTOP || !inspectMode) return
+    shell.browser.eval(setToolScript(inspectTool)).catch(() => {})
+  }, [inspectMode, inspectTool])
+
+  const handleStyleChange = useCallback((a: VisualAnnotation, prop: string, value: string) => {
+    const next: Record<string, string> = { ...(a.styleDraft ?? {}) }
+    if (value === "") delete next[prop]
+    else next[prop] = value
+    onAnnotationStyle?.(a.id, next)
+    if (IS_DESKTOP) {
+      const props: Record<string, string | null> = { [prop]: value === "" ? null : value }
+      shell.browser.eval(applyStyleScript(a.id, props)).catch(() => {})
+    }
+  }, [onAnnotationStyle])
 
   // Reconciliar badges numerados con las anotaciones actuales (también re-los
   // crea si la página navegaron/recargaron).
@@ -354,12 +398,16 @@ export const BrowserPanel = memo(function BrowserPanel({
   }, [])
 
   // Badge individual eliminado desde el drawer → quitarlo del DOM también
+  // (+ desbindear elemento y overrides CSS del bridge)
   const prevAnnIds = useRef<string[]>([])
   useEffect(() => {
     if (!IS_DESKTOP) return
     const ids = annotations.map((a) => a.id)
     for (const gone of prevAnnIds.current) {
-      if (!ids.includes(gone)) shell.browser.eval(removeBadgeScript(gone)).catch(() => {})
+      if (!ids.includes(gone)) {
+        shell.browser.eval(removeBadgeScript(gone)).catch(() => {})
+        shell.browser.eval(unbindScript(gone)).catch(() => {})
+      }
     }
     prevAnnIds.current = ids
   }, [annotations])
@@ -642,13 +690,25 @@ export const BrowserPanel = memo(function BrowserPanel({
             {onToggleInspect && (
               <button
                 type="button"
-                className={`browser-tune-btn${inspectMode ? " active" : ""}`}
-                onClick={onToggleInspect}
-                title={inspectMode ? "Salir selección (Esc)" : visualSelection ? `Zona: ${visualSelection.selector ?? visualSelection.fileName} — clic para cambiar` : "Seleccionar zona: clic en botón/cuadrado (◈)"}
-                aria-label="Seleccionar zona"
-                style={inspectMode ? { color: "#58a6ff", background: "rgba(88,166,255,0.15)" } : visualSelection ? { color: "#58a6ff" } : undefined}
+                className={`browser-tune-btn${inspectMode && inspectTool === "picker" ? " active" : ""}`}
+                onClick={() => onToggleInspectTool ? onToggleInspectTool("picker") : onToggleInspect()}
+                title={inspectMode && inspectTool === "picker" ? "Salir selección (Esc)" : "Seleccionar elemento: clic (◈)"}
+                aria-label="Seleccionar elemento"
+                style={inspectMode && inspectTool === "picker" ? { color: "#58a6ff", background: "rgba(88,166,255,0.15)" } : undefined}
               >
                 <span style={{ fontSize: 14, lineHeight: 1 }}>◈</span>
+              </button>
+            )}
+            {onToggleInspectTool && (
+              <button
+                type="button"
+                className={`browser-tune-btn${inspectMode && inspectTool === "pod" ? " active" : ""}`}
+                onClick={() => onToggleInspectTool("pod")}
+                title={inspectMode && inspectTool === "pod" ? "Salir selección (Esc)" : "Marcar área: arrastrá un trazo (⬚)"}
+                aria-label="Marcar área"
+                style={inspectMode && inspectTool === "pod" ? { color: "#ffa657", background: "rgba(255,166,87,0.15)" } : undefined}
+              >
+                <span style={{ fontSize: 13, lineHeight: 1 }}>⬚</span>
               </button>
             )}
             {visualSelection && onClearVisual && (
@@ -758,8 +818,15 @@ export const BrowserPanel = memo(function BrowserPanel({
           >
             <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span>ZONAS MARCADAS{annotations.length > 0 ? ` (${annotations.length})` : ""}</span>
-              {onClearVisual && annotations.length > 0 && (
-                <button type="button" onClick={() => { annotations.forEach((a) => onRemoveAnnotation?.(a.id)); onClearVisual() }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 11 }} title="Quitar todas">✕ todo</button>
+              {annotations.length > 0 && (
+                <button type="button" onClick={() => {
+                  annotations.forEach((a) => onRemoveAnnotation?.(a.id))
+                  if (IS_DESKTOP) {
+                    shell.browser.eval(clearBadgesScript).catch(() => {})
+                    annotations.forEach((a) => shell.browser.eval(unbindScript(a.id)).catch(() => {}))
+                  }
+                  onClearVisual?.()
+                }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 11 }} title="Quitar todas">✕ todo</button>
               )}
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -771,8 +838,8 @@ export const BrowserPanel = memo(function BrowserPanel({
               {annotations.map((a, i) => (
                 <div key={a.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px", fontSize: 11.5 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                    <span style={{ background: "#58a6ff", color: "#fff", borderRadius: 9, minWidth: 18, height: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, padding: "0 4px" }}>{ZONE_ICONS[i] ?? i + 1}</span>
-                    <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>&lt;{a.tag}&gt; {a.selector.slice(0, 26)}</span>
+                    <span style={{ background: a.mode === "pod" ? "#ffa657" : "#58a6ff", color: "#fff", borderRadius: 9, minWidth: 18, height: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, padding: "0 4px" }}>{ZONE_ICONS[i] ?? i + 1}</span>
+                    <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>&lt;{a.tag}&gt; {a.mode === "pod" ? `área · ${a.members?.length ?? 0} elems` : a.selector.slice(0, 26)}</span>
                     <button type="button" onClick={() => onRemoveAnnotation?.(a.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }} aria-label="Quitar zona">✕</button>
                   </div>
                   {a.source?.file && (
@@ -787,6 +854,85 @@ export const BrowserPanel = memo(function BrowserPanel({
                     rows={2}
                     style={{ width: "100%", boxSizing: "border-box", background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 11.5, padding: "4px 6px", resize: "vertical" }}
                   />
+                  {(() => {
+                    const open = expandedStyleId === a.id
+                    const draft = a.styleDraft ?? {}
+                    const activeCount = Object.keys(draft).length
+                    return (
+                      <>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedStyleId(open ? null : a.id)}
+                            style={{ background: "none", border: "none", color: open ? "#58a6ff" : "var(--muted)", cursor: "pointer", fontSize: 11, padding: 0 }}
+                          >
+                            🎛 Ajustar estilo{activeCount > 0 ? ` (${activeCount})` : ""}
+                          </button>
+                          {activeCount > 0 && IS_DESKTOP && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onAnnotationStyle?.(a.id, {})
+                                if (IS_DESKTOP) shell.browser.eval(applyStyleScript(a.id, {})).catch(() => {})
+                              }}
+                              style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 11, padding: 0 }}
+                            >
+                              ↺ reset
+                            </button>
+                          )}
+                        </div>
+                        {open && (
+                          <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 4 }}>
+                            {STYLE_FIELDS.map((f) => (
+                              <div key={f.prop} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                <span style={{ width: 62, color: "var(--muted)", fontSize: 10.5, flexShrink: 0 }}>{f.label}</span>
+                                {f.kind === "color" && (
+                                  <>
+                                    <input
+                                      type="color"
+                                      value={/^#[0-9a-fA-F]{6}$/.test(draft[f.prop] ?? "") ? draft[f.prop] : "#000000"}
+                                      onChange={(e) => handleStyleChange(a, f.prop, e.target.value)}
+                                      style={{ width: 26, height: 20, padding: 0, border: "1px solid var(--border)", background: "transparent", cursor: "pointer" }}
+                                      aria-label={f.label}
+                                    />
+                                    <input
+                                      type="text"
+                                      value={draft[f.prop] ?? ""}
+                                      placeholder="—"
+                                      onChange={(e) => handleStyleChange(a, f.prop, e.target.value)}
+                                      style={{ flex: 1, minWidth: 0, background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 10.5, padding: "2px 4px" }}
+                                    />
+                                  </>
+                                )}
+                                {f.kind === "number" && (
+                                  <span style={{ display: "flex", alignItems: "center", gap: 2, flex: 1 }}>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={(draft[f.prop] ?? "").replace(/px$/, "")}
+                                      placeholder="—"
+                                      onChange={(e) => handleStyleChange(a, f.prop, e.target.value === "" ? "" : `${e.target.value}${f.unit ?? "px"}`)}
+                                      style={{ width: 58, background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 10.5, padding: "2px 4px" }}
+                                    />
+                                    <span style={{ color: "var(--muted)", fontSize: 10 }}>{f.unit}</span>
+                                  </span>
+                                )}
+                                {f.kind === "select" && (
+                                  <select
+                                    value={draft[f.prop] ?? ""}
+                                    onChange={(e) => handleStyleChange(a, f.prop, e.target.value)}
+                                    style={{ flex: 1, minWidth: 0, background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 10.5, padding: "2px 4px" }}
+                                  >
+                                    {(f.options ?? []).map((o) => <option key={o} value={o}>{o === "" ? "—" : o}</option>)}
+                                  </select>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
                 </div>
               ))}
             </div>

@@ -2940,20 +2940,34 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     })
   }, [vs])
 
-  const handleBrowserVisualPick = useCallback((url: string, el: { outerHTML: string; innerText: string; selector: string; xpath?: string; tag: string; boundingRect: { x: number; y: number; w: number; h: number }; bx?: number; by?: number; source?: { file: string; line: number | null } | null }) => {
-    // Zonas múltiples: cada clic agrega una anotación (con badge en la página)
+  const handleBrowserVisualPick = useCallback((url: string, el: any) => {
+    // Zonas múltiples: cada interacción agrega una anotación (badge en la página).
+    // picker = 1 elemento · pod = área arrastrada con members[]
+    const isPod = el?.mode === "pod" && Array.isArray(el.members) && el.members.length > 0
     vs.addAnnotation({
-      tag: el.tag,
-      selector: el.selector,
+      id: typeof el.tmpId === "string" && el.tmpId ? el.tmpId : undefined,
+      mode: isPod ? "pod" : "picker",
+      members: isPod ? el.members : undefined,
+      tag: String(el.tag ?? "div"),
+      selector: String(el.selector ?? ""),
       xpath: el.xpath,
-      outerHTML: el.outerHTML,
-      innerText: el.innerText,
+      outerHTML: String(el.outerHTML ?? ""),
+      innerText: String(el.innerText ?? ""),
       boundingRect: el.boundingRect,
       bx: el.bx,
       by: el.by,
       url,
       source: el.source ?? null,
-    })
+    } as any)
+  }, [vs])
+
+  const handleToggleInspectTool = useCallback((tool: "picker" | "pod") => {
+    if (vs.inspectMode && vs.inspectTool === tool) {
+      vs.setInspectMode(false)
+      return
+    }
+    vs.setInspectTool(tool)
+    vs.setInspectMode(true)
   }, [vs])
 
   const detailView = <ChatView {...baseChatProps} composer={composer} onComposerChange={handleComposerChange} onOpenBrowser={handleOpenBrowser} />
@@ -3392,6 +3406,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       annotations={vs.annotations}
                       onAnnotationComment={vs.setAnnotationComment}
                       onRemoveAnnotation={vs.removeAnnotation}
+                      onAnnotationStyle={vs.setAnnotationStyle}
+                      onAnnotationStyleBefore={vs.setAnnotationStyleBefore}
+                      inspectTool={vs.inspectTool}
+                      onToggleInspectTool={handleToggleInspectTool}
                     />
                   </div>
                 )
