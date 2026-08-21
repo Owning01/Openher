@@ -2,8 +2,13 @@ import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
+import { BrowserVisualOverlay, type BrowserPickedElement } from "./BrowserVisualOverlay"
+import type { VisualSelection, VisualAnnotation } from "../hooks/useVisualSelection"
+import { buildOverlayScript, badgeScript, removeBadgeScript, clearBadgesScript, cleanupOverlayScript } from "./browserOverlayScript"
 
 const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
+
+const ZONE_ICONS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"]
 
 function toEmbeddableUrl(url: string): string {
   try {
@@ -39,9 +44,9 @@ function toEmbeddableUrl(url: string): string {
   return url
 }
 
-function getFrameSrc(url: string): string {
+function getFrameSrc(url: string, forceProxy = false): string {
   if (!url || url === "about:blank") return "about:blank"
-  if (/^(http:\/\/)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(url)) {
+  if (!forceProxy && /^(http:\/\/)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(url)) {
     return url
   }
   const embed = toEmbeddableUrl(url)
@@ -131,9 +136,25 @@ function formatDisplayTitle(url: string): string {
 export const BrowserPanel = memo(function BrowserPanel({
   initialUrl = "http://localhost:5173",
   onClose,
+  visualSelection,
+  inspectMode,
+  onVisualPick,
+  onToggleInspect,
+  onClearVisual,
+  annotations = [],
+  onAnnotationComment,
+  onRemoveAnnotation,
 }: {
   initialUrl?: string
   onClose?: () => void
+  visualSelection?: VisualSelection | null
+  inspectMode?: boolean
+  onVisualPick?: (el: BrowserPickedElement) => void
+  onToggleInspect?: () => void
+  onClearVisual?: () => void
+  annotations?: VisualAnnotation[]
+  onAnnotationComment?: (id: string, text: string) => void
+  onRemoveAnnotation?: (id: string) => void
 }) {
   const [tabs, setTabs] = useState<BrowserTabItem[]>(() => [
     {
@@ -152,6 +173,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [showTuneDropdown, setShowTuneDropdown] = useState(false)
   const [hasError, setHasError] = useState(false)
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const nativeReady = useRef(false)
 
   const dropdownRef = useRef<HTMLDivElement | null>(null)
@@ -254,6 +276,93 @@ export const BrowserPanel = memo(function BrowserPanel({
     if (!IS_DESKTOP || !nativeReady.current) return
     shell.browser.navigate(currentSrc).catch(() => {})
   }, [currentSrc])
+
+  // Modo selección en desktop: el overlay se INYECTA dentro del sub-WebView
+  // nativo vía eval (sin recargar ni ocultar la página — cero pérdida de estado).
+  // Los picks vuelven por HTTP (/shell/browser/pick) y el host los drena aquí.
+  const cbRef = useRef({ onVisualPick, onRemoveAnnotation, onToggleInspect })
+  cbRef.current = { onVisualPick, onRemoveAnnotation, onToggleInspect }
+  const inspectRef = useRef(!!inspectMode)
+  inspectRef.current = !!inspectMode
+
+  useEffect(() => {
+    if (!IS_DESKTOP) return
+    let stopped = false
+    let lastInject = 0
+    const apiBase = window.location.origin
+    const tick = async () => {
+      if (stopped) return
+      try {
+        const now = Date.now()
+        // Re-inyectar periódicamente mientras inspeccionamos: el script es
+        // idempotente (self-guard) y sobrevive navegaciones/recargas de la página.
+        if (inspectRef.current && now - lastInject > 2200) {
+          lastInject = now
+          await shell.browser.eval(buildOverlayScript(apiBase))
+        }
+        const r = await shell.browser.drainPicks()
+        for (const p of r?.picks ?? []) {
+          if (p?.type === "remove" && p.id) {
+            cbRef.current.onRemoveAnnotation?.(String(p.id))
+          } else if (p?.type === "escape") {
+            if (inspectRef.current) cbRef.current.onToggleInspect?.()
+          } else if (p?.type === "pick") {
+            cbRef.current.onVisualPick?.(p as BrowserPickedElement)
+          }
+        }
+      } catch {}
+      if (!stopped) setTimeout(tick, 350)
+    }
+    tick()
+    return () => { stopped = true }
+  }, [])
+
+  // Reconciliar badges numerados con las anotaciones actuales (también re-los
+  // crea si la página navegaron/recargaron).
+  const annRef = useRef(annotations)
+  annRef.current = annotations
+  useEffect(() => {
+    if (!IS_DESKTOP) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        await shell.browser.eval(clearBadgesScript)
+        for (let i = 0; i < annRef.current.length; i++) {
+          if (cancelled) return
+          const a = annRef.current[i]
+          await shell.browser.eval(badgeScript(a.id, ZONE_ICONS[i] ?? String(i + 1), a.bx ?? a.boundingRect.x, a.by ?? a.boundingRect.y))
+        }
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [annotations])
+
+  useEffect(() => {
+    if (!IS_DESKTOP || !nativeReady.current) return
+    if (!inspectMode) {
+      shell.browser.eval(cleanupOverlayScript).catch(() => {})
+    }
+  }, [inspectMode])
+
+  // Al desmontar el panel: limpiar overlay + badges del sub-WebView
+  useEffect(() => {
+    if (!IS_DESKTOP) return
+    return () => {
+      shell.browser.eval(cleanupOverlayScript).catch(() => {})
+      shell.browser.eval(clearBadgesScript).catch(() => {})
+    }
+  }, [])
+
+  // Badge individual eliminado desde el drawer → quitarlo del DOM también
+  const prevAnnIds = useRef<string[]>([])
+  useEffect(() => {
+    if (!IS_DESKTOP) return
+    const ids = annotations.map((a) => a.id)
+    for (const gone of prevAnnIds.current) {
+      if (!ids.includes(gone)) shell.browser.eval(removeBadgeScript(gone)).catch(() => {})
+    }
+    prevAnnIds.current = ids
+  }, [annotations])
 
   // Visibility: hide when component is not active (e.g. tab switch)
   // The parent handles this via the `active` prop — but for now we
@@ -530,6 +639,29 @@ export const BrowserPanel = memo(function BrowserPanel({
           )}
 
           <div className="browser-omnibox-actions">
+            {onToggleInspect && (
+              <button
+                type="button"
+                className={`browser-tune-btn${inspectMode ? " active" : ""}`}
+                onClick={onToggleInspect}
+                title={inspectMode ? "Salir selección (Esc)" : visualSelection ? `Zona: ${visualSelection.selector ?? visualSelection.fileName} — clic para cambiar` : "Seleccionar zona: clic en botón/cuadrado (◈)"}
+                aria-label="Seleccionar zona"
+                style={inspectMode ? { color: "#58a6ff", background: "rgba(88,166,255,0.15)" } : visualSelection ? { color: "#58a6ff" } : undefined}
+              >
+                <span style={{ fontSize: 14, lineHeight: 1 }}>◈</span>
+              </button>
+            )}
+            {visualSelection && onClearVisual && (
+              <button
+                type="button"
+                className="browser-tune-btn"
+                onClick={onClearVisual}
+                title="Quitar zona seleccionada"
+                aria-label="Quitar zona"
+              >
+                ×
+              </button>
+            )}
             <button
               type="button"
               className="browser-tune-btn"
@@ -555,45 +687,115 @@ export const BrowserPanel = memo(function BrowserPanel({
         )}
       </div>
 
-      {/* 4. Web Viewport */}
-      <div className="browser-viewport-container" ref={viewportRef}>
-        {hasError ? (
-          <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text)", maxWidth: "460px", margin: "auto" }}>
-            <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>⚠️</div>
-            <h3 style={{ margin: "0 0 8px 0", fontSize: "1.1rem" }}>No se pudo conectar con la página</h3>
-            <p style={{ fontSize: "0.82rem", color: "var(--muted)", marginBottom: "20px" }}>
-              Si es un servidor local, verifica que el dev server esté ejecutándose (botón <strong>▶ Run Web</strong> en el chat). Si es un sitio web externo protegido, ábrelo en el navegador externo.
-            </p>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-              <button type="button" className="btn-primary compact" onClick={handleReload}>
-                Reintentar
-              </button>
-              <button type="button" className="btn-secondary compact" onClick={handleOpenExternal}>
-                Abrir en Chrome / Edge
-              </button>
+      {/* 4. Web Viewport + drawer de anotaciones */}
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <div className="browser-viewport-container" ref={viewportRef} style={{ position: "relative", flex: 1, minWidth: 0 }}>
+          {hasError ? (
+            <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text)", maxWidth: "460px", margin: "auto" }}>
+              <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>⚠️</div>
+              <h3 style={{ margin: "0 0 8px 0", fontSize: "1.1rem" }}>No se pudo conectar con la página</h3>
+              <p style={{ fontSize: "0.82rem", color: "var(--muted)", marginBottom: "20px" }}>
+                Si es un servidor local, verifica que el dev server esté ejecutándose (botón <strong>▶ Run Web</strong> en el chat). Si es un sitio web externo protegido, ábrelo en el navegador externo.
+              </p>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                <button type="button" className="btn-primary compact" onClick={handleReload}>
+                  Reintentar
+                </button>
+                <button type="button" className="btn-secondary compact" onClick={handleOpenExternal}>
+                  Abrir en Chrome / Edge
+                </button>
+              </div>
             </div>
-          </div>
-        ) : IS_DESKTOP ? (
-          /* Desktop: native sub-WebView renders here, no iframe needed */
-          null
-        ) : (
-          <iframe
-            key={reloadKey}
-            src={getFrameSrc(currentSrc)}
-            title="Vista previa web"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-top-navigation-by-user-activation"
-            allow="accelerometer; autoplay; clipboard-read; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; microphone; camera"
-            onLoad={() => setLoading(false)}
-            onError={() => {
-              setLoading(false)
-              setHasError(true)
-            }}
-            className="browser-iframe-element"
+          ) : IS_DESKTOP ? (
+            /* Desktop: sub-WebView nativo SIEMPRE (también en modo selección —
+               el overlay se inyecta dentro vía eval, sin recarga ni swap a iframe) */
+            null
+          ) : (
+            <>
+              <iframe
+                key={`${reloadKey}-${inspectMode ? "inspect" : "view"}`}
+                ref={iframeRef}
+                src={getFrameSrc(currentSrc, !!inspectMode)}
+                title="Vista previa web"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-top-navigation-by-user-activation"
+                allow="accelerometer; autoplay; clipboard-read; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; microphone; camera"
+                onLoad={() => setLoading(false)}
+                onError={() => {
+                  setLoading(false)
+                  setHasError(true)
+                }}
+                className="browser-iframe-element"
+                style={{
+                  width: targetWidth || "100%",
+                  boxShadow: targetWidth ? "0 4px 24px rgba(0,0,0,0.3)" : "none",
+                }}
+              />
+              {inspectMode && onVisualPick && (
+                <BrowserVisualOverlay
+                  iframeRef={iframeRef}
+                  enabled={!!inspectMode}
+                  url={currentSrc}
+                  onPick={(el) => onVisualPick(el)}
+                  onExit={() => onToggleInspect?.()}
+                />
+              )}
+            </>
+          )}
+        </div>
+
+        {(annotations.length > 0 || !!inspectMode) && (
+          <div
+            className="browser-annotations"
             style={{
-              width: targetWidth || "100%",
-              boxShadow: targetWidth ? "0 4px 24px rgba(0,0,0,0.3)" : "none",
+              width: 240,
+              flexShrink: 0,
+              borderLeft: "1px solid var(--border)",
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--bg, #161b22)",
+              overflow: "hidden",
             }}
-          />
+          >
+            <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>ZONAS MARCADAS{annotations.length > 0 ? ` (${annotations.length})` : ""}</span>
+              {onClearVisual && annotations.length > 0 && (
+                <button type="button" onClick={() => { annotations.forEach((a) => onRemoveAnnotation?.(a.id)); onClearVisual() }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 11 }} title="Quitar todas">✕ todo</button>
+              )}
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+              {annotations.length === 0 && (
+                <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5, padding: "4px 2px" }}>
+                  {inspectMode ? "Clic en cualquier elemento de la página para marcar una zona." : "Activá ◈ y hacé clic en elementos para marcar zonas."}
+                </div>
+              )}
+              {annotations.map((a, i) => (
+                <div key={a.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px", fontSize: 11.5 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <span style={{ background: "#58a6ff", color: "#fff", borderRadius: 9, minWidth: 18, height: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, padding: "0 4px" }}>{ZONE_ICONS[i] ?? i + 1}</span>
+                    <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>&lt;{a.tag}&gt; {a.selector.slice(0, 26)}</span>
+                    <button type="button" onClick={() => onRemoveAnnotation?.(a.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }} aria-label="Quitar zona">✕</button>
+                  </div>
+                  {a.source?.file && (
+                    <div style={{ color: "#7ee787", fontSize: 10.5, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${a.source.file}${a.source.line != null ? `:${a.source.line}` : ""}`}>
+                      📄 {a.source.file.split(/[\\/]/).slice(-2).join("/")}{a.source.line != null ? `:${a.source.line}` : ""}
+                    </div>
+                  )}
+                  <textarea
+                    value={a.comment}
+                    onChange={(e) => onAnnotationComment?.(a.id, e.target.value)}
+                    placeholder="¿Qué cambiar acá? (lógica, error, estilo…)"
+                    rows={2}
+                    style={{ width: "100%", boxSizing: "border-box", background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 11.5, padding: "4px 6px", resize: "vertical" }}
+                  />
+                </div>
+              ))}
+            </div>
+            {annotations.length > 0 && (
+              <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border)", fontSize: 11, color: "var(--muted)", lineHeight: 1.45 }}>
+                Tu próximo mensaje del chat incluirá estas {annotations.length === 1 ? "zona" : `${annotations.length} zonas`} automáticamente.
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

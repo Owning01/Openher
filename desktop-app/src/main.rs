@@ -473,6 +473,7 @@ fn main() {
         stats: statsx::StatsManager::new(),
         dist,
         browser: browser_mgr,
+        browser_picks: std::sync::Mutex::new(Vec::new()),
     });
     state::save_config(&config);
     if !state::autostart_enabled() {

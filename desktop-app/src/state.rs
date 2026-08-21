@@ -109,6 +109,9 @@ pub struct AppState {
     pub dist: Option<PathBuf>,
     /// Manager para enviar comandos al sub-WebView (main thread).
     pub browser: crate::browser_view::SubWebViewManager,
+    /// Picks del modo inspección visual: el JS inyectado en el sub-WebView
+    /// hace POST aquí y el host hace polling con GET (drena la cola).
+    pub browser_picks: std::sync::Mutex<Vec<String>>,
 }
 
 /// data/ vive al lado del exe (portable, cero escrituras en C:).

@@ -40,6 +40,13 @@ pub enum BrowserCommand {
     CurrentUrl {
         reply: crossbeam_channel::Sender<Result<String, String>>,
     },
+    /// Ejecuta JS en el sub-WebView (fire-and-forget). El resultado de datos
+    /// vuelve por HTTP vía /shell/browser/pick (evaluate_script no retorna valor).
+    /// Usado por el modo inspección (overlay inyectado sin recargar la página).
+    Eval {
+        code: String,
+        reply: crossbeam_channel::Sender<Result<(), String>>,
+    },
 }
 
 /// Estado del sub-WebView (solo se accede desde el main thread).
@@ -112,6 +119,17 @@ impl SubWebViewManager {
         let (reply_tx, reply_rx) = bounded(1);
         self.send(BrowserCommand::CurrentUrl { reply: reply_tx }, reply_rx)?
     }
+
+    pub fn eval(&self, code: &str) -> Result<(), String> {
+        let (reply_tx, reply_rx) = bounded(1);
+        self.send(
+            BrowserCommand::Eval {
+                code: code.to_string(),
+                reply: reply_tx,
+            },
+            reply_rx,
+        )?
+    }
 }
 
 /// Procesa comandos en el main thread. Llamar desde `App::about_to_wait`.
@@ -152,6 +170,10 @@ pub fn process_browser_commands(
                 }
                 BrowserCommand::CurrentUrl { reply } => {
                     let result = cmd_current_url(inner);
+                    let _ = reply.send(result);
+                }
+                BrowserCommand::Eval { code, reply } => {
+                    let result = cmd_eval(inner, &code);
                     let _ = reply.send(result);
                 }
             },
@@ -278,4 +300,11 @@ fn cmd_current_url(inner: &mut SubWebViewInner) -> Result<String, String> {
         return wv.url().map_err(|e| e.to_string());
     }
     Ok(inner.url.clone())
+}
+
+fn cmd_eval(inner: &mut SubWebViewInner, code: &str) -> Result<(), String> {
+    if let Some(wv) = &inner.webview {
+        return wv.evaluate_script(code).map_err(|e| e.to_string());
+    }
+    Ok(())
 }

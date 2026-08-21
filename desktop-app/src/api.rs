@@ -1151,6 +1151,46 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         let _ = req.respond(resp);
         return;
     }
+    // Eval JS en el sub-WebView (modo inspección visual sin recarga)
+    if path == "/shell/browser/eval" && method == Method::Post {
+        if let Ok(v) = read_body(&mut req) {
+            let code = v["code"].as_str().unwrap_or("");
+            if code.is_empty() {
+                let _ = req.respond(json_err(400, "missing code"));
+                return;
+            }
+            let resp = match state.browser.eval(code) {
+                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+                Err(e) => json_err(500, &e),
+            };
+            let _ = req.respond(resp);
+            return;
+        }
+        let _ = req.respond(json_err(400, "bad body"));
+        return;
+    }
+    // Picks del modo inspección: POST encola (lo llama el JS inyectado en el
+    // sub-WebView), GET drena la cola hacia el host.
+    if path == "/shell/browser/pick" && method == Method::Post {
+        if let Ok(v) = read_body(&mut req) {
+            let mut queue = state.browser_picks.lock().unwrap_or_else(|e| e.into_inner());
+            if queue.len() < 64 {
+                queue.push(v.to_string());
+            }
+            let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
+            return;
+        }
+        let _ = req.respond(json_err(400, "bad body"));
+        return;
+    }
+    if path == "/shell/browser/pick" && method == Method::Get {
+        let drained: Vec<serde_json::Value> = {
+            let mut queue = state.browser_picks.lock().unwrap_or_else(|e| e.into_inner());
+            queue.drain(..).map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::Null)).collect()
+        };
+        let _ = req.respond(json_ok(&serde_json::json!({ "picks": drained })));
+        return;
+    }
 
     let _ = req.respond(
         Response::from_string("not found")

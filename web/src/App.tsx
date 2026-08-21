@@ -1184,7 +1184,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
       setCommands, setRuntimeError, images, textToSend, setLocalRevertID, originalText ?? undefined)
-    if (hadVisualSelection && result !== false) vs.clear()
+    if (hadVisualSelection && result !== false) {
+      vs.clear()
+      vs.clearAnnotations()
+    }
     if (result === "help") { setHelpPage("commands"); navigate("help") }
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
     if (result === "connect") setShowConnectSheet(true)
@@ -2937,18 +2940,19 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     })
   }, [vs])
 
-  const handleBrowserVisualPick = useCallback((url: string, el: { outerHTML: string; innerText: string; selector: string; xpath: string; tag: string; boundingRect: { x: number; y: number; w: number; h: number } }) => {
-    const fileName = `${el.tag} · ${el.selector.slice(0, 24)}`
-    vs.select({
-      filePath: url,
-      fileName,
-      lineStart: null,
-      lineEnd: null,
-      selectedText: el.innerText,
-      surroundingContext: "",
-      outerHTML: el.outerHTML,
+  const handleBrowserVisualPick = useCallback((url: string, el: { outerHTML: string; innerText: string; selector: string; xpath?: string; tag: string; boundingRect: { x: number; y: number; w: number; h: number }; bx?: number; by?: number; source?: { file: string; line: number | null } | null }) => {
+    // Zonas múltiples: cada clic agrega una anotación (con badge en la página)
+    vs.addAnnotation({
+      tag: el.tag,
       selector: el.selector,
+      xpath: el.xpath,
+      outerHTML: el.outerHTML,
+      innerText: el.innerText,
       boundingRect: el.boundingRect,
+      bx: el.bx,
+      by: el.by,
+      url,
+      source: el.source ?? null,
     })
   }, [vs])
 
@@ -3384,7 +3388,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       inspectMode={vs.inspectMode}
                       onVisualPick={(el) => handleBrowserVisualPick(browserUrl, el)}
                       onToggleInspect={vs.toggleInspect}
-                      onClearVisual={vs.clear}
+                      onClearVisual={vs.clearAnnotations}
+                      annotations={vs.annotations}
+                      onAnnotationComment={vs.setAnnotationComment}
+                      onRemoveAnnotation={vs.removeAnnotation}
                     />
                   </div>
                 )

@@ -170,6 +170,8 @@ export const shell = {
       post<{ ok: boolean }>("/shell/browser/navigate", { url, action }),
     close: () => post<{ ok: boolean }>("/shell/browser/close"),
     url: () => get<{ url: string }>("/shell/browser/url"),
+    eval: (code: string) => post<{ ok: boolean }>("/shell/browser/eval", { code }),
+    drainPicks: () => get<{ picks: any[] }>("/shell/browser/pick"),
   },
   config: {
     get: () => get<ShellConfig>("/shell/config"),
