@@ -137,37 +137,61 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     [],
   )
 
-  // Local value: input responde instantáneo sin re-render del padre (App).
-  // Typing → solo Composer re-render; parent se actualiza via App debounced (350ms)
+  // Local value: fuente de verdad mientras se tipea. El padre NO recibe cada
+  // keystroke (eso re-renderizaba App completa y su eco stale REVERTÍA los
+  // borrados). Push al padre solo con debounce largo (higiene/persistencia),
+  // en send/clear, y en cambios externos (share, snippet, historial).
   const [localValue, setLocalValue] = useState(value)
-  const lastExternalRef = useRef(value)
+  const localValueRef = useRef(value)
+  localValueRef.current = localValue
+  const lastSyncedRef = useRef(value)   // último value visto del padre
+  const lastPushedRef = useRef(value)   // último valor que notificamos al padre
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
-  // Sync desde padre: solo si es un cambio externo (clear, snippet, historial). Evita revertir lo tipeado.
+
+  const pushNow = useCallback((v: string) => {
+    if (pushTimerRef.current) { clearTimeout(pushTimerRef.current); pushTimerRef.current = null }
+    lastPushedRef.current = v
+    onChangeRef.current(v)
+  }, [])
+
+  // Sync SOLO de cambios externos del padre. Reglas:
+  // 1. Echo propio (el debounce del padre devolvió lo que empujamos) → ignorar.
+  // 2. Con foco en el textarea y value≠"" → ignorar (protege lo tipeado/borrado).
+  // 3. Clear ("") o cambio externo real sin foco → aplicar.
   useEffect(() => {
-    if (value !== lastExternalRef.current) {
-      // value=="" es clear tras send → siempre sincronizar
-      if (value === "") {
-        lastExternalRef.current = value
-        setLocalValue(value)
-        return
-      }
-      // Si el usuario tipea por delante del value stale, no revertir
-      const typedAhead = localValue.length > value.length && localValue.startsWith(value)
-      if (typedAhead) {
-        // Mantener lo tipeado, pero actualizar ref para no loop; el debounce de App lo alcanzará
-        lastExternalRef.current = value
-        return
-      }
-      lastExternalRef.current = value
-      setLocalValue(value)
-    }
-  }, [value, localValue]) // localValue necesario para typedAhead check
+    if (value === lastSyncedRef.current) return
+    lastSyncedRef.current = value
+    if (value === lastPushedRef.current) return
+    const ta = textareaRef.current
+    const focused = ta ? document.activeElement === ta : false
+    if (focused && value !== "") return
+    setLocalValue(value)
+    lastPushedRef.current = value
+  }, [value])
+
   const handleChange = useCallback((newValue: string) => {
     setLocalValue(newValue)
-    lastExternalRef.current = newValue
-    // Sin debounce local: delegar debounce a App (350ms). Evita doble timer que deja texto trunco al enviar rápido.
-    onChangeRef.current(newValue)
+    // Push diferido al padre: persistencia del draft y estado del padre,
+    // sin acoplar el ritmo de tipeo al re-render de App.
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
+    pushTimerRef.current = setTimeout(() => {
+      pushTimerRef.current = null
+      lastPushedRef.current = newValue
+      onChangeRef.current(newValue)
+    }, 800)
+  }, [])
+
+  // Flush del draft pendiente al desmontar (no perder texto tipeado).
+  useEffect(() => () => {
+    if (pushTimerRef.current) {
+      clearTimeout(pushTimerRef.current)
+      if (localValueRef.current !== lastPushedRef.current) {
+        lastPushedRef.current = localValueRef.current
+        onChangeRef.current(localValueRef.current)
+      }
+    }
   }, [])
 
   const promptHistoryRef = useRef<string[]>(loadHistory())
@@ -427,18 +451,18 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     // del server (evita que la preview quede 10s en el composer).
     setImages([])
     setLocalValue("")
-    lastExternalRef.current = ""
-    onChangeRef.current("")
+    localValueRef.current = ""
+    pushNow("")
     resizeTextarea()
     const ok = await onSend(imgs, opts, textToSend)
     if (ok === false) {
       // Si falló, restaurar las imágenes y el texto (best-effort)
       if (imgs) setImages(imgs)
       setLocalValue(textToSend)
-      lastExternalRef.current = textToSend
-      onChangeRef.current(textToSend)
+      localValueRef.current = textToSend
+      pushNow(textToSend)
     }
-  }, [onSend, images, resizeTextarea, disabled, localValue, tslEnabled])
+  }, [onSend, images, resizeTextarea, disabled, localValue, tslEnabled, pushNow])
 
   const isCommandValid = useMemo(() => {
     if (!localValue.startsWith("/")) return false

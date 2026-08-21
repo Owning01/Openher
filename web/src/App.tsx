@@ -1183,7 +1183,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const result = await send(selectedSession, activeModel, activeAgentID, commands,
       () => refreshSessions(),
       () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-      setCommands, setRuntimeError, images, textToSend !== composerText ? textToSend : (hadVisualSelection ? textToSend : undefined), setLocalRevertID, originalText ?? undefined)
+      setCommands, setRuntimeError, images, textToSend, setLocalRevertID, originalText ?? undefined)
     if (hadVisualSelection && result !== false) vs.clear()
     if (result === "help") { setHelpPage("commands"); navigate("help") }
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
@@ -2937,6 +2937,21 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     })
   }, [vs])
 
+  const handleBrowserVisualPick = useCallback((url: string, el: { outerHTML: string; innerText: string; selector: string; xpath: string; tag: string; boundingRect: { x: number; y: number; w: number; h: number } }) => {
+    const fileName = `${el.tag} · ${el.selector.slice(0, 24)}`
+    vs.select({
+      filePath: url,
+      fileName,
+      lineStart: null,
+      lineEnd: null,
+      selectedText: el.innerText,
+      surroundingContext: "",
+      outerHTML: el.outerHTML,
+      selector: el.selector,
+      boundingRect: el.boundingRect,
+    })
+  }, [vs])
+
   const detailView = <ChatView {...baseChatProps} composer={composer} onComposerChange={handleComposerChange} onOpenBrowser={handleOpenBrowser} />
 
   return (
@@ -3365,6 +3380,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     <BrowserPanel
                       initialUrl={browserUrl}
                       onClose={() => closePanel(i)}
+                      visualSelection={vs.selection}
+                      inspectMode={vs.inspectMode}
+                      onVisualPick={(el) => handleBrowserVisualPick(browserUrl, el)}
+                      onToggleInspect={vs.toggleInspect}
+                      onClearVisual={vs.clear}
                     />
                   </div>
                 )
