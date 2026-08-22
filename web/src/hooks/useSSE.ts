@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
 import { authHeader, baseUrl, resolveApiVersion, onApiVersionChange } from "../api"
+import { createSSEFrameParser, type ParsedSSEFrame } from "../shared/sse/parser"
 import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS, SSE_CONNECT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
@@ -99,7 +100,8 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
       readerRef.current = reader
       startHeartbeat(reader)
       const decoder = new TextDecoder()
-      let buffer = ""
+      // Parser por conexión: buffer fresco, no arrastra frames de la conexión anterior.
+      const parseChunk = createSSEFrameParser()
 
       const dispatch = (event: Partial<SSEEvent>) => {
         if (event.type === "server.heartbeat") return
@@ -131,34 +133,11 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
         }
       }
 
-      const processBuffer = () => {
-        const lines = buffer.split("\n")
-        buffer = lines.pop() ?? ""
-        let currentEvent: Partial<SSEEvent> = {}
-        for (const rawLine of lines) {
-          const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine
-          if (line.startsWith("event: ")) {
-            currentEvent.type = line.slice(7).trim()
-          } else if (line.startsWith("data: ")) {
-            try {
-              const parsed = JSON.parse(line.slice(6)) as {
-                id?: string
-                type?: string
-                properties?: Record<string, unknown>
-              }
-              currentEvent.type = parsed.type ?? currentEvent.type
-              currentEvent.properties = parsed.properties ?? (parsed as unknown as Record<string, unknown>)
-              if (parsed.id) currentEvent.id = parsed.id
-            } catch {
-              currentEvent.properties = { raw: line.slice(6) }
-            }
-          } else if (line === "" && currentEvent.type) {
-            touch()
-            dispatch(currentEvent)
-            currentEvent = {}
-          }
+      const emitFrames = (frames: ParsedSSEFrame[]) => {
+        for (const frame of frames) {
+          touch()
+          dispatch(frame)
         }
-        // No despachar evento incompleto al final del chunk: queda en buffer hasta próximo \n\n
       }
 
       const pump = async () => {
@@ -171,14 +150,14 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
               break
             }
             recordDataUsage(value.byteLength, "down")
-            buffer += decoder.decode(value, { stream: true })
-            processBuffer()
+            emitFrames(parseChunk(decoder.decode(value, { stream: true })))
           } catch (err) {
             if (err instanceof Error && err.name === "AbortError") return
             break
           }
         }
-        processBuffer()
+        // Drenar lo que quedó completo en el buffer al cortar la conexión.
+        emitFrames(parseChunk(""))
       }
 
       await pump()
