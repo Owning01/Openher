@@ -43,6 +43,10 @@ export const MessageList = memo(function MessageList({
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
+  // Ledger de scroll programático: durante un scrollTo suave el contenedor
+  // pasa por posiciones intermedias lejanas al fondo que NO son input del
+  // usuario — no deben apagar el pin ni hacer parpadear el botón.
+  const programmaticUntilRef = useRef(0)
 
   // El footer (modo · modelo · nivel de pensamiento · duración) se muestra solo
   // en el último mensaje assistant COMPLETED, o en un mensaje donde el
@@ -76,30 +80,32 @@ export const MessageList = memo(function MessageList({
     return map
   }, [messages])
 
+  // Stick-to-bottom derivado de posición, NO de IntersectionObserver: durante
+  // streaming el sentinel se corre hacia abajo por el contenido nuevo y el IO
+  // reportaba "salió del viewport" con el usuario pegado al fondo (el botón
+  // parpadeaba). La distancia al fondo en el evento scroll es la fuente de
+  // verdad; el contenido que crece sin scroll no dispara eventos, así que no
+  // puede apagar el pin — el efecto de firma lo vuelve a anclar.
   useEffect(() => {
-    const el = messagesEndRef.current
     const root = messagesRef.current
-    if (!el || !root) return
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsAtBottom(entry.isIntersecting),
-      { root, threshold: 0 }
-    )
-    observer.observe(el)
-    const onScroll = () => {
-      const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 120
-      // Solo actualizar a true cuando realmente está cerca del final (evita
-      // que el botón aparezca al enviar si el observer aún no actualizó)
-      if (nearBottom) setIsAtBottom(true)
+    if (!root) return
+    const recompute = () => {
+      const near = root.scrollHeight - root.scrollTop - root.clientHeight < 120
+      setIsAtBottom((prev) => {
+        if (!near && prev && Date.now() < programmaticUntilRef.current) return prev
+        return near
+      })
     }
-    root.addEventListener("scroll", onScroll, { passive: true })
+    recompute()
+    root.addEventListener("scroll", recompute, { passive: true })
     return () => {
-      observer.disconnect()
-      root.removeEventListener("scroll", onScroll)
+      root.removeEventListener("scroll", recompute)
     }
-  }, [messages.length, loadingSessionID, selectedID])
+  }, [])
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setIsAtBottom(true)
+    programmaticUntilRef.current = Date.now() + (behavior === "smooth" ? 700 : 150)
     const container = messagesRef.current
     if (container) {
       // Intento inmediato + rAF de respaldo (cubre markdown/imágenes que aún hacen layout)
