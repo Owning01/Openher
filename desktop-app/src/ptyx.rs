@@ -6,7 +6,7 @@ use std::net::TcpStream;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, CommandBuilder, Child, MasterPty, PtySize};
 
 /// Buffer de salida del pty: ring buffer con condvar. Cada consumidor SSE
 /// lleva su propio cursor (replay desde 0 en reconexión).
@@ -52,8 +52,11 @@ pub struct PtySession {
     pub id: String,
     pub shell: String,
     pub cwd: String,
-    writer: Mutex<Box<dyn Write + Send>>,
-    master: Mutex<Box<dyn MasterPty + Send>>,
+    writer: Mutex<Option<Box<dyn Write + Send>>>,
+    master: Mutex<Option<Box<dyn MasterPty + Send>>>,
+    /// Handle del proceso hijo. `Option` + take(): un solo consumidor hace
+    /// wait (kill o lector natural) y el otro lo encuentra vacío.
+    child: Arc<Mutex<Option<Box<dyn Child + Send + Sync>>>>,
     pub output: Arc<PtyOutput>,
 }
 
@@ -105,13 +108,18 @@ impl PtyRegistry {
         if let Some(dir) = &cwd {
             cmd.cwd(dir);
         }
-        let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+        let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
         let master = pair.master;
         let writer = master.take_writer().map_err(|e| e.to_string())?;
         let output = PtyOutput::new();
         let out = output.clone();
+        // Handle compartido: kill() y el hilo lector compiten por hacer wait —
+        // el take() bajo lock garantiza que solo uno lo haga (quiescencia).
+        let child: Arc<Mutex<Option<Box<dyn Child + Send + Sync>>>> =
+            Arc::new(Mutex::new(Some(child)));
+        let child_for_reader = child.clone();
         // Hilo lector: vuelca el output del pty al buffer compartido.
         std::thread::spawn(move || {
             let mut buf = vec![0u8; 16384];
@@ -124,15 +132,22 @@ impl PtyRegistry {
             }
             out.done.store(true, std::sync::atomic::Ordering::SeqCst);
             out.cv.notify_all();
-            let _ = child.wait();
+            // Salida natural (el usuario tipeó exit): reap del hijo para no
+            // dejar zombie. Si kill() llegó primero, el take() devuelve None.
+            if let Ok(mut guard) = child_for_reader.lock() {
+                if let Some(mut c) = guard.take() {
+                    let _ = c.wait();
+                }
+            }
         });
         let id = format!("pt{}", crate::state::now_ms());
         let session = PtySession {
             id: id.clone(),
             shell: shell_exe,
             cwd: cwd.unwrap_or_else(|| std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()),
-            writer: Mutex::new(writer),
-            master: Mutex::new(master),
+            writer: Mutex::new(Some(writer)),
+            master: Mutex::new(Some(master)),
+            child,
             output,
         };
         self.sessions.lock().unwrap_or_else(|e| e.into_inner()).insert(id.clone(), session);
@@ -143,27 +158,47 @@ impl PtyRegistry {
         let map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get(id).ok_or("pty no existe")?;
         let mut w = s.writer.lock().unwrap_or_else(|e| e.into_inner());
-        w.write_all(data).map_err(|e| e.to_string())
+        match w.as_mut() {
+            Some(w) => w.write_all(data).map_err(|e| e.to_string()),
+            None => Err("pty cerrado".into()),
+        }
     }
 
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
         let map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get(id).ok_or("pty no existe")?;
         let m = s.master.lock().unwrap_or_else(|e| e.into_inner());
-        m.resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| e.to_string())
+        match m.as_ref() {
+            Some(m) => m
+                .resize(PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|e| e.to_string()),
+            None => Err("pty cerrado".into()),
+        }
     }
 
+    /// Teardown con quiescencia (no solo "pedirla"): 1) señala done a los
+    /// consumidores ANTES de matar para que los completados tardíos queden
+    /// silenciosos; 2) cierra stdin y el pty master (el shell suele salir
+    /// solo); 3) kill explícito + wait del hijo — sin huérfanos ni zombies.
     pub fn kill(&self, id: &str) {
         let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(s) = map.remove(id) {
+            drop(map);
             s.output.done.store(true, std::sync::atomic::Ordering::SeqCst);
             s.output.cv.notify_all();
+            *s.writer.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            *s.master.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            if let Ok(mut guard) = s.child.lock() {
+                if let Some(mut c) = guard.take() {
+                    let _ = c.kill();
+                    let _ = c.wait();
+                }
+            }
         }
     }
 
