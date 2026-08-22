@@ -39,6 +39,9 @@ function loadInitialConfig(): ServerConfig {
 }
 
 function loadInitialDataMode(): DataMode {
+  // Escritorio (shell wry) → SIEMPRE full, síncrono, sin esperar a la red.
+  const isDesktop = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
+  if (isDesktop) return "full"
   const saved = localStorage.getItem(STORAGE_KEYS.DATA_MODE)
   return saved === "full" || saved === "saver" || saved === "ultra" || saved === "miser" ? saved : "saver"
 }
