@@ -16,7 +16,7 @@ async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response
 }
 
 // Cerebras OpenAI-compatible. Limits: 5 RPM, 90k TPM, 30k uncached TPM
-const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
+const CEREBRAS_DEFAULT_URL = "https://api.cerebras.ai/v1/chat/completions"
 // Models offered by Cerebras per user: gemma 4 + gpt oss 120b. No default silent fallback to deepseek.
 const MODELS = [
   { id: "gpt-oss-120b", label: "GPT-OSS 120B" },
@@ -37,7 +37,8 @@ function recordRequest() { recentRequests.push(Date.now()) }
 
 function estimateTokens(text: string): number { return Math.ceil(text.length / 4) }
 
-export function createCerebrasProvider(apiKey: string): QuickChatProvider {
+export function createCerebrasProvider(apiKey: string, baseUrl?: string): QuickChatProvider {
+  const CEREBRAS_URL = baseUrl ?? CEREBRAS_DEFAULT_URL
   return {
     id: "cerebras",
     labelKey: "quickchat.providerCerebras",

@@ -51,6 +51,7 @@
   },
   "devDependencies": {
     "@babel/core": "^8.0.1",
+    "@deepseek-ai/dsh-llm-mock-server": "0.1.1-rc.2",
     "@rolldown/plugin-babel": "^0.2.3",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.1",

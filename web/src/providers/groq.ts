@@ -17,7 +17,7 @@ async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response
 
 // Groq OpenAI-compatible. Ultra-low latency, native streaming.
 // Docs: https://console.groq.com/docs/quickstart — baseURL https://api.groq.com/openai/v1
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+const GROQ_DEFAULT_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 // Model requested: qwen/qwen3.6-27b (user) — Groq serves it as qwen/qwen3-32b or qwen3-27b. Keep exact id user gave, fallback to hosted qwen.
 const MODELS = [
@@ -38,7 +38,8 @@ function checkRateLimit(): string | null {
 function recordRequest() { recentRequests.push(Date.now()) }
 function estimateTokens(text: string): number { return Math.ceil(text.length / 4) }
 
-export function createGroqProvider(apiKey: string): QuickChatProvider {
+export function createGroqProvider(apiKey: string, baseUrl?: string): QuickChatProvider {
+  const GROQ_URL = baseUrl ?? GROQ_DEFAULT_URL
   return {
     id: "groq",
     labelKey: "quickchat.providerGroq",
@@ -91,6 +92,26 @@ export function createGroqProvider(apiKey: string): QuickChatProvider {
       let acc = ""
       let buffer = ""
       let usage: any = undefined
+      let midstreamError: unknown = null
+
+      const consumeLine = (rawLine: string) => {
+        const trimmedLine = rawLine.trim()
+        if (!trimmedLine.startsWith("data:")) return
+        const dataStr = trimmedLine.slice(5).trim()
+        if (dataStr === "[DONE]") return
+        try {
+          const json = JSON.parse(dataStr)
+          const delta = json?.choices?.[0]?.delta?.content ?? ""
+          if (delta) {
+            acc += delta
+            opts.onChunk?.(delta)
+          }
+          if (json?.usage) usage = json.usage
+          // Groq may send x_groq usage at end
+          if (json?.x_groq?.usage) usage = json.x_groq.usage
+        } catch {}
+      }
+
       try {
         while (true) {
           const { done, value } = await reader.read()
@@ -98,28 +119,23 @@ export function createGroqProvider(apiKey: string): QuickChatProvider {
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split("\n")
           buffer = lines.pop() ?? ""
-          for (const line of lines) {
-            const trimmedLine = line.trim()
-            if (!trimmedLine.startsWith("data:")) continue
-            const dataStr = trimmedLine.slice(5).trim()
-            if (dataStr === "[DONE]") continue
-            try {
-              const json = JSON.parse(dataStr)
-              const delta = json?.choices?.[0]?.delta?.content ?? ""
-              if (delta) {
-                acc += delta
-                opts.onChunk?.(delta)
-              }
-              if (json?.usage) usage = json.usage
-              // Groq may send x_groq usage at end
-              if (json?.x_groq?.usage) usage = json.x_groq.usage
-            } catch {}
-          }
+          for (const line of lines) consumeLine(line)
         }
+        // Corte a mitad de línea (socket muerto sin \n final): recuperar el
+        // resto que quedó en el buffer en vez de descartarlo.
+        if (buffer) consumeLine(buffer)
+        buffer = ""
+      } catch (err) {
+        // Red cortada a mitad del stream (típico móvil): conservar lo acumulado
+        // como parcial en vez de tirar todo. El abort del usuario SÍ se relanza.
+        if (err instanceof Error && err.name === "AbortError") throw err
+        midstreamError = err
       } finally {
         try { reader.releaseLock() } catch {}
       }
-      // Fallback: if nothing streamed, try to parse as non-stream
+      // Si no llegó NADA y además hubo error de red, el fallo es honesto;
+      // con texto parcial recibido, devolverlo vale más que un throw.
+      if (!acc && midstreamError) throw midstreamError
       return { text: acc.trim(), usage: usage ? { input: usage.prompt_tokens ?? 0, output: usage.completion_tokens ?? 0, total: usage.total_tokens ?? 0 } : undefined }
     },
   }
