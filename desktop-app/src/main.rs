@@ -80,6 +80,10 @@ struct App {
 enum AppEvent {
     Quit,
     Restore,
+    /// Un comando de browser llegó desde el HTTP thread: despertar el loop
+    /// para que about_to_wait bombee la cola (sin esto, con ControlFlow::Wait
+    /// y app idle, el request quedaba colgado hasta un evento del OS).
+    BrowserWork,
 }
 
 /// ¿Está instalado el runtime de WebView2 (Evergreen)? En Windows 10 no
@@ -207,10 +211,10 @@ impl ApplicationHandler<AppEvent> for App {
             .with_url(&self.url)
             .with_devtools(true)
             .with_initialization_script("window.__OPENCODE_DESKTOP__ = true;")
-            // GPU + autoplay; sin --disable-web-security (inestable). CORS/X-Frame se resuelve vía /shell/proxy.
-            .with_additional_browser_args(
-                "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-accelerated-video-decode --enable-gpu-rasterization --enable-zero-copy --autoplay-policy=no-user-gesture-required",
-            );
+            // GPU + autoplay. DEBE ser idéntico al del sub-WebView del browser
+            // (browser_view::WEBVIEW_BROWSER_ARGS): comparten WebContext y un
+            // mismatch de argumentos cuelga la creación del WebView hijo.
+            .with_additional_browser_args(browser_view::WEBVIEW_BROWSER_ARGS);
         match builder.build_as_child(&window) {
             Ok(wv) => {
                 window.set_visible(true);
@@ -286,6 +290,11 @@ impl ApplicationHandler<AppEvent> for App {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
             AppEvent::Quit => event_loop.exit(),
+            AppEvent::BrowserWork => {
+                // No-op intencional: despertó el loop; about_to_wait bombea
+                // process_browser_commands. Con Wait, el wake ya reprogramó.
+                self.about_to_wait(event_loop);
+            }
             AppEvent::Restore => {
                 if let Some(window) = &self.window {
                     window.set_visible(true);
@@ -512,6 +521,15 @@ fn main() {
     let event_loop = EventLoop::with_user_event().build().unwrap();
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
+
+    // Waker: los comandos browser que lleguen por HTTP despiertan el loop
+    // (antes, con app idle en Wait, el request colgaba hasta un evento del OS).
+    {
+        let wake_proxy = event_loop.create_proxy();
+        app_state.browser.set_waker(std::sync::Arc::new(move || {
+            let _ = wake_proxy.send_event(AppEvent::BrowserWork);
+        }));
+    }
 
     if let Err(e) = setup_tray(proxy) {
         eprintln!("opencode-desktop: tray no disponible: {e}");

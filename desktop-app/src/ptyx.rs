@@ -365,12 +365,23 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
         std::thread::Builder::new()
             .name("pty-ws-writer".into())
             .spawn(move || {
-                let mut consumed = 0usize;
+                // consumed es ABSOLUTO (base_offset + len del Vec): el ring
+                // recorta la primera mitad al crecer y base_offset avanza —
+                // un índice relativo quedaba > len y congelaba el stream.
+                let mut consumed_abs: usize = 0;
+                let mut last_id = String::new();
                 loop {
                     let out = {
                         let mut p = match conn.pty.lock() { Ok(p) => p, Err(_) => return };
                         loop {
-                            if let Some((_, o)) = &*p {
+                            if let Some((id, o)) = &*p {
+                                // Reattach a OTRO pty: resetear cursor para
+                                // replayear su ring completo (terminal nuevo
+                                // no arranca en negro).
+                                if *id != last_id {
+                                    last_id = id.clone();
+                                    consumed_abs = 0;
+                                }
                                 break o.clone();
                             }
                             let (g, _) = match conn.attached.wait_timeout(p, Duration::from_millis(500)) { Ok(r) => r, Err(_) => return };
@@ -382,9 +393,16 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                         }
                     };
                     let data = match out.data.lock() { Ok(d) => d, Err(_) => return };
-                    if consumed < data.len() {
-                        let delta = data[consumed..].to_vec();
-                        consumed = data.len();
+                    let base = out.base_offset.load(std::sync::atomic::Ordering::Relaxed);
+                    if consumed_abs < base {
+                        // Rotación: lo previo ya no existe — arrancar desde lo disponible.
+                        consumed_abs = base;
+                    }
+                    let total = base + data.len();
+                    if consumed_abs < total {
+                        let start = consumed_abs - base;
+                        let delta = data[start..].to_vec();
+                        consumed_abs = total;
                         drop(data);
                         // Chunk en frames de 16KB para no congelar el hilo UI del WebView (TUI a 60fps)
                         const CHUNK: usize = 16 * 1024;

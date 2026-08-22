@@ -11,7 +11,27 @@
 //! para que el event loop no se quede colgado en `recv()`.
 
 use crossbeam_channel::{bounded, Receiver, Sender, TryRecvError};
+use std::sync::Arc;
+use std::time::Duration;
 use wry::{MemoryUsageLevel, Rect, WebView, WebViewBuilder, WebViewBuilderExtWindows, WebViewExtWindows};
+
+/// Args de browser COMPARTIDOS por el WebView principal y el sub-WebView.
+/// WebView2 EXIGE que todos los WebViews que comparten user-data folder
+/// (WebContext) usen argumentos compatibles: un mismatch (antes el hijo llevaba
+/// --disable-web-security/--disable-site-isolation-trials y el principal no)
+/// cuelga CreateCoreWebView2Controller para siempre → el event loop entero se
+/// congela y TODOS los comandos del browser responden 500 por timeout.
+/// Sin flags de seguridad desactivados: el bypass de CORS/X-Frame lo hace el
+/// proxy /shell/proxy del server, no el renderer.
+pub const WEBVIEW_BROWSER_ARGS: &str =
+    "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-video-decode \
+     --enable-accelerated-2d-canvas --enable-gpu-rasterization --enable-zero-copy \
+     --autoplay-policy=no-user-gesture-required \
+     --no-first-run --no-default-browser-check --disable-component-update \
+     --disable-background-networking --disable-renderer-backgrounding \
+     --disable-background-timer-throttling --disable-hang-monitor \
+     --disable-ipc-flooding-protection --disable-popup-blocking \
+     --disable-prompt-on-repost";
 
 /// Comando enviado desde el thread HTTP al main thread para crear/manipular
 /// el sub-WebView.
@@ -59,6 +79,10 @@ pub struct SubWebViewInner {
 /// Manager que despacha comandos al main thread vía canal.
 pub struct SubWebViewManager {
     pub tx: Sender<BrowserCommand>,
+    /// Despierta el event loop de winit tras encolar un comando: sin esto,
+    /// con ControlFlow::Wait y app idle, rx.recv() del main thread no corre
+    /// y el request HTTP queda colgado hasta que llegue cualquier evento del OS.
+    waker: std::sync::Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 impl SubWebViewManager {
@@ -66,14 +90,37 @@ impl SubWebViewManager {
     /// HTTP thread si el main thread está saturado procesando comandos).
     pub fn new() -> (Self, Receiver<BrowserCommand>) {
         let (tx, rx) = bounded(32);
-        (Self { tx }, rx)
+        (Self { tx, waker: std::sync::Mutex::new(None) }, rx)
+    }
+
+    pub fn set_waker(&self, f: Arc<dyn Fn() + Send + Sync>) {
+        *self.waker.lock().unwrap_or_else(|e| e.into_inner()) = Some(f);
+    }
+
+    fn wake(&self) {
+        if let Ok(g) = self.waker.lock() {
+            if let Some(f) = g.as_ref() {
+                f();
+            }
+        }
     }
 
     /// Envía un comando y espera la respuesta. El HTTP thread se bloquea
-    /// aquí hasta que el main thread procese el comando y envíe el reply.
+    /// aquí hasta que el main thread procese y responda. Con timeout:
+    /// si el main thread murió/está bloqueado, respondemos 500 en vez de
+    /// colgar el worker para siempre.
     pub fn send<T>(&self, cmd: BrowserCommand, rx: crossbeam_channel::Receiver<T>) -> Result<T, String> {
         self.tx.send(cmd).map_err(|_| "main thread gone".to_string())?;
-        rx.recv().map_err(|_| "main thread dropped reply".to_string())
+        self.wake();
+        match rx.recv_timeout(Duration::from_secs(10)) {
+            Ok(v) => Ok(v),
+            Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                Err("main thread timeout (event loop no procesó el comando)".to_string())
+            }
+            Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                Err("main thread dropped reply".to_string())
+            }
+        }
     }
 
     pub fn open(&self, url: &str, bounds: Rect) -> Result<(), String> {
@@ -215,25 +262,9 @@ fn cmd_open(
         )
         // Permitir reproducción automática (YouTube, música, etc.) sin gesto del usuario.
         .with_autoplay(true)
-        .with_additional_browser_args(
-            // GPU + aceleración
-            "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-video-decode \
-             --enable-accelerated-2d-canvas --enable-zero-copy \
-             \
-             --disable-web-security --disable-site-isolation-trials \
-             --disable-features=IsolateOrigins,site-per-process \
-             \
-             --autoplay-policy=no-user-gesture-required \
-             --disable-blink-features=AutomationControlled \
-             --disable-features=WebRtcHideLocalIpsWithMdns \
-             --no-first-run --no-default-browser-check \
-             --disable-component-update --disable-background-networking \
-             --disable-renderer-backgrounding --disable-background-timer-throttling \
-             --disable-hang-monitor --disable-ipc-flooding-protection \
-             --disable-popup-blocking --disable-prompt-on-repost \
-             \
-             --enable-widevine-cdm --disable-component-update",
-        )
+        // DEBE ser idéntico al del WebView principal (ver WEBVIEW_BROWSER_ARGS):
+        // comparten WebContext y un mismatch cuelga la creación del controller.
+        .with_additional_browser_args(WEBVIEW_BROWSER_ARGS)
         .build_as_child(window)
         .map_err(|e| format!("SubWebView create: {e}"))?;
 
