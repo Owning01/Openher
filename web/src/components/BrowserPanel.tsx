@@ -257,6 +257,20 @@ export const BrowserPanel = memo(function BrowserPanel({
     shell.browser.open(currentSrc, bounds).catch(() => {})
     nativeReady.current = true
 
+    // CRÍTICO: el child HWND de Win32 tiene prioridad de hit-testing sobre el
+    // DOM del host — si queda visible fuera de pantalla / tras cambio de tab,
+    // traga TODOS los clicks (X incluida) y tapa la sidebar. Ocultarlo a nivel
+    // Win32 apenas deja de intersectar.
+    let ioVisibility = true
+    const io = new IntersectionObserver((entries) => {
+      const visible = entries.some((e) => e.isIntersecting && e.intersectionRatio > 0.01)
+      if (visible !== ioVisibility) {
+        ioVisibility = visible
+        shell.browser.setVisibility(visible).catch(() => {})
+      }
+    }, { threshold: [0, 0.01, 0.5] })
+    io.observe(el)
+
     // ResizeObserver: sync bounds en tiempo real (debounced)
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
     const ro = new ResizeObserver(() => {
@@ -284,11 +298,15 @@ export const BrowserPanel = memo(function BrowserPanel({
     document.addEventListener("visibilitychange", handleVis)
 
     return () => {
+      io.disconnect()
       ro.disconnect()
       window.removeEventListener("resize", syncBounds)
       window.removeEventListener("scroll", syncBounds, true)
       document.removeEventListener("visibilitychange", handleVis)
       if (debounceTimer) clearTimeout(debounceTimer)
+      // Orden: ocultar ANTES de cerrar — si el close falla (main thread
+      // ocupado), el HWND al menos no sigue tragando clicks del host.
+      shell.browser.setVisibility(false).catch(() => {})
       shell.browser.close().catch(() => {})
       nativeReady.current = false
     }

@@ -183,6 +183,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     }, 800)
   }, [])
 
+  const handleBlur = useCallback(() => {
+    if (pushTimerRef.current) {
+      clearTimeout(pushTimerRef.current)
+      pushTimerRef.current = null
+      if (localValueRef.current !== lastPushedRef.current) {
+        lastPushedRef.current = localValueRef.current
+        onChangeRef.current(localValueRef.current)
+      }
+    }
+  }, [])
+
   // Flush del draft pendiente al desmontar (no perder texto tipeado).
   useEffect(() => () => {
     if (pushTimerRef.current) {
@@ -649,6 +660,11 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         <textarea
           ref={textareaRef}
           value={localValue}
+          onBlur={() => {
+            // Contrato: al perder foco, el padre queda SIEMPRE sincronizado
+            // (persistencia de draft, atajos, queue offline).
+            if (localValueRef.current !== lastPushedRef.current) pushNow(localValueRef.current)
+          }}
           onChange={(event) => {
             // Edición manual: cancela la navegación por historial (↑/↓) en curso.
             if (historyIndexRef.current !== -1) {
