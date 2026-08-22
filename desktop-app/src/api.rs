@@ -1029,7 +1029,11 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     }
 
     // ============================== Estáticos (web app)
-    if let Some(base) = state.dist.as_ref() {
+    // GUARD: las rutas /shell/* son API — jamás caer al SPA fallback.
+    // (Sin esto, POST /shell/browser/open devolvía index.html y el WebView
+    // nativo jamás se abría: .catch(()=>{}) se tragaba el JSON parse error.)
+    if !path.starts_with("/shell/") {
+        if let Some(base) = state.dist.as_ref() {
         let rel = path.trim_start_matches('/');
         let mut file = base.join(rel);
         if !file.starts_with(base) {
@@ -1073,6 +1077,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             return;
         }
     }
+    } // fin guard /shell/*
 
     // ============================== Browser (Sub-WebView2 nativo ultra-ligero)
     if path == "/shell/browser/open" && method == Method::Post {

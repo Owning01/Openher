@@ -253,9 +253,12 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
           try {
             const buf = await shell.pty.poll(ptyId, cursor)
             if (buf && buf.data) {
-              cursor += buf.len
-              // Extract localhost URL
-              const match = buf.data.match(/(https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d+)(\/[^\s]*)?)/i)
+              // len es cursor ABSOLUTO del ring (base+d.len), no delta: asignar, no acumular.
+              cursor = buf.len
+              // data llega BASE64 (mismo transporte que el terminal): decodificar
+              // antes de matchear URLs — sobre base64 nunca hay "http://".
+              const txt = atob(buf.data)
+              const match = txt.match(/(https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d+)(\/[^\s]*)?)/i)
               if (match) {
                 let u = match[1]
                 if (u.includes("0.0.0.0")) u = u.replace("0.0.0.0", "localhost")

@@ -256,18 +256,22 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
     if (existing) {
       ptyId = existing.ptyId
       wsPort = existing.wsPort
-      // Restaurar buffer histórico sin matar PTY (en cola para no bloquear)
-      shell.pty.poll(ptyId, 0).then((r) => {
-        if (disposed) return
-        if (r.data) {
-          since = r.len
-          queueWriteB64(r.data)
-        }
-      }).catch(() => {})
-      // Si wsPort no está guardado (migración), derivar de location.port+1
-      if (!wsPort) wsPort = Number(window.location.port || 0) + 1 || 0
-      if (wsPort) connectWs(wsPort, ptyId)
-      else { polling = true; poll() }
+      if (!wsPort) {
+        // Solo el fallback polling necesita replay manual: el writer WS ya
+        // re-envía el ring completo al attach (consumed=0). Hacer AMBOS
+        // duplicaba todo el scrollback.
+        shell.pty.poll(ptyId, 0).then((r) => {
+          if (disposed) return
+          if (r.data) {
+            since = r.len
+            queueWriteB64(r.data)
+          }
+        }).catch(() => {})
+        polling = true
+        poll()
+      } else {
+        connectWs(wsPort, ptyId)
+      }
     } else {
       shell.pty.create(initialCwdRef.current, initialShellRef.current).then((res) => {
         if (disposed) {

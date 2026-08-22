@@ -95,7 +95,7 @@ export function buildOverlayScript(apiBase: string, initialTool: InspectTool = "
       if(tag==='script'||tag==='style'||tag==='link'||tag==='meta'||tag==='noscript')continue;
       var r=el.getBoundingClientRect();
       if(!visibleEnough(el,r))continue;
-      var cx=r.left+r.width/2+(W.scrollX||0),cy=r.top+r.height/2+(W.scrollY||0);
+      var cx=r.left+r.width/2,cy=r.top+r.height/2;
       if(cx<b.x||cx>b.x+b.w||cy<b.y||cy>b.y+b.h)continue;
       var covered=false;
       for(var j=0;j<out.length;j++){if(out[j]!==el&&out[j].contains(el)){covered=true;break}}
@@ -143,7 +143,8 @@ export function buildOverlayScript(apiBase: string, initialTool: InspectTool = "
     var b=document.createElement('div');
     b.className='__oc_badge';b.setAttribute('data-ocid',String(id));b.setAttribute('data-oc-vs','1');b.textContent=label;
     b.style.left=(bx||0)+'px';b.style.top=(by||0)+'px';
-    b.addEventListener('click',function(ev){ev.preventDefault();ev.stopPropagation();post('/shell/browser/pick',{type:'remove',id:id})},true);
+    // sin listener propio: el click-handler global de capture postea 'remove'
+    // (stopPropagation de document impide que este nodo reciba la fase target)
     document.body.appendChild(b);
   };
   W.__oc_removeBadge=function(id){
@@ -202,9 +203,14 @@ export function buildOverlayScript(apiBase: string, initialTool: InspectTool = "
   document.addEventListener('mouseout',function(e){if(e.target===cur){cur.classList.remove('__oc_hover');cur=null;hl.style.display='none'}},true);
   document.addEventListener('click',function(e){
     e.preventDefault();e.stopPropagation();
+    var t=e.target;
+    // Badge: postear remove AQUÍ mismo — el listener del badge nunca corre
+    // porque stopPropagation en capture de document mata la fase target.
+    var b=t&&t.closest?t.closest('.__oc_badge'):null;
+    if(b){post('/shell/browser/pick',{type:'remove',id:b.getAttribute('data-ocid')});return}
     if(suppressClick)return;
     if(TOOL!=='picker')return;
-    W.__oc_sendPick(e.target);
+    W.__oc_sendPick(t);
   },true);
   document.addEventListener('keydown',function(e){if(e.key==='Escape')post('/shell/browser/pick',{type:'escape'})},true);
   // ---- Runtime state capture (scroll + forms via sessionStorage) ----
