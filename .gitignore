@@ -73,3 +73,8 @@ signaling-worker/.wrangler/
 desktop-app/target/
 desktop-app/data/
 desktop-app/opencode-desktop.exe
+
+# Build artifacts desktop (regenerables con build-desktop.ps1)
+dist-desktop/
+web/dist-locked/
+web/dist-locked2/
