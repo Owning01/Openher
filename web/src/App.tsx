@@ -481,17 +481,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const composerRef = useRef(composer)
   useEffect(() => { composerRef.current = composer }, [composer])
   const composerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // SIN debounce en el padre: el Composer ya empuja con su propio ciclo
+  // (800ms tras pausa / send / clear), así que esto solo corre ~1 vez por
+  // pausa de tipeo. El doble-debounce reseteado por tecla era la causa del
+  // prompt cortado al enviar rápido.
   const handleComposerChange = useCallback((value: string) => {
-    const prev = composerRef.current
-    composerRef.current = value
-    if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
-    if (value === "" || Math.abs(value.length - prev.length) > 12 || value.startsWith("/")) {
-      setComposer(value)
-      return
+    if (composerDebounceRef.current) {
+      clearTimeout(composerDebounceRef.current)
+      composerDebounceRef.current = null
     }
-    composerDebounceRef.current = setTimeout(() => {
-      setComposer(value)
-    }, 350)
+    composerRef.current = value
+    setComposer(value)
   }, [setComposer])
   useEffect(() => () => {
     if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
@@ -1133,11 +1133,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string) => {
     if (!selectedSession) return
-    // Flush debounce pendiente: evita que un timer stale pise el clear y deje el prompt cortado
-    if (composerDebounceRef.current) {
-      clearTimeout(composerDebounceRef.current)
-      composerDebounceRef.current = null
-    }
+    // El texto SIEMPRE llega explícito desde el sender (localValueRef del
+    // Composer); composerRef es solo fallback defensivo.
     const composerText = text ?? composerRef.current
     if (connectionState === "offline") {
       queueAction({ type: "prompt", sessionID: selectedSession.id, directory: selectedSession.directory, payload: composerText })
@@ -1192,7 +1189,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (result === "themes") { navigate("settings"); setShowThemePicker(true) }
     if (result === "connect") setShowConnectSheet(true)
     return typeof result === "boolean" ? result : true
-  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker, setShowConnectSheet, vs])
+    // Primitivos, no el objeto `vs` (identidad nueva por render → invalidaba
+    // handleSend → baseChatProps → todo el árbol del chat por keystroke).
+  }, [selectedSession, activeModel, activeAgentID, commands, send, refreshSessions, loadSelected, setSessions, connectionState, queueAction, setRuntimeError, setComposer, localRevertID, setMessages, navigate, setHelpPage, setShowThemePicker, setShowConnectSheet, vs.hasSelection, vs.promptContext, vs.clear])
 
   const handleRegenerate = useCallback(async () => {
     if (!selectedSession) return
@@ -2670,13 +2669,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   // Memoizado: un objeto literal por render re-renderiza todo el árbol del
   // chat (SessionChatPanel/ChatView) con cada setState global.
   // composer/onComposerChange se pasan aparte para no invalidar el memo en cada keystroke.
+  // Referencia ESTABLE de los mensajes de la sesión visible: sin esto, el
+  // .filter() dentro de baseChatProps creaba un array nuevo en cada recompute
+  // y derrotaba el memo de MessageList/MessageBubble (lag de teclado/stream).
+  const visibleRenderedMessages = useMemo(
+    () => (selectedSession ? renderedMessages.filter((m) => m.info.sessionID === selectedSession.id) : renderedMessages),
+    [renderedMessages, selectedSession]
+  )
+
   const baseChatProps: Omit<ChatViewProps, 'composer' | 'onComposerChange'> = useMemo(() => ({
     selectedSession,
     revertID: localRevertID,
-    // Cinturón y tiradores: el estado de mensajes debe contener una sola
-    // conversación, pero cualquier raza de switch residual (patch SSE tarde,
-    // parte foránea) NUNCA debe cruzar la frontera de render.
-    messages: selectedSession ? renderedMessages.filter((m) => m.info.sessionID === selectedSession.id) : renderedMessages,
+    // Cinturón y tiradores: cualquier raza de switch residual NUNCA cruza
+    // la frontera de render (contaminación entre chats).
+    messages: visibleRenderedMessages,
     pendingIndex, todos,
     todosExpanded,
     isWorking, showTypingBubble, isSending,
@@ -2784,7 +2790,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     handleRedo, handleCompact, handleCreateSession, fb, setShowTerminal,
     setShowMCPBrowser, setShowRemoteDesktop, chatSettings, setChatSetting, resetChatSettings,
     promptSnippets, handleRegenerate, handleInsertPrompt, handleSendPrompt,
-    vs.selection, vs.clear, handleOpenFile,
+    visibleRenderedMessages, vs.selection, vs.clear, handleOpenFile,
   ])
 
   const activeSessionSid = isDesktop ? desktopLayout.sessions[Math.min(activePanel, desktopLayout.sessions.length - 1)] : selectedSession?.id

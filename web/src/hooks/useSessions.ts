@@ -6,6 +6,10 @@ import { useLocalStorage } from "./useLocalStorage"
 
 const FAVORITES_KEY = STORAGE_KEYS.FAVORITES
 
+// Unión persistente de directorios vistos: si /project falla (catch → []) o la
+// lista global rota, los proyectos viejos NO desaparecen de la sidebar.
+const knownDirsHistoryRef: { current: Set<string> } = { current: new Set<string>() }
+
 function toSessionView(session: Session, status?: SessionStatus): SessionView {
   return {
     id: session.id,
@@ -90,62 +94,71 @@ export function useSessions(
   const refreshSessions = useCallback(async (full = false) => {
     if (!config.host || config.port <= 0) return
     try {
-      const items = await api.listGlobalSessions(config).catch(() => api.listSessions(config))
+      const [items, projects] = await Promise.all([
+        api.listGlobalSessions(config).catch(() => api.listSessions(config)),
+        api.listProjects(config).catch(() => []),
+      ])
 
-      if (full) {
-        // Full refresh: hydrate per-directory for accurate statuses
-        const directories = [...new Set(items.map((s) => s.directory).filter(Boolean))]
-        const chunk = <T>(arr: T[], size: number) => {
-          const chunks: T[][] = []
-          for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
-          return chunks
-        }
-        const dirChunks = chunk(directories, 10)
-        const allSessionLists: Session[][] = []
-        const allStatusLists: Record<string, SessionStatus>[] = []
-        for (const c of dirChunks) {
-          const [sl, st] = await Promise.all([
-            Promise.all(c.map((d) => api.listSessions(config, d).catch(() => [] as Session[]))),
-            Promise.all(c.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>))))
-          ])
-          allSessionLists.push(...sl)
-          allStatusLists.push(...st)
-        }
-        const sessionLists = allSessionLists
-        const statuses = allStatusLists
-        const scoped = new Map(sessionLists.flat().map((s) => [s.id, s]))
-        const allStatuses = new Map<string, SessionStatus>()
-        for (const sm of statuses) {
-          for (const [id, st] of Object.entries(sm)) {
-            if (!allStatuses.has(id)) allStatuses.set(id, st)
-          }
-        }
-        const hydrated = items.map((s) => ({ ...s, ...scoped.get(s.id), project: s.project }))
-        const mapped = hydrated
-          .map((s) => toSessionView(s as Session, allStatuses.get(s.id)))
-          .sort((a, b) => b.updated - a.updated)
-        setSessions((current) => {
-          const selected = selectedID ? current.find((s) => s.id === selectedID) : null
-          if (!selected || mapped.some((s) => s.id === selected.id)) return mapped
-          return [selected, ...mapped].sort((a, b) => b.updated - a.updated)
-        })
-      } else {
-        // Light refresh: merge from global list, preserve existing statuses
-        const mapped = items.map((s) => toSessionView(s as Session, undefined)).sort((a, b) => b.updated - a.updated)
-        setSessions((current) => {
-          const currentMap = new Map(current.map((s) => [s.id, s]))
-          for (const m of mapped) {
-            const existing = currentMap.get(m.id)
-            currentMap.set(m.id, { ...existing, ...m,
-              status: existing && (existing.status === "busy" || existing.status === "retry") ? existing.status : m.status
-            })
-          }
-          const result = [...currentMap.values()].sort((a, b) => b.updated - a.updated)
-          const selected = selectedID ? result.find((s) => s.id === selectedID) : null
-          if (!selected || result.some((s) => s.id === selected.id)) return result
-          return [selected, ...result].sort((a, b) => b.updated - a.updated)
-        })
+      const knownDirs = new Set<string>(knownDirsHistoryRef.current)
+      for (const s of items) if (s.directory) knownDirs.add(s.directory)
+      for (const p of projects) if (p.directory) knownDirs.add(p.directory)
+      for (const d of knownDirs) knownDirsHistoryRef.current.add(d)
+
+      const directories = [...knownDirs].filter(Boolean)
+      const chunk = <T>(arr: T[], size: number) => {
+        const chunks: T[][] = []
+        for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
+        return chunks
       }
+      const dirChunks = chunk(directories, 10)
+      const allSessionLists: Session[][] = []
+      const allStatusLists: Record<string, SessionStatus>[] = []
+      for (const c of dirChunks) {
+        const [sl, st] = await Promise.all([
+          Promise.all(c.map((d) => api.listSessions(config, d).catch(() => [] as Session[]))),
+          full ? Promise.all(c.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>)))) : Promise.resolve([]),
+        ])
+        allSessionLists.push(...sl)
+        if (full) allStatusLists.push(...st)
+      }
+
+      const allSessionsMap = new Map<string, Session>()
+      for (const s of items) if (s.id) allSessionsMap.set(s.id, s as Session)
+      for (const s of allSessionLists.flat()) if (s.id) allSessionsMap.set(s.id, s)
+
+      const allStatuses = new Map<string, SessionStatus>()
+      for (const sm of allStatusLists) {
+        for (const [id, st] of Object.entries(sm)) {
+          if (!allStatuses.has(id)) allStatuses.set(id, st)
+        }
+      }
+
+      const mapped = [...allSessionsMap.values()]
+        .map((s) => toSessionView(s, allStatuses.get(s.id)))
+        .sort((a, b) => b.updated - a.updated)
+
+      // Diagnóstico "solo 3 proyectos": activar con localStorage.debug.sessions=1
+      if (typeof localStorage !== "undefined" && localStorage.getItem("debug.sessions") === "1") {
+        const dirCounts = new Map<string, number>()
+        for (const s of mapped) if (s.directory) dirCounts.set(s.directory, (dirCounts.get(s.directory) ?? 0) + 1)
+        console.info(`[sessions] raw=${items.length} projects=${projects.length} dirsConsultadas=${directories.length} total=${mapped.length}`, [...dirCounts.entries()].slice(0, 20))
+      }
+
+      setSessions((current) => {
+        const currentMap = new Map(current.map((s) => [s.id, s]))
+        for (const m of mapped) {
+          const existing = currentMap.get(m.id)
+          currentMap.set(m.id, {
+            ...existing,
+            ...m,
+            status: m.status !== "idle" ? m.status : (existing && (existing.status === "busy" || existing.status === "retry") ? existing.status : m.status),
+          })
+        }
+        const result = [...currentMap.values()].sort((a, b) => b.updated - a.updated)
+        const selected = selectedID ? result.find((s) => s.id === selectedID) : null
+        if (!selected || result.some((s) => s.id === selected.id)) return result
+        return [selected, ...result].sort((a, b) => b.updated - a.updated)
+      })
 
       backgroundFailureCountRef.current = 0
       initialSessionLoadRef.current = false

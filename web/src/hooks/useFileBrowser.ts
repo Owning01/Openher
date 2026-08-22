@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useMemo } from "react"
 import type { ServerConfig, FileEntry } from "../types"
 import { api } from "../api"
 
@@ -50,7 +50,9 @@ export function useFileBrowser(config: ServerConfig, directory?: string) {
     if (parent !== null) browseDir(parent)
   }, [currentPath, browseDir])
 
-  return { isOpen, currentPath, items, loading, error, open, close, navigateTo, goUp }
+  // Objeto estable entre renders: sin esto, `fb` en deps de baseChatProps
+  // invalidaba el memo del chat entero en cada keystroke.
+  return useMemo(() => ({ isOpen, currentPath, items, loading, error, open, close, navigateTo, goUp }), [isOpen, currentPath, items, loading, error, open, close, navigateTo, goUp])
 }
 
 function parentDir(path: string): string | null {

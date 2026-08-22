@@ -17,11 +17,17 @@ const COMPOSER_STORAGE_KEY = "opencode.remote.composer"
 
 // Translation originals: maps message ID → original (pre-translation) text.
 // Populated when TSL is active and a message is sent.
+// CAP FIFO: map module-level vivo toda la sesión — sin tope, crece eterno.
+const TRANSLATION_ORIGINALS_CAP = 200
 const translationOriginals = new Map<string, string>()
 export function getTranslationOriginal(id: string): string | undefined {
   return translationOriginals.get(id)
 }
 export function setTranslationOriginal(id: string, text: string) {
+  if (!translationOriginals.has(id) && translationOriginals.size >= TRANSLATION_ORIGINALS_CAP) {
+    const oldest = translationOriginals.keys().next().value
+    if (oldest !== undefined) translationOriginals.delete(oldest)
+  }
   translationOriginals.set(id, text)
 }
 
@@ -272,6 +278,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // sesión ya se aplican (el merge por id conserva lo streamed local).
     loadedSessionIDRef.current = sessionID
     setCurrentSessionId(sessionID)
+    // Podar anchors de subagentes: solo eran válidos para la sesión previa.
+    // Sin poda, el map crece toda la vida de la app y retiene mensajes viejos.
+    subagentAnchorRef.current.clear()
     const limit = dataMode === "ultra" ? 100 : dataMode === "miser" ? 100 : 500
 
     const raw = await api.loadMessages(config, sessionID, directory, limit)
@@ -412,20 +421,35 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     isUndoingRef.current = true
     try {
       const userMessages = messages.filter((m) => m.info.role === "user")
-      const target = userMessages.length > 0
-        ? revert
-          ? userMessages.filter((m) => m.info.id < revert.messageID).pop()
-          : userMessages.pop()
-        : undefined
-      if (!target) {
+      if (userMessages.length === 0) {
         setRuntimeError("No messages to undo")
         return
       }
-      // S3: actualización optimista INSTANTÁNEA — el filtro local oculta los
-      // mensajes revertidos en ~0ms en vez de esperar 3-5 RTTs de red.
-      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= target.info.id))
-      onSetRevertID?.(target.info.id)
-      onPatchSession?.({ revert: { messageID: target.info.id } })
+
+      // En el servidor OpenCode, revert(messageID) preserva messageID y
+      // revierte todo lo posterior. Por tanto, para deshacer el mensaje U_n,
+      // debemos revertir a U_(n-1).
+      let targetIndex = -1
+      if (revert?.messageID) {
+        const curIdx = userMessages.findIndex((m) => m.info.id === revert.messageID)
+        targetIndex = curIdx > 0 ? curIdx - 1 : -1
+      } else {
+        targetIndex = userMessages.length > 1 ? userMessages.length - 2 : -1
+      }
+
+      const targetID = targetIndex >= 0 ? userMessages[targetIndex].info.id : ""
+
+      // S3: actualización optimista instantánea
+      if (targetID) {
+        setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= targetID))
+        onSetRevertID?.(targetID)
+        onPatchSession?.({ revert: { messageID: targetID } })
+      } else {
+        setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID))
+        onSetRevertID?.(null)
+        onPatchSession?.({ revert: undefined })
+      }
+
       if (awaitingAssistantReply || messages.some((m) => m.info.role !== "user" && !m.info.time.completed)) {
         await Promise.race([
           api.abort(config, sessionID, directory).catch(() => {}),
@@ -434,11 +458,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         // Esperar a que el server pase a idle (assertNotBusy del revert)
         await new Promise((r) => setTimeout(r, 400))
       }
+
       let revertResult: unknown = null
       let lastErr: unknown = null
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          revertResult = await api.revert(config, sessionID, target.info.id, directory)
+          if (targetID) {
+            revertResult = await api.revert(config, sessionID, targetID, directory)
+          } else {
+            // Deshacer el primer mensaje de la sesión
+            revertResult = await api.unrevert(config, sessionID, directory).catch(() => ({}))
+          }
           lastErr = null
           break
         } catch (err: any) {
@@ -454,12 +484,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           break
         }
       }
+
       if (lastErr && revertResult === null) {
-        // Revertir optimista si falló definitivamente (evitar que el mensaje quede oculto fantasma)
+        // Revertir optimista si falló definitivamente
         await onLoadSelected().catch(() => {})
         return
       }
-      if (revertResult === null) return
+
       await onLoadSelected().catch(() => {})
     } catch (err) {
       setRuntimeError((err as Error).message)
