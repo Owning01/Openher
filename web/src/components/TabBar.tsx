@@ -63,14 +63,15 @@ export const TabBar = memo(function TabBar({
     const id = tabs[index]
     e.dataTransfer.setData("application/x-opencode-tab-index", String(index))
     if (id) {
-      e.dataTransfer.setData("application/x-opencode-path", `session:${id}`)
-      e.dataTransfer.setData("text/plain", `session:${id}`)
+      const payload = panelIndex !== undefined ? `panel:${panelIndex}:${id}` : `session:${id}`
+      e.dataTransfer.setData("application/x-opencode-path", payload)
+      e.dataTransfer.setData("text/plain", payload)
     } else {
       e.dataTransfer.setData("text/plain", `tab:${index}`)
     }
     e.dataTransfer.effectAllowed = "move"
     setDragIdx(index)
-  }, [tabs])
+  }, [tabs, panelIndex])
 
   const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault()

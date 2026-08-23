@@ -283,11 +283,11 @@ const ShellPanelCell = memo(function ShellPanelCell({
     const y = e.clientY - rect.top
     const w = rect.width
     const h = rect.height
-    if (y < h * 0.15) return "top"
-    if (y > h * 0.85) return "bottom"
-    if (x < w * 0.15) return "left"
-    if (x > w * 0.85) return "right"
-    return "center"
+    if (x < w * 0.25) return "left"
+    if (x > w * 0.75) return "right"
+    if (y < h * 0.25) return "top"
+    if (y > h * 0.75) return "bottom"
+    return kind === "editor" ? "center" : (x >= w / 2 ? "right" : "left")
   }
 
   return (
@@ -2506,66 +2506,65 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
 
     setDesktopLayout((prev) => {
-      // 1. Si se especificó targetIndex y zone:
-      if (targetIndex != null && zone) {
-        if (zone === "center") {
-          const panelKinds = [...prev.panelKinds]
-          panelKinds[targetIndex] = "editor"
-          const prevTabs = prev.panelEditorTabStacks?.[targetIndex] ?? (prev.panelEditorPaths?.[targetIndex] ? [prev.panelEditorPaths[targetIndex]] : [])
-          const isSameEditor = prev.panelKinds[targetIndex] === "editor"
-          const nextTabs = isSameEditor ? (prevTabs.includes(filePath) ? prevTabs : [...prevTabs, filePath]) : [filePath]
-          const nextActive = nextTabs.indexOf(filePath)
-          return {
-            ...prev,
-            panelKinds,
-            panelEditorTabStacks: { ...prev.panelEditorTabStacks, [targetIndex]: nextTabs },
-            panelEditorActive: { ...prev.panelEditorActive, [targetIndex]: nextActive },
-            panelEditorPaths: { ...prev.panelEditorPaths, [targetIndex]: filePath },
-          }
-        }
-        if (zone === "left" || zone === "right") {
-          const cols = prev.cols + 1
-          const col = targetIndex % prev.cols
-          const insertCol = zone === "left" ? col : col + 1
-          const sessions: Array<string | null> = []
-          const panelKinds: Array<ShellPanelKind | "editor"> = []
-          const panelIds: Array<string> = []
-          const panelEditorPaths: Record<number, string> = {}
-          const panelEditorTabStacks: Record<number, string[]> = {}
-          const panelEditorActive: Record<number, number> = {}
-          for (let r = 0; r < prev.rows; r++) {
-            for (let c = 0; c < cols; c++) {
-              if (c < insertCol) {
-                const oldIdx = r * prev.cols + c
-                sessions.push(prev.sessions[oldIdx] ?? null)
-                panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
-                panelIds.push(prev.panelIds[oldIdx] ?? genPanelId())
-                if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
-                if (prev.panelEditorTabStacks?.[oldIdx]) panelEditorTabStacks[sessions.length - 1] = prev.panelEditorTabStacks[oldIdx]
-                if (prev.panelEditorActive?.[oldIdx] != null) panelEditorActive[sessions.length - 1] = prev.panelEditorActive[oldIdx]!
-              } else if (c === insertCol) {
-                sessions.push(null)
-                panelKinds.push("editor")
-                panelIds.push(genPanelId())
-                panelEditorPaths[sessions.length - 1] = filePath
-                panelEditorTabStacks[sessions.length - 1] = [filePath]
-                panelEditorActive[sessions.length - 1] = 0
-              } else {
-                const oldIdx = r * prev.cols + (c - 1)
-                sessions.push(prev.sessions[oldIdx] ?? null)
-                panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
-                panelIds.push(prev.panelIds[oldIdx] ?? genPanelId())
-                if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
-                if (prev.panelEditorTabStacks?.[oldIdx]) panelEditorTabStacks[sessions.length - 1] = prev.panelEditorTabStacks[oldIdx]
-                if (prev.panelEditorActive?.[oldIdx] != null) panelEditorActive[sessions.length - 1] = prev.panelEditorActive[oldIdx]!
-              }
-            }
-          }
-          return { ...prev, cols, sessions, panelKinds, panelIds, panelEditorPaths, panelEditorTabStacks, panelEditorActive, colSizes: new Array(cols).fill(null) }
+      // 1. Si el panel destino ES un editor y se suelta al centro: agregar tab
+      if (targetIndex != null && prev.panelKinds[targetIndex] === "editor" && (!zone || zone === "center")) {
+        const prevTabs = prev.panelEditorTabStacks?.[targetIndex] ?? (prev.panelEditorPaths?.[targetIndex] ? [prev.panelEditorPaths[targetIndex]] : [])
+        const nextTabs = prevTabs.includes(filePath) ? prevTabs : [...prevTabs, filePath]
+        const nextActive = nextTabs.indexOf(filePath)
+        return {
+          ...prev,
+          panelEditorTabStacks: { ...prev.panelEditorTabStacks, [targetIndex]: nextTabs },
+          panelEditorActive: { ...prev.panelEditorActive, [targetIndex]: nextActive },
+          panelEditorPaths: { ...prev.panelEditorPaths, [targetIndex]: filePath },
         }
       }
 
-      // 2. Si ya hay un editor abierto, agregar pestaña (VS Code: no reemplaza)
+      // 2. Si se especificó zona direccional (left/right/top/bottom):
+      const effectiveIndex = targetIndex ?? activePanel
+      const splitDir = (zone === "left" || zone === "top" || zone === "bottom") ? zone : "right"
+
+      if (targetIndex != null && (zone === "left" || zone === "right" || zone === "top" || zone === "bottom")) {
+        const cols = prev.cols + 1
+        const col = effectiveIndex % prev.cols
+        const insertCol = splitDir === "left" ? col : col + 1
+        const sessions: Array<string | null> = []
+        const panelKinds: Array<ShellPanelKind | "editor"> = []
+        const panelIds: Array<string> = []
+        const panelEditorPaths: Record<number, string> = {}
+        const panelEditorTabStacks: Record<number, string[]> = {}
+        const panelEditorActive: Record<number, number> = {}
+        for (let r = 0; r < prev.rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (c < insertCol) {
+              const oldIdx = r * prev.cols + c
+              sessions.push(prev.sessions[oldIdx] ?? null)
+              panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+              panelIds.push(prev.panelIds[oldIdx] ?? genPanelId())
+              if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
+              if (prev.panelEditorTabStacks?.[oldIdx]) panelEditorTabStacks[sessions.length - 1] = prev.panelEditorTabStacks[oldIdx]
+              if (prev.panelEditorActive?.[oldIdx] != null) panelEditorActive[sessions.length - 1] = prev.panelEditorActive[oldIdx]!
+            } else if (c === insertCol) {
+              sessions.push(null)
+              panelKinds.push("editor")
+              panelIds.push(genPanelId())
+              panelEditorPaths[sessions.length - 1] = filePath
+              panelEditorTabStacks[sessions.length - 1] = [filePath]
+              panelEditorActive[sessions.length - 1] = 0
+            } else {
+              const oldIdx = r * prev.cols + (c - 1)
+              sessions.push(prev.sessions[oldIdx] ?? null)
+              panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
+              panelIds.push(prev.panelIds[oldIdx] ?? genPanelId())
+              if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
+              if (prev.panelEditorTabStacks?.[oldIdx]) panelEditorTabStacks[sessions.length - 1] = prev.panelEditorTabStacks[oldIdx]
+              if (prev.panelEditorActive?.[oldIdx] != null) panelEditorActive[sessions.length - 1] = prev.panelEditorActive[oldIdx]!
+            }
+          }
+        }
+        return { ...prev, cols, sessions, panelKinds, panelIds, panelEditorPaths, panelEditorTabStacks, panelEditorActive, colSizes: new Array(cols).fill(null) }
+      }
+
+      // 3. Si ya hay un editor abierto en cualquier celda, agregar pestaña allí
       const existingEditorIdx = prev.panelKinds.indexOf("editor")
       if (existingEditorIdx >= 0) {
         const prevTabs = prev.panelEditorTabStacks?.[existingEditorIdx] ?? (prev.panelEditorPaths?.[existingEditorIdx] ? [prev.panelEditorPaths[existingEditorIdx]] : [])
@@ -2579,80 +2578,19 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         }
       }
 
-      // 3. Si tenemos 1 solo panel (el chat), colocar editor a la izquierda (col 0) y chat a la derecha (col 1)
-      if (prev.cols === 1 && prev.rows === 1) {
-        const curSessionId = prev.sessions[0] ?? selectedSession?.id ?? null
-        return {
-          ...prev,
-          cols: 2,
-          rows: 1,
-          colSizes: [null, null],
-          rowSizes: [null],
-          panelKinds: ["editor", "session"],
-          sessions: [null, curSessionId],
-          panelIds: [genPanelId(), prev.panelIds[0] ?? genPanelId()],
-          panelEditorPaths: { 0: filePath },
-          panelEditorTabStacks: { 0: [filePath] },
-          panelEditorActive: { 0: 0 },
-        }
-      }
-
-      // 4. Si tenemos Explorador en col 0 y Chat en col 1 (2 cols):
-      // Col 0: Explorador | Col 1: Editor (centro) | Col 2: Chat (derecha)
-      const explorerIdx = prev.panelKinds.indexOf("explorer")
-      const chatIdx = prev.panelKinds.indexOf("session")
-      if (explorerIdx === 0 && chatIdx === 1 && prev.cols === 2) {
-        const curSessionId = prev.sessions[1] ?? selectedSession?.id ?? null
-        return {
-          ...prev,
-          cols: 3,
-          rows: 1,
-          colSizes: [null, null, null],
-          rowSizes: [null],
-          panelKinds: ["explorer", "editor", "session"],
-          sessions: [null, null, curSessionId],
-          panelIds: [prev.panelIds[0] ?? genPanelId(), genPanelId(), prev.panelIds[1] ?? genPanelId()],
-          panelEditorPaths: { 1: filePath },
-          panelEditorTabStacks: { 1: [filePath] },
-          panelEditorActive: { 1: 0 },
-        }
-      }
-
-      // 5. Si hay un panel activo que no sea el chat, abrir el editor allí
-      const activeKind = prev.panelKinds[activePanel]
-      if (activeKind !== "session") {
-        const panelKinds = [...prev.panelKinds]
-        panelKinds[activePanel] = "editor"
-        const prevTabs = prev.panelEditorTabStacks?.[activePanel] ?? (prev.panelEditorPaths?.[activePanel] ? [prev.panelEditorPaths[activePanel]] : [])
-        const nextTabs = prevTabs.includes(filePath) ? prevTabs : [...prevTabs, filePath]
-        // si ya era editor, preserva tabs; si no, nuevo tab único
-        const tabs = prev.panelKinds[activePanel] === "editor" ? nextTabs : [filePath]
-        const active = tabs.indexOf(filePath)
-        return {
-          ...prev,
-          panelKinds,
-          panelEditorTabStacks: { ...prev.panelEditorTabStacks, [activePanel]: tabs },
-          panelEditorActive: { ...prev.panelEditorActive, [activePanel]: active },
-          panelEditorPaths: {
-            ...prev.panelEditorPaths,
-            [activePanel]: filePath,
-          }
-        }
-      }
-
-      // 6. Colocar editor en posición activa a la izquierda del chat
+      // 4. Si no hay editor abierto, hacer split hacia la derecha del panel activo
       const cols = prev.cols + 1
-      const col = activePanel % prev.cols
+      const col = effectiveIndex % prev.cols
+      const insertCol = col + 1
       const sessions: Array<string | null> = []
       const panelKinds: Array<ShellPanelKind | "editor"> = []
       const panelIds: Array<string> = []
       const panelEditorPaths: Record<number, string> = {}
       const panelEditorTabStacks: Record<number, string[]> = {}
       const panelEditorActive: Record<number, number> = {}
-
       for (let r = 0; r < prev.rows; r++) {
         for (let c = 0; c < cols; c++) {
-          if (c < col) {
+          if (c < insertCol) {
             const oldIdx = r * prev.cols + c
             sessions.push(prev.sessions[oldIdx] ?? null)
             panelKinds.push(prev.panelKinds[oldIdx] ?? "session")
@@ -2660,7 +2598,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             if (prev.panelEditorPaths?.[oldIdx]) panelEditorPaths[sessions.length - 1] = prev.panelEditorPaths[oldIdx]
             if (prev.panelEditorTabStacks?.[oldIdx]) panelEditorTabStacks[sessions.length - 1] = prev.panelEditorTabStacks[oldIdx]
             if (prev.panelEditorActive?.[oldIdx] != null) panelEditorActive[sessions.length - 1] = prev.panelEditorActive[oldIdx]!
-          } else if (c === col) {
+          } else if (c === insertCol) {
             sessions.push(null)
             panelKinds.push("editor")
             panelIds.push(genPanelId())
@@ -2678,20 +2616,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           }
         }
       }
-
-      return {
-        ...prev,
-        cols,
-        sessions,
-        panelKinds,
-        panelIds,
-        panelEditorPaths,
-        panelEditorTabStacks,
-        panelEditorActive,
-        colSizes: new Array(cols).fill(null),
-      }
+      return { ...prev, cols, sessions, panelKinds, panelIds, panelEditorPaths, panelEditorTabStacks, panelEditorActive, colSizes: new Array(cols).fill(null) }
     })
-  }, [isDesktop, selectedSession?.id, activePanel])
+  }, [isDesktop, activePanel])
 
   const handleEditorTabSelect = useCallback((panelIdx: number, path: string) => {
     setDesktopLayout((prev) => {
@@ -3372,7 +3299,44 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 }
                 if (!session) {
                   return (
-                    <div key={panelId} className="desktop-cell-placeholder" style={placement} onClick={() => setActivePanel(i)}>
+                    <div
+                      key={panelId}
+                      className="desktop-cell-placeholder"
+                      style={{ ...placement, position: "relative" }}
+                      onClick={() => setActivePanel(i)}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = "move"
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                          const f = e.dataTransfer.files[0]
+                          const filePath = (f as any).path || f.name
+                          if (filePath) {
+                            handleOpenFile(filePath, i, "center")
+                            return
+                          }
+                        }
+                        const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
+                        if (raw) {
+                          const payload = parseDragPayload(raw)
+                          if (payload.kind === "file") {
+                            handleOpenFile(payload.path, i, "center")
+                          } else if (payload.kind === "panel") {
+                            handleSwapPanels(payload.idx, i)
+                          } else if (payload.kind === "session") {
+                            handleDockSession(i, "center", payload.id)
+                          } else if (payload.kind === "kind") {
+                            handleDockSession(i, "center", raw)
+                          } else if (payload.kind === "tab") {
+                            handleDockSession(i, "center", raw)
+                          } else {
+                            handleDockSession(i, "center", raw)
+                          }
+                        }
+                      }}
+                    >
                       <button type="button" className="btn-icon compact desktop-cell-close"
                         title="Close split" aria-label="Close split"
                         onClick={(e) => { e.stopPropagation(); closePanel(i) }}>×</button>
