@@ -24,6 +24,83 @@ type Props = {
   onOpenSettings?: () => void
 }
 
+function parseThinkContent(raw: string): { think: string | null; response: string } {
+  if (!raw) return { think: null, response: "" }
+  
+  // Case 1: Complete <think>...</think>
+  const match = raw.match(/<think>([\s\S]*?)<\/think>/i)
+  if (match) {
+    const think = match[1].trim()
+    const response = raw.replace(/<think>[\s\S]*?<\/think>/i, "").trim()
+    return { think, response }
+  }
+
+  // Case 2: In-progress streaming <think>... (no closing tag yet)
+  const openMatch = raw.match(/<think>([\s\S]*)$/i)
+  if (openMatch) {
+    return { think: openMatch[1].trim(), response: "" }
+  }
+
+  return { think: null, response: raw }
+}
+
+function AssistantBubbleContent({ content }: { content: string }) {
+  const { think, response } = useMemo(() => parseThinkContent(content), [content])
+  const [thinkExpanded, setThinkExpanded] = useState(false)
+
+  return (
+    <div>
+      {think && (
+        <div style={{
+          marginBottom: 8,
+          borderRadius: 6,
+          background: "var(--surface-subtle)",
+          border: "1px solid var(--border)",
+          padding: "6px 8px",
+          fontSize: 11,
+        }}>
+          <div
+            onClick={() => setThinkExpanded(!thinkExpanded)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              cursor: "pointer",
+              userSelect: "none",
+              color: "var(--muted)",
+              fontWeight: 600,
+            }}
+          >
+            <span>💭 Razonamiento {thinkExpanded ? "▲" : "▼"}</span>
+            <span style={{ fontSize: 10, opacity: 0.7 }}>{think.length} chars</span>
+          </div>
+          {thinkExpanded && (
+            <div style={{
+              maxHeight: 130,
+              overflowY: "auto",
+              marginTop: 6,
+              paddingTop: 6,
+              borderTop: "1px solid var(--border)",
+              color: "var(--muted)",
+              fontFamily: "var(--font-mono, monospace)",
+              fontSize: 11,
+              whiteSpace: "pre-wrap",
+              lineHeight: 1.4,
+            }}>
+              {think}
+            </div>
+          )}
+        </div>
+      )}
+      {response ? (
+        <Markdown text={response} />
+      ) : (
+        think && !response ? <span style={{ fontStyle: "italic", opacity: 0.7 }}>Pensando…</span> : null
+      )}
+    </div>
+  )
+}
+
 export function QuickChatPanel({
   cerebrasKey,
   groqKey = "",
@@ -44,7 +121,7 @@ export function QuickChatPanel({
   const [searchEnabled, setSearchEnabled] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_SEARCH) === "1")
   const [input, setInput] = useState("")
 
-  // Quick settings modal/popover
+  // Quick settings modal/popover (ruedita)
   const [showConfig, setShowConfig] = useState(false)
   const [showKeySecret, setShowKeySecret] = useState(false)
   const [tempKey, setTempKey] = useState("")
@@ -153,7 +230,17 @@ export function QuickChatPanel({
     void send(v)
   }
 
+  const handleNewChat = () => {
+    clear()
+    setInput("")
+  }
+
   const needsKey = (provider === "groq" && !activeKey) || (provider === "cerebras" && !activeKey) || (provider === "opencode-go" && !goKey)
+
+  const activeModelLabel = useMemo(() => {
+    const found = availableModels.find((m: any) => m.id === model)
+    return found ? found.label : model || "Sin modelo"
+  }, [availableModels, model])
 
   const handleSaveConfig = async () => {
     const val = tempKey.trim()
@@ -216,20 +303,34 @@ export function QuickChatPanel({
 
   return (
     <div className="qc-panel">
-      {/* Header */}
+      {/* Header Limpio con Ruedita y Botón Nuevo Chat */}
       <div className="qc-header">
         <div className="qc-header-icon"><BrainIcon size={18} /></div>
         <div className="qc-header-text">
-          <div className="qc-header-title">{t("quickchat.title")}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span className="qc-header-title">{t("quickchat.title")}</span>
+            <span className="qc-badge" style={{ fontSize: 10, padding: "1px 6px" }} title={`${provider} / ${model}`}>
+              {activeModelLabel}
+            </span>
+          </div>
           <div className="qc-header-subtitle">{t("quickchat.subtitle")}</div>
         </div>
         <div className="qc-header-actions">
+          <button
+            className="qc-icon-btn"
+            onClick={handleNewChat}
+            title="Nuevo chat (limpiar todo)"
+            aria-label="Nuevo chat"
+            style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", width: "auto", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}
+          >
+            <span>+</span> Nuevo
+          </button>
           <button className="qc-icon-btn" onClick={clear} title={t("quickchat.clear")} aria-label={t("quickchat.clear")}><TrashIcon size={14} /></button>
           <button
             className={`qc-icon-btn${showConfig ? " active" : ""}`}
             onClick={() => setShowConfig(!showConfig)}
-            title="Configurar conexión del proveedor"
-            aria-label="Configuración de conexión"
+            title="Configuración de Proveedor y Modelo"
+            aria-label="Configurar chat"
           >
             <SettingsIcon size={14} />
           </button>
@@ -241,47 +342,57 @@ export function QuickChatPanel({
         </div>
       </div>
 
-      {/* Selector Controls */}
-      <div className="qc-controls">
-        <label className="qc-control-group">
-          <span>{t("quickchat.provider")}</span>
-          <select className="qc-select" value={provider} onChange={e => setProvider(e.target.value as QuickChatProviderId)}>
-            <option value="groq">{t("quickchat.providerGroq")} (Ultra Rápido)</option>
-            <option value="cerebras">{t("quickchat.providerCerebras")}</option>
-            <option value="custom">{t("quickchat.providerCustom")}</option>
-            {providers.filter(p => p.connected && p.id !== "groq" && p.id !== "cerebras" && p.id !== "custom").map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-            {!providers.some(p => p.id === "opencode-go") && <option value="opencode-go">{t("quickchat.providerOpencode")}</option>}
-          </select>
-        </label>
-
-        <label className="qc-control-group">
-          <span>{t("quickchat.model")}</span>
-          <select className="qc-select" value={model} onChange={e => setModel(e.target.value)}>
-            <option value="" disabled>{availableModels.length === 0 ? t("settings.noProviders") : t("detail.modelSelectLabel")}</option>
-            {availableModels.map((m: any) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="qc-switch">
-          <input type="checkbox" checked={searchEnabled} onChange={e => setSearchEnabled(e.target.checked)} />
-          <span>{t("quickchat.search")}</span>
-          <span style={{ opacity: 0.6, fontSize: 11 }}>{searchEnabled ? t("quickchat.searchOn") : t("quickchat.searchOff")}</span>
-        </label>
-      </div>
-
-      {/* Config Panel Popover / Inline Card */}
+      {/* Config Panel Popover / Modal dentro de la Ruedita */}
       {showConfig && (
-        <div style={{ background: "var(--surface-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, margin: "8px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ background: "var(--surface-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, margin: "8px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
-              ⚙ Configuración de {provider === "groq" ? "Groq" : provider === "cerebras" ? "Cerebras" : provider === "custom" ? "API Personalizada (OpenAI / Ollama)" : "Proveedor"}
+              ⚙ Configuración de Chat Rápido
             </span>
             <button className="btn-icon compact" onClick={() => setShowConfig(false)}>✕</button>
           </div>
+
+          {/* Selector de Proveedor y Modelo dentro de la ruedita */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11 }}>
+              <span style={{ color: "var(--muted)" }}>{t("quickchat.provider")}:</span>
+              <select
+                className="qc-select"
+                value={provider}
+                onChange={e => setProvider(e.target.value as QuickChatProviderId)}
+                style={{ width: "100%", fontSize: 12, padding: "4px 8px" }}
+              >
+                <option value="groq">{t("quickchat.providerGroq")} (Ultra Rápido)</option>
+                <option value="cerebras">{t("quickchat.providerCerebras")}</option>
+                <option value="custom">{t("quickchat.providerCustom")}</option>
+                {providers.filter(p => p.connected && p.id !== "groq" && p.id !== "cerebras" && p.id !== "custom").map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+                {!providers.some(p => p.id === "opencode-go") && <option value="opencode-go">{t("quickchat.providerOpencode")}</option>}
+              </select>
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11 }}>
+              <span style={{ color: "var(--muted)" }}>{t("quickchat.model")}:</span>
+              <select
+                className="qc-select"
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                style={{ width: "100%", fontSize: 12, padding: "4px 8px" }}
+              >
+                <option value="" disabled>{availableModels.length === 0 ? t("settings.noProviders") : t("detail.modelSelectLabel")}</option>
+                {availableModels.map((m: any) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label className="qc-switch" style={{ fontSize: 11, padding: "4px 0" }}>
+            <input type="checkbox" checked={searchEnabled} onChange={e => setSearchEnabled(e.target.checked)} />
+            <span>{t("quickchat.search")}</span>
+            <span style={{ opacity: 0.6, fontSize: 11 }}>{searchEnabled ? t("quickchat.searchOn") : t("quickchat.searchOff")}</span>
+          </label>
 
           {provider === "custom" && (
             <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
@@ -351,7 +462,11 @@ export function QuickChatPanel({
         {messages.map(m => (
           <div key={m.id} className={`qc-bubble ${m.role === "user" ? "user" : "assistant"}`}>
             <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
+              {m.role === "assistant" ? (
+                <AssistantBubbleContent content={m.content} />
+              ) : (
+                m.content
+              )}
             </div>
             {m.cached && <div className="qc-bubble-meta"><span className="qc-badge">{t("quickchat.cached")}</span></div>}
             {m.searchResults && m.searchResults.length > 0 && (

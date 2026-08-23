@@ -2541,7 +2541,6 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
           onLoad={() => setStatus("ready")}
           style={{ flex: 1, border: "none", background: "#fff" }}
           title="Open Design Preview"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
           allow="clipboard-read; clipboard-write"
         />
       )}
