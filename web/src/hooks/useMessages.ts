@@ -428,7 +428,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (isUndoingRef.current) return
     isUndoingRef.current = true
     try {
-      const userMessages = messages.filter((m) => m.info.role === "user")
+      const userMessages = messages.filter((m) => m.info.sessionID === sessionID && m.info.role === "user")
       if (userMessages.length === 0) {
         setRuntimeError("No messages to undo")
         return
@@ -449,29 +449,21 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
       // S3: actualización optimista instantánea
       if (targetID) {
-        setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= targetID))
-        setOptimisticUserMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= targetID))
         onSetRevertID?.(targetID)
         onPatchSession?.({ revert: { messageID: targetID } })
       } else {
-        setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID))
-        setOptimisticUserMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID))
         onSetRevertID?.(null)
         onPatchSession?.({ revert: undefined })
       }
 
-      if (awaitingAssistantReply || messages.some((m) => m.info.role !== "user" && !m.info.time.completed)) {
-        await Promise.race([
-          api.abort(config, sessionID, directory).catch(() => {}),
-          new Promise((r) => setTimeout(r, 2500)),
-        ])
-        // Esperar a que el server pase a idle (assertNotBusy del revert)
-        await new Promise((r) => setTimeout(r, 400))
+      if (awaitingAssistantReply) {
+        setAwaitingAssistantReply(false)
+        await api.abort(config, sessionID, directory).catch(() => {})
       }
 
       let revertResult: unknown = null
       let lastErr: unknown = null
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 2; attempt++) {
         try {
           if (targetID) {
             revertResult = await api.revert(config, sessionID, targetID, directory)
@@ -485,8 +477,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           lastErr = err
           const msg = String(err?.message ?? "")
           const isBusy = /busy/i.test(msg) || /BusyError/i.test(msg)
-          if (isBusy && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
+          if (isBusy && attempt < 1) {
+            await new Promise((r) => setTimeout(r, 300))
             continue
           }
           setRuntimeError(`Revert failed: ${msg || "server error"}`)
@@ -496,7 +488,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       }
 
       if (lastErr && revertResult === null) {
-        // Revertir optimista si falló definitivamente
         await onLoadSelected().catch(() => {})
         return
       }

@@ -116,10 +116,11 @@ const TranslationOriginal = memo(function TranslationOriginal({ messageId }: { m
   )
 })
 
-export const MessageBubble = memo(function MessageBubble({ message, queued, revert, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
+export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
   message: RenderedMessage
   queued?: boolean
   revert?: SessionView["revert"]
+  isReverted?: boolean
   onRevertToMessage?: (messageID: string) => void
   onEditMessage?: (messageID: string, text: string) => void
   agents?: AgentOption[]
@@ -147,9 +148,8 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const moreWrapRef = useRef<HTMLSpanElement | null>(null)
   useOutsideClick(moreWrapRef, () => setMoreOpen(false), moreOpen)
 
-  // Los IDs del server son msg_<hexTimestamp+counter> (monotónicos): la
-  // comparación lexicográfica es equivalente a la de orden temporal.
-  const isReverted = revert ? messageIdGt(message.info.id, revert.messageID) : false
+  // Mensaje revertido: calculado por posición ordinal o fallback por ID
+  const isReverted = isRevertedProp ?? (revert ? messageIdGt(message.info.id, revert.messageID) : false)
   const isRevertPoint = revert && message.info.id === revert.messageID
 
   const isAssistant = message.info.role === "assistant"
@@ -219,7 +219,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
         </div>
       )}
       <article
-        className={`message ${message.info.role} fade-in${(isReverted || isRevertPoint) ? " revert-hidden" : ""}${showConfirm ? " confirming-undo" : ""}`}
+        className={`message ${message.info.role} fade-in${isReverted ? " revert-hidden" : ""}${showConfirm ? " confirming-undo" : ""}`}
         data-message-id={message.info.id}
         data-mode={message.turnMode || undefined}
         onContextMenu={handleContextMenu}

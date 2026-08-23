@@ -98,6 +98,11 @@ export const MessageList = memo(function MessageList({
     return map
   }, [messages])
 
+  const revertIndex = useMemo(() => {
+    if (!revert?.messageID) return -1
+    return messages.findIndex((m) => m.info.id === revert.messageID)
+  }, [messages, revert?.messageID])
+
   // Stick-to-bottom derivado de posición, NO de IntersectionObserver: durante
   // streaming el sentinel se corre hacia abajo por el contenido nuevo y el IO
   // reportaba "salió del viewport" con el usuario pegado al fondo (el botón
@@ -225,6 +230,7 @@ export const MessageList = memo(function MessageList({
                     message={message}
                     queued={pendingIndex !== undefined && actualIndex > pendingIndex}
                     revert={revert}
+                    isReverted={revertIndex >= 0 && actualIndex > revertIndex}
                     onRevertToMessage={onRevertToMessage}
                     agents={agents}
                     prevUserTs={message.info.parentID ? prevUserTsMap.get(message.info.parentID) : undefined}

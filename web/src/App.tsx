@@ -2333,90 +2333,41 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (!selectedSession) return
     try {
       if (awaitingAssistantReply) {
-        await Promise.race([
-          api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {}),
-          new Promise((r) => setTimeout(r, 2500)),
-        ])
-        await new Promise((r) => setTimeout(r, 400))
+        api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
       }
       const target = renderedMessages.find((m) => m.info.id === messageID)
-      // S3: filtro optimista instantáneo.
       const sid = selectedSession.id
-      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id <= messageID))
       setLocalRevertID(messageID)
-      let ok = false
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await api.revert(config, sid, messageID, selectedSession.directory)
-          ok = true
-          break
-        } catch (err: any) {
-          const msg = String(err?.message ?? "")
-          if (/busy/i.test(msg) && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
-            continue
-          }
-          throw err
-        }
-      }
-      if (!ok) {
-        await loadSelected(sid, selectedSession.directory).catch(() => {})
-        return
-      }
+      await api.revert(config, sid, messageID, selectedSession.directory)
       await loadSelected(sid, selectedSession.directory).catch(() => {})
       if (target?.text) setComposer(target.text)
     } catch (err) {
       setRuntimeError((err as Error).message)
       await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
     }
-  }, [selectedSession, config, awaitingAssistantReply, loadSelected, renderedMessages, setMessages])
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, renderedMessages])
 
   const handleEditMessage = useCallback(async (messageID: string, text: string) => {
     if (!selectedSession) return
     try {
       if (awaitingAssistantReply) {
-        await Promise.race([
-          api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {}),
-          new Promise((r) => setTimeout(r, 2500)),
-        ])
-        await new Promise((r) => setTimeout(r, 400))
+        api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
       }
       const sid = selectedSession.id
-      // Para editar: revertir ANTES del mensaje elegido (no incluirlo),
-      // así el reenvío corregido lo reemplaza y no duplica.
-      const prevId = [...messages]
-        .filter((m) => m.info.sessionID === sid && m.info.id < messageID)
-        .pop()?.info.id ?? null
+      const sessionMsgs = messages.filter((m) => m.info.sessionID === sid)
+      const targetIdx = sessionMsgs.findIndex((m) => m.info.id === messageID)
+      const prevId = targetIdx > 0 ? sessionMsgs[targetIdx - 1].info.id : null
       const revertTarget = prevId ?? messageID
-      // Filtro local instantáneo: excluir el mensaje editado ( < messageID)
-      setMessages((prev) => prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id < messageID))
       setLocalRevertID(revertTarget)
-      let ok = false
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await api.revert(config, sid, revertTarget, selectedSession.directory)
-          ok = true
-          break
-        } catch (err: any) {
-          const msg = String(err?.message ?? "")
-          if (/busy/i.test(msg) && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
-            continue
-          }
-          throw err
-        }
-      }
-      if (!ok) {
-        await loadSelected(sid, selectedSession.directory).catch(() => {})
-        return
-      }
+      await api.revert(config, sid, revertTarget, selectedSession.directory)
       await loadSelected(sid, selectedSession.directory).catch(() => {})
       setComposer(text)
     } catch (err) {
       setRuntimeError((err as Error).message)
       await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
     }
-  }, [selectedSession, config, awaitingAssistantReply, loadSelected, setMessages, messages])
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, messages])
+
   const handleUndo = useCallback(() => {
     if (!selectedSession) return
     // S3+S5: patch local instantáneo — el undo se siente en ~0ms.
