@@ -35,7 +35,7 @@ export type DockTarget = {
   fromIndex: number | null
 }
 
-const LEGACY_SHELL_KINDS = new Set(["terminal", "explorer", "kanban", "stats"])
+const LEGACY_SHELL_KINDS = new Set(["terminal", "explorer", "kanban", "stats", "browser", "editor", "design"])
 
 export function parseDockPayload(raw: string): DockTarget {
   let targetKind = "session"
@@ -49,12 +49,18 @@ export function parseDockPayload(raw: string): DockTarget {
     if (payload.startsWith("kind:")) {
       targetKind = payload.replace("kind:", "")
       targetSessionId = null
-    } else if (LEGACY_SHELL_KINDS.has(payload)) {
-      targetKind = payload
-      targetSessionId = null
+    } else if (payload.startsWith("terminal") || LEGACY_SHELL_KINDS.has(payload)) {
+      targetKind = payload.startsWith("terminal") ? "session" : payload
+      targetSessionId = payload
     } else if (payload.startsWith("session:")) {
-      targetKind = "session"
-      targetSessionId = payload.replace("session:", "")
+      const sid = payload.replace("session:", "")
+      if (sid.startsWith("terminal")) {
+        targetKind = "session"
+        targetSessionId = sid
+      } else {
+        targetKind = "session"
+        targetSessionId = sid
+      }
     } else {
       targetKind = "session"
       targetSessionId = payload
@@ -62,12 +68,13 @@ export function parseDockPayload(raw: string): DockTarget {
   } else if (raw.startsWith("kind:")) {
     targetKind = raw.replace("kind:", "")
     targetSessionId = null
-  } else if (LEGACY_SHELL_KINDS.has(raw)) {
-    targetKind = raw
-    targetSessionId = null
+  } else if (raw.startsWith("terminal") || LEGACY_SHELL_KINDS.has(raw)) {
+    targetKind = raw.startsWith("terminal") ? "session" : raw
+    targetSessionId = raw
   } else if (raw.startsWith("session:")) {
+    const sid = raw.replace("session:", "")
     targetKind = "session"
-    targetSessionId = raw.replace("session:", "")
+    targetSessionId = sid
   } else {
     targetKind = "session"
     targetSessionId = raw

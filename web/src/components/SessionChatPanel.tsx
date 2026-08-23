@@ -356,11 +356,11 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     const y = e.clientY - rect.top
     const w = rect.width
     const h = rect.height
-    if (y < h * 0.15) return "top"
-    if (y > h * 0.85) return "bottom"
-    if (x < w * 0.15) return "left"
-    if (x > w * 0.85) return "right"
-    return "center"
+    if (x < w * 0.25) return "left"
+    if (x > w * 0.75) return "right"
+    if (y < h * 0.25) return "top"
+    if (y > h * 0.75) return "bottom"
+    return x >= w / 2 ? "right" : "left"
   }
 
   return (
