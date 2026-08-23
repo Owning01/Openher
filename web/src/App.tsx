@@ -1783,6 +1783,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     let targetSessionId = dock.targetSessionId
     let fromIndex = dock.fromIndex
 
+    if (rawId.includes("terminal") || targetKind === "terminal" || targetSessionId?.startsWith("terminal")) {
+      setShowTerminal(false)
+    }
+
     if (dir === "center") {
       setDesktopLayout((prev) => {
         const sessions = [...prev.sessions]
