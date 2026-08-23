@@ -165,7 +165,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   )
 
   // Turno en curso (el agente sigue generando) vs terminado.
-  const isWorkingTurn = !message.info.time.completed
+  const isWorkingTurn = !message.info.time.completed && !message.info.finish
   // El box de actividad se abre solo mientras trabaja y se colapsa al terminar.
   const [activityOpen, setActivityOpen] = useState(isWorkingTurn)
   useEffect(() => { if (!isWorkingTurn) setActivityOpen(false) }, [isWorkingTurn])

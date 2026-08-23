@@ -877,6 +877,134 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         let _ = req.respond(json_err(404, "Archivo de proyecto no encontrado"));
         return;
     }
+    if path == "/shell/opencode/global" && method == Method::Get {
+        let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).unwrap_or_default();
+        let home_path = std::path::PathBuf::from(&home);
+
+        let candidate_configs = vec![
+            home_path.join(".config").join("opencode").join("opencode.json"),
+            home_path.join(".config").join("opencode").join("config.json"),
+            home_path.join(".opencode").join("opencode.json"),
+            home_path.join(".opencode").join("config.json"),
+            home_path.join("AppData").join("Roaming").join("opencode").join("config.json"),
+            std::path::PathBuf::from("opencode.json"),
+        ];
+
+        let mut config_path_found = String::new();
+        let mut config_content = String::new();
+        let mut config_json = serde_json::Value::Null;
+
+        for p in &candidate_configs {
+            if p.is_file() {
+                if let Ok(c) = std::fs::read_to_string(p) {
+                    config_path_found = p.to_string_lossy().to_string();
+                    config_content = c.clone();
+                    config_json = serde_json::from_str(&c).unwrap_or(serde_json::Value::Null);
+                    break;
+                }
+            }
+        }
+
+        if config_path_found.is_empty() {
+            let def_p = &candidate_configs[0];
+            config_path_found = def_p.to_string_lossy().to_string();
+            config_content = "{\n  \"$schema\": \"https://opencode.ai/schema.json\",\n  \"providers\": {}\n}".to_string();
+            config_json = serde_json::from_str(&config_content).unwrap_or(serde_json::Value::Null);
+        }
+
+        let candidate_skill_roots = vec![
+            home_path.join(".agents").join("skills"),
+            home_path.join(".claude").join("skills"),
+            home_path.join(".gemini").join("config").join("skills"),
+            home_path.join(".gemini").join("antigravity").join("builtin").join("skills"),
+            home_path.join(".config").join("skills"),
+        ];
+
+        let mut skills = Vec::new();
+        let mut scanned_roots = Vec::new();
+
+        for root in candidate_skill_roots {
+            if root.is_dir() {
+                scanned_roots.push(root.to_string_lossy().to_string());
+                if let Ok(entries) = std::fs::read_dir(&root) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            let skill_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            let skill_md_path = path.join("SKILL.md");
+                            let mut description = String::new();
+                            if skill_md_path.is_file() {
+                                if let Ok(content) = std::fs::read_to_string(&skill_md_path) {
+                                    let lines: Vec<&str> = content.lines().collect();
+                                    let mut in_frontmatter = false;
+                                    for line in lines.iter().take(40) {
+                                        let trimmed = line.trim();
+                                        if trimmed == "---" {
+                                            in_frontmatter = !in_frontmatter;
+                                            continue;
+                                        }
+                                        if in_frontmatter {
+                                            if let Some(desc) = trimmed.strip_prefix("description:") {
+                                                description = desc.trim().trim_matches('"').trim_matches('\'').to_string();
+                                            }
+                                        } else if description.is_empty() && trimmed.starts_with("# ") {
+                                            description = trimmed.strip_prefix("# ").unwrap_or("").trim().to_string();
+                                        }
+                                    }
+                                }
+                            }
+                            skills.push(serde_json::json!({
+                                "name": skill_name,
+                                "description": if description.is_empty() { format!("Skill {}", skill_name) } else { description },
+                                "path": path.to_string_lossy().to_string(),
+                                "skillFile": skill_md_path.to_string_lossy().to_string(),
+                                "source": root.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+
+        let _ = req.respond(json_ok(&serde_json::json!({
+            "configPath": config_path_found,
+            "configContent": config_content,
+            "configJson": config_json,
+            "skills": skills,
+            "scannedRoots": scanned_roots,
+        })));
+        return;
+    }
+
+    if path == "/shell/opencode/global" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let config_path = b["configPath"].as_str().unwrap_or("");
+                let content = b["content"].as_str().unwrap_or("");
+                if config_path.is_empty() || content.is_empty() {
+                    let _ = req.respond(json_err(400, "Ruta o contenido inválido"));
+                    return;
+                }
+                let p = std::path::PathBuf::from(config_path);
+                if let Some(parent) = p.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                match std::fs::write(&p, content) {
+                    Ok(_) => {
+                        let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
+                    }
+                    Err(e) => {
+                        let _ = req.respond(json_err(500, &format!("Error al escribir archivo: {}", e)));
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+
     if path == "/shell/labs" {
         let _ = req.respond(json_ok(&crate::plugins::labs_list(&state)));
         return;

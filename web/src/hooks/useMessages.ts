@@ -383,6 +383,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       }
       return current.filter((m) => m.info.sessionID !== sessionID || !removeIDs.has(m.info.id))
     })
+
+    if (safe.length > 0) {
+      const last = safe[safe.length - 1]
+      if (last.info.role === "assistant" && (last.info.time.completed || last.info.finish)) {
+        setAwaitingAssistantReply(false)
+      }
+    }
   }, [config, dataMode])
 
   const removeOptimistic = useCallback((id: string) => {

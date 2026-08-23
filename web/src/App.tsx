@@ -28,6 +28,7 @@ import { ADEDiffPanel } from "./components/ADEDiffPanel"
 import { ConfirmModal } from "./components/ConfirmModal"
 import { ErrorModal } from "./components/ErrorModal"
 import { ShortcutsModal } from "./components/ShortcutsModal"
+import { OpenCodeHubModal } from "./components/OpenCodeHubModal"
 import { loadShortcutsConfig, matchesShortcut, type ShortcutItem } from "./shortcuts"
 import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, FileDiff } from "./types"
 import type { LanguageCode } from "./i18n"
@@ -652,6 +653,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // ===== Feature: Favorites Manager =====
   const [showFavoritesManager, setShowFavoritesManager] = useState(false)
+  const [showOpenCodeHub, setShowOpenCodeHub] = useState(false)
 
   // ===== Feature: Saved servers (profiles) =====
   const { profiles: serverProfiles, addProfile, removeProfile, updateProfile } = useServers()
@@ -883,13 +885,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     t,
   })
 
-  const isLastAssistantIncomplete = Boolean(
-    selectedSession &&
-    renderedMessages.length > 0 &&
-    renderedMessages[renderedMessages.length - 1].info.role === "assistant" &&
-    !renderedMessages[renderedMessages.length - 1].info.time.completed
-  )
-  const isSessionRunning = Boolean(selectedSession && (isSessionActive(selectedSession) || isLastAssistantIncomplete))
+  const isSessionRunning = Boolean(selectedSession && isSessionActive(selectedSession))
   const isWorking = awaitingAssistantReply || isSessionRunning
   const showTypingBubble = Boolean(selectedSession) && isWorking
 
@@ -3080,6 +3076,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <button type="button" className={`activity-btn${(tabStacks?.some((s) => s.includes("__design__")) || desktopLayout.sessions.includes("__design__") || desktopLayout.panelKinds.includes("design" as any) ? " active" : "")}`} title="Open Design" aria-label="Open Design"
               onClick={handleOpenDesign}>
               <PencilIcon size={18} /></button>
+            <button type="button" className={`activity-btn${showOpenCodeHub ? " active" : ""}`} title="OpenCode Hub: Agentes, Skills & Configuración Global" aria-label="OpenCode Hub"
+              onClick={() => setShowOpenCodeHub(true)}>
+              <span style={{ fontSize: "16px", lineHeight: "1" }}>🤖</span></button>
           </div>
           <div className="app-desktop-activity-bottom">
             {memInfo && (
@@ -3872,6 +3871,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           />
         )}
       </Suspense>
+
+            <OpenCodeHubModal
+        isOpen={showOpenCodeHub}
+        onClose={() => setShowOpenCodeHub(false)}
+        agents={agentOptions}
+        activeAgentID={activeAgentID}
+        onSelectAgent={(id) => changeAgent(id, selectedSession?.directory)}
+      />
 
       {runtimeError && (
         <ErrorModal message={runtimeError} onClose={() => setRuntimeError(null)} />
