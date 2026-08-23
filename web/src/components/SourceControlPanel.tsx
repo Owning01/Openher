@@ -8,7 +8,11 @@ import { CheckIcon, ChevronIcon, FolderIcon, LoadingIcon, RefreshIcon, UndoIcon 
 import { shell, type GitChangedFile, type GitStatusSnapshot } from "../shell"
 import { HistoryPane } from "./scm/HistoryPane"
 
-type Props = { cwd?: string }
+type Props = {
+  cwd?: string
+  availableDirs?: string[]
+  onSelectDir?: (dir: string) => void
+}
 
 function basename(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean)
@@ -89,8 +93,9 @@ const EntryRow = memo(function EntryRow({ entry, staged, onToggleStage, onOpenDi
   )
 })
 
-export const SourceControlPanel = memo(function SourceControlPanel({ cwd }: Props) {
+export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availableDirs = [], onSelectDir }: Props) {
   const t = useT()
+  const [activeCwd, setActiveCwd] = useState(cwd || "")
   const [tab, setTab] = useState<"changes" | "history">("changes")
   const [snapshot, setSnapshot] = useState<GitStatusSnapshot | null>(null)
   const [repoRoot, setRepoRoot] = useState<string | null>(null)
@@ -103,6 +108,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd }: Prop
   const [diffView, setDiffView] = useState<{ title: string; text: string } | null>(null)
   const fbTimer = useRef<number | null>(null)
 
+  useEffect(() => {
+    if (cwd) setActiveCwd(cwd)
+  }, [cwd])
+
   const showFeedback = useCallback((tone: "ok" | "err", msg: string) => {
     setFeedback({ tone, msg })
     if (fbTimer.current) window.clearTimeout(fbTimer.current)
@@ -110,10 +119,11 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd }: Prop
   }, [])
 
   const refresh = useCallback(async (silent = false) => {
-    if (!cwd) { setNotRepo(true); return }
+    const targetDir = activeCwd || cwd
+    if (!targetDir) { setNotRepo(true); return }
     if (!silent) setLoading(true)
     try {
-      const snap = await shell.git.panel(cwd)
+      const snap = await shell.git.panel(targetDir)
       if (snap.repo && snap.status) {
         setRepoRoot(snap.repo.repoRoot)
         setSnapshot(snap.status)
@@ -122,9 +132,24 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd }: Prop
         setNotRepo(true); setSnapshot(null); setRepoRoot(null)
       }
     } catch { setNotRepo(true) } finally { setLoading(false) }
-  }, [cwd])
+  }, [activeCwd, cwd])
 
   useEffect(() => { void refresh() }, [refresh])
+
+  const handlePickFolder = async () => {
+    try {
+      const res = await shell.fs.pickFolder()
+      if (res?.ok && res.path) {
+        setActiveCwd(res.path)
+        onSelectDir?.(res.path)
+      }
+    } catch {}
+  }
+
+  const handleSwitchDir = (dir: string) => {
+    setActiveCwd(dir)
+    onSelectDir?.(dir)
+  }
 
   const runAction = useCallback(async (fn: () => Promise<unknown>, okMsg?: string) => {
     if (busy || !repoRoot) return
@@ -189,17 +214,40 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd }: Prop
     }
   }
 
-  if (!cwd) {
-    return <div className="scm-empty">{t("scm.noSession")}</div>
+  const currentFolder = activeCwd || cwd || ""
+
+  if (!currentFolder) {
+    return (
+      <div className="scm-panel">
+        <div className="scm-empty">
+          <FolderIcon size={20} />
+          <p>{t("scm.noSession")}</p>
+          <button className="btn-primary compact" onClick={handlePickFolder} style={{ marginTop: 8 }}>
+            📂 Seleccionar Repositorio
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (notRepo) {
     return (
       <div className="scm-panel">
+        <div className="scm-header" style={{ padding: "6px 10px", gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={currentFolder}>
+            📂 {currentFolder.split(/[\\/]/).pop() || currentFolder}
+          </span>
+          <button className="btn-secondary compact" onClick={handlePickFolder} title="Elegir otra carpeta">
+            📂 Cambiar
+          </button>
+        </div>
         <div className="scm-empty">
           <FolderIcon size={20} />
           <p>{t("scm.notARepo")}</p>
-          <small>{dirname(cwd)}</small>
+          <small>{currentFolder}</small>
+          <button className="btn-primary compact" onClick={handlePickFolder} style={{ marginTop: 12 }}>
+            📂 Abrir Otro Repositorio
+          </button>
         </div>
       </div>
     )
@@ -209,6 +257,29 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd }: Prop
 
   return (
     <div className="scm-panel">
+      {/* Selector de Repositorio / Directorio */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px", background: "var(--surface-subtle)", borderBottom: "1px solid var(--border)", fontSize: 11 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
+          <span style={{ fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={repoRoot || currentFolder}>
+            📂 {(repoRoot || currentFolder).split(/[\\/]/).pop()}
+          </span>
+          {availableDirs.length > 1 && (
+            <select
+              value={activeCwd}
+              onChange={(e) => handleSwitchDir(e.target.value)}
+              style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 10, padding: "1px 4px", maxWidth: 120 }}
+            >
+              {availableDirs.map((d) => (
+                <option key={d} value={d}>{d.split(/[\\/]/).pop()}</option>
+              ))}
+            </select>
+          )}
+        </div>
+        <button className="btn-secondary compact" onClick={handlePickFolder} title="Seleccionar otra carpeta en disco" style={{ fontSize: 10, padding: "2px 6px" }}>
+          Cambiar
+        </button>
+      </div>
+
       {/* Header: branch dropdown + upstream + acciones remotas */}
       <div className="scm-header">
         <button type="button" className={`scm-tabbtn${tab === "changes" ? " on" : ""}`} onClick={() => setTab("changes")}>

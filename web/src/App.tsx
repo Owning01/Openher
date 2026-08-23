@@ -106,7 +106,7 @@ const StatsPanel = lazyRetry(() => import("./components/shellPanels").then((m) =
 const KanbanPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.KanbanPanel })))
 const ConfigPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.ConfigPanel })))
 const FileEditorPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.FileEditorPanel })))
-const BrowserPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.BrowserPanel })))
+const BrowserPanel = lazyRetry(() => import("./components/BrowserPanel").then((m) => ({ default: m.BrowserPanel })))
 const DesignPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.DesignPanel })))
 const TerminalPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.TerminalPanel })))
 const PANEL_SUSPENSE_FALLBACK = (
@@ -3138,7 +3138,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   {activity === "sessions" ? sessionsView
                     : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                     : activity === "stats" ? <StatsPanel />
-                    : activity === "scm" ? <SourceControlPanel cwd={explorerCwd || activeSessionDir || selectedSession?.directory || sessions[0]?.directory} />
+                    : activity === "scm" ? <SourceControlPanel cwd={currentActiveSession?.directory || activeSessionDir || selectedSession?.directory || explorerCwd || sessions[0]?.directory} availableDirs={Array.from(new Set(sessions.map((s) => s.directory).filter(Boolean)))} onSelectDir={(d) => setExplorerCwd(d)} />
                     : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} customKey={quickChatCustomKey} customUrl={quickChatCustomUrl} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
                     : <ConfigPanel />}
                 </Suspense>
