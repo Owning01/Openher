@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from "react"
+import { memo, useCallback, useState } from "react"
 import { useT } from "../i18n-context"
 import type { Question, QuestionInfo } from "../types"
 
@@ -16,38 +16,6 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
     : (question.question ? [{ question: question.question, header: "", options: [], custom: true }] : [])
   const [selected, setSelected] = useState<Record<number, string[]>>({})
   const [customs, setCustoms] = useState<Record<number, string>>({})
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const offsetRef = useRef(offset)
-  offsetRef.current = offset
-
-  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 && e.pointerType === "mouse") return
-    if ((e.target as HTMLElement).closest("button, input, textarea, a")) return
-
-    e.preventDefault()
-    const startX = e.clientX
-    const startY = e.clientY
-    const startOffsetX = offsetRef.current.x
-    const startOffsetY = offsetRef.current.y
-
-    document.body.style.userSelect = "none"
-
-    const onPointerMove = (ev: PointerEvent) => {
-      setOffset({
-        x: startOffsetX + (ev.clientX - startX),
-        y: startOffsetY + (ev.clientY - startY),
-      })
-    }
-
-    const onPointerUp = () => {
-      document.body.style.userSelect = ""
-      window.removeEventListener("pointermove", onPointerMove)
-      window.removeEventListener("pointerup", onPointerUp)
-    }
-
-    window.addEventListener("pointermove", onPointerMove)
-    window.addEventListener("pointerup", onPointerUp)
-  }, [])
 
   const handleToggle = useCallback((qi: number, label: string) => {
     setSelected((prev) => {
@@ -81,24 +49,9 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
 
   return (
     <div className="question-overlay">
-      <div
-        className="question-card"
-        role="dialog"
-        aria-label={t('settings.questionPrompt')}
-        style={{
-          transform: `translate3d(${offset.x}px, ${offset.y}px, 0)`,
-        }}
-      >
-        <div
-          className="question-card-header"
-          onPointerDown={handlePointerDown}
-          style={{ cursor: "grab", touchAction: "none", userSelect: "none" }}
-          title="Arrastra para mover"
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ opacity: 0.4, cursor: "grab", fontSize: 13 }}>⠿</span>
-            <strong>{t('settings.questionPrompt')}</strong>
-          </div>
+      <div className="question-card" role="dialog" aria-label={t('settings.questionPrompt')}>
+        <div className="question-card-header">
+          <strong>{t('settings.questionPrompt')}</strong>
           <button className="btn-icon btn-ghost" onClick={onDismiss} aria-label={t('session.cancel')}>×</button>
         </div>
         <div className="question-card-body">
