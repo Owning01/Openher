@@ -428,33 +428,36 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (isUndoingRef.current) return
     isUndoingRef.current = true
     try {
-      const sessionMsgs = messages.filter((m) => m.info.sessionID === sessionID)
-      const curRevertIdx = revert?.messageID
-        ? sessionMsgs.findIndex((m) => m.info.id === revert.messageID)
-        : -1
-      const activeMsgs = curRevertIdx >= 0 ? sessionMsgs.slice(0, curRevertIdx) : sessionMsgs
-      const targetUserMsg = [...activeMsgs].reverse().find((m) => m.info.role === "user")
-
-      if (!targetUserMsg) {
+      const userMessages = messages.filter((m) => (!m.info.sessionID || m.info.sessionID === sessionID) && m.info.role === "user")
+      const currentRevertID = revert?.messageID
+      const boundary = currentRevertID ? userMessages.findIndex((m) => m.info.id === currentRevertID) : userMessages.length
+      if (boundary <= 0) {
         setRuntimeError("No messages to undo")
         return
       }
 
-      const targetID = targetUserMsg.info.id
-      const text = extractText(targetUserMsg) || ""
+      const targetMessage = userMessages[boundary - 1]
+      if (!targetMessage) {
+        setRuntimeError("No messages to undo")
+        return
+      }
+
+      const targetID = targetMessage.info.id
+      const text = extractText(targetMessage) || ""
       if (text) setComposer(text)
 
-      // Actualización optimista
+      // Actualización optimista inmediata
       onSetRevertID?.(targetID)
       onPatchSession?.({ revert: { messageID: targetID } })
 
       if (awaitingAssistantReply) {
         setAwaitingAssistantReply(false)
-        await api.abort(config, sessionID, directory).catch(() => {})
+        api.abort(config, sessionID, directory).catch(() => {})
       }
 
       await api.revert(config, sessionID, targetID, directory)
       await onLoadSelected().catch(() => {})
+      await _onRefreshSessions().catch(() => {})
     } catch (err) {
       setRuntimeError((err as Error).message)
     } finally {
@@ -472,23 +475,25 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     onSetRevertID?: (id: string | null) => void,
   ) => {
     try {
-      const sessionMsgs = messages.filter((m) => m.info.sessionID === sessionID)
-      if (!revert?.messageID) return
-      const curRevertIdx = sessionMsgs.findIndex((m) => m.info.id === revert.messageID)
-      if (curRevertIdx < 0) return
+      const userMessages = messages.filter((m) => (!m.info.sessionID || m.info.sessionID === sessionID) && m.info.role === "user")
+      const currentRevertID = revert?.messageID
+      if (!currentRevertID) return
+      const boundary = userMessages.findIndex((m) => m.info.id === currentRevertID)
+      if (boundary < 0) return
 
-      const nextUserMsg = sessionMsgs.slice(curRevertIdx + 1).find((m) => m.info.role === "user")
+      const next = userMessages[boundary + 1]
 
-      if (!nextUserMsg) {
+      if (!next) {
         onSetRevertID?.(null)
         onPatchSession?.({ revert: undefined })
         await api.unrevert(config, sessionID, directory)
       } else {
-        onSetRevertID?.(nextUserMsg.info.id)
-        onPatchSession?.({ revert: { messageID: nextUserMsg.info.id } })
-        await api.revert(config, sessionID, nextUserMsg.info.id, directory)
+        onSetRevertID?.(next.info.id)
+        onPatchSession?.({ revert: { messageID: next.info.id } })
+        await api.revert(config, sessionID, next.info.id, directory)
       }
       await onLoadSelected().catch(() => {})
+      await _onRefreshSessions().catch(() => {})
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
