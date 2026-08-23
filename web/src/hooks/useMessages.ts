@@ -762,12 +762,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           onSetRuntimeError((err as Error).message)
         }
       } finally {
-        // NO reset isSendingRef aquí — se mantiene true hasta que termine
-        // la confirmación o el error, evitando doble-envío por race condition
-        // con re-render async de React.
-      }
-
-      if (!ok) {
+        isSendingRef.current = false
         setIsSending(false)
       }
 
@@ -775,7 +770,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         // Send OK: esperar confirmación. El server puede tardar (payloads
         // de imagen grandes) — poll hasta que el optimistic desaparezca
         // (merge por id de loadSelected / echo SSE) o expire el deadline.
-        // NOTA: isSendingRef ya es false aquí — no bloquea envíos rápidos.
+        // isSendingRef ya es false aquí — no bloquea envíos rápidos posteriores.
         try {
           // Al menos un fetch inmediato para traer el assistant aunque el optimistic ya haya sido confirmado por SSE
           await then().catch(() => undefined)
@@ -798,8 +793,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       } catch {
         // ignore
       }
-      isSendingRef.current = false
-      setIsSending(false)
       return ok
     }
 
