@@ -7,6 +7,7 @@ const indexURL = new URL('./styles.css', import.meta.url)
 export function cssBundle() {
   const index = readFileSync(indexURL, 'utf8')
   return index.replace(/@import\s+"([^"]+)";/g, (_, path) => {
+    if (!path.startsWith('.')) return ''
     return readFileSync(new URL(path, indexURL), 'utf8')
   })
 }

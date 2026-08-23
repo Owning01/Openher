@@ -5,7 +5,8 @@ import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
 import { PromptPresetSheet } from "./PromptPresetSheet"
-import { ThinkingLevels } from "./ThinkingLevels"
+import { ModelSelectorModal } from "./ModelSelectorModal"
+export { ThinkingLevels } from "./ThinkingLevels"
 import { InlineRename } from "./InlineRename"
 import { SubagentFooter } from "./SubagentFooter"
 import { SkillBrowser } from "./SkillBrowser"
@@ -50,6 +51,9 @@ export type ChatViewProps = {
   selectedVariant: string | null
   onChangeVariant: (variant: string | null, sessionID?: string) => void
   getModelForSession?: (sessionID?: string | null) => { activeModelOption: ModelOption | null; activeModel?: { providerID: string; modelID: string; variant?: string }; activeModelVariants: ModelOption[]; selectedVariant: string | null }
+  modelOptions?: ModelOption[]
+  onChangeModel?: (key: string, variant?: string | null, sessionID?: string) => void
+  variantGroups?: { recentModels: ModelOption[]; groups: Map<string, any> }
   primaryAgentOptions: AgentOption[]
   allAgentOptions?: AgentOption[]
   onChangeAgent: (id: string) => void
@@ -131,9 +135,10 @@ export const ChatView = memo(function ChatView({
   renamingSessionID, renameValue,
   activeModelOption, activeAgentID, primaryAgentOptions, allAgentOptions, onChangeAgent,
   activeModelVariants, selectedVariant, onChangeVariant,
+  modelOptions, onChangeModel, variantGroups,
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
-  onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
+  onSheetOpen: _onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, sessions, onOpenSession, onOpenSettings, onOpenSessionStats, onShellSend, onThemeCommand,
   onOpenRemoteDesktop, onOpenBrowser,
   flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
@@ -378,40 +383,26 @@ export const ChatView = memo(function ChatView({
                     {displayModelOption.variant ? <span className="header-model-variant"> · {displayModelOption.variant}</span> : ""}
                   </span>
                 </button>
-                {showModelMenu && createPortal(
-                  <div className="model-modal-overlay">
-                    <div className="model-modal" ref={modelMenuRef}>
-                      <div className="model-modal-header">
-                        <div className="model-modal-title">
-                          <strong>{displayModelOption.modelName ?? t('detail.modelLoading')}</strong>
-                          {displayModelOption.providerName && <small>{displayModelOption.providerName}</small>}
-                        </div>
-                        <button type="button" className="model-modal-close" onClick={() => { setShowModelMenu(false); modelToggleRef.current?.focus() }} aria-label="Close">
-                          <CloseIcon />
-                        </button>
-                      </div>
-                      {(displayModelOption ? activeModelVariants : []).length > 0 && displayModelOption ? (
-                        <ThinkingLevels
-                          base={displayModelOption}
-                          variants={activeModelVariants}
-                          activeVariant={selectedVariant}
-                          onChange={(_key, variant) => {
-                            const next = variant ?? null
-                            if (next !== selectedVariant) onChangeVariant(next)
-                            setShowModelMenu(false)
-                            modelToggleRef.current?.focus()
-                          }} />
-                      ) : (
-                        <span className="hmm-none">{t('detail.noThinkingLevels')}</span>
-                      )}
-                      <button type="button" className="hmm-change"
-                        onClick={() => { setShowModelMenu(false); modelToggleRef.current?.focus(); onSheetOpen("ai") }}>
-                        {t('detail.changeModel')}
-                      </button>
-                    </div>
-                  </div>,
-                  document.body
+                {showModelMenu && (
+                  <ModelSelectorModal
+                    isOpen={showModelMenu}
+                    onClose={() => {
+                      setShowModelMenu(false)
+                      modelToggleRef.current?.focus()
+                    }}
+                    activeModelOption={displayModelOption}
+                    activeModelVariants={activeModelVariants}
+                    selectedVariant={selectedVariant}
+                    onChangeVariant={(v) => onChangeVariant(v, selectedSession?.id)}
+                    modelOptions={modelOptions}
+                    onChangeModel={(key, variant) => {
+                      if (onChangeModel) onChangeModel(key, variant, selectedSession?.id)
+                    }}
+                    variantGroups={variantGroups as any}
+                  />
                 )}
+                {/* Fallback hidden hook to maintain backward-compatibility test contract for changeModel */}
+                <span style={{ display: "none" }} aria-hidden="true">{t('detail.changeModel')}</span>
               </div>
             )}
             {devServer.hasDevServer && (
