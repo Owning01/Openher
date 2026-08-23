@@ -36,7 +36,9 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
 
     // ============================== Source control (git)
     if path.starts_with("/shell/git/") {
-        if let Some(resp) = crate::infrastructure::http::scm_router::handle(req, state, &path, method, &q) {
+        if let Some(resp) =
+            crate::infrastructure::http::scm_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+        {
             let _ = req.respond(resp);
             return;
         }

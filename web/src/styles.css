@@ -23,5 +23,6 @@
 @import "./styles/desktop.css";
 @import "./styles/shell.css";
 @import "./styles/browser.css";
+@import "./styles/scm.css";
 @import "./styles/utilities.css";
 @import "./styles/responsive.css";

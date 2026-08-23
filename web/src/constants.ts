@@ -22,7 +22,12 @@ export const STORAGE_KEYS = {
   QUICKCHAT_PROVIDER: "opencode.mobile.quickchat.provider",
   QUICKCHAT_MODEL: "opencode.mobile.quickchat.model",
   QUICKCHAT_SEARCH: "opencode.mobile.quickchat.search",
-  QUICKCHAT: "opencode.mobile.quickchat.messages"
+  QUICKCHAT: "opencode.mobile.quickchat.messages",
+  QUICKCHAT_KEY_GROQ: "opencode.mobile.quickchat.key.groq",
+  QUICKCHAT_KEY_CEREBRAS: "opencode.mobile.quickchat.key.cerebras",
+  QUICKCHAT_KEY_CUSTOM: "opencode.mobile.quickchat.key.custom",
+  QUICKCHAT_CUSTOM_URL: "opencode.mobile.quickchat.custom.url",
+  QUICKCHAT_CUSTOM_MODEL: "opencode.mobile.quickchat.custom.model"
 }
 
 export const DEFAULT_STATS_PORT = 8765

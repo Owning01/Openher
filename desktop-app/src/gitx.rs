@@ -235,7 +235,10 @@ where
     S: AsRef<std::ffi::OsStr>,
 {
     let dur = Duration::from_secs(timeout_secs);
-    let argv: Vec<std::ffi::OsString> = args.into_iter().collect();
+    let argv: Vec<std::ffi::OsString> = args
+        .into_iter()
+        .map(|a| a.as_ref().to_os_string())
+        .collect();
     let mut builder = build_git_command(cwd, &argv);
     let cmd = &mut builder.cmd;
     cmd.env("GIT_TERMINAL_PROMPT", "0")
@@ -444,18 +447,18 @@ fn canonical_dir(path: &str) -> Result<PathBuf, String> {
     Ok(p.canonicalize().unwrap_or(p))
 }
 
-/// Resuelve `rel` dentro del repo; rechaza escape por `..`.
+/// Resuelve `rel` dentro del repo; rechaza escape por `..` vía canonical.
 fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf, String> {
-    let cleaned: PathBuf = rel
-        .replace('\\', "/")
+    let cleaned = rel.replace('\\', "/");
+    let parts: Vec<&str> = cleaned
         .split('/')
         .filter(|c| !c.is_empty() && *c != ".")
-        .collect::<Vec<_>>()
-        .iter()
-        .map(PathBuf::from)
-        .product();
-    let abs = repo_root.join(cleaned);
-    let canonical = abs.canonicalize().unwrap_or(abs.clone());
+        .collect();
+    if parts.iter().any(|p| *p == "..") {
+        return Err(err("path fuera del repo", rel.to_string()));
+    }
+    let abs = repo_root.join(parts.join("/"));
+    let canonical = abs.canonicalize().unwrap_or(abs);
     let root_canonical = repo_root.canonicalize().unwrap_or_else(|_| repo_root.to_path_buf());
     if !canonical.starts_with(&root_canonical) {
         return Err(err("path fuera del repo", rel.to_string()));
@@ -633,37 +636,6 @@ fn status_label(index_status: char, worktree_status: char) -> String {
 }
 
 // ===== operaciones =====
-
-pub fn resolve_repo(cwd: &str) -> Result<Option<GitRepoInfo>, String> {
-    let dir = canonical_dir(cwd)?;
-    ensure_git_available()?;
-    let root_line = git_stdout_line_opt(
-        dir.to_string_lossy().as_ref(),
-        ["rev-parse", "--show-toplevel"],
-    )?;
-    let Some(root_line) = root_line else {
-        return Ok(None);
-    };
-    let root = canonical_dir(&root_line)?;
-    let root_s = root.to_string_lossy().into_owned();
-
-    let head = git_stdout_lines(&root_s, ["rev-parse", "--abbrev-ref", "HEAD"])?
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| "HEAD".into());
-
-    let upstream = git_stdout_line_opt(
-        &root_s,
-        ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
-    )?;
-
-    Ok(Some(GitRepoInfo {
-        repo_root: root_s,
-        is_detached: head == "HEAD",
-        branch: head,
-        upstream,
-    }))
-}
 
 pub fn panel_snapshot(cwd: &str) -> Result<GitPanelSnapshot, String> {
     let dir = canonical_dir(cwd)?;

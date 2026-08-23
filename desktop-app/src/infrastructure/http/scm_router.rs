@@ -8,8 +8,9 @@ use crate::gitx;
 use crate::state::{json_err, json_ok, read_body, AppState};
 
 /// Atiende rutas git. Devuelve Some(response) si la ruta es del módulo.
+#[allow(clippy::too_many_lines)]
 pub fn handle(
-    mut req: Request,
+    req: &mut Request,
     _state: Arc<AppState>,
     path: &str,
     method: Method,
@@ -52,31 +53,31 @@ pub fn handle(
         }
         (Method::Get, "/commit-files") => j!(gitx::commit_files(&q("path"), &q("sha"))),
         (Method::Post, "/commit-diff") => {
-            let body = read_body(&mut req).unwrap_or(serde_json::Value::Null);
+            let body = read_body(req).unwrap_or(serde_json::Value::Null);
             let sha = body.get("sha").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let file = body.get("file").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let original = body.get("originalPath").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            match gitx::commit_file_diff(&q("path"), &sha, &file, Some(original).filter(|s| !s.is_empty())) {
+            match gitx::commit_file_diff(&q("path"), &sha, &file, Some(original.as_str()).filter(|s| !s.is_empty())) {
                 Ok(v) => serde_json::to_value(v).map(|v| json_ok(&v)).unwrap_or_else(|e| json_err(500, &e.to_string())),
                 Err(e) => json_err(400, &e),
             }
         }
         (Method::Get, "/remote-url") => j!(gitx::remote_url(&q("path"), &q("name"))),
         (Method::Get, "/branches") => j!(gitx::list_branches(&q("path"))),
-        (Method::Post, "/stage") => match body_strings(&mut req, "files") {
+        (Method::Post, "/stage") => match body_strings(req, "files") {
             Ok(files) => j!(gitx::stage(&q("path"), &files)),
             Err(e) => json_err(400, &e),
         },
-        (Method::Post, "/unstage") => match body_strings(&mut req, "files") {
+        (Method::Post, "/unstage") => match body_strings(req, "files") {
             Ok(files) => j!(gitx::unstage(&q("path"), &files)),
             Err(e) => json_err(400, &e),
         },
-        (Method::Post, "/discard") => match body_discard(&mut req) {
+        (Method::Post, "/discard") => match body_discard(req) {
             Ok(entries) => j!(gitx::discard(&q("path"), &entries)),
             Err(e) => json_err(400, &e),
         },
         (Method::Post, "/commit") => {
-            let body = read_body(&mut req).unwrap_or(serde_json::Value::Null);
+            let body = read_body(req).unwrap_or(serde_json::Value::Null);
             let message = body.get("message").and_then(|v| v.as_str()).unwrap_or("").to_string();
             j!(gitx::commit(&q("path"), &message))
         }
@@ -94,7 +95,7 @@ pub fn handle(
             }
         }
         (Method::Post, "/checkout") => {
-            let body = read_body(&mut req).unwrap_or(serde_json::Value::Null);
+            let body = read_body(req).unwrap_or(serde_json::Value::Null);
             let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
             match gitx::checkout_branch(&q("path"), &name) {
                 Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
@@ -102,7 +103,7 @@ pub fn handle(
             }
         }
         (Method::Post, "/show-commit-diff") => {
-            let body = read_body(&mut req).unwrap_or(serde_json::Value::Null);
+            let body = read_body(req).unwrap_or(serde_json::Value::Null);
             let sha = body.get("sha").and_then(|v| v.as_str()).unwrap_or("").to_string();
             j!(gitx::show_commit_diff(&q("path"), &sha))
         }

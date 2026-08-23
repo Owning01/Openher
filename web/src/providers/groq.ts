@@ -17,14 +17,15 @@ async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response
 
 // Groq OpenAI-compatible. Ultra-low latency, native streaming.
 // Docs: https://console.groq.com/docs/quickstart — baseURL https://api.groq.com/openai/v1
-const GROQ_DEFAULT_URL = "https://api.groq.com/openai/v1/chat/completions"
+const GROQ_DEFAULT_BASE = "https://api.groq.com/openai/v1"
 
-// Model requested: qwen/qwen3.6-27b (user) — Groq serves it as qwen/qwen3-32b or qwen3-27b. Keep exact id user gave, fallback to hosted qwen.
 const MODELS = [
-  { id: "qwen/qwen3-32b", label: "Qwen3 32B (Groq · qwen3.6-27b)" },
-  { id: "qwen/qwen3-6-27b", label: "Qwen3.6 27B" },
   { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B Versatile" },
   { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B Instant" },
+  { id: "deepseek-r1-distill-llama-70b", label: "DeepSeek R1 Distill 70B (Groq)" },
+  { id: "qwen-2.5-32b", label: "Qwen 2.5 32B" },
+  { id: "qwen/qwen3-32b", label: "Qwen3 32B (qwen3.6-27b)" },
+  { id: "gemma2-9b-it", label: "Gemma 2 9B" },
   { id: "mixtral-8x7b-32768", label: "Mixtral 8x7B" },
 ]
 
@@ -39,11 +40,36 @@ function recordRequest() { recentRequests.push(Date.now()) }
 function estimateTokens(text: string): number { return Math.ceil(text.length / 4) }
 
 export function createGroqProvider(apiKey: string, baseUrl?: string): QuickChatProvider {
-  const GROQ_URL = baseUrl ?? GROQ_DEFAULT_URL
+  const BASE_URL = baseUrl ? baseUrl.replace(/\/chat\/completions\/?$/, "") : GROQ_DEFAULT_BASE
+  const GROQ_URL = `${BASE_URL}/chat/completions`
   return {
     id: "groq",
     labelKey: "quickchat.providerGroq",
-    async listModels() { return MODELS },
+    async listModels() {
+      if (apiKey) {
+        try {
+          const res = await proxyAwareFetch(`${BASE_URL}/models`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          })
+          if (res.ok) {
+            const data = await res.json() as any
+            const list: Array<{ id: string }> = data?.data || []
+            if (Array.isArray(list) && list.length > 0) {
+              const active = list
+                .filter(m => m.id && !m.id.includes("whisper") && !m.id.includes("tts") && !m.id.includes("guard"))
+                .map(m => {
+                  const matched = MODELS.find(known => known.id === m.id)
+                  return { id: m.id, label: matched?.label || m.id }
+                })
+              if (active.length > 0) return active
+            }
+          }
+        } catch {
+          // fallback to static MODELS
+        }
+      }
+      return MODELS
+    },
     async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void }): Promise<QuickChatResult> {
       if (!apiKey) throw new Error("NO_KEY_GROQ")
       const rl = checkRateLimit()
