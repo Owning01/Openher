@@ -1,7 +1,9 @@
-import { memo, useCallback, useEffect, useRef, useState, useMemo } from "react"
+import { memo, useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense } from "react"
 import { ChatView } from "./ChatView"
 import { ErrorModal } from "./ErrorModal"
-import { SessionStatsPanel } from "./shellPanels"
+// Lazy: rompe el borde estático con shellPanels (que arrastra @xterm) para que
+// el bundle inicial móvil no descargue terminal/kanban/browser del desktop.
+const SessionStatsPanel = lazy(() => import("./shellPanels").then((m) => ({ default: m.SessionStatsPanel })))
 import { useMessages } from "../hooks/useMessages"
 import { useSSE } from "../hooks/useSSE"
 import { useSSEHandler } from "../hooks/useSSEHandler"
@@ -451,7 +453,9 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       {showStats && (
         <div className="session-stats-overlay" onClick={() => setShowStats(false)}>
           <div onClick={(e) => e.stopPropagation()}>
-            <SessionStatsPanel sessionID={session.id} onClose={() => setShowStats(false)} />
+            <Suspense fallback={null}>
+              <SessionStatsPanel sessionID={session.id} onClose={() => setShowStats(false)} />
+            </Suspense>
           </div>
         </div>
       )}

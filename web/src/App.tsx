@@ -61,7 +61,6 @@ import { useServers } from "./hooks/useServers"
 import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
 import { shell } from "./shell"
-import { ShellPanel, ExplorerPanel, StatsPanel, KanbanPanel, ConfigPanel, FileEditorPanel, BrowserPanel, DesignPanel, TerminalPanel } from "./components/shellPanels"
 import { TabBar } from "./components/TabBar"
 import type { ServerProfile } from "./types"
 import { useVisualSelection, formatSelectionForPrompt } from "./hooks/useVisualSelection"
@@ -97,6 +96,21 @@ const FileBrowser = lazyRetry(() => import("./components/FileBrowser").then((m) 
 const HelpPage = lazyRetry(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const FolderPicker = lazyRetry(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
 const QuickChatPanel = lazyRetry(() => import("./components/QuickChatPanel").then((m) => ({ default: m.QuickChatPanel })))
+
+// Paneles del shell desktop (shellPanels.tsx arrastra @xterm): lazy para que el
+// APK móvil no descargue ni parsee terminal/browser/kanban que nunca renderiza.
+const ShellPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.ShellPanel })))
+const ExplorerPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.ExplorerPanel })))
+const StatsPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.StatsPanel })))
+const KanbanPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.KanbanPanel })))
+const ConfigPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.ConfigPanel })))
+const FileEditorPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.FileEditorPanel })))
+const BrowserPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.BrowserPanel })))
+const DesignPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.DesignPanel })))
+const TerminalPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.TerminalPanel })))
+const PANEL_SUSPENSE_FALLBACK = (
+  <div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando…</div>
+)
 
 type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat"
 
@@ -353,7 +367,9 @@ const ShellPanelCell = memo(function ShellPanelCell({
       >
         ×
       </button>
-      <ShellPanel kind={kind} cwd={cwd} sessionID={sessionID} onOpenSessionDir={onOpenSessionDir} onOpenFile={(p) => onOpenFile?.(p, index, "center")} panelIndex={index} panelId={panelId} />
+      <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+        <ShellPanel kind={kind} cwd={cwd} sessionID={sessionID} onOpenSessionDir={onOpenSessionDir} onOpenFile={(p) => onOpenFile?.(p, index, "center")} panelIndex={index} panelId={panelId} />
+      </Suspense>
     </div>
   )
 })
@@ -3107,11 +3123,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 </span>
               </div>
               <div className="desktop-sidebar-body">
-                {activity === "sessions" ? sessionsView
-                  : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
-                  : activity === "stats" ? <StatsPanel />
-                  : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
-                  : <ConfigPanel />}
+                <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                  {activity === "sessions" ? sessionsView
+                    : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
+                    : activity === "stats" ? <StatsPanel />
+                    : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
+                    : <ConfigPanel />}
+                </Suspense>
               </div>
               <div className="desktop-sidebar-resizer" onPointerDown={startSidebarResize} title={t('desktop.resizeSidebar')} />
             </>
@@ -3257,7 +3275,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                             }
                           }} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} />
                           <div style={{ flex: 1, minHeight: 0 }}>
-                            <DesignPanel />
+                            <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                              <DesignPanel />
+                            </Suspense>
                           </div>
                         </div>
                       </div>
@@ -3301,7 +3321,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                             }
                           }} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} />
                           <div style={{ flex: 1, minHeight: 0 }}>
-                            <KanbanPanel />
+                            <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                              <KanbanPanel />
+                            </Suspense>
                           </div>
                         </div>
                       </div>
@@ -3328,7 +3350,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                           onDropTerminal={addTerminalToPanel}
                         />
                         <div style={{ flex: 1, minHeight: 0 }}>
-                          <TerminalPanel cwd={termCwd} panelId={`${panelId}-term`} />
+                          <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                            <TerminalPanel cwd={termCwd} panelId={`${panelId}-term`} />
+                          </Suspense>
                         </div>
                       </div>
                     </div>
@@ -3423,20 +3447,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 const editorPath = editorTabs[editorActiveIdx] ?? desktopLayout.panelEditorPaths?.[i] ?? ""
                 return (
                   <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
-                    <FileEditorPanel
-                      path={editorPath}
-                      tabs={editorTabs}
-                      activePath={editorPath}
-                      initialCwd={activeSessionDir}
-                      onTabSelect={(p) => handleEditorTabSelect(i, p)}
-                      onTabClose={(p) => handleEditorTabClose(i, p)}
-                      onClose={() => closePanel(i)}
-                      visualSelection={vs.selection}
-                      inspectMode={vs.inspectMode}
-                      onVisualSelect={(payload) => handleVisualSelect(editorPath, payload)}
-                      onVisualClear={vs.clear}
-                      onToggleInspect={vs.toggleInspect}
-                    />
+                    <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                      <FileEditorPanel
+                        path={editorPath}
+                        tabs={editorTabs}
+                        activePath={editorPath}
+                        initialCwd={activeSessionDir}
+                        onTabSelect={(p) => handleEditorTabSelect(i, p)}
+                        onTabClose={(p) => handleEditorTabClose(i, p)}
+                        onClose={() => closePanel(i)}
+                        visualSelection={vs.selection}
+                        inspectMode={vs.inspectMode}
+                        onVisualSelect={(payload) => handleVisualSelect(editorPath, payload)}
+                        onVisualClear={vs.clear}
+                        onToggleInspect={vs.toggleInspect}
+                      />
+                    </Suspense>
                   </div>
                 )
               }
