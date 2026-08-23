@@ -12,33 +12,8 @@ import { VisualSelectOverlay } from "./VisualSelectOverlay"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { useDevServer } from "../hooks/useDevServer"
 
-// Persistencia de terminales por panelId: al mover la terminal de celda
-// su estado (tabs) sobrevive al remount aunque React cree una nueva instancia.
-type TerminalPersist = { tabs: Array<{ id: string; title: string; shell: string }>; activeId: string; splitId?: string | null }
-const terminalStore = new Map<string, TerminalPersist>()
-// PTYs vivos por tabId: sobreviven a hide/resize/tab-switch; solo se matan con X explícita.
-// LRU cap: cada PTY ConPTY vivo cuesta RAM + threads del shell; sin tope, abrir
-// muchas terminales a lo largo de la sesión degrada todo (creep silencioso).
-const MAX_PERSISTED_PTYS = 8
-const terminalPtyStore = new Map<string, { ptyId: string; wsPort: number }>()
-function rememberTerminalPty(tabId: string, entry: { ptyId: string; wsPort: number }) {
-  terminalPtyStore.delete(tabId)
-  terminalPtyStore.set(tabId, entry)
-  while (terminalPtyStore.size > MAX_PERSISTED_PTYS) {
-    const oldest = terminalPtyStore.keys().next().value as string | undefined
-    if (!oldest) break
-    const victim = terminalPtyStore.get(oldest)
-    terminalPtyStore.delete(oldest)
-    if (victim) shell.pty.kill(victim.ptyId).catch(() => {})
-  }
-}
-export function killTerminalPty(tabId: string) {
-  const entry = terminalPtyStore.get(tabId)
-  if (entry) {
-    shell.pty.kill(entry.ptyId).catch(() => {})
-    terminalPtyStore.delete(tabId)
-  }
-}
+import { terminalStore, terminalPtyStore, rememberTerminalPty, killTerminalPty, transferTerminalTab } from "../utils/terminalStore"
+export { killTerminalPty, transferTerminalTab }
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
@@ -393,6 +368,22 @@ export const TerminalPanel = memo(function TerminalPanel({
     }
   }, [panelId])
 
+  useEffect(() => {
+    const onTabsUpdated = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (panelId && (detail?.sourcePanelId === panelId || detail?.destPanelId === panelId)) {
+        if (terminalStore.has(panelId)) {
+          const saved = terminalStore.get(panelId)!
+          setTermTabs([...saved.tabs])
+          setActiveTabId(saved.activeId)
+          if (saved.splitId) setSplitTabId(saved.splitId)
+        }
+      }
+    }
+    window.addEventListener("terminal:tabs-updated", onTabsUpdated)
+    return () => window.removeEventListener("terminal:tabs-updated", onTabsUpdated)
+  }, [panelId])
+
   const handleAddTab = () => {
     const nextNum = termTabs.length + 1
     const newId = `term-${Date.now()}`
@@ -653,7 +644,8 @@ export const TerminalPanel = memo(function TerminalPanel({
                   draggable
                   style={{ cursor: "grab" }}
                   onDragStart={(e) => {
-                    const dragPayload = panelIndex !== undefined ? `panel:${panelIndex}:kind:terminal` : "kind:terminal"
+                    const pId = panelId || (isDocked ? "bottom-terminal" : `panel-${panelIndex ?? 0}-term`)
+                    const dragPayload = `panel:${panelIndex ?? 0}:terminal-tab:${tab.id}:${pId}`
                     e.dataTransfer.setData("text/plain", dragPayload)
                     e.dataTransfer.setData("application/x-opencode-path", dragPayload)
                     e.dataTransfer.effectAllowed = "move"
