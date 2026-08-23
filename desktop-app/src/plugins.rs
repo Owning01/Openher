@@ -1,4 +1,4 @@
-//! Plugins (data/plugins/<name>/plugin.json) + Labs (apps del ecosistema).
+//! Plugins (data/plugins/<name>/package.json o plugin.json) + Labs (apps del ecosistema).
 
 use std::path::Path;
 use std::process::Child;
@@ -6,21 +6,43 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct PluginManifest {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct OpenCodePluginManifest {
     pub name: String,
+    #[serde(default)]
     pub title: Option<String>,
-    #[serde(rename = "type")]
-    pub kind: String, // "web" | "command" | "link"
-    pub url: Option<String>,
-    pub command: Option<String>,
-    pub cwd: Option<String>,
-    pub description: Option<String>,
+    #[serde(default)]
     pub version: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub entry: Option<String>,
+    #[serde(rename = "entryUrl", default)]
+    pub entry_url: Option<String>,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+    #[serde(default)]
+    pub config: serde_json::Value,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(rename = "type", default = "default_type_esm")]
+    pub kind: String, // "esm" | "web" | "command" | "link"
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub cwd: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_type_esm() -> String {
+    "esm".to_string()
 }
 
 pub struct PluginRegistry {
-    pub plugins: Mutex<Vec<PluginManifest>>,
+    pub plugins: Mutex<Vec<OpenCodePluginManifest>>,
     running: Mutex<Vec<(String, Child)>>,
 }
 
@@ -32,35 +54,129 @@ impl PluginRegistry {
         }
     }
 
-    pub fn scan(&self) -> Vec<serde_json::Value> {
+    pub fn scan(&self) -> Vec<OpenCodePluginManifest> {
         let dir = crate::state::plugins_dir();
         let mut out = Vec::new();
         if let Ok(rd) = std::fs::read_dir(&dir) {
             for e in rd.flatten() {
-                let manifest_path = e.path().join("plugin.json");
-                if let Ok(raw) = std::fs::read_to_string(&manifest_path) {
-                    if let Ok(m) = serde_json::from_str::<PluginManifest>(&raw) {
-                        out.push(serde_json::json!({
-                            "name": m.name,
-                            "title": m.title.as_deref().unwrap_or(&m.name),
-                            "type": m.kind,
-                            "description": m.description.as_deref().unwrap_or(""),
-                            "version": m.version.as_deref().unwrap_or("0.0.0"),
-                        }));
+                if !e.path().is_dir() {
+                    continue;
+                }
+                let folder_name = e.file_name().to_string_lossy().to_string();
+
+                // 1. Probar package.json (estándar OpenCode / dsh ESM)
+                let pkg_path = e.path().join("package.json");
+                if let Ok(raw) = std::fs::read_to_string(&pkg_path) {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+                        let name = v["name"].as_str().unwrap_or(&folder_name).to_string();
+                        let title = v["title"].as_str().map(String::from);
+                        let version = v["version"].as_str().map(String::from);
+                        let desc = v["description"].as_str().map(String::from);
+
+                        let opencode_sec = if v["opencode"].is_object() {
+                            &v["opencode"]
+                        } else if v["dsh"].is_object() {
+                            &v["dsh"]
+                        } else {
+                            &serde_json::Value::Null
+                        };
+
+                        let entry_raw = opencode_sec["entry"]
+                            .as_str()
+                            .or_else(|| v["main"].as_str())
+                            .or_else(|| v["module"].as_str())
+                            .unwrap_or("index.js");
+                        let entry = entry_raw.trim_start_matches("./").to_string();
+                        let entry_url = format!("/shell/plugin/{}/{}", folder_name, entry);
+
+                        let caps: Vec<String> = opencode_sec["capabilities"]
+                            .as_array()
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|c| c.as_str().map(String::from))
+                                    .collect()
+                            })
+                            .unwrap_or_else(|| {
+                                vec![
+                                    "ui".to_string(),
+                                    "events".to_string(),
+                                    "commands".to_string(),
+                                    "storage".to_string(),
+                                ]
+                            });
+
+                        let config = opencode_sec["config"].clone();
+
+                        out.push(OpenCodePluginManifest {
+                            name,
+                            title,
+                            version,
+                            description: desc,
+                            entry: Some(entry),
+                            entry_url: Some(entry_url),
+                            capabilities: caps,
+                            config,
+                            enabled: true,
+                            kind: "esm".to_string(),
+                            command: None,
+                            cwd: None,
+                        });
+                        continue;
+                    }
+                }
+
+                // 2. Probar plugin.json (legacy)
+                let legacy_path = e.path().join("plugin.json");
+                if let Ok(raw) = std::fs::read_to_string(&legacy_path) {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+                        let name = v["name"].as_str().unwrap_or(&folder_name).to_string();
+                        let title = v["title"].as_str().map(String::from);
+                        let version = v["version"].as_str().map(String::from);
+                        let desc = v["description"].as_str().map(String::from);
+                        let kind = v["type"].as_str().unwrap_or("web").to_string();
+                        let entry = v["entry"].as_str().unwrap_or("index.js").to_string();
+                        let entry_url = format!("/shell/plugin/{}/{}", folder_name, entry);
+
+                        out.push(OpenCodePluginManifest {
+                            name,
+                            title,
+                            version,
+                            description: desc,
+                            entry: Some(entry),
+                            entry_url: Some(entry_url),
+                            capabilities: vec![
+                                "ui".to_string(),
+                                "events".to_string(),
+                                "commands".to_string(),
+                                "storage".to_string(),
+                            ],
+                            config: serde_json::Value::Null,
+                            enabled: true,
+                            kind,
+                            command: v["command"].as_str().map(String::from),
+                            cwd: v["cwd"].as_str().map(String::from),
+                        });
                     }
                 }
             }
         }
-        *self.plugins.lock().unwrap_or_else(|e| e.into_inner()) = out
-            .iter()
-            .filter_map(|v| serde_json::from_value(v.clone()).ok())
-            .collect();
+
+        *self.plugins.lock().unwrap_or_else(|e| e.into_inner()) = out.clone();
         out
     }
 
     pub fn list(&self) -> serde_json::Value {
         let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        serde_json::json!({ "plugins": plugins })
+        serde_json::json!({ "ok": true, "plugins": plugins })
+    }
+
+    pub fn toggle(&self, name: &str, enabled: bool) -> bool {
+        let mut plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(p) = plugins.iter_mut().find(|p| p.name == name) {
+            p.enabled = enabled;
+            return true;
+        }
+        false
     }
 
     /// Sirve archivos de un plugin web desde data/plugins/<name>.

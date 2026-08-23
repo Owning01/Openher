@@ -5,6 +5,7 @@ import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
 import type { AgentOption, CommandInfo, PromptSnippet, ServerConfig } from "../types"
 import { ImageEditor } from "./ImageEditor"
+import { PluginSlot } from "../plugins"
 
 type ImageAttachment = { id: string; base64: string; mime: string; name: string }
 
@@ -183,16 +184,17 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     }, 800)
   }, [])
 
-  // Flush del draft pendiente al desmontar (no perder texto tipeado).
-  useEffect(() => () => {
-    if (pushTimerRef.current) {
-      clearTimeout(pushTimerRef.current)
-      if (localValueRef.current !== lastPushedRef.current) {
-        lastPushedRef.current = localValueRef.current
-        onChangeRef.current(localValueRef.current)
+  // Listener para eventos emitidos por plugins para insertar texto en el prompt
+  useEffect(() => {
+    const handleInsert = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail
+      if (typeof detail === "string") {
+        handleChange(localValueRef.current ? `${localValueRef.current} ${detail}` : detail)
       }
     }
-  }, [])
+    window.addEventListener("plugin:insert-text", handleInsert)
+    return () => window.removeEventListener("plugin:insert-text", handleInsert)
+  }, [handleChange])
 
   const promptHistoryRef = useRef<string[]>(loadHistory())
   const historyIndexRef = useRef(-1)
@@ -754,6 +756,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
               <span>{primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
             </button>
           )}
+          <PluginSlot id="composer.actions" />
           {contextLabel && <span className="context-usage-label">{contextLabel}</span>}
         </div>
         <div className="composer-bar-right">

@@ -737,6 +737,25 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         let _ = req.respond(json_ok(&state.plugins.list()));
         return;
     }
+    if path == "/shell/plugins/reload" && method == Method::Post {
+        let scanned = state.plugins.scan();
+        let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "plugins": scanned })));
+        return;
+    }
+    if path == "/shell/plugins/toggle" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let name = b["name"].as_str().unwrap_or("");
+                let enabled = b["enabled"].as_bool().unwrap_or(true);
+                let updated = state.plugins.toggle(name, enabled);
+                let _ = req.respond(json_ok(&serde_json::json!({ "ok": updated })));
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
     if path == "/shell/plugins/running" {
         let _ = req.respond(json_ok(&state.plugins.running()));
         return;
