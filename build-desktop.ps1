@@ -22,7 +22,7 @@ try {
   $desktopAppDir = Join-Path $rootDir "desktop-app"
 
   Write-Host "==========================================" -ForegroundColor Cyan
-  Write-Host "  OpenCode Desktop - Build & Packaging" -ForegroundColor Cyan
+  Write-Host "  OpenHer Desktop - Build & Packaging" -ForegroundColor Cyan
   Write-Host "==========================================" -ForegroundColor Cyan
 
   # 1. Compilar Web Frontend

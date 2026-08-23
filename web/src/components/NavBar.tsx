@@ -36,8 +36,8 @@ export const NavBar = memo(function NavBar({ view, onNavigate, onToggleLightMode
       <button className="brand-section" onClick={() => onNavigate("sessions")} type="button"
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate("sessions") } }}>
         <div className="brand-title">
-          <img src="./img/apple-touch-icon-180x180.jpg" alt="OpenCode" className="app-icon" />
-          <span className="brand-name">OpenCode</span>
+          <img src="./img/apple-touch-icon-180x180.jpg" alt="OpenHer" className="app-icon" />
+          <span className="brand-name">OpenHer</span>
         </div>
       </button>
       <nav className="desktop-nav tab-row" role="navigation" aria-label="Main navigation">

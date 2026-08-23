@@ -1,11 +1,11 @@
 ---
-name: opencode-add-plugin
-description: Guía paso a paso para crear, desarrollar, probar e integrar nuevos plugins y extensiones ESM en OpenCode Mobile / Desktop utilizando los UI Slots (sidebar, composer, overlay, settings), bus de eventos SSE, comandos y storage con capability gating.
+name: openher-add-plugin
+description: Guía paso a paso para crear, desarrollar, probar e integrar nuevos plugins y extensiones ESM en OpenHer Mobile / Desktop utilizando los UI Slots (sidebar, composer, overlay, settings), bus de eventos SSE, comandos y storage con capability gating.
 ---
 
-# Cómo Crear y Agregar un Plugin a OpenCode
+# Cómo Crear y Agregar un Plugin a OpenHer
 
-Esta skill enseña cómo desarrollar e instalar un plugin en **OpenCode Mobile / Desktop**. Los plugins son módulos ESM ligeros que se ejecutan directamente en la aplicación y se extienden a través de puntos de inserción visual (**UI Slots**), escucha de eventos SSE de la IA en tiempo real y comandos personalizados.
+Esta skill enseña cómo desarrollar e instalar un plugin en **OpenHer Mobile / Desktop**. Los plugins son módulos ESM ligeros que se ejecutan directamente en la aplicación y se extienden a través de puntos de inserción visual (**UI Slots**), escucha de eventos SSE de la IA en tiempo real y comandos personalizados.
 
 ---
 
@@ -213,7 +213,7 @@ ctx.on("session.updated", ({ sessionID, directory, type }) => {
 1. Crea la carpeta en `data/plugins/<tu-plugin>/`.
 2. Crea `data/plugins/<tu-plugin>/package.json` con el campo `"opencode"`.
 3. Crea `data/plugins/<tu-plugin>/index.js` con tu función `apply(ctx)`.
-4. Abre o recarga la aplicación de escritorio (**OpenCode Desktop**). El plugin se cargará automáticamente al arrancar.
+4. Abre o recarga la aplicación de escritorio (**OpenHer Desktop**). El plugin se cargará automáticamente al arrancar.
 5. Para forzar una recarga en caliente sin reiniciar la app:
    - En la consola de desarrollo o vía código ejecuta: `shell.plugins.reload()`.
    - Para deshabilitarlo temporalmente: `shell.plugins.toggle("<tu-plugin>", false)`.

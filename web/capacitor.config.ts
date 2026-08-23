@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli"
 
 const config: CapacitorConfig = {
   appId: "com.gbro.opencode",
-  appName: "OpenCode Mobile",
+  appName: "OpenHer",
   webDir: "dist",
   server: {
     androidScheme: "http",

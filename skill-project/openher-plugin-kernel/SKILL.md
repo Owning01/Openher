@@ -1,5 +1,5 @@
 ---
-name: opencode-plugin-kernel
+name: openher-plugin-kernel
 description: Guía y arquitectura para implementar un kernel de plugins modular, seguro y ligero (~500 líneas en React/TS + Rust) basado en ESM nativo, gating de capacidades por Proxy, bus de eventos reactivo y UI Slots.
 ---
 
@@ -348,7 +348,7 @@ export const pluginHost = new PluginHost();
 {
   "name": "plugin-hello",
   "version": "1.0.0",
-  "description": "Demostración de plugin OpenCode",
+  "description": "Demostración de plugin OpenHer",
   "opencode": {
     "entry": "./index.js",
     "capabilities": ["ui", "events", "commands", "storage"],
@@ -365,7 +365,7 @@ export function apply(ctx) {
   // 1. Inyectar widget en la barra lateral
   const unslotSidebar = ctx.ui.registerSlot("sidebar.activity", {
     id: "clock-widget",
-    title: "Reloj OpenCode",
+    title: "Reloj OpenHer",
     render: () => {
       const timeStr = new Date().toLocaleTimeString();
       return (

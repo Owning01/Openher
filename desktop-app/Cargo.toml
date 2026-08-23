@@ -2,7 +2,7 @@
 name = "opencode-desktop"
 version = "0.1.0"
 edition = "2021"
-description = "OpenCode Desktop - shell Rust portable que embebe la web app, stats, terminales, explorador y plugins"
+description = "OpenHer Desktop - shell Rust portable que embebe la web app, stats, terminales, explorador y plugins"
 license = "MIT"
 
 [dependencies]

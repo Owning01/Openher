@@ -3075,7 +3075,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <>
               <div className="desktop-sidebar-header">
                 <span className="desktop-sidebar-title">
-                  {activity === "sessions" ? "Opencode"
+                  {activity === "sessions" ? "OpenHer"
                     : activity === "explorer" ? t('shell.kindExplorer')
                     : activity === "stats" ? t('shell.kindStats')
                     : activity === "quickchat" ? t('quickchat.title')

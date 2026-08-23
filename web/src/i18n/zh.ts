@@ -298,7 +298,7 @@ export default {
   'detail.abort': '中止',
   'detail.jumpToLatest': '前往最新',
   'detail.you': '👤 你',
-  'detail.opencode': 'OpenCode',
+  'detail.opencode': 'OpenHer',
   'detail.projectDashboardLabel': '專案與 VCS 儀表板',
   'detail.projectLabel': '專案',
   'detail.vcsLabel': 'VCS',
