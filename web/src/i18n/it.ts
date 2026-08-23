@@ -1,6 +1,6 @@
 // Extraído de i18n.ts (chunk por idioma)
 export default {
-  'app.title': 'OpenCode Mobile',
+  'app.title': 'OpenHer',
   'app.exitTitle': 'Chiudere app?',
   'app.exitMessage': 'Sei sicuro di voler uscire?',
   'app.exitOk': 'Chiudi',
@@ -298,7 +298,7 @@ export default {
   'detail.abort': 'Interrompi',
   'detail.jumpToLatest': 'Vai alla fine',
   'detail.you': '👤 Tu',
-  'detail.opencode': 'OpenCode',
+  'detail.opencode': 'OpenHer',
   'detail.projectDashboardLabel': 'Dashboard progetto e VCS',
   'detail.projectLabel': 'Progetto',
   'detail.vcsLabel': 'VCS',

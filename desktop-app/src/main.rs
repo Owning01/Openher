@@ -155,7 +155,7 @@ impl ApplicationHandler<AppEvent> for App {
             return;
         }
         let mut attributes = Window::default_attributes();
-        attributes.title = "OpenCode Desktop".to_string();
+        attributes.title = "OpenHer Desktop".to_string();
         // Restaurar geometría persistida si existe y es visible en algún monitor.
         // Si la ventana quedó fuera de pantalla (segundo monitor desconectado,
         // coordenadas inválidas), se ignora y se usa el default centrado.
@@ -383,7 +383,7 @@ fn setup_tray(proxy: EventLoopProxy<AppEvent>) -> Result<(), Box<dyn std::error:
     use tray_icon::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
     let quit = MenuItem::new("Salir", true, None);
-    let open = MenuItem::new("Abrir OpenCode Desktop", true, None);
+    let open = MenuItem::new("Abrir OpenHer Desktop", true, None);
     let menu = Menu::new();
     menu.append(&open)?;
     menu.append(&quit)?;
@@ -393,7 +393,7 @@ fn setup_tray(proxy: EventLoopProxy<AppEvent>) -> Result<(), Box<dyn std::error:
     };
     let tray = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
-        .with_tooltip("OpenCode Desktop")
+        .with_tooltip("OpenHer Desktop")
         .with_icon(icon)
         .build()?;
     std::mem::forget(tray);
@@ -432,14 +432,14 @@ fn setup_tray(proxy: EventLoopProxy<AppEvent>) -> Result<(), Box<dyn std::error:
 
 fn main() {
     std::panic::set_hook(Box::new(|info| {
-        let msg = format!("Error crítico en OpenCode Desktop:\n\n{}", info);
+        let msg = format!("Error crítico en OpenHer Desktop:\n\n{}", info);
         eprintln!("{}", msg);
         let _ = std::fs::write("opencode-desktop-error.log", &msg);
         #[cfg(windows)]
         unsafe {
             use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
             let wide: Vec<u16> = msg.encode_utf16().chain(Some(0)).collect();
-            let title: Vec<u16> = "OpenCode Desktop Error".encode_utf16().chain(Some(0)).collect();
+            let title: Vec<u16> = "OpenHer Desktop Error".encode_utf16().chain(Some(0)).collect();
             MessageBoxW(std::ptr::null_mut(), wide.as_ptr(), title.as_ptr(), MB_OK | MB_ICONERROR);
         }
     }));
