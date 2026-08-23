@@ -453,10 +453,9 @@ export const TerminalPanel = memo(function TerminalPanel({
       {/* Barra superior estilo VS Code */}
       {!hideHeader && (
         <div className="terminal-header-bar"
-          draggable={!isDocked}
-          style={{ cursor: isDocked ? "default" : "grab" }}
+          draggable={true}
+          style={{ cursor: "grab" }}
           onDragStart={(e) => {
-            if (isDocked) { e.preventDefault(); return }
             const dragPayload = panelIndex !== undefined ? `panel:${panelIndex}:kind:terminal` : "kind:terminal"
             e.dataTransfer.setData("text/plain", dragPayload)
             e.dataTransfer.setData("application/x-opencode-path", dragPayload)
