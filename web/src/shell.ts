@@ -204,6 +204,17 @@ export const shell = {
       return fetch(url, init as any)
     },
   },
+  opencode: {
+    getGlobal: () => get<{
+      configPath: string
+      configContent: string
+      configFiles: Array<{ path: string; name: string; content: string }>
+      instructionsFiles: Array<{ path: string; name: string; content: string }>
+      skills: Array<{ name: string; description: string; path: string; skillFile: string; source: string }>
+      scannedRoots: string[]
+    }>("/shell/opencode/global"),
+    saveGlobal: (path: string, content: string) => post<{ ok: boolean }>("/shell/opencode/global", { path, content }),
+  },
 }
 
 // ================================================================ Base64
