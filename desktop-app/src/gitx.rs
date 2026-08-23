@@ -184,7 +184,10 @@ fn build_git_command(cwd: Option<&str>, args: &[std::ffi::OsString]) -> GitCmd {
     let mut cmd = Command::new("git");
     cmd.args(args);
     if let Some(dir) = cwd.filter(|s| !s.is_empty()) {
-        cmd.current_dir(Path::new(dir));
+        let clean = dir.trim().trim_matches('"');
+        let p = Path::new(clean);
+        let clean_p = strip_unc(p);
+        cmd.current_dir(clean_p);
     }
     GitCmd { cmd }
 }
@@ -439,12 +442,26 @@ fn read_text_file(path: &Path) -> Result<TextSource, String> {
 
 // ===== utils de paths =====
 
+fn strip_unc(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(stripped)
+    } else {
+        p.to_path_buf()
+    }
+}
+
 fn canonical_dir(path: &str) -> Result<PathBuf, String> {
-    let p = PathBuf::from(path);
+    let clean = path.trim().trim_matches('"');
+    let p = PathBuf::from(clean);
+    if !p.exists() {
+        return Err(err("directorio no existe", path.to_string()));
+    }
     if !p.is_dir() {
         return Err(err("no es directorio", path.to_string()));
     }
-    Ok(p.canonicalize().unwrap_or(p))
+    let canon = p.canonicalize().unwrap_or(p);
+    Ok(strip_unc(&canon))
 }
 
 /// Resuelve `rel` dentro del repo; rechaza escape por `..` vía canonical.
@@ -459,7 +476,9 @@ fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf, String> {
     }
     let abs = repo_root.join(parts.join("/"));
     let canonical = abs.canonicalize().unwrap_or(abs);
+    let canonical = strip_unc(&canonical);
     let root_canonical = repo_root.canonicalize().unwrap_or_else(|_| repo_root.to_path_buf());
+    let root_canonical = strip_unc(&root_canonical);
     if !canonical.starts_with(&root_canonical) {
         return Err(err("path fuera del repo", rel.to_string()));
     }

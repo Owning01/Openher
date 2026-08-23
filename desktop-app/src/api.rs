@@ -258,6 +258,26 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         }
         return;
     }
+    if path == "/shell/fs/move" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let src = b["src"].as_str().unwrap_or("");
+                let dest = b["dest"].as_str().unwrap_or("");
+                match crate::fsx::move_entry(src, dest) {
+                    Ok(target) => {
+                        let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "path": target })));
+                    }
+                    Err(e) => {
+                        let _ = req.respond(json_err(400, &e));
+                    }
+                }
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
     if path == "/shell/fs/write" && method == Method::Post {
         match read_body(&mut req) {
             Ok(b) => {

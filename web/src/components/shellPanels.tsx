@@ -710,6 +710,7 @@ function ExplorerTreeFolder({
   const [subDirs, setSubDirs] = useState<FsEntry[]>([])
   const [subFiles, setSubFiles] = useState<FsEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [dropTarget, setDropTarget] = useState(false)
 
   const toggle = async () => {
     if (expanded) {
@@ -735,18 +736,20 @@ function ExplorerTreeFolder({
   return (
     <div className="shell-tree-folder-group">
       <div
-        className={`shell-row shell-dir${expanded ? " is-expanded" : ""}`}
+        className={`shell-row shell-dir${expanded ? " is-expanded" : ""}${dropTarget ? " is-drop-target" : ""}`}
         style={{ paddingLeft: `${depth * 14 + 6}px` }}
         onClick={toggle}
         onDoubleClick={() => fav(entry.path, true)}
         onContextMenu={(e) => handleContextMenu(e, entry, true)}
-        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy" }}
-        onDrop={(e) => handleDropExternal(e, entry.path)}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed === "move" ? "move" : "copy"; setDropTarget(true) }}
+        onDragLeave={() => setDropTarget(false)}
+        onDrop={(e) => { setDropTarget(false); handleDropExternal(e, entry.path) }}
         draggable={true}
         onDragStart={(e) => {
           e.dataTransfer.setData("text/plain", entry.path)
           e.dataTransfer.setData("application/x-opencode-path", entry.path)
           e.dataTransfer.setData("application/x-opencode-is-image", "0")
+          e.dataTransfer.effectAllowed = "move"
         }}
       >
         <span className="shell-tree-chevron" style={{ width: 12, fontSize: 9, color: "var(--muted)", display: "inline-flex", justifyContent: "center", flexShrink: 0 }}>
@@ -794,6 +797,7 @@ function ExplorerTreeFolder({
                   e.dataTransfer.setData("text/plain", f.path)
                   e.dataTransfer.setData("application/x-opencode-path", f.path)
                   e.dataTransfer.setData("application/x-opencode-is-image", isImg ? "1" : "0")
+                  e.dataTransfer.effectAllowed = "move"
                 }}
               >
                 <span style={{ width: 12, flexShrink: 0 }} />
@@ -977,6 +981,12 @@ export const ExplorerPanel = memo(function ExplorerPanel({
     e.preventDefault()
     e.stopPropagation()
     setDragOverTree(false)
+    // Drag interno (archivo/carpeta del propio árbol) → mover a targetDir.
+    const internalSrc = e.dataTransfer.getData("application/x-opencode-path")
+    if (internalSrc) {
+      await handleMoveInto(internalSrc, targetDir)
+      return
+    }
     const filesList = e.dataTransfer.files
     if (!filesList || filesList.length === 0) return
 
@@ -1003,6 +1013,25 @@ export const ExplorerPanel = memo(function ExplorerPanel({
     }
     showNotice(`Añadido(s) ${count} archivo(s) a la carpeta`)
     if (cwd) load(cwd)
+  }
+
+  const handleMoveInto = async (srcPath: string, targetDir: string) => {
+    const normTarget = targetDir.replace(/[\\/]+$/, "")
+    const srcNorm = srcPath.replace(/[\\/]+$/, "")
+    const sep = srcNorm.includes("\\") ? "\\" : "/"
+    if (srcNorm === normTarget || normTarget.startsWith(srcNorm + sep)) {
+      showNotice("No podés mover una carpeta dentro de sí misma")
+      return
+    }
+    try {
+      const r = await shell.fs.move(srcPath, targetDir)
+      const parts = r.path.split(/[/\\]/)
+      showNotice(`Movido a ${parts[parts.length - 2] || targetDir}`)
+      if (cwd) load(cwd)
+    } catch (err) {
+      showNotice(`Error al mover: ${String(err).slice(0, 80)}`)
+      if (cwd) load(cwd)
+    }
   }
 
   const handleCreateFile = async (parentDir: string) => {

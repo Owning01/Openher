@@ -225,6 +225,64 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Mueve src hacia dest_dir (mismo nombre). Rename atómico en el mismo volumen;
+/// fallback copiar+borrar entre volúmenes. Rechaza mover una carpeta dentro de
+/// sí misma o de un descendiente.
+pub fn move_entry(src: &str, dest_dir: &str) -> Result<String, String> {
+    let s = Path::new(src);
+    if !s.exists() {
+        return Err("Origen no existe".into());
+    }
+    let d_dir = Path::new(dest_dir);
+    if !d_dir.is_dir() {
+        return Err("Destino no es carpeta".into());
+    }
+    let filename = s.file_name().ok_or("Nombre de archivo inválido")?;
+
+    let s_canon = s.canonicalize().map_err(|e| e.to_string())?;
+    let d_canon = d_dir.canonicalize().map_err(|e| e.to_string())?;
+    let t_full = d_canon.join(filename);
+    if t_full == s_canon {
+        return Err("El archivo ya está en esa carpeta".into());
+    }
+    if t_full.starts_with(&s_canon) {
+        return Err("No se puede mover una carpeta dentro de sí misma".into());
+    }
+
+    let mut target = d_dir.join(filename);
+    if target.exists() {
+        // Colisión: mismo criterio que copy_entry, sufijo -copia.
+        let stem = s.file_stem().and_then(|st| st.to_str()).unwrap_or("file");
+        let ext = s.extension().and_then(|e| e.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
+        let mut candidate = d_dir.join(format!("{stem}-copia{ext}"));
+        let mut n = 2;
+        while candidate.exists() {
+            candidate = d_dir.join(format!("{stem}-copia-{n}{ext}"));
+            n += 1;
+        }
+        target = candidate;
+    }
+
+    match std::fs::rename(s, &target) {
+        Ok(()) => {}
+        Err(_) => {
+            // Cross-volume: copiar al destino final (con sufijo si hubo colisión)
+            // y recién borrar el origen cuando la copia salió bien.
+            if s.is_file() {
+                std::fs::copy(s, &target).map_err(|e| e.to_string())?;
+            } else {
+                copy_dir_recursive(s, &target).map_err(|e| e.to_string())?;
+            }
+            if s.is_dir() {
+                std::fs::remove_dir_all(s).map_err(|e| e.to_string())?;
+            } else {
+                std::fs::remove_file(s).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(crate::state::pstring(&target))
+}
+
 pub fn write_file(path: &str, data_base64: &str) -> Result<(), String> {
     let p = Path::new(path);
     if let Some(parent) = p.parent() {
@@ -291,4 +349,56 @@ pub fn pick_folder() -> Result<Option<String>, String> {
         .set_title("Seleccionar carpeta para nueva sesión");
     let path = dialog.pick_folder();
     Ok(path.map(|p| p.to_string_lossy().to_string()))
+}
+#[cfg(test)]
+mod tests {
+    use super::move_entry;
+
+    fn tmpdir(tag: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("fsx_move_test_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn moves_file_into_folder() {
+        let root = tmpdir("file");
+        let src = root.join("a.txt");
+        let dest = root.join("sub");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(&src, b"hola").unwrap();
+        let out = move_entry(src.to_str().unwrap(), dest.to_str().unwrap()).unwrap();
+        assert!(!src.exists());
+        assert!(dest.join("a.txt").exists());
+        assert!(out.contains("a.txt"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_folder_into_itself_and_descendant() {
+        let root = tmpdir("self");
+        let parent = root.join("p");
+        let child = parent.join("c");
+        std::fs::create_dir_all(&child).unwrap();
+        // dentro de sí misma (mismo lugar)
+        assert!(move_entry(parent.to_str().unwrap(), &parent.to_string_lossy()).is_err());
+        // descendiente
+        assert!(move_entry(parent.to_str().unwrap(), child.to_str().unwrap()).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn collision_gets_suffix_instead_of_overwrite() {
+        let root = tmpdir("coll");
+        let src = root.join("x.txt");
+        let dest = root.join("d");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(&src, b"nuevo").unwrap();
+        std::fs::write(dest.join("x.txt"), b"viejo").unwrap();
+        move_entry(src.to_str().unwrap(), dest.to_str().unwrap()).unwrap();
+        assert_eq!(std::fs::read_to_string(dest.join("x.txt")).unwrap(), "viejo");
+        assert_eq!(std::fs::read_to_string(dest.join("x-copia.txt")).unwrap(), "nuevo");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

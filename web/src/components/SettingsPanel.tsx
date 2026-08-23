@@ -17,6 +17,9 @@ import { fetchGoUsage, loadGoAccounts, saveGoAccounts, type GoUsage } from "../g
 import { getDataUsage, formatBytes } from "../utils/dataUsage"
 import { variantsOf } from "../utils/model-utils"
 import { useIsDesktop } from "../hooks/useIsDesktop"
+import { STORAGE_KEYS } from "../constants"
+import { GROQ_MODELS } from "../providers/groq"
+import { CEREBRAS_MODELS } from "../providers/cerebras"
 
 type UsageStats = {
   promptsSent: number
@@ -120,15 +123,24 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [showPairModal, setShowPairModal] = useState(false)
   // Sección de servidores abierta por defecto: el botón + y los servers visibles.
   const [serversOpen, setServersOpen] = useState(true)
-  const [qcKey, setQcKey] = useState("")
-  const [qcGroqKey, setQcGroqKey] = useState("")
+  const [qcProvider, setQcProvider] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_PROVIDER) || "groq")
+  const [qcModel, setQcModel] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_MODEL) || "")
+  const [qcCustomUrl, setQcCustomUrl] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL) || "https://api.openai.com/v1")
+  const [qcCustomKey, setQcCustomKey] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM) || "")
+  const [qcKey, setQcKey] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS) || "")
+  const [qcGroqKey, setQcGroqKey] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ) || "")
   const [qcKeyLoaded, setQcKeyLoaded] = useState(false)
   const [qcSaving, setQcSaving] = useState(false)
   const [qcNotice, setQcNotice] = useState<string | null>(null)
+
   useEffect(() => {
     if (!isDesktop || qcKeyLoaded) return
     import("../shell").then(({ shell }) => {
-      shell.config.get().then((c: any) => { setQcKey(c?.cerebras_api_key ?? ""); setQcGroqKey((c as any)?.groq_api_key ?? ""); setQcKeyLoaded(true) }).catch(() => setQcKeyLoaded(true))
+      shell.config.get().then((c: any) => {
+        if (c?.cerebras_api_key) setQcKey(c.cerebras_api_key)
+        if (c?.groq_api_key) setQcGroqKey(c.groq_api_key)
+        setQcKeyLoaded(true)
+      }).catch(() => setQcKeyLoaded(true))
     })
   }, [isDesktop, qcKeyLoaded])
 
@@ -809,36 +821,110 @@ export const SettingsPanel = memo(function SettingsPanel({
       </SettingsSection>
       )}
 
-      {/* Quick Chat */}
-      {isDesktop && (
+      {/* Quick Chat — Solo en la categoría IA & Modelos */}
+      {showModels && (
       <SettingsSection title={t('quickchat.title')}>
         <p className="subtle">{t('quickchat.subtitle')}</p>
+
+        <div className="form-grid">
+          <label className="form-field">
+            <span>{t('quickchat.provider')}</span>
+            <select value={qcProvider} onChange={e => {
+              const p = e.target.value
+              setQcProvider(p)
+              if (p === "groq") setQcModel("llama-3.3-70b-versatile")
+              else if (p === "cerebras") setQcModel("llama-3.3-70b")
+              else if (p === "custom") setQcModel("gpt-4o")
+            }}>
+              <option value="groq">{t('quickchat.providerGroq')} (Ultra Rápido)</option>
+              <option value="cerebras">{t('quickchat.providerCerebras')}</option>
+              <option value="custom">{t('quickchat.providerCustom')}</option>
+              {providers.filter(p => p.connected && p.id !== "groq" && p.id !== "cerebras" && p.id !== "custom").map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+              {!providers.some(p => p.id === "opencode-go") && <option value="opencode-go">{t('quickchat.providerOpencode')}</option>}
+            </select>
+          </label>
+
+          <label className="form-field">
+            <span>{t('quickchat.model')}</span>
+            <select value={qcModel} onChange={e => setQcModel(e.target.value)}>
+              {qcProvider === "groq" && GROQ_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+              {qcProvider === "cerebras" && CEREBRAS_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+              {qcProvider === "custom" && [
+                { id: "gpt-4o", label: "GPT-4o" },
+                { id: "gpt-4o-mini", label: "GPT-4o Mini" },
+                { id: "deepseek-chat", label: "DeepSeek V3" },
+                { id: "deepseek-reasoner", label: "DeepSeek R1" },
+                { id: "llama3", label: "Llama 3 (Local)" },
+              ].map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+              {qcProvider !== "groq" && qcProvider !== "cerebras" && qcProvider !== "custom" && (
+                modelOptions.filter(m => m.providerID === qcProvider).map(m => (
+                  <option key={`${m.providerID}/${m.modelID}`} value={`${m.providerID}/${m.modelID}`}>{m.modelName || m.modelID}</option>
+                ))
+              )}
+            </select>
+          </label>
+        </div>
+
+        {qcProvider === "custom" && (
+          <label className="settings-field" style={{ marginTop: 8 }}>
+            <span>{t('quickchat.customUrl')}</span>
+            <input
+              type="text"
+              value={qcCustomUrl}
+              onChange={e => setQcCustomUrl(e.target.value)}
+              placeholder="https://api.openai.com/v1 o http://localhost:11434/v1"
+            />
+          </label>
+        )}
+
         <label className="settings-field">
-          <span>{t('quickchat.settingsKey')}</span>
+          <span>
+            {qcProvider === "groq" ? t('quickchat.settingsKeyGroq')
+              : qcProvider === "cerebras" ? t('quickchat.settingsKey')
+              : qcProvider === "custom" ? t('quickchat.customKey')
+              : "API Key"}
+          </span>
           <div style={{ display: "flex", gap: 6 }}>
-            <input type={showPassword ? "text" : "password"} value={qcKey} onChange={e => setQcKey(e.target.value)} placeholder={t('quickchat.settingsKeyPlaceholder')} style={{ flex: 1 }} />
+            <input
+              type={showPassword ? "text" : "password"}
+              value={qcProvider === "groq" ? qcGroqKey : qcProvider === "cerebras" ? qcKey : qcCustomKey}
+              onChange={e => {
+                if (qcProvider === "groq") setQcGroqKey(e.target.value)
+                else if (qcProvider === "cerebras") setQcKey(e.target.value)
+                else setQcCustomKey(e.target.value)
+              }}
+              placeholder={qcProvider === "groq" ? "gsk_..." : qcProvider === "cerebras" ? "csk-..." : "sk-..."}
+              style={{ flex: 1 }}
+            />
             <button type="button" className="btn-icon" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "hide" : "show"}>{showPassword ? "🙈" : "👁"}</button>
           </div>
         </label>
-        <label className="settings-field">
-          <span>{t('quickchat.settingsKeyGroq')}</span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <input type={showPassword ? "text" : "password"} value={qcGroqKey} onChange={e => setQcGroqKey(e.target.value)} placeholder={t('quickchat.settingsKeyGroqPlaceholder')} style={{ flex: 1 }} />
-            <button type="button" className="btn-icon" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "hide" : "show"}>{showPassword ? "🙈" : "👁"}</button>
-          </div>
-        </label>
+
         <button type="button" className="btn-primary" disabled={qcSaving} onClick={async () => {
-              setQcSaving(true)
-              try {
-                const { shell } = await import("../shell")
-                await shell.config.patch({ cerebras_api_key: qcKey, groq_api_key: qcGroqKey } as any)
-                setQcNotice("Guardado")
-                setTimeout(() => setQcNotice(null), 2000)
-              } catch (e: any) { setQcNotice(e?.message ?? "Error") }
-              setQcSaving(false)
-            }}>{qcSaving ? t('settings.saving') : t('settings.save')}</button>
+          setQcSaving(true)
+          try {
+            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_PROVIDER, qcProvider)
+            if (qcModel) localStorage.setItem(STORAGE_KEYS.QUICKCHAT_MODEL, qcModel)
+            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ, qcGroqKey)
+            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS, qcKey)
+            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM, qcCustomKey)
+            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL, qcCustomUrl)
+
+            if (isDesktop) {
+              const { shell } = await import("../shell")
+              await shell.config.patch({ cerebras_api_key: qcKey, groq_api_key: qcGroqKey } as any)
+            }
+            window.dispatchEvent(new CustomEvent("quickchat:key-saved"))
+            setQcNotice("Configuración guardada")
+            setTimeout(() => setQcNotice(null), 2000)
+          } catch (e: any) {
+            setQcNotice(e?.message ?? "Error al guardar")
+          }
+          setQcSaving(false)
+        }}>{qcSaving ? t('settings.saving') : t('settings.save')}</button>
         {qcNotice && <p className="subtle" style={{ color: "var(--accent)" }}>{qcNotice}</p>}
-        <p className="subtle" style={{ fontSize: 11 }}>{t('quickchat.providerGroq')} · {t('quickchat.providerCerebras')} · qwen/qwen3.6-27b (Groq streaming) · {t('quickchat.search')} + cache 24h</p>
       </SettingsSection>
       )}
 

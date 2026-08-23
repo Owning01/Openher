@@ -1249,3 +1249,11 @@
   border: 1px solid var(--border);
 }
 
+
+/* Drop target al arrastrar un archivo/carpeta sobre una carpeta (move). */
+.shell-row.shell-dir.is-drop-target {
+  outline: 1px dashed var(--primary, #58a6ff);
+  outline-offset: -1px;
+  background: var(--hover-bg);
+  border-radius: var(--radius-sm);
+}
