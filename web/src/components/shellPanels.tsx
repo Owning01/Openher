@@ -10,6 +10,7 @@ import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizon
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
 import { VisualSelectOverlay } from "./VisualSelectOverlay"
 import type { VisualSelection } from "../hooks/useVisualSelection"
+import { useDevServer } from "../hooks/useDevServer"
 
 // Persistencia de terminales por panelId: al mover la terminal de celda
 // su estado (tabs) sobrevive al remount aunque React cree una nueva instancia.
@@ -2313,6 +2314,7 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
   const [url, setUrl] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "")
   const [iframeKey, setIframeKey] = useState(0)
   const [status, setStatus] = useState<"loading" | "ready" | "offline">("loading")
+  const [customInputUrl, setCustomInputUrl] = useState("")
   const [servedProject, setServedProject] = useState<{
     token: string
     directory: string
@@ -2328,9 +2330,17 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
     }
   })
 
+  const devServer = useDevServer(servedProject?.directory)
+
   useEffect(() => {
     let cancelled = false
     setStatus("loading")
+
+    if (devServer.status === "running" && devServer.serverUrl) {
+      setUrl(devServer.serverUrl)
+      setStatus("ready")
+      return
+    }
 
     if (servedProject && servedProject.token) {
       const previewUrl = `${window.location.origin}/shell/preview/${servedProject.token}/${servedProject.entryPoint || "index.html"}`
@@ -2364,7 +2374,7 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
 
     const t = window.setTimeout(() => { if (!cancelled) setStatus((s) => (s === "loading" ? "offline" : s)) }, 3000)
     return () => { cancelled = true; window.clearTimeout(t) }
-  }, [iframeKey, servedProject])
+  }, [iframeKey, servedProject, devServer.status, devServer.serverUrl])
 
   const handlePickAndServe = async () => {
     try {
@@ -2394,12 +2404,37 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
     }
   }
 
+  const handleStartDevServer = async () => {
+    try {
+      setStatus("loading")
+      const sUrl = await devServer.startDevServer()
+      if (sUrl) {
+        setUrl(sUrl)
+        setStatus("ready")
+        setIframeKey((k) => k + 1)
+      }
+    } catch (err: any) {
+      alert("Error al iniciar dev server: " + (err?.message || String(err)))
+      setStatus("offline")
+    }
+  }
+
   const handleSwitchHtml = (file: string) => {
     if (!servedProject) return
     const next = { ...servedProject, entryPoint: file }
     setServedProject(next)
     try { localStorage.setItem("od.served.project", JSON.stringify(next)) } catch {}
     setUrl(`${window.location.origin}/shell/preview/${servedProject.token}/${file}`)
+    setIframeKey((k) => k + 1)
+  }
+
+  const handleCustomUrlSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    let u = customInputUrl.trim()
+    if (!u) return
+    if (!/^https?:\/\//i.test(u)) u = `http://${u}`
+    setUrl(u)
+    setStatus("ready")
     setIframeKey((k) => k + 1)
   }
 
@@ -2441,6 +2476,16 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {servedProject && devServer.hasDevServer && devServer.status !== "running" && (
+            <button className="btn-primary compact" onClick={handleStartDevServer} disabled={devServer.status === "starting"} title="Iniciar servidor dev con hot-reload">
+              {devServer.status === "starting" ? "⏳ Levantando..." : `▶ Iniciar Dev (${devServer.devCommand || "npm run dev"})`}
+            </button>
+          )}
+          {devServer.status === "running" && (
+            <button className="btn-secondary compact" onClick={devServer.stopDevServer} title="Detener dev server">
+              ⏹ Parar Dev
+            </button>
+          )}
           <button className="btn-secondary compact" onClick={handlePickAndServe} title="Abrir y servir carpeta de proyecto web">
             📂 Abrir Proyecto
           </button>
@@ -2459,21 +2504,35 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
           <div style={{ width: 56, height: 56, borderRadius: 14, background: "rgba(88,166,255,0.1)", border: "1px solid rgba(88,166,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, color: "#58a6ff" }}>
             ◈
           </div>
-          <div style={{ maxWidth: 420 }}>
+          <div style={{ maxWidth: 440 }}>
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, color: "var(--text)" }}>Servidor de Proyectos & Open Design</div>
             <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
-              Seleccioná una carpeta de proyecto con HTML/JS o tu aplicación web local. El servidor la levantará automáticamente para inspeccionar y editar visualmente su diseño.
+              Seleccioná una carpeta de proyecto. Si es un proyecto web con Node/Vite o HTML estático, se levantará automáticamente para inspeccionar sus estilos y diseño visual.
             </div>
           </div>
+
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
             <button className="btn-primary" onClick={handlePickAndServe} style={{ padding: "8px 18px", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
               <span>📂</span>
-              <span>Abrir y Servir Proyecto Local</span>
+              <span>Abrir Carpeta de Proyecto</span>
             </button>
             <button className="btn-secondary" onClick={reload} style={{ padding: "8px 14px" }}>
               Reintentar OpenDesign (:3000)
             </button>
           </div>
+
+          <form onSubmit={handleCustomUrlSubmit} style={{ display: "flex", gap: 6, marginTop: 8, maxWidth: 360, width: "100%" }}>
+            <input
+              type="text"
+              placeholder="O ingresá una URL (ej: localhost:5173)"
+              value={customInputUrl}
+              onChange={(e) => setCustomInputUrl(e.target.value)}
+              style={{ flex: 1, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "var(--text)" }}
+            />
+            <button type="submit" className="btn-secondary compact" style={{ padding: "6px 12px" }}>
+              Ir
+            </button>
+          </form>
         </div>
       ) : (
         <iframe
