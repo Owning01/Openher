@@ -151,7 +151,7 @@ export function useSessions(
           currentMap.set(m.id, {
             ...existing,
             ...m,
-            status: m.status !== "idle" ? m.status : (existing && (existing.status === "busy" || existing.status === "retry") ? existing.status : m.status),
+            status: m.status,
           })
         }
         const result = [...currentMap.values()].sort((a, b) => b.updated - a.updated)

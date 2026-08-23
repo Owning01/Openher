@@ -3076,9 +3076,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <button type="button" className={`activity-btn${(tabStacks?.some((s) => s.includes("__design__")) || desktopLayout.sessions.includes("__design__") || desktopLayout.panelKinds.includes("design" as any) ? " active" : "")}`} title="Open Design" aria-label="Open Design"
               onClick={handleOpenDesign}>
               <PencilIcon size={18} /></button>
-            <button type="button" className={`activity-btn${showOpenCodeHub ? " active" : ""}`} title="OpenCode Hub: Agentes, Skills & Configuración Global" aria-label="OpenCode Hub"
-              onClick={() => setShowOpenCodeHub(true)}>
-              <span style={{ fontSize: "16px", lineHeight: "1" }}>🤖</span></button>
           </div>
           <div className="app-desktop-activity-bottom">
             {memInfo && (
@@ -3665,6 +3662,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onOpenFavoritesManager={() => setShowFavoritesManager(true)}
           onOpenArchivedView={() => setShowArchivedView(true)}
           onOpenShortcuts={() => setShowShortcuts(true)}
+          onOpenOpenCodeHub={() => setShowOpenCodeHub(true)}
           onClose={() => {
             if (navStackRef.current.length > 0) goBack()
             else handleNavigate(desktopLayout.sessions.some(Boolean) ? "detail" : "sessions")
@@ -3878,6 +3876,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         agents={agentOptions}
         activeAgentID={activeAgentID}
         onSelectAgent={(id) => changeAgent(id, selectedSession?.directory)}
+        serverConfig={config}
       />
 
       {runtimeError && (

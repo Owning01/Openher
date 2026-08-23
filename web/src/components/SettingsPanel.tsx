@@ -87,6 +87,7 @@ type SettingsPanelProps = {
   onOpenFavoritesManager?: () => void
   onOpenArchivedView?: () => void
   onOpenShortcuts?: () => void
+  onOpenOpenCodeHub?: () => void
   onClose?: () => void
 }
 
@@ -106,7 +107,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile, onApplyServerProfile, onAddPairServer, activeServerProfileID,
   chatSettings, onChatSettingChange, onResetChatSettings,
   snippets, onAddSnippet, onRemoveSnippet,
-  onShutdownHost, onRestartHost, onOpenGitHub, onOpenFavoritesManager, onOpenArchivedView, onOpenShortcuts,
+  onShutdownHost, onRestartHost, onOpenGitHub, onOpenFavoritesManager, onOpenArchivedView, onOpenShortcuts, onOpenOpenCodeHub,
   onClose
 }: SettingsPanelProps) {
   const t = useT()
@@ -434,6 +435,53 @@ export const SettingsPanel = memo(function SettingsPanel({
         )}
 
         <div className="settings-content-pane">
+        {isDesktop && onOpenOpenCodeHub && (
+          <div style={{
+            background: "linear-gradient(135deg, rgba(88,166,255,0.12) 0%, rgba(31,111,235,0.06) 100%)",
+            border: "1px solid rgba(88,166,255,0.35)",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            marginBottom: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "24px" }}>🤖</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: "14px", color: "#f0f6fc" }}>
+                  OpenCode Hub (Agentes, Skills & Configuración Oficial)
+                </div>
+                <div style={{ fontSize: "12px", color: "#8b949e", marginTop: "2px" }}>
+                  Visualiza los prompts de sistema de tus agentes, catálogo de skills del entorno y edita opencode.json global.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={onOpenOpenCodeHub}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 14px",
+                background: "#1f6feb",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontWeight: 600,
+                fontSize: "12px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span>Abrir Hub</span>
+              <span>→</span>
+            </button>
+          </div>
+        )}
       {/* Saved servers + per-server config */}
       {showServers && (
       <SettingsSection title={t('settings.sectionServers')} icon={<ServerIcon size={14} />}

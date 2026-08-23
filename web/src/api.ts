@@ -286,6 +286,17 @@ export const api = {
     })
   },
 
+  loadRawConfig(config: ServerConfig, directory?: string) {
+    return request<unknown>(config, withDirectory("/config", directory))
+  },
+
+  saveRawConfig(config: ServerConfig, rawBody: Record<string, unknown>, directory?: string) {
+    return request<unknown>(config, withDirectory("/config", directory), {
+      method: "PATCH",
+      body: rawBody,
+    })
+  },
+
   async createSession(config: ServerConfig, title?: string, model?: ModelSelection, directory?: string) {
     if ((await getApiVersion(config)) === "v2") {
       const body: Record<string, unknown> = {}
@@ -448,12 +459,10 @@ export const api = {
     try {
       return await request<boolean>(config, withDirectory(primary, directory), {
         method: "POST",
-        body: {},
       })
     } catch {
       return await request<boolean>(config, withDirectory(secondary, directory), {
         method: "POST",
-        body: {},
       }).catch(() => false)
     }
   },

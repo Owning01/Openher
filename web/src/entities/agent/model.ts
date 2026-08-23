@@ -21,6 +21,8 @@ export type AgentOption = {
   description?: string
   mode: "primary" | "subagent" | "all"
   hidden?: boolean
+  prompt?: string
+  model?: { providerID?: string; modelID?: string }
 }
 
 // ---------------------------------------------------------------------------
