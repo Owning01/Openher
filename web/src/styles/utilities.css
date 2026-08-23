@@ -1,7 +1,7 @@
 /* styles/utilities.css - spinners, keyframes, reduced-motion, utilidades
    Extraido de styles.css (152 lineas) - move puro, cascada preservada. */
 
-/* Spinner de 9 cuadrados (3×3): recorre los 8 del borde, el centro fijo */
+/* Spinner de 9 cuadrados (3×3): recorre los 8 del borde con estela de 2 antes y 3 después, centro oculto */
 .grid-spinner {
   flex: 0 0 auto;
   display: grid;
@@ -14,18 +14,25 @@
 
 .gs {
   background: var(--warning);
-  opacity: 0.15;
-  animation: gs-pulse 1.2s steps(1) infinite;
+  opacity: 0;
+  border-radius: 1px;
+  animation: gs-pulse 1.2s ease-in-out infinite;
 }
 
 .gs-4 {
   animation: none;
-  opacity: 0.12;
+  opacity: 0;
+  visibility: hidden;
 }
 
 @keyframes gs-pulse {
-  0%, 100% { opacity: 1; }
-  12%, 40% { opacity: 0.15; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  12.5% { opacity: 0.85; transform: scale(0.96); }
+  25% { opacity: 0.55; transform: scale(0.92); }
+  37.5% { opacity: 0.25; transform: scale(0.88); }
+  50%, 62.5% { opacity: 0; transform: scale(0.8); }
+  75% { opacity: 0.35; transform: scale(0.88); }
+  87.5% { opacity: 0.7; transform: scale(0.94); }
 }
 
 .gs-0 { animation-delay: 0s; }
