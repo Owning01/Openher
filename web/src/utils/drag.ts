@@ -33,6 +33,9 @@ export type DockTarget = {
   targetKind: string
   targetSessionId: string | null
   fromIndex: number | null
+  tabId?: string | null
+  fromPanelId?: string | null
+  isSingleTab?: boolean
 }
 
 const LEGACY_SHELL_KINDS = new Set(["terminal", "explorer", "kanban", "stats", "browser", "editor", "design"])
@@ -41,12 +44,22 @@ export function parseDockPayload(raw: string): DockTarget {
   let targetKind = "session"
   let targetSessionId: string | null = null
   let fromIndex: number | null = null
+  let tabId: string | null = null
+  let fromPanelId: string | null = null
+  let isSingleTab = false
 
   if (raw.startsWith("panel:")) {
     const parts = raw.split(":")
     fromIndex = Number(parts[1])
     const payload = parts.slice(2).join(":")
-    if (payload.startsWith("kind:")) {
+    if (payload.startsWith("terminal-tab:")) {
+      const subParts = payload.split(":")
+      tabId = subParts[1] || null
+      fromPanelId = subParts[2] || null
+      targetKind = "session"
+      targetSessionId = tabId ? `terminal-${tabId}` : "terminal"
+      isSingleTab = true
+    } else if (payload.startsWith("kind:")) {
       targetKind = payload.replace("kind:", "")
       targetSessionId = null
     } else if (payload.startsWith("terminal") || LEGACY_SHELL_KINDS.has(payload)) {
@@ -65,6 +78,13 @@ export function parseDockPayload(raw: string): DockTarget {
       targetKind = "session"
       targetSessionId = payload
     }
+  } else if (raw.startsWith("terminal-tab:")) {
+    const subParts = raw.split(":")
+    tabId = subParts[1] || null
+    fromPanelId = subParts[2] || null
+    targetKind = "session"
+    targetSessionId = tabId ? `terminal-${tabId}` : "terminal"
+    isSingleTab = true
   } else if (raw.startsWith("kind:")) {
     targetKind = raw.replace("kind:", "")
     targetSessionId = null
@@ -80,5 +100,5 @@ export function parseDockPayload(raw: string): DockTarget {
     targetSessionId = raw
   }
 
-  return { targetKind, targetSessionId, fromIndex }
+  return { targetKind, targetSessionId, fromIndex, tabId, fromPanelId, isSingleTab }
 }

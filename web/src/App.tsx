@@ -63,6 +63,7 @@ import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
 import { shell } from "./shell"
 import { TabBar } from "./components/TabBar"
+import { transferTerminalTab } from "./utils/terminalStore"
 import type { ServerProfile } from "./types"
 import { useVisualSelection, formatSelectionForPrompt } from "./hooks/useVisualSelection"
 
@@ -1782,9 +1783,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     let targetKind = dock.targetKind as ShellPanelKind | "editor"
     let targetSessionId = dock.targetSessionId
     let fromIndex = dock.fromIndex
+    let tabId = dock.tabId
+    let fromPanelId = dock.fromPanelId
+    let isSingleTab = dock.isSingleTab
 
-    if (rawId.includes("terminal") || targetKind === "terminal" || targetSessionId?.startsWith("terminal")) {
-      setShowTerminal(false)
+    if (isSingleTab && tabId && fromPanelId) {
+      const destPanelId = `panel-${index}-term`
+      const remainingInSource = transferTerminalTab(fromPanelId, tabId, destPanelId)
+      if (fromPanelId === "bottom-terminal" && remainingInSource === 0) {
+        setShowTerminal(false)
+      }
+    } else if (rawId.includes("terminal") || targetKind === "terminal" || targetSessionId?.startsWith("terminal")) {
+      if (!fromPanelId || fromPanelId === "bottom-terminal" || fromIndex === null) {
+        setShowTerminal(false)
+      }
     }
 
     if (dir === "center") {

@@ -90,6 +90,7 @@ export const TerminalView = memo(function TerminalView({
       <div style={{ flex: 1, minHeight: 0, position: "relative", width: "100%", height: "100%" }}>
         <TerminalPanel
           cwd={directory}
+          panelId="bottom-terminal"
           onToggleDock={onToggleDock}
           isDocked={isDocked}
           onMaximize={() => setMaximized((v) => !v)}
