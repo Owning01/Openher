@@ -188,14 +188,9 @@ describe("variantsOf", () => {
     expect(variantsOf([baseOpt, otherOpt], baseOpt)).toEqual([])
   })
 
-  it("excludes variant that equals base variant", () => {
-    // base is variantOpt itself, should not include itself
+  it("includes all variants of the model family", () => {
     const result = variantsOf([baseOpt, variantOpt, variantOpt2], variantOpt)
-    // variantOpt has variant "thinking", baseOpt has no variant (excluded? sameModel true but baseOpt has no variant -> falsy -> filtered out)
-    // variantOpt2 has variant "fast" !== "thinking" -> included
-    // variantOpt itself is === base -> excluded by m !== base handled? No, variantsOf only checks sameModel + m.variant && m.variant !== base.variant
-    // So variantOpt itself: sameModel true but m.variant ("thinking") === base.variant ("thinking") -> excluded
-    expect(result).toEqual([variantOpt2])
+    expect(result).toEqual([variantOpt, variantOpt2])
   })
 
   it("returns empty when models list is empty", () => {

@@ -41,7 +41,7 @@ export type VariantGroup = { base: ModelOption; variants: ModelOption[] }
 // del chat, el model sheet y las preferencias (DRY).
 export function variantsOf(models: ModelOption[], base: ModelOption | ModelSelection | null | undefined): ModelOption[] {
   if (!base) return []
-  return models.filter((m) => sameModel(m, base) && m.variant && m.variant !== base.variant)
+  return models.filter((m) => sameModel(m, base) && !!m.variant)
 }
 
 // Agrupa modelos por provider:modelID, con el base (sin variant) y sus variantes.
