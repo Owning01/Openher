@@ -17,6 +17,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 tray-icon = "0.19"
+rfd = "0.15"
 portable-pty = "0.8"
 ureq = "2"
 winreg = "0.52"

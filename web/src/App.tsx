@@ -368,6 +368,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     saveConfig, testConnection, setConnectionState, setConnectionMessage } = useConfig()
 
   const { theme, setTheme } = useTheme()
+  const isDesktop = useIsDesktop()
   const handleToggleLightMode = useCallback(() => {
     const isLight = document.documentElement.getAttribute("data-theme") === "light"
     setTheme(isLight ? "dark" : "light")
@@ -1252,41 +1253,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setTimeout(() => { stopGenerationRef.current = false }, 400)
   }, [selectedSession, abortSession, loadSelected, settleSession])
 
-  const handleCreateSession = useCallback(async (directory?: string) => {
-    const created = await createSession(directory, activeModel)
-    if (created) {
-      recordSessionCreated()
-      setShowNewSessionPicker(false)
-      if (directory) persistDirectory(directory)
-      navigate("detail")
-      await onLoadSelected(created.id, created.directory)
-      await refreshSessions()
-    }
-  }, [createSession, activeModel, recordSessionCreated, persistDirectory, navigate, onLoadSelected, refreshSessions])
-
-  const isDesktop = useIsDesktop()
-
-  const handleOpenNewSession = useCallback(async () => {
-    if (isDesktop) {
-      try {
-        const res = await shell.fs.pickFolder()
-        if (res && res.ok && res.path) {
-          await handleCreateSession(res.path)
-          return
-        }
-        if (res && res.ok === false && res.path === null) {
-          // El usuario canceló la selección de carpeta
-          return
-        }
-      } catch {
-        // En caso de que no esté corriendo bajo el shell exe, fallback a picker
-      }
-      openNewSessionPicker()
-      return
-    }
-    openNewSessionPicker()
-  }, [isDesktop, handleCreateSession, openNewSessionPicker])
-
   // Zoom general de la interfaz con Ctrl + Ruedita y atajos de teclado (Ctrl + / Ctrl - / Ctrl 0)
   useEffect(() => {
     const ZOOM_KEY = "opencode.mobile.ui_zoom"
@@ -1460,6 +1426,58 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     })
     setActivePanel(index)
   }, [setTabStacks])
+
+  const handleCreateSession = useCallback(async (directory?: string) => {
+    const created = await createSession(directory, activeModel)
+    if (created) {
+      recordSessionCreated()
+      setShowNewSessionPicker(false)
+      if (directory) persistDirectory(directory)
+      if (isDesktop) {
+        setDesktopLayout((prev) => {
+          const sessions = [...prev.sessions]
+          const panelKinds = [...prev.panelKinds]
+          const i = Math.min(activePanel, Math.max(0, prev.sessions.length - 1))
+          sessions[i] = created.id
+          panelKinds[i] = "session"
+          return { ...prev, sessions, panelKinds }
+        })
+        setTabStacks((prev) => {
+          const next = (prev ?? []).map((s) => [...s])
+          const i = Math.min(activePanel, Math.max(0, next.length - 1))
+          while (next.length <= i) next.push([])
+          if (!next[i]) next[i] = []
+          if (!next[i].includes(created.id)) next[i] = [...next[i], created.id]
+          return next
+        })
+      } else {
+        navigate("detail")
+      }
+      await onLoadSelected(created.id, created.directory)
+      await refreshSessions()
+    }
+  }, [createSession, activeModel, recordSessionCreated, persistDirectory, isDesktop, setDesktopLayout, setTabStacks, activePanel, navigate, onLoadSelected, refreshSessions])
+
+  const handleOpenNewSession = useCallback(async () => {
+    if (isDesktop) {
+      try {
+        const res = await shell.fs.pickFolder()
+        if (res && res.ok && res.path) {
+          await handleCreateSession(res.path)
+          return
+        }
+        if (res && res.ok === false && res.path === null) {
+          // El usuario canceló la selección de carpeta
+          return
+        }
+      } catch {
+        // En caso de que no esté corriendo bajo el shell exe, fallback a picker
+      }
+      openNewSessionPicker()
+      return
+    }
+    openNewSessionPicker()
+  }, [isDesktop, handleCreateSession, openNewSessionPicker])
 
   const switchTab = useCallback((panelIndex: number, tabIndex: number) => {
     const stack = tabStacks?.[panelIndex]
@@ -1770,16 +1788,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         panelKinds[index] = targetKind
         return { ...prev, sessions, panelKinds, panelIds }
       })
-      if (targetSessionId) {
-        setTabStacks((prev) => {
-          const next = prev.map((s) => s.filter((sid) => sid !== targetSessionId))
-          while (next.length <= index) next.push([])
+      setTabStacks((prev) => {
+        const next = (prev ?? []).map((s) => [...s])
+        while (next.length <= Math.max(index, fromIndex ?? index)) next.push([])
+        if (targetSessionId) {
+          for (let i = 0; i < next.length; i++) {
+            if (i !== index) next[i] = next[i].filter((sid) => sid !== targetSessionId)
+          }
           if (!next[index].includes(targetSessionId)) {
             next[index] = [...next[index], targetSessionId]
           }
-          return next
-        })
-      }
+        } else if (fromIndex !== null && fromIndex !== index) {
+          next[index] = next[fromIndex] ?? []
+          next[fromIndex] = []
+        }
+        return next
+      })
       setActivePanel(index)
       return
     }
@@ -2016,8 +2040,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       ;[panelIds[from], panelIds[to]] = [panelIds[to], panelIds[from]]
       return { ...prev, sessions, panelKinds, panelIds }
     })
+    setTabStacks((prev) => {
+      const next = (prev ?? []).map((s) => [...s])
+      while (next.length <= Math.max(from, to)) next.push([])
+      ;[next[from], next[to]] = [next[to] ?? [], next[from] ?? []]
+      return next
+    })
     setActivePanel(to)
-  }, [setDesktopLayout])
+  }, [setDesktopLayout, setTabStacks])
 
   const startSidebarResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     // No bloquear la scrollbar nativa: el resizer de 4px ocupa el borde derecho
@@ -3332,49 +3362,50 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onOpenFile={handleOpenFile}
                       onOpenConnect={() => setShowConnectSheet(true)}
                       onOpenBrowser={handleOpenBrowser}
-                        tabStack={tabStacks?.[i] ?? (session ? [session.id] : [])}
-                        allSessions={(() => {
-                          const stack = tabStacks?.[i] ?? (session ? [session.id] : [])
-                          const extra: any[] = []
-                          if (stack.includes("__design__")) extra.push({ id: "__design__", title: "Open Design", directory: "" })
-                          if (stack.includes("__kanban__")) extra.push({ id: "__kanban__", title: "Kanban", directory: "" })
-                          return extra.length ? [...sessions, ...extra] : sessions
-                        })()}
-                        busySessionIds={busySessions}
-                        onTabSwitch={(panelIdx, tabIdx) => {
-                          const stack = tabStacks?.[panelIdx] ?? []
-                          const tabId = stack[tabIdx] ?? (tabIdx === 0 && session ? session.id : undefined)
-                          if (tabId === "__design__" || tabId === "__kanban__") {
-                            setDesktopLayout((prev) => {
-                              const sessions = [...prev.sessions]
-                              sessions[panelIdx] = tabId
-                              return { ...prev, sessions }
-                            })
-                            setActivePanel(panelIdx)
-                          } else {
-                            switchTab(panelIdx, tabIdx)
-                          }
-                        }}
-                        onTabClose={(panelIdx, tabIdx) => {
-                          const stack = tabStacks?.[panelIdx] ?? []
-                          const tabId = stack[tabIdx]
-                          if (tabId === "__design__" || tabId === "__kanban__") {
-                            setTabStacks((prev) => {
-                              const next = (prev ?? []).map((s) => [...s])
-                              if (next[panelIdx]) next[panelIdx] = next[panelIdx].filter((id) => id !== tabId)
-                              return next
-                            })
-                          } else {
-                            removeTab(panelIdx, tabIdx)
-                          }
-                        }}
+                      tabStack={tabStacks?.[i] ?? (session ? [session.id] : [])}
+                      allSessions={(() => {
+                        const stack = tabStacks?.[i] ?? (session ? [session.id] : [])
+                        const extra: any[] = []
+                        if (stack.includes("__design__")) extra.push({ id: "__design__", title: "Open Design", directory: "" })
+                        if (stack.includes("__kanban__")) extra.push({ id: "__kanban__", title: "Kanban", directory: "" })
+                        return extra.length ? [...sessions, ...extra] : sessions
+                      })()}
+                      busySessionIds={busySessions}
+                      onTabSwitch={(panelIdx, tabIdx) => {
+                        const stack = tabStacks?.[panelIdx] ?? []
+                        const tabId = stack[tabIdx] ?? (tabIdx === 0 && session ? session.id : undefined)
+                        if (tabId === "__design__" || tabId === "__kanban__") {
+                          setDesktopLayout((prev) => {
+                            const sessions = [...prev.sessions]
+                            sessions[panelIdx] = tabId
+                            return { ...prev, sessions }
+                          })
+                          setActivePanel(panelIdx)
+                        } else {
+                          switchTab(panelIdx, tabIdx)
+                        }
+                      }}
+                      onTabClose={(panelIdx, tabIdx) => {
+                        const stack = tabStacks?.[panelIdx] ?? []
+                        const tabId = stack[tabIdx]
+                        if (tabId === "__design__" || tabId === "__kanban__") {
+                          setTabStacks((prev) => {
+                            const next = (prev ?? []).map((s) => [...s])
+                            if (next[panelIdx]) next[panelIdx] = next[panelIdx].filter((id) => id !== tabId)
+                            return next
+                          })
+                        } else {
+                          removeTab(panelIdx, tabIdx)
+                        }
+                      }}
                       onTabAdd={() => {}} // TODO: open session picker
                       onTabMove={(from, to) => moveTab(i, from, to)}
                       onDropTerminal={addTerminalToPanel}
                       visualSelection={vs.selection}
                       visualPromptContext={vs.promptContext}
                       onClearVisualSelection={vs.clear}
-                      onFocusVisualFile={handleOpenFile} />
+                      onFocusVisualFile={handleOpenFile}
+                    />
                   </div>
                 )
               }
@@ -3405,22 +3436,24 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 const browserUrl = desktopLayout.panelBrowserUrls?.[i] || "http://localhost:5173"
                 return (
                   <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
-                    <BrowserPanel
-                      initialUrl={browserUrl}
-                      onClose={() => closePanel(i)}
-                      visualSelection={vs.selection}
-                      inspectMode={vs.inspectMode}
-                      onVisualPick={(el) => handleBrowserVisualPick(browserUrl, el)}
-                      onToggleInspect={vs.toggleInspect}
-                      onClearVisual={vs.clearAnnotations}
-                      annotations={vs.annotations}
-                      onAnnotationComment={vs.setAnnotationComment}
-                      onRemoveAnnotation={vs.removeAnnotation}
-                      onAnnotationStyle={vs.setAnnotationStyle}
-                      onAnnotationStyleBefore={vs.setAnnotationStyleBefore}
-                      inspectTool={vs.inspectTool}
-                      onToggleInspectTool={handleToggleInspectTool}
-                    />
+                    <Suspense fallback={<div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando navegador...</div>}>
+                      <BrowserPanel
+                        initialUrl={browserUrl}
+                        onClose={() => closePanel(i)}
+                        visualSelection={vs.selection}
+                        inspectMode={vs.inspectMode}
+                        onVisualPick={(el) => handleBrowserVisualPick(browserUrl, el)}
+                        onToggleInspect={vs.toggleInspect}
+                        onClearVisual={vs.clearAnnotations}
+                        annotations={vs.annotations}
+                        onAnnotationComment={vs.setAnnotationComment}
+                        onRemoveAnnotation={vs.removeAnnotation}
+                        onAnnotationStyle={vs.setAnnotationStyle}
+                        onAnnotationStyleBefore={vs.setAnnotationStyleBefore}
+                        inspectTool={vs.inspectTool}
+                        onToggleInspectTool={handleToggleInspectTool}
+                      />
+                    </Suspense>
                   </div>
                 )
               }

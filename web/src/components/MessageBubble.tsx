@@ -274,11 +274,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
 
         {message.text && (
           <div className="message-content">
-            {/* Durante el streaming el texto cambia en cada delta: parsear
-                markdown por delta es O(n²) en mensajes largos. Pre-wrap plano
-                mientras streamea (y supera el umbral) — el markdown se parsea
-                UNA vez cuando el turno se completa. */}
-            {!message.info.time.completed && message.text.length > 2000 ? (
+            {!message.info.time.completed && message.text.length > 800 ? (
               <pre className="md-plain-stream">{message.text}</pre>
             ) : (
               <Markdown text={message.text} highlight={highlight} />

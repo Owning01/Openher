@@ -183,17 +183,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     }, 800)
   }, [])
 
-  const handleBlur = useCallback(() => {
-    if (pushTimerRef.current) {
-      clearTimeout(pushTimerRef.current)
-      pushTimerRef.current = null
-      if (localValueRef.current !== lastPushedRef.current) {
-        lastPushedRef.current = localValueRef.current
-        onChangeRef.current(localValueRef.current)
-      }
-    }
-  }, [])
-
   // Flush del draft pendiente al desmontar (no perder texto tipeado).
   useEffect(() => () => {
     if (pushTimerRef.current) {

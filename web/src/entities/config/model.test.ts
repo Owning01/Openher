@@ -325,4 +325,4 @@ describe("DEFAULT_SIGNALING_URL", () => {
   it("contiene dominio workers.dev", () => {
     expect(DEFAULT_SIGNALING_URL).toContain("workers.dev")
   })
-}))
+})

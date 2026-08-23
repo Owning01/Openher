@@ -48,6 +48,24 @@ export const MessageList = memo(function MessageList({
   // usuario — no deben apagar el pin ni hacer parpadear el botón.
   const programmaticUntilRef = useRef(0)
 
+  const INITIAL_PAGE_SIZE = 40
+  const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_SIZE)
+
+  useEffect(() => {
+    setVisibleCount(INITIAL_PAGE_SIZE)
+  }, [selectedID])
+
+  useEffect(() => {
+    if (scrollToMessageID) {
+      setVisibleCount(messages.length)
+    }
+  }, [scrollToMessageID, messages.length])
+
+  const visibleMessages = useMemo(() => {
+    if (messages.length <= visibleCount) return messages
+    return messages.slice(messages.length - visibleCount)
+  }, [messages, visibleCount])
+
   // El footer (modo · modelo · nivel de pensamiento · duración) se muestra solo
   // en el último mensaje assistant COMPLETED, o en un mensaje donde el
   // modelo/plan cambió respecto al anterior (misma regla visual que el TUI).
@@ -187,33 +205,48 @@ export const MessageList = memo(function MessageList({
           </div>
         ) : (
           <>
-            {messages.map((message, index) => (
-              <Fragment key={message.info.id}>
-                <MessageBubble
-                  message={message}
-                  queued={pendingIndex !== undefined && index > pendingIndex}
-                  revert={revert}
-                  onRevertToMessage={onRevertToMessage}
-                  agents={agents}
-                  prevUserTs={message.info.parentID ? prevUserTsMap.get(message.info.parentID) : undefined}
-                  showModelInfo={footerInfoMap.get(message.info.id) ?? false}
-                  config={config}
-                  directory={directory}
-                  onViewSubagents={onViewSubagents}
-                  onContextMenu={onContextMenu}
-                  onEditMessage={onEditMessage}
-                  showTodoButton={showTodoButton}
-                  onToggleTodos={onToggleTodos}
-                  todosOpen={todosOpen}
-                  highlight={highlight}
-                  compactTools={compactTools}
-                  minimalistMode={minimalistMode}
-                  thinkingDefault={thinkingDefault}
-                  onRegenerate={onRegenerate}
-                  onOpenADEDiff={onOpenADEDiff}
-                />
-              </Fragment>
-            ))}
+            {messages.length > visibleCount && (
+              <div style={{ textAlign: "center", padding: "8px 0" }}>
+                <button
+                  type="button"
+                  className="btn-secondary compact"
+                  style={{ fontSize: "0.75rem", padding: "4px 14px", borderRadius: "14px" }}
+                  onClick={() => setVisibleCount((prev) => prev + INITIAL_PAGE_SIZE)}
+                >
+                  ↑ Cargar {Math.min(INITIAL_PAGE_SIZE, messages.length - visibleCount)} mensajes anteriores ({messages.length - visibleCount} restantes)
+                </button>
+              </div>
+            )}
+            {visibleMessages.map((message, index) => {
+              const actualIndex = messages.length - visibleMessages.length + index
+              return (
+                <Fragment key={message.info.id}>
+                  <MessageBubble
+                    message={message}
+                    queued={pendingIndex !== undefined && actualIndex > pendingIndex}
+                    revert={revert}
+                    onRevertToMessage={onRevertToMessage}
+                    agents={agents}
+                    prevUserTs={message.info.parentID ? prevUserTsMap.get(message.info.parentID) : undefined}
+                    showModelInfo={footerInfoMap.get(message.info.id) ?? false}
+                    config={config}
+                    directory={directory}
+                    onViewSubagents={onViewSubagents}
+                    onContextMenu={onContextMenu}
+                    onEditMessage={onEditMessage}
+                    showTodoButton={showTodoButton}
+                    onToggleTodos={onToggleTodos}
+                    todosOpen={todosOpen}
+                    highlight={highlight}
+                    compactTools={compactTools}
+                    minimalistMode={minimalistMode}
+                    thinkingDefault={thinkingDefault}
+                    onRegenerate={onRegenerate}
+                    onOpenADEDiff={onOpenADEDiff}
+                  />
+                </Fragment>
+              )
+            })}
             {compacting && (
               <article className="message assistant compacting-bubble fade-in" aria-label="Compacting session">
                 <div className="compacting-indicator" aria-hidden="true">
