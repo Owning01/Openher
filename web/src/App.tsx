@@ -2340,12 +2340,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setLocalRevertID(messageID)
       await api.revert(config, sid, messageID, selectedSession.directory)
       await loadSelected(sid, selectedSession.directory).catch(() => {})
+      await refreshSessions().catch(() => {})
       if (target?.text) setComposer(target.text)
     } catch (err) {
       setRuntimeError((err as Error).message)
       await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
     }
-  }, [selectedSession, config, awaitingAssistantReply, loadSelected, renderedMessages])
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, renderedMessages, refreshSessions])
 
   const handleEditMessage = useCallback(async (messageID: string, text: string) => {
     if (!selectedSession) return
@@ -2354,19 +2355,16 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
       }
       const sid = selectedSession.id
-      const sessionMsgs = messages.filter((m) => m.info.sessionID === sid)
-      const targetIdx = sessionMsgs.findIndex((m) => m.info.id === messageID)
-      const prevId = targetIdx > 0 ? sessionMsgs[targetIdx - 1].info.id : null
-      const revertTarget = prevId ?? messageID
-      setLocalRevertID(revertTarget)
-      await api.revert(config, sid, revertTarget, selectedSession.directory)
+      setLocalRevertID(messageID)
+      await api.revert(config, sid, messageID, selectedSession.directory)
       await loadSelected(sid, selectedSession.directory).catch(() => {})
+      await refreshSessions().catch(() => {})
       setComposer(text)
     } catch (err) {
       setRuntimeError((err as Error).message)
       await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
     }
-  }, [selectedSession, config, awaitingAssistantReply, loadSelected, messages])
+  }, [selectedSession, config, awaitingAssistantReply, loadSelected, refreshSessions])
 
   const handleUndo = useCallback(() => {
     if (!selectedSession) return
