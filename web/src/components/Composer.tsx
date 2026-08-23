@@ -159,21 +159,27 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
   // Sync SOLO de cambios externos del padre. Reglas:
   // 1. Echo propio (el debounce del padre devolvió lo que empujamos) → ignorar.
-  // 2. Con foco en el textarea y value≠"" → ignorar (protege lo tipeado/borrado).
-  // 3. Clear ("") o cambio externo real sin foco → aplicar.
+  // 2. Si el padre tiene un prefijo más corto que lo que el usuario ya tipeó localmente → ignorar (evita truncar a la mitad).
+  // 3. Con foco en el textarea y value≠"" → ignorar (protege lo tipeado/borrado).
+  // 4. Clear ("") o cambio externo real sin foco → aplicar.
   useEffect(() => {
     if (value === lastSyncedRef.current) return
     lastSyncedRef.current = value
     if (value === lastPushedRef.current) return
+    if (localValueRef.current && localValueRef.current.startsWith(value) && localValueRef.current.length > value.length) {
+      return
+    }
     const ta = textareaRef.current
     const focused = ta ? document.activeElement === ta : false
     if (focused && value !== "") return
     setLocalValue(value)
+    localValueRef.current = value
     lastPushedRef.current = value
   }, [value])
 
   const handleChange = useCallback((newValue: string) => {
     setLocalValue(newValue)
+    localValueRef.current = newValue
     // Push diferido al padre: persistencia del draft y estado del padre,
     // sin acoplar el ritmo de tipeo al re-render de App.
     if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
@@ -181,7 +187,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       pushTimerRef.current = null
       lastPushedRef.current = newValue
       onChangeRef.current(newValue)
-    }, 800)
+    }, 400)
   }, [])
 
   // Listener para eventos emitidos por plugins para insertar texto en el prompt
@@ -445,12 +451,15 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
   const handleSendWithImages = useCallback(async () => {
     if (disabled) return
-    if (!localValue.trim() && images.length === 0) return
+    const domText = textareaRef.current?.value ?? ""
+    const textToSend = domText.length >= (localValueRef.current?.length ?? 0)
+      ? domText
+      : (localValueRef.current || localValue)
+    if (!textToSend.trim() && images.length === 0) return
     const opts = tslEnabled ? { translate: true } : undefined
     const imgs = images.length > 0 ? images : undefined
-    const textToSend = localValue
     // Limpiar imágenes y texto INMEDIATAMENTE antes de esperar la respuesta
-    // del server (evita que la preview quede 10s en el composer).
+    // del server (evita que la preview quede en el composer).
     setImages([])
     setLocalValue("")
     localValueRef.current = ""
