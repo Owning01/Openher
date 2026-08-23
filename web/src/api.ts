@@ -442,23 +442,39 @@ export const api = {
   },
 
   async abort(config: ServerConfig, sessionID: string, directory?: string) {
-    const path = (await getApiVersion(config)) === "v2" ? `/session/${sessionID}/interrupt` : `/session/${sessionID}/abort`
-    return request<boolean>(config, withDirectory(path, directory), {
-      method: "POST",
-      body: {},
-    })
+    const isV2 = (await getApiVersion(config)) === "v2"
+    const primary = isV2 ? `/session/${sessionID}/interrupt` : `/session/${sessionID}/abort`
+    const secondary = isV2 ? `/session/${sessionID}/abort` : `/session/${sessionID}/interrupt`
+    try {
+      return await request<boolean>(config, withDirectory(primary, directory), {
+        method: "POST",
+        body: {},
+      })
+    } catch {
+      return await request<boolean>(config, withDirectory(secondary, directory), {
+        method: "POST",
+        body: {},
+      }).catch(() => false)
+    }
   },
 
   async revert(config: ServerConfig, sessionID: string, messageID: string, directory?: string) {
     if ((await getApiVersion(config)) === "v2") {
-      await request<unknown>(config, withDirectory(`/session/${sessionID}/revert/stage`, directory), {
-        method: "POST",
-        body: { messageID, files: true },
-      })
-      return request<Session>(config, withDirectory(`/session/${sessionID}/revert/commit`, directory), {
-        method: "POST",
-        body: {},
-      })
+      try {
+        await request<unknown>(config, withDirectory(`/session/${sessionID}/revert/stage`, directory), {
+          method: "POST",
+          body: { messageID, files: true },
+        })
+        return await request<Session>(config, withDirectory(`/session/${sessionID}/revert/commit`, directory), {
+          method: "POST",
+          body: {},
+        })
+      } catch {
+        return request<Session>(config, withDirectory(`/session/${sessionID}/revert`, directory), {
+          method: "POST",
+          body: { messageID },
+        })
+      }
     }
     return request<Session>(config, withDirectory(`/session/${sessionID}/revert`, directory), {
       method: "POST",
