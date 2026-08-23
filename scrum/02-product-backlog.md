@@ -29,7 +29,7 @@ Puntos según `05-metricas.md`. Estado: `todo` / `doing` / `done` / `blocked`.
 | PB-009 | deploy-apk.ps1: validar link tmpfiles.org + generar changelog desde commits del sprint | E | 2 | Baja | todo |
 | PB-010 | Terminal desktop: QA multi-tab + split tras fix TUI freeze (PTY persiste al ocultar) | D | 2 | Alta | todo |
 | PB-011 | i18n: auditar claves quickchat nuevas completas en/en (it/zh caen por fallback) | F | 1 | Media | todo |
-| PB-012 | Actualizar CATALOGO.md y architecture.md con features nuevas (quickchat, FSD) | E | 2 | Baja | todo |
+| PB-012 | Actualizar architecture.md con features nuevas (quickchat, FSD) — CATALOGO.md eliminado, consolidado en architecture.md | E | 2 | Baja | todo |
 
 ## Backlog frío (sin priorizar todavía)
 

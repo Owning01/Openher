@@ -4,8 +4,7 @@
 > `project-knowledge.md` (ambos eliminados; este archivo los reemplaza).
 > Describe todo el monorepo: qué es cada carpeta, cómo se
 > conectan, decisiones tomadas, estado real del código y flujos críticos.
-> Verificado en disco al **2026-08-23**. Para reglas de contribución ver `AGENTS.md`;
-> para catálogo de funciones ver `CATALOGO.md`.
+> Verificado en disco al **2026-08-23**. Para reglas de contribución ver `AGENTS.md`.
 
 ---
 

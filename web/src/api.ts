@@ -468,19 +468,6 @@ export const api = {
   },
 
   async revert(config: ServerConfig, sessionID: string, messageID: string, directory?: string) {
-    if ((await getApiVersion(config)) === "v2") {
-      try {
-        return await request<Session>(config, withLocationDirectory(`/session/${sessionID}/revert/stage`, directory), {
-          method: "POST",
-          body: { messageID, files: true },
-        })
-      } catch {
-        return request<Session>(config, withDirectory(`/session/${sessionID}/revert`, directory), {
-          method: "POST",
-          body: { messageID },
-        })
-      }
-    }
     return request<Session>(config, withDirectory(`/session/${sessionID}/revert`, directory), {
       method: "POST",
       body: { messageID },
@@ -488,12 +475,6 @@ export const api = {
   },
 
   async unrevert(config: ServerConfig, sessionID: string, directory?: string) {
-    if ((await getApiVersion(config)) === "v2") {
-      return request<Session>(config, withLocationDirectory(`/session/${sessionID}/revert/clear`, directory), {
-        method: "POST",
-        body: {},
-      })
-    }
     return request<Session>(config, withDirectory(`/session/${sessionID}/unrevert`, directory), {
       method: "POST",
       body: {},

@@ -164,7 +164,7 @@ Estimates over compressed HTTP/2 with ~10 server sessions.
 
 ---
 
-> 📖 **Full catalog**: [`CATALOGO.md`](CATALOGO.md) — 57 components, 32 hooks, 36 endpoints, graphs, LLM guide.
+> 🏗️ **Architecture**: [`architecture.md`](architecture.md) — monorepo map, critical flows, decisions and pitfalls.
 
 ## 📁 Project structure
 
