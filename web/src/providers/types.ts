@@ -7,7 +7,7 @@ export type QuickChatMessage = {
   searchResults?: { title: string; url: string; snippet: string }[]
 }
 
-export type QuickChatProviderId = "cerebras" | "groq" | "opencode-go"
+export type QuickChatProviderId = "cerebras" | "groq" | "opencode-go" | "custom" | (string & {})
 
 export type QuickChatUsage = { input: number; output: number; total: number }
 

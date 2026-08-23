@@ -53,7 +53,7 @@ import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
 import { useQuestions } from "./hooks/useQuestions"
 import { useSSEHandler } from "./hooks/useSSEHandler"
-import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, StatsIcon, GlobeIcon, PencilIcon, BrainIcon } from "./Icons"
+import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, StatsIcon, GlobeIcon, PencilIcon, BrainIcon, BranchIcon } from "./Icons"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -112,8 +112,9 @@ const TerminalPanel = lazyRetry(() => import("./components/shellPanels").then((m
 const PANEL_SUSPENSE_FALLBACK = (
   <div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando…</div>
 )
+const SourceControlPanel = lazyRetry(() => import("./components/SourceControlPanel").then((m) => ({ default: m.SourceControlPanel })))
 
-type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat"
+type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm"
 
 type DesktopLayout = {
   cols: number
@@ -390,30 +391,41 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const isLight = document.documentElement.getAttribute("data-theme") === "light"
     setTheme(isLight ? "dark" : "light")
   }, [setTheme])
-  const [quickChatKey, setQuickChatKey] = useState("")
-  const [quickChatGroqKey, setQuickChatGroqKey] = useState("")
+  const [quickChatKey, setQuickChatKey] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS) || "")
+  const [quickChatGroqKey, setQuickChatGroqKey] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ) || "")
   const [quickChatGoKey, setQuickChatGoKey] = useState("")
+  const [quickChatCustomKey, setQuickChatCustomKey] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM) || "")
+  const [quickChatCustomUrl, setQuickChatCustomUrl] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL) || "https://api.openai.com/v1")
+
   useEffect(() => {
     import("./goUsage").then(({ loadGoAccounts }) => {
       loadGoAccounts().then(keys => setQuickChatGoKey(keys[0] ?? "")).catch(() => {})
     })
     import("./shell").then(({ shell }) => {
       shell.config.get().then(c => {
-        setQuickChatKey((c as any)?.cerebras_api_key ?? "")
-        setQuickChatGroqKey((c as any)?.groq_api_key ?? "")
+        const cerKey = (c as any)?.cerebras_api_key
+        const grKey = (c as any)?.groq_api_key
+        if (cerKey) setQuickChatKey(cerKey)
+        if (grKey) setQuickChatGroqKey(grKey)
       }).catch(() => {})
     })
   }, [])
   // Recargar keys cuando QuickChatPanel guarda (sin reload) — fix "no se guarda"
   useEffect(() => {
     const reloadKeys = () => {
+      setQuickChatKey(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS) || "")
+      setQuickChatGroqKey(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ) || "")
+      setQuickChatCustomKey(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM) || "")
+      setQuickChatCustomUrl(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL) || "https://api.openai.com/v1")
       import("./goUsage").then(({ loadGoAccounts }) => {
         loadGoAccounts().then(keys => setQuickChatGoKey(keys[0] ?? "")).catch(() => {})
       })
       import("./shell").then(({ shell }) => {
         shell.config.get().then(c => {
-          setQuickChatKey((c as any)?.cerebras_api_key ?? "")
-          setQuickChatGroqKey((c as any)?.groq_api_key ?? "")
+          const cerKey = (c as any)?.cerebras_api_key
+          const grKey = (c as any)?.groq_api_key
+          if (cerKey) setQuickChatKey(cerKey)
+          if (grKey) setQuickChatGroqKey(grKey)
         }).catch(() => {})
       })
     }
@@ -3073,6 +3085,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
             <button type="button" className={`activity-btn${activity === "quickchat" ? " active" : ""}`} title={t('quickchat.title')} aria-label={t('quickchat.title')}
               onClick={() => { if (activity === "quickchat") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("quickchat"); setSidebarCollapsed(false) } }}>
               <BrainIcon size={18} /></button>
+            <button type="button" className={`activity-btn${activity === "scm" ? " active" : ""}`} title={t('scm.title')} aria-label={t('scm.title')}
+              onClick={() => { if (activity === "scm") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("scm"); setSidebarCollapsed(false) } }}>
+              <BranchIcon size={18} /></button>
             <button type="button" className={`activity-btn${(tabStacks?.some((s) => s.includes("__design__")) || desktopLayout.sessions.includes("__design__") || desktopLayout.panelKinds.includes("design" as any) ? " active" : "")}`} title="Open Design" aria-label="Open Design"
               onClick={handleOpenDesign}>
               <PencilIcon size={18} /></button>
@@ -3123,7 +3138,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   {activity === "sessions" ? sessionsView
                     : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
                     : activity === "stats" ? <StatsPanel />
-                    : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
+                    : activity === "scm" ? <SourceControlPanel cwd={explorerCwd || activeSessionDir || selectedSession?.directory || sessions[0]?.directory} />
+                    : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} customKey={quickChatCustomKey} customUrl={quickChatCustomUrl} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
                     : <ConfigPanel />}
                 </Suspense>
               </div>
@@ -3496,7 +3512,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                         <button className="btn-icon compact" onClick={() => closePanel(i)} aria-label={t('panel.close')}>×</button>
                       </div>
                       <div style={{ flex: 1, minHeight: 0 }}>
-                        <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
+                        <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} customKey={quickChatCustomKey} customUrl={quickChatCustomUrl} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
                       </div>
                     </div>
                   </div>
@@ -3686,7 +3702,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       {view === "quickchat" && (
         <div className={`quickchat-view${isDesktop ? " settings-overlay" : ""}`} style={{ height: isDesktop ? "100%" : "calc(100dvh - 56px)", display: "flex", flexDirection: "column" }}>
           <Suspense fallback={null}>
-            <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
+            <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} customKey={quickChatCustomKey} customUrl={quickChatCustomUrl} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
           </Suspense>
         </div>
       )}

@@ -14,6 +14,65 @@ export type LabApp = { id: string; title: string; kind: string; configured: bool
 
 export type ShellPlugin = { name: string; title: string; type: string; description: string; version: string }
 
+// ===== Source control (git) =====
+
+export type GitRepoInfo = { repoRoot: string; branch: string; upstream: string | null; isDetached: boolean }
+
+export type GitChangedFile = {
+  path: string
+  originalPath: string | null
+  indexStatus: string
+  worktreeStatus: string
+  staged: boolean
+  unstaged: boolean
+  untracked: boolean
+  statusLabel: string
+}
+
+export type GitStatusSnapshot = {
+  repoRoot: string
+  branch: string
+  upstream: string | null
+  ahead: number
+  behind: number
+  isDetached: boolean
+  truncated: boolean
+  changedFiles: GitChangedFile[]
+}
+
+export type GitPanelSnapshot = { repo: GitRepoInfo | null; status: GitStatusSnapshot | null }
+
+export type GitLogEntry = {
+  sha: string
+  shortSha: string
+  author: string
+  authorEmail: string
+  timestampSecs: number
+  parents: string[]
+  subject: string
+  filesChanged: number
+  insertions: number
+  deletions: number
+}
+
+export type GitCommitFileChange = {
+  path: string
+  originalPath: string | null
+  status: string
+  statusLabel: string
+  added: number
+  removed: number
+  isBinary: boolean
+}
+
+export type GitBranchEntry = {
+  name: string
+  kind: "local" | "worktree"
+  worktreePath: string | null
+  isHead: boolean
+  isDetached: boolean
+}
+
 export type ShellConfig = {
   server: { host: string; port: number; username: string; password: string; use_ssl: boolean }
   port: number
@@ -109,6 +168,42 @@ export const shell = {
       hasPackageJson: boolean
       scripts: Record<string, string>
     }>("/shell/project/serve", { path }),
+  },
+  git: {
+    panel: (path: string) => get<GitPanelSnapshot>(`/shell/git/panel?path=${encodeURIComponent(path)}`),
+    diff: (path: string, file: string | null, staged: boolean) =>
+      get<{ diffText: string; truncated: boolean }>(
+        `/shell/git/diff?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file ?? "")}&staged=${staged}`,
+      ),
+    stage: (path: string, files: string[]) => post("/shell/git/stage?path=" + encodeURIComponent(path), { files }),
+    unstage: (path: string, files: string[]) => post("/shell/git/unstage?path=" + encodeURIComponent(path), { files }),
+    discard: (path: string, entries: { path: string; untracked: boolean }[]) =>
+      post("/shell/git/discard?path=" + encodeURIComponent(path), { entries }),
+    commit: (path: string, message: string) =>
+      post<{ commitSha: string; summary: string }>("/shell/git/commit?path=" + encodeURIComponent(path), { message }),
+    push: (path: string) =>
+      post<{ remote: string | null; branch: string | null; pushed: boolean }>("/shell/git/push?path=" + encodeURIComponent(path)),
+    fetch: (path: string) => post("/shell/git/fetch?path=" + encodeURIComponent(path)),
+    pull: (path: string) => post("/shell/git/pull?path=" + encodeURIComponent(path)),
+    log: (path: string, limit: number, before?: string, search?: string) => {
+      const params = new URLSearchParams({ path, limit: String(limit) })
+      if (before) params.set("before", before)
+      if (search) params.set("search", search)
+      return get<GitLogEntry[]>(`/shell/git/log?${params.toString()}`)
+    },
+    commitFiles: (path: string, sha: string) =>
+      get<GitCommitFileChange[]>(`/shell/git/commit-files?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(sha)}`),
+    showCommitDiff: (path: string, sha: string) =>
+      post<{ diffText: string; truncated: boolean }>(`/shell/git/show-commit-diff?path=` + encodeURIComponent(path), { sha }),
+    commitDiff: (path: string, sha: string, file: string, originalPath?: string) =>
+      post<{ diffText: string; truncated: boolean; isBinary: boolean; fallbackPatch: string }>(
+        `/shell/git/commit-diff?path=` + encodeURIComponent(path),
+        { sha, file, originalPath: originalPath ?? "" },
+      ),
+    remoteUrl: (path: string, name: string) =>
+      get<string | null>(`/shell/git/remote-url?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`),
+    branches: (path: string) => get<{ branches: GitBranchEntry[] }>(`/shell/git/branches?path=${encodeURIComponent(path)}`),
+    checkout: (path: string, name: string) => post(`/shell/git/checkout?path=` + encodeURIComponent(path), { name }),
   },
   pty: {
     create: (cwd?: string, shellName?: string) => {

@@ -14,6 +14,7 @@ mod common;
 mod docsx;
 mod fsx;
 mod gitx;
+mod infrastructure;
 mod kanban;
 mod plugins;
 mod ptyx;
