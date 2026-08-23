@@ -914,7 +914,6 @@ export const BrowserPanel = memo(function BrowserPanel({
                 ref={iframeRef}
                 src={getFrameSrc(currentSrc, !!inspectMode)}
                 title="Vista previa web"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-top-navigation-by-user-activation"
                 allow="accelerometer; autoplay; clipboard-read; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; microphone; camera"
                 onLoad={() => setLoading(false)}
                 onError={() => {
