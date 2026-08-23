@@ -471,19 +471,23 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     return allSlashCommands.some((c) => c.name.toLowerCase().startsWith(firstWord.toLowerCase()))
   }, [localValue, allSlashCommands])
 
+  const primaryVisibleAgents = useMemo(() => {
+    return primaryAgentOptions.filter((a) => !a.hidden && a.mode !== "subagent")
+  }, [primaryAgentOptions])
+
   const agentColorIdx = useMemo(() => {
-    const visible = primaryAgentOptions.filter((a) => !a.hidden)
+    const visible = primaryVisibleAgents
     const idx = visible.findIndex((a) => a.id === activeAgentID)
     return idx >= 0 ? idx % 7 : 0
-  }, [primaryAgentOptions, activeAgentID])
+  }, [primaryVisibleAgents, activeAgentID])
 
   const handleToggleAgent = useCallback(() => {
-    const visible = primaryAgentOptions.filter((a) => !a.hidden)
+    const visible = primaryVisibleAgents
     if (visible.length < 2) return
     const curIdx = visible.findIndex((a) => a.id === activeAgentID)
     const next = visible[(curIdx + 1) % visible.length]
     onChangeAgent(next.id)
-  }, [primaryAgentOptions, activeAgentID, onChangeAgent])
+  }, [primaryVisibleAgents, activeAgentID, onChangeAgent])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (handleSlashKeys(e)) return
@@ -742,11 +746,12 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           >
             TSL
           </button>
-          {visibleAgents.length > 1 && (
+          {primaryVisibleAgents.length > 1 && (
             <button onClick={handleToggleAgent} disabled={disabled}
               className="agent-toggle"
+              title={`Agente activo: ${primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID} (click para cambiar)`}
               style={{ color: `var(--agent-${agentColorIdx})`, border: "none", outline: "none", background: "transparent", padding: "0 4px" } as React.CSSProperties}>
-              <span>{visibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
+              <span>{primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
             </button>
           )}
           {contextLabel && <span className="context-usage-label">{contextLabel}</span>}

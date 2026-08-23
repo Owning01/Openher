@@ -92,7 +92,30 @@ export function useAI(config: ServerConfig) {
 
   const selectedModel = useMemo(() => selectedModelKey ? modelFromKey(selectedModelKey) : null, [selectedModelKey])
 
-  const primaryAgentOptions = useMemo(() => filterPrimary(agentOptions), [agentOptions])
+  const [disabledAgents, setDisabledAgents] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem("opencode.remote.disabled_agents")
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  const toggleAgentEnabled = useCallback((agentId: string) => {
+    setDisabledAgents((prev) => {
+      const next = { ...prev, [agentId]: !prev[agentId] }
+      try { localStorage.setItem("opencode.remote.disabled_agents", JSON.stringify(next)) } catch {}
+      return next
+    })
+  }, [])
+
+  const allPrimaryAgents = useMemo(() => filterPrimary(agentOptions), [agentOptions])
+
+  const primaryAgentOptions = useMemo(() => {
+    const primary = filterPrimary(agentOptions)
+    const enabled = primary.filter((a) => !disabledAgents[a.id])
+    return enabled.length > 0 ? enabled : primary
+  }, [agentOptions, disabledAgents])
 
   const activeAgent = useMemo(() => {
     return primaryAgentOptions.find((agent) => agent.id === selectedAgentID)
@@ -296,6 +319,7 @@ export function useAI(config: ServerConfig) {
   return {
     agentOptions, agentLoadError, selectedAgentID, modelOptions, modelLoadError,
     selectedModelKey, modelQuery, setModelQuery, selectedModel, primaryAgentOptions,
+    allPrimaryAgents, disabledAgents, toggleAgentEnabled,
     activeAgent, activeAgentID, activeModelOption, activeModel, filteredModelOptions,
     groupedModelOptions, variantGroups, recentModels, activeModelVariants,
     selectedVariant, changeVariant, getModelForSession,

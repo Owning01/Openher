@@ -166,6 +166,7 @@ export default {
   'settings.navBarPosition': 'Navigation bar',
   'settings.navBarBottom': 'Bottom',
   'settings.navBarHeader': 'Header',
+  'settings.primaryAgents': 'Primary Agents',
   'settings.blockedModels': 'Blocked models',
   'settings.blockedModelsHint': 'Blocked models are hidden from the model picker.',
   'settings.blockedModelsSearch': 'Filter models...',

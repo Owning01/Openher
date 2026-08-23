@@ -2,7 +2,7 @@ import { memo, useState, useCallback, useMemo, useEffect } from "react"
 import { SettingsIcon, SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon, GlobeIcon, BrainIcon, PaintIcon, ChatIcon, ToolIcon, SearchIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo,
-  ServerProfile, ChatSettings, PromptSnippet } from "../types"
+  ServerProfile, ChatSettings, PromptSnippet, AgentOption } from "../types"
 import type { LanguageCode } from "../i18n"
 import { describeProfile, isPairProfile } from "../hooks/useServers"
 import { ProviderManager } from "./ProviderManager"
@@ -87,6 +87,9 @@ type SettingsPanelProps = {
   onShutdownHost: () => void
   onRestartHost: () => void
   onOpenGitHub: () => void
+  allPrimaryAgents?: AgentOption[]
+  disabledAgents?: Record<string, boolean>
+  onToggleAgentEnabled?: (agentId: string) => void
   onOpenFavoritesManager?: () => void
   onOpenArchivedView?: () => void
   onOpenShortcuts?: () => void
@@ -102,6 +105,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   dataMode, onDataModeChange, onNavigate,
   modelOptions, selectedModelKey, onChangeModel, modelKey: mk,
   selectedVariant,
+  allPrimaryAgents, disabledAgents, onToggleAgentEnabled,
   stats, onResetStats,
   activeModelOption, blockedModels, onOpenThemePicker,
   onOpenThemeCreator,
@@ -926,6 +930,58 @@ export const SettingsPanel = memo(function SettingsPanel({
         }}>{qcSaving ? t('settings.saving') : t('settings.save')}</button>
         {qcNotice && <p className="subtle" style={{ color: "var(--accent)" }}>{qcNotice}</p>}
       </SettingsSection>
+      )}
+
+      {/* Agentes Principales */}
+      {showModels && allPrimaryAgents && allPrimaryAgents.length > 0 && (
+        <SettingsSection title={t('settings.primaryAgents') || "Agentes Principales"}>
+          <p className="subtle">Habilita o deshabilita los agentes principales que se mostrarán en el selector del chat.</p>
+          <div className="agent-settings-list" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {allPrimaryAgents.map((agent) => {
+              const isDisabled = !!disabledAgents?.[agent.id]
+              return (
+                <div
+                  key={agent.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 15 }}>
+                        {agent.id.includes("plan") ? "🧭" : agent.id.includes("build") ? "🛠️" : "🤖"}
+                      </span>
+                      <strong style={{ fontSize: 13, color: "var(--text)" }}>{agent.name || agent.id}</strong>
+                      {agent.id && <small style={{ color: "var(--muted)", fontSize: 11 }}>({agent.id})</small>}
+                    </div>
+                    {agent.description && (
+                      <p style={{ margin: 0, fontSize: 11, color: "var(--muted)", lineHeight: 1.4 }}>
+                        {agent.description}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className={`switch-track compact${!isDisabled ? " active" : ""}`}
+                    role="switch"
+                    aria-checked={!isDisabled}
+                    onClick={() => onToggleAgentEnabled?.(agent.id)}
+                    title={!isDisabled ? "Deshabilitar agente" : "Habilitar agente"}
+                  >
+                    <span className="switch-thumb" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </SettingsSection>
       )}
 
       {/* Blocked models */}

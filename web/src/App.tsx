@@ -461,6 +461,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const { agentOptions, modelOptions, modelLoadError,
     modelQuery, setModelQuery, primaryAgentOptions,
+    allPrimaryAgents, disabledAgents, toggleAgentEnabled,
     activeAgent, activeAgentID, activeModelOption: globalActiveModelOption, activeModel: globalActiveModel,
     variantGroups, selectedModelKey, selectedVariant: globalSelectedVariant, changeVariant, activeModelVariants: globalActiveModelVariants, getModelForSession, loadAgents, loadModels, changeModel, changeAgent } = useAI(config)
   const blockedModels = useBlockedModels(modelOptions)
@@ -3610,6 +3611,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           modelOptions={modelOptions} selectedModelKey={selectedModelKey}
           onChangeModel={changeModel} modelKey={modelKey}
           selectedVariant={selectedVariant}
+          allPrimaryAgents={allPrimaryAgents}
+          disabledAgents={disabledAgents}
+          onToggleAgentEnabled={toggleAgentEnabled}
           stats={stats} onResetStats={resetStats}
           activeModelOption={activeModelOption}
           blockedModels={blockedModels}
