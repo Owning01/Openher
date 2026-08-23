@@ -212,7 +212,18 @@ export const SessionChatPanel = memo(function SessionChatPanel({
 
   const handleAbort = useCallback(async () => {
     stopGenerationRef.current = true
+    msgs.setAwaitingAssistantReply(false)
+    msgs.completionShouldPlayRef.current = false
+    msgs.setMessages((prev) => {
+      return prev.map((m) => {
+        if (m.info.sessionID === session.id && m.info.role === "assistant" && !m.info.time.completed) {
+          return { ...m, info: { ...m.info, time: { ...m.info.time, completed: Date.now() } } }
+        }
+        return m
+      })
+    })
     try { await msgs.abortSession(session.id, session.directory) } catch { /* ignore */ }
+    msgs.loadSelected(session.id, session.directory).catch(() => undefined)
   }, [msgs, session])
 
   const handleRevertToMessage = useCallback(async (messageID: string) => {

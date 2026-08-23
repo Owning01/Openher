@@ -320,12 +320,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           merged.push({ ...updated, parts })
           msgMap.delete(m.info.id)
           if (updated.info.time.completed !== m.info.time.completed || updated.info.role !== m.info.role) changed = true
-        } else {
-          // Conservar todo lo local no devuelto por el server: el fetch acotado
-          // (limit 500) puede no incluir mensajes aún no persistidos; descartar
-          // solo si el server confirma revert/compact via session.revert. No cortar
-          // mensajes completos dentro de la ventana por timing.
+        } else if (raw.length >= limit) {
+          // Solo conservar mensajes no devueltos si la lista del server fue truncada por límite de paginación
+          seen.add(m.info.id)
           merged.push(m)
+        } else {
+          // Si el fetch trajo la lista completa y este mensaje no está, fue revertido/borrado en el server.
+          changed = true
         }
       }
       for (const m of msgMap.values()) {
@@ -442,10 +443,12 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       // S3: actualización optimista instantánea
       if (targetID) {
         setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= targetID))
+        setOptimisticUserMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID || !m.info.id || m.info.id <= targetID))
         onSetRevertID?.(targetID)
         onPatchSession?.({ revert: { messageID: targetID } })
       } else {
         setMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID))
+        setOptimisticUserMessages((prev) => prev.filter((m) => m.info.sessionID !== sessionID))
         onSetRevertID?.(null)
         onPatchSession?.({ revert: undefined })
       }

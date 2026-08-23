@@ -1239,19 +1239,27 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       setCommands, setRuntimeError, undefined, text, setLocalRevertID)
   }, [selectedSession, awaitingAssistantReply, config, send, activeModel, activeAgentID, commands, refreshSessions, loadSelected, setCommands, setRuntimeError])
 
-  const handleAbort = useCallback(async () => {    if (!selectedSession) return
+  const handleAbort = useCallback(async () => {
+    if (!selectedSession) return
     stopGenerationRef.current = true
     setAwaitingAssistantReply(false)
-    // Optimista: pasar a idle inmediato en UI
+    completionShouldPlayRef.current = false
     setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, status: "idle" as const } : s))
+    setMessages((prev) => {
+      return prev.map((m) => {
+        if (m.info.sessionID === selectedSession.id && m.info.role === "assistant" && !m.info.time.completed) {
+          return { ...m, info: { ...m.info, time: { ...m.info.time, completed: Date.now() } } }
+        }
+        return m
+      })
+    })
     const sid = selectedSession.id
     const dir = selectedSession.directory
     abortSession(sid, dir).catch(() => {})
-    // Refrescos en background, sin bloquear UI
     loadSelected(sid, dir).catch(() => undefined)
     settleSession(sid, dir).catch(() => undefined)
     setTimeout(() => { stopGenerationRef.current = false }, 400)
-  }, [selectedSession, abortSession, loadSelected, settleSession])
+  }, [selectedSession, abortSession, loadSelected, settleSession, setAwaitingAssistantReply, setSessions, setMessages])
 
   // Zoom general de la interfaz con Ctrl + Ruedita y atajos de teclado (Ctrl + / Ctrl - / Ctrl 0)
   useEffect(() => {
