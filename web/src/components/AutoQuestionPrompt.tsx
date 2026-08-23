@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react"
+import { memo, useCallback, useRef, useState } from "react"
 import { useT } from "../i18n-context"
 import type { Question, QuestionInfo } from "../types"
 
@@ -16,6 +16,41 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
     : (question.question ? [{ question: question.question, header: "", options: [], custom: true }] : [])
   const [selected, setSelected] = useState<Record<number, string[]>>({})
   const [customs, setCustoms] = useState<Record<number, string>>({})
+  const cardRef = useRef<HTMLDivElement>(null)
+  const posRef = useRef({ x: 0, y: 0 })
+
+  const startDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return
+    if ((e.target as HTMLElement).closest("button, input, textarea, a, select")) return
+
+    e.preventDefault()
+    const startX = e.clientX
+    const startY = e.clientY
+    const startPosX = posRef.current.x
+    const startPosY = posRef.current.y
+
+    document.body.style.userSelect = "none"
+    document.body.style.cursor = "grabbing"
+
+    const onMove = (ev: PointerEvent) => {
+      const nextX = startPosX + (ev.clientX - startX)
+      const nextY = startPosY + (ev.clientY - startY)
+      posRef.current = { x: nextX, y: nextY }
+      if (cardRef.current) {
+        cardRef.current.style.transform = `translate3d(${nextX}px, ${nextY}px, 0)`
+      }
+    }
+
+    const onUp = () => {
+      document.body.style.userSelect = ""
+      document.body.style.cursor = ""
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+    }
+
+    window.addEventListener("pointermove", onMove, { passive: true })
+    window.addEventListener("pointerup", onUp)
+  }, [])
 
   const handleToggle = useCallback((qi: number, label: string) => {
     setSelected((prev) => {
@@ -49,9 +84,17 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
 
   return (
     <div className="question-overlay">
-      <div className="question-card" role="dialog" aria-label={t('settings.questionPrompt')}>
-        <div className="question-card-header">
-          <strong>{t('settings.questionPrompt')}</strong>
+      <div ref={cardRef} className="question-card" role="dialog" aria-label={t('settings.questionPrompt')}>
+        <div
+          className="question-card-header"
+          onPointerDown={startDrag}
+          style={{ cursor: "grab", touchAction: "none", userSelect: "none" }}
+          title="Arrastra para mover"
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ opacity: 0.4, cursor: "grab", fontSize: 13 }}>⠿</span>
+            <strong>{t('settings.questionPrompt')}</strong>
+          </div>
           <button className="btn-icon btn-ghost" onClick={onDismiss} aria-label={t('session.cancel')}>×</button>
         </div>
         <div className="question-card-body">
