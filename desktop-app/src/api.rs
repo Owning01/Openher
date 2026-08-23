@@ -34,6 +34,14 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         return;
     }
 
+    // ============================== Source control (git)
+    if path.starts_with("/shell/git/") {
+        if let Some(resp) = crate::infrastructure::http::scm_router::handle(req, state, &path, method, &q) {
+            let _ = req.respond(resp);
+            return;
+        }
+    }
+
     // ============================== Config
     if path == "/shell/config" && method == Method::Get {
         let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
@@ -861,9 +869,24 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             let served = crate::common::serve_file(&root_path, rel)
                 .or_else(|| crate::common::serve_file(&root_path.join("dist"), rel))
                 .or_else(|| crate::common::serve_file(&root_path.join("public"), rel))
-                .or_else(|| crate::common::serve_file(&root_path.join("build"), rel));
+                .or_else(|| crate::common::serve_file(&root_path.join("build"), rel))
+                .or_else(|| crate::common::serve_file(&root_path.join("web").join("dist"), rel))
+                .or_else(|| crate::common::serve_file(&root_path.join("web"), rel));
 
-            if let Some((bytes, mime)) = served {
+            if let Some((mut bytes, mime)) = served {
+                if mime.starts_with("text/html") {
+                    if let Ok(html_str) = String::from_utf8(bytes.clone()) {
+                        let base_tag = format!("<base href=\"/shell/preview/{}/\" />", token);
+                        let modified = if html_str.contains("<head>") {
+                            html_str.replacen("<head>", &format!("<head>\n  {}", base_tag), 1)
+                        } else if html_str.contains("<HEAD>") {
+                            html_str.replacen("<HEAD>", &format!("<HEAD>\n  {}", base_tag), 1)
+                        } else {
+                            format!("{}\n{}", base_tag, html_str)
+                        };
+                        bytes = modified.into_bytes();
+                    }
+                }
                 let _ = req.respond(
                     Response::from_data(bytes)
                         .with_status_code(StatusCode(200))

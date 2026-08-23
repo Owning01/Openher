@@ -13,6 +13,7 @@ mod browser_view;
 mod common;
 mod docsx;
 mod fsx;
+mod gitx;
 mod kanban;
 mod plugins;
 mod ptyx;
