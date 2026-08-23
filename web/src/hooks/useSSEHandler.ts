@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react"
 import type { SSEEvent } from "../types"
 import type { MessageEnvelope } from "../types"
+import { pluginBus } from "../plugins/bus"
 
 // Diagnóstico del streaming de reasoning: inactivo por defecto (spam por
 // delta). Activación: localStorage.setItem("opencode.debug.sse", "1").
@@ -30,6 +31,10 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     const p = event.properties as Record<string, unknown>
     const type = event.type
     if (type === "server.connected" || type === "server.heartbeat") return
+
+    // Reemitir eventos hacia el bus de plugins
+    pluginBus.emit(type, { ...p, sessionID: deps.sessionID, directory: deps.directory })
+    pluginBus.emit("session.updated", { sessionID: deps.sessionID, directory: deps.directory, type })
 
     if (type === "message.part.updated") {
       const part = p.part as { id?: string; type?: string; messageID?: string; sessionID?: string; text?: string } | undefined

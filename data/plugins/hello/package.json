@@ -1,0 +1,19 @@
+{
+  "name": "plugin-hello",
+  "title": "Hello & Clock Plugin",
+  "version": "1.0.0",
+  "description": "Demostración de kernel de plugins propio: Reloj en sidebar, comando /hora y eventos SSE.",
+  "opencode": {
+    "entry": "./index.js",
+    "capabilities": [
+      "ui",
+      "events",
+      "commands",
+      "storage"
+    ],
+    "config": {
+      "format": "24h",
+      "prefix": "⏰"
+    }
+  }
+}

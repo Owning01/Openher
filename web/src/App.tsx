@@ -66,6 +66,7 @@ import { TabBar } from "./components/TabBar"
 import { transferTerminalTab } from "./utils/terminalStore"
 import type { ServerProfile } from "./types"
 import { useVisualSelection, formatSelectionForPrompt } from "./hooks/useVisualSelection"
+import { pluginHost, PluginSlot } from "./plugins"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
 
@@ -490,6 +491,13 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [vs])
+
+  // Inicialización y carga de plugins en caliente (Desktop)
+  useEffect(() => {
+    if (isDesktop) {
+      pluginHost.reloadAll().catch((err) => console.error("[Plugins] Error al inicializar:", err))
+    }
+  }, [isDesktop])
 
   const filteredVariantGroups = useMemo(() => {
     const bs = blockedModels.blocked
@@ -3085,6 +3093,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                     : activity === "scm" ? <SourceControlPanel cwd={currentActiveSession?.directory || activeSessionDir || selectedSession?.directory || explorerCwd || sessions[0]?.directory} availableDirs={Array.from(new Set(sessions.map((s) => s.directory).filter(Boolean)))} onSelectDir={(d) => setExplorerCwd(d)} />
                     : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} customKey={quickChatCustomKey} customUrl={quickChatCustomUrl} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
                     : <ConfigPanel />}
+                  <PluginSlot id="sidebar.activity" />
                 </Suspense>
               </div>
               <div className="desktop-sidebar-resizer" onPointerDown={startSidebarResize} title={t('desktop.resizeSidebar')} />
@@ -3882,6 +3891,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       {runtimeError && (
         <ErrorModal message={runtimeError} onClose={() => setRuntimeError(null)} />
       )}
+
+      {/* Slots de plugins (overlay global) */}
+      <PluginSlot id="shell.overlay" />
     </div>
   )
 }

@@ -240,7 +240,9 @@ export const shell = {
     proxy: (path: string) => fetch(`/shell/stats/proxy/${path}`).then((r) => r.json()),
   },
   plugins: {
-    list: () => get<{ plugins: ShellPlugin[] }>("/shell/plugins"),
+    list: () => get<{ ok?: boolean; plugins: ShellPlugin[] }>("/shell/plugins"),
+    reload: () => post<{ ok?: boolean; plugins: ShellPlugin[] }>("/shell/plugins/reload"),
+    toggle: (name: string, enabled: boolean) => post<{ ok: boolean }>("/shell/plugins/toggle", { name, enabled }),
     run: (name: string) => post("/shell/plugins/run", { name }),
   },
   labs: {

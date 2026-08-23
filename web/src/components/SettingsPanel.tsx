@@ -12,6 +12,7 @@ import { SettingsSection } from "./SettingsSection"
 import { DataUsageModal } from "./DataUsageModal"
 import { ThinkingLevels } from "./ThinkingLevels"
 import { PairModal } from "./PairModal"
+import { PluginSlot } from "../plugins"
 import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type DesktopConfig } from "../desktop"
 import { fetchGoUsage, loadGoAccounts, saveGoAccounts, type GoUsage } from "../goUsage"
 import { getDataUsage, formatBytes } from "../utils/dataUsage"
@@ -1301,6 +1302,9 @@ export const SettingsPanel = memo(function SettingsPanel({
         </div>
       </SettingsSection>
       )}
+
+      {/* Slots de plugins (secciones adicionales) */}
+      <PluginSlot id="settings.section" />
         </div>
       </div>
 
