@@ -240,8 +240,8 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
       const ptyRes = await shell.pty.create(cwd)
       const ptyId = ptyRes.id
 
-      // Send the dev command to PTY
-      await shell.pty.write(ptyId, `${devCommand}\n`)
+      // Send the dev command to PTY with CRLF
+      await shell.pty.write(ptyId, `${devCommand}\r\n`)
 
       return new Promise<string>((resolve) => {
         let cursor = 0
@@ -249,19 +249,12 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
         let attempts = 0
         let fullOutput = ""
 
-        const cleanAnsi = (str: string) => str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, "").replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "")
-
-        const probeUrl = async (testUrl: string): Promise<boolean> => {
-          try {
-            const controller = new AbortController()
-            const id = setTimeout(() => controller.abort(), 800)
-            await fetch(testUrl, { mode: "no-cors", signal: controller.signal, cache: "no-store" })
-            clearTimeout(id)
-            return true
-          } catch {
-            return false
-          }
-        }
+        const cleanAnsi = (str: string) =>
+          str
+            .replace(/\x1B\]8;;[^\x1b\x07]*(\x1B\\|\x07)/g, "")
+            .replace(/\x1B\][^\x07\x1B]*(\x07|\x1B\\)/g, "")
+            .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, "")
+            .replace(/\x1B[@-Z\\-_]/g, "")
 
         const checkOutput = async () => {
           attempts++
@@ -273,15 +266,21 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
               const clean = cleanAnsi(txt)
               fullOutput += clean
 
-              const match = clean.match(/(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d+)(?:\/[^\s'"<>()]*)?)/i)
-                || fullOutput.match(/(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d+)(?:\/[^\s'"<>()]*)?)/i)
+              const urlMatch = clean.match(/(?:https?:\/\/)(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d+)(?:\/[^\s'"<>()]*)?/i)
+                || fullOutput.match(/(?:https?:\/\/)(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d+)(?:\/[^\s'"<>()]*)?/i)
+                || clean.match(/localhost:(\d+)/i)
+                || fullOutput.match(/localhost:(\d+)/i)
 
-              if (match) {
-                let u = match[1]
-                if (u.includes("0.0.0.0")) u = u.replace("0.0.0.0", "127.0.0.1")
-                if (u.includes("[::1]")) u = u.replace("[::1]", "127.0.0.1")
-                if (u.includes("localhost")) u = u.replace("localhost", "127.0.0.1")
-                foundUrl = u
+              if (urlMatch) {
+                if (urlMatch[0].startsWith("http")) {
+                  let u = urlMatch[0]
+                  if (u.includes("0.0.0.0")) u = u.replace("0.0.0.0", "127.0.0.1")
+                  if (u.includes("[::1]")) u = u.replace("[::1]", "127.0.0.1")
+                  if (u.includes("localhost")) u = u.replace("localhost", "127.0.0.1")
+                  foundUrl = u
+                } else if (urlMatch[1]) {
+                  foundUrl = `http://127.0.0.1:${urlMatch[1]}/`
+                }
               }
             }
           } catch {
@@ -300,28 +299,8 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
             return
           }
 
-          // A partir del intento 8 (~2s), sondear puertos dev estándar si ya están escuchando
-          if (attempts >= 8 && attempts % 4 === 0) {
-            const portsToTry = ["5173", "3000", "5174", "8080", "4321", "8000"]
-            for (const p of portsToTry) {
-              const testUrl = `http://127.0.0.1:${p}`
-              const isOpen = await probeUrl(testUrl)
-              if (isOpen) {
-                if (pollRef.current) {
-                  window.clearInterval(pollRef.current)
-                  pollRef.current = null
-                }
-                runningServers.set(directory, { ptyId, url: testUrl, command: devCommand, cwd })
-                setStatus("running")
-                setServerUrl(testUrl)
-                resolve(testUrl)
-                return
-              }
-            }
-          }
-
-          // Timeout tras 25 segundos (100 intentos x 250ms)
-          if (attempts >= 100) {
+          // Timeout tras 20 segundos (80 intentos x 250ms)
+          if (attempts >= 80) {
             if (pollRef.current) {
               window.clearInterval(pollRef.current)
               pollRef.current = null

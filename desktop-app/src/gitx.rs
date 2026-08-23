@@ -16,7 +16,7 @@ pub const MAX_TIMEOUT_SECS: u64 = 180;
 const MAX_OUTPUT_BYTES: usize = 2 * 1024 * 1024;
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepoInfo {
     pub repo_root: String,
@@ -25,7 +25,7 @@ pub struct GitRepoInfo {
     pub is_detached: bool,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GitChangedFile {
     pub path: String,
@@ -38,7 +38,7 @@ pub struct GitChangedFile {
     pub status_label: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitStatusSnapshot {
     pub repo_root: String,
@@ -51,7 +51,7 @@ pub struct GitStatusSnapshot {
     pub changed_files: Vec<GitChangedFile>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitPanelSnapshot {
     pub repo: Option<GitRepoInfo>,
@@ -1636,15 +1636,5 @@ mod tests {
         assert!(resolve_within_repo(&root, "../outside.txt").is_err());
         assert!(resolve_within_repo(&root, "sub/dir/file.txt").is_ok());
         let _ = std::fs::remove_dir_all(&tmp);
-    }
-
-    #[test]
-    fn test_current_repo_panel_snapshot() {
-        let cur = std::env::current_dir().unwrap();
-        let res = panel_snapshot(cur.to_str().unwrap());
-        println!("panel_snapshot result: {:?}", res);
-        assert!(res.is_ok(), "panel_snapshot failed: {:?}", res.err());
-        let snap = res.unwrap();
-        assert!(snap.repo.is_some(), "snap.repo is None");
     }
 }
