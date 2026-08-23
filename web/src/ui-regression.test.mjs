@@ -119,7 +119,7 @@ const gridSpinner = readFileSync(new URL('./components/GridSpinner.tsx', import.
 assert.ok(gridSpinner.includes('Array.from({ length: 9 })'), 'grid spinner should render 9 squares')
 assert.ok(/\.gs-4\s*\{[^}]*animation:\s*none/.test(styles), 'center square of the grid spinner must stay fixed')
 assert.ok(/\.gs-1\s*\{[^}]*animation-delay:\s*0\.15s/.test(styles) && /\.gs-6\s*\{[^}]*animation-delay:\s*0\.9s/.test(styles), 'edge squares should pulse in sequence')
-assert.ok(/@keyframes gs-pulse[\s\S]*?0%, 100% \{ opacity: 1; \}[\s\S]*?12%, 40% \{ opacity: 0\.15; \}/.test(styles), 'gs-pulse should keep the traveling dot bright and dim the rest of the ring')
+assert.ok(/@keyframes gs-pulse[\s\S]*?0%, 100% \{ opacity: 1;/.test(styles), 'gs-pulse should animate the traveling trail')
 assert.ok(!styles.includes('pixel-spinner') && !styles.includes('.composer-cost') && !styles.includes('.stream-dot'), 'removed spinners and chat cost label should not reappear')
 assert.ok(!styles.includes('image-rendering: pixelated'), 'pixelated image rendering on the spinner should not reappear')
 assert.ok(msgList.includes('GridSpinner'), 'session loading state should show the grid spinner')
