@@ -2308,60 +2308,183 @@ export const ConfigPanel = memo(function ConfigPanel() {
   )
 })
 
-// ============================================================== Open Design (desktop only, nativo — sin localhost visible)
+// ============================================================== Open Design & Auto-Servidor de Proyectos Locales
 export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUrl?: string }) {
-  const [url, setUrl] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "http://localhost:3000")
+  const [url, setUrl] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "")
   const [iframeKey, setIframeKey] = useState(0)
   const [status, setStatus] = useState<"loading" | "ready" | "offline">("loading")
+  const [servedProject, setServedProject] = useState<{
+    token: string
+    directory: string
+    entryPoint: string
+    htmlFiles: string[]
+    packageType: string
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem("od.served.project")
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
+
   useEffect(() => {
     let cancelled = false
     setStatus("loading")
-    // Consultar al shell el estado real del daemon (puerto dinámico, si está corriendo)
+
+    if (servedProject && servedProject.token) {
+      const previewUrl = `${window.location.origin}/shell/preview/${servedProject.token}/${servedProject.entryPoint || "index.html"}`
+      setUrl(previewUrl)
+      setStatus("ready")
+      return
+    }
+
+    // Consultar al shell el estado real del daemon
     shell.design.status().then((r: any) => {
       if (cancelled) return
       const discovered = r?.url as string | undefined
       const running = !!r?.running
-      if (discovered && discovered !== url) {
+      if (discovered && running) {
         setUrl(discovered)
         try { localStorage.setItem("od.web.url", discovered) } catch {}
-      }
-      if (running && discovered) {
         setStatus("ready")
         return
       }
-      // fallback: probar fetch directo (por si el endpoint del shell no está disponible)
-      fetch(discovered || url, { mode: "no-cors", cache: "no-store" }).then(() => { if (!cancelled) setStatus("ready") }).catch(() => { if (!cancelled) setStatus("offline") })
+      if (discovered) {
+        fetch(discovered, { mode: "no-cors", cache: "no-store" })
+          .then(() => { if (!cancelled) { setUrl(discovered); setStatus("ready") } })
+          .catch(() => { if (!cancelled) setStatus("offline") })
+      } else {
+        setStatus("offline")
+      }
     }).catch(() => {
       if (cancelled) return
-      fetch(url, { mode: "no-cors", cache: "no-store" }).then(() => { if (!cancelled) setStatus("ready") }).catch(() => { if (!cancelled) setStatus("offline") })
+      setStatus("offline")
     })
+
     const t = window.setTimeout(() => { if (!cancelled) setStatus((s) => (s === "loading" ? "offline" : s)) }, 3000)
     return () => { cancelled = true; window.clearTimeout(t) }
-  }, [url, iframeKey])
+  }, [iframeKey, servedProject])
+
+  const handlePickAndServe = async () => {
+    try {
+      const res = await shell.fs.pickFolder()
+      if (res?.ok && res.path) {
+        setStatus("loading")
+        const serveRes = await shell.project.serve(res.path)
+        if (serveRes?.ok && serveRes.token) {
+          const p = {
+            token: serveRes.token,
+            directory: serveRes.directory,
+            entryPoint: serveRes.entrypoint || "index.html",
+            htmlFiles: serveRes.htmlFiles || ["index.html"],
+            packageType: serveRes.hasPackageJson ? "node" : "static",
+          }
+          setServedProject(p)
+          try { localStorage.setItem("od.served.project", JSON.stringify(p)) } catch {}
+          const pUrl = `${window.location.origin}/shell/preview/${serveRes.token}/${serveRes.entrypoint || "index.html"}`
+          setUrl(pUrl)
+          setStatus("ready")
+          setIframeKey((k) => k + 1)
+        }
+      }
+    } catch (err: any) {
+      alert("Error al servir proyecto: " + (err?.message || String(err)))
+      setStatus("offline")
+    }
+  }
+
+  const handleSwitchHtml = (file: string) => {
+    if (!servedProject) return
+    const next = { ...servedProject, entryPoint: file }
+    setServedProject(next)
+    try { localStorage.setItem("od.served.project", JSON.stringify(next)) } catch {}
+    setUrl(`${window.location.origin}/shell/preview/${servedProject.token}/${file}`)
+    setIframeKey((k) => k + 1)
+  }
+
+  const handleCloseProject = () => {
+    setServedProject(null)
+    try { localStorage.removeItem("od.served.project") } catch {}
+    setUrl("")
+    setStatus("offline")
+  }
+
   const reload = () => setIframeKey((k) => k + 1)
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
-      {/* Header nativo — sin URL, como cualquier otra sección (explorer/kanban) */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)", flexShrink: 0 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>Open Design</span>
+      {/* Header nativo */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", borderBottom: "1px solid var(--border)", background: "var(--surface-subtle)", flexShrink: 0, gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Open Design</span>
+          {servedProject ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--muted)", overflow: "hidden" }}>
+              <span style={{ background: "rgba(88,166,255,0.12)", color: "#58a6ff", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
+                {servedProject.directory.split(/[\\/]/).pop()}
+              </span>
+              {servedProject.htmlFiles.length > 1 && (
+                <select
+                  value={servedProject.entryPoint}
+                  onChange={(e) => handleSwitchHtml(e.target.value)}
+                  style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 11, padding: "2px 4px" }}
+                >
+                  {servedProject.htmlFiles.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--muted)" }}>Previsualización y diseño interactivo</span>
+          )}
+        </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: status === "ready" ? "#3fb950" : status === "offline" ? "#f85149" : "#8b949e", display: "inline-block" }} />
+          <button className="btn-secondary compact" onClick={handlePickAndServe} title="Abrir y servir carpeta de proyecto web">
+            📂 Abrir Proyecto
+          </button>
+          {servedProject && (
+            <button className="btn-secondary compact" onClick={handleCloseProject} title="Cerrar proyecto actual">
+              ✕
+            </button>
+          )}
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: status === "ready" ? "#3fb950" : status === "offline" ? "#f85149" : "#8b949e", display: "inline-block" }} />
           <button className="btn-secondary compact" onClick={reload} title="Recargar">↻</button>
         </div>
       </div>
-      {status === "offline" ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 24, textAlign: "center" }}>
-          <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--surface-subtle)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>◈</div>
-          <div style={{ maxWidth: 360 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Open Design no está iniciado</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
-              Esta sección carga la app de diseño como si fuera nativa. Para iniciarla, abrí una terminal en <code>od-web</code> y ejecutá <code>pnpm tools-dev</code> (Node 24), luego recargá.
+
+      {status === "offline" && !url ? (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32, textAlign: "center" }}>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: "rgba(88,166,255,0.1)", border: "1px solid rgba(88,166,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, color: "#58a6ff" }}>
+            ◈
+          </div>
+          <div style={{ maxWidth: 420 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, color: "var(--text)" }}>Servidor de Proyectos & Open Design</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
+              Seleccioná una carpeta de proyecto con HTML/JS o tu aplicación web local. El servidor la levantará automáticamente para inspeccionar y editar visualmente su diseño.
             </div>
           </div>
-          <button className="btn-primary compact" onClick={reload}>Reintentar</button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+            <button className="btn-primary" onClick={handlePickAndServe} style={{ padding: "8px 18px", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+              <span>📂</span>
+              <span>Abrir y Servir Proyecto Local</span>
+            </button>
+            <button className="btn-secondary" onClick={reload} style={{ padding: "8px 14px" }}>
+              Reintentar OpenDesign (:3000)
+            </button>
+          </div>
         </div>
       ) : (
-        <iframe key={iframeKey} src={url} onLoad={() => setStatus("ready")} style={{ flex: 1, border: "none", background: "#fff" }} title="Open Design" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals" allow="clipboard-read; clipboard-write" />
+        <iframe
+          key={iframeKey}
+          src={url}
+          onLoad={() => setStatus("ready")}
+          style={{ flex: 1, border: "none", background: "#fff" }}
+          title="Open Design Preview"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
+          allow="clipboard-read; clipboard-write"
+        />
       )}
     </div>
   )
