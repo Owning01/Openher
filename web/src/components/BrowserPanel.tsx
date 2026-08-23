@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
-import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon } from "../Icons"
+import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon, FolderIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
 import { BrowserVisualOverlay, type BrowserPickedElement } from "./BrowserVisualOverlay"
@@ -13,6 +13,7 @@ import {
 const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
 
 const ZONE_ICONS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"]
+
 
 const STYLE_FIELDS: Array<{ prop: string; label: string; kind: "color" | "number" | "select"; options?: string[]; unit?: string }> = [
   { prop: "color", label: "Texto", kind: "color" },
@@ -195,6 +196,14 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [showTuneDropdown, setShowTuneDropdown] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null)
+  const [projectBanner, setProjectBanner] = useState<{
+    directory: string
+    entrypoint: string
+    htmlFiles: string[]
+    hasPackageJson: boolean
+    scripts: Record<string, string>
+  } | null>(null)
+
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const nativeReady = useRef(false)
@@ -467,6 +476,33 @@ export const BrowserPanel = memo(function BrowserPanel({
     }
   }, [activeTabId])
 
+  const handleOpenProjectFolder = useCallback(async () => {
+    try {
+      const res = await shell.fs.pickFolder()
+      if (res && res.ok && res.path) {
+        setLoading(true)
+        const serveRes = await shell.project.serve(res.path)
+        if (serveRes.ok && serveRes.previewUrl) {
+          setProjectBanner({
+            directory: serveRes.directory,
+            entrypoint: serveRes.entrypoint,
+            htmlFiles: serveRes.htmlFiles || [],
+            hasPackageJson: serveRes.hasPackageJson,
+            scripts: serveRes.scripts || {},
+          })
+          navigateTab(serveRes.previewUrl)
+          if (!inspectMode && onToggleInspectTool) {
+            onToggleInspectTool("picker")
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error al auto-servir proyecto:", err)
+    } finally {
+      setLoading(false)
+    }
+  }, [navigateTab, inspectMode, onToggleInspectTool])
+
   const handleAddTab = () => {
     const newId = `tab-${Date.now().toString(36)}`
     const defaultUrl = "http://localhost:5173"
@@ -621,6 +657,31 @@ export const BrowserPanel = memo(function BrowserPanel({
           >
             <RefreshIcon size={14} />
           </button>
+          <button
+            type="button"
+            className="browser-open-project-btn"
+            onClick={handleOpenProjectFolder}
+            title="Abrir carpeta de proyecto para diseñar y auto-servir en OpenDesign"
+            aria-label="Abrir proyecto para diseño"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              padding: "3px 8px",
+              background: "rgba(88, 166, 255, 0.12)",
+              border: "1px solid rgba(88, 166, 255, 0.35)",
+              borderRadius: "6px",
+              color: "#58a6ff",
+              fontSize: "12px",
+              fontWeight: 500,
+              cursor: "pointer",
+              marginLeft: "4px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <FolderIcon size={13} />
+            <span>Abrir Proyecto Web</span>
+          </button>
         </div>
 
         {/* 3. Address Bar (Clean Input without background/border) */}
@@ -771,6 +832,58 @@ export const BrowserPanel = memo(function BrowserPanel({
         )}
       </div>
 
+      {/* Quick Project Bar */}
+      {projectBanner && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "4px 12px",
+          background: "#161b22",
+          borderBottom: "1px solid #30363d",
+          fontSize: "11px",
+          color: "#8b949e",
+          overflowX: "auto"
+        }}>
+          <span style={{ color: "#58a6ff", fontWeight: 600 }}>📁 {projectBanner.directory.split(/[\/\\]/).pop()}</span>
+          {projectBanner.htmlFiles.length > 1 && (
+            <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+              <span>Vistas:</span>
+              {projectBanner.htmlFiles.map((file) => {
+                const isActive = activeTab?.url.endsWith(file)
+                return (
+                  <button
+                    key={file}
+                    type="button"
+                    onClick={() => {
+                      const match = activeTab?.url.match(/\/shell\/preview\/([^/]+)/)
+                      if (match) {
+                        navigateTab(`http://127.0.0.1:4848/shell/preview/${match[1]}/${file}`)
+                      }
+                    }}
+                    style={{
+                      background: isActive ? "#1f6feb" : "#21262d",
+                      color: isActive ? "#fff" : "#c9d1d9",
+                      border: "none",
+                      borderRadius: "4px",
+                      padding: "2px 6px",
+                      cursor: "pointer",
+                      fontSize: "11px"
+                    }}
+                  >
+                    {file}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {projectBanner.hasPackageJson && (
+            <span style={{ marginLeft: "auto", fontSize: "10px", color: "#8b949e" }}>
+              Node/Vite Project • Auto-servido
+            </span>
+          )}
+        </div>
+      )}
       {/* 4. Web Viewport + drawer de anotaciones */}
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <div className="browser-viewport-container" ref={viewportRef} style={{ position: "relative", flex: 1, minWidth: 0 }}>

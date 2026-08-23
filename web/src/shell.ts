@@ -98,6 +98,18 @@ export const shell = {
     execFile: (path: string) => post<{ ok: boolean; path: string }>("/shell/fs/exec", { path }),
     pickFolder: () => get<{ ok: boolean; path: string | null }>("/shell/fs/pick-folder"),
   },
+  project: {
+    serve: (path: string) => post<{
+      ok: boolean
+      token: string
+      previewUrl: string
+      directory: string
+      entrypoint: string
+      htmlFiles: string[]
+      hasPackageJson: boolean
+      scripts: Record<string, string>
+    }>("/shell/project/serve", { path }),
+  },
   pty: {
     create: (cwd?: string, shellName?: string) => {
       const params = new URLSearchParams()

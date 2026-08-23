@@ -744,6 +744,139 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         let _ = req.respond(json_err(404, "plugin no encontrado"));
         return;
     }
+
+    // ============================== Project Auto-Serve / Preview
+    if path == "/shell/project/serve" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let p_str = b["path"].as_str().unwrap_or("");
+                let p = std::path::PathBuf::from(p_str);
+                let dir = if p.is_file() {
+                    p.parent().unwrap_or(std::path::Path::new(".")).to_path_buf()
+                } else {
+                    p.clone()
+                };
+
+                if !dir.exists() || !dir.is_dir() {
+                    let _ = req.respond(json_err(400, "El directorio no existe"));
+                    return;
+                }
+
+                // Generar token único / estable
+                let token = format!("p{:x}", dir.to_string_lossy().as_bytes().iter().fold(0u64, |acc: u64, &b| acc.wrapping_mul(31).wrapping_add(b as u64)));
+                state.projects.write().unwrap_or_else(|e| e.into_inner()).insert(token.clone(), dir.clone());
+
+                // Escanear archivos html
+                let mut html_files = Vec::new();
+                let mut entrypoint = String::new();
+                if let Ok(entries) = std::fs::read_dir(&dir) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if name.ends_with(".html") || name.ends_with(".htm") {
+                            html_files.push(name.clone());
+                            if name == "index.html" || name == "index.htm" {
+                                entrypoint = name.clone();
+                            }
+                        }
+                    }
+                }
+
+                // Si no se encontró index.html en raíz, buscar en subdirectorios típicos (dist, build, public, src)
+                if entrypoint.is_empty() {
+                    for sub in &["dist", "build", "public", "src"] {
+                        let sub_path = dir.join(sub);
+                        if sub_path.is_dir() {
+                            if let Ok(entries) = std::fs::read_dir(&sub_path) {
+                                for entry in entries.flatten() {
+                                    let name = entry.file_name().to_string_lossy().to_string();
+                                    if name.ends_with(".html") || name.ends_with(".htm") {
+                                        let rel = format!("{}/{}", sub, name);
+                                        html_files.push(rel.clone());
+                                        if entrypoint.is_empty() {
+                                            entrypoint = rel;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if entrypoint.is_empty() && !html_files.is_empty() {
+                    entrypoint = html_files[0].clone();
+                }
+
+                // Si p era un archivo específico html, usar ese
+                if p.is_file() {
+                    let file_name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    if file_name.ends_with(".html") || file_name.ends_with(".htm") {
+                        entrypoint = file_name;
+                    }
+                }
+
+                // Revisar package.json
+                let pkg_path = dir.join("package.json");
+                let mut has_package_json = false;
+                let mut scripts = serde_json::Map::new();
+                if pkg_path.is_file() {
+                    if let Ok(content) = std::fs::read_to_string(&pkg_path) {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                            has_package_json = true;
+                            if let Some(sc) = json.get("scripts").and_then(|s| s.as_object()) {
+                                scripts = sc.clone();
+                            }
+                        }
+                    }
+                }
+
+                let preview_url = if !entrypoint.is_empty() {
+                    format!("http://127.0.0.1:{}/shell/preview/{}/{}", state.port, token, entrypoint)
+                } else {
+                    format!("http://127.0.0.1:{}/shell/preview/{}/index.html", state.port, token)
+                };
+
+                let _ = req.respond(json_ok(&serde_json::json!({
+                    "ok": true,
+                    "token": token,
+                    "previewUrl": preview_url,
+                    "directory": dir.to_string_lossy(),
+                    "entrypoint": entrypoint,
+                    "htmlFiles": html_files,
+                    "hasPackageJson": has_package_json,
+                    "scripts": scripts,
+                })));
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+
+    if let Some(rest) = path.strip_prefix("/shell/preview/") {
+        let (token, rel) = rest.split_once('/').unwrap_or((rest, "index.html"));
+        let rel = if rel.is_empty() { "index.html" } else { rel };
+        let root = state.projects.read().unwrap_or_else(|e| e.into_inner()).get(token).cloned();
+        if let Some(root_path) = root {
+            let served = crate::common::serve_file(&root_path, rel)
+                .or_else(|| crate::common::serve_file(&root_path.join("dist"), rel))
+                .or_else(|| crate::common::serve_file(&root_path.join("public"), rel))
+                .or_else(|| crate::common::serve_file(&root_path.join("build"), rel));
+
+            if let Some((bytes, mime)) = served {
+                let _ = req.respond(
+                    Response::from_data(bytes)
+                        .with_status_code(StatusCode(200))
+                        .with_header(Header::from_bytes("Content-Type", mime).unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+                        .with_header(Header::from_bytes("Cache-Control", "no-cache").unwrap()),
+                );
+                return;
+            }
+        }
+        let _ = req.respond(json_err(404, "Archivo de proyecto no encontrado"));
+        return;
+    }
     if path == "/shell/labs" {
         let _ = req.respond(json_ok(&crate::plugins::labs_list(&state)));
         return;

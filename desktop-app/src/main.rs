@@ -483,6 +483,7 @@ fn main() {
         dist,
         browser: browser_mgr,
         browser_picks: std::sync::Mutex::new(Vec::new()),
+        projects: std::sync::RwLock::new(std::collections::HashMap::new()),
     });
     state::save_config(&config);
     if !state::autostart_enabled() {
