@@ -1,7 +1,7 @@
 # AGENTS.md — OpenCode Mobile
 
 Cliente Android/iOS (Capacitor) + escritorio Windows para un server remoto `opencode serve`. Thin client: toda la IA corre en el server; la app solo consume REST + SSE.
-> Arquitectura completa: [`architecture.md`](architecture.md) · Catálogo: [`CATALOGO.md`](CATALOGO.md)
+> Arquitectura completa: [`architecture.md`](architecture.md)
 
 ## Estructura
 

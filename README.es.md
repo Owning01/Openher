@@ -164,7 +164,7 @@ Cifras estimadas sobre HTTP/2 comprimido con ~10 sesiones en el servidor.
 
 ---
 
-> 📖 **Catálogo completo**: [`CATALOGO.md`](CATALOGO.md) — 57 componentes, 32 hooks, 36 endpoints, grafos, guía para LLM.
+> 🏗️ **Arquitectura**: [`architecture.md`](architecture.md) — mapa del monorepo, flujos críticos, decisiones y trampas.
 
 ## 📁 Estructura del proyecto
 
