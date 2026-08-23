@@ -109,12 +109,9 @@ export const ModelSelectorModal = memo(function ModelSelectorModal({
     }
   }
 
-  const handleVariantChange = (key: string, variant?: string | null) => {
+  const handleVariantChange = (_key: string, variant?: string | null) => {
     const next = variant ?? null
     onChangeVariant(next)
-    if (onChangeModel && activeModelOption) {
-      onChangeModel(key, next)
-    }
   }
 
   return createPortal(

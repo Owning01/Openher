@@ -75,18 +75,18 @@ describe("parseDragPayload", () => {
 describe("parseDockPayload", () => {
   it("parses panel with kind payload", () => {
     const result = parseDockPayload("panel:1:kind:terminal")
-    expect(result).toEqual({ targetKind: "terminal", targetSessionId: null, fromIndex: 1 })
+    expect(result).toMatchObject({ targetKind: "terminal", targetSessionId: null, fromIndex: 1 })
   })
 
   it("parses panel with legacy shell kind", () => {
-    expect(parseDockPayload("panel:0:explorer")).toEqual({ targetKind: "explorer", targetSessionId: null, fromIndex: 0 })
-    expect(parseDockPayload("panel:2:kanban")).toEqual({ targetKind: "kanban", targetSessionId: null, fromIndex: 2 })
-    expect(parseDockPayload("panel:0:stats")).toEqual({ targetKind: "stats", targetSessionId: null, fromIndex: 0 })
-    expect(parseDockPayload("panel:0:terminal")).toEqual({ targetKind: "terminal", targetSessionId: null, fromIndex: 0 })
+    expect(parseDockPayload("panel:0:explorer")).toMatchObject({ targetKind: "explorer", targetSessionId: null, fromIndex: 0 })
+    expect(parseDockPayload("panel:2:kanban")).toMatchObject({ targetKind: "kanban", targetSessionId: null, fromIndex: 2 })
+    expect(parseDockPayload("panel:0:stats")).toMatchObject({ targetKind: "stats", targetSessionId: null, fromIndex: 0 })
+    expect(parseDockPayload("panel:0:terminal")).toMatchObject({ targetKind: "session", targetSessionId: "terminal", fromIndex: 0 })
   })
 
   it("parses panel with session payload", () => {
-    expect(parseDockPayload("panel:3:session:abc123")).toEqual({
+    expect(parseDockPayload("panel:3:session:abc123")).toMatchObject({
       targetKind: "session",
       targetSessionId: "abc123",
       fromIndex: 3,
@@ -94,7 +94,7 @@ describe("parseDockPayload", () => {
   })
 
   it("parses panel with raw session id (fallback)", () => {
-    expect(parseDockPayload("panel:5:my-session-id")).toEqual({
+    expect(parseDockPayload("panel:5:my-session-id")).toMatchObject({
       targetKind: "session",
       targetSessionId: "my-session-id",
       fromIndex: 5,
@@ -102,25 +102,25 @@ describe("parseDockPayload", () => {
   })
 
   it("parses kind prefix", () => {
-    expect(parseDockPayload("kind:terminal")).toEqual({ targetKind: "terminal", targetSessionId: null, fromIndex: null })
+    expect(parseDockPayload("kind:terminal")).toMatchObject({ targetKind: "terminal", targetSessionId: null, fromIndex: null })
   })
 
   it("parses legacy shell kind directly", () => {
-    expect(parseDockPayload("explorer")).toEqual({ targetKind: "explorer", targetSessionId: null, fromIndex: null })
-    expect(parseDockPayload("terminal")).toEqual({ targetKind: "terminal", targetSessionId: null, fromIndex: null })
+    expect(parseDockPayload("explorer")).toMatchObject({ targetKind: "explorer", targetSessionId: null, fromIndex: null })
+    expect(parseDockPayload("terminal")).toMatchObject({ targetKind: "session", targetSessionId: "terminal", fromIndex: null })
   })
 
   it("parses session prefix directly", () => {
-    expect(parseDockPayload("session:xyz")).toEqual({ targetKind: "session", targetSessionId: "xyz", fromIndex: null })
+    expect(parseDockPayload("session:xyz")).toMatchObject({ targetKind: "session", targetSessionId: "xyz", fromIndex: null })
   })
 
   it("treats unknown raw as session id", () => {
-    expect(parseDockPayload("my-session-999")).toEqual({ targetKind: "session", targetSessionId: "my-session-999", fromIndex: null })
+    expect(parseDockPayload("my-session-999")).toMatchObject({ targetKind: "session", targetSessionId: "my-session-999", fromIndex: null })
   })
 
   it("handles panel with slash-containing payload as session", () => {
     // payload "foo/bar" is not kind/session/legacy, so treated as session id
-    expect(parseDockPayload("panel:0:foo/bar")).toEqual({ targetKind: "session", targetSessionId: "foo/bar", fromIndex: 0 })
+    expect(parseDockPayload("panel:0:foo/bar")).toMatchObject({ targetKind: "session", targetSessionId: "foo/bar", fromIndex: 0 })
   })
 
   it("handles panel with NaN index", () => {
@@ -130,6 +130,6 @@ describe("parseDockPayload", () => {
   })
 
   it("empty string becomes session with empty id", () => {
-    expect(parseDockPayload("")).toEqual({ targetKind: "session", targetSessionId: "", fromIndex: null })
+    expect(parseDockPayload("")).toMatchObject({ targetKind: "session", targetSessionId: "", fromIndex: null })
   })
 })

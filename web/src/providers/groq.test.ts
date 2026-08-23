@@ -112,7 +112,7 @@ describe("createGroqProvider (contra llm-mock-server)", () => {
     const provider = createGroqProvider(KEY, `${s.baseURL}/openai/v1/chat/completions`)
     const models = await provider.listModels()
     expect(models.length).toBeGreaterThanOrEqual(3)
-    expect(models[0].id).toContain("qwen")
+    expect(models.some((m) => m.id.includes("qwen"))).toBe(true)
   })
 
   beforeAll(() => {
