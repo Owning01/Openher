@@ -158,7 +158,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_ok(&v));
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(404, &e));
             }
         }
         return;
@@ -1001,6 +1001,8 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             "configPath": config_path_found,
             "configContent": config_content,
             "configJson": config_json,
+            "configFiles": config_files,
+            "instructionsFiles": instructions_files,
             "skills": skills,
             "scannedRoots": scanned_roots,
         })));
@@ -1010,7 +1012,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     if path == "/shell/opencode/global" && method == Method::Post {
         match read_body(&mut req) {
             Ok(b) => {
-                let config_path = b["configPath"].as_str().unwrap_or("");
+                let config_path = b["configPath"].as_str().or_else(|| b["path"].as_str()).unwrap_or("");
                 let content = b["content"].as_str().unwrap_or("");
                 if config_path.is_empty() || content.is_empty() {
                     let _ = req.respond(json_err(400, "Ruta o contenido inválido"));
