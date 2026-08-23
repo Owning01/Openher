@@ -138,7 +138,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       if (type === "message.updated") {
         const sessionID = p.sessionID as string | undefined
         if (sessionID && sessionID === deps.sessionID) {
-          const rawMsg = p.message as { id?: string; info?: { id?: string; role?: string; time?: { completed?: number } }; parts?: Array<{ id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }>; content?: Array<{ id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }> } | undefined
+          const rawMsg = p.message as { id?: string; info?: { id?: string; role?: string; finish?: string; time?: { completed?: number } }; parts?: Array<{ id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }>; content?: Array<{ id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }> } | undefined
           // Streaming del reasoning en vivo (v1): `message.part.delta` no trae
           // el type del part, así que los deltas de reasoning sin `part.updated`
           // previo caen como texto. El mensaje persistido SÍ trae los parts
@@ -166,7 +166,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
               }
             }
           }
-          if (rawMsg?.info?.role === "assistant" && rawMsg?.info?.time?.completed && deps.awaitingRef()) {
+          if (rawMsg?.info?.role === "assistant" && (rawMsg?.info?.time?.completed || rawMsg?.info?.finish) && deps.awaitingRef()) {
             deps.setAwaitingAssistantReply(false)
             deps.onSettled(sessionID, deps.directory ?? "")
           }

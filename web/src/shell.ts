@@ -110,6 +110,16 @@ export const shell = {
       scripts: Record<string, string>
     }>("/shell/project/serve", { path }),
   },
+  opencode: {
+    getGlobal: () => get<{
+      configPath: string
+      configContent: string
+      configJson: unknown
+      skills: Array<{ name: string; description: string; path: string; skillFile: string; source: string }>
+      scannedRoots: string[]
+    }>("/shell/opencode/global"),
+    saveGlobal: (configPath: string, content: string) => post<{ ok: boolean }>("/shell/opencode/global", { configPath, content }),
+  },
   pty: {
     create: (cwd?: string, shellName?: string) => {
       const params = new URLSearchParams()

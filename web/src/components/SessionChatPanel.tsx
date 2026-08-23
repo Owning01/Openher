@@ -283,13 +283,8 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const isWorking = useMemo(() => {
     if (msgs.awaitingAssistantReply) return true
     if (isSessionActive(session)) return true
-    const list = msgs.renderedMessages
-    if (list.length > 0) {
-      const last = list[list.length - 1]
-      if (last.info.role === "assistant" && !last.info.time.completed) return true
-    }
     return false
-  }, [msgs.awaitingAssistantReply, msgs.renderedMessages, session])
+  }, [msgs.awaitingAssistantReply, session])
 
   // Polling para desktop: cuando SSE está deshabilitado (saver/ultra/miser) no hay updates en vivo.
   // Sin esto, el assistant no aparece hasta re-entrar a la sesión.
