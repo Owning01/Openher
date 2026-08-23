@@ -883,13 +883,15 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
 
         let candidate_configs = vec![
             home_path.join(".config").join("opencode").join("opencode.json"),
+            home_path.join(".opencode").join("config.json"),
+            home_path.join(".config").join("opencode3").join("opencode.json"),
             home_path.join(".config").join("opencode").join("config.json"),
             home_path.join(".opencode").join("opencode.json"),
-            home_path.join(".opencode").join("config.json"),
             home_path.join("AppData").join("Roaming").join("opencode").join("config.json"),
             std::path::PathBuf::from("opencode.json"),
         ];
 
+        let mut config_files = Vec::new();
         let mut config_path_found = String::new();
         let mut config_content = String::new();
         let mut config_json = serde_json::Value::Null;
@@ -897,10 +899,16 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         for p in &candidate_configs {
             if p.is_file() {
                 if let Ok(c) = std::fs::read_to_string(p) {
-                    config_path_found = p.to_string_lossy().to_string();
-                    config_content = c.clone();
-                    config_json = serde_json::from_str(&c).unwrap_or(serde_json::Value::Null);
-                    break;
+                    if config_path_found.is_empty() {
+                        config_path_found = p.to_string_lossy().to_string();
+                        config_content = c.clone();
+                        config_json = serde_json::from_str(&c).unwrap_or(serde_json::Value::Null);
+                    }
+                    config_files.push(serde_json::json!({
+                        "path": p.to_string_lossy().to_string(),
+                        "name": format!("{} ({})", p.file_name().unwrap_or_default().to_string_lossy(), p.parent().and_then(|pr| pr.file_name()).unwrap_or_default().to_string_lossy()),
+                        "content": c,
+                    }));
                 }
             }
         }
@@ -910,6 +918,29 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             config_path_found = def_p.to_string_lossy().to_string();
             config_content = "{\n  \"$schema\": \"https://opencode.ai/schema.json\",\n  \"providers\": {}\n}".to_string();
             config_json = serde_json::from_str(&config_content).unwrap_or(serde_json::Value::Null);
+            config_files.push(serde_json::json!({
+                "path": config_path_found.clone(),
+                "name": "opencode.json (nuevo)",
+                "content": config_content.clone(),
+            }));
+        }
+
+        let candidate_instructions = vec![
+            std::path::PathBuf::from("AGENTS.md"),
+            home_path.join(".config").join("opencode").join("AGENTS.md"),
+            home_path.join(".opencode").join("AGENTS.md"),
+        ];
+        let mut instructions_files = Vec::new();
+        for p in &candidate_instructions {
+            if p.is_file() {
+                if let Ok(c) = std::fs::read_to_string(p) {
+                    instructions_files.push(serde_json::json!({
+                        "path": p.to_string_lossy().to_string(),
+                        "name": p.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                        "content": c,
+                    }));
+                }
+            }
         }
 
         let candidate_skill_roots = vec![

@@ -58,12 +58,15 @@ export function mapProviderModels(response: ConfigProvidersResponse): ModelOptio
 
 export function toAgentOption(agent: AgentResponse[number]): AgentOption {
   const id = agent.id || agent.name || ""
+  const anyAgent = agent as any
   return {
     id,
     name: agent.name || id,
     description: agent.description,
     mode: agent.mode,
     hidden: agent.hidden,
+    prompt: anyAgent.prompt || anyAgent.system || anyAgent.instructions,
+    model: anyAgent.model,
   }
 }
 
