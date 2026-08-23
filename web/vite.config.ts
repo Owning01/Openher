@@ -8,7 +8,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/shell": {
-        target: "http://127.0.0.1:5900",
+        target: "http://127.0.0.1:4848",
         changeOrigin: true,
       },
     },
