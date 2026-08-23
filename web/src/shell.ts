@@ -102,9 +102,9 @@ export async function resolveShellBase(): Promise<string> {
     }
   } catch {}
   try {
-    const res = await fetch("http://127.0.0.1:5900/shell/health", { cache: "no-store" })
+    const res = await fetch("http://127.0.0.1:4848/shell/health", { cache: "no-store" })
     if (res.ok) {
-      resolvedBase = "http://127.0.0.1:5900"
+      resolvedBase = "http://127.0.0.1:4848"
       return resolvedBase
     }
   } catch {}
