@@ -9,6 +9,7 @@
    tokens, base, utilities) o responsive.css para breakpoints globales.
    El bundle de Vite inlinea estos imports en el mismo orden. */
 
+@import "tailwindcss";
 @import "./styles/tokens.css";
 @import "./styles/base.css";
 @import "./styles/layout.css";

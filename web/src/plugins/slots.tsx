@@ -1,24 +1,31 @@
 import { useSyncExternalStore } from "react"
 import type { SlotId, SlotItem, PluginDisposer } from "./types"
 
+const EMPTY_SLOT_ITEMS: SlotItem[] = []
+
 class SlotRegistry {
   private slots = new Map<SlotId, SlotItem[]>()
   private listeners = new Set<() => void>()
 
   register(slotId: SlotId, item: SlotItem): PluginDisposer {
-    const list = this.slots.get(slotId) ?? []
+    const list = this.slots.get(slotId) ?? EMPTY_SLOT_ITEMS
     this.slots.set(slotId, [...list.filter((s) => s.id !== item.id), item])
     this.notify()
 
     return () => {
-      const current = this.slots.get(slotId) ?? []
-      this.slots.set(slotId, current.filter((s) => s.id !== item.id))
+      const current = this.slots.get(slotId) ?? EMPTY_SLOT_ITEMS
+      const next = current.filter((s) => s.id !== item.id)
+      if (next.length === 0) {
+        this.slots.delete(slotId)
+      } else {
+        this.slots.set(slotId, next)
+      }
       this.notify()
     }
   }
 
   get(slotId: SlotId): SlotItem[] {
-    return this.slots.get(slotId) ?? []
+    return this.slots.get(slotId) ?? EMPTY_SLOT_ITEMS
   }
 
   subscribe(listener: () => void): () => void {

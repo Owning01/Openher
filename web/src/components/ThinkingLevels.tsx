@@ -12,12 +12,14 @@ type ThinkingLevelsProps = {
   variants: ModelOption[]
   activeVariant: string | null
   onChange: (key: string, variant?: string | null) => void
+  mode?: "combobox" | "pills"
+  disabled?: boolean
 }
 
 const KNOWN_LEVELS = ["high", "medium", "low"]
 
 export const ThinkingLevels = memo(function ThinkingLevels({
-  base, variants, activeVariant, onChange
+  base, variants, activeVariant, onChange, mode = "pills", disabled
 }: ThinkingLevelsProps) {
   const t = useT()
   const baseKey = modelKey(base)
@@ -28,10 +30,38 @@ export const ThinkingLevels = memo(function ThinkingLevels({
     .filter((v): v is string => !!v && !KNOWN_LEVELS.includes(v))
 
   const pills: Array<{ name: string; variant: string | null }> = [
-    { name: "Default", variant: null },
-    ...known.map((l) => ({ name: l, variant: l })),
+    { name: "Default (Automático)", variant: null },
+    ...known.map((l) => ({ name: l.charAt(0).toUpperCase() + l.slice(1), variant: l })),
     ...customs.map((l) => ({ name: l, variant: l })),
   ]
+
+  if (mode === "combobox") {
+    return (
+      <div className="thinking-combobox-wrap">
+        <label className="thinking-levels-label" htmlFor={`thinking-select-${baseKey}`}>
+          {t('detail.thinkingLevel')}
+        </label>
+        <select
+          id={`thinking-select-${baseKey}`}
+          className="thinking-combobox"
+          disabled={disabled || variants.length === 0}
+          value={activeVariant ?? ""}
+          onChange={(e) => onChange(baseKey, e.target.value ? e.target.value : null)}
+          aria-label={t('detail.thinkingLevel')}
+        >
+          {variants.length === 0 ? (
+            <option value="">{t('detail.noThinkingLevels')}</option>
+          ) : (
+            pills.map((p) => (
+              <option key={p.variant ?? "default"} value={p.variant ?? ""}>
+                {p.name}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+    )
+  }
 
   return (
     <div className="thinking-levels">
