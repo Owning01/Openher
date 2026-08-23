@@ -14,6 +14,8 @@ import { TabBar } from "./TabBar"
 import { usePolling } from "../hooks/usePolling"
 import type { ChatViewProps } from "./ChatView"
 import type { ServerConfig, DataMode, SessionView, CommandInfo } from "../types"
+import type { VisualSelection } from "../hooks/useVisualSelection"
+import { formatSelectionForPrompt } from "../hooks/useVisualSelection"
 
 type Props = {
   session: SessionView
@@ -48,6 +50,10 @@ type Props = {
   onTabAdd?: (panelIndex: number) => void
   onTabMove?: (panelIndex: number, fromIndex: number, toIndex: number) => void
   onDropTerminal?: (panelIndex: number, targetIndex?: number) => void
+  visualSelection?: VisualSelection | null
+  visualPromptContext?: string
+  onClearVisualSelection?: () => void
+  onFocusVisualFile?: (path: string) => void
 }
 
 export const SessionChatPanel = memo(function SessionChatPanel({
@@ -56,7 +62,8 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
   onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels,
   onOpenFile, onOpenConnect, onOpenBrowser,
-  tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove, onDropTerminal
+  tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove, onDropTerminal,
+  visualSelection, visualPromptContext, onClearVisualSelection, onFocusVisualFile
 }: Props) {
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
   const composerRef = useRef(msgs.composer)
@@ -112,7 +119,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   })
 
   const { streamState } = useSSE(
-    (dataMode === "full" && baseProps.flags.streamingFull) ? config : null,
+    (dataMode === "full" && baseProps.flags.streamingFull && (active || busySessionIds?.has(session.id))) ? config : null,
     useCallback((event) => {
       if (stopGenerationRef.current) {
         if (event.type === "message.part.delta" || event.type === "message.updated" || event.type === "message.part.updated"
@@ -158,7 +165,8 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string) => {
     if (!config) return
     if (!session) return
-    const currentComposer = (typeof text === "string" ? text : composerRef.current).trim() ? (typeof text === "string" ? text : composerRef.current) : ""
+    const rawComposer = (typeof text === "string" ? text : composerRef.current).trim() ? (typeof text === "string" ? text : composerRef.current) : ""
+    const currentComposer = visualPromptContext ? formatSelectionForPrompt(rawComposer, visualPromptContext) : rawComposer
     if (!currentComposer.trim() && (!images || images.length === 0)) return
     if (connectionState === "offline") {
       onQueueAction({ type: "prompt", sessionID: session.id, directory: session.directory, payload: currentComposer })
@@ -195,10 +203,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       refresh,
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
       onSetCommands, msgs.setRuntimeError, images,
-      sendText !== currentComposer ? sendText : undefined, undefined, originalText ?? undefined)
+      sendText !== currentComposer ? sendText : (visualPromptContext && rawComposer !== currentComposer ? currentComposer : undefined), undefined, originalText ?? undefined)
     if (res === "connect") onOpenConnect?.()
+    // Auto-limpiar selección scropeada tras envío exitoso
+    if (res !== false && visualPromptContext) onClearVisualSelection?.()
     return typeof res === "boolean" ? res : true
-  }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID, onOpenConnect])
+  }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID, onOpenConnect, visualPromptContext, onClearVisualSelection])
 
   const handleAbort = useCallback(async () => {
     stopGenerationRef.current = true
@@ -312,6 +322,9 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     onPermissionApprove: handlePermissionApprove,
     onPermissionReject: handlePermissionReject,
     onDismissPermission: handleDismissPermission,
+    visualSelection,
+    onClearVisualSelection,
+    onFocusVisualFile,
     onShellSend: (cmd) => onShellExecute(cmd, session.id, session.directory),
     onChangeAgent: (id) => onChangeAgentGlobal(id, session.directory),
     onBackToSessions: () => undefined,

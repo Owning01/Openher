@@ -286,59 +286,9 @@ pub fn execute_file(path: &str) -> Result<serde_json::Value, String> {
     }
 }
 
-#[cfg(target_os = "windows")]
 pub fn pick_folder() -> Result<Option<String>, String> {
-    use std::process::Command;
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    let script = r#"
-        Add-Type -AssemblyName System.Windows.Forms
-        $f = New-Object System.Windows.Forms.FolderBrowserDialog
-        $f.Description = "Seleccionar carpeta para nueva sesión"
-        $f.ShowNewFolderButton = $true
-        if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-            Write-Output $f.SelectedPath
-        }
-    "#;
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| e.to_string())?;
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if path.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(path))
-    }
-}
-
-#[cfg(target_os = "linux")]
-pub fn pick_folder() -> Result<Option<String>, String> {
-    use std::process::Command;
-    if let Ok(output) = Command::new("zenity").args(["--file-selection", "--directory", "--title=Seleccionar carpeta"]).output() {
-        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !path.is_empty() { return Ok(Some(path)); }
-    }
-    if let Ok(output) = Command::new("kdialog").args(["--getexistingdirectory"]).output() {
-        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !path.is_empty() { return Ok(Some(path)); }
-    }
-    Ok(None)
-}
-
-#[cfg(target_os = "macos")]
-pub fn pick_folder() -> Result<Option<String>, String> {
-    use std::process::Command;
-    let script = r#"POSIX path of (choose folder with prompt "Seleccionar carpeta para nueva sesión")"#;
-    if let Ok(output) = Command::new("osascript").args(["-e", script]).output() {
-        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !path.is_empty() { return Ok(Some(path)); }
-    }
-    Ok(None)
-}
-
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-pub fn pick_folder() -> Result<Option<String>, String> {
-    Ok(None)
+    let dialog = rfd::FileDialog::new()
+        .set_title("Seleccionar carpeta para nueva sesión");
+    let path = dialog.pick_folder();
+    Ok(path.map(|p| p.to_string_lossy().to_string()))
 }

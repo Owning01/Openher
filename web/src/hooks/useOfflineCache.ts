@@ -13,6 +13,38 @@ function isEncoded(val: unknown): boolean {
   return typeof val === "string" && val.startsWith(ENC_PREFIX)
 }
 
+// Merge por id SIN reemplazar el mensaje entero: conserva los parts de la
+// caché que el snapshot nuevo no traiga (app cerrada a mitad de stream, fetch
+// acotado, etc.). Mismo contrato que loadSelected — la caché NUNCA se encoge.
+// Los parts cacheados vienen cifrados; los nuevos en claro. Al ganar el nuevo
+// (misma id) el texto reemplaza; al ganar el cached se mantiene el ciphertext.
+export function mergeCachedMessages(
+  cached: MessageEnvelope[],
+  incoming: MessageEnvelope[],
+  sortDesc = true,
+): MessageEnvelope[] {
+  const byID = new Map<string, MessageEnvelope>()
+  for (const m of cached) if (m?.info?.id) byID.set(m.info.id, m)
+  for (const m of incoming) {
+    if (!m?.info?.id) continue
+    const prev = byID.get(m.info.id)
+    if (!prev) { byID.set(m.info.id, m); continue }
+    const prevByPart = new Map(prev.parts.map((p) => [p.id, p]))
+    const parts: MessageEnvelope["parts"] = []
+    for (const p of m.parts) {
+      prevByPart.delete(p.id)
+      parts.push(p)
+    }
+    for (const p of prevByPart.values()) parts.push(p)
+    byID.set(m.info.id, { ...m, parts })
+  }
+  return [...byID.values()].sort((a, b) =>
+    sortDesc
+      ? (b.info.time.created || 0) - (a.info.time.created || 0)
+      : (a.info.time.created || 0) - (b.info.time.created || 0),
+  )
+}
+
 async function decryptMessages(messages: MessageEnvelope[]): Promise<MessageEnvelope[]> {
   return Promise.all(messages.map(async (msg) => ({
     ...msg,
@@ -132,6 +164,8 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
       })
 
       // Merge por id: la caché NUNCA se encoge — solo agrega/actualiza con lo nuevo.
+      // mergeCachedMessages hace union por part (conserva cached no presentes en
+      // el snapshot) y ordena DESC (nuevos primero) para el slice de retención.
       let merged = messages
       let prevHashes: Record<string, string> | undefined
       if (existing?.messages?.length) {
@@ -140,10 +174,7 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
         // el hash (length + prefijo) coincide — así los parts streamed nuevos se
         // encriptan SOLOS (O(deltas)) en vez de re-encriptar todo el historial.
         try {
-          const map = new Map<string, MessageEnvelope>()
-          for (const m of existing.messages) map.set(m.info.id, m)
-          for (const m of messages) map.set(m.info.id, m)
-          merged = [...map.values()].sort((a, b) => (b.info.time.created || 0) - (a.info.time.created || 0))
+          merged = mergeCachedMessages(existing.messages, messages)
           prevHashes = existing.hashes
         } catch {
           // si el merge falla, conservamos solo lo nuevo

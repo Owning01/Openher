@@ -97,6 +97,33 @@ export const api = {
     return sessions
   },
 
+  async listProjects(config: ServerConfig): Promise<Array<{ id: string; directory: string; name?: string }>> {
+    try {
+      if ((await getApiVersion(config)) === "v2") {
+        const raw = await request<Array<{ id?: string; directory?: string; name?: string; worktree?: string }>>(config, "/project")
+        if (Array.isArray(raw)) {
+          return raw.map((p) => ({
+            id: p.id || p.directory || p.worktree || "",
+            directory: p.directory || p.worktree || "",
+            name: p.name || (p.directory ? p.directory.split(/[\/\\]/).filter(Boolean).pop() : undefined),
+          })).filter((p) => Boolean(p.directory))
+        }
+        return []
+      }
+      const raw = await request<Array<{ id?: string; directory?: string; name?: string; worktree?: string }>>(config, "/project")
+      if (Array.isArray(raw)) {
+        return raw.map((p) => ({
+          id: p.id || p.directory || p.worktree || "",
+          directory: p.directory || p.worktree || "",
+          name: p.name || (p.worktree ? p.worktree.split(/[\/\\]/).filter(Boolean).pop() : undefined),
+        })).filter((p) => Boolean(p.directory))
+      }
+      return []
+    } catch {
+      return []
+    }
+  },
+
   async listStatuses(config: ServerConfig, directory?: string) {
     if ((await getApiVersion(config)) === "v2") {
       const raw = await request<Record<string, { type?: string }>>(config, withLocationDirectory("/session/active", directory))

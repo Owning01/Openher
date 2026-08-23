@@ -1,7 +1,7 @@
 // Paneles de la shell para el grid de escritorio: terminal, explorador,
 // kanban, docs, updates, stats, labs y config. Todos hablan con /shell/*.
 
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState, lazy, Suspense } from "react"
 import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
@@ -41,9 +41,10 @@ export function killTerminalPty(tabId: string) {
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
-import { BrowserPanel } from "./BrowserPanel"
-import { DocEditorPanel } from "./DocEditorPanel"
 import { sanitizeHtml } from "../utils/sanitize"
+
+const BrowserPanel = lazy(() => import("./BrowserPanel").then((m) => ({ default: m.BrowserPanel })))
+const DocEditorPanel = lazy(() => import("./DocEditorPanel").then((m) => ({ default: m.DocEditorPanel })))
 export { BrowserPanel, DocEditorPanel }
 
 // ============================================================== Terminal
@@ -62,7 +63,7 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
       fontFamily: "Consolas, 'Cascadia Mono', monospace",
       fontSize: 13,
       cursorBlink: true,
-      scrollback: 5000,
+      scrollback: 2000,
       theme: {
         background: "#0d1117",
         foreground: "#e6edf3",
@@ -74,13 +75,18 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
     term.loadAddon(fit)
     term.open(el)
 
-    // Renderer WebGL (aceleración directa por GPU de xterm al estilo Terax)
+    // Renderer WebGL (aceleración directa por GPU de xterm)
+    let webglAddon: WebglAddon | null = null
     try {
-      const webgl = new WebglAddon()
-      webgl.onContextLoss(() => webgl.dispose())
-      term.loadAddon(webgl)
+      webglAddon = new WebglAddon()
+      webglAddon.onContextLoss(() => {
+        try { webglAddon?.dispose() } catch {}
+        webglAddon = null
+      })
+      term.loadAddon(webglAddon)
     } catch {
       /* renderer DOM por defecto si no hay soporte WebGL */
+      webglAddon = null
     }
 
     term.attachCustomKeyEventHandler((e) => {
@@ -323,6 +329,11 @@ const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: {
       } catch {
         /* ignore */
       }
+      try {
+        webglAddon?.dispose()
+      } catch {
+        /* ignore */
+      }
       // NO matar PTY: sobrevive a hide/resize/tab-switch; solo killTerminalPty() con X lo mata
       term.dispose()
     }
@@ -405,7 +416,17 @@ export const TerminalPanel = memo(function TerminalPanel({
 
   const handleCloseTab = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
-    if (termTabs.length <= 1) return
+    killTerminalPty(id)
+    if (termTabs.length <= 1) {
+      const newId = `term-${Date.now()}`
+      setTermTabs([{ id: newId, title: `${currentShell} 1`, shell: currentShell }])
+      setActiveTabId(newId)
+      setSplitTabId(null)
+      if (panelId) {
+        terminalStore.delete(panelId)
+      }
+      return
+    }
     const nextTabs = termTabs.filter((t) => t.id !== id)
     setTermTabs(nextTabs)
     // Solo X explícita mata la PTY; hide/resize no la toca
@@ -642,16 +663,15 @@ export const TerminalPanel = memo(function TerminalPanel({
                     <TerminalIcon size={12} />
                     <span>{tab.title}</span>
                   </div>
-                  {termTabs.length > 1 && (
-                    <button
-                      type="button"
-                      className="terminal-tab-close-btn"
-                      onClick={(e) => handleCloseTab(tab.id, e)}
-                      title="Cerrar terminal"
-                    >
-                      <TrashIcon size={11} />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="terminal-tab-close-btn"
+                    onClick={(e) => handleCloseTab(tab.id, e)}
+                    title={termTabs.length > 1 ? "Cerrar terminal" : "Reiniciar terminal"}
+                    aria-label={termTabs.length > 1 ? "Cerrar terminal" : "Reiniciar terminal"}
+                  >
+                    <TrashIcon size={11} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -2490,9 +2510,17 @@ export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir
     case "config":
       return <ConfigPanel />
     case "browser":
-      return <BrowserPanel initialUrl={cwd?.startsWith("http") ? cwd : "http://localhost:5173"} />
+      return (
+        <Suspense fallback={<div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando navegador...</div>}>
+          <BrowserPanel initialUrl={cwd?.startsWith("http") ? cwd : "http://localhost:5173"} />
+        </Suspense>
+      )
     case "doc":
-      return <DocEditorPanel initialPath={cwd} />
+      return (
+        <Suspense fallback={<div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando editor...</div>}>
+          <DocEditorPanel initialPath={cwd} />
+        </Suspense>
+      )
     case "design":
       return <DesignPanel initialUrl={cwd?.startsWith("http") ? cwd : undefined} />
     default:

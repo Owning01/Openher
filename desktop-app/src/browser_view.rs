@@ -27,9 +27,9 @@ pub const WEBVIEW_BROWSER_ARGS: &str =
     "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-video-decode \
      --enable-accelerated-2d-canvas --enable-gpu-rasterization --enable-zero-copy \
      --autoplay-policy=no-user-gesture-required \
+     --renderer-process-limit=2 \
      --no-first-run --no-default-browser-check --disable-component-update \
-     --disable-background-networking --disable-renderer-backgrounding \
-     --disable-background-timer-throttling --disable-hang-monitor \
+     --disable-hang-monitor \
      --disable-ipc-flooding-protection --disable-popup-blocking \
      --disable-prompt-on-repost";
 
