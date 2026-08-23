@@ -428,97 +428,71 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (isUndoingRef.current) return
     isUndoingRef.current = true
     try {
-      const userMessages = messages.filter((m) => m.info.sessionID === sessionID && m.info.role === "user")
-      if (userMessages.length === 0) {
+      const sessionMsgs = messages.filter((m) => m.info.sessionID === sessionID)
+      const curRevertIdx = revert?.messageID
+        ? sessionMsgs.findIndex((m) => m.info.id === revert.messageID)
+        : -1
+      const activeMsgs = curRevertIdx >= 0 ? sessionMsgs.slice(0, curRevertIdx) : sessionMsgs
+      const targetUserMsg = [...activeMsgs].reverse().find((m) => m.info.role === "user")
+
+      if (!targetUserMsg) {
         setRuntimeError("No messages to undo")
         return
       }
 
-      // En el servidor OpenCode, revert(messageID) preserva messageID y
-      // revierte todo lo posterior. Por tanto, para deshacer el mensaje U_n,
-      // debemos revertir a U_(n-1).
-      let targetIndex = -1
-      if (revert?.messageID) {
-        const curIdx = userMessages.findIndex((m) => m.info.id === revert.messageID)
-        targetIndex = curIdx > 0 ? curIdx - 1 : -1
-      } else {
-        targetIndex = userMessages.length > 1 ? userMessages.length - 2 : -1
-      }
+      const targetID = targetUserMsg.info.id
+      const text = extractText(targetUserMsg) || ""
+      if (text) setComposer(text)
 
-      const targetID = targetIndex >= 0 ? userMessages[targetIndex].info.id : ""
-
-      // S3: actualización optimista instantánea
-      if (targetID) {
-        onSetRevertID?.(targetID)
-        onPatchSession?.({ revert: { messageID: targetID } })
-      } else {
-        onSetRevertID?.(null)
-        onPatchSession?.({ revert: undefined })
-      }
+      // Actualización optimista
+      onSetRevertID?.(targetID)
+      onPatchSession?.({ revert: { messageID: targetID } })
 
       if (awaitingAssistantReply) {
         setAwaitingAssistantReply(false)
         await api.abort(config, sessionID, directory).catch(() => {})
       }
 
-      let revertResult: unknown = null
-      let lastErr: unknown = null
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          if (targetID) {
-            revertResult = await api.revert(config, sessionID, targetID, directory)
-          } else {
-            // Deshacer el primer mensaje de la sesión
-            revertResult = await api.unrevert(config, sessionID, directory).catch(() => ({}))
-          }
-          lastErr = null
-          break
-        } catch (err: any) {
-          lastErr = err
-          const msg = String(err?.message ?? "")
-          const isBusy = /busy/i.test(msg) || /BusyError/i.test(msg)
-          if (isBusy && attempt < 1) {
-            await new Promise((r) => setTimeout(r, 300))
-            continue
-          }
-          setRuntimeError(`Revert failed: ${msg || "server error"}`)
-          revertResult = null
-          break
-        }
-      }
-
-      if (lastErr && revertResult === null) {
-        await onLoadSelected().catch(() => {})
-        return
-      }
-
+      await api.revert(config, sessionID, targetID, directory)
       await onLoadSelected().catch(() => {})
     } catch (err) {
       setRuntimeError((err as Error).message)
     } finally {
       isUndoingRef.current = false
     }
-  }, [config, messages, awaitingAssistantReply])
+  }, [config, messages, awaitingAssistantReply, setComposer])
 
   const redoMessage = useCallback(async (
     sessionID: string,
     directory: string,
+    revert: { messageID: string } | undefined,
     _onRefreshSessions: () => Promise<void>,
     onLoadSelected: () => Promise<void>,
-    onPatchSession?: (patch: Partial<{ revert: undefined }>) => void,
+    onPatchSession?: (patch: Partial<{ revert: { messageID: string } | undefined }>) => void,
+    onSetRevertID?: (id: string | null) => void,
   ) => {
-    // S3: limpiar el revert localmente para feedback instantáneo.
-    onPatchSession?.({ revert: undefined })
     try {
-      // S1+S5: unrevert + refetch en paralelo, sin refreshSessions global.
-      await Promise.all([
-        api.unrevert(config, sessionID, directory).catch(() => {}),
-        onLoadSelected().catch(() => {}),
-      ])
+      const sessionMsgs = messages.filter((m) => m.info.sessionID === sessionID)
+      if (!revert?.messageID) return
+      const curRevertIdx = sessionMsgs.findIndex((m) => m.info.id === revert.messageID)
+      if (curRevertIdx < 0) return
+
+      const nextUserMsg = sessionMsgs.slice(curRevertIdx + 1).find((m) => m.info.role === "user")
+
+      if (!nextUserMsg) {
+        onSetRevertID?.(null)
+        onPatchSession?.({ revert: undefined })
+        await api.unrevert(config, sessionID, directory)
+      } else {
+        onSetRevertID?.(nextUserMsg.info.id)
+        onPatchSession?.({ revert: { messageID: nextUserMsg.info.id } })
+        await api.revert(config, sessionID, nextUserMsg.info.id, directory)
+      }
+      await onLoadSelected().catch(() => {})
     } catch (err) {
       setRuntimeError((err as Error).message)
     }
-  }, [config])
+  }, [config, messages])
 
   const sendShellCallback = useCallback(async (sessionID: string, directory: string) => {
     const text = composer.trim()
@@ -804,7 +778,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     }
     if (parsed?.type === "redo") {
       setComposer("")
-      await redoMessage(selectedSession.id, selectedSession.directory, onRefreshSessions, onLoadSelected)
+      await redoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, onRefreshSessions, onLoadSelected, undefined, onSetRevertID)
       return
     }
     if (parsed?.type === "compact") {

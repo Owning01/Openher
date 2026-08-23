@@ -2379,11 +2379,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleRedo = useCallback(() => {
     if (!selectedSession) return
-    setLocalRevertID(null)
     const patchSession = (patch: Record<string, unknown>) => {
       setSessions((prev) => prev.map((s) => s.id === selectedSession.id ? { ...s, ...patch } : s))
     }
-    redoMessage(selectedSession.id, selectedSession.directory, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory), patchSession)
+    redoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, refreshSessions, () => loadSelected(selectedSession.id, selectedSession.directory), patchSession, setLocalRevertID)
   }, [selectedSession, redoMessage, refreshSessions, loadSelected, setSessions])
 
   const handleCompact = useCallback(async () => {

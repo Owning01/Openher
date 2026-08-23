@@ -265,8 +265,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   }, [msgs, session, refresh])
 
   const handleRedo = useCallback(() => {
-    setLocalRevertID(null)
-    msgs.redoMessage(session.id, session.directory, refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined))
+    msgs.redoMessage(session.id, session.directory, session.revert, refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined), undefined, setLocalRevertID)
   }, [msgs, session, refresh])
 
   const handleCompact = useCallback(async () => {
