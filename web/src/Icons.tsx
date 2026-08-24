@@ -1,11 +1,11 @@
 import { type ReactNode, type CSSProperties } from "react"
 
-function Svg({ children, label, className, size = 20, viewBox = "0 0 24 24", spin = false, style }: {
+function Svg({ children, label, className, size = 16, viewBox = "0 0 24 24", spin = false, style }: {
   children: ReactNode; label: string; className?: string; size?: number; viewBox?: string; spin?: boolean; style?: CSSProperties
 }) {
   return (
     <svg width={size} height={size} viewBox={viewBox} fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
       className={spin ? `${className || ""} animate-spin` : className || ""}
       style={style}
       role="img" aria-label={label}>{children}</svg>

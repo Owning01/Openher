@@ -19,11 +19,10 @@ button {
 
 button:hover:not(:disabled) {
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
 }
 
 button:active:not(:disabled) {
-  transform: translateY(1px);
+  opacity: 0.96;
 }
 
 button:disabled {

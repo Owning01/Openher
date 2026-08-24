@@ -34,10 +34,9 @@
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-3);
-  border: none;
-  border-radius: var(--radius-lg);
-  background: var(--nav-bg);
-  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
 
 .theme-toggle-nav {
@@ -120,8 +119,7 @@
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-md);
   padding: var(--space-5);
 }
 
@@ -286,7 +284,7 @@
   /* ===== Vista escritorio: sidebar de sesiones + contenido ===== */
   .app-shell {
     display: grid;
-    grid-template-columns: 48px 340px minmax(0, 1fr);
+    grid-template-columns: 36px 340px minmax(0, 1fr);
     height: 100dvh;
     overflow: hidden;
     padding: 0;
@@ -319,14 +317,14 @@
     border-radius: 0;
   }
 
-  /* ===== Activity bar estilo VS Code ===== */
+  /* ===== Activity bar estilo VS Code → minimal 36px, flat ===== */
   .app-desktop-activity {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    background: var(--surface-strong);
-    border-right: 1px solid var(--border);
-    padding: 4px 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border-subtle);
+    padding: 6px 0;
     overflow-y: auto;
   }
 
@@ -335,12 +333,12 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
   }
 
   .activity-btn {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -348,18 +346,18 @@
     background: transparent;
     color: var(--muted);
     cursor: pointer;
-    border-left: 2px solid transparent;
-    border-radius: 0;
-    transition: color 0.15s, border-color 0.15s;
+    border-radius: var(--radius-sm);
+    transition: color 0.12s, background 0.12s;
   }
 
   .activity-btn:hover {
     color: var(--text);
+    background: var(--surface-strong);
   }
 
   .activity-btn.active {
     color: var(--primary);
-    border-left-color: var(--primary);
+    background: var(--primary-soft);
   }
 
   .activity-ram-chip {
@@ -500,6 +498,17 @@
 
   .desktop-cell-placeholder:hover {
     border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .desktop-cell-placeholder.drag-over {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent);
+  }
+
+  .desktop-cell-placeholder.drag-over .icon-empty-state,
+  .desktop-cell-placeholder.drag-over p {
     color: var(--primary);
   }
 
@@ -890,10 +899,8 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-1);
     border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--bottom-nav-bg);
-    box-shadow: var(--shadow-md);
-    backdrop-filter: blur(14px);
+    border-radius: var(--radius-md);
+    background: var(--surface);
     padding: var(--space-1);
     width: min(400px, 90vw);
   }
