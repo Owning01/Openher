@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import type { ServerConfig, SSEEvent, StreamState } from "../types"
-import { authHeader, baseUrl, resolveApiVersion, onApiVersionChange } from "../api"
+import { authHeader, onApiVersionChange } from "../api"
+import { buildSSEUrl } from "../shared/sse/client"
 import { createSSEFrameParser, type ParsedSSEFrame } from "../shared/sse/parser"
 import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS, SSE_CONNECT_TIMEOUT_MS } from "../constants"
@@ -61,18 +62,13 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
     // connect() con un health probe. Si el cache está vacío, cae a v1 y se
     // corrige en background cuando el health detecta v2 (onApiVersionChange
     // re-ejecuta el efecto de conexión).
-    const v2 = resolveApiVersion(config) === "v2"
 
     abortRef.current?.abort()
     clearHeartbeat()
     const abort = new AbortController()
     abortRef.current = abort
 
-    let url = `${baseUrl(config)}/${v2 ? "api/event" : "event"}`
-    const dir = directoryRef.current
-    if (dir) {
-      url += `?directory=${encodeURIComponent(dir.replace(/\\/g, "/"))}`
-    }
+    const url = buildSSEUrl(config, directoryRef.current, sessionIDRef.current ?? undefined)
 
     const headers: Record<string, string> = { Accept: "text/event-stream" }
     if (config.username && config.password) {
@@ -105,6 +101,17 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
 
       const dispatch = (event: Partial<SSEEvent>) => {
         if (event.type === "server.heartbeat") return
+        if (event.type === "server.instance.disposed") {
+          onEventRef.current({ id: String(event.id ?? ""), type: event.type as string, properties: (event.properties as Record<string, unknown>) ?? {} })
+          abort.abort()
+          try { reader.cancel() } catch {}
+          setStreamState("polling")
+          return
+        }
+        if (event.type === "server.connected") {
+          onEventRef.current({ id: String(event.id ?? ""), type: event.type as string, properties: (event.properties as Record<string, unknown>) ?? {} })
+          return
+        }
         if (event.properties) {
           const props = event.properties as Record<string, unknown>
           const visible = sessionIDRef.current
@@ -173,6 +180,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
 
   const scheduleReconnect = useCallback(() => {
     if (!mountedRef.current) return
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
     const attempt = reconnectAttemptRef.current++
     const delay = computeBackoff(SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, attempt)
     reconnectTimerRef.current = setTimeout(() => {

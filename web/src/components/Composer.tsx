@@ -133,10 +133,15 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
   // En móvil (táctil) Enter = nueva línea; en desktop Enter envía.
   // En wry desktop (WebView2) forzamos desktop aunque el device reporte pointer:coarse (laptop táctil)
-  const isMobileInput = useMemo(
+  const [isMobileInput, setIsMobileInput] = useState(
     () => typeof window !== "undefined" && !(window as any).__OPENCODE_DESKTOP__ && window.matchMedia("(pointer: coarse)").matches,
-    [],
   )
+  useEffect(() => {
+    const mql = window.matchMedia("(pointer: coarse)")
+    const onChange = () => setIsMobileInput(!(window as any).__OPENCODE_DESKTOP__ && mql.matches)
+    mql.addEventListener?.("change", onChange)
+    return () => mql.removeEventListener?.("change", onChange)
+  }, [])
 
   // Local value: fuente de verdad mientras se tipea. El padre NO recibe cada
   // keystroke (eso re-renderizaba App completa y su eco stale REVERTÍA los
@@ -348,14 +353,14 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       if (e.key === "ArrowUp") { e.preventDefault(); setAtIndex((i) => (i - 1 + mentionItems.length) % mentionItems.length); return true }
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); selectMention(mentionItems[atIndex]); return true }
       if (e.key === "Escape") { e.preventDefault(); setShowAtMenu(false); return true }
-      return true
+      return false
     }
     if (showSlashMenu && slashFiltered.length > 0) {
       if (e.key === "ArrowDown") { e.preventDefault(); setSlashIndex((i) => (i + 1) % slashFiltered.length); return true }
       if (e.key === "ArrowUp") { e.preventDefault(); setSlashIndex((i) => (i - 1 + slashFiltered.length) % slashFiltered.length); return true }
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); selectSlashCommand(slashFiltered[slashIndex]); return true }
       if (e.key === "Escape") { e.preventDefault(); setShowSlashMenu(false); return true }
-      return true
+      return false
     }
     return false
   }, [showSlashMenu, slashFiltered, slashIndex, selectSlashCommand, showAtMenu, mentionItems, atIndex, selectMention])
@@ -458,6 +463,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       ? domText
       : (localValueRef.current || localValue)
     if (!textToSend.trim() && images.length === 0) return
+    if (charLimit > 0 && textToSend.length > charLimit) return
     const opts = tslEnabled ? { translate: true } : undefined
     const imgs = images.length > 0 ? images : undefined
 
@@ -726,7 +732,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           <button
             type="button"
             onClick={handleSendWithImages}
-            disabled={disabled || isSending || (!localValue.trim() && images.length === 0)}
+            disabled={disabled || isSending || (!localValue.trim() && images.length === 0) || (charLimit > 0 && localValue.length > charLimit)}
             className={`composer-inline-btn composer-send-btn${supported ? " with-mic" : ""}`}
             title={t('composer.send')}
             aria-label={t('composer.send')}

@@ -27,10 +27,42 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     partTypeCacheRef.current.clear()
   }, [deps.sessionID])
 
+  // Coalesce de deltas por frame (copiado de app/server-sdk.tsx FLUSH_FRAME_MS 16): concatena
+  // deltas del mismo part para no crear N patches por frame.
+  const coalesceMapRef = useRef<Map<string, { sessionID: string; messageID: string; partID: string; text: string; replace: boolean; partType: string }>>(new Map())
+  const coalesceFrameRef = useRef<number | null>(null)
+  const flushCoalesce = useCallback(() => {
+    coalesceFrameRef.current = null
+    const toFlush = [...coalesceMapRef.current.values()]
+    coalesceMapRef.current.clear()
+    for (const v of toFlush) deps.applyDelta(v.sessionID, v.messageID, v.partID, v.text, v.replace, v.partType)
+  }, [deps])
+  const enqueueDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace: boolean, partType: string) => {
+    const key = `${sessionID}:${messageID}:${partID}:${partType}`
+    const existing = coalesceMapRef.current.get(key)
+    if (existing && !replace) existing.text += text
+    else coalesceMapRef.current.set(key, { sessionID, messageID, partID, text, replace, partType })
+    if (coalesceFrameRef.current === null) coalesceFrameRef.current = requestAnimationFrame(flushCoalesce)
+  }, [flushCoalesce])
+  useEffect(() => () => {
+    if (coalesceFrameRef.current !== null) cancelAnimationFrame(coalesceFrameRef.current)
+    coalesceMapRef.current.clear()
+  }, [])
+
   return useCallback((event: SSEEvent) => {
     const p = event.properties as Record<string, unknown>
     const type = event.type
-    if (type === "server.connected" || type === "server.heartbeat") return
+    if (type === "server.heartbeat") return
+    if (type === "server.connected") {
+      // Upstream server-sdk refresca sesiones al reconectar; aquí refrescamos la sesión visible.
+      if (deps.sessionID && deps.directory) deps.loadSelected(deps.sessionID, deps.directory)
+      return
+    }
+    if (type === "server.instance.disposed") {
+      deps.setRuntimeError("Server instance disposed — reconnect or reload")
+      deps.setAwaitingAssistantReply(false)
+      return
+    }
 
     // Reemitir eventos hacia el bus de plugins
     pluginBus.emit(type, { ...p, sessionID: deps.sessionID, directory: deps.directory })
@@ -89,7 +121,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
         console.info("[SSE:diag] part.delta", { partID, messageID, partType, cached: Boolean(cachedType), deltaLen: text.length })
       }
       if (sessionID && messageID && partID && text && sessionID === deps.sessionID) {
-        deps.applyDelta(sessionID, messageID, partID, text, !hasDelta, partType)
+        enqueueDelta(sessionID, messageID, partID, text, !hasDelta, partType)
       }
       return
     }
@@ -110,7 +142,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const hasDelta = typeof (d.delta ?? p.delta) === "string"
       const text = (hasDelta ? (d.delta ?? p.delta) : (d.text ?? p.text ?? "")) as string
       if (assistantMessageID && partID && text) {
-        deps.applyDelta(sessionID, assistantMessageID, partID, text, !hasDelta, partType)
+        enqueueDelta(sessionID, assistantMessageID, partID, text, !hasDelta, partType)
       }
       return
     }
@@ -122,7 +154,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       if (sessionID && messageID && sessionID === deps.sessionID) {
         if (type === "session.next.compaction.delta") {
           const text = (d.text ?? p.text) as string | undefined
-          if (text) deps.applyDelta(sessionID, messageID, messageID, text, true, "compaction")
+          if (text) enqueueDelta(sessionID, messageID, messageID, text, true, "compaction")
         } else {
           deps.loadSelected(sessionID, deps.directory ?? "")
         }

@@ -27,7 +27,7 @@ export { BrowserPanel, DocEditorPanel }
 
 // ============================================================== Terminal (Multi-Pestaña)
 
-const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: { cwd?: string; shellName?: string; tabId: string }) {
+export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tabId }: { cwd?: string; shellName?: string; tabId: string }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const initialCwdRef = useRef(cwd)
   const initialShellRef = useRef(shellName)
@@ -916,10 +916,10 @@ export const ExplorerPanel = memo(function ExplorerPanel({
   const handleContextMenu = (e: React.MouseEvent, entry: FsEntry | null, isDir: boolean) => {
     e.preventDefault()
     e.stopPropagation()
-    const menuW = 210
-    const menuH = 260
-    const x = e.clientX + menuW > window.innerWidth ? Math.max(10, e.clientX - menuW) : e.clientX
-    const y = e.clientY + menuH > window.innerHeight ? Math.max(10, e.clientY - menuH) : e.clientY
+    const menuW = 240
+    const menuH = 460 // altura real máxima (≈12 ítems); 260 cortaba "Copiar/Eliminar"
+    const x = e.clientX + menuW > window.innerWidth ? Math.max(8, e.clientX - menuW) : e.clientX
+    const y = e.clientY + menuH > window.innerHeight ? Math.max(8, window.innerHeight - menuH - 8) : e.clientY
     setContextMenu({ x, y, entry, isDir })
   }
 
@@ -1186,9 +1186,10 @@ export const ExplorerPanel = memo(function ExplorerPanel({
             borderRadius: "var(--radius-sm)",
             boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
             padding: "4px 0",
-            minWidth: "190px",
-            maxHeight: "calc(100vh - 40px)",
+            minWidth: "230px",
+            maxHeight: `calc(100vh - ${contextMenu.y}px - 12px)`,
             overflowY: "auto",
+            overscrollBehavior: "contain",
           }}
         >
           {contextMenu.entry && (

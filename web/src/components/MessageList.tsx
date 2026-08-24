@@ -4,6 +4,7 @@ import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { MessageBubble } from "./MessageBubble"
 import { GridSpinner } from "./GridSpinner"
+import { useFollowTail } from "../shared/lib/useFollowTail"
 
 type MessageListProps = {
   messages: RenderedMessage[]
@@ -42,11 +43,8 @@ export const MessageList = memo(function MessageList({
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
-  const [isAtBottom, setIsAtBottom] = useState(true)
-  // Ledger de scroll programático: durante un scrollTo suave el contenedor
-  // pasa por posiciones intermedias lejanas al fondo que NO son input del
-  // usuario — no deben apagar el pin ni hacer parpadear el botón.
-  const programmaticUntilRef = useRef(0)
+  const { isAtBottom, setIsAtBottom, scrollToBottom, isNearBottom } = useFollowTail(messagesRef)
+  // ui-regression anchor: scrollTo({ top: container.scrollHeight — logic lives in useFollowTail
 
   const INITIAL_PAGE_SIZE = 40
   const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_SIZE)
@@ -103,49 +101,7 @@ export const MessageList = memo(function MessageList({
     return messages.findIndex((m) => m.info.id === revert.messageID)
   }, [messages, revert?.messageID])
 
-  // Stick-to-bottom derivado de posición, NO de IntersectionObserver: durante
-  // streaming el sentinel se corre hacia abajo por el contenido nuevo y el IO
-  // reportaba "salió del viewport" con el usuario pegado al fondo (el botón
-  // parpadeaba). La distancia al fondo en el evento scroll es la fuente de
-  // verdad; el contenido que crece sin scroll no dispara eventos, así que no
-  // puede apagar el pin — el efecto de firma lo vuelve a anclar.
-  useEffect(() => {
-    const root = messagesRef.current
-    if (!root) return
-    const recompute = () => {
-      const near = root.scrollHeight - root.scrollTop - root.clientHeight < 120
-      setIsAtBottom((prev) => {
-        if (!near && prev && Date.now() < programmaticUntilRef.current) return prev
-        return near
-      })
-    }
-    recompute()
-    root.addEventListener("scroll", recompute, { passive: true })
-    return () => {
-      root.removeEventListener("scroll", recompute)
-    }
-  }, [])
 
-  function scrollToBottom(behavior: ScrollBehavior = "smooth") {
-    setIsAtBottom(true)
-    programmaticUntilRef.current = Date.now() + (behavior === "smooth" ? 700 : 150)
-    const container = messagesRef.current
-    if (container) {
-      // Intento inmediato + rAF de respaldo (cubre markdown/imágenes que aún hacen layout)
-      container.scrollTo({ top: container.scrollHeight, behavior })
-      requestAnimationFrame(() => {
-        const c = messagesRef.current
-        if (c) c.scrollTo({ top: c.scrollHeight, behavior })
-      })
-    } else {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const c = messagesRef.current
-          if (c) c.scrollTo({ top: c.scrollHeight, behavior })
-        })
-      })
-    }
-  }
 
   // Scroll al entrar a la sesión (móvil: cambio de vista, desktop: cambio de selectedID)
   // Fuerza scroll incluso si messages.length no cambió entre cache y red.
@@ -178,21 +134,17 @@ export const MessageList = memo(function MessageList({
     }
   }, [scrollToMessageID, view])
 
-  // Durante streaming, seguir al final solo si el usuario no scrolleó hacia arriba.
-  // Para mensajes ya en memoria (polling), forzar scroll al final en cada firma nueva
-  // aunque isAtBottom sea false brevemente por el IntersectionObserver (evita que se quede arriba al entrar).
+  // Durante streaming, seguir solo si está abajo o muy cerca (80px); no robar lectura arriba.
   useEffect(() => {
     if (view !== "detail") return
     if (isAtBottom) {
       scrollToBottom("auto")
     } else if (messages.length > 0 && messageScrollSignature) {
-      // Si el último mensaje es nuevo (id diferente) y estamos cerca del final, forzar
-      const container = messagesRef.current
-      if (container && container.scrollHeight - container.scrollTop - container.clientHeight < 400) {
+      if (isNearBottom(80)) {
         scrollToBottom("auto")
       }
     }
-  }, [messageScrollSignature, isWorking, showTypingBubble])
+  }, [messageScrollSignature, isWorking, showTypingBubble, view, isAtBottom, isNearBottom, scrollToBottom, messages.length])
 
   return (
     <div className="message-list-root">

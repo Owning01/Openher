@@ -1,9 +1,11 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
 import { api } from "../api"
+import { resolveApiVersion } from "../shared/api/version"
 import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "../utils/parseCommand"
 import { computeRenderedMessages } from "../utils/rendered"
 import { isImagePart, countImageParts } from "../utils"
+import { formatServerError } from "../shared/errors/serverErrors"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
@@ -161,30 +163,39 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (optimisticUserMessages.length === 0) {
       merged = messages
     } else {
-      // Filtrar optimistas que ya están presentes en messages (por id o por coincidencia de texto en la misma sesión)
-      const existingUserTexts = new Set(
-        messages.filter((m) => m.info.role === "user").map((m) => `${m.info.sessionID}:${extractText(m).trim()}`)
-      )
-      // Para mensajes solo-imagen, trackear por sesión + cantidad de partes imagen
-      const existingImageCounts = new Map<string, number>()
+      // Filtrar optimistas que ya están presentes en messages (por id o por coincidencia de texto)
+      // Usa Map count para no colapsar duplicados ("hola" x2)
+      const existingUserTextCounts = new Map<string, number>()
+      for (const m of messages.filter((m) => m.info.role === "user")) {
+        const key = `${m.info.sessionID}:${extractText(m).trim()}`
+        if (key.endsWith(":")) continue
+        existingUserTextCounts.set(key, (existingUserTextCounts.get(key) ?? 0) + 1)
+      }
+      const existingImageCountMap = new Map<string, Map<number, number>>()
       for (const m of messages.filter((m) => m.info.role === "user")) {
         const imgCount = countImageParts(m.parts)
         if (imgCount > 0) {
-          existingImageCounts.set(m.info.sessionID, (existingImageCounts.get(m.info.sessionID) ?? 0) + imgCount)
+          let inner = existingImageCountMap.get(m.info.sessionID)
+          if (!inner) { inner = new Map(); existingImageCountMap.set(m.info.sessionID, inner) }
+          inner.set(imgCount, (inner.get(imgCount) ?? 0) + 1)
         }
       }
       const pendingOptimistic = optimisticUserMessages.filter((opt) => {
         const key = `${opt.info.sessionID}:${extractText(opt).trim()}`
-        if (existingUserTexts.has(key)) {
-          existingUserTexts.delete(key)
+        const cnt = existingUserTextCounts.get(key) ?? 0
+        if (cnt > 0) {
+          existingUserTextCounts.set(key, cnt - 1)
           return false
         }
-        // Para mensajes solo-imagen: si el server ya tiene mensajes de usuario
-        // con imágenes en la misma sesión, asumir que fue confirmado
         if (!extractText(opt).trim()) {
           const optImgCount = opt.parts.filter((p) => isImagePart(p)).length
-          if (optImgCount > 0 && existingImageCounts.has(opt.info.sessionID)) {
-            return false
+          if (optImgCount > 0) {
+            const inner = existingImageCountMap.get(opt.info.sessionID)
+            const icnt = inner?.get(optImgCount) ?? 0
+            if (icnt > 0) {
+              inner!.set(optImgCount, icnt - 1)
+              return false
+            }
           }
         }
         return true
@@ -353,31 +364,38 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       //    de desaparecer junto con el primero.
       //    Para mensajes solo-imagen (sin texto), se confirma por cantidad de
       //    partes de imagen coincidente.
-      const confirmedTexts = new Set(confirmedUsers.map((m) => extractText(m).trim()).filter(Boolean))
-      const confirmedImageCounts = new Map<string, number>()
+      const confirmedTextCounts = new Map<string, number>()
+      for (const m of confirmedUsers) {
+        const t = extractText(m).trim()
+        if (!t) continue
+        confirmedTextCounts.set(t, (confirmedTextCounts.get(t) ?? 0) + 1)
+      }
+      const confirmedImageCountMap = new Map<string, Map<number, number>>()
       for (const m of confirmedUsers) {
         const imgCount = countImageParts(m.parts)
         if (imgCount > 0) {
-          const key = `${m.info.sessionID}:${extractText(m).trim()}`
-          confirmedImageCounts.set(key, imgCount)
+          let inner = confirmedImageCountMap.get(m.info.sessionID)
+          if (!inner) { inner = new Map(); confirmedImageCountMap.set(m.info.sessionID, inner) }
+          inner.set(imgCount, (inner.get(imgCount) ?? 0) + 1)
         }
       }
       const removeIDs = new Set<string>(confirmedIDs)
-      const matchedTexts = new Set<string>()
       for (const m of current) {
         if (m.info.sessionID !== sessionID || confirmedIDs.has(m.info.id)) continue
         const t = extractText(m).trim()
-        if (t && confirmedTexts.has(t) && !matchedTexts.has(t)) {
-          matchedTexts.add(t)
-          removeIDs.add(m.info.id)
-        } else if (!t) {
-          // Mensaje solo-imagen: matchear por cantidad de partes imagen
-          const optImgCount = m.parts.filter((p) => isImagePart(p)).length
-          const key = `${m.info.sessionID}:`
-          const serverImgCount = confirmedImageCounts.get(key)
-          if (serverImgCount !== undefined && serverImgCount === optImgCount) {
+        if (t) {
+          const cnt = confirmedTextCounts.get(t) ?? 0
+          if (cnt > 0) {
+            confirmedTextCounts.set(t, cnt - 1)
             removeIDs.add(m.info.id)
-            confirmedImageCounts.delete(key)
+          }
+        } else {
+          const optImgCount = m.parts.filter((p) => isImagePart(p)).length
+          const inner = confirmedImageCountMap.get(m.info.sessionID)
+          const icnt = inner?.get(optImgCount) ?? 0
+          if (icnt > 0) {
+            inner!.set(optImgCount, icnt - 1)
+            removeIDs.add(m.info.id)
           }
         }
       }
@@ -459,7 +477,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       await onLoadSelected().catch(() => {})
       await _onRefreshSessions().catch(() => {})
     } catch (err) {
-      setRuntimeError((err as Error).message)
+      setRuntimeError(formatServerError(err))
     } finally {
       isUndoingRef.current = false
     }
@@ -495,7 +513,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       await onLoadSelected().catch(() => {})
       await _onRefreshSessions().catch(() => {})
     } catch (err) {
-      setRuntimeError((err as Error).message)
+      setRuntimeError(formatServerError(err))
     }
   }, [config, messages])
 
@@ -508,7 +526,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       await api.sendShell(config, sessionID, text, directory)
     } catch (err) {
       setAwaitingAssistantReply(false)
-      setRuntimeError((err as Error).message)
+      setRuntimeError(formatServerError(err))
     }
   }, [config, composer])
 
@@ -527,7 +545,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       await loadSelected(sessionID, directory)
       await onRefreshSessions()
     } catch (err) {
-      setRuntimeError((err as Error).message)
+      setRuntimeError(formatServerError(err))
     }
   }, [config, loadSelected])
 
@@ -685,6 +703,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   ) => {
     const text = (textOverride ?? composer).trim()
     if ((!text || !selectedSession) && (!images || images.length === 0)) return false
+    // v2 no soporta imágenes (server las descarta y el optimistic quedaría huérfano/duplicado)
+    if (images && images.length > 0 && resolveApiVersion(config) === "v2") {
+      onSetRuntimeError("This server (v2) doesn't support images — switch to v1 or remove attachments")
+      return false
+    }
     try {
 
     const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
@@ -729,7 +752,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           setAwaitingAssistantReply(false)
           removeOptimistic(optimisticMessage.info.id)
           setComposer((current) => current || text)
-          onSetRuntimeError((err as Error).message)
+          onSetRuntimeError(formatServerError(err))
         }
       } finally {
         isSendingRef.current = false
@@ -817,7 +840,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           await api.setProviderAuth(config, m[1], m[2], selectedSession.directory)
           return true
         } catch (err) {
-          onSetRuntimeError((err as Error).message)
+          onSetRuntimeError(formatServerError(err))
           return false
         }
       }
@@ -827,7 +850,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       const { isKnown } = await resolveCommand(config, parsed.command, commands, onSetCommands)
       if (!isKnown) {
         return doSend(
-          () => api.sendPrompt(config, selectedSession.id, text.slice(1), selectedSession.directory, activeModel, activeAgentID),
+          () => api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID),
           () => onLoadSelected()
         )
       }
