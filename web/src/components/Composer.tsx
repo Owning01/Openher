@@ -142,11 +142,12 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   // keystroke (eso re-renderizaba App completa y su eco stale REVERTÍA los
   // borrados). Push al padre solo con debounce largo (higiene/persistencia),
   // en send/clear, y en cambios externos (share, snippet, historial).
+  // Local value: fuente de verdad absoluta mientras se tipea.
   const [localValue, setLocalValue] = useState(value)
   const localValueRef = useRef(value)
   localValueRef.current = localValue
   const lastSyncedRef = useRef(value)   // último value visto del padre
-  const lastPushedRef = useRef(value)   // último valor que notificamos al padre
+  const lastPushedRef = useRef(value)   // último valor que notificamos o tenemos localmente
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -157,37 +158,38 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     onChangeRef.current(v)
   }, [])
 
-  // Sync SOLO de cambios externos del padre. Reglas:
-  // 1. Echo propio (el debounce del padre devolvió lo que empujamos) → ignorar.
-  // 2. Si el padre tiene un prefijo más corto que lo que el usuario ya tipeó localmente → ignorar (evita truncar a la mitad).
-  // 3. Con foco en el textarea y value≠"" → ignorar (protege lo tipeado/borrado).
-  // 4. Clear ("") o cambio externo real sin foco → aplicar.
+  // Sync SOLO de cambios externos del padre (reset a "", inserción en composer vacío, etc.).
+  // NUNCA sobreescribe texto local con versiones intermedias o más cortas del padre.
   useEffect(() => {
     if (value === lastSyncedRef.current) return
     lastSyncedRef.current = value
-    if (value === lastPushedRef.current) return
-    if (localValueRef.current && localValueRef.current.startsWith(value) && localValueRef.current.length > value.length) {
+    if (value === localValueRef.current || value === lastPushedRef.current) return
+
+    // Si el usuario tiene texto local activo y el padre envía algo distinto que no sea vacío,
+    // protegemos el texto local contra truncamientos o ecos viejos.
+    if (localValueRef.current.trim().length > 0 && value !== "") {
       return
     }
-    const ta = textareaRef.current
-    const focused = ta ? document.activeElement === ta : false
-    if (focused && value !== "") return
+
     setLocalValue(value)
     localValueRef.current = value
     lastPushedRef.current = value
+    if (textareaRef.current) {
+      textareaRef.current.value = value
+    }
   }, [value])
 
   const handleChange = useCallback((newValue: string) => {
     setLocalValue(newValue)
     localValueRef.current = newValue
-    // Push diferido al padre: persistencia del draft y estado del padre,
-    // sin acoplar el ritmo de tipeo al re-render de App.
+    lastPushedRef.current = newValue
+
+    // Push diferido al padre para persistencia de draft
     if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
     pushTimerRef.current = setTimeout(() => {
       pushTimerRef.current = null
-      lastPushedRef.current = newValue
       onChangeRef.current(newValue)
-    }, 400)
+    }, 300)
   }, [])
 
   // Listener para eventos emitidos por plugins para insertar texto en el prompt
@@ -458,19 +460,22 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     if (!textToSend.trim() && images.length === 0) return
     const opts = tslEnabled ? { translate: true } : undefined
     const imgs = images.length > 0 ? images : undefined
-    // Limpiar imágenes y texto INMEDIATAMENTE antes de esperar la respuesta
-    // del server (evita que la preview quede en el composer).
+
     setImages([])
+    if (textareaRef.current) textareaRef.current.value = ""
     setLocalValue("")
     localValueRef.current = ""
+    lastPushedRef.current = ""
+    lastSyncedRef.current = ""
     pushNow("")
     resizeTextarea()
     const ok = await onSend(imgs, opts, textToSend)
     if (ok === false) {
-      // Si falló, restaurar las imágenes y el texto (best-effort)
       if (imgs) setImages(imgs)
       setLocalValue(textToSend)
       localValueRef.current = textToSend
+      lastPushedRef.current = textToSend
+      if (textareaRef.current) textareaRef.current.value = textToSend
       pushNow(textToSend)
     }
   }, [onSend, images, resizeTextarea, disabled, localValue, tslEnabled, pushNow])
