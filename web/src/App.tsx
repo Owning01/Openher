@@ -23,17 +23,13 @@ import { SessionList } from "./components/SessionList"
 import { ChatView } from "./components/ChatView"
 import type { ChatViewProps } from "./components/ChatView"
 import { SessionChatPanel } from "./components/SessionChatPanel"
-import { BottomSheet } from "./components/BottomSheet"
 import { ADEDiffPanel } from "./components/ADEDiffPanel"
-import { ConfirmModal } from "./components/ConfirmModal"
-import { ErrorModal } from "./components/ErrorModal"
-import { ShortcutsModal } from "./components/ShortcutsModal"
-import { OpenCodeHubModal } from "./components/OpenCodeHubModal"
+import { AppModals } from "./components/AppModals"
 import { loadShortcutsConfig, matchesShortcut, type ShortcutItem } from "./shortcuts"
-import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, FileDiff } from "./types"
+import type { ViewType, HelpPage as HelpPageType, SessionView, SSEEvent, StreamState, FileDiff, DesktopLayout } from "./types"
 import type { LanguageCode } from "./i18n"
 import { formatLimit, extractPath, extractName, extractBranch, isSessionActive, filterByQuery } from "./utils"
-import { parseDragPayload, parseDockPayload } from "./utils/drag"
+import { parseDragPayload, parseDockPayload, isTerminalTabPayload } from "./utils/drag"
 import { STORAGE_KEYS, DEFAULT_STATS_PORT } from "./constants"
 import { useBackButton } from "./hooks/useBackButton"
 import { useNetworkMode } from "./hooks/useNetworkMode"
@@ -51,6 +47,7 @@ import { useOfflineQueue } from "./hooks/useOfflineQueue"
 import { useNotifications } from "./hooks/useNotifications"
 import { useDeepLink } from "./hooks/useDeepLink"
 import { useIsDesktop } from "./hooks/useIsDesktop"
+import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts"
 import { useQuestions } from "./hooks/useQuestions"
 import { useSSEHandler } from "./hooks/useSSEHandler"
 import { FolderIcon, SettingsIcon, ChatIcon, TerminalIcon, LayersIcon, StatsIcon, GlobeIcon, PencilIcon, BrainIcon, BranchIcon } from "./Icons"
@@ -63,7 +60,7 @@ import { loadDesktopConfig } from "./desktop"
 import type { ShellPanelKind } from "./shell"
 import { shell } from "./shell"
 import { TabBar } from "./components/TabBar"
-import { transferTerminalTab } from "./utils/terminalStore"
+import { transferTerminalTab, killTerminalPty } from "./utils/terminalStore"
 import type { ServerProfile } from "./types"
 import { useVisualSelection, formatSelectionForPrompt } from "./hooks/useVisualSelection"
 import { pluginHost, PluginSlot } from "./plugins"
@@ -86,16 +83,7 @@ function lazyRetry<T extends React.ComponentType<any>>(
 }
 
 // Componentes pesados o poco frecuentes: se descargan bajo demanda
-const ThemePicker = lazyRetry(() => import("./components/ThemePicker").then((m) => ({ default: m.ThemePicker })))
-const ConnectProviderSheet = lazyRetry(() => import("./components/ConnectProviderSheet").then((m) => ({ default: m.ConnectProviderSheet })))
-const MCPBrowser = lazyRetry(() => import("./components/MCPBrowser").then((m) => ({ default: m.MCPBrowser })))
-const ArchivedList = lazyRetry(() => import("./components/ArchivedList").then((m) => ({ default: m.ArchivedList })))
-const FileEditor = lazyRetry(() => import("./components/FileEditor").then((m) => ({ default: m.FileEditor })))
 const TerminalView = lazyRetry(() => import("./components/TerminalView").then((m) => ({ default: m.TerminalView })))
-const RemoteDesktop = lazyRetry(() => import("./components/RemoteDesktop").then((m) => ({ default: m.RemoteDesktop })))
-const ThemeCreator = lazyRetry(() => import("./components/ThemeCreator").then((m) => ({ default: m.ThemeCreator })))
-const FavoritesManager = lazyRetry(() => import("./components/FavoritesManager").then((m) => ({ default: m.FavoritesManager })))
-const FileBrowser = lazyRetry(() => import("./components/FileBrowser").then((m) => ({ default: m.FileBrowser })))
 const HelpPage = lazyRetry(() => import("./components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const FolderPicker = lazyRetry(() => import("./components/FolderPicker").then((m) => ({ default: m.FolderPicker })))
 const QuickChatPanel = lazyRetry(() => import("./components/QuickChatPanel").then((m) => ({ default: m.QuickChatPanel })))
@@ -104,34 +92,19 @@ const QuickChatPanel = lazyRetry(() => import("./components/QuickChatPanel").the
 // APK móvil no descargue ni parsee terminal/browser/kanban que nunca renderiza.
 const ShellPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.ShellPanel })))
 const ExplorerPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.ExplorerPanel })))
+const SingleTerminal = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.SingleTerminal })))
 const StatsPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.StatsPanel })))
 const KanbanPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.KanbanPanel })))
 const ConfigPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.ConfigPanel })))
 const FileEditorPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.FileEditorPanel })))
 const BrowserPanel = lazyRetry(() => import("./components/BrowserPanel").then((m) => ({ default: m.BrowserPanel })))
 const DesignPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.DesignPanel })))
-const TerminalPanel = lazyRetry(() => import("./components/shellPanels").then((m) => ({ default: m.TerminalPanel })))
 const PANEL_SUSPENSE_FALLBACK = (
   <div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando…</div>
 )
 const SourceControlPanel = lazyRetry(() => import("./components/SourceControlPanel").then((m) => ({ default: m.SourceControlPanel })))
 
 type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm"
-
-type DesktopLayout = {
-  cols: number
-  rows: number
-  sessions: Array<string | null>
-  panelKinds: Array<ShellPanelKind | "editor">
-  panelIds: Array<string>
-  panelEditorPaths?: Record<number, string>
-  /** Multi-tab por celda de editor: índice de celda → lista de paths. DRY con tabStacks. */
-  panelEditorTabStacks?: Record<number, string[]>
-  panelEditorActive?: Record<number, number>
-  panelBrowserUrls?: Record<number, string>
-  colSizes: Array<number | null>
-  rowSizes: Array<number | null>
-}
 
 let panelIdCounter = 0
 function genPanelId(): string {
@@ -316,6 +289,10 @@ const ShellPanelCell = memo(function ShellPanelCell({
         }
         const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
         if (raw) {
+          if (isTerminalTabPayload(raw)) {
+            onSplitSession(index, zone, raw)
+            return
+          }
           const payload = parseDragPayload(raw)
           if (payload.kind === "panel") {
             if (payload.idx !== index) {
@@ -377,6 +354,65 @@ const ShellPanelCell = memo(function ShellPanelCell({
     </div>
   )
 })
+
+function DesktopCellPlaceholder(props: {
+  index: number
+  style: React.CSSProperties
+  onActivate: () => void
+  onClose: () => void
+  onOpenFile: (path: string, index?: number, zone?: "left" | "right" | "top" | "bottom" | "center") => void
+  onSwapPanels: (from: number, to: number) => void
+  onDock: (index: number, dir: "left" | "right" | "top" | "bottom" | "center", specificId?: string) => void
+  label: string
+}) {
+  const [dragOver, setDragOver] = useState(false)
+  const { index } = props
+  return (
+    <div
+      className={`desktop-cell-placeholder${dragOver ? " drag-over" : ""}`}
+      style={{ ...props.style, position: "relative" }}
+      onClick={props.onActivate}
+      onDragOver={(e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "move"
+        setDragOver(true)
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDragOver(false)
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const f = e.dataTransfer.files[0]
+          const filePath = (f as any).path || f.name
+          if (filePath) {
+            props.onOpenFile(filePath, index, "center")
+            return
+          }
+        }
+        const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
+        if (!raw) return
+        if (isTerminalTabPayload(raw)) {
+          props.onDock(index, "center", raw)
+          return
+        }
+        const payload = parseDragPayload(raw)
+        if (payload.kind === "file") {
+          props.onOpenFile(payload.path, index, "center")
+        } else if (payload.kind === "panel") {
+          if (payload.idx !== index) props.onSwapPanels(payload.idx, index)
+        } else {
+          props.onDock(index, "center", raw)
+        }
+      }}
+    >
+      <button type="button" className="btn-icon compact desktop-cell-close"
+        title="Close split" aria-label="Close split"
+        onClick={(e) => { e.stopPropagation(); props.onClose() }}>×</button>
+      <FolderIcon size={48} className="icon-empty-state" />
+      <p>{props.label}</p>
+    </div>
+  )
+}
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const t = useT()
@@ -861,10 +897,11 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // ===== Offline cache: persistencia de sesiones =====
   useEffect(() => {
+    if (!flags.offlineCache) return
     if (sessions.length > 0) {
       cacheSessions(sessions as unknown as import("./types").Session[])
     }
-  }, [sessions, cacheSessions])
+  }, [sessions, cacheSessions, flags.offlineCache])
 
   // Caché con debounce: escribe solo cuando el estado real cambió (evita
   // re-encriptar todo el historial en cada delta/merge).
@@ -1190,7 +1227,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         }
       } catch (err) {
         setRuntimeError(`Translation failed: ${(err as Error).message}`)
-        return
+        return false
       }
     }
     // Scropear prompt a zona seleccionada visualmente (si existe)
@@ -1292,8 +1329,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     abortSession(sid, dir).catch(() => {})
     loadSelected(sid, dir).catch(() => undefined)
     settleSession(sid, dir).catch(() => undefined)
-    setTimeout(() => { stopGenerationRef.current = false }, 400)
+    setTimeout(() => { stopGenerationRef.current = false }, 2000)
   }, [selectedSession, abortSession, loadSelected, settleSession, setAwaitingAssistantReply, setSessions, setMessages])
+
+  // Reset stopGeneration cuando el servidor confirma idle (evita delta huérfano tras abort)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!awaitingAssistantReply && stopGenerationRef.current) stopGenerationRef.current = false
+  }, [awaitingAssistantReply])
 
   // Zoom general de la interfaz con Ctrl + Ruedita y atajos de teclado (Ctrl + / Ctrl - / Ctrl 0)
   useEffect(() => {
@@ -1365,7 +1408,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   const setActivity = useCallback((a: DesktopActivity) => setDesktopState((prev) => ({ ...prev, activity: a })), [])
   const setSidebarWidth = useCallback((w: number) => setDesktopState((prev) => ({ ...prev, sidebarWidth: w })), [])
   const setSidebarCollapsed = useCallback((collapsed: boolean | ((v: boolean) => boolean)) => {
-    setDesktopState((prev) => ({ ...prev, sidebarCollapsed: typeof collapsed === "function" ? collapsed(prev.sidebarCollapsed) : collapsed }))
+    const apply = () => setDesktopState((prev) => ({ ...prev, sidebarCollapsed: typeof collapsed === "function" ? collapsed(prev.sidebarCollapsed) : collapsed }))
+    const doc: any = document
+    if (doc.startViewTransition) doc.startViewTransition(apply)
+    else apply()
   }, [])
   const [explorerCwd, setExplorerCwd] = useState<string | undefined>(undefined)
   const handleOpenExplorer = useCallback((dir: string) => {
@@ -1382,6 +1428,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const removeTab = useCallback((panelIndex: number, tabIndex: number) => {
     const tabId = tabStacks?.[panelIndex]?.[tabIndex]
+    if (tabId && tabId.startsWith("terminal")) {
+      const ptyId = tabId.replace(/^terminal[:\-]/, "")
+      killTerminalPty(ptyId)
+    }
     const wasActive = tabId ? desktopLayout.sessions[panelIndex] === tabId : false
     setTabStacks((prev) => {
       const next = prev.map((s) => [...s])
@@ -1538,7 +1588,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [tabStacks, openInPanel])
 
   const addTerminalToPanel = useCallback((panelIndex: number, _targetIndex?: number) => {
-    const terminalId = `terminal:${Date.now()}`
+    const ptyId = `term-${Date.now()}`
+    const terminalId = `terminal:${ptyId}`
     setTabStacks((prev) => {
       const next = prev.map((s) => [...s])
       while (next.length <= panelIndex) next.push([])
@@ -2144,123 +2195,25 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [sidebarWidth, setSidebarWidth, desktopDiffOpen, desktopDiffWidth])
 
   // Atajos de escritorio (splits/sidebar/layouts/tabs) — solo desktop
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!isDesktop || (view !== "sessions" && view !== "detail") || !(e.ctrlKey || e.metaKey)) return
-
-      // 1. Tab switching in the column/panel that was clicked last (activePanel)
-      const nextTabSc = shortcuts.find((s) => s.id === "switch_tab_next" && s.enabled)
-      const prevTabSc = shortcuts.find((s) => s.id === "switch_tab_prev" && s.enabled)
-
-      if (nextTabSc && matchesShortcut(e, nextTabSc.keys)) {
-        e.preventDefault()
-        e.stopPropagation()
-        const stack = tabStacks?.[activePanel]
-        if (stack && stack.length > 1) {
-          const currentId = desktopLayout.sessions[activePanel]
-          const currentIdx = currentId ? stack.indexOf(currentId) : 0
-          const nextIdx = (currentIdx + 1) % stack.length
-          switchTab(activePanel, nextIdx)
-        }
-        return
-      }
-
-      if (prevTabSc && matchesShortcut(e, prevTabSc.keys)) {
-        e.preventDefault()
-        e.stopPropagation()
-        const stack = tabStacks?.[activePanel]
-        if (stack && stack.length > 1) {
-          const currentId = desktopLayout.sessions[activePanel]
-          const currentIdx = currentId ? stack.indexOf(currentId) : 0
-          const prevIdx = (currentIdx - 1 + stack.length) % stack.length
-          switchTab(activePanel, prevIdx)
-        }
-        return
-      }
-
-      const inEditable = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
-
-      // 2. Close split
-      const closeSc = shortcuts.find((s) => s.id === "close_split" && s.enabled)
-      if (closeSc && matchesShortcut(e, closeSc.keys)) {
-        e.preventDefault()
-        if (maximizedPanel !== null) { setMaximizedPanel(null); return }
-        if (desktopLayout.cols > 1 || desktopLayout.rows > 1 || desktopLayout.sessions.some((s) => s !== null)) {
-          closePanel(activePanel)
-        }
-        return
-      }
-
-      if (inEditable) return
-
-      // 3. Split right
-      const splitRightSc = shortcuts.find((s) => s.id === "split_right" && s.enabled)
-      if (splitRightSc && matchesShortcut(e, splitRightSc.keys)) {
-        e.preventDefault()
-        splitPanel(activePanel, "right")
-        return
-      }
-
-      // 4. Split bottom
-      const splitBottomSc = shortcuts.find((s) => s.id === "split_bottom" && s.enabled)
-      if (splitBottomSc && matchesShortcut(e, splitBottomSc.keys)) {
-        e.preventDefault()
-        splitPanel(activePanel, "bottom")
-        return
-      }
-
-      // 5. Maximize / restore
-      const maxSc = shortcuts.find((s) => s.id === "maximize_panel" && s.enabled)
-      if (maxSc && matchesShortcut(e, maxSc.keys)) {
-        e.preventDefault()
-        if (desktopLayout.sessions[activePanel]) toggleMaximize(activePanel)
-        return
-      }
-
-      // 6. Toggle sidebar
-      const sidebarSc = shortcuts.find((s) => s.id === "toggle_sidebar" && s.enabled)
-      if (sidebarSc && matchesShortcut(e, sidebarSc.keys)) {
-        e.preventDefault()
-        setSidebarCollapsed((v) => !v)
-        return
-      }
-
-      // 7. New session
-      const newSessSc = shortcuts.find((s) => s.id === "new_session" && s.enabled)
-      if (newSessSc && matchesShortcut(e, newSessSc.keys)) {
-        e.preventDefault()
-        handleOpenNewSession()
-        return
-      }
-
-      const newTermSc = shortcuts.find((s) => s.id === "new_terminal" && s.enabled)
-      if (newTermSc && matchesShortcut(e, newTermSc.keys)) {
-        e.preventDefault()
-        e.stopPropagation()
-        if (isDesktop) {
-          // Convertir el panel activo a terminal
-          setDesktopLayout((prev) => {
-            const panelKinds = [...prev.panelKinds]
-            panelKinds[activePanel] = "terminal"
-            return { ...prev, panelKinds }
-          })
-        } else {
-          // En mobile: abrir terminal inferior
-          setShowTerminal(true)
-        }
-        return
-      }
-
-      const k = e.key.toLowerCase()
-      if (!e.shiftKey && /^[1-9]$/.test(k)) {
-        const idx = Number(k) - 1
-        if (idx < desktopLayout.cols * desktopLayout.rows) { e.preventDefault(); setActivePanel(idx) }
-        return
-      }
-    }
-    window.addEventListener("keydown", handler)
-    return () => window.removeEventListener("keydown", handler)
-  }, [isDesktop, view, maximizedPanel, desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions, activePanel, tabStacks, switchTab, closePanel, splitPanel, toggleMaximize, setSidebarCollapsed, handleOpenNewSession, shortcuts])
+  useDesktopShortcuts({
+    isDesktop,
+    view,
+    shortcuts,
+    activePanel,
+    tabStacks,
+    desktopLayout,
+    maximizedPanel,
+    switchTab,
+    closePanel,
+    splitPanel,
+    toggleMaximize,
+    setMaximizedPanel,
+    setSidebarCollapsed,
+    handleOpenNewSession,
+    setDesktopLayout,
+    setShowTerminal,
+    setActivePanel,
+  })
 
   const handleOpenSession = useCallback(async (id: string, dir: string) => {
     navigate("detail")
@@ -3245,8 +3198,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       </div>
                     )
                   }
-                  // Si el tab activo es un terminal (compartido en el mismo tabset), renderizar TerminalPanel
+                  // Si el tab activo es un terminal: cada terminal es su propia PTY independiente.
                 if (sid && sid.startsWith("terminal")) {
+                  const ptyId = sid.replace(/^terminal[:\-]/, "")
                   const termCwd = activeDir || activeSessionDir || selectedSession?.directory || sessions[0]?.directory
                   const tStack = tabStacks?.[i] ?? [sid]
                   const tActiveIdx = Math.max(0, tStack.indexOf(sid))
@@ -3265,9 +3219,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                           panelIndex={i}
                           onDropTerminal={addTerminalToPanel}
                         />
-                        <div style={{ flex: 1, minHeight: 0 }}>
+                        <div style={{ flex: 1, minHeight: 0, background: "#0d1117" }}>
                           <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
-                            <TerminalPanel cwd={termCwd} panelId={`${panelId}-term`} />
+                            <SingleTerminal cwd={termCwd} tabId={ptyId} />
                           </Suspense>
                         </div>
                       </div>
@@ -3276,50 +3230,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 }
                 if (!session) {
                   return (
-                    <div
+                    <DesktopCellPlaceholder
                       key={panelId}
-                      className="desktop-cell-placeholder"
-                      style={{ ...placement, position: "relative" }}
-                      onClick={() => setActivePanel(i)}
-                      onDragOver={(e) => {
-                        e.preventDefault()
-                        e.dataTransfer.dropEffect = "move"
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault()
-                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                          const f = e.dataTransfer.files[0]
-                          const filePath = (f as any).path || f.name
-                          if (filePath) {
-                            handleOpenFile(filePath, i, "center")
-                            return
-                          }
-                        }
-                        const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
-                        if (raw) {
-                          const payload = parseDragPayload(raw)
-                          if (payload.kind === "file") {
-                            handleOpenFile(payload.path, i, "center")
-                          } else if (payload.kind === "panel") {
-                            handleSwapPanels(payload.idx, i)
-                          } else if (payload.kind === "session") {
-                            handleDockSession(i, "center", payload.id)
-                          } else if (payload.kind === "kind") {
-                            handleDockSession(i, "center", raw)
-                          } else if (payload.kind === "tab") {
-                            handleDockSession(i, "center", raw)
-                          } else {
-                            handleDockSession(i, "center", raw)
-                          }
-                        }
-                      }}
-                    >
-                      <button type="button" className="btn-icon compact desktop-cell-close"
-                        title="Close split" aria-label="Close split"
-                        onClick={(e) => { e.stopPropagation(); closePanel(i) }}>×</button>
-                      <FolderIcon size={48} className="icon-empty-state" />
-                      <p>{t('sessions.selectOne')}</p>
-                    </div>
+                      index={i}
+                      style={placement}
+                      onActivate={() => setActivePanel(i)}
+                      onClose={() => closePanel(i)}
+                      onOpenFile={handleOpenFile}
+                      onSwapPanels={handleSwapPanels}
+                      onDock={handleDockSession}
+                      label={t('sessions.selectOne')}
+                    />
                   )
                 }
                 return (
@@ -3383,7 +3304,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                           removeTab(panelIdx, tabIdx)
                         }
                       }}
-                      onTabAdd={() => {}} // TODO: open session picker
+                      onTabAdd={() => addTerminalToPanel(i)}
                       onTabMove={(from, to) => moveTab(i, from, to)}
                       onDropTerminal={addTerminalToPanel}
                       visualSelection={vs.selection}
@@ -3687,17 +3608,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         />
       )}
 
-      <BottomSheet
-        activeSheet={activeDetailSheet}
-        onClose={() => setActiveDetailSheet(null)}
+      <AppModals
+        activeDetailSheet={activeDetailSheet}
+        onCloseDetailSheet={() => setActiveDetailSheet(null)}
         modelOptions={modelOptions}
         modelLoadError={modelLoadError}
         activeModelOption={activeModelOption}
-        variantGroups={filteredVariantGroups}
+        filteredVariantGroups={filteredVariantGroups}
         modelQuery={modelQuery}
         isWorking={isWorking}
-        onChangeModel={(key, variant) => changeModel(key, variant, selectedSession?.id)}
-        onModelQueryChange={setModelQuery}
+        changeModel={(key, variant) => changeModel(key, variant, selectedSession?.id)}
+        setModelQuery={setModelQuery}
         selectedVariant={selectedVariant}
         formatLimit={formatLimit}
         projectName={projectName}
@@ -3709,142 +3630,67 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         totalDiffDeletions={totalDiffDeletions}
         dashboardError={dashboardError}
         config={config}
-        onVariantsChanged={() => loadModels(selectedSession?.directory).catch(() => undefined)} />
-
-      {sessionToDelete && (
-        <ConfirmModal
-          session={sessionToDelete}
-          onConfirm={(id) => { deleteSession(id).catch(() => undefined) }}
-          onCancel={() => setSessionToDelete(null)} />
-      )}
-
-      {showThemePicker && (
-        <Suspense fallback={null}>
-          <ThemePicker onClose={() => setShowThemePicker(false)} />
-        </Suspense>
-      )}
-
-      {showConnectSheet && config && (
-        <Suspense fallback={null}>
-          <ConnectProviderSheet
-            config={config}
-            onClose={() => setShowConnectSheet(false)}
-            onConnect={connectProvider}
-            onDisconnect={disconnectProvider}
-            onAddCustom={addCustomProvider}
-            onConnected={() => loadModels().catch(() => undefined)}
-          />
-        </Suspense>
-      )}
-
-      {showMCPBrowser && config && <Suspense fallback={null}><MCPBrowser config={config} onClose={() => setShowMCPBrowser(false)} /></Suspense>}
-
-      {showArchivedView && (
-        <Suspense fallback={null}>
-          <ArchivedList
-            sessions={sessions.filter((s) => s.status === "archived")}
-            onRestore={(id) => {
-              const s = sessions.find((x) => x.id === id)
-              if (s) api.sendCommand(config, id, "/unarchive", "", s.directory).catch(() => {})
-              setShowArchivedView(false)
-            }}
-            onOpen={(id, dir) => { setShowArchivedView(false); handleOpenSession(id, dir) }}
-            onClose={() => setShowArchivedView(false)}
-          />
-        </Suspense>
-      )}
-
-      {fileEditorPath && config && (
-        <Suspense fallback={null}>
-          <FileEditor
-            config={config}
-            path={fileEditorPath}
-            directory={currentActiveSession?.directory || activeSessionDir || selectedSession?.directory}
-            onClose={() => setFileEditorPath(null)}
-          />
-        </Suspense>
-      )}
-
-      {fb.isOpen && (
-        <Suspense fallback={null}>
-          <FileBrowser
-            config={config}
-            directory={currentActiveSession?.directory || activeSessionDir || selectedSession?.directory}
-            currentPath={fb.currentPath}
-            items={fb.items}
-            loading={fb.loading}
-            error={fb.error}
-            onClose={fb.close}
-            onNavigate={fb.navigateTo}
-            onGoUp={fb.goUp}
-            onOpenFile={(path) => { setFileEditorPath(path) }}
-          />
-        </Suspense>
-      )}
-
-      {showTerminal && (!isDesktop || !terminalDocked) && (
-        <Suspense fallback={null}>
-          <TerminalView
-            lines={shellLines}
-            running={shellRunning}
-            sessionID={currentActiveSession?.id || selectedSession?.id || ""}
-            directory={activeSessionDir || selectedSession?.directory || ""}
-            shell={terminalShell}
-            onShellChange={setTerminalShell}
-            onExecute={shellExecute}
-            onClear={shellClear}
-            onClose={() => setShowTerminal(false)}
-            history={shellHistory}
-            isDocked={false}
-            onToggleDock={() => setTerminalDocked(true)}
-          />
-        </Suspense>
-      )}
-
-      {showRemoteDesktop && (
-        <Suspense fallback={null}>
-          <RemoteDesktop
-            config={desktopCfg}
-            dataMode={dataMode}
-            onClose={() => setShowRemoteDesktop(false)}
-            onOpenSettings={() => navigate("settings")}
-          />
-        </Suspense>
-      )}
-
-          {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} desktop={isDesktop} />}
-
-      <Suspense fallback={null}>
-        {showThemeCreator && <ThemeCreator onClose={() => setShowThemeCreator(false)} />}
-      </Suspense>
-
-      <Suspense fallback={null}>
-        {showFavoritesManager && (
-          <FavoritesManager
-            favorites={sessions.filter((s) => favorites.has(s.id))}
-            onReorder={(ids) => {
-              try { localStorage.setItem("opencode.mobile.favoritesOrder", JSON.stringify(ids)) } catch {}
-            }}
-            onClose={() => setShowFavoritesManager(false)}
-          />
-        )}
-      </Suspense>
-
-            <OpenCodeHubModal
-        isOpen={showOpenCodeHub}
-        onClose={() => setShowOpenCodeHub(false)}
-        agents={agentOptions}
+        loadModels={loadModels}
+        selectedSession={selectedSession}
+        sessionToDelete={sessionToDelete}
+        onConfirmDeleteSession={(id) => { deleteSession(id).catch(() => undefined) }}
+        onCancelDeleteSession={() => setSessionToDelete(null)}
+        showThemePicker={showThemePicker}
+        onCloseThemePicker={() => setShowThemePicker(false)}
+        showThemeCreator={showThemeCreator}
+        onCloseThemeCreator={() => setShowThemeCreator(false)}
+        showConnectSheet={showConnectSheet}
+        onCloseConnectSheet={() => setShowConnectSheet(false)}
+        connectProvider={connectProvider}
+        disconnectProvider={disconnectProvider}
+        addCustomProvider={addCustomProvider}
+        showMCPBrowser={showMCPBrowser}
+        onCloseMCPBrowser={() => setShowMCPBrowser(false)}
+        showArchivedView={showArchivedView}
+        onCloseArchivedView={() => setShowArchivedView(false)}
+        sessions={sessions}
+        onRestoreArchivedSession={(id) => {
+          const s = sessions.find((x) => x.id === id)
+          if (s) api.sendCommand(config!, id, "/unarchive", "", s.directory).catch(() => {})
+          setShowArchivedView(false)
+        }}
+        onOpenSession={(id, dir) => handleOpenSession(id, dir)}
+        fileEditorPath={fileEditorPath}
+        onCloseFileEditor={() => setFileEditorPath(null)}
+        currentActiveSession={currentActiveSession}
+        activeSessionDir={activeSessionDir}
+        fb={fb}
+        onOpenFileEditor={(path) => setFileEditorPath(path)}
+        showTerminal={showTerminal}
+        isDesktop={isDesktop}
+        terminalDocked={terminalDocked}
+        shellLines={shellLines}
+        shellRunning={shellRunning}
+        terminalShell={terminalShell}
+        setTerminalShell={setTerminalShell}
+        shellExecute={(cmd, sid, dir) => { shellExecute(cmd, sid || "", dir) }}
+        shellClear={shellClear}
+        onCloseTerminal={() => setShowTerminal(false)}
+        shellHistory={shellHistory}
+        setTerminalDocked={setTerminalDocked}
+        showRemoteDesktop={showRemoteDesktop}
+        onCloseRemoteDesktop={() => setShowRemoteDesktop(false)}
+        desktopCfg={desktopCfg}
+        dataMode={dataMode}
+        onNavigateSettings={() => navigate("settings")}
+        showShortcuts={showShortcuts}
+        onCloseShortcuts={() => setShowShortcuts(false)}
+        showFavoritesManager={showFavoritesManager}
+        onCloseFavoritesManager={() => setShowFavoritesManager(false)}
+        favorites={favorites}
+        showOpenCodeHub={showOpenCodeHub}
+        onCloseOpenCodeHub={() => setShowOpenCodeHub(false)}
+        agentOptions={agentOptions}
         activeAgentID={activeAgentID}
-        onSelectAgent={(id) => changeAgent(id, selectedSession?.directory)}
-        serverConfig={config}
+        changeAgent={changeAgent}
+        runtimeError={runtimeError}
+        onCloseRuntimeError={() => setRuntimeError(null)}
       />
-
-      {runtimeError && (
-        <ErrorModal message={runtimeError} onClose={() => setRuntimeError(null)} />
-      )}
-
-      {/* Slots de plugins (overlay global) */}
-      <PluginSlot id="shell.overlay" />
     </div>
   )
 }

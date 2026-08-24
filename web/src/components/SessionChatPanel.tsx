@@ -70,20 +70,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
   const composerRef = useRef(msgs.composer)
   useEffect(() => { composerRef.current = msgs.composer }, [msgs.composer])
-  const composerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Copiado de App.tsx: SIN debounce — el Composer ya debouncea para persistencia (300ms).
+  // El doble-debounce reseteado por tecla cortaba el prompt (<650ms) al enviar rápido.
   const debouncedSetComposer = useCallback((value: string) => {
-    const prev = composerRef.current
     composerRef.current = value
-    if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
-    if (value === "" || Math.abs(value.length - prev.length) > 12 || value.startsWith("/")) {
-      msgs.setComposer(value)
-      return
-    }
-    composerDebounceRef.current = setTimeout(() => msgs.setComposer(value), 350)
+    msgs.setComposer(value)
   }, [msgs.setComposer])
-  useEffect(() => () => {
-    if (composerDebounceRef.current) clearTimeout(composerDebounceRef.current)
-  }, [])
   const { getCachedMessages } = useOfflineCache(baseProps.flags)
   const [localRevertID, setLocalRevertID] = useState<string | null>(null)
   const [stopGenerationRef] = useState(() => ({ current: false }))
@@ -191,7 +183,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         }
       } catch (err) {
         msgs.setRuntimeError(`Translation failed: ${(err as Error).message}`)
-        return
+        return false
       }
     }
     onRecordPrompt(currentComposer)
@@ -226,6 +218,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     })
     try { await msgs.abortSession(session.id, session.directory) } catch { /* ignore */ }
     msgs.loadSelected(session.id, session.directory).catch(() => undefined)
+    setTimeout(() => { stopGenerationRef.current = false }, 2000)
   }, [msgs, session])
 
   const handleRevertToMessage = useCallback(async (messageID: string) => {
@@ -284,6 +277,10 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     if (isSessionActive(session)) return true
     return false
   }, [msgs.awaitingAssistantReply, session])
+
+  useEffect(() => {
+    if (!isWorking && stopGenerationRef.current) stopGenerationRef.current = false
+  }, [isWorking])
 
   // Polling para desktop: cuando SSE está deshabilitado (saver/ultra/miser) no hay updates en vivo.
   // Sin esto, el assistant no aparece hasta re-entrar a la sesión.

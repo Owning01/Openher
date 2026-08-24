@@ -3,6 +3,7 @@ import { computeBackoff } from "../../utils"
 import { recordDataUsage } from "../../utils/dataUsage"
 import type { ServerConfig } from "../../types"
 import { ensureVersionDetected, apiPath, unwrapData } from "./version"
+import { toWrappedError } from "../errors/sdkErrorInterceptor"
 
 export function toBase64(input: string): string {
   const bytes = new TextEncoder().encode(input)
@@ -107,8 +108,9 @@ export function responseDetail(body: unknown): string | null {
     }
   }
   if (typeof body === "object") {
-    const value = body as { data?: { message?: string }; message?: string }
-    return value.data?.message ?? value.message ?? JSON.stringify(body)
+    const value = body as { data?: { message?: string }; message?: string; error?: { message?: string }; _tag?: string; name?: string }
+    // Copiado pattern sdk: prefiere data.message > message > name > _tag
+    return value.data?.message ?? (value as { message?: string }).message ?? (value as { error?: { message?: string } }).error?.message ?? (typeof value._tag === "string" ? value._tag : null) ?? (typeof value.name === "string" ? value.name : null) ?? JSON.stringify(body)
   }
   return String(body)
 }
@@ -122,10 +124,14 @@ export function normalizeHeaders(headers: Record<string, unknown> | undefined): 
 
 export function serializedSize(value: unknown): number {
   if (value === undefined || value === null) return 0
-  if (typeof value === "number") return value
+  if (typeof value === "number") return 8
   if (typeof value === "boolean") return 4
-  if (typeof value === "string") return value.length
-  return 0
+  if (typeof value === "string") return new TextEncoder().encode(value).length
+  try {
+    return new TextEncoder().encode(JSON.stringify(value)).length
+  } catch {
+    return 0
+  }
 }
 
 export async function requestWithHeaders<T>(config: ServerConfig, path: string, options: RequestOptions = {}): Promise<ResponseWithHeaders<T>> {
@@ -169,7 +175,8 @@ export async function requestRaw<T>(config: ServerConfig, target: string, option
         })
 
         if (response.status >= 400) {
-          throw new Error(responseDetail(response.data) || `HTTP ${response.status}`)
+          const detail = responseDetail(response.data) || `HTTP ${response.status}`
+          throw toWrappedError(detail, response.status, target, method, response.data) as Error
         }
 
         const responseHeaders = normalizeHeaders(response.headers)
@@ -217,15 +224,21 @@ export async function requestRaw<T>(config: ServerConfig, target: string, option
 
       if (!response.ok) {
         let detail = `HTTP ${response.status}`
+        let rawBody: unknown = null
         try {
           const clone = response.clone()
-          const body = await clone.json()
-          detail = responseDetail(body) ?? detail
+          rawBody = await clone.json()
+          detail = responseDetail(rawBody) ?? detail
         } catch {
-          const text = await response.text()
-          if (text) detail = text
+          try {
+            const text = await response.text()
+            rawBody = text
+            if (text) detail = text
+          } catch {
+            rawBody = detail
+          }
         }
-        throw new Error(detail)
+        throw toWrappedError(detail, response.status, target, method, rawBody) as Error
       }
 
       const responseHeaders = normalizeHeaders(Object.fromEntries(response.headers.entries()))
