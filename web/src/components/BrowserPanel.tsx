@@ -195,6 +195,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("responsive")
   const [showTuneDropdown, setShowTuneDropdown] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const [browserFailed, setBrowserFailed] = useState(false)
   const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null)
   const [projectBanner, setProjectBanner] = useState<{
     directory: string
@@ -263,8 +264,16 @@ export const BrowserPanel = memo(function BrowserPanel({
     // Open native sub-WebView with initial URL at the viewport bounds
     const rect = el.getBoundingClientRect()
     const bounds = { x: rect.left, y: rect.top, w: rect.width, h: rect.height }
-    shell.browser.open(currentSrc, bounds).catch(() => {})
-    nativeReady.current = true
+    shell.browser.open(currentSrc, bounds).then(() => {
+      nativeReady.current = true
+      setBrowserFailed(false)
+    }).catch(() => {
+      // Fallback a iframe vía proxy si el sub-WebView no pudo crearse
+      // (mismatch de args, WebView2 no disponible, etc.)
+      nativeReady.current = false
+      setBrowserFailed(true)
+      setHasError(false)
+    })
 
     // CRÍTICO: el child HWND de Win32 tiene prioridad de hit-testing sobre el
     // DOM del host — si queda visible fuera de pantalla / tras cambio de tab,
@@ -323,9 +332,11 @@ export const BrowserPanel = memo(function BrowserPanel({
 
   // Navigate native WebView when URL changes
   useEffect(() => {
-    if (!IS_DESKTOP || !nativeReady.current) return
-    shell.browser.navigate(currentSrc).catch(() => {})
-  }, [currentSrc])
+    if (!IS_DESKTOP || !nativeReady.current || browserFailed) return
+    shell.browser.navigate(currentSrc).catch(() => {
+      setBrowserFailed(true)
+    })
+  }, [currentSrc, browserFailed])
 
   // Modo selección en desktop: el overlay se INYECTA dentro del sub-WebView
   // nativo vía eval (sin recargar ni ocultar la página — cero pérdida de estado).
@@ -565,8 +576,24 @@ export const BrowserPanel = memo(function BrowserPanel({
   const handleReload = () => {
     setLoading(true)
     setHasError(false)
-    if (IS_DESKTOP) {
-      shell.browser.navigate(currentSrc, "reload").catch(() => {})
+    if (IS_DESKTOP && !browserFailed) {
+      shell.browser.navigate(currentSrc, "reload").catch(() => {
+        setBrowserFailed(true)
+      })
+    } else if (IS_DESKTOP && browserFailed) {
+      // Reintentar crear el sub-WebView antes de fallback
+      const el = viewportRef.current
+      if (el) {
+        const rect = el.getBoundingClientRect()
+        shell.browser.open(currentSrc, { x: rect.left, y: rect.top, w: rect.width, h: rect.height }).then(() => {
+          nativeReady.current = true
+          setBrowserFailed(false)
+        }).catch(() => {
+          setReloadKey((k) => k + 1)
+        })
+      } else {
+        setReloadKey((k) => k + 1)
+      }
     } else {
       setReloadKey((k) => k + 1)
     }
@@ -904,9 +931,26 @@ export const BrowserPanel = memo(function BrowserPanel({
               </div>
             </div>
           ) : IS_DESKTOP ? (
-            /* Desktop: sub-WebView nativo SIEMPRE (también en modo selección —
-               el overlay se inyecta dentro vía eval, sin recarga ni swap a iframe) */
-            null
+            browserFailed ? (
+              /* Fallback: sub-WebView falló → iframe vía proxy (mismo que mobile) */
+              <iframe
+                key={`${reloadKey}-${inspectMode ? "inspect" : "view"}-fallback`}
+                ref={iframeRef}
+                src={getFrameSrc(currentSrc, !!inspectMode)}
+                title="Vista previa web (fallback)"
+                allow="accelerometer; autoplay; clipboard-read; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; microphone; camera"
+                onLoad={() => setLoading(false)}
+                onError={() => {
+                  setLoading(false)
+                  setHasError(true)
+                }}
+                className="browser-iframe-element"
+                style={{
+                  width: targetWidth || "100%",
+                  boxShadow: targetWidth ? "0 4px 24px rgba(0,0,0,0.3)" : "none",
+                }}
+              />
+            ) : null
           ) : (
             <>
               <iframe

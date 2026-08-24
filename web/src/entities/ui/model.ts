@@ -55,3 +55,22 @@ export type ThemePreference = "system" | "light" | "dark" | "scheduled"
 // NoticeType — nivel semántico de una notificación toast/banner
 // ---------------------------------------------------------------------------
 export type NoticeType = "info" | "success" | "error"
+
+import type { ShellPanelKind } from "../../shell"
+export type { ShellPanelKind }
+
+export type DesktopLayout = {
+  cols: number
+  rows: number
+  sessions: Array<string | null>
+  panelKinds: Array<ShellPanelKind | "editor">
+  panelIds: Array<string>
+  panelEditorPaths?: Record<number, string>
+  /** Multi-tab por celda de editor: índice de celda → lista de paths. DRY con tabStacks. */
+  panelEditorTabStacks?: Record<number, string[]>
+  panelEditorActive?: Record<number, number>
+  panelBrowserUrls?: Record<number, string>
+  colSizes: Array<number | null>
+  rowSizes: Array<number | null>
+}
+

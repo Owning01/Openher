@@ -29,6 +29,16 @@ export function parseDragPayload(raw: string): DragPayload {
   return { kind: "unknown", raw }
 }
 
+export function isTerminalTabPayload(raw: string): boolean {
+  if (!raw) return false
+  if (raw.startsWith("terminal-tab:")) return true
+  if (raw.startsWith("panel:")) {
+    const parts = raw.split(":")
+    return parts.slice(2).join(":").startsWith("terminal-tab:")
+  }
+  return false
+}
+
 export type DockTarget = {
   targetKind: string
   targetSessionId: string | null

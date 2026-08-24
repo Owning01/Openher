@@ -1,0 +1,94 @@
+/* styles/motion.css — animaciones ligeras sin dependencias (concepto GPUI motion.div en web) */
+
+/* Sidebar collapse: transición en compositor, sin re-layout thrash por JS */
+.app-shell {
+  transition: grid-template-columns 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: grid-template-columns;
+}
+
+.app-desktop-sidebar {
+  transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+  will-change: transform, opacity;
+}
+
+/* Fallback View Transitions para sidebar (cuando el browser lo soporta, el UA interpola) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.22s;
+}
+
+/* Modales: @starting-style para enter/exit sin JS (Chrome 117+) */
+.modal-backdrop,
+.sheet-backdrop,
+.modal-overlay,
+.theme-picker-overlay {
+  transition: opacity 0.18s ease, background 0.18s ease;
+}
+@starting-style {
+  .modal-backdrop,
+  .sheet-backdrop,
+  .modal-overlay,
+  .theme-picker-overlay {
+    opacity: 0;
+  }
+}
+
+.modal-card,
+.bottom-sheet,
+.theme-picker,
+.modal-content {
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@starting-style {
+  .modal-card,
+  .theme-picker,
+  .modal-content {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  .bottom-sheet {
+    transform: translateY(100%);
+  }
+}
+
+/* Acordeones / collapsibles: grid-template-rows 0fr→1fr (interpolable sin JS) */
+.collapsible-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease, opacity 0.15s ease;
+  opacity: 0;
+}
+.collapsible-content.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.collapsible-content > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Composer height: interpolate-size permite transition height auto→auto */
+.composer-input-wrap {
+  /* Chrome 122+ */
+  interpolate-size: allow-keywords;
+  transition: height 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Mensajes: desactivar animación pesada cuando virtualizado usa position:absolute */
+.messages .message[data-virtualized] {
+  animation: none !important;
+}
+
+/* Respeto a reduced motion (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  .app-shell,
+  .app-desktop-sidebar,
+  .modal-backdrop,
+  .sheet-backdrop,
+  .modal-card,
+  .bottom-sheet,
+  .collapsible-content {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

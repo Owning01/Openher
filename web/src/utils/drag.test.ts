@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { parseDragPayload, parseDockPayload } from "./drag"
+import { parseDragPayload, parseDockPayload, isTerminalTabPayload } from "./drag"
 
 describe("parseDragPayload", () => {
   it("returns unknown for empty string", () => {
@@ -131,5 +131,32 @@ describe("parseDockPayload", () => {
 
   it("empty string becomes session with empty id", () => {
     expect(parseDockPayload("")).toMatchObject({ targetKind: "session", targetSessionId: "", fromIndex: null })
+  })
+})
+
+describe("isTerminalTabPayload", () => {
+  it("detects terminal-tab inside panel payload (docked terminal)", () => {
+    expect(isTerminalTabPayload("panel:0:terminal-tab:tab-1:bottom-terminal")).toBe(true)
+  })
+
+  it("detects terminal-tab inside panel payload (grid terminal)", () => {
+    expect(isTerminalTabPayload("panel:2:terminal-tab:abc123:panel-2-term")).toBe(true)
+  })
+
+  it("detects bare terminal-tab payload", () => {
+    expect(isTerminalTabPayload("terminal-tab:tab-1:panel-0-term")).toBe(true)
+  })
+
+  it("rejects plain panel payloads", () => {
+    expect(isTerminalTabPayload("panel:2:kind:terminal")).toBe(false)
+    expect(isTerminalTabPayload("panel:1:session:abc")).toBe(false)
+    expect(isTerminalTabPayload("panel:0:terminal")).toBe(false)
+  })
+
+  it("rejects empty and unrelated payloads", () => {
+    expect(isTerminalTabPayload("")).toBe(false)
+    expect(isTerminalTabPayload("session:abc")).toBe(false)
+    expect(isTerminalTabPayload("kind:terminal")).toBe(false)
+    expect(isTerminalTabPayload("src/utils/file.ts")).toBe(false)
   })
 })

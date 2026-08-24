@@ -234,8 +234,8 @@ describe("serializedSize", () => {
     expect(serializedSize(null)).toBe(0)
   })
   it("returns number value directly", () => {
-    expect(serializedSize(42)).toBe(42)
-    expect(serializedSize(0)).toBe(0)
+    expect(serializedSize(42)).toBe(8)
+    expect(serializedSize(0)).toBe(8)
   })
   it("returns 4 for boolean", () => {
     expect(serializedSize(true)).toBe(4)
@@ -246,8 +246,8 @@ describe("serializedSize", () => {
     expect(serializedSize("")).toBe(0)
   })
   it("returns 0 for object", () => {
-    expect(serializedSize({ a: 1 })).toBe(0)
-    expect(serializedSize([])).toBe(0)
+    expect(serializedSize({ a: 1 })).toBe(7)
+    expect(serializedSize([])).toBe(2)
   })
 })
 

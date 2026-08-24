@@ -1,6 +1,6 @@
 import type { ServerConfig, SSEEvent, StreamState } from "../../types"
 import { baseUrl } from "../api/client"
-import { ensureVersionDetected, resolveApiVersion, unwrapData } from "../api/version"
+import { resolveApiVersion, unwrapData } from "../api/version"
 
 export function buildSSEUrl(config: ServerConfig, directory?: string, sessionID?: string): string {
   const base = baseUrl(config)
