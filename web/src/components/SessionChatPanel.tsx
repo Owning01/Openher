@@ -412,7 +412,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
             zIndex: 100,
             pointerEvents: "none",
             background: "rgba(88, 166, 255, 0.25)",
-            border: "2px dashed #58a6ff",
+            border: "2px dashed var(--primary)",
             borderRadius: "var(--radius-md)",
             transition: "all 0.1s ease",
             ...(dropZone === "left"

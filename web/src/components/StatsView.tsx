@@ -21,13 +21,13 @@ type TabId = "resumen" | "modelo" | "proyecto" | "dia" | "mes" | "sesiones" | "l
 
 const TOKEN_CARDS: Array<{ key: string; label: string; color: string }> = [
   { key: "input", label: "Entrada (input)", color: "#3b82f6" },
-  { key: "output", label: "Salida (output)", color: "#22c55e" },
+  { key: "output", label: "Salida (output)", color: "var(--success)" },
   { key: "reasoning", label: "Razonamiento", color: "#f59e0b" },
   { key: "cache_read", label: "Cache leída", color: "#a855f7" },
   { key: "cache_write", label: "Cache escrita", color: "#06b6d4" }
 ]
 
-const MODEL_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#06b6d4", "#84cc16", "#ec4899", "#eab308", "#64748b"]
+const MODEL_COLORS = ["#3b82f6", "var(--success)", "#f59e0b", "#a855f7", "var(--danger)", "#06b6d4", "#84cc16", "#ec4899", "#eab308", "#64748b"]
 
 function fmtTokens(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`
@@ -283,7 +283,7 @@ export function StatsView({ config, onBack }: StatsViewProps) {
                     <span className="stat-label">{c.label}</span>
                   </div>
                 ))}
-                <div className="stat-item stats-token-card" style={{ borderLeft: "4px solid #ef4444" }}>
+                <div className="stat-item stats-token-card" style={{ borderLeft: "4px solid var(--danger)" }}>
                   <span className="stat-value">{fmtCost(data.cost)}</span>
                   <span className="stat-label">{t('stats.cost')}</span>
                   <small className="subtle">{t('stats.estCost')}: {fmtCost(data.est_total)}</small>

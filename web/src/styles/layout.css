@@ -284,7 +284,7 @@
   /* ===== Vista escritorio: sidebar de sesiones + contenido ===== */
   .app-shell {
     display: grid;
-    grid-template-columns: 36px 340px minmax(0, 1fr);
+    grid-template-columns: calc(44px * var(--ui-scale, 1)) calc(340px * var(--ui-scale, 1)) minmax(0, 1fr);
     height: 100dvh;
     overflow: hidden;
     padding: 0;
@@ -317,14 +317,17 @@
     border-radius: 0;
   }
 
-  /* ===== Activity bar estilo VS Code → minimal 36px, flat ===== */
+  /* ===== Activity bar — 40px, visible flat =====
+     Fix zoom: px cromado escalado con --ui-scale para que Ctrl+rueda escale uniforme.
+     Sin esto, al subir fontSize (rem) solo el contenido crece y los botones parecen
+     achicarse (inverso). */
   .app-desktop-activity {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    background: var(--surface);
-    border-right: 1px solid var(--border-subtle);
-    padding: 6px 0;
+    background: var(--surface-subtle);
+    border-right: 1px solid var(--border);
+    padding: calc(8px * var(--ui-scale, 1)) 0;
     overflow-y: auto;
   }
 
@@ -333,12 +336,15 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: calc(6px * var(--ui-scale, 1));
   }
 
   .activity-btn {
-    width: 32px;
-    height: 32px;
+    /* 44×44 mínimo accesible (WCAG 2.5.5) — escala con zoom */
+    width: calc(44px * var(--ui-scale, 1));
+    height: calc(44px * var(--ui-scale, 1));
+    min-width: calc(44px * var(--ui-scale, 1));
+    min-height: calc(44px * var(--ui-scale, 1));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -346,22 +352,24 @@
     background: transparent;
     color: var(--muted);
     cursor: pointer;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     transition: color 0.12s, background 0.12s;
   }
 
   .activity-btn:hover {
     color: var(--text);
     background: var(--surface-strong);
+    border-color: var(--border);
   }
 
   .activity-btn.active {
     color: var(--primary);
     background: var(--primary-soft);
+    border-color: var(--primary-border);
   }
 
   .activity-ram-chip {
-    font-size: 0.6rem;
+    font-size: 0.875rem;
     color: var(--muted, #888);
     font-family: var(--font-mono, monospace);
     padding: 2px 0;
@@ -518,7 +526,7 @@
     position: relative;
     touch-action: none;
     /* 4px hit-area en vez de 6px: no tapa la scrollbar de los paneles adyacentes */
-    width: 4px;
+    width: calc(4px * var(--ui-scale, 1));
   }
 
   .desktop-resize-row {
@@ -526,7 +534,7 @@
     background: transparent;
     position: relative;
     touch-action: none;
-    height: 4px;
+    height: calc(4px * var(--ui-scale, 1));
   }
 
   .desktop-resize-col::after {
@@ -593,7 +601,7 @@
   }
 
   .session-panel-title {
-    font-size: 0.72rem;
+    font-size: 0.875rem;
     font-weight: 700;
     font-family: var(--font-mono);
     color: var(--muted-strong);
@@ -632,19 +640,20 @@
   .tab {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
-    padding: 2px 6px;
-    border-radius: 0;
-    font-size: 0.68rem;
+    gap: var(--space-2);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
     font-family: var(--font-mono);
     color: var(--muted-strong);
     cursor: pointer;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 160px;
-    min-width: 48px;
-    height: 23px;
+    max-width: 180px;
+    min-width: 64px;
+    min-height: 36px;
+    height: 36px;
     box-sizing: border-box;
     border: 1px solid transparent;
     border-bottom: none;
@@ -794,24 +803,30 @@
     border-radius: 0;
   }
 
+  /* Left panel icon buttons — 32px minimal, not 24 */
+  .app-desktop-sidebar .btn-icon {
+    min-width: 32px;
+    min-height: 32px;
+  }
+
   .desktop-sidebar-rail {
-    width: 48px;
+    width: calc(40px * var(--ui-scale, 1));
     height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--space-2);
     padding-top: var(--space-2);
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--border-subtle);
     background: var(--surface);
   }
 
   .desktop-sidebar-resizer {
     position: absolute;
     top: 0;
-    right: -3px;
+    right: calc(-3px * var(--ui-scale, 1));
     bottom: 0;
-    width: 6px;
+    width: calc(6px * var(--ui-scale, 1));
     cursor: col-resize;
     touch-action: none;
     z-index: 3;

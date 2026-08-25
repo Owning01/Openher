@@ -256,7 +256,7 @@
 }
 
 .browser-tune-section-title {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
@@ -272,7 +272,7 @@
 
 .browser-port-btn {
   padding: 4px 6px;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 500;
   border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border);
@@ -303,7 +303,7 @@
 
 .browser-device-btn {
   padding: 4px 2px;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border);
   background: var(--surface-2);

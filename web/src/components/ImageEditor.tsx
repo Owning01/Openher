@@ -24,7 +24,7 @@ export const ImageEditor = memo(function ImageEditor({ src, mime, onApply, onClo
   const cropStartRef = useRef<{ x: number; y: number } | null>(null)
   const lastPointRef = useRef<{ x: number; y: number } | null>(null)
   const [tool, setTool] = useState<Tool>(null)
-  const [color, setColor] = useState("#22d3ee")
+  const [color, setColor] = useState("var(--primary)")
   const [brushSize, setBrushSize] = useState(4)
   const [canUndo, setCanUndo] = useState(false)
 
@@ -113,7 +113,7 @@ export const ImageEditor = memo(function ImageEditor({ src, mime, onApply, onClo
       ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h)
       ctx.fillRect(0, y, x, h)
       ctx.fillRect(x + w, y, canvas.width - x - w, h)
-      ctx.strokeStyle = "#22d3ee"
+      ctx.strokeStyle = "var(--primary)"
       ctx.lineWidth = 1.5
       ctx.strokeRect(x, y, w, h)
       cropStartRef.current = { ...start, x, y, w, h } as never

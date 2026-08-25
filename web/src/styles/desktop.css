@@ -40,7 +40,7 @@
 .desktop-toolbar .btn-icon.compact {
   min-height: 44px;
   min-width: 44px;
-  padding: 0.4rem 0.6rem;
+  padding: 0.4rem 0.78rem;
 }
 
 .desktop-source-btn {
@@ -51,11 +51,11 @@
   font-size: 0.8rem;
   font-weight: 700;
   min-height: 44px;
-  padding: 0.4rem 0.7rem;
+  padding: 0.4rem 0.82rem;
 }
 
 .desktop-status {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--muted);
   font-family: var(--font-mono);
@@ -68,7 +68,7 @@
 .desktop-toolbar-spacer { flex: 1; }
 
 .desktop-mods-active {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--primary);
   font-family: var(--font-mono);
@@ -87,7 +87,7 @@
   width: auto;
   min-height: 44px;
   padding: 0.25rem 0.5rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 
 /* Selector de botón de mouse (segmentado) */
@@ -102,13 +102,13 @@
 .desktop-seg-btn {
   min-height: 44px;
   min-width: 44px;
-  padding: 0.3rem 0.6rem;
+  padding: 0.3rem 0.78rem;
   border: none;
   border-radius: 0;
   background: transparent;
   color: var(--muted);
   font-weight: 700;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 
 .desktop-seg-btn + .desktop-seg-btn {
@@ -136,8 +136,8 @@
 
 .desktop-mod {
   min-height: 44px;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.72rem;
+  padding: 0.3rem 0.78rem;
+  font-size: 0.875rem;
   font-weight: 700;
   font-family: var(--font-mono);
   border-radius: var(--radius-sm);
@@ -234,11 +234,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 0.35rem 0.7rem;
+  padding: 0.35rem 0.82rem;
   background: var(--nav-bg);
   border: 1px solid var(--border);
   border-radius: 99px;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text);
   box-shadow: var(--shadow-md);
@@ -252,11 +252,11 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
-  padding: 0.3rem 0.7rem;
+  padding: 0.3rem 0.82rem;
   background: rgba(0, 0, 0, 0.65);
   border: 1px solid var(--border);
   border-radius: 99px;
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-family: var(--font-mono);
   color: var(--muted-strong);
   backdrop-filter: blur(8px);
@@ -351,7 +351,7 @@
   gap: var(--space-2);
   width: 100%;
   min-height: 52px;
-  padding: 0.4rem 0.6rem;
+  padding: 0.4rem 0.78rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
@@ -391,7 +391,7 @@
 }
 
 .desktop-picker-name small {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   color: var(--muted);
 }
 
@@ -426,7 +426,7 @@
 
 .desktop-settings-notice {
   margin-top: var(--space-2);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -441,7 +441,7 @@
 }
 
 .file-diffs-ade-link {
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   font-weight: 800;
   color: var(--primary, #10b981);
   padding: 2px 6px;
@@ -458,7 +458,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--primary, #10b981);
   background: var(--primary-soft, rgba(16, 185, 129, 0.12));
@@ -530,7 +530,7 @@
 }
 
 .ade-diff-count-chip {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   color: var(--muted);
   background: var(--surface-strong);
   padding: 2px 6px;
@@ -541,7 +541,7 @@
 .ade-diff-stats-chip {
   display: inline-flex;
   gap: 4px;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-family: var(--font-mono);
   font-weight: 700;
 }
@@ -606,23 +606,24 @@
   border-radius: 2px;
 }
 
-/* file-editor tabs comparten métricas de .tab (layout.css) */
+/* file-editor tabs — 36px altura profesional, 0.82rem legible */
 .file-editor-tab {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: 2px 6px;
-  border-radius: 0;
-  font-size: 0.68rem;
+  gap: var(--space-2);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
   font-family: var(--font-mono);
   color: var(--muted-strong);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 160px;
-  min-width: 48px;
-  height: 23px;
+  max-width: 180px;
+  min-width: 64px;
+  min-height: 36px;
+  height: 36px;
   box-sizing: border-box;
   border: 1px solid transparent;
   border-bottom: none;
@@ -664,7 +665,7 @@
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--muted, #969696);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-family: inherit;
   font-weight: 500;
   cursor: pointer;
@@ -756,8 +757,8 @@
 }
 
 .file-editor-md-btn {
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -785,7 +786,7 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-family: var(--font-mono, monospace);
   font-weight: 700;
   opacity: 0.85;
@@ -855,7 +856,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   padding: 2px 8px;
 }
 
@@ -864,7 +865,7 @@
   overflow-y: auto;
   overflow-x: auto;
   font-family: var(--font-mono, monospace);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   line-height: 1.45;
   background: var(--surface);
   color: var(--text);
@@ -893,7 +894,7 @@
   padding: 0 6px;
   color: var(--muted);
   user-select: none;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   border-right: 1px solid var(--border);
 }
 
@@ -966,7 +967,7 @@
   background: #0d1117;
   color: #c9d1d9;
   font-family: var(--font-mono, "Cascadia Code", "Fira Code", monospace);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   overflow: hidden;
   position: relative;
   border-top: 1px solid var(--border-strong, #30363d);
@@ -1175,16 +1176,16 @@
 .terminal-banner-title {
   font-weight: 700;
   color: #58a6ff;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 
 .terminal-banner-cwd {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   color: #8b949e;
 }
 
 .terminal-banner-hint {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   color: #6e7681;
 }
 
@@ -1370,6 +1371,54 @@
 .terminal-trash-btn:hover {
   background: transparent !important;
   color: #f85149 !important;
+}
+
+/* ===== Desktop legibility boost — chat / archivos / terminal / browser =====
+   En escritorio (≥781px) los tamaños mobile (0.72-0.85rem) quedan diminutos.
+   Se escala solo en desktop, sin tocar móvil. */
+@media (min-width: 781px) {
+  /* Chat: burbujas + markdown + tool parts legibles */
+  .message-content { font-size: 0.95rem; }
+  .message-content pre { font-size: 0.88rem; }
+  .thinking-text { font-size: 0.88rem; }
+  .tool-part-toggle { font-size: 0.88rem; }
+  .tool-part-label { font-size: 0.875rem; }
+  .tool-part-arg { font-size: 0.875rem; max-width: 240px; }
+  .tool-part-pre { font-size: 0.84rem; }
+  .code-block-header { font-size: 0.875rem; }
+  .message small { font-size: 0.875rem; }
+
+  /* Archivos (explorador / docs) */
+  .shell-row { font-size: 0.9rem; padding: 4px 8px; }
+  .shell-tree-title { font-size: 0.875rem; }
+  .shell-path { font-size: 0.875rem; }
+  .shell-preview-body { font-size: 0.84rem; }
+  .shell-preview-name { font-size: 0.875rem; }
+  .shell-drive { font-size: 0.875rem; }
+  .shell-size { font-size: 0.74rem; }
+  .shell-docs-content { font-size: 0.92rem; }
+  .shell-docs-head input { font-size: 0.84rem; }
+
+  /* Terminal: filas + input + tabs */
+  .terminal-container { font-size: 0.88rem; }
+  .terminal-row { font-size: 0.88rem; }
+  .terminal-cmd-input { font-size: 0.92rem; }
+  .terminal-tab { font-size: 12px; }
+  .terminal-tab-item { font-size: 13px; }
+  .terminal-banner-title { font-size: 0.84rem; }
+  .terminal-banner-cwd { font-size: 0.875rem; }
+
+  /* Browser: tabs + omnibox + toolbar */
+  .browser-tab { font-size: 0.875rem; height: 30px; }
+  .browser-tab-title { font-size: 0.875rem; }
+  .browser-omnibox-input { font-size: 0.92rem; }
+  .browser-nav-btn { width: 30px; height: 30px; font-size: 1.05rem; }
+  .browser-tune-btn { font-size: 0.95rem; }
+
+  /* Tabs de editor / diff en desktop — de 0.82rem a legible */
+  .file-editor-tab { font-size: 0.875rem; }
+  .tab { font-size: 0.875rem; }
+  .session-panel-title { font-size: 0.875rem; }
 }
 
 

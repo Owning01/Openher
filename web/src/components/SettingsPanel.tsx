@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useMemo, useEffect } from "react"
-import { SettingsIcon, SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon, GlobeIcon, BrainIcon, PaintIcon, ChatIcon, ToolIcon, SearchIcon } from "../Icons"
+import { SettingsIcon, SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon, GlobeIcon, BrainIcon, PaintIcon, ChatIcon, ToolIcon, SearchIcon, LayersIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo,
   ServerProfile, ChatSettings, PromptSnippet, AgentOption } from "../types"
@@ -13,6 +13,7 @@ import { DataUsageModal } from "./DataUsageModal"
 import { ThinkingLevels } from "./ThinkingLevels"
 import { PairModal } from "./PairModal"
 import { PluginSlot } from "../plugins"
+import { ExportCacheButton } from "./ExportCacheButton"
 import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type DesktopConfig } from "../desktop"
 import { fetchGoUsage, loadGoAccounts, saveGoAccounts, type GoUsage } from "../goUsage"
 import { getDataUsage, formatBytes } from "../utils/dataUsage"
@@ -417,8 +418,8 @@ export const SettingsPanel = memo(function SettingsPanel({
       {/* Notice */}
       {settingsNotice && (
         <div className={`notice ${settingsNotice.type} fade-in`}>
-          {settingsNotice.type === 'success' && '✓ '}
-          {settingsNotice.type === 'error' && '✗ '}
+          {settingsNotice.type === 'success' && ' '}
+          {settingsNotice.type === 'error' && ' '}
           {settingsNotice.type === 'info' && 'ℹ '}
           <span style={{ whiteSpace: "pre-line" }}>{settingsNotice.text}</span>
         </div>
@@ -454,8 +455,8 @@ export const SettingsPanel = memo(function SettingsPanel({
         <div className="settings-content-pane">
         {isDesktop && onOpenOpenCodeHub && (
           <div style={{
-            background: "linear-gradient(135deg, rgba(88,166,255,0.12) 0%, rgba(31,111,235,0.06) 100%)",
-            border: "1px solid rgba(88,166,255,0.35)",
+            background: "linear-gradient(135deg, var(--primary-soft) 0%, rgba(31,111,235,0.06) 100%)",
+            border: "1px solid var(--primary-soft)",
             borderRadius: "8px",
             padding: "12px 16px",
             marginBottom: "16px",
@@ -465,12 +466,12 @@ export const SettingsPanel = memo(function SettingsPanel({
             gap: "12px",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span style={{ fontSize: "24px" }}>🤖</span>
+              <span style={{ fontSize: "24px" }}></span>
               <div>
-                <div style={{ fontWeight: 600, fontSize: "14px", color: "#f0f6fc" }}>
+                <div style={{ fontWeight: 600, fontSize: "14px", color: "var(--text)" }}>
                   OpenCode Hub (Agentes, Skills & Configuración Oficial)
                 </div>
-                <div style={{ fontSize: "12px", color: "#8b949e", marginTop: "2px" }}>
+                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
                   Visualiza los prompts de sistema de tus agentes, catálogo de skills del entorno y edita opencode.json global.
                 </div>
               </div>
@@ -484,7 +485,7 @@ export const SettingsPanel = memo(function SettingsPanel({
                 alignItems: "center",
                 gap: "6px",
                 padding: "6px 14px",
-                background: "#1f6feb",
+                background: "var(--primary)",
                 color: "#fff",
                 border: "none",
                 borderRadius: "6px",
@@ -903,7 +904,7 @@ export const SettingsPanel = memo(function SettingsPanel({
               placeholder={qcProvider === "groq" ? "gsk_..." : qcProvider === "cerebras" ? "csk-..." : "sk-..."}
               style={{ flex: 1 }}
             />
-            <button type="button" className="btn-icon" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "hide" : "show"}>{showPassword ? "🙈" : "👁"}</button>
+            <button type="button" className="btn-icon" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "hide" : "show"}>{showPassword ? "" : ""}</button>
           </div>
         </label>
 
@@ -956,14 +957,14 @@ export const SettingsPanel = memo(function SettingsPanel({
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 15 }}>
-                        {agent.id.includes("plan") ? "🧭" : agent.id.includes("build") ? "🛠️" : "🤖"}
+                      <span style={{ display: "inline-flex", color: "var(--primary)" }}>
+                        {agent.id.includes("plan") ? <LayersIcon size={16} /> : agent.id.includes("build") ? <ToolIcon size={16} /> : <BrainIcon size={16} />}
                       </span>
                       <strong style={{ fontSize: 13, color: "var(--text)" }}>{agent.name || agent.id}</strong>
-                      {agent.id && <small style={{ color: "var(--muted)", fontSize: 11 }}>({agent.id})</small>}
+                      {agent.id && <small style={{ color: "var(--muted)", fontSize: 12 }}>({agent.id})</small>}
                     </div>
                     {agent.description && (
-                      <p style={{ margin: 0, fontSize: 11, color: "var(--muted)", lineHeight: 1.4 }}>
+                      <p style={{ margin: 0, fontSize: 12, color: "var(--muted)", lineHeight: 1.4 }}>
                         {agent.description}
                       </p>
                     )}
@@ -1067,6 +1068,34 @@ export const SettingsPanel = memo(function SettingsPanel({
       </SettingsSection>
       )}
 
+      {/* Auto opencode2 en terminal al abrir — usa localStorage directo para no depender del FeatureFlags merge */}
+      {showSystem && (
+      <SettingsSection title="Inicio">
+        <p className="subtle">Configuración de arranque automático</p>
+        <div className="switch-list">
+          <label className="switch-row">
+            <span className="switch-label">
+              <strong>Abrir opencode2 automáticamente</strong>
+              <small>Al iniciar la app de escritorio abre una terminal ejecutando <code>opencode2</code></small>
+            </span>
+            <input
+              type="checkbox"
+              className="switch-checkbox"
+              checked={(() => { try { return localStorage.getItem("opencode.auto_opencode2") === "1" } catch { return false } })()}
+              onChange={(e) => {
+                const v = e.target.checked
+                try { localStorage.setItem("opencode.auto_opencode2", v ? "1" : "0") } catch {}
+                // también persistir en shell config para portable
+                import("../shell").then(({ shell }) => shell.config.patch({ auto_opencode2: v } as any).catch(() => {})).catch(() => {})
+                // forzar re-render del panel
+                try { window.dispatchEvent(new Event("opencode:auto-opencode2-toggle")) } catch {}
+              }}
+            />
+          </label>
+        </div>
+      </SettingsSection>
+      )}
+
       {/* Extras */}
       {showSystem && (
       <SettingsSection title={t('settings.extras')}>
@@ -1120,6 +1149,14 @@ export const SettingsPanel = memo(function SettingsPanel({
               </span>
             </button>
           )}
+          <div className="btn-secondary extras-btn" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <SaveIcon size={16} />
+            <span style={{ flex: 1 }}>
+              <strong>Exportar chats guardados (.md)</strong>
+              <small>Descarga TODOS los mensajes del cache local (incluye borrados)</small>
+            </span>
+            <ExportCacheButton small label="Exportar .md" />
+          </div>
         </div>
       </SettingsSection>
       )}

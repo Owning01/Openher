@@ -138,6 +138,7 @@
 
 /* ===== Base Reset ===== */
 html {
+  font-size: 16px;
   background: var(--bg);
   overscroll-behavior: none;
   overflow: hidden;
@@ -149,7 +150,7 @@ body {
   font-family: var(--font-family);
   color: var(--text);
   background: var(--bg);
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overscroll-behavior: none;

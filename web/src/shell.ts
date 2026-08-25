@@ -88,6 +88,7 @@ export type ShellConfig = {
   groq_api_key: string
   quickchat_provider: string
   quickchat_model: string
+  auto_opencode2?: boolean
 }
 
 let resolvedBase: string | null = null
@@ -215,7 +216,7 @@ export const shell = {
       return post<{ id: string; ws_port: number }>(`/shell/pty${qs ? `?${qs}` : ""}`)
     },
     write: (id: string, data: string) => post(`/shell/pty/${id}/write`, { data }),
-    resize: (id: string, cols: number, rows: number) => post(`/shell/pty/${id}/resize`, { cols, rows }),
+    resize: (id: string, cols: number, rows: number, pixelWidth?: number, pixelHeight?: number) => post(`/shell/pty/${id}/resize`, { cols, rows, pixel_width: pixelWidth, pixel_height: pixelHeight }),
     kill: (id: string) => fetch(`/shell/pty/${id}`, { method: "DELETE" }).then(() => undefined),
     poll: (id: string, since: number) => get<{ len: number; done: boolean; data?: string; error?: string }>(`/shell/pty/${id}/buffer?since=${since}`),
   },

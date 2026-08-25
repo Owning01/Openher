@@ -31,7 +31,7 @@ export const SelectionBar = memo(function SelectionBar({ selection, onClear, onF
           width: 7,
           height: 7,
           borderRadius: "50%",
-          background: "#58a6ff",
+          background: "var(--primary)",
           display: "inline-block",
           flexShrink: 0,
           boxShadow: "0 0 0 4px rgba(88,166,255,0.18)",
@@ -56,8 +56,8 @@ export const SelectionBar = memo(function SelectionBar({ selection, onClear, onF
       )}
       <span
         style={{
-          fontSize: 11,
-          color: "#58a6ff",
+          fontSize: 12,
+          color: "var(--primary)",
           background: "rgba(88,166,255,0.16)",
           borderRadius: 999,
           padding: "2px 7px",

@@ -22,8 +22,8 @@
   flex-shrink: 0;
 }
 .qc-header-icon {
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -34,14 +34,14 @@
 .qc-header-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .qc-header-title {
   font-weight: 600;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--text);
   line-height: 1;
 }
 .qc-header-subtitle {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;

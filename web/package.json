@@ -21,7 +21,8 @@
     "test:rendered": "node --experimental-strip-types src/rendered.test.mjs",
     "check:contrast": "node --experimental-strip-types src/theme-contrast.mjs",
     "benchmark": "node benchmarks/runner.mjs",
-    "benchmark:report": "node benchmarks/runner.mjs > benchmarks/report.txt"
+    "benchmark:report": "node benchmarks/runner.mjs > benchmarks/report.txt",
+    "learning:manifest": "node scripts/generate-learning-manifest.mjs"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "7.0.1",

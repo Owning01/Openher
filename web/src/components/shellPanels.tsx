@@ -12,12 +12,13 @@ import { VisualSelectOverlay } from "./VisualSelectOverlay"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { useDevServer } from "../hooks/useDevServer"
 
-import { terminalStore, terminalPtyStore, rememberTerminalPty, killTerminalPty, transferTerminalTab } from "../utils/terminalStore"
+import { terminalStore, terminalPtyStore, rememberTerminalPty, killTerminalPty, transferTerminalTab, getTerminalFontSize, setTerminalFontSize, TERMINAL_FONT_MIN, TERMINAL_FONT_MAX } from "../utils/terminalStore"
 export { killTerminalPty, transferTerminalTab }
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
 import { sanitizeHtml } from "../utils/sanitize"
+import { useOutsideClick } from "../hooks/useOutsideClick"
 
 const BrowserPanel = lazy(() => import("./BrowserPanel").then((m) => ({ default: m.BrowserPanel })))
 const DocEditorPanel = lazy(() => import("./DocEditorPanel").then((m) => ({ default: m.DocEditorPanel })))
@@ -35,35 +36,125 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    const getUiScale = () => {
+      try {
+        const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"))
+        return Number.isFinite(v) && v > 0 ? v : 1
+      } catch { return 1 }
+    }
+    let baseFontFromStore = 13
+    try { baseFontFromStore = getTerminalFontSize(tabId) } catch {}
+    const initialScale = getUiScale()
+    const effectiveSize = Math.round(baseFontFromStore * initialScale)
+    // TUI opencode: box-drawing continuo, alt buffer, WebGL atlases estables, DPR alto
     const term = new Terminal({
-      fontFamily: "Consolas, 'Cascadia Mono', monospace",
-      fontSize: 13,
+      fontFamily: "Cascadia Mono, Consolas, 'Cascadia Mono', monospace",
+      fontSize: effectiveSize,
+      lineHeight: 1.0,
+      letterSpacing: 0,
+      fontWeight: "400" as any,
+      fontWeightBold: "700" as any,
       cursorBlink: true,
-      scrollback: 2000,
+      cursorStyle: "block",
+      cursorInactiveStyle: "outline",
+      cursorWidth: 1,
+      scrollback: 3000,
+      allowTransparency: false,
+      allowProposedApi: true,
+      convertEol: false,
+      customGlyphs: true,
+      rescaleOverlappingGlyphs: true as any,
+      minimumContrastRatio: 1,
+      smoothScrollDuration: 0,
+      scrollSensitivity: 1,
+      fastScrollSensitivity: 5,
+      altClickMovesCursor: false,
+      rightClickSelectsWord: true,
+      macOptionIsMeta: true,
+      macOptionClickForcesSelection: true,
+      wordSeparator: " ()[]{}',\"`",
+      windowsPty: { backend: "conpty" } as any,
+      // Terminal isolated surface: #0d1117 kept as terminal canvas (not tokenized per frontend-pro isolation)
       theme: {
         background: "#0d1117",
         foreground: "#e6edf3",
         cursor: "#58a6ff",
+        cursorAccent: "#0d1117",
         selectionBackground: "#264f78",
+        selectionInactiveBackground: "#1e3a5f",
+        selectionForeground: "#ffffff",
       },
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(el)
 
-    // Renderer WebGL (aceleración directa por GPU de xterm)
+    // Renderer por GPU: WebGL preferido; fallback a DOM (Canvas addon es opcional y no está instalado
+    // por compatibilidad con @xterm/xterm@6 — su peer es ^5). DOM + cola optimizada ya rinde para opencode.
     let webglAddon: WebglAddon | null = null
-    try {
-      webglAddon = new WebglAddon()
-      webglAddon.onContextLoss(() => {
-        try { webglAddon?.dispose() } catch {}
-        webglAddon = null
-      })
-      term.loadAddon(webglAddon)
-    } catch {
-      /* renderer DOM por defecto si no hay soporte WebGL */
-      webglAddon = null
+    const hasWebGL2 = (() => {
+      try {
+        const c = document.createElement("canvas")
+        return !!c.getContext("webgl2")
+      } catch { return false }
+    })()
+    // CSP-safe probe: algunos entornos bloquean data: canvas.toDataURL
+    let usingWebGL = false
+    let webglProbeFailed = false
+    const probeWebGL = (): boolean => {
+      try {
+        const c = document.createElement("canvas")
+        const gl = c.getContext("webgl2", { alpha: false, antialias: false }) as any
+        if (!gl) return false
+        // Si el driver está bloqueado, getExtension puede lanzar
+        try { gl.getExtension("WEBGL_lose_context") } catch {}
+        return true
+      } catch { return false }
     }
+    const canUseWebGL = hasWebGL2 && probeWebGL()
+    // Teardown+rebuild para atlas corruption (zoom/DPR/sleep): clearTextureAtlas no alcanza en Chromium+Nvidia
+    let webglRebuildTimer = 0
+    const rebuildWebGL = () => {
+      try { webglAddon?.dispose() } catch {}
+      webglAddon = null
+      usingWebGL = false
+      if (!canUseWebGL || disposed) return
+      try {
+        webglAddon = new WebglAddon()
+        webglAddon.onContextLoss(() => {
+          try { webglAddon?.dispose() } catch {}
+          webglAddon = null
+          usingWebGL = false
+          webglProbeFailed = true
+        })
+        term.loadAddon(webglAddon)
+        usingWebGL = true
+        webglProbeFailed = false
+      } catch {
+        webglAddon = null
+        usingWebGL = false
+      }
+    }
+    if (canUseWebGL) {
+      try {
+        webglAddon = new WebglAddon()
+        webglAddon.onContextLoss(() => {
+          try { webglAddon?.dispose() } catch {}
+          webglAddon = null
+          usingWebGL = false
+          webglProbeFailed = true
+        })
+        term.loadAddon(webglAddon)
+        usingWebGL = true
+      } catch {
+        webglAddon = null
+        usingWebGL = false
+        webglProbeFailed = true
+      }
+    }
+    try {
+      console.info(`[xterm] ${tabId} renderer=${usingWebGL ? "webgl" : webglProbeFailed ? "dom(blocked)" : "dom"} webgl2=${hasWebGL2} canUse=${canUseWebGL} font=${effectiveSize} dpr=${window.devicePixelRatio}`)
+    } catch {}
 
     term.attachCustomKeyEventHandler((e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "c" && term.hasSelection()) {
@@ -95,12 +186,12 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
     let since = 0
     let polling = false
 
-    // Cola de escritura para no congelar el hilo principal con TUI a 60fps (500KB burst).
-    // CAP duro: con la ventana oculta rAF no corre y la cola crecería sin límite
-    // (TUI escupiendo MBs → ~1GB RAM). Al superar MAX_QUEUE se descarta lo viejo.
+    // Cola de escritura para TUI 60fps (opencode alternate buffer). Batch por rAF para no
+    // bloquear el hilo UI; truncation suave para no romper frames de la TUI.
     let writeQueue: (string | Uint8Array)[] = []
     let flushScheduled = false
     let queueTruncated = false
+    const MAX_QUEUE = 900
     const TRUNCATE_MARKER = "\r\n\x1b[33m[terminal: salida omitida mientras estaba en segundo plano]\x1b[0m\r\n"
     const scheduleFlush = () => {
       if (flushScheduled) return
@@ -108,13 +199,13 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
       requestAnimationFrame(() => {
         flushScheduled = false
         let budget = 0
-        while (writeQueue.length > 0 && budget < 32) {
+        // Presupuesto más alto para TUI: opencode pinta frames completos en un burst
+        while (writeQueue.length > 0 && budget < 64) {
           const chunk = writeQueue.shift()!
           if (chunk instanceof Uint8Array) term.write(chunk)
           else term.write(chunk)
           budget++
-          // ceder si cola sigue grande para no bloquear animaciones/scroll
-          if (writeQueue.length > 50 && budget % 16 === 0) break
+          if (writeQueue.length > 120 && budget % 24 === 0) break
         }
         if (writeQueue.length === 0 && queueTruncated) {
           queueTruncated = false
@@ -125,8 +216,8 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
     }
     const queueWrite = (data: string | Uint8Array) => {
       writeQueue.push(data)
-      if (writeQueue.length > 240) {
-        const drop = writeQueue.length - 240
+      if (writeQueue.length > MAX_QUEUE) {
+        const drop = writeQueue.length - MAX_QUEUE
         writeQueue.splice(0, drop)
         queueTruncated = true
       }
@@ -153,10 +244,73 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
     }
     document.addEventListener("visibilitychange", onVisChange)
 
+    let lastCols = 0, lastRows = 0
     const sendResize = () => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ cmd: "resize", cols: term.cols, rows: term.rows }))
+      const cols = term.cols, rows = term.rows
+      if (cols === lastCols && rows === lastRows) {
+        // DPR-only change still needs pixel resize
+        const dpr = window.devicePixelRatio || 1
+        const w = Math.round(el.clientWidth * dpr)
+        const h = Math.round(el.clientHeight * dpr)
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          try { ws.send(JSON.stringify({ cmd: "resize", cols, rows, pixel_width: w, pixel_height: h })) } catch {}
+        } else if (ptyId) {
+          shell.pty.resize(ptyId, cols, rows, w, h).catch(() => {})
+        }
+        return
       }
+      lastCols = cols; lastRows = rows
+      const dpr = window.devicePixelRatio || 1
+      const w = Math.round(el.clientWidth * dpr)
+      const h = Math.round(el.clientHeight * dpr)
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ cmd: "resize", cols, rows, pixel_width: w, pixel_height: h })) } catch {}
+        // También HTTP para que el ConPTY lo aplique aunque el WS esté reconectando
+        shell.pty.resize(ptyId, cols, rows, w, h).catch(() => {})
+      } else if (ptyId) {
+        shell.pty.resize(ptyId, cols, rows, w, h).catch(() => {})
+      }
+      try { console.info(`[xterm] ${tabId} resize ${cols}x${rows} dpr=${dpr} px=${w}x${h} font=${term.options.fontSize}`) } catch {}
+    }
+
+    const applyZoom = (nextBase: number) => {
+      if (disposed) return
+      const z = getUiScale()
+      const nextSize = Math.max(TERMINAL_FONT_MIN, Math.min(TERMINAL_FONT_MAX, Math.round(nextBase * z)))
+      if (term.options.fontSize !== nextSize) term.options.fontSize = nextSize
+      // Zoom cambia métricas de glyph: full rebuild del atlas (no solo clear) para evitar bordes duplicados
+      if (usingWebGL) {
+        window.clearTimeout(webglRebuildTimer)
+        try { (webglAddon as any)?.clearTextureAtlas?.() } catch {}
+        webglRebuildTimer = window.setTimeout(() => {
+          if (disposed || !usingWebGL) return
+          rebuildWebGL()
+          try { fit.fit(); (term as any).refresh?.(0, term.rows - 1) } catch {}
+          sendResize()
+        }, 60) as any
+      }
+      try { fit.fit(); (term as any).refresh?.(0, term.rows - 1) } catch {}
+      sendResize()
+    }
+
+    // Fix zoom TUI: al cambiar --ui-scale, el canvas WebGL queda con atlas viejo
+    // y se ven letras dobles/triples. Ajustar fontSize + limpiar atlas + refit.
+    const handleUiZoom = () => {
+      if (disposed) return
+      try {
+        let base = baseFontFromStore
+        try { base = getTerminalFontSize(tabId) } catch {}
+        applyZoom(base)
+      } catch {}
+    }
+    const handleTerminalZoom = (e: Event) => {
+      if (disposed) return
+      const d = (e as CustomEvent).detail as any
+      if (!d || d.tabId !== tabId) return
+      try {
+        baseFontFromStore = d.size
+        applyZoom(d.size)
+      } catch {}
     }
 
     // Fallback a polling si el WebSocket no está disponible (server viejo).
@@ -257,7 +411,6 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
     } else {
       shell.pty.create(initialCwdRef.current, initialShellRef.current).then((res) => {
         if (disposed) {
-          // No matar: guardar para futura reconexión si el usuario ocultó rápido
           rememberTerminalPty(tabId, { ptyId: res.id, wsPort: res.ws_port })
           return
         }
@@ -265,10 +418,134 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
         wsPort = res.ws_port
         rememberTerminalPty(tabId, { ptyId: res.id, wsPort: res.ws_port })
         connectWs(wsPort, ptyId)
+        // Si hay flag de auto-opencode2 pendiente, enviar el comando tras conectar
+        let shouldAuto = false
+        try { shouldAuto = sessionStorage.getItem("opencode.auto_opencode2.pending") === "1" } catch {}
+        if (shouldAuto) {
+          try { sessionStorage.removeItem("opencode.auto_opencode2.pending") } catch {}
+          const send = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ cmd: "write", data: "opencode2\r" }))
+            else if (ptyId) shell.pty.write(ptyId, "opencode2\r").catch(() => {})
+          }
+          setTimeout(send, 900)
+        }
       }).catch(() => {
         term.writeln("\r\n\x1b[31m[Terminal] No se pudo iniciar el proceso ConPTY. Verifique que el ejecutable de escritorio esté en ejecución.\x1b[0m\r\n")
       })
     }
+
+    // Zoom: dentro del terminal (rueda con Ctrl, pinch, botones) + global --ui-scale
+    const handleWheelZoom = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -1 : 1
+      try {
+        const cur = getTerminalFontSize(tabId)
+        const nxt = setTerminalFontSize(tabId, cur + delta)
+        baseFontFromStore = nxt
+        applyZoom(nxt)
+      } catch {}
+    }
+    // Pinch con 2 dedos (Android/tablet)
+    let pinchStartDist = 0
+    let pinchStartFont = 0
+    let pinchActive = false
+    let pinchLastNudge = 0
+    const dist2 = (t0: Touch, t1: Touch) => Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        pinchActive = true
+        pinchStartDist = dist2(e.touches[0]!, e.touches[1]!)
+        try { pinchStartFont = getTerminalFontSize(tabId) } catch { pinchStartFont = baseFontFromStore }
+      }
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pinchActive || e.touches.length !== 2) return
+      const d = dist2(e.touches[0]!, e.touches[1]!)
+      const delta = d - pinchStartDist
+      if (Math.abs(delta) < 18) return
+      const now = Date.now()
+      if (now - pinchLastNudge < 90) return
+      pinchLastNudge = now
+      e.preventDefault()
+      const step = delta > 0 ? 1 : -1
+      try {
+        const nxt = setTerminalFontSize(tabId, pinchStartFont + step)
+        baseFontFromStore = nxt
+        pinchStartFont = nxt
+        pinchStartDist = d
+        applyZoom(nxt)
+      } catch {}
+    }
+    const onTouchEnd = () => { pinchActive = false }
+    el.addEventListener("wheel", handleWheelZoom, { passive: false })
+    el.addEventListener("touchstart", onTouchStart, { passive: true })
+    el.addEventListener("touchmove", onTouchMove, { passive: false })
+    el.addEventListener("touchend", onTouchEnd, { passive: true })
+
+    // Escuchar zoom global + zoom por tab
+    window.addEventListener("ui-zoom", handleUiZoom)
+    window.addEventListener("terminal:zoom", handleTerminalZoom as any)
+    // Ctrl+=/Ctrl+- / Ctrl+0: nativo al terminal (no robar al TUI sin Ctrl)
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (!(ev.ctrlKey || ev.metaKey)) return
+      if (ev.key === "=" || ev.key === "+" || ev.key === "Add") {
+        ev.preventDefault()
+        try {
+          const nxt = setTerminalFontSize(tabId, getTerminalFontSize(tabId) + 1)
+          baseFontFromStore = nxt
+          applyZoom(nxt)
+        } catch {}
+      } else if (ev.key === "-" || ev.key === "Subtract" || ev.key === "_") {
+        ev.preventDefault()
+        try {
+          const nxt = setTerminalFontSize(tabId, getTerminalFontSize(tabId) - 1)
+          baseFontFromStore = nxt
+          applyZoom(nxt)
+        } catch {}
+      } else if (ev.key === "0") {
+        ev.preventDefault()
+        try {
+          const nxt = setTerminalFontSize(tabId, 13)
+          baseFontFromStore = nxt
+          applyZoom(nxt)
+        } catch {}
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    // Algunos navegadores no disparan ResizeObserver con solo font-size: forzar
+    let zoomDebounce = 0
+    const onWindowResize = () => {
+      window.clearTimeout(zoomDebounce)
+      zoomDebounce = window.setTimeout(() => { if (!disposed) handleUiZoom() }, 40)
+    }
+    window.addEventListener("resize", onWindowResize)
+    // DPR change (mover entre monitores / zoom del OS) también corrompe atlas
+    let lastDpr = window.devicePixelRatio || 1
+    const dprQuery = window.matchMedia?.(`(resolution: ${lastDpr}dppx)`) as MediaQueryList | undefined
+    const onDprChange = () => {
+      if (disposed) return
+      const dpr = window.devicePixelRatio || 1
+      if (dpr === lastDpr) return
+      lastDpr = dpr
+      try { (webglAddon as any)?.clearTextureAtlas?.() } catch {}
+      if (usingWebGL) {
+        window.clearTimeout(webglRebuildTimer)
+        webglRebuildTimer = window.setTimeout(() => {
+          if (disposed || !usingWebGL) return
+          rebuildWebGL()
+          try { fit.fit(); (term as any).refresh?.(0, term.rows - 1) } catch {}
+          sendResize()
+        }, 80) as any
+      }
+      try { fit.fit() } catch {}
+      sendResize()
+      // re-armar listener con nuevo dpr
+      try { dprQuery?.removeEventListener?.("change", onDprChange as any) } catch {}
+      try { window.matchMedia?.(`(resolution: ${dpr}dppx)`)?.addEventListener?.("change", onDprChange as any) } catch {}
+    }
+    try { dprQuery?.addEventListener?.("change", onDprChange as any) } catch {}
+    window.addEventListener("resize", onDprChange)
 
     let resizeTimer = 0
     const ro = new ResizeObserver(() => {
@@ -276,7 +553,9 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
       resizeTimer = window.setTimeout(() => {
         if (disposed) return
         try {
+          try { (webglAddon as any)?.clearTextureAtlas?.() } catch {}
           fit.fit()
+          try { (term as any).refresh?.(0, term.rows - 1) } catch {}
           sendResize()
         } catch {
           /* ignore */
@@ -286,6 +565,7 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
     ro.observe(el)
     window.setTimeout(() => {
       try {
+        try { (webglAddon as any)?.clearTextureAtlas?.() } catch {}
         fit.fit()
         sendResize()
       } catch {
@@ -297,7 +577,19 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
       disposed = true
       window.clearTimeout(pollTimer)
       window.clearTimeout(resizeTimer)
+      window.clearTimeout(zoomDebounce)
+      window.clearTimeout(webglRebuildTimer)
+      el.removeEventListener("wheel", handleWheelZoom as any)
+      el.removeEventListener("touchstart", onTouchStart as any)
+      el.removeEventListener("touchmove", onTouchMove as any)
+      el.removeEventListener("touchend", onTouchEnd as any)
       document.removeEventListener("visibilitychange", onVisChange)
+      window.removeEventListener("ui-zoom", handleUiZoom as any)
+      window.removeEventListener("terminal:zoom", handleTerminalZoom as any)
+      window.removeEventListener("keydown", onKeyDown as any)
+      window.removeEventListener("resize", onWindowResize)
+      window.removeEventListener("resize", onDprChange as any)
+      try { dprQuery?.removeEventListener?.("change", onDprChange as any) } catch {}
       ro.disconnect()
       onData.dispose()
       try {
@@ -315,7 +607,7 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
     }
   }, [tabId])
 
-  return <div ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6 }} />
+  return <div ref={ref} style={{ width: "100%", height: "100%", background: "#0d1117", padding: 6, touchAction: "none", overscrollBehavior: "contain" }} />
 })
 
 export const TerminalPanel = memo(function TerminalPanel({
@@ -439,6 +731,18 @@ export const TerminalPanel = memo(function TerminalPanel({
     }
   }
 
+  const [zoomTick, setZoomTick] = useState(0)
+  useEffect(() => {
+    const onZoom = () => setZoomTick((x) => x + 1)
+    window.addEventListener("terminal:zoom", onZoom)
+    return () => window.removeEventListener("terminal:zoom", onZoom)
+  }, [])
+  const activeZoom = (() => { void zoomTick; try { return getTerminalFontSize(activeTabId) } catch { return 13 } })()
+  const pct = Math.round((activeZoom / 13) * 100)
+  const zoomIn = () => { try { const cur = getTerminalFontSize(activeTabId); setTerminalFontSize(activeTabId, cur + 1) } catch {} }
+  const zoomOut = () => { try { const cur = getTerminalFontSize(activeTabId); setTerminalFontSize(activeTabId, cur - 1) } catch {} }
+  const zoomReset = () => { try { setTerminalFontSize(activeTabId, 13) } catch {} }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#0d1117" }}>
       {/* Barra superior estilo VS Code */}
@@ -461,6 +765,11 @@ export const TerminalPanel = memo(function TerminalPanel({
           </div>
 
           <div className="terminal-actions-group">
+            <span className="terminal-zoom-group" title="Zoom (Ctrl+rueda, pinch, Ctrl+=/-/0)">
+              <button type="button" className="terminal-action-btn" onClick={zoomOut} aria-label="Zoom menos">−</button>
+              <button type="button" className="terminal-zoom-label" onClick={zoomReset} aria-label="Restablecer zoom" title="Restablecer al 100% (Ctrl+0)">{pct}%</button>
+              <button type="button" className="terminal-action-btn" onClick={zoomIn} aria-label="Zoom más">+</button>
+            </span>
             <div className="terminal-shell-picker">
               <span className="terminal-tab-icon" style={{ marginRight: 4 }}><TerminalIcon size={12} /></span>
               <select
@@ -563,7 +872,7 @@ export const TerminalPanel = memo(function TerminalPanel({
       {/* Contenedor principal de terminales con columna de pestañas estilo VS Code */}
       <div className="terminal-body-wrapper">
         {splitTabId ? (
-          <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 1, background: "#30363d" }}>
+          <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 1, background: "var(--border)" }}>
             {(() => {
               const leftTab = termTabs.find((t) => t.id === activeTabId) ?? termTabs[0]
               const rightTab = termTabs.find((t) => t.id === splitTabId)
@@ -574,18 +883,18 @@ export const TerminalPanel = memo(function TerminalPanel({
                     <div style={{ flex: 1, position: "relative" }}>
                       <SingleTerminal cwd={cwd} shellName={leftTab.shell} tabId={leftTab.id} />
                     </div>
-                    <div style={{ padding: "2px 6px", fontSize: 11, color: "#8b949e", background: "#161b22", borderTop: "1px solid #30363d", display: "flex", justifyContent: "space-between" }}>
+                    <div style={{ padding: "2px 6px", fontSize: 12, color: "var(--muted)", background: "var(--surface-strong)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
                       <span>{leftTab.title}</span>
-                      <button onClick={() => setSplitTabId(null)} style={{ background: "transparent", border: "none", color: "#8b949e", cursor: "pointer" }} title="Cerrar split">×</button>
+                      <button onClick={() => setSplitTabId(null)} style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer" }} title="Cerrar split">×</button>
                     </div>
                   </div>
                   <div style={{ flex: 1, position: "relative", background: "#0d1117", display: "flex", flexDirection: "column" }}>
                     <div style={{ flex: 1, position: "relative" }}>
                       <SingleTerminal cwd={cwd} shellName={rightTab.shell} tabId={rightTab.id} />
                     </div>
-                    <div style={{ padding: "2px 6px", fontSize: 11, color: "#8b949e", background: "#161b22", borderTop: "1px solid #30363d", display: "flex", justifyContent: "space-between" }}>
+                    <div style={{ padding: "2px 6px", fontSize: 12, color: "var(--muted)", background: "var(--surface-strong)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
                       <span>{rightTab.title}</span>
-                      <button onClick={() => setSplitTabId(null)} style={{ background: "transparent", border: "none", color: "#8b949e", cursor: "pointer" }} title="Cerrar split">×</button>
+                      <button onClick={() => setSplitTabId(null)} style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer" }} title="Cerrar split">×</button>
                     </div>
                   </div>
                 </>
@@ -630,7 +939,7 @@ export const TerminalPanel = memo(function TerminalPanel({
                 <button
                   type="button"
                   onClick={handleAddTab}
-                  style={{ background: "transparent", border: "none", color: "#8b949e", cursor: "pointer", padding: 0 }}
+                  style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }}
                   title="Nueva terminal"
                 >
                   <PlusIcon size={11} />
@@ -804,6 +1113,23 @@ function ExplorerTreeFolder({
   )
 }
 
+const EXPLORER_RECENT_KEY = "opencode.explorer.recentDirs"
+function loadExplorerRecent(): string[] {
+  try {
+    const raw = localStorage.getItem(EXPLORER_RECENT_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? arr.filter((s: any) => typeof s === "string" && s).slice(0, 20) : []
+  } catch { return [] }
+}
+function pushExplorerRecent(path: string) {
+  if (!path) return
+  try {
+    const list = loadExplorerRecent().filter((p) => p !== path)
+    list.unshift(path)
+    localStorage.setItem(EXPLORER_RECENT_KEY, JSON.stringify(list.slice(0, 20)))
+  } catch {}
+}
+
 export const ExplorerPanel = memo(function ExplorerPanel({
   onOpenSessionDir,
   initialCwd,
@@ -828,6 +1154,11 @@ export const ExplorerPanel = memo(function ExplorerPanel({
   const [actionNotice, setActionNotice] = useState<string | null>(null)
   const [execConfirm, setExecConfirm] = useState<{ path: string; name: string } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const [showProjectMenu, setShowProjectMenu] = useState(false)
+  const projectMenuRef = useRef<HTMLDivElement | null>(null)
+  const [explorerRecent, setExplorerRecent] = useState<string[]>(() => loadExplorerRecent())
+  useOutsideClick(projectMenuRef, () => setShowProjectMenu(false), showProjectMenu)
+  const refreshExplorerRecent = useCallback(() => setExplorerRecent(loadExplorerRecent()), [])
 
   const isExecScript = (path?: string) => {
     if (!path) return false
@@ -844,6 +1175,8 @@ export const ExplorerPanel = memo(function ExplorerPanel({
     if (!path) return
     setCwd(path)
     setPreview(null)
+    pushExplorerRecent(path)
+    refreshExplorerRecent()
     try {
       const r = await shell.fs.list(path)
       setDirs(r.dirs || [])
@@ -852,17 +1185,22 @@ export const ExplorerPanel = memo(function ExplorerPanel({
       setDirs([])
       setFiles([])
     }
-  }, [])
+  }, [refreshExplorerRecent])
 
   // Auto-cargar la sesión cuando cambia o se define initialCwd
   useEffect(() => {
     if (initialCwd) {
       load(initialCwd)
     } else {
-      shell.fs.drives().then(({ drives }) => {
-        setDrives(drives)
-        if (drives.length > 0) load(drives[0])
-      }).catch(() => {})
+      const recent = loadExplorerRecent()
+      if (recent.length > 0) {
+        load(recent[0]!)
+      } else {
+        shell.fs.drives().then(({ drives }) => {
+          setDrives(drives)
+          if (drives.length > 0) load(drives[0])
+        }).catch(() => {})
+      }
     }
   }, [initialCwd, load])
 
@@ -1068,6 +1406,14 @@ export const ExplorerPanel = memo(function ExplorerPanel({
 
   const projName = initialCwd ? (initialCwd.split(/[/\\]/).filter(Boolean).pop() || initialCwd) : null
 
+  const openChangeFolder = async () => {
+    try {
+      const picked = await shell.fs.pickFolder()
+      const path = (picked as any)?.path as string | null | undefined
+      if (path) load(path)
+    } catch {}
+  }
+
   return (
     <div
       className={`shell-explorer${dragOverTree ? " is-drag-over" : ""}`}
@@ -1076,13 +1422,87 @@ export const ExplorerPanel = memo(function ExplorerPanel({
       onDragLeave={() => setDragOverTree(false)}
       onDrop={(e) => handleDropExternal(e, cwd || initialCwd || "")}
     >
-      <div className="shell-explorer-top">
+      <div className="shell-explorer-top" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         <button className="btn-icon compact" onClick={back} title={t('shell.back')} aria-label={t('shell.back')}>←</button>
-        <span className="shell-path" title={cwd ?? ""}>
+        <span className="shell-path" title={cwd ?? ""} style={{ flex: "1 1 auto", minWidth: 0 }}>
           {projName && cwd?.startsWith(initialCwd!) ? (
             cwd === initialCwd ? <><FolderIcon size={12} /> {projName}</> : <><FolderIcon size={12} /> {projName}/{cwd.slice(initialCwd!.length).replace(/^[/\\]+/, "")}</>
           ) : (cwd ?? "…")}
         </span>
+        <button
+          type="button"
+          onClick={openChangeFolder}
+          title="Cambiar carpeta"
+          aria-label="Cambiar carpeta"
+          style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: "0.78rem", fontWeight: 500, cursor: "pointer", padding: "2px 4px" }}
+        >
+          Cambiar carpeta
+        </button>
+        <div ref={projectMenuRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => setShowProjectMenu((v) => !v)}
+            title="Proyectos recientes"
+            aria-label="Proyectos recientes"
+            aria-expanded={showProjectMenu}
+            style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: "2px 4px", fontSize: "0.95rem", lineHeight: 1 }}
+          >
+            ▾
+          </button>
+          {showProjectMenu && (
+            <div
+              className="modal-dropdown fade-in"
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 6px)",
+                zIndex: 100000,
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-sm)",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+                padding: "4px 0",
+                minWidth: "280px",
+                maxWidth: "min(420px, 88vw)",
+                maxHeight: "min(360px, 60vh)",
+                overflowY: "auto",
+              }}
+            >
+              <div style={{ padding: "6px 10px 4px", fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                Proyectos recientes
+              </div>
+              {explorerRecent.length === 0 ? (
+                <div style={{ padding: "8px 10px", color: "var(--muted)", fontSize: "0.82rem" }}>Sin proyectos recientes</div>
+              ) : explorerRecent.map((p) => {
+                const label = p.split(/[/\\]/).filter(Boolean).pop() || p
+                const isActive = cwd === p
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    className="overflow-item"
+                    style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "space-between", fontWeight: isActive ? 600 : 400 }}
+                    onClick={() => {
+                      setShowProjectMenu(false)
+                      load(p)
+                    }}
+                    title={p}
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                      <FolderIcon size={13} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                    </span>
+                    <span style={{ color: "var(--muted)", fontSize: "0.72rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "52%" }}>{p}</span>
+                  </button>
+                )
+              })}
+              <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
+              <button type="button" className="overflow-item" onClick={() => { setShowProjectMenu(false); openChangeFolder() }}>
+                <span><FolderIcon size={14} /></span> Cambiar carpeta…
+              </button>
+            </div>
+          )}
+        </div>
         <button type="button" className="btn-icon compact" onClick={() => handleCreateFile(cwd || initialCwd || "")} title="Nuevo archivo">
           +<FileIcon size={13} />
         </button>
@@ -1644,7 +2064,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
               onClick={onToggleInspect}
               title={inspectMode ? "Salir modo selección (Esc)" : visualSelection ? `Zona: ${visualSelection.fileName ?? ""}:${visualSelection.lineStart ?? ""} — clic para cambiar` : "Seleccionar zona para el agente (Ctrl+Shift+C)"}
               aria-label="Seleccionar zona"
-              style={visualSelection ? { color: "#58a6ff", borderColor: "rgba(88,166,255,0.35)" } : undefined}
+              style={visualSelection ? { color: "var(--primary)", borderColor: "var(--primary-soft)" } : undefined}
             >
               <span style={{ fontSize: 13, lineHeight: 1 }}>◈</span>
             </button>
@@ -1777,7 +2197,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 10px", fontSize: "0.72rem", color: "var(--muted)", borderTop: "1px solid var(--border-subtle)", background: "var(--surface)", height: "22px", minHeight: "22px", flexShrink: 0 }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{relPath}</span>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-          <span>{saving ? "Guardando..." : activeFile?.dirty ? "● Modificado" : "✓ Guardado"}</span>
+          <span>{saving ? "Guardando..." : activeFile?.dirty ? "● Modificado" : " Guardado"}</span>
           {ext && <span style={{ textTransform: "uppercase" }}>{ext}</span>}
           <span>{lineCount} líneas</span>
           <span>{charCount} caracs</span>
@@ -1891,7 +2311,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
   if (!board) {
     return (
       <div className="shell-kanban-empty">
-        <div style={{ width: 64, height: 64, borderRadius: 16, background: "var(--primary-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🗂️</div>
+        <div style={{ width: 64, height: 64, borderRadius: 16, background: "var(--primary-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>️</div>
         <p style={{ fontWeight: 600 }}>{t('shell.noBoards')}</p>
         <p style={{ fontSize: "0.82rem", color: "var(--muted)", textAlign: "center", maxWidth: 300 }}>Crea tu primer tablero para organizar tareas con columnas y tarjetas arrastrables.</p>
         <button className="btn-primary" onClick={() => setShowAddBoard(true)}>{t('shell.newBoard')}</button>
@@ -1932,7 +2352,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
             <input type="search" placeholder="Buscar tarjetas..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <span style={{ fontSize: "0.72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>{totalCards} tarjetas · {colCount} columnas</span>
-          <button type="button" className={`btn-secondary compact${showNotes ? " active" : ""}`} onClick={() => setShowNotes((v) => !v)} title="Notas del tablero">📝</button>
+          <button type="button" className={`btn-secondary compact${showNotes ? " active" : ""}`} onClick={() => setShowNotes((v) => !v)} title="Notas del tablero"></button>
           <button className="btn-icon compact" title={t('shell.deleteBoard')} onClick={() => { if (board && window.confirm(t('shell.deleteBoard'))) shell.kanban.delBoard(board.id).then(load) }} style={{ color: "var(--muted)" }}>×</button>
         </div>
       </div>
@@ -1961,7 +2381,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
                       <div className="shell-kanban-card-head">
                         <span className="shell-kanban-card-title">{c.title}</span>
                         <span className="shell-kanban-card-actions">
-                          <button onClick={(e) => { e.stopPropagation(); openEditCard(c) }} title="Editar">✎</button>
+                          <button onClick={(e) => { e.stopPropagation(); openEditCard(c) }} title="Editar"></button>
                           <button className="danger" onClick={(e) => { e.stopPropagation(); delCard(c.id) }} title="Eliminar">×</button>
                         </span>
                       </div>
@@ -1986,9 +2406,9 @@ export const KanbanPanel = memo(function KanbanPanel() {
         {showNotes && (
           <div className="shell-kanban-notes">
             <div className="shell-kanban-notes-head">
-              <span className="shell-kanban-notes-title">📌 Notas — {board.name}</span>
+              <span className="shell-kanban-notes-title"> Notas — {board.name}</span>
               <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span style={{ fontSize: 10, color: "var(--muted)" }}>{boardNotes.length} caracteres</span>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>{boardNotes.length} caracteres</span>
                 <button type="button" className="btn-icon compact" title="Copiar" onClick={() => navigator.clipboard?.writeText(boardNotes)}>Copiar</button>
                 <button type="button" className="btn-icon compact" title="Limpiar" onClick={() => { if (window.confirm("¿Limpiar notas?")) handleNotesChange("") }}>Limpiar</button>
               </span>
@@ -2110,7 +2530,7 @@ export const DocsPanel = memo(function DocsPanel() {
         <div className="shell-docs-list">
           {shown.map((f) => (
             <div key={f.path} className={`shell-row shell-file${doc?.path === f.path ? " active" : ""}`} onClick={() => open(f.path)} title={f.path}>
-              <span className="shell-glyph" style={{ color: "#4aa3df" }}>M</span>
+              <span className="shell-glyph" style={{ color: "var(--primary)" }}>M</span>
               <span className="shell-name">{f.name}</span>
             </div>
           ))}
@@ -2306,16 +2726,16 @@ export const ConfigPanel = memo(function ConfigPanel() {
     try {
       const parsed = JSON.parse(raw)
       await shell.config.import(parsed)
-      setMsg("✓")
+      setMsg("")
       load()
     } catch (e: any) {
-      setMsg("✗ " + (e.message ?? e))
+      setMsg(" " + (e.message ?? e))
     }
   }
   const exportCfg = async () => {
     const r = await shell.config.export()
     await navigator.clipboard.writeText(JSON.stringify(r.config, null, 2))
-    setMsg("✓ " + t('shell.copied'))
+    setMsg(" " + t('shell.copied'))
   }
 
   return (
@@ -2475,15 +2895,15 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Open Design</span>
           {servedProject ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--muted)", overflow: "hidden" }}>
-              <span style={{ background: "rgba(88,166,255,0.12)", color: "#58a6ff", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)", overflow: "hidden" }}>
+              <span style={{ background: "var(--primary-soft)", color: "var(--primary)", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
                 {servedProject.directory.split(/[\\/]/).pop()}
               </span>
               {servedProject.htmlFiles.length > 1 && (
                 <select
                   value={servedProject.entryPoint}
                   onChange={(e) => handleSwitchHtml(e.target.value)}
-                  style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 11, padding: "2px 4px" }}
+                  style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12, padding: "2px 4px" }}
                 >
                   {servedProject.htmlFiles.map((f) => (
                     <option key={f} value={f}>{f}</option>
@@ -2492,7 +2912,7 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
               )}
             </div>
           ) : (
-            <span style={{ fontSize: 11, color: "var(--muted)" }}>Previsualización y diseño interactivo</span>
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>Previsualización y diseño interactivo</span>
           )}
         </div>
 
@@ -2508,21 +2928,21 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
             </button>
           )}
           <button className="btn-secondary compact" onClick={handlePickAndServe} title="Abrir y servir carpeta de proyecto web">
-            📂 Abrir Proyecto
+             Abrir Proyecto
           </button>
           {servedProject && (
             <button className="btn-secondary compact" onClick={handleCloseProject} title="Cerrar proyecto actual">
-              ✕
+              
             </button>
           )}
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: status === "ready" ? "#3fb950" : status === "offline" ? "#f85149" : "#8b949e", display: "inline-block" }} />
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: status === "ready" ? "var(--success)" : status === "offline" ? "var(--danger)" : "var(--muted)", display: "inline-block" }} />
           <button className="btn-secondary compact" onClick={reload} title="Recargar">↻</button>
         </div>
       </div>
 
       {status === "offline" && !url ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32, textAlign: "center" }}>
-          <div style={{ width: 56, height: 56, borderRadius: 14, background: "rgba(88,166,255,0.1)", border: "1px solid rgba(88,166,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, color: "#58a6ff" }}>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: "var(--primary-soft)", border: "1px solid var(--primary-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, color: "var(--primary)" }}>
             ◈
           </div>
           <div style={{ maxWidth: 440 }}>
@@ -2534,7 +2954,7 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
             <button className="btn-primary" onClick={handlePickAndServe} style={{ padding: "8px 18px", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-              <span>📂</span>
+              <span></span>
               <span>Abrir Carpeta de Proyecto</span>
             </button>
             <button className="btn-secondary" onClick={reload} style={{ padding: "8px 14px" }}>

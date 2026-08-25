@@ -6,7 +6,7 @@ button {
   min-height: 44px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  padding: 0.65rem 0.9rem;
+  padding: 0.78rem 0.9rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -74,7 +74,7 @@ select {
 textarea {
   resize: vertical;
   min-height: 96px;
-  line-height: 1.45;
+  line-height: 1.6;
 }
 
 input:focus,
@@ -98,7 +98,7 @@ ol {
 }
 
 h1 {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   line-height: 1.1;
   letter-spacing: 0;
 }
@@ -110,18 +110,19 @@ h2 {
 }
 
 h3 {
-  font-size: 1rem;
+  font-size: 1.125rem;
   line-height: 1.25;
   letter-spacing: 0;
 }
 
 p {
   color: var(--muted);
+  line-height: 1.6;
 }
 
 .subtle {
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.875rem;
 }
 
 

@@ -8,6 +8,32 @@ export const terminalStore = new Map<string, TerminalPersist>()
 const MAX_PERSISTED_PTYS = 8
 export const terminalPtyStore = new Map<string, { ptyId: string; wsPort: number }>()
 
+export const TERMINAL_FONT_MIN = 9
+export const TERMINAL_FONT_MAX = 28
+export const TERMINAL_FONT_DEFAULT = 13
+const TERMINAL_FONT_PREFIX = "opencode.terminal.fontSize."
+
+export function getTerminalFontSize(tabId: string): number {
+  try {
+    const raw = localStorage.getItem(TERMINAL_FONT_PREFIX + tabId)
+    const v = raw ? parseInt(raw, 10) : NaN
+    if (Number.isFinite(v) && v >= TERMINAL_FONT_MIN && v <= TERMINAL_FONT_MAX) return v
+  } catch {}
+  return TERMINAL_FONT_DEFAULT
+}
+
+export function setTerminalFontSize(tabId: string, size: number) {
+  const next = Math.max(TERMINAL_FONT_MIN, Math.min(TERMINAL_FONT_MAX, Math.round(size)))
+  try { localStorage.setItem(TERMINAL_FONT_PREFIX + tabId, String(next)) } catch {}
+  // Notificar a todas las instancias montadas
+  try { window.dispatchEvent(new CustomEvent("terminal:zoom", { detail: { tabId, size: next } })) } catch {}
+  return next
+}
+
+export function adjustTerminalFontSize(tabId: string, delta: number): number {
+  return setTerminalFontSize(tabId, getTerminalFontSize(tabId) + delta)
+}
+
 export function rememberTerminalPty(tabId: string, entry: { ptyId: string; wsPort: number }) {
   terminalPtyStore.delete(tabId)
   terminalPtyStore.set(tabId, entry)

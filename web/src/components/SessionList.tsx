@@ -6,6 +6,7 @@ import { ConnectionNotices } from "./ConnectionNotices"
 import { SessionToolbar } from "./SessionToolbar"
 import { QuickAccessCard } from "./QuickAccessCard"
 import { ContextMenu } from "./ContextMenu"
+import { ExportCacheButton } from "./ExportCacheButton"
 import { shell } from "../shell"
 import type { SessionView, ConnectionState, DataMode } from "../types"
 
@@ -455,6 +456,9 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
         </div>
         {notices}
         {selectionBar}
+        <div style={{ display: "flex", justifyContent: "center", margin: "8px 0 4px" }}>
+          <ExportCacheButton small />
+        </div>
         <div className="session-list">{renderSessionCards(projectSessions)}</div>
         {sessionContextMenuElement}
         {projectContextMenuElement}
@@ -477,6 +481,9 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
       {notices}
       {selectionBar}
+      <div style={{ display: "flex", justifyContent: "center", margin: "8px 0 4px", gap: 8 }}>
+        <ExportCacheButton />
+      </div>
 
       {!selectedProjectDir && !query.trim() && (favorites.size > 0 || activeSessions.length > 0 || recentSessions.length > 0) && (
         <div className="quick-access">

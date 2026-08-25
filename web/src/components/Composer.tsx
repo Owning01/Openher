@@ -163,6 +163,15 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     onChangeRef.current(v)
   }, [])
 
+  // Persistencia directa sin re-render del padre (debounce 0): el draft se guarda
+  // en localStorage en cada tecla sin pasar por App → solo Composer re-renderiza.
+  useEffect(() => {
+    try {
+      if (localValue) localStorage.setItem("opencode.remote.composer", localValue)
+      else localStorage.removeItem("opencode.remote.composer")
+    } catch {}
+  }, [localValue])
+
   // Sync SOLO de cambios externos del padre (reset a "", inserción en composer vacío, etc.).
   // NUNCA sobreescribe texto local con versiones intermedias o más cortas del padre.
   useEffect(() => {
@@ -187,14 +196,14 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const handleChange = useCallback((newValue: string) => {
     setLocalValue(newValue)
     localValueRef.current = newValue
+    // No notificar al padre en cada tecla: evita re-render del God Component (App)
+    // El padre se sincroniza solo en send/clear/blur (pushNow) y el envio lee del DOM.
+    // Debounce 0 para envio: texto completo via textareaRef + localValueRef.
     lastPushedRef.current = newValue
-
-    // Push diferido al padre para persistencia de draft
+    // Persistencia diferida sin re-render: guardamos en ref para que App lo lea en blur/send
     if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
-    pushTimerRef.current = setTimeout(() => {
-      pushTimerRef.current = null
-      onChangeRef.current(newValue)
-    }, 300)
+    // Debounce 0 nominal: no programamos push al padre por tipeo (evita corte y recarga DOM)
+    // Si se requiere persistencia inmediata, usar 0ms: pushTimerRef.current = setTimeout(() => onChangeRef.current(newValue), 0)
   }, [])
 
   // Listener para eventos emitidos por plugins para insertar texto en el prompt

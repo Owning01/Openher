@@ -1,14 +1,12 @@
 /* styles/motion.css — animaciones ligeras sin dependencias (concepto GPUI motion.div en web) */
 
-/* Sidebar collapse: transición en compositor, sin re-layout thrash por JS */
+/* Sidebar collapse: transición solo en transform/opacity (GPU), grid animado sin will-change para ahorrar RAM */
 .app-shell {
-  transition: grid-template-columns 0.26s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: grid-template-columns;
+  transition: grid-template-columns 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .app-desktop-sidebar {
-  transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
-  will-change: transform, opacity;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
 }
 
 /* Fallback View Transitions para sidebar (cuando el browser lo soporta, el UA interpola) */
@@ -90,5 +88,11 @@
   .collapsible-content {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

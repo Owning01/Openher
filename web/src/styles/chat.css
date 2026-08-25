@@ -153,7 +153,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   color: var(--muted);
 }
 
@@ -198,7 +198,7 @@
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
   margin: var(--space-2) 0;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   color: var(--accent);
   border-top: 1px dashed var(--accent);
   border-bottom: 1px dashed var(--accent);
@@ -250,7 +250,7 @@
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
   color: var(--muted-strong);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   cursor: pointer;
   min-height: 32px;
   white-space: nowrap;
@@ -300,7 +300,7 @@
 .context-chip span,
 .context-chip small {
   color: var(--muted-strong);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -369,7 +369,7 @@
 
 .dashboard-label {
   color: var(--muted-strong);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -457,7 +457,7 @@
 }
 
 .context-bar-label {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--muted);
   white-space: nowrap;
@@ -603,8 +603,9 @@
 }
 
 .message-content {
-  font-size: var(--chat-font-size, 0.88rem);
+  font-size: var(--chat-font-size, 1rem);
   font-family: var(--chat-font-family, inherit);
+  line-height: 1.6;
 }
 .message-content p {
   font-size: inherit;
@@ -629,8 +630,8 @@
   position: absolute;
   top: 4px;
   right: 4px;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-xs);
   background: rgba(0, 0, 0, 0.6);
   border: none;
@@ -648,6 +649,12 @@
   opacity: 1;
 }
 
+@media (hover: none), (pointer: coarse) {
+  .message-image-edit {
+    opacity: 0.85;
+  }
+}
+
 .translation-original {
   margin-top: var(--space-1);
 }
@@ -656,7 +663,7 @@
   background: none;
   border: none;
   color: var(--muted, #888);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   cursor: pointer;
   padding: 0;
   font-style: italic;
@@ -673,7 +680,7 @@
   background: rgba(128, 128, 128, 0.06);
   border-left: 2px solid var(--border, rgba(255, 255, 255, 0.1));
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   color: var(--muted, #999);
   font-style: italic;
   max-height: 200px;
@@ -701,7 +708,7 @@
 
 .chat-preview p {
   font-size: inherit;
-  line-height: 1.45;
+  line-height: 1.6;
   margin: 0;
 }
 
@@ -732,7 +739,7 @@
 
 .chat-preview-footer {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-family: var(--font-mono);
   opacity: 0.75;
 }
@@ -776,7 +783,7 @@
   padding-bottom: 0.12rem;
 }
 .activity-box-completed .collapsible-title {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 500;
   text-transform: none;
   letter-spacing: normal;
@@ -808,7 +815,7 @@
   padding: 0 var(--space-2);
   background: inherit;
   color: var(--chat-accent, var(--primary));
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -845,14 +852,14 @@
   gap: 0.2rem;
   margin-top: var(--space-2);
   padding-top: var(--space-1);
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-family: var(--font-mono);
   color: var(--muted);
   opacity: 0.75;
 }
 
 .msg-agent-dot {
-  font-size: 0.6rem;
+  font-size: 0.875rem;
   margin-right: 0.1rem;
 }
 
@@ -943,7 +950,7 @@
 .typing-bubble {
   width: auto;
   min-width: 56px;
-  padding: 0.65rem 0.85rem;
+  padding: 0.78rem 0.85rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1014,7 +1021,7 @@
 
 .msg-queued-badge {
   display: inline-block;
-  font-size: 0.6rem;
+  font-size: 0.875rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.04em;
@@ -1034,9 +1041,9 @@
 }
 
 .edit-msg-btn {
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -1083,9 +1090,9 @@
 }
 
 .msg-tasks-btn {
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -1126,6 +1133,7 @@
   margin-top: var(--space-2);
   white-space: pre-wrap;
   color: var(--text);
+  line-height: 1.6;
   overflow-wrap: break-word;
   word-break: break-word;
 }
@@ -1221,7 +1229,7 @@
   padding: 4px 12px;
   background: rgba(128, 128, 128, 0.06);
   border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-family: var(--font-mono, monospace);
   color: var(--muted, #888);
   user-select: none;
@@ -1243,7 +1251,7 @@
   cursor: pointer;
   padding: 2px 6px;
   border-radius: var(--radius-xs);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-family: inherit;
   transition: background 0.15s, color 0.15s;
 }
@@ -1259,7 +1267,7 @@
   background: transparent;
   color: var(--code-text, #e4e4e7);
   padding: var(--space-4);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.55;
   tab-size: 2;
   word-break: break-all;
@@ -1363,7 +1371,7 @@
   .message-content .table-wrap th {
     background: transparent;
     font-weight: 800;
-    font-size: 0.72rem;
+    font-size: 0.875rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--muted-strong);
@@ -1432,7 +1440,7 @@
 
 .tool-part-icon {
   flex: 0 0 auto;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   opacity: 0.7;
 }
 
@@ -1452,7 +1460,7 @@
 .tool-part-arg {
   font-weight: 400;
   opacity: 0.6;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   text-transform: none;
   letter-spacing: 0;
   overflow: hidden;
@@ -1475,7 +1483,7 @@
   margin: 0;
   padding: 0.5rem;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1505,7 +1513,7 @@
 
 .diff-badge {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: 600;
   line-height: 1;
   padding: 0.18rem 0.35rem;
@@ -1604,7 +1612,7 @@
 .file-diff-path {
   flex: 1 1 auto;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1723,7 +1731,7 @@
 }
 
 .subagent-task-title {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -1756,7 +1764,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -1771,7 +1779,7 @@
 }
 
 .subagent-section-title {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--muted);
@@ -1785,7 +1793,7 @@
   padding-left: 8px;
   color: var(--muted);
   font-style: italic;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   white-space: pre-wrap;
   max-height: 140px;
   overflow-y: auto;
@@ -1845,7 +1853,7 @@
   border: none !important;
   border-radius: 0 !important;
   padding: 2px 0;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 
@@ -1866,12 +1874,12 @@
 }
 
 .question-tab {
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.78rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -1908,7 +1916,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0.4rem 0.6rem;
+  padding: 0.4rem 0.78rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -1943,7 +1951,7 @@
 }
 
 .question-opt-desc {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   color: var(--muted);
   margin-left: var(--space-1);
 }
@@ -1984,7 +1992,7 @@
 }
 
 .question-custom-submit {
-  padding: 0.35rem 0.6rem;
+  padding: 0.35rem 0.78rem;
   border: 1px solid var(--primary);
   border-radius: var(--radius-sm);
   background: var(--primary);
@@ -1995,7 +2003,7 @@
 }
 
 .question-custom-preview {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   color: var(--muted);
   padding: 0.2rem 0.5rem;
 }
@@ -2027,7 +2035,7 @@
 
 .question-error {
   color: var(--danger);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   margin-bottom: var(--space-2);
 }
 
@@ -2109,7 +2117,7 @@
 }
 
 .question-btn {
-  padding: 0.3rem 0.6rem;
+  padding: 0.3rem 0.78rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -2157,7 +2165,7 @@
   align-items: baseline;
   gap: 0.5rem;
   padding: 0.15rem 0;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text);
 }
@@ -2174,7 +2182,7 @@
 .tool-part-inline-text {
   flex: 1 1 auto;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2197,7 +2205,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.4rem 0.6rem;
+  padding: 0.4rem 0.78rem;
   margin-top: 0.5rem;
   background: var(--surface-subtle);
   border: 1px solid var(--border);
@@ -2206,7 +2214,7 @@
 }
 
 .undo-confirm-text {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text);
 }
@@ -2219,7 +2227,7 @@
 
 .undo-confirm-yes,
 .undo-confirm-no {
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.78rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
@@ -2338,7 +2346,7 @@
 }
 
 .todo-status-badge {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   padding: 1px 6px;
   border-radius: 99px;
   text-transform: uppercase;
@@ -2371,7 +2379,7 @@
 
 .todo-toggle-btn {
   min-height: 36px;
-  padding: 0.4rem 0.7rem;
+  padding: 0.4rem 0.82rem;
   font-size: 0.8rem;
 }
 
@@ -2422,6 +2430,12 @@
   opacity: 1;
 }
 
+@media (hover: none), (pointer: coarse) {
+  .detail-title-row .btn-icon {
+    opacity: 0.85;
+  }
+}
+
 /* ===== Thinking Block ===== */
 .thinking-block {
   margin-bottom: var(--space-3);
@@ -2432,7 +2446,7 @@
 .session-type-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   font-weight: 800;
   padding: 0.08rem 0.35rem;
   border-radius: var(--radius-sm);
@@ -2538,7 +2552,7 @@
   border-radius: 0 !important;
   background: transparent !important;
   color: var(--text);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: color 0.15s;
 }
@@ -2557,7 +2571,7 @@
   color: var(--accent);
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   letter-spacing: 0.05em;
   display: flex;
   align-items: center;
@@ -2591,13 +2605,13 @@
 .subagent-footer-tokens,
 .subagent-footer-cost {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.875rem;
 }
 
 
 /* ===== Context Usage Label & @-Menu ===== */
 .context-usage-label {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--muted);
   white-space: nowrap;
@@ -2639,7 +2653,7 @@
   border: none;
   color: var(--text);
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   transition: background 0.1s;
 }
 .diff-file-header:hover {
@@ -2670,7 +2684,7 @@
 }
 .diff-empty {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 .diff-mini-bar {
   background: var(--primary-soft);
@@ -2694,7 +2708,7 @@
   border: none;
   color: var(--text);
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 .plan-breakdown-icon {
   color: var(--accent);
@@ -2706,7 +2720,7 @@
   text-align: left;
 }
 .plan-breakdown-count {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   color: var(--muted);
 }
 .plan-breakdown-body {
@@ -2717,7 +2731,7 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-1) 0;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 .plan-task-status {
   width: 16px;
@@ -2789,7 +2803,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   flex-wrap: wrap;
 }
 .git-branch {
@@ -2803,12 +2817,12 @@
 .git-ahead {
   color: var(--success);
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
 }
 .git-behind {
   color: var(--accent);
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
 }
 .git-actions {
   display: flex;
@@ -2836,7 +2850,7 @@
 }
 /* ===== Message search bar in ChatView ===== */
 .message-search-bar { padding: var(--space-2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: var(--space-2); }
-.message-search-bar input { flex: 1; min-width: 0; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text); font-size: 0.85rem; }
+.message-search-bar input { flex: 1; min-width: 0; padding: 0.4rem 0.78rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text); font-size: 0.85rem; }
 .message-search-count { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 
 /* Resaltado de coincidencias del buscador de mensajes */
@@ -2852,7 +2866,7 @@ mark {
   flex-shrink: 0;
   margin-left: auto;
   color: var(--muted-strong);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;

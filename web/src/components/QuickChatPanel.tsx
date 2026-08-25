@@ -57,7 +57,7 @@ function AssistantBubbleContent({ content }: { content: string }) {
           background: "var(--surface-subtle)",
           border: "1px solid var(--border)",
           padding: "6px 8px",
-          fontSize: 11,
+          fontSize: 12,
         }}>
           <div
             onClick={() => setThinkExpanded(!thinkExpanded)}
@@ -71,8 +71,8 @@ function AssistantBubbleContent({ content }: { content: string }) {
               fontWeight: 600,
             }}
           >
-            <span>💭 Razonamiento {thinkExpanded ? "▲" : "▼"}</span>
-            <span style={{ fontSize: 10, opacity: 0.7 }}>{think.length} chars</span>
+            <span> Razonamiento {thinkExpanded ? "▲" : "▼"}</span>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>{think.length} chars</span>
           </div>
           {thinkExpanded && (
             <div style={{
@@ -83,7 +83,7 @@ function AssistantBubbleContent({ content }: { content: string }) {
               borderTop: "1px solid var(--border)",
               color: "var(--muted)",
               fontFamily: "var(--font-mono, monospace)",
-              fontSize: 11,
+              fontSize: 12,
               whiteSpace: "pre-wrap",
               lineHeight: 1.4,
             }}>
@@ -309,7 +309,7 @@ export function QuickChatPanel({
         <div className="qc-header-text">
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span className="qc-header-title">{t("quickchat.title")}</span>
-            <span className="qc-badge" style={{ fontSize: 10, padding: "1px 6px" }} title={`${provider} / ${model}`}>
+            <span className="qc-badge" style={{ fontSize: 12, padding: "1px 6px" }} title={`${provider} / ${model}`}>
               {activeModelLabel}
             </span>
           </div>
@@ -321,7 +321,7 @@ export function QuickChatPanel({
             onClick={handleNewChat}
             title="Nuevo chat (limpiar todo)"
             aria-label="Nuevo chat"
-            style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", width: "auto", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}
+            style={{ fontSize: 12, fontWeight: 600, padding: "2px 8px", width: "auto", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}
           >
             <span>+</span> Nuevo
           </button>
@@ -336,7 +336,7 @@ export function QuickChatPanel({
           </button>
           {onOpenSettings && (
             <button className="qc-icon-btn" onClick={onOpenSettings} title={t("nav.settings")} aria-label={t("nav.settings")}>
-              ⚙
+              
             </button>
           )}
         </div>
@@ -347,14 +347,14 @@ export function QuickChatPanel({
         <div style={{ background: "var(--surface-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, margin: "8px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
-              ⚙ Configuración de Chat Rápido
+               Configuración de Chat Rápido
             </span>
-            <button className="btn-icon compact" onClick={() => setShowConfig(false)}>✕</button>
+            <button className="btn-icon compact" onClick={() => setShowConfig(false)}></button>
           </div>
 
           {/* Selector de Proveedor y Modelo dentro de la ruedita */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12 }}>
               <span style={{ color: "var(--muted)" }}>{t("quickchat.provider")}:</span>
               <select
                 className="qc-select"
@@ -372,7 +372,7 @@ export function QuickChatPanel({
               </select>
             </label>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12 }}>
               <span style={{ color: "var(--muted)" }}>{t("quickchat.model")}:</span>
               <select
                 className="qc-select"
@@ -388,14 +388,14 @@ export function QuickChatPanel({
             </label>
           </div>
 
-          <label className="qc-switch" style={{ fontSize: 11, padding: "4px 0" }}>
+          <label className="qc-switch" style={{ fontSize: 12, padding: "4px 0" }}>
             <input type="checkbox" checked={searchEnabled} onChange={e => setSearchEnabled(e.target.checked)} />
             <span>{t("quickchat.search")}</span>
-            <span style={{ opacity: 0.6, fontSize: 11 }}>{searchEnabled ? t("quickchat.searchOn") : t("quickchat.searchOff")}</span>
+            <span style={{ opacity: 0.6, fontSize: 12 }}>{searchEnabled ? t("quickchat.searchOn") : t("quickchat.searchOff")}</span>
           </label>
 
           {provider === "custom" && (
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
               <span style={{ color: "var(--muted)" }}>{t("quickchat.customUrl")}:</span>
               <input
                 type="text"
@@ -407,7 +407,7 @@ export function QuickChatPanel({
             </label>
           )}
 
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
             <span style={{ color: "var(--muted)" }}>
               {provider === "groq" ? "Groq API Key (gsk_...)" : provider === "cerebras" ? "Cerebras API Key (csk-...)" : provider === "custom" ? "API Key (opcional si es Ollama/local)" : "API Key"}:
             </span>
@@ -420,7 +420,7 @@ export function QuickChatPanel({
                 style={{ flex: 1, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 8px", fontSize: 12, color: "var(--text)" }}
               />
               <button className="btn-secondary compact" type="button" onClick={() => setShowKeySecret(!showKeySecret)} title={showKeySecret ? "Ocultar" : "Mostrar"}>
-                {showKeySecret ? "🙈" : "👁"}
+                {showKeySecret ? "" : ""}
               </button>
             </div>
           </label>
@@ -430,8 +430,8 @@ export function QuickChatPanel({
               <button className="btn-secondary compact" type="button" onClick={handleTestConnection} disabled={testStatus === "testing"}>
                 {testStatus === "testing" ? "Probando..." : t("quickchat.testConnection")}
               </button>
-              {testStatus === "ok" && <span style={{ color: "#3fb950", fontSize: 11, fontWeight: 600 }}>✓ {t("quickchat.connected")}</span>}
-              {testStatus === "error" && <span style={{ color: "#f85149", fontSize: 11 }} title={testError || ""}>✗ Error de conexión</span>}
+              {testStatus === "ok" && <span style={{ color: "var(--success)", fontSize: 12, fontWeight: 600 }}> {t("quickchat.connected")}</span>}
+              {testStatus === "error" && <span style={{ color: "var(--danger)", fontSize: 12 }} title={testError || ""}> Error de conexión</span>}
             </div>
 
             <button className="btn-primary compact" type="button" onClick={handleSaveConfig} style={{ padding: "6px 14px" }}>
@@ -444,7 +444,7 @@ export function QuickChatPanel({
       {/* Warning banner when key is missing */}
       {needsKey && !showConfig && (
         <div className="qc-config-banner">
-          <span>⚠️ {provider === "groq" ? t("quickchat.errorNoKeyGroq") : provider === "cerebras" ? t("quickchat.errorNoKey") : "Configurá tu clave de API"}</span>
+          <span>️ {provider === "groq" ? t("quickchat.errorNoKeyGroq") : provider === "cerebras" ? t("quickchat.errorNoKey") : "Configurá tu clave de API"}</span>
           <button className="qc-config-btn" onClick={() => setShowConfig(true)}>
             {t("settings.connect")}
           </button>
@@ -455,7 +455,7 @@ export function QuickChatPanel({
       <div ref={listRef} className="qc-messages">
         {messages.length === 0 && (
           <div className="qc-empty">
-            <div className="qc-empty-icon">💬</div>
+            <div className="qc-empty-icon"></div>
             <div className="qc-empty-text">{t("quickchat.empty")}</div>
           </div>
         )}

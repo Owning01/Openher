@@ -31,7 +31,7 @@ export const PlanBreakdown = memo(function PlanBreakdown({ tasks }: Props) {
           {tasks.map((tk) => (
             <div key={tk.id} className={`plan-task plan-task-${tk.status}`}>
               <span className="plan-task-status">
-                {tk.status === "completed" ? "✓" : tk.status === "in_progress" ? "◌" : "○"}
+                {tk.status === "completed" ? "" : tk.status === "in_progress" ? "◌" : "○"}
               </span>
               <span className="plan-task-title">{tk.title}</span>
             </div>

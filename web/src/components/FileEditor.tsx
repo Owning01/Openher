@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { api } from "../api"
 import { shell } from "../shell"
 import { ModalHeader } from "./ModalHeader"
+import { CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { basename } from "../utils"
 import { sanitizeHtml, sanitizeClassName } from "../utils/sanitize"
@@ -162,13 +163,13 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content file-editor" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="File Editor">
         <ModalHeader title={basename(path)} titleTooltip={path} onClose={onClose}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem" }}>
             {saving ? (
-              <span style={{ color: "var(--primary)" }}>Guardando...</span>
+              <span style={{ color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: 6 }}>Guardando...</span>
             ) : dirty ? (
-              <span style={{ color: "var(--warning, #e3b341)" }}>● Modificado (autoguardando)</span>
+              <span style={{ color: "var(--warning)", display: "inline-flex", alignItems: "center", gap: 6 }}>Modificado (autoguardando)</span>
             ) : lastSaved ? (
-              <span style={{ color: "var(--color-success, #3fb950)" }}>✓ Guardado</span>
+              <span style={{ color: "var(--success)", display: "inline-flex", alignItems: "center", gap: 6 }}><CheckIcon size={12} /> Guardado</span>
             ) : null}
           </div>
         </ModalHeader>

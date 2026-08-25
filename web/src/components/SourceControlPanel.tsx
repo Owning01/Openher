@@ -45,7 +45,7 @@ const DiffModal = memo(function DiffModal({ title, patch, onClose }: {
     <Modal onClose={onClose}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{title}</h3>
-        <button className="btn-icon compact" onClick={onClose}>✕</button>
+        <button className="btn-icon compact" onClick={onClose}></button>
       </div>
       <div className="scm-diff">
         {lines.map((l, i) => (
@@ -223,7 +223,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
           <FolderIcon size={20} />
           <p>{t("scm.noSession")}</p>
           <button className="btn-primary compact" onClick={handlePickFolder} style={{ marginTop: 8 }}>
-            📂 Seleccionar Repositorio
+             Seleccionar Repositorio
           </button>
         </div>
       </div>
@@ -234,11 +234,11 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
     return (
       <div className="scm-panel">
         <div className="scm-header" style={{ padding: "6px 10px", gap: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={currentFolder}>
-            📂 {currentFolder.split(/[\\/]/).pop() || currentFolder}
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={currentFolder}>
+             {currentFolder.split(/[\\/]/).pop() || currentFolder}
           </span>
           <button className="btn-secondary compact" onClick={handlePickFolder} title="Elegir otra carpeta">
-            📂 Cambiar
+             Cambiar
           </button>
         </div>
         <div className="scm-empty">
@@ -246,7 +246,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
           <p>{t("scm.notARepo")}</p>
           <small>{currentFolder}</small>
           <button className="btn-primary compact" onClick={handlePickFolder} style={{ marginTop: 12 }}>
-            📂 Abrir Otro Repositorio
+             Abrir Otro Repositorio
           </button>
         </div>
       </div>
@@ -258,16 +258,16 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
   return (
     <div className="scm-panel">
       {/* Selector de Repositorio / Directorio */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px", background: "var(--surface-subtle)", borderBottom: "1px solid var(--border)", fontSize: 11 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px", background: "var(--surface-subtle)", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
           <span style={{ fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={repoRoot || currentFolder}>
-            📂 {(repoRoot || currentFolder).split(/[\\/]/).pop()}
+             {(repoRoot || currentFolder).split(/[\\/]/).pop()}
           </span>
           {availableDirs.length > 1 && (
             <select
               value={activeCwd}
               onChange={(e) => handleSwitchDir(e.target.value)}
-              style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 10, padding: "1px 4px", maxWidth: 120 }}
+              style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12, padding: "1px 4px", maxWidth: 120 }}
             >
               {availableDirs.map((d) => (
                 <option key={d} value={d}>{d.split(/[\\/]/).pop()}</option>
@@ -275,7 +275,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
             </select>
           )}
         </div>
-        <button className="btn-secondary compact" onClick={handlePickFolder} title="Seleccionar otra carpeta en disco" style={{ fontSize: 10, padding: "2px 6px" }}>
+        <button className="btn-secondary compact" onClick={handlePickFolder} title="Seleccionar otra carpeta en disco" style={{ fontSize: 12, padding: "2px 6px" }}>
           Cambiar
         </button>
       </div>

@@ -40,17 +40,17 @@ export const TabBar = memo(function TabBar({
   const getLabel = useCallback((id: string) => {
     if (id.startsWith("browser:") || id.startsWith("http://") || id.startsWith("https://")) {
       const u = id.replace(/^browser:/, "")
-      return `🌐 ${u.replace(/^https?:\/\//, "")}`
+      return ` ${u.replace(/^https?:\/\//, "")}`
     }
     if (id.startsWith("editor:")) {
-      return `📝 ${basename(id.replace(/^editor:/, ""))}`
+      return ` ${basename(id.replace(/^editor:/, ""))}`
     }
-    if (id.startsWith("terminal")) return "💻 Terminal"
-    if (id === "explorer") return "📁 Explorador"
-    if (id === "stats") return "📊 Estadísticas"
-    if (id === "kanban") return "📋 Kanban"
-    if (id === "docs") return "📖 Docs"
-    if (id === "labs") return "🧪 Labs"
+    if (id.startsWith("terminal")) return " Terminal"
+    if (id === "explorer") return " Explorador"
+    if (id === "stats") return " Estadísticas"
+    if (id === "kanban") return " Kanban"
+    if (id === "docs") return " Docs"
+    if (id === "labs") return " Labs"
     if (id === "__design__") return "◈ Open Design"
 
     const session = sessions.find((s) => s.id === id)
@@ -190,7 +190,7 @@ export const TabBar = memo(function TabBar({
           title="Nueva terminal como pestaña"
           aria-label="Nueva terminal"
         >
-          💻
+          
         </button>
       )}
     </div>

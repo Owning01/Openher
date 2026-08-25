@@ -114,8 +114,10 @@ export const MessageList = memo(function MessageList({
   useEffect(() => {
     if (view !== "detail") return
     if (loadingSessionID === selectedID) return
-    if (messages.length > 0) scrollToBottom("auto")
-  }, [view, loadingSessionID, selectedID, messages.length])
+    if (messages.length > 0) {
+      if (isAtBottom || isNearBottom(80)) scrollToBottom("auto")
+    }
+  }, [view, loadingSessionID, selectedID, messages.length, isAtBottom, isNearBottom, scrollToBottom])
 
   // Desktop: selectedID cambia sin que view cambie. Fuerza scroll al cambiar de sesión.
   useEffect(() => {

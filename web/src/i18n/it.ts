@@ -297,7 +297,7 @@ export default {
   'detail.send': 'Invia',
   'detail.abort': 'Interrompi',
   'detail.jumpToLatest': 'Vai alla fine',
-  'detail.you': '👤 Tu',
+  'detail.you': ' Tu',
   'detail.opencode': 'OpenHer',
   'detail.projectDashboardLabel': 'Dashboard progetto e VCS',
   'detail.projectLabel': 'Progetto',
