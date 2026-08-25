@@ -16,6 +16,7 @@ type NavBarProps = {
 // "OpenCode"; al chat se entra tocando cada sesión.
 const navItems: Array<{ view: ViewType; icon: ReactNode; label: string }> = [
   { view: "quickchat", icon: <BrainIcon size={18} />, label: "quickchat.title" },
+  { view: "learning", icon: <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>📚</span>, label: "learning.title" },
   { view: "settings", icon: <SettingsIcon size={18} />, label: "nav.settings" }
 ]
 

@@ -3,7 +3,7 @@
 
 /* ===== Badge ===== */
 .badge {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   color: var(--muted);
   background: var(--surface);
   padding: 0.1rem 0.5rem;
@@ -14,7 +14,7 @@
 
 .model-active-name {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   margin-top: var(--space-1);
 }
 
@@ -78,7 +78,7 @@
   background: none;
   border: none;
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 600;
   padding: 0.35rem 0;
   cursor: pointer;
@@ -109,7 +109,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 
@@ -128,7 +128,7 @@
 
 .fp-project-action {
   color: var(--primary);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -166,7 +166,7 @@
 .fp-path-sep {
   color: var(--muted);
   margin: 0 0.2rem;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
 }
 
 .fp-path-link {
@@ -204,7 +204,7 @@
 .fp-manual-row input {
   flex: 1;
   min-width: 0;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .fp-error-banner {
@@ -245,7 +245,7 @@
   gap: 0.5rem;
   padding: 1.5rem 0;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .fp-row {
@@ -289,7 +289,7 @@
 
 .fp-row-hint {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   flex-shrink: 0;
 }
 
@@ -318,7 +318,7 @@
   background: transparent;
   color: var(--muted-strong);
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: color 0.15s;
@@ -350,7 +350,7 @@
 }
 
 .mode-label {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--muted);
   display: flex;
@@ -365,7 +365,7 @@
   flex: 1 0 auto;
   min-width: 0;
   text-align: center;
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   font-weight: 700;
   padding: 0.2rem 0.3rem;
   border: 1px solid var(--border);
@@ -454,8 +454,8 @@
 .session-toolbar-row .btn-new-session {
   height: 32px;
   min-height: 32px;
-  padding: 0 0.65rem;
-  font-size: 0.78rem;
+  padding: 0 0.78rem;
+  font-size: 0.875rem;
   gap: 6px;
   white-space: nowrap;
 }
@@ -503,7 +503,7 @@
 .mode-dropdown-item {
   width: 100%;
   text-align: left;
-  padding: 0.38rem 0.65rem;
+  padding: 0.38rem 0.78rem;
   font-size: 0.76rem;
   font-weight: 700;
   border-radius: var(--radius-sm);
@@ -553,7 +553,7 @@
   color: var(--muted-strong);
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -588,7 +588,7 @@
 }
 
 .quick-access-count {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: 800;
   padding: 0.05rem 0.35rem;
   border-radius: 999px;
@@ -941,7 +941,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   color: var(--muted);
   background: var(--surface-strong);
   border: 1px solid var(--border);
@@ -1016,7 +1016,7 @@
 }
 .collapsible-file {
   color: var(--primary);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1026,7 +1026,7 @@
 }
 .collapsible-chevron {
   flex-shrink: 0;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   color: var(--muted);
   margin-left: auto;
 }
@@ -1049,7 +1049,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   color: var(--muted);
   flex-wrap: wrap;
 }
@@ -1060,7 +1060,7 @@
 }
 .project-chevron {
   margin-left: var(--space-2);
-  font-size: 0.6rem;
+  font-size: 0.875rem;
 }
 .project-sessions-inline {
   display: flex;
@@ -1088,7 +1088,7 @@
 
 .compact-action-btn {
   flex: 0 0 auto;
-  padding: 0.45rem 0.6rem;
+  padding: 0.45rem 0.78rem;
   min-height: 36px;
   display: inline-flex;
   align-items: center;
@@ -1101,7 +1101,7 @@
 
 @media (max-width: 430px) {
   .session-actions button {
-    font-size: 0.82rem;
+    font-size: 0.875rem;
     padding: 0.5rem 0.5rem;
     min-height: 38px;
   }
@@ -1124,7 +1124,7 @@
   justify-content: center;
   border-radius: 999px;
   padding: 0.15rem 0.55rem;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-weight: 800;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1176,7 +1176,7 @@
 }
 
 .session-selection-count {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -1204,7 +1204,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted-strong);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 600;
   padding: 0.15rem 0.45rem;
   cursor: pointer;

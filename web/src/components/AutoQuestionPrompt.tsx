@@ -1,4 +1,5 @@
 import { memo, useCallback, useRef, useState } from "react"
+import { CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { Question, QuestionInfo } from "../types"
 
@@ -111,7 +112,7 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
                         onClick={() => handleToggle(qi, opt.label)}>
                         <span className="question-opt-label">{opt.label}</span>
                         {opt.description && <span className="question-opt-desc">{opt.description}</span>}
-                        {isActive && <span className="question-opt-check">✓</span>}
+                        {isActive && <span className="question-opt-check"><CheckIcon size={12} /></span>}
                       </button>
                     )
                   })}

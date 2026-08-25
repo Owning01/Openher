@@ -45,13 +45,14 @@ export type FeatureFlags = {
   offlineCache: boolean
   questionAuto: boolean
   permissionUI: boolean
+  autoOpencode2: boolean
 }
 
 // ---------------------------------------------------------------------------
 // ViewType / HelpPage — navegación de alto nivel de la SPA
 // Duplicado con entities/ui/model.ts — se deduplicará en merge.
 // ---------------------------------------------------------------------------
-export type ViewType = "settings" | "sessions" | "detail" | "help" | "stats" | "quickchat"
+export type ViewType = "settings" | "sessions" | "detail" | "help" | "stats" | "quickchat" | "learning"
 
 export type HelpPage = "overview" | "server" | "network" | "troubleshooting" | "commands"
 

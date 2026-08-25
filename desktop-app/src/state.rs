@@ -35,6 +35,8 @@ pub struct ShellConfig {
     pub groq_api_key: String,
     pub quickchat_provider: String,
     pub quickchat_model: String,
+    /// Auto-abrir `opencode2` en una terminal al iniciar la app.
+    pub auto_opencode2: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -72,6 +74,7 @@ impl Default for ShellConfig {
             groq_api_key: String::new(),
             quickchat_provider: String::new(),
             quickchat_model: String::new(),
+            auto_opencode2: false,
         }
     }
 }

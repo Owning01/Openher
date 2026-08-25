@@ -108,6 +108,11 @@ impl PtyRegistry {
         if let Some(dir) = &cwd {
             cmd.cwd(dir);
         }
+        // Env para TUI bbox: UTF-8 + 256color + sin CI poisoning (termenv degrada a ASCII con CI=1)
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
+        cmd.env("LANG", std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string()));
+        // No propagar CI que rompe bubbletea/opentui (ver sst/opencode#3417)
         let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
@@ -165,6 +170,9 @@ impl PtyRegistry {
     }
 
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
+        self.resize_px(id, cols, rows, 0, 0)
+    }
+    pub fn resize_px(&self, id: &str, cols: u16, rows: u16, pixel_width: u16, pixel_height: u16) -> Result<(), String> {
         let map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get(id).ok_or("pty no existe")?;
         let m = s.master.lock().unwrap_or_else(|e| e.into_inner());
@@ -173,8 +181,8 @@ impl PtyRegistry {
                 .resize(PtySize {
                     rows,
                     cols,
-                    pixel_width: 0,
-                    pixel_height: 0,
+                    pixel_width,
+                    pixel_height,
                 })
                 .map_err(|e| e.to_string()),
             None => Err("pty cerrado".into()),
@@ -499,7 +507,9 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                             if let Some(id) = id {
                                 let cols = cmd["cols"].as_u64().unwrap_or(100) as u16;
                                 let rows = cmd["rows"].as_u64().unwrap_or(30) as u16;
-                                let _ = registry.resize(&id, cols, rows);
+                                let pw = cmd["pixel_width"].as_u64().or(cmd["pixelWidth"].as_u64()).unwrap_or(0) as u16;
+                                let ph = cmd["pixel_height"].as_u64().or(cmd["pixelHeight"].as_u64()).unwrap_or(0) as u16;
+                                let _ = registry.resize_px(&id, cols, rows, pw, ph);
                             }
                         }
                         "kill" => {

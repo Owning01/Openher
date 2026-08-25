@@ -46,7 +46,7 @@
   background: var(--danger-soft);
   border: 1px solid var(--danger);
   border-radius: var(--radius-sm);
-  padding: 0.35rem 0.6rem;
+  padding: 0.35rem 0.78rem;
   animation: fade-in 0.2s ease;
 }
 
@@ -67,7 +67,7 @@
   color: var(--text);
   font-family: inherit;
   font-size: 0.88rem;
-  line-height: 1.45;
+  line-height: 1.6;
   resize: none;
   overflow-y: auto;
   outline: none;
@@ -91,8 +91,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   border: none;
   border-radius: 50%;
   background: transparent;
@@ -200,8 +202,8 @@
 }
 
 .composer-bar-btn {
-  min-height: 30px;
-  min-width: 30px;
+  min-height: 32px;
+  min-width: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -262,7 +264,7 @@
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   font-family: var(--font-mono, monospace);
   letter-spacing: 0.03em;
@@ -279,7 +281,7 @@
 }
 
 .composer-char-count {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-family: var(--font-mono);
   color: var(--muted);
   align-self: center;
@@ -366,7 +368,7 @@
   width: 100%;
   max-height: 50vh;
   object-fit: contain;
-  background: #0a0a0f;
+  background: var(--code-bg);
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   touch-action: none;
@@ -384,8 +386,8 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -470,7 +472,7 @@
 
 .prompt-preset-info small {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -494,7 +496,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted-strong);
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-weight: 600;
   padding: 0.15rem 0.4rem;
   cursor: pointer;
@@ -518,7 +520,7 @@
 .header-model-variant {
   opacity: 0.6;
   font-weight: 400;
-  font-size: 0.65rem;
+  font-size: 0.875rem;
 }
 
 /* ===== Dev Server Button (header del chat) ===== */
@@ -531,7 +533,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface-2, rgba(255, 255, 255, 0.04));
   color: var(--text);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 600;
   padding: 0.15rem 0.5rem;
   cursor: pointer;
@@ -549,13 +551,13 @@
 .header-dev-server-btn.running {
   border-color: rgba(34, 197, 94, 0.5);
   background: rgba(34, 197, 94, 0.12);
-  color: #22c55e;
+  color: var(--success);
 }
 
 .header-dev-server-btn.starting {
   border-color: rgba(234, 179, 8, 0.5);
   background: rgba(234, 179, 8, 0.12);
-  color: #eab308;
+  color: var(--warning);
 }
 
 /* Menú de niveles de pensamiento del toggle del modelo */
@@ -570,7 +572,7 @@
   gap: 0.35rem;
   min-width: 210px;
   max-width: 260px;
-  padding: 0.6rem;
+  padding: 0.78rem;
   background: var(--surface-strong, #1a1a20);
   border: 1px solid var(--border-strong, #444);
   border-radius: var(--radius-md, 8px);
@@ -586,7 +588,7 @@
 }
 
 .header-model-menu .hmm-title strong {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   color: var(--text, #eee);
   white-space: nowrap;
   overflow: hidden;
@@ -594,7 +596,7 @@
 }
 
 .header-model-menu .hmm-title small {
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   color: var(--muted, #999);
   white-space: nowrap;
   overflow: hidden;
@@ -613,7 +615,7 @@
 }
 
 .header-model-menu .hmm-none {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   color: var(--muted, #999);
   padding: 0.2rem 0;
 }
@@ -628,7 +630,7 @@
   border-radius: var(--radius-sm, 6px);
   background: transparent;
   color: var(--text, #eee);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
@@ -693,7 +695,7 @@
 .model-selector-thinking-card {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.78rem;
   padding: 0.85rem;
   background: var(--surface-strong, #16161c);
   border: 1px solid var(--border, #2a2a36);
@@ -720,7 +722,7 @@
 }
 
 .model-provider-badge {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   padding: 0.15rem 0.45rem;
   background: rgba(59, 130, 246, 0.15);
   color: var(--primary, #60a5fa);
@@ -829,7 +831,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.65rem 0.8rem;
+  padding: 0.78rem 0.8rem;
   background: var(--surface-strong, #181820);
   border: 1px solid var(--border, #2a2a36);
   border-radius: var(--radius-md, 8px);
@@ -886,12 +888,12 @@
 }
 
 .model-option-provider {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   color: var(--muted, #9ca3af);
 }
 
 .model-context-chip {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   padding: 0.08rem 0.35rem;
   background: rgba(255, 255, 255, 0.06);
   border-radius: 3px;
@@ -900,18 +902,18 @@
 }
 
 .model-variants-chip {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   padding: 0.08rem 0.35rem;
-  background: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
+  background: var(--accent-soft);
+  color: var(--accent);
   border-radius: 3px;
 }
 
 .model-default-tag {
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   padding: 0.05rem 0.3rem;
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: var(--success-soft);
+  color: var(--success);
   border-radius: 3px;
   font-weight: 600;
 }
@@ -933,7 +935,7 @@
 }
 
 .model-selector-hint {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   color: var(--muted, #9ca3af);
   flex: 1;
 }
@@ -989,7 +991,7 @@
   align-items: center;
   justify-content: center;
   background: var(--surface-strong);
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-family: var(--font-mono);
   font-weight: 700;
 }
@@ -1011,7 +1013,8 @@
 }
 
 .image-pick-btn {
-  min-height: 30px;
+  min-height: 32px;
+  min-width: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1034,7 +1037,7 @@
 .attach-icon-other { color: var(--warning); }
 
 .image-preview .file-info {
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1091,7 +1094,7 @@
 }
 
 .slash-menu-desc {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   color: var(--muted, #999);
   white-space: nowrap;
   overflow: hidden;
@@ -1102,7 +1105,7 @@
 }
 
 .slash-menu-source {
-  font-size: 0.6rem;
+  font-size: 0.875rem;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--accent, #ff9f1c);
@@ -1123,7 +1126,7 @@
 .at-menu .slash-menu-source {
   border-radius: 3px;
   padding: 0 4px;
-  font-size: 0.6rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -1134,7 +1137,7 @@
 
 .at-menu .slash-menu-desc {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -79,14 +79,14 @@ export const DiffViewer = memo(function DiffViewer({ files, config, sessionID, d
                     <div className="diff-actions">
                       {onApplyDiff && (
                         <button className="btn-primary compact" onClick={() => handleApply(f.file)} disabled={applyingRef.current === f.file}>
-                          {applyingRef.current === f.file ? "..." : "✓ Apply"}
+                          {applyingRef.current === f.file ? "..." : " Apply"}
                         </button>
                       )}
                       {onRejectDiff && (
-                        <button className="btn-secondary compact" onClick={() => onRejectDiff(f.file)}>✗ Reject</button>
+                        <button className="btn-secondary compact" onClick={() => onRejectDiff(f.file)}> Reject</button>
                       )}
                       {onEditFile && (
-                        <button className="btn-secondary compact" onClick={() => onEditFile(f.file)}>✎ Edit</button>
+                        <button className="btn-secondary compact" onClick={() => onEditFile(f.file)}> Edit</button>
                       )}
                     </div>
                   )}

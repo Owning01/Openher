@@ -7,7 +7,7 @@ import { CollapsibleSection } from "./CollapsibleSection"
 import { GridSpinner } from "./GridSpinner"
 import { DiffView, parseDiffStat, synthesizeWritePatch } from "./DiffView"
 import { useT } from "../i18n-context"
-import { CodeIcon, FileIcon, TerminalIcon, GlobeIcon, SearchIcon, ToolIcon } from "../Icons"
+import { CheckIcon, CloseIcon, CodeIcon, FileIcon, GlobeIcon, SearchIcon, TerminalIcon, ToolIcon } from "../Icons"
 import { Markdown } from "./Markdown"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { computeRenderedMessages } from "../utils/rendered"
@@ -80,6 +80,27 @@ function extractFilePath(text: string): string | null {
   return m ? m[1] : null
 }
 
+function toRelativePath(fullPath: string, baseDir?: string): string {
+  if (!fullPath) return fullPath
+  if (baseDir) {
+    const normalize = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "")
+    const nFull = normalize(fullPath)
+    const nBase = normalize(baseDir)
+    if (nFull.toLowerCase().startsWith(nBase.toLowerCase() + "/")) {
+      let rel = nFull.slice(nBase.length + 1)
+      if (fullPath.includes("\\")) rel = rel.replace(/\//g, "\\")
+      return rel
+    }
+  }
+  const webIdx = fullPath.search(/[\\/]web[\\/]/i)
+  if (webIdx !== -1) {
+    let rel = fullPath.slice(webIdx + 1)
+    if (rel.startsWith("\\") || rel.startsWith("/")) rel = rel.slice(1)
+    return rel
+  }
+  return fullPath
+}
+
 function previewLines(text: string, maxLines = 5): string {
   const lines = text.split("\n")
   if (lines.length <= maxLines) return text
@@ -92,7 +113,7 @@ function shortToolLabel(tool: string): string {
   return tool
 }
 
-function formatInput(input: unknown): string {
+function formatInput(input: unknown, baseDir?: string): string {
   if (input == null) return ""
   if (typeof input === "string") return input
   if (typeof input === "object" && !Array.isArray(input)) {
@@ -103,7 +124,7 @@ function formatInput(input: unknown): string {
       const args = Array.isArray(obj.args) ? obj.args.filter((a: unknown) => typeof a === "string").join(" ") : ""
       const base = args ? `${cmd} ${args}` : cmd
       const extra: string[] = []
-      if (typeof obj.workdir === "string" && obj.workdir) extra.push(`workdir: ${obj.workdir}`)
+      if (typeof obj.workdir === "string" && obj.workdir) extra.push(`workdir: ${toRelativePath(obj.workdir, baseDir)}`)
       if (typeof obj.title === "string" && obj.title) extra.push(`title: ${obj.title}`)
       if (typeof obj.description === "string" && obj.description) extra.push(`description: ${obj.description}`)
       if (typeof obj.notifyOnExit === "boolean") extra.push(`notifyOnExit: ${obj.notifyOnExit}`)
@@ -115,7 +136,9 @@ function formatInput(input: unknown): string {
     for (const [k, v] of Object.entries(obj)) {
       if (v == null || v === false) continue
       if (v === true) { lines.push(k); continue }
-      if (typeof v === "string") { lines.push(v.includes("\n") ? `${k}:\n${v}` : `${k}: ${v}`); continue }
+      if (typeof v === "string") {
+        const displayV = (k === "filePath" || k === "file" || k === "path" || k === "filepath" || k === "workdir" || k === "directory") && baseDir ? toRelativePath(v, baseDir) : v
+        lines.push(displayV.includes("\n") ? `${k}:\n${displayV}` : `${k}: ${displayV}`); continue }
       if (Array.isArray(v)) {
         const items = v.map((x: unknown) => typeof x === "string" ? x : JSON.stringify(x)).join(", ")
         lines.push(`${k}: ${items}`)
@@ -253,12 +276,12 @@ function SubagentTaskCard({
         <div className="subagent-task-right">
           <span className="subagent-task-status">
             {isDone ? (
-              isError ? <span style={{ color: "var(--danger)" }}>✗ Error</span> : <span style={{ color: "var(--success)" }}>✓ Completado</span>
+              isError ? <span style={{ color: "var(--danger)" }}> Error</span> : <span style={{ color: "var(--success)" }}> Completado</span>
             ) : (
               <><GridSpinner label={title} size={14} /><span style={{ color: "var(--accent)" }}>En progreso...</span></>
             )}
           </span>
-          <span className="subagent-expand-chevron" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: "10px", color: "var(--text-muted)" }}>
+          <span className="subagent-expand-chevron" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: "12px", color: "var(--text-muted)" }}>
             ▼
           </span>
         </div>
@@ -373,6 +396,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   const toolName = useMemo(() => part.tool ?? detectToolName(text ?? ""), [part.tool, text])
   const meta = toolName ? toolMeta[toolName] : null
   const filePath = useMemo(() => extractFilePath(text ?? ""), [text])
+  const displayFilePath = useMemo(() => filePath ? toRelativePath(filePath, directory) : null, [filePath, directory])
   const resultText = useMemo(() => getResultText(text ?? ""), [text])
   const preview = useMemo(() => previewLines(meta ? resultText : (text ?? "")), [meta, resultText, text])
 
@@ -382,14 +406,14 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   const isDone = status === "completed" || status === "error"
 
   const inputText = useMemo(() => {
-    if (part.state?.input != null) return formatInput(part.state.input)
+    if (part.state?.input != null) return formatInput(part.state.input, directory)
     return text ?? ""
-  }, [part.state?.input, text])
+  }, [part.state?.input, text, directory])
 
   const outputText = useMemo(() => {
-    if (part.state?.output != null) return formatInput(part.state.output)
+    if (part.state?.output != null) return formatInput(part.state.output, directory)
     return resultText
-  }, [part.state?.output, resultText])
+  }, [part.state?.output, resultText, directory])
 
   // Comandos de terminal: muestran el command en la línea del toggle (visible
   // sin expandir) y la salida al expandir.
@@ -445,13 +469,14 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     if (!isFileTool) return null
     const fd = metadata?.filediff as FileDiff | undefined
     const files = metadata?.files as Array<{ filePath?: string }> | undefined
-    return (metadata?.filepath as string | undefined)
+    const raw = (metadata?.filepath as string | undefined)
       ?? fd?.file
       ?? files?.[0]?.filePath
       ?? part.state?.title
       ?? (part.state?.input as { filePath?: string } | undefined)?.filePath
       ?? filePath
-  }, [isFileTool, metadata, part.state?.title, part.state?.input, filePath])
+    return raw ? toRelativePath(raw, directory) : null
+  }, [isFileTool, metadata, part.state?.title, part.state?.input, filePath, directory])
 
   const fileActionLabel = useMemo(() => {
     if (!isFileTool || !toolName) return null
@@ -509,8 +534,8 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   const headerIcon = toolSvgIcon(toolName ?? null)
   const statusIcon = isWorking
     ? <GridSpinner label={label} size={14} />
-    : isError ? <span className="tool-status-icon tool-error-mark">✗</span>
-    : isDone ? <span className="tool-status-icon tool-ok-mark">✓</span>
+    : isError ? <span className="tool-status-icon tool-error-mark"><CloseIcon size={12} /></span>
+    : isDone ? <span className="tool-status-icon tool-ok-mark"><CheckIcon size={12} /></span>
     : null
 
   const title = toolName ? shortToolLabel(toolName) : label
@@ -628,7 +653,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
         icon={headerIcon}
         title={toolName!}
         subtitle={subtitle ?? undefined}
-        filePath={filePath ?? undefined}
+        filePath={displayFilePath ?? undefined}
         defaultOpen={false}
       >
         <pre className="tool-part-pre">{text}</pre>
@@ -642,7 +667,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
         icon={headerIcon}
         title={`${toolName} result`}
         subtitle={subtitle ?? undefined}
-        filePath={filePath ?? undefined}
+        filePath={displayFilePath ?? undefined}
         defaultOpen={false}
       >
         <pre className="tool-part-pre">{resultText}</pre>
@@ -655,7 +680,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
       icon={<ToolIcon size={14} />}
       title={label}
       subtitle={subtitle ?? undefined}
-      filePath={filePath ?? undefined}
+      filePath={displayFilePath ?? undefined}
       defaultOpen={false}
     >
       <pre className="tool-part-pre">{preview}</pre>

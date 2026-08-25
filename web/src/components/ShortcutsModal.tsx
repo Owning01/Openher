@@ -226,7 +226,7 @@ export const ShortcutsModal = memo(function ShortcutsModal({ onClose, desktop: _
                             onClick={() => handleDelete(s.id)}
                             title="Borrar atajo"
                             aria-label="Borrar atajo"
-                            style={{ color: "var(--danger, #ef4444)" }}
+                            style={{ color: "var(--danger, var(--danger))" }}
                           >
                             <TrashIcon size={14} />
                           </button>

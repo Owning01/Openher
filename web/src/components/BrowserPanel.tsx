@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
-import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon, FolderIcon } from "../Icons"
+import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon, FolderIcon, GlobeIcon, SearchIcon, FileIcon, PaintIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
 import { BrowserVisualOverlay, type BrowserPickedElement } from "./BrowserVisualOverlay"
@@ -11,6 +11,9 @@ import {
 } from "./browserOverlayScript"
 
 const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
+export const BROWSER_HOME = "https://www.google.com"
+const BROWSER_BOOKMARKS_KEY = "opencode.browser.bookmarks"
+const BROWSER_HISTORY_KEY = "opencode.browser.history"
 
 const ZONE_ICONS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"]
 
@@ -50,11 +53,7 @@ function toEmbeddableUrl(url: string): string {
       return "https://piped.video"
     }
 
-    if (host === "google.com" || host === "www.google.com") {
-      const q = u.searchParams.get("q")
-      if (q) return `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`
-      return "https://html.duckduckgo.com"
-    }
+    // Google se sirve directo (via proxy/sub-WebView) para búsqueda real — no redirigir a DDG
   } catch {}
   return url
 }
@@ -66,22 +65,55 @@ function getFrameSrc(url: string, forceProxy = false): string {
   }
   const embed = toEmbeddableUrl(url)
   if (embed !== url) return embed
-  // X-Frame-Options / CSP frame-ancestors bloquean iframe directo para la mayoría de sitios.
-  // En desktop la navegación va por sub-WebView nativo (no iframe), pero en web/mobile usamos el
-  // puente Rust /shell/proxy que limpia X-Frame-Options/CSP y añade CORS (mismo origen).
-  // El proxy hace fetch en Rust y reinyecta <base>, por lo que el iframe ve contenido same-origin.
   try {
-    // Si estamos servidos desde el shell (127.0.0.1), el proxy existe
     if (typeof window !== "undefined" && window.location.hostname === "127.0.0.1") {
       return `/shell/proxy?url=${encodeURIComponent(url)}`
     }
-    // IS_DESKTOP usa sub-WebView nativo (no iframe), pero por si se renderiza iframe en algún fallback
     if (IS_DESKTOP) return url
-    // Fallback web sin shell: intentar proxy relativo (si no existe, el iframe mostrará error legible del proxy en vez de bloqueo silencioso)
     return `/shell/proxy?url=${encodeURIComponent(url)}`
   } catch {
     return url
   }
+}
+
+function isProbablyUrl(raw: string): boolean {
+  const s = raw.trim()
+  if (!s) return false
+  if (/^\d{2,5}$/.test(s)) return true
+  if (/^(https?:\/\/)/i.test(s)) return true
+  if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(\/.*)?$/i.test(s)) return true
+  if (s.includes(" ") ) return false
+  if (s.includes(".") && !s.includes(" ")) return true
+  if (s.includes(":") && !s.includes(" ")) return true
+  if (s.includes("/") && s.includes(".")) return true
+  return false
+}
+
+export type BrowserBookmark = { url: string; title: string; addedAt: number }
+function loadBookmarks(): BrowserBookmark[] {
+  try {
+    const raw = localStorage.getItem(BROWSER_BOOKMARKS_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? arr.filter((x: any) => x && typeof x.url === "string") : []
+  } catch { return [] }
+}
+function saveBookmarks(items: BrowserBookmark[]) {
+  try { localStorage.setItem(BROWSER_BOOKMARKS_KEY, JSON.stringify(items.slice(0, 100))) } catch {}
+}
+function loadHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(BROWSER_HISTORY_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? arr.filter((x: any) => typeof x === "string").slice(0, 80) : []
+  } catch { return [] }
+}
+function pushHistory(url: string) {
+  if (!url || url === "about:blank") return
+  try {
+    const list = loadHistory().filter((u) => u !== url)
+    list.unshift(url)
+    localStorage.setItem(BROWSER_HISTORY_KEY, JSON.stringify(list.slice(0, 80)))
+  } catch {}
 }
 
 type DeviceMode = "responsive" | "mobile" | "tablet" | "desktop"
@@ -121,18 +153,18 @@ function getFavicon(url: string) {
   }
   if (u.includes("youtube.com") || u.includes("youtu.be")) {
     return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="#ef4444">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--danger)">
         <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
       </svg>
     )
   }
   if (u.includes("gemini.google.com") || u.includes("google.")) {
-    return <span style={{ fontSize: "0.85rem", color: "#38bdf8" }}>✦</span>
+    return <span style={{ color: "var(--primary)", display: "inline-flex" }}><SearchIcon size={14} /></span>
   }
   if (u.includes("localhost") || u.includes("127.0.0.1") || u.includes("0.0.0.0")) {
-    return <span style={{ fontSize: "0.85rem" }}>🌐</span>
+    return <MonitorIcon size={14} />
   }
-  return <span style={{ fontSize: "0.85rem" }}>🌍</span>
+  return <GlobeIcon size={14} />
 }
 
 function formatDisplayTitle(url: string): string {
@@ -149,7 +181,7 @@ function formatDisplayTitle(url: string): string {
 }
 
 export const BrowserPanel = memo(function BrowserPanel({
-  initialUrl = "http://localhost:5173",
+  initialUrl = BROWSER_HOME,
   onClose,
   visualSelection,
   inspectMode,
@@ -194,9 +226,26 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [loading, setLoading] = useState(true)
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("responsive")
   const [showTuneDropdown, setShowTuneDropdown] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [browserFailed, setBrowserFailed] = useState(false)
   const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
+  const [findQuery, setFindQuery] = useState("")
+  const [findCase, setFindCase] = useState(false)
+  const [bookmarks, setBookmarks] = useState<BrowserBookmark[]>(() => loadBookmarks())
+  const [showBookmarks, setShowBookmarks] = useState(() => {
+    try { return localStorage.getItem("opencode.browser.showBookmarks") !== "0" } catch { return true }
+  })
+  const [zoomLevel, setZoomLevel] = useState<number>(() => {
+    try {
+      const v = parseFloat(localStorage.getItem("opencode.browser.zoom") || "1")
+      return Number.isFinite(v) && v > 0 ? Math.max(0.5, Math.min(2.5, v)) : 1
+    } catch { return 1 }
+  })
+  const [homeUrl] = useState<string>(() => {
+    try { return localStorage.getItem("opencode.browser.home") || BROWSER_HOME } catch { return BROWSER_HOME }
+  })
   const [projectBanner, setProjectBanner] = useState<{
     directory: string
     entrypoint: string
@@ -211,9 +260,13 @@ export const BrowserPanel = memo(function BrowserPanel({
 
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   useOutsideClick(dropdownRef, () => setShowTuneDropdown(false), showTuneDropdown)
+  const histRef = useRef<HTMLDivElement | null>(null)
+  useOutsideClick(histRef, () => setShowHistory(false), showHistory)
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0]
   const currentSrc = activeTab?.url || "about:blank"
+  const isSecure = /^https:/i.test(currentSrc)
+  const isBookmarked = bookmarks.some((b) => b.url === currentSrc)
 
   useEffect(() => {
     if (activeTab) {
@@ -230,9 +283,13 @@ export const BrowserPanel = memo(function BrowserPanel({
 
   const normalizeUrl = (raw: string): string => {
     let u = raw.trim()
-    if (!u) return "http://localhost:5173"
+    if (!u) return homeUrl
     if (/^\d{2,5}$/.test(u)) {
       return `http://localhost:${u}`
+    }
+    // Omnibox tipo Chrome: sin puntos/espacios → búsqueda en Google
+    if (!isProbablyUrl(u)) {
+      return `https://www.google.com/search?q=${encodeURIComponent(u)}`
     }
     if (!/^https?:\/\//i.test(u)) {
       if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(\/.*)?$/i.test(u)) {
@@ -465,6 +522,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     setInputUrl(norm)
     setLoading(true)
     setHasError(false)
+    pushHistory(norm)
 
     setTabs((prev) =>
       prev.map((t) => {
@@ -485,7 +543,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     } else {
       setReloadKey((k) => k + 1)
     }
-  }, [activeTabId])
+  }, [activeTabId, homeUrl])
 
   const handleOpenProjectFolder = useCallback(async () => {
     try {
@@ -516,7 +574,7 @@ export const BrowserPanel = memo(function BrowserPanel({
 
   const handleAddTab = () => {
     const newId = `tab-${Date.now().toString(36)}`
-    const defaultUrl = "http://localhost:5173"
+    const defaultUrl = homeUrl
     const newTab: BrowserTabItem = {
       id: newId,
       url: defaultUrl,
@@ -602,12 +660,57 @@ export const BrowserPanel = memo(function BrowserPanel({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       navigateTab(inputUrl)
+      setShowHistory(false)
+    } else if (e.key === "Escape") {
+      setShowHistory(false)
     }
   }
 
+  const handleHome = () => navigateTab(homeUrl)
   const handleOpenExternal = () => {
     if (activeTab?.url) {
       window.open(activeTab.url, "_blank", "noopener,noreferrer")
+    }
+  }
+  const handleCopyUrl = async () => {
+    try { await navigator.clipboard.writeText(currentSrc) } catch {}
+  }
+  const applyFind = useCallback((q: string, cs: boolean) => {
+    if (!q) return
+    const code = cs
+      ? `window.find(${JSON.stringify(q)}, false, false, true, false, false, false)`
+      : `window.find(${JSON.stringify(q)}, false, false, false, false, false, false)`
+    if (IS_DESKTOP) shell.browser.eval(code).catch(() => {})
+    else {
+      try {
+        const w = iframeRef.current?.contentWindow as any
+        if (w?.find) w.find(q, false, false, !cs, false, false, false)
+      } catch {}
+    }
+  }, [])
+  const toggleBookmark = () => {
+    const title = formatDisplayTitle(currentSrc)
+    setBookmarks((prev) => {
+      const exists = prev.some((b) => b.url === currentSrc)
+      const next = exists ? prev.filter((b) => b.url !== currentSrc) : [{ url: currentSrc, title, addedAt: Date.now() }, ...prev].slice(0, 100)
+      saveBookmarks(next)
+      return next
+    })
+  }
+  const applyZoom = (next: number) => {
+    const v = Math.max(0.5, Math.min(2.5, Math.round(next * 10) / 10))
+    setZoomLevel(v)
+    try { localStorage.setItem("opencode.browser.zoom", String(v)) } catch {}
+    const css = `document.documentElement.style.zoom='${v}'; document.body.style.zoom='${v}';`
+    if (IS_DESKTOP) shell.browser.eval(css).catch(() => {})
+    else {
+      try {
+        const doc = iframeRef.current?.contentDocument as any
+        if (doc?.documentElement) {
+          doc.documentElement.style.zoom = String(v)
+          if (doc.body) doc.body.style.zoom = String(v)
+        }
+      } catch {}
     }
   }
 
@@ -652,7 +755,7 @@ export const BrowserPanel = memo(function BrowserPanel({
         </button>
       </div>
 
-      {/* 2. Navigation Toolbar (Clean, no background, no border on buttons/input) */}
+      {/* 2. Navigation Toolbar — full chrome-like browser */}
       <div className="browser-toolbar">
         <div className="browser-nav-actions">
           <button
@@ -684,6 +787,9 @@ export const BrowserPanel = memo(function BrowserPanel({
           >
             <RefreshIcon size={14} />
           </button>
+          <button type="button" className="browser-nav-btn" onClick={handleHome} title="Inicio (Google)" aria-label="Inicio">
+            <span style={{ fontSize: 14 }}>⌂</span>
+          </button>
           <button
             type="button"
             className="browser-open-project-btn"
@@ -695,10 +801,10 @@ export const BrowserPanel = memo(function BrowserPanel({
               alignItems: "center",
               gap: "5px",
               padding: "3px 8px",
-              background: "rgba(88, 166, 255, 0.12)",
-              border: "1px solid rgba(88, 166, 255, 0.35)",
+              background: "var(--primary-soft)",
+              border: "1px solid var(--primary-soft)",
               borderRadius: "6px",
-              color: "#58a6ff",
+              color: "var(--primary)",
               fontSize: "12px",
               fontWeight: 500,
               cursor: "pointer",
@@ -711,8 +817,8 @@ export const BrowserPanel = memo(function BrowserPanel({
           </button>
         </div>
 
-        {/* 3. Address Bar (Clean Input without background/border) */}
-        <div className="browser-omnibox" ref={dropdownRef}>
+        {/* 3. Address Bar — omnibox chrome-like con search, candado, fav, tabs */}
+        <div className="browser-omnibox" ref={dropdownRef} style={{ flex: 1 }}>
           <button
             type="button"
             className={`browser-tune-btn${showTuneDropdown ? " active" : ""}`}
@@ -726,14 +832,53 @@ export const BrowserPanel = memo(function BrowserPanel({
             </svg>
           </button>
 
-          <input
-            type="text"
-            className="browser-omnibox-input"
-            value={inputUrl}
-            onChange={(e) => setInputUrl(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Introduce una URL o selecciona un puerto..."
-          />
+          <span className={isSecure ? "browser-addr-lock" : "browser-addr-warn"} title={isSecure ? "Conexión segura (HTTPS)" : "No seguro (HTTP)"} style={{ display: "inline-flex", flexShrink: 0 }}>
+            {isSecure ? "🔒" : "⚠"}
+          </span>
+          <div style={{ position: "relative", flex: 1, minWidth: 0, display: "flex", alignItems: "center" }}>
+            <input
+              type="text"
+              className="browser-omnibox-input"
+              value={inputUrl}
+              onChange={(e) => { setInputUrl(e.target.value); if (e.target.value.trim().length >= 1) setShowHistory(true) }}
+              onFocus={() => { if (inputUrl.trim() === "" || inputUrl === homeUrl) setShowHistory(true); else if (loadHistory().length > 0) setShowHistory(true) }}
+              onKeyDown={handleKeyDown}
+              placeholder="Buscá en Google o escribí una URL"
+            />
+            {inputUrl && (
+              <button type="button" onClick={() => setInputUrl("")} title="Borrar" aria-label="Borrar" style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: "0 4px" }}>×</button>
+            )}
+            {showHistory && (
+              <div ref={histRef} className="browser-suggest-dropdown">
+                {(() => {
+                  const q = inputUrl.trim().toLowerCase()
+                  const hist = loadHistory()
+                  const filtered = q ? hist.filter((u) => u.toLowerCase().includes(q)).slice(0, 8) : hist.slice(0, 8)
+                  const suggestions: Array<{ label: string; url: string }> = []
+                  if (q && !isProbablyUrl(q)) {
+                    suggestions.push({ label: `Buscar "${inputUrl.trim()}" en Google`, url: `https://www.google.com/search?q=${encodeURIComponent(inputUrl.trim())}` })
+                  }
+                  return (
+                    <>
+                      {suggestions.map((s) => (
+                        <button key={s.url} type="button" className="browser-suggest-item" onClick={() => { setShowHistory(false); navigateTab(s.url) }}>
+                          <SearchIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
+                        </button>
+                      ))}
+                      {filtered.map((u) => (
+                        <button key={u} type="button" className="browser-suggest-item" onClick={() => { setShowHistory(false); navigateTab(u) }}>
+                          <GlobeIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u}</span>
+                        </button>
+                      ))}
+                      {filtered.length === 0 && suggestions.length === 0 && (
+                        <div style={{ padding: "8px 10px", color: "var(--muted)", fontSize: 12 }}>Sin historial. Escribí para buscar en Google.</div>
+                      )}
+                    </>
+                  )
+                })()}
+              </div>
+            )}
+          </div>
 
           {loading && <LoadingIcon size={14} className="browser-loading-spinner" />}
 
@@ -770,28 +915,28 @@ export const BrowserPanel = memo(function BrowserPanel({
                     className={`browser-device-btn${deviceMode === "responsive" ? " active" : ""}`}
                     onClick={() => { setDeviceMode("responsive"); setShowTuneDropdown(false) }}
                   >
-                    100%
+                    <GlobeIcon size={12} /> 100%
                   </button>
                   <button
                     type="button"
                     className={`browser-device-btn${deviceMode === "mobile" ? " active" : ""}`}
                     onClick={() => { setDeviceMode("mobile"); setShowTuneDropdown(false) }}
                   >
-                    📱 375px
+                    <MonitorIcon size={12} /> 375px
                   </button>
                   <button
                     type="button"
                     className={`browser-device-btn${deviceMode === "tablet" ? " active" : ""}`}
                     onClick={() => { setDeviceMode("tablet"); setShowTuneDropdown(false) }}
                   >
-                    💻 768px
+                    <MonitorIcon size={12} /> 768px
                   </button>
                   <button
                     type="button"
                     className={`browser-device-btn${deviceMode === "desktop" ? " active" : ""}`}
                     onClick={() => { setDeviceMode("desktop"); setShowTuneDropdown(false) }}
                   >
-                    🖥️ 1280px
+                    <MonitorIcon size={12} /> 1280px
                   </button>
                 </div>
               </div>
@@ -799,6 +944,21 @@ export const BrowserPanel = memo(function BrowserPanel({
           )}
 
           <div className="browser-omnibox-actions">
+            <button type="button" className={`browser-tune-btn${isBookmarked ? " browser-star-on" : ""}`} onClick={toggleBookmark} title={isBookmarked ? "Quitar favorito" : "Agregar a favoritos"} aria-label="Favorito">
+              <span style={{ fontSize: 14 }}>{isBookmarked ? "★" : "☆"}</span>
+            </button>
+            <button type="button" className="browser-tune-btn" onClick={handleCopyUrl} title="Copiar URL" aria-label="Copiar URL">
+              <span style={{ fontSize: 12 }}>⧉</span>
+            </button>
+            <div className="browser-zoom-group" title="Zoom de página">
+              <button type="button" className="browser-tune-btn" onClick={() => applyZoom(zoomLevel - 0.1)} aria-label="Alejar">−</button>
+              <span style={{ fontSize: 11, minWidth: 34, textAlign: "center" }}>{Math.round(zoomLevel * 100)}%</span>
+              <button type="button" className="browser-tune-btn" onClick={() => applyZoom(zoomLevel + 0.1)} aria-label="Acercar">+</button>
+              <button type="button" className="browser-tune-btn" onClick={() => applyZoom(1)} aria-label="100%">↺</button>
+            </div>
+            <button type="button" className={`browser-tune-btn${findOpen ? " active" : ""}`} onClick={() => setFindOpen((v) => !v)} title="Buscar en la página (Ctrl+F)" aria-label="Buscar">
+              <SearchIcon size={13} />
+            </button>
             {onToggleInspect && (
               <button
                 type="button"
@@ -806,7 +966,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                 onClick={() => onToggleInspectTool ? onToggleInspectTool("picker") : onToggleInspect()}
                 title={inspectMode && inspectTool === "picker" ? "Salir selección (Esc)" : "Seleccionar elemento: clic (◈)"}
                 aria-label="Seleccionar elemento"
-                style={inspectMode && inspectTool === "picker" ? { color: "#58a6ff", background: "rgba(88,166,255,0.15)" } : undefined}
+                style={inspectMode && inspectTool === "picker" ? { color: "var(--primary)", background: "var(--primary-soft)" } : undefined}
               >
                 <span style={{ fontSize: 14, lineHeight: 1 }}>◈</span>
               </button>
@@ -818,7 +978,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                 onClick={() => onToggleInspectTool("pod")}
                 title={inspectMode && inspectTool === "pod" ? "Salir selección (Esc)" : "Marcar área: arrastrá un trazo (⬚)"}
                 aria-label="Marcar área"
-                style={inspectMode && inspectTool === "pod" ? { color: "#ffa657", background: "rgba(255,166,87,0.15)" } : undefined}
+                style={inspectMode && inspectTool === "pod" ? { color: "var(--warning)", background: "var(--warning-soft)" } : undefined}
               >
                 <span style={{ fontSize: 13, lineHeight: 1 }}>⬚</span>
               </button>
@@ -858,6 +1018,49 @@ export const BrowserPanel = memo(function BrowserPanel({
           </button>
         )}
       </div>
+      {findOpen && (
+        <div className="browser-findbar">
+          <SearchIcon size={13} />
+          <input
+            autoFocus
+            value={findQuery}
+            onChange={(e) => setFindQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") applyFind(findQuery, findCase)
+              if (e.key === "Escape") setFindOpen(false)
+            }}
+            placeholder="Buscar en la página…"
+          />
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--muted)" }}>
+            <input type="checkbox" checked={findCase} onChange={(e) => setFindCase(e.target.checked)} /> Aa
+          </label>
+          <button type="button" className="btn-secondary compact" onClick={() => applyFind(findQuery, findCase)}>Buscar</button>
+          <button type="button" className="browser-nav-btn" onClick={() => setFindOpen(false)} aria-label="Cerrar">×</button>
+        </div>
+      )}
+      {showBookmarks && bookmarks.length > 0 && (
+        <div className="browser-bookmarks-bar">
+          {bookmarks.slice(0, 20).map((b) => (
+            <button key={b.url} type="button" className="browser-bookmark" onClick={() => navigateTab(b.url)} title={b.url}>
+              <GlobeIcon size={11} /> {b.title || b.url.slice(0, 36)}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="browser-nav-btn"
+            style={{ marginLeft: "auto" }}
+            onClick={() => {
+              const v = !showBookmarks
+              setShowBookmarks(v)
+              try { localStorage.setItem("opencode.browser.showBookmarks", v ? "1" : "0") } catch {}
+            }}
+            title="Ocultar barra de favoritos"
+            aria-label="Ocultar favoritos"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Quick Project Bar */}
       {projectBanner && (
@@ -866,13 +1069,13 @@ export const BrowserPanel = memo(function BrowserPanel({
           alignItems: "center",
           gap: "8px",
           padding: "4px 12px",
-          background: "#161b22",
-          borderBottom: "1px solid #30363d",
-          fontSize: "11px",
-          color: "#8b949e",
+          background: "var(--surface-strong)",
+          borderBottom: "1px solid var(--border)",
+          fontSize: "12px",
+          color: "var(--muted)",
           overflowX: "auto"
         }}>
-          <span style={{ color: "#58a6ff", fontWeight: 600 }}>📁 {projectBanner.directory.split(/[\/\\]/).pop()}</span>
+          <span style={{ color: "var(--primary)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}><FolderIcon size={12} /> {projectBanner.directory.split(/[\/\\]/).pop()}</span>
           {projectBanner.htmlFiles.length > 1 && (
             <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
               <span>Vistas:</span>
@@ -889,13 +1092,13 @@ export const BrowserPanel = memo(function BrowserPanel({
                       }
                     }}
                     style={{
-                      background: isActive ? "#1f6feb" : "#21262d",
-                      color: isActive ? "#fff" : "#c9d1d9",
+                      background: isActive ? "var(--primary)" : "var(--surface-strong)",
+                      color: isActive ? "#fff" : "var(--text)",
                       border: "none",
                       borderRadius: "4px",
                       padding: "2px 6px",
                       cursor: "pointer",
-                      fontSize: "11px"
+                      fontSize: "12px"
                     }}
                   >
                     {file}
@@ -905,7 +1108,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             </div>
           )}
           {projectBanner.hasPackageJson && (
-            <span style={{ marginLeft: "auto", fontSize: "10px", color: "#8b949e" }}>
+            <span style={{ marginLeft: "auto", fontSize: "12px", color: "var(--muted)" }}>
               Node/Vite Project • Auto-servido
             </span>
           )}
@@ -916,7 +1119,7 @@ export const BrowserPanel = memo(function BrowserPanel({
         <div className="browser-viewport-container" ref={viewportRef} style={{ position: "relative", flex: 1, minWidth: 0 }}>
           {hasError ? (
             <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text)", maxWidth: "460px", margin: "auto" }}>
-              <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>⚠️</div>
+              <div style={{ marginBottom: "12px", color: "var(--danger)", display: "inline-flex" }}><CloseIcon size={32} /></div>
               <h3 style={{ margin: "0 0 8px 0", fontSize: "1.1rem" }}>No se pudo conectar con la página</h3>
               <p style={{ fontSize: "0.82rem", color: "var(--muted)", marginBottom: "20px" }}>
                 Si es un servidor local, verifica que el dev server esté ejecutándose (botón <strong>▶ Run Web</strong> en el chat). Si es un sitio web externo protegido, ábrelo en el navegador externo.
@@ -992,7 +1195,7 @@ export const BrowserPanel = memo(function BrowserPanel({
               borderLeft: "1px solid var(--border)",
               display: "flex",
               flexDirection: "column",
-              background: "var(--bg, #161b22)",
+              background: "var(--bg, var(--surface-strong))",
               overflow: "hidden",
             }}
           >
@@ -1006,25 +1209,25 @@ export const BrowserPanel = memo(function BrowserPanel({
                     annotations.forEach((a) => shell.browser.eval(unbindScript(a.id)).catch(() => {}))
                   }
                   onClearVisual?.()
-                }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 11 }} title="Quitar todas">✕ todo</button>
+                }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }} title="Quitar todas">Quitar todo</button>
               )}
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
               {annotations.length === 0 && (
-                <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5, padding: "4px 2px" }}>
+                <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, padding: "4px 2px" }}>
                   {inspectMode ? "Clic en cualquier elemento de la página para marcar una zona." : "Activá ◈ y hacé clic en elementos para marcar zonas."}
                 </div>
               )}
               {annotations.map((a, i) => (
-                <div key={a.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px", fontSize: 11.5 }}>
+                <div key={a.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px", fontSize: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                    <span style={{ background: a.mode === "pod" ? "#ffa657" : "#58a6ff", color: "#fff", borderRadius: 9, minWidth: 18, height: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, padding: "0 4px" }}>{ZONE_ICONS[i] ?? i + 1}</span>
+                    <span style={{ background: a.mode === "pod" ? "var(--warning)" : "var(--primary)", color: "#fff", borderRadius: 9, minWidth: 18, height: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, padding: "0 4px" }}>{ZONE_ICONS[i] ?? i + 1}</span>
                     <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>&lt;{a.tag}&gt; {a.mode === "pod" ? `área · ${a.members?.length ?? 0} elems` : a.selector.slice(0, 26)}</span>
-                    <button type="button" onClick={() => onRemoveAnnotation?.(a.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }} aria-label="Quitar zona">✕</button>
+                    <button type="button" onClick={() => onRemoveAnnotation?.(a.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0, display: "inline-flex" }} aria-label="Quitar zona"><CloseIcon size={12} /></button>
                   </div>
                   {a.source?.file && (
-                    <div style={{ color: "#7ee787", fontSize: 10.5, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${a.source.file}${a.source.line != null ? `:${a.source.line}` : ""}`}>
-                      📄 {a.source.file.split(/[\\/]/).slice(-2).join("/")}{a.source.line != null ? `:${a.source.line}` : ""}
+                    <div style={{ color: "var(--success)", fontSize: 12, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "3px" }} title={`${a.source.file}${a.source.line != null ? `:${a.source.line}` : ""}`}>
+                        <FileIcon size={12} /> {a.source.file.split(/[\\/]/).slice(-2).join("/")}{a.source.line != null ? `:${a.source.line}` : ""}
                     </div>
                   )}
                   <textarea
@@ -1032,7 +1235,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                     onChange={(e) => onAnnotationComment?.(a.id, e.target.value)}
                     placeholder="¿Qué cambiar acá? (lógica, error, estilo…)"
                     rows={2}
-                    style={{ width: "100%", boxSizing: "border-box", background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 11.5, padding: "4px 6px", resize: "vertical" }}
+                    style={{ width: "100%", boxSizing: "border-box", background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, padding: "4px 6px", resize: "vertical" }}
                   />
                   {(() => {
                     const open = expandedStyleId === a.id
@@ -1044,9 +1247,9 @@ export const BrowserPanel = memo(function BrowserPanel({
                           <button
                             type="button"
                             onClick={() => setExpandedStyleId(open ? null : a.id)}
-                            style={{ background: "none", border: "none", color: open ? "#58a6ff" : "var(--muted)", cursor: "pointer", fontSize: 11, padding: 0 }}
+                            style={{ background: "none", border: "none", color: open ? "var(--primary)" : "var(--muted)", cursor: "pointer", fontSize: 12, padding: 0, display: "inline-flex", alignItems: "center", gap: "4px" }}
                           >
-                            🎛 Ajustar estilo{activeCount > 0 ? ` (${activeCount})` : ""}
+                            <PaintIcon size={12} /> Ajustar estilo{activeCount > 0 ? ` (${activeCount})` : ""}
                           </button>
                           {activeCount > 0 && IS_DESKTOP && (
                             <button
@@ -1055,7 +1258,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                                 onAnnotationStyle?.(a.id, {})
                                 if (IS_DESKTOP) shell.browser.eval(applyStyleScript(a.id, {})).catch(() => {})
                               }}
-                              style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 11, padding: 0 }}
+                              style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12, padding: 0 }}
                             >
                               ↺ reset
                             </button>
@@ -1065,7 +1268,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                           <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 4 }}>
                             {STYLE_FIELDS.map((f) => (
                               <div key={f.prop} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                <span style={{ width: 62, color: "var(--muted)", fontSize: 10.5, flexShrink: 0 }}>{f.label}</span>
+                                <span style={{ width: 62, color: "var(--muted)", fontSize: 12, flexShrink: 0 }}>{f.label}</span>
                                 {f.kind === "color" && (
                                   <>
                                     <input
@@ -1080,7 +1283,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                                       value={draft[f.prop] ?? ""}
                                       placeholder="—"
                                       onChange={(e) => handleStyleChange(a, f.prop, e.target.value)}
-                                      style={{ flex: 1, minWidth: 0, background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 10.5, padding: "2px 4px" }}
+                                      style={{ flex: 1, minWidth: 0, background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12, padding: "2px 4px" }}
                                     />
                                   </>
                                 )}
@@ -1092,16 +1295,16 @@ export const BrowserPanel = memo(function BrowserPanel({
                                       value={(draft[f.prop] ?? "").replace(/px$/, "")}
                                       placeholder="—"
                                       onChange={(e) => handleStyleChange(a, f.prop, e.target.value === "" ? "" : `${e.target.value}${f.unit ?? "px"}`)}
-                                      style={{ width: 58, background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 10.5, padding: "2px 4px" }}
+                                      style={{ width: 58, background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12, padding: "2px 4px" }}
                                     />
-                                    <span style={{ color: "var(--muted)", fontSize: 10 }}>{f.unit}</span>
+                                    <span style={{ color: "var(--muted)", fontSize: 12 }}>{f.unit}</span>
                                   </span>
                                 )}
                                 {f.kind === "select" && (
                                   <select
                                     value={draft[f.prop] ?? ""}
                                     onChange={(e) => handleStyleChange(a, f.prop, e.target.value)}
-                                    style={{ flex: 1, minWidth: 0, background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 10.5, padding: "2px 4px" }}
+                                    style={{ flex: 1, minWidth: 0, background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12, padding: "2px 4px" }}
                                   >
                                     {(f.options ?? []).map((o) => <option key={o} value={o}>{o === "" ? "—" : o}</option>)}
                                   </select>
@@ -1117,7 +1320,7 @@ export const BrowserPanel = memo(function BrowserPanel({
               ))}
             </div>
             {annotations.length > 0 && (
-              <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border)", fontSize: 11, color: "var(--muted)", lineHeight: 1.45 }}>
+              <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--muted)", lineHeight: 1.45 }}>
                 Tu próximo mensaje del chat incluirá estas {annotations.length === 1 ? "zona" : `${annotations.length} zonas`} automáticamente.
               </div>
             )}

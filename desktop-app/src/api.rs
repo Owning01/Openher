@@ -480,7 +480,9 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 Ok(b) => {
                     let cols = b["cols"].as_u64().unwrap_or(100) as u16;
                     let rows = b["rows"].as_u64().unwrap_or(30) as u16;
-                    match state.pty.resize(&id, cols, rows) {
+                    let pw = b["pixel_width"].as_u64().unwrap_or(b["pixelWidth"].as_u64().unwrap_or(0)) as u16;
+                    let ph = b["pixel_height"].as_u64().unwrap_or(b["pixelHeight"].as_u64().unwrap_or(0)) as u16;
+                    match state.pty.resize_px(&id, cols, rows, pw, ph) {
                         Ok(()) => {
                             let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
                         }
@@ -1780,5 +1782,8 @@ fn merge_config(cfg: &mut crate::state::ShellConfig, patch: &serde_json::Value) 
     }
     if let Some(s) = patch.get("quickchat_model").and_then(|v| v.as_str()) {
         cfg.quickchat_model = s.to_string();
+    }
+    if let Some(b) = patch.get("auto_opencode2").and_then(|v| v.as_bool()) {
+        cfg.auto_opencode2 = b;
     }
 }

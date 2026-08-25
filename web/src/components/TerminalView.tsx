@@ -68,7 +68,7 @@ export const TerminalView = memo(function TerminalView({
         flexDirection: "column",
         height: isDocked ? (maximized ? "calc(100vh - 48px)" : `${height}px`) : "100%",
         width: "100%",
-        background: "#0d1117",
+        background: "var(--surface)",
         position: isDocked && maximized ? "fixed" : "relative",
         top: isDocked && maximized ? 48 : undefined,
         left: isDocked && maximized ? 0 : undefined,

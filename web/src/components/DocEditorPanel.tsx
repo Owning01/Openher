@@ -80,7 +80,7 @@ export const DocEditorPanel = memo(function DocEditorPanel({ initialPath }: Prop
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#0d1117", color: "#e6edf3" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "var(--surface)", color: "var(--text)" }}>
       {/* Barra superior de herramientas */}
       <div style={{
         display: "flex",
@@ -153,13 +153,13 @@ export const DocEditorPanel = memo(function DocEditorPanel({ initialPath }: Prop
 
       {/* Barra de modos markdown — 3 iconos compactos debajo */}
       <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "2px 6px", background: "rgba(0,0,0,0.2)", borderBottom: "1px solid rgba(255,255,255,0.05)", height: 26, minHeight: 26, flexShrink: 0 }}>
-        <button type="button" onClick={() => setViewMode("edit")} title="Editar" aria-label="Editar" style={{ width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", border: viewMode === "edit" ? "1px solid #58a6ff" : "1px solid transparent", borderRadius: 4, background: viewMode === "edit" ? "rgba(88,166,255,0.15)" : "transparent", color: viewMode === "edit" ? "#58a6ff" : "#8b949e", cursor: "pointer", padding: 0 }}>
+        <button type="button" onClick={() => setViewMode("edit")} title="Editar" aria-label="Editar" style={{ width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", border: viewMode === "edit" ? "1px solid var(--primary)" : "1px solid transparent", borderRadius: 4, background: viewMode === "edit" ? "var(--primary-soft)" : "transparent", color: viewMode === "edit" ? "var(--primary)" : "var(--muted)", cursor: "pointer", padding: 0 }}>
           <PencilIcon size={12} />
         </button>
-        <button type="button" onClick={() => setViewMode("split")} title="Vista dividida" aria-label="Vista dividida" style={{ width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", border: viewMode === "split" ? "1px solid #58a6ff" : "1px solid transparent", borderRadius: 4, background: viewMode === "split" ? "rgba(88,166,255,0.15)" : "transparent", color: viewMode === "split" ? "#58a6ff" : "#8b949e", cursor: "pointer", padding: 0 }}>
+        <button type="button" onClick={() => setViewMode("split")} title="Vista dividida" aria-label="Vista dividida" style={{ width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", border: viewMode === "split" ? "1px solid var(--primary)" : "1px solid transparent", borderRadius: 4, background: viewMode === "split" ? "var(--primary-soft)" : "transparent", color: viewMode === "split" ? "var(--primary)" : "var(--muted)", cursor: "pointer", padding: 0 }}>
           <SplitIcon size={12} />
         </button>
-        <button type="button" onClick={() => setViewMode("preview")} title="Vista previa" aria-label="Vista previa" style={{ width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", border: viewMode === "preview" ? "1px solid #58a6ff" : "1px solid transparent", borderRadius: 4, background: viewMode === "preview" ? "rgba(88,166,255,0.15)" : "transparent", color: viewMode === "preview" ? "#58a6ff" : "#8b949e", cursor: "pointer", padding: 0 }}>
+        <button type="button" onClick={() => setViewMode("preview")} title="Vista previa" aria-label="Vista previa" style={{ width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", border: viewMode === "preview" ? "1px solid var(--primary)" : "1px solid transparent", borderRadius: 4, background: viewMode === "preview" ? "var(--primary-soft)" : "transparent", color: viewMode === "preview" ? "var(--primary)" : "var(--muted)", cursor: "pointer", padding: 0 }}>
           <EyeIcon size={12} />
         </button>
       </div>
@@ -172,7 +172,7 @@ export const DocEditorPanel = memo(function DocEditorPanel({ initialPath }: Prop
         padding: "4px 12px",
         background: "rgba(0,0,0,0.2)",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
-        fontSize: 11,
+        fontSize: 12,
       }}>
         <button type="button" className="btn-icon compact" onClick={() => insertText("# ", "")} title="Título 1">H1</button>
         <button type="button" className="btn-icon compact" onClick={() => insertText("## ", "")} title="Título 2">H2</button>
@@ -185,7 +185,7 @@ export const DocEditorPanel = memo(function DocEditorPanel({ initialPath }: Prop
         <button type="button" className="btn-icon compact" onClick={() => insertText("```\n", "\n```")} title="Bloque de código">&lt;/&gt;</button>
         <button type="button" className="btn-icon compact" onClick={() => insertText("> ", "")} title="Cita">” Cita</button>
         {statusMsg && (
-          <span style={{ marginLeft: "auto", color: "#58a6ff", fontSize: 11 }}>{statusMsg}</span>
+          <span style={{ marginLeft: "auto", color: "var(--primary)", fontSize: 12 }}>{statusMsg}</span>
         )}
       </div>
 
@@ -204,7 +204,7 @@ export const DocEditorPanel = memo(function DocEditorPanel({ initialPath }: Prop
                 height: "100%",
                 resize: "none",
                 background: "transparent",
-                color: "#e6edf3",
+                color: "var(--text)",
                 border: "none",
                 outline: "none",
                 padding: 14,

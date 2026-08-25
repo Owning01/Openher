@@ -44,7 +44,7 @@ export function ThemePicker({ onClose }: ThemePickerProps) {
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
-          <button className="theme-picker-close" onClick={handleCancel}>✕</button>
+          <button className="theme-picker-close" onClick={handleCancel}></button>
         </div>
         <div className="theme-picker-list">
           {filtered.map((name) => (

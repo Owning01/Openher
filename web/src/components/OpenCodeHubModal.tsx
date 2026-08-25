@@ -1,6 +1,6 @@
 import { memo, useState, useEffect, useCallback, useMemo } from "react"
 import { createPortal } from "react-dom"
-import { CloseIcon, SearchIcon, SaveIcon, LoadingIcon } from "../Icons"
+import { BrainIcon, CloseIcon, LayersIcon, LoadingIcon, SaveIcon, SearchIcon, SettingsIcon, ToolIcon } from "../Icons"
 import { shell } from "../shell"
 import { api } from "../api"
 import type { AgentOption, ServerConfig } from "../types"
@@ -210,8 +210,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
           maxWidth: "1000px",
           height: "85vh",
           maxHeight: "780px",
-          background: "#0d1117",
-          border: "1px solid #30363d",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
           borderRadius: "12px",
           display: "flex",
           flexDirection: "column",
@@ -226,17 +226,17 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
             alignItems: "center",
             justifyContent: "space-between",
             padding: "12px 20px",
-            borderBottom: "1px solid #21262d",
-            background: "#161b22",
+            borderBottom: "1px solid var(--border)",
+            background: "var(--surface-strong)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "20px" }}>🤖</span>
+            <span style={{ display: "inline-flex", color: "var(--primary)" }}><BrainIcon size={20} /></span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: "15px", color: "#f0f6fc" }}>
+              <div style={{ fontWeight: 600, fontSize: "15px", color: "var(--text)" }}>
                 OpenCode Hub (Agentes, Skills & Configuración)
               </div>
-              <div style={{ fontSize: "11px", color: "#8b949e" }}>
+              <div style={{ fontSize: "12px", color: "var(--muted)" }}>
                 Inspecciona prompts de sistema, modelos asignados, catálogo de skills y archivos de configuración
               </div>
             </div>
@@ -247,7 +247,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
             style={{
               background: "transparent",
               border: "none",
-              color: "#8b949e",
+              color: "var(--muted)",
               cursor: "pointer",
               padding: "6px",
               borderRadius: "6px",
@@ -263,8 +263,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
           style={{
             display: "flex",
             alignItems: "center",
-            borderBottom: "1px solid #21262d",
-            background: "#0d1117",
+            borderBottom: "1px solid var(--surface-strong)",
+            background: "var(--surface)",
             padding: "0 16px",
             gap: "8px",
           }}
@@ -276,8 +276,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
               padding: "10px 16px",
               background: "transparent",
               border: "none",
-              borderBottom: activeTab === "agents" ? "2px solid #58a6ff" : "2px solid transparent",
-              color: activeTab === "agents" ? "#58a6ff" : "#8b949e",
+              borderBottom: activeTab === "agents" ? "2px solid var(--primary)" : "2px solid transparent",
+              color: activeTab === "agents" ? "var(--primary)" : "var(--muted)",
               fontWeight: activeTab === "agents" ? 600 : 400,
               fontSize: "13px",
               cursor: "pointer",
@@ -286,7 +286,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
               gap: "6px",
             }}
           >
-            <span>🤖</span>
+            <BrainIcon size={14} />
             <span>Agentes Oficiales ({agents.length})</span>
           </button>
 
@@ -297,8 +297,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
               padding: "10px 16px",
               background: "transparent",
               border: "none",
-              borderBottom: activeTab === "skills" ? "2px solid #58a6ff" : "2px solid transparent",
-              color: activeTab === "skills" ? "#58a6ff" : "#8b949e",
+              borderBottom: activeTab === "skills" ? "2px solid var(--primary)" : "2px solid transparent",
+              color: activeTab === "skills" ? "var(--primary)" : "var(--muted)",
               fontWeight: activeTab === "skills" ? 600 : 400,
               fontSize: "13px",
               cursor: "pointer",
@@ -307,7 +307,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
               gap: "6px",
             }}
           >
-            <span>⚡</span>
+            <LayersIcon size={14} />
             <span>Skills del Sistema ({globalData?.skills?.length ?? 0})</span>
           </button>
 
@@ -318,8 +318,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
               padding: "10px 16px",
               background: "transparent",
               border: "none",
-              borderBottom: activeTab === "config" ? "2px solid #58a6ff" : "2px solid transparent",
-              color: activeTab === "config" ? "#58a6ff" : "#8b949e",
+              borderBottom: activeTab === "config" ? "2px solid var(--primary)" : "2px solid transparent",
+              color: activeTab === "config" ? "var(--primary)" : "var(--muted)",
               fontWeight: activeTab === "config" ? 600 : 400,
               fontSize: "13px",
               cursor: "pointer",
@@ -328,13 +328,13 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
               gap: "6px",
             }}
           >
-            <span>⚙️</span>
+            <SettingsIcon size={14} />
             <span>Configuración Oficial ({globalData?.configFiles?.length ? globalData.configFiles.length : "opencode.json"})</span>
           </button>
 
           {activeTab !== "config" && (
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", position: "relative" }}>
-              <span style={{ position: "absolute", left: "10px", color: "#8b949e", display: "flex", alignItems: "center" }}>
+              <span style={{ position: "absolute", left: "10px", color: "var(--muted)", display: "flex", alignItems: "center" }}>
                 <SearchIcon size={13} />
               </span>
               <input
@@ -343,11 +343,11 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={`Buscar ${activeTab === "agents" ? "agentes o prompts" : "skills"}...`}
                 style={{
-                  background: "#161b22",
-                  border: "1px solid #30363d",
+                  background: "var(--surface-strong)",
+                  border: "1px solid var(--border)",
                   borderRadius: "6px",
                   padding: "4px 8px 4px 28px",
-                  color: "#f0f6fc",
+                  color: "var(--text)",
                   fontSize: "12px",
                   width: "200px",
                 }}
@@ -359,14 +359,14 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
         {/* Content Body */}
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 20px" }}>
           {loading ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: "8px", color: "#8b949e" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: "8px", color: "var(--muted)" }}>
               <LoadingIcon size={18} />
               <span>Cargando configuración de OpenCode...</span>
             </div>
           ) : activeTab === "agents" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               {filteredAgents.length === 0 ? (
-                <div style={{ color: "#8b949e", padding: "20px", textAlign: "center" }}>
+                <div style={{ color: "var(--muted)", padding: "20px", textAlign: "center" }}>
                   No se encontraron agentes configurados.
                 </div>
               ) : (
@@ -379,8 +379,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                     <div
                       key={agent.id}
                       style={{
-                        background: isSelected ? "rgba(88, 166, 255, 0.06)" : "#161b22",
-                        border: isSelected ? "1px solid #58a6ff" : "1px solid #30363d",
+                        background: isSelected ? "var(--primary-soft)" : "var(--surface-strong)",
+                        border: isSelected ? "1px solid var(--primary)" : "1px solid var(--border)",
                         borderRadius: "8px",
                         padding: "16px",
                         display: "flex",
@@ -390,23 +390,23 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                     >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <span style={{ fontSize: "20px" }}>
-                            {agent.name.toLowerCase().includes("plan") ? "🧭" : agent.name.toLowerCase().includes("build") ? "🛠️" : "🤖"}
+                          <span style={{ display: "inline-flex", color: "var(--primary)" }}>
+                            {agent.name.toLowerCase().includes("plan") ? <LayersIcon size={18} /> : agent.name.toLowerCase().includes("build") ? <ToolIcon size={18} /> : <BrainIcon size={18} />}
                           </span>
                           <div>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span style={{ fontWeight: 600, fontSize: "15px", color: "#f0f6fc" }}>{agent.name}</span>
-                              <span style={{ fontSize: "11px", background: "#21262d", color: "#8b949e", padding: "2px 6px", borderRadius: "4px", fontFamily: "monospace" }}>
+                              <span style={{ fontWeight: 600, fontSize: "15px", color: "var(--text)" }}>{agent.name}</span>
+                              <span style={{ fontSize: "12px", background: "var(--surface-strong)", color: "var(--muted)", padding: "2px 6px", borderRadius: "4px", fontFamily: "monospace" }}>
                                 {agent.id}
                               </span>
                               {agent.mode && (
-                                <span style={{ fontSize: "10px", background: "rgba(88,166,255,0.15)", color: "#58a6ff", padding: "2px 6px", borderRadius: "4px" }}>
+                                <span style={{ fontSize: "12px", background: "var(--primary-soft)", color: "var(--primary)", padding: "2px 6px", borderRadius: "4px" }}>
                                   {agent.mode}
                                 </span>
                               )}
                             </div>
                             {agent.description && (
-                              <div style={{ fontSize: "12px", color: "#8b949e", marginTop: "2px" }}>
+                              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
                                 {agent.description}
                               </div>
                             )}
@@ -415,7 +415,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
 
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           {isSelected && (
-                            <span style={{ fontSize: "11px", background: "#1f6feb", color: "#fff", padding: "3px 8px", borderRadius: "10px", fontWeight: 600 }}>
+                            <span style={{ fontSize: "12px", background: "var(--primary)", color: "#fff", padding: "3px 8px", borderRadius: "10px", fontWeight: 600 }}>
                               ACTIVO EN CHAT
                             </span>
                           )}
@@ -427,10 +427,10 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                                 onClose()
                               }}
                               style={{
-                                background: "#21262d",
-                                border: "1px solid #30363d",
+                                background: "var(--surface-strong)",
+                                border: "1px solid var(--border)",
                                 borderRadius: "6px",
-                                color: "#f0f6fc",
+                                color: "var(--text)",
                                 padding: "4px 10px",
                                 cursor: "pointer",
                                 fontSize: "12px",
@@ -445,7 +445,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                       {/* System Prompt Box */}
                       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: "11px", fontWeight: 600, color: "#8b949e", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                             Prompt del Sistema / Instrucciones
                           </span>
                           <div style={{ display: "flex", gap: "6px" }}>
@@ -453,26 +453,26 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                               type="button"
                               onClick={() => handleCopy(agent.id, promptText)}
                               style={{
-                                background: "#21262d",
-                                border: "1px solid #30363d",
+                                background: "var(--surface-strong)",
+                                border: "1px solid var(--border)",
                                 borderRadius: "4px",
-                                color: "#c9d1d9",
-                                fontSize: "11px",
+                                color: "var(--text)",
+                                fontSize: "12px",
                                 padding: "2px 8px",
                                 cursor: "pointer",
                               }}
                             >
-                              {copiedId === agent.id ? "✓ Copiado" : "Copiar Prompt"}
+                              {copiedId === agent.id ? " Copiado" : "Copiar Prompt"}
                             </button>
                             <button
                               type="button"
                               onClick={() => setExpandedPromptId(isExpanded ? null : agent.id)}
                               style={{
-                                background: "#21262d",
-                                border: "1px solid #30363d",
+                                background: "var(--surface-strong)",
+                                border: "1px solid var(--border)",
                                 borderRadius: "4px",
-                                color: "#58a6ff",
-                                fontSize: "11px",
+                                color: "var(--primary)",
+                                fontSize: "12px",
                                 padding: "2px 8px",
                                 cursor: "pointer",
                               }}
@@ -484,12 +484,12 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
 
                         <pre
                           style={{
-                            background: "#090d13",
-                            border: "1px solid #30363d",
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
                             borderRadius: "6px",
                             padding: "10px 12px",
-                            color: "#e6edf3",
-                            fontSize: "11px",
+                            color: "var(--text)",
+                            fontSize: "12px",
                             fontFamily: "Consolas, Menlo, Monaco, 'Courier New', monospace",
                             lineHeight: "1.4",
                             maxHeight: isExpanded ? "400px" : "80px",
@@ -509,10 +509,10 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
             </div>
           ) : activeTab === "skills" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#8b949e" }}>
-                <span>📁 Rutas escaneadas:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--muted)" }}>
+                <span> Rutas escaneadas:</span>
                 {globalData?.scannedRoots?.map((r) => (
-                  <span key={r} style={{ background: "#21262d", padding: "2px 6px", borderRadius: "4px", fontFamily: "monospace", fontSize: "10px" }}>
+                  <span key={r} style={{ background: "var(--surface-strong)", padding: "2px 6px", borderRadius: "4px", fontFamily: "monospace", fontSize: "12px" }}>
                     {r.split(/[\\/]/).slice(-2).join("/")}
                   </span>
                 ))}
@@ -520,7 +520,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "12px" }}>
                 {filteredSkills.length === 0 ? (
-                  <div style={{ color: "#8b949e", padding: "20px", gridColumn: "1 / -1", textAlign: "center" }}>
+                  <div style={{ color: "var(--muted)", padding: "20px", gridColumn: "1 / -1", textAlign: "center" }}>
                     No se detectaron skills en las carpetas estándar.
                   </div>
                 ) : (
@@ -528,8 +528,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                     <div
                       key={skill.path}
                       style={{
-                        background: "#161b22",
-                        border: "1px solid #30363d",
+                        background: "var(--surface-strong)",
+                        border: "1px solid var(--border)",
                         borderRadius: "8px",
                         padding: "12px 14px",
                         display: "flex",
@@ -539,19 +539,19 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                     >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "14px" }}>⚡</span>
-                          <span style={{ fontWeight: 600, fontSize: "13px", color: "#58a6ff" }}>{skill.name}</span>
+                          <span style={{ fontSize: "14px" }}></span>
+                          <span style={{ fontWeight: 600, fontSize: "13px", color: "var(--primary)" }}>{skill.name}</span>
                         </div>
-                        <span style={{ fontSize: "10px", background: "#21262d", color: "#8b949e", padding: "2px 6px", borderRadius: "4px" }}>
+                        <span style={{ fontSize: "12px", background: "var(--surface-strong)", color: "var(--muted)", padding: "2px 6px", borderRadius: "4px" }}>
                           {skill.source}
                         </span>
                       </div>
 
-                      <div style={{ fontSize: "12px", color: "#c9d1d9", lineHeight: "1.4", flex: 1 }}>
+                      <div style={{ fontSize: "12px", color: "var(--text)", lineHeight: "1.4", flex: 1 }}>
                         {skill.description}
                       </div>
 
-                      <div style={{ fontSize: "10px", color: "#8b949e", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={skill.path}>
+                      <div style={{ fontSize: "12px", color: "var(--muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={skill.path}>
                         {skill.path}
                       </div>
                     </div>
@@ -564,7 +564,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
               {/* File switcher bar */}
               {globalData?.configFiles && globalData.configFiles.length > 1 && (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
-                  <span style={{ fontSize: "11px", color: "#8b949e", whiteSpace: "nowrap" }}>Archivos detectados:</span>
+                  <span style={{ fontSize: "12px", color: "var(--muted)", whiteSpace: "nowrap" }}>Archivos detectados:</span>
                   {globalData.configFiles.map((file) => {
                     const isActive = file.path === selectedConfigPath
                     return (
@@ -573,17 +573,17 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                         type="button"
                         onClick={() => handleSelectConfigFile(file.path)}
                         style={{
-                          background: isActive ? "#1f6feb" : "#21262d",
-                          color: isActive ? "#fff" : "#c9d1d9",
+                          background: isActive ? "var(--primary)" : "var(--surface-strong)",
+                          color: isActive ? "#fff" : "var(--text)",
                           border: "none",
                           borderRadius: "4px",
                           padding: "3px 8px",
-                          fontSize: "11px",
+                          fontSize: "12px",
                           cursor: "pointer",
                           whiteSpace: "nowrap",
                         }}
                       >
-                        📄 {file.name}
+                         {file.name}
                       </button>
                     )
                   })}
@@ -591,20 +591,20 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
               )}
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ fontSize: "12px", color: "#8b949e" }}>
-                  Ruta: <span style={{ color: "#58a6ff", fontFamily: "monospace" }}>{selectedConfigPath || globalData?.configPath || "opencode.json"}</span>
+                <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+                  Ruta: <span style={{ color: "var(--primary)", fontFamily: "monospace" }}>{selectedConfigPath || globalData?.configPath || "opencode.json"}</span>
                 </div>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  {jsonError && <span style={{ fontSize: "11px", color: "#f85149" }}>⚠️ {jsonError}</span>}
-                  {saveStatus && <span style={{ fontSize: "11px", color: saveStatus.includes("Error") ? "#f85149" : "#3fb950" }}>{saveStatus}</span>}
+                  {jsonError && <span style={{ fontSize: "12px", color: "var(--danger)" }}>️ {jsonError}</span>}
+                  {saveStatus && <span style={{ fontSize: "12px", color: saveStatus.includes("Error") ? "var(--danger)" : "var(--success)" }}>{saveStatus}</span>}
                   <button
                     type="button"
                     onClick={handleFormatJson}
                     style={{
-                      background: "#21262d",
-                      border: "1px solid #30363d",
+                      background: "var(--surface-strong)",
+                      border: "1px solid var(--border)",
                       borderRadius: "6px",
-                      color: "#c9d1d9",
+                      color: "var(--text)",
                       padding: "4px 10px",
                       fontSize: "12px",
                       cursor: "pointer",
@@ -620,7 +620,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                       display: "flex",
                       alignItems: "center",
                       gap: "6px",
-                      background: "#238636",
+                      background: "var(--success)",
                       border: "1px solid rgba(240,246,252,0.1)",
                       borderRadius: "6px",
                       color: "#fff",
@@ -644,11 +644,11 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                 style={{
                   flex: 1,
                   minHeight: "350px",
-                  background: "#090d13",
-                  border: jsonError ? "1px solid #f85149" : "1px solid #30363d",
+                  background: "var(--surface)",
+                  border: jsonError ? "1px solid var(--danger)" : "1px solid var(--border)",
                   borderRadius: "8px",
                   padding: "12px",
-                  color: "#f0f6fc",
+                  color: "var(--text)",
                   fontFamily: "Consolas, Menlo, Monaco, 'Courier New', monospace",
                   fontSize: "12px",
                   lineHeight: "1.5",

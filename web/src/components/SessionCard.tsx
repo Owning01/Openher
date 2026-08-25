@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef } from "react"
-import { StarIcon, ChevronIcon } from "../Icons"
+import { StarIcon, ChevronIcon, CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { formatTime } from "../utils"
 import { InlineRename } from "./InlineRename"
@@ -108,7 +108,7 @@ export const SessionCard = memo(function SessionCard({
           )}
           {selectMode ? (
             <span className={`session-checkbox${isChecked ? " checked" : ""}`} aria-hidden="true">
-              {isChecked && <span>✓</span>}
+              {isChecked && <CheckIcon size={10} />}
             </span>
           ) : (
             <button className="star-btn" onClick={handleToggleFavorite}

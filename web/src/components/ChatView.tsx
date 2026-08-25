@@ -3,7 +3,6 @@ import { createPortal } from "react-dom"
 import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
-import { MessageVirtualList } from "../widgets/message-list/MessageVirtualList"
 import { Composer } from "./Composer"
 import { PromptPresetSheet } from "./PromptPresetSheet"
 import { ModelSelectorModal } from "./ModelSelectorModal"
@@ -438,7 +437,7 @@ export const ChatView = memo(function ChatView({
                   </>
                 ) : devServer.status === "running" ? (
                   <>
-                    <span style={{ color: "#22c55e", fontSize: "0.8rem" }}>●</span>
+                    <span style={{ color: "var(--success)", fontSize: "0.8rem" }}>●</span>
                     <span>{devServer.serverUrl ? devServer.serverUrl.replace(/^https?:\/\//, "") : "Web"}</span>
                   </>
                 ) : (
@@ -616,67 +615,35 @@ export const ChatView = memo(function ChatView({
       )}
 
       <div className="messages-wrap" ref={messagesWrapRef}>
-        {messages.length > 40 ? (
-          <MessageVirtualList
-            messages={messages}
-            pendingIndex={pendingIndex}
-            loadingSessionID={loadingSessionID}
-            selectedID={selectedID}
-            showTypingBubble={showTypingBubble}
-            compacting={compacting}
-            isWorking={isWorking}
-            messageScrollSignature={messageScrollSignature}
-            view={view}
-            revert={revertObj}
-            onRevertToMessage={onRevertToMessage}
-            onEditMessage={onEditMessage}
-            agents={agents}
-            config={config}
-            directory={selectedSession?.directory}
-            onViewSubagents={handleViewSubagents}
-            onContextMenu={flags.contextMenu ? handleContextMenu : undefined}
-            showTodoButton={showTodoButton ?? false}
-            onToggleTodos={onTodosToggle}
-            todosOpen={todosExpanded}
-            highlight={deferredQuery.trim() || undefined}
-            scrollToMessageID={scrollToMessageID}
-            compactTools={compactTools}
-            minimalistMode={minimalistMode}
-            thinkingDefault={thinkingDefault}
-            onRegenerate={onRegenerate}
-            onOpenADEDiff={onOpenADEDiff}
-          />
-        ) : (
-          <MessageList
-            messages={messages}
-            pendingIndex={pendingIndex}
-            loadingSessionID={loadingSessionID}
-            selectedID={selectedID}
-            showTypingBubble={showTypingBubble}
-            compacting={compacting}
-            isWorking={isWorking}
-            messageScrollSignature={messageScrollSignature}
-            view={view}
-            revert={revertObj}
-            onRevertToMessage={onRevertToMessage}
-            onEditMessage={onEditMessage}
-            agents={agents}
-            config={config}
-            directory={selectedSession?.directory}
-            onViewSubagents={handleViewSubagents}
-            onContextMenu={flags.contextMenu ? handleContextMenu : undefined}
-            showTodoButton={showTodoButton ?? false}
-            onToggleTodos={onTodosToggle}
-            todosOpen={todosExpanded}
-            highlight={deferredQuery.trim() || undefined}
-            scrollToMessageID={scrollToMessageID}
-            compactTools={compactTools}
-            minimalistMode={minimalistMode}
-            thinkingDefault={thinkingDefault}
-            onRegenerate={onRegenerate}
-            onOpenADEDiff={onOpenADEDiff}
-          />
-        )}
+        <MessageList
+          messages={messages}
+          pendingIndex={pendingIndex}
+          loadingSessionID={loadingSessionID}
+          selectedID={selectedID}
+          showTypingBubble={showTypingBubble}
+          compacting={compacting}
+          isWorking={isWorking}
+          messageScrollSignature={messageScrollSignature}
+          view={view}
+          revert={revertObj}
+          onRevertToMessage={onRevertToMessage}
+          onEditMessage={onEditMessage}
+          agents={agents}
+          config={config}
+          directory={selectedSession?.directory}
+          onViewSubagents={handleViewSubagents}
+          onContextMenu={flags.contextMenu ? handleContextMenu : undefined}
+          showTodoButton={showTodoButton ?? false}
+          onToggleTodos={onTodosToggle}
+          todosOpen={todosExpanded}
+          highlight={deferredQuery.trim() || undefined}
+          scrollToMessageID={scrollToMessageID}
+          compactTools={compactTools}
+          minimalistMode={minimalistMode}
+          thinkingDefault={thinkingDefault}
+          onRegenerate={onRegenerate}
+          onOpenADEDiff={onOpenADEDiff}
+        />
       </div>
 
       {selectedSession?.parentID && (

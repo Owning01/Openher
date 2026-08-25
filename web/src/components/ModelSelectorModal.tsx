@@ -281,7 +281,7 @@ export const ModelSelectorModal = memo(function ModelSelectorModal({
                           )}
                           {variantCount > 0 && (
                             <span className="model-variants-chip" title={`${variantCount} niveles de pensamiento disponibles`}>
-                              🧠 ${variantCount}
+                               ${variantCount}
                             </span>
                           )}
                           {m.isDefault && (

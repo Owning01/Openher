@@ -103,6 +103,7 @@ const PANEL_SUSPENSE_FALLBACK = (
   <div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando…</div>
 )
 const SourceControlPanel = lazyRetry(() => import("./components/SourceControlPanel").then((m) => ({ default: m.SourceControlPanel })))
+const LearningPage = lazyRetry(() => import("./features/learning/LearningPage").then((m) => ({ default: m.default })))
 
 type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm"
 
@@ -413,6 +414,8 @@ function DesktopCellPlaceholder(props: {
     </div>
   )
 }
+
+const AUTO_OPENCODE2_KEY = "opencode.auto_opencode2"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const t = useT()
@@ -1339,17 +1342,26 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [awaitingAssistantReply])
 
   // Zoom general de la interfaz con Ctrl + Ruedita y atajos de teclado (Ctrl + / Ctrl - / Ctrl 0)
+  // Fix: escala uniforme (rem + px cromado) + notifica a xterm para evitar duplicación de glifos.
   useEffect(() => {
     const ZOOM_KEY = "opencode.mobile.ui_zoom"
     const saved = localStorage.getItem(ZOOM_KEY)
     let currentZoom = saved ? Math.min(2.0, Math.max(0.7, parseFloat(saved))) : 1
 
     const applyZoom = (z: number) => {
-      // Limpiar cualquier propiedad zoom antigua que desborde el viewport
+      // --ui-scale alimenta calc() del cromado px (activity bar / grid) y xterm.
+      // fontSize escala rem (todo el layout basado en rem). No usar `zoom` en html:
+      // zoom escala devicePixelRatio y rompe el atlas WebGL de xterm (letras dobles).
       try { (document.documentElement.style as any).zoom = "" } catch {}
       const basePx = Math.round(16 * z * 10) / 10
       document.documentElement.style.fontSize = `${basePx}px`
       document.documentElement.style.setProperty("--ui-scale", `${z}`)
+      // Notificar a terminales y a cualquier listener para refit/refresh
+      try {
+        window.dispatchEvent(new CustomEvent("ui-zoom", { detail: { zoom: z } }))
+        // ResizeObserver de xterm a veces no dispara con solo fontSize: forzar
+        window.dispatchEvent(new Event("resize"))
+      } catch {}
     }
 
     applyZoom(currentZoom)
@@ -1392,6 +1404,53 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       window.removeEventListener("wheel", handleWheel)
       window.removeEventListener("keydown", handleKeyDown)
     }
+  }, [])
+
+  // Auto-abrir opencode2 en terminal al iniciar (si está activado en Ajustes > Inicio)
+  useEffect(() => {
+    if (!(window as any).__OPENCODE_DESKTOP__) return
+    let cancelled = false
+    const check = async () => {
+      let should = false
+      try { should = localStorage.getItem(AUTO_OPENCODE2_KEY) === "1" } catch {}
+      if (!should) {
+        try {
+          const { shell } = await import("./shell")
+          const cfg = await shell.config.get().catch(() => null) as any
+          if (cfg?.auto_opencode2) should = true
+        } catch {}
+      }
+      if (!should || cancelled) return
+      try { sessionStorage.setItem("opencode.auto_opencode2.pending", "1") } catch {}
+      // Esperar a que el grid esté montado
+      await new Promise(r => setTimeout(r, 1200))
+      if (cancelled) return
+      // Crear la terminal via el mismo flujo que el botón Terminal, y marcarla para auto-enviar
+      const { shell } = await import("./shell")
+      // Crear PTY real y guardar marca para que SingleTerminal lo ejecute
+      try { sessionStorage.setItem("opencode.auto_opencode2.fire", "1") } catch {}
+      window.dispatchEvent(new CustomEvent("opencode:auto-opencode2:create"))
+      // Tras crear, enviar opencode2 por WS/pty al tab recién creado
+      setTimeout(async () => {
+        if (cancelled) return
+        try {
+          // Buscar el tab recién creado (empieza con terminal:term-auto)
+          const raw = localStorage.getItem("opencode.mobile.desktopState")
+          if (!raw) return
+          const st = JSON.parse(raw) as any
+          const stacks: string[][] = st?.tabStacks ?? st?.layout?.sessions ?? []
+          let targetTab: string | null = null
+          for (const stack of stacks) for (const id of (stack ?? [])) if (String(id).startsWith("terminal:")) targetTab = String(id)
+          if (!targetTab) return
+          const ptyId = targetTab.replace(/^terminal[:\-]/, "")
+          const write = (data: string) => shell.pty.write(ptyId, data).catch(() => {})
+          // Dar tiempo a que el PTY conecte
+          setTimeout(() => write("opencode2\r"), 900)
+        } catch {}
+      }, 900)
+    }
+    const t = setTimeout(check, 900)
+    return () => { cancelled = true; clearTimeout(t) }
   }, [])
 
   // ===== Desktop: grid de paneles (splits) =====
@@ -1608,6 +1667,36 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     })
     setActivePanel(panelIndex)
   }, [setTabStacks])
+
+  // Listener para auto-crear terminal con opencode2 al inicio
+  useEffect(() => {
+    const h = () => {
+      let fire = false
+      try { fire = sessionStorage.getItem("opencode.auto_opencode2.fire") === "1" } catch {}
+      if (!fire) return
+      try { sessionStorage.removeItem("opencode.auto_opencode2.fire") } catch {}
+      // Crear tab exactamente como addTerminalToPanel pero en panel 0
+      const idx = 0
+      addTerminalToPanel(idx)
+      // El siguiente tick: escribir opencode2 en ese PTY (lo hace el efecto de arriba con timeout)
+      setTimeout(async () => {
+        try {
+          const raw = localStorage.getItem(DESKTOP_STATE_KEY)
+          const st = raw ? JSON.parse(raw) as any : null
+          const stacks: string[][] = st?.tabStacks ?? []
+          let last: string | null = null
+          for (const s of stacks) for (const id of (s ?? [])) if (String(id).startsWith("terminal:")) last = String(id)
+          // Fallback: buscar en DOM no confiable, mejor usar el tabStacks actual via timeout extra
+          if (!last) return
+          const ptyId = last.replace(/^terminal[:\-]/, "")
+          const { shell } = await import("./shell")
+          setTimeout(() => shell.pty.write(ptyId, "opencode2\r").catch(() => {}), 900)
+        } catch {}
+      }, 600)
+    }
+    window.addEventListener("opencode:auto-opencode2:create", h as any)
+    return () => window.removeEventListener("opencode:auto-opencode2:create", h as any)
+  }, [addTerminalToPanel])
 
   const splitPanel = useCallback((index: number, dir: "right" | "bottom") => {
     setDesktopLayout((prev) => {
@@ -2174,7 +2263,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     document.body.style.userSelect = "none"
     document.body.style.cursor = "col-resize"
     const apply = (w: number) => {
-      if (shellRef.current) shellRef.current.style.gridTemplateColumns = `48px ${w}px minmax(0, 1fr)${desktopDiffOpen ? ` ${desktopDiffWidth}px` : ""}`
+      if (shellRef.current) shellRef.current.style.gridTemplateColumns = `calc(48px * var(--ui-scale, 1)) calc(${w}px * var(--ui-scale, 1)) minmax(0, 1fr)${desktopDiffOpen ? ` calc(${desktopDiffWidth}px * var(--ui-scale, 1))` : ""}`
     }
     const onMove = (ev: PointerEvent) => {
       lastW = Math.max(200, Math.min(480, startWidth + (ev.clientX - startX)))
@@ -2902,7 +2991,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   return (
     <div className="app-shell" data-navbar="header" ref={shellRef}
-      style={isDesktop ? { gridTemplateColumns: `48px ${sidebarCollapsed ? "0px" : `${sidebarWidth}px`} minmax(0, 1fr)${desktopDiffOpen ? ` ${desktopDiffWidth}px` : ""}` } : undefined}>
+      style={isDesktop ? { gridTemplateColumns: `calc(48px * var(--ui-scale, 1)) ${sidebarCollapsed ? "0px" : `calc(${sidebarWidth}px * var(--ui-scale, 1))`} minmax(0, 1fr)${desktopDiffOpen ? ` calc(${desktopDiffWidth}px * var(--ui-scale, 1))` : ""}` } : undefined}>
       {!isDesktop && view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={handleNavigate}
           onToggleLightMode={handleToggleLightMode} />
@@ -2930,9 +3019,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 }
               }}>
               <StatsIcon size={18} /></button>
-            <button type="button" className="activity-btn" title="Navegador Web / Localhost" aria-label="Navegador Web"
+            <button type="button" className="activity-btn" title="Navegador Web" aria-label="Navegador Web"
               onClick={() => {
-                handleOpenBrowser("http://localhost:5173")
+                handleOpenBrowser("https://www.google.com")
               }}>
               <GlobeIcon size={18} /></button>
             <button type="button" className={`activity-btn${(tabStacks?.some((s) => s.includes("__kanban__")) || desktopLayout.sessions.includes("__kanban__") || desktopLayout.panelKinds.includes("kanban" as any) ? " active" : "")}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
@@ -2954,6 +3043,15 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 {formatBytes(memInfo.jsHeapUsed)}
               </div>
             )}
+            <button type="button" className={`activity-btn${view === "learning" ? " active" : ""}`} title={t('learning.title') || "Aprendizaje"} aria-label={t('learning.title') || "Aprendizaje"}
+              onClick={() => {
+                if (view === "learning") {
+                  handleNavigate(desktopLayout.sessions.some(Boolean) ? "detail" : "sessions")
+                } else {
+                  handleNavigate("learning")
+                }
+              }}>
+              <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>📚</span></button>
             <button type="button" className={`activity-btn${view === "settings" ? " active" : ""}`} title={t('nav.settings') || "Configuración"} aria-label={t('nav.settings') || "Configuración"}
               onClick={() => {
                 if (view === "settings") {
@@ -3341,7 +3439,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 )
               }
               if (kind === "browser") {
-                const browserUrl = desktopLayout.panelBrowserUrls?.[i] || "http://localhost:5173"
+                const browserUrl = desktopLayout.panelBrowserUrls?.[i] || "https://www.google.com"
                 return (
                   <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
                     <Suspense fallback={<div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando navegador...</div>}>
@@ -3568,6 +3666,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         <div className={`quickchat-view${isDesktop ? " settings-overlay" : ""}`} style={{ height: isDesktop ? "100%" : "calc(100dvh - 56px)", display: "flex", flexDirection: "column" }}>
           <Suspense fallback={null}>
             <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} customKey={quickChatCustomKey} customUrl={quickChatCustomUrl} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
+          </Suspense>
+        </div>
+      )}
+
+      {view === "learning" && (
+        <div className="learning-view" style={{ height: isDesktop ? "100%" : "calc(100dvh - 56px)", display: "flex", flexDirection: "column" }}>
+          <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando aprendizaje…</div>}>
+            <LearningPage />
           </Suspense>
         </div>
       )}

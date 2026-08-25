@@ -220,12 +220,12 @@ describe("NoticeType", () => {
     function label(t: NoticeType): string {
       switch (t) {
         case "info": return "ℹ️"
-        case "success": return "✅"
-        case "error": return "❌"
+        case "success": return ""
+        case "error": return ""
       }
     }
     expect(label("info")).toBe("ℹ️")
-    expect(label("success")).toBe("✅")
-    expect(label("error")).toBe("❌")
+    expect(label("success")).toBe("")
+    expect(label("error")).toBe("")
   })
 })

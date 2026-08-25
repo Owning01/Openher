@@ -720,6 +720,7 @@ type TranslationKey =
   | 'project.revealExplorer'
   | 'project.copyPath'
   | 'quickchat.title'
+  | 'learning.title'
   | 'quickchat.subtitle'
   | 'quickchat.placeholder'
   | 'quickchat.send'

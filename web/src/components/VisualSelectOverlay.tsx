@@ -85,13 +85,13 @@ export const VisualSelectOverlay = memo(function VisualSelectOverlay({ enabled, 
           alignItems: "center",
           gap: 8,
           padding: "6px 8px",
-          background: "rgba(88,166,255,0.12)",
-          borderBottom: "1px solid rgba(88,166,255,0.35)",
+          background: "var(--primary-soft)",
+          borderBottom: "1px solid var(--primary-soft)",
           backdropFilter: "blur(6px)",
           fontSize: 12,
         }}
       >
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#58a6ff", display: "inline-block", flexShrink: 0 }} />
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)", display: "inline-block", flexShrink: 0 }} />
         <span style={{ fontWeight: 600, color: "var(--text)" }}>Modo selección</span>
         <span style={{ color: "var(--muted)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {filePath.split("/").pop() ?? filePath} — seleccioná texto en el editor y capturá
@@ -118,7 +118,7 @@ export const VisualSelectOverlay = memo(function VisualSelectOverlay({ enabled, 
         </button>
       </div>
       {hint && (
-        <div style={{ pointerEvents: "auto", padding: "4px 8px", fontSize: 11, color: "#f0883e", background: "rgba(240,136,62,0.12)" }}>
+        <div style={{ pointerEvents: "auto", padding: "4px 8px", fontSize: 12, color: "#f0883e", background: "rgba(240,136,62,0.12)" }}>
           {hint}
         </div>
       )}

@@ -136,7 +136,7 @@ export function useShell(config: ServerConfig | null, initialDirectory?: string)
         ...prev,
         {
           id: `out-${Date.now()}`,
-          text: `✓ [${shell.toUpperCase()}] Comando enviado a ${effectiveDir || "sesión"}`,
+          text: ` [${shell.toUpperCase()}] Comando enviado a ${effectiveDir || "sesión"}`,
           type: "output",
           timestamp: Date.now()
         }

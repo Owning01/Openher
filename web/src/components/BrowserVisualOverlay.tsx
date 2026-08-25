@@ -168,7 +168,7 @@ function injectIntoDoc(doc: Document, onPick: (el: BrowserPickedElement) => void
   const hint = doc.createElement("div")
   hint.id = "__opencode-hint"
   hint.textContent = "◈ Modo selección — clic en cualquier botón/cuadrado/zona • Esc para salir"
-  hint.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);background:rgba(88,166,255,0.95);color:white;padding:6px 12px;border-radius:999px;font:600 12px system-ui;z-index:2147483647;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,0.25)"
+  hint.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);background:#58a6ff;color:white;padding:6px 12px;border-radius:999px;font:600 12px system-ui;z-index:2147483647;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,0.25)"
   doc.body.appendChild(hint)
 
   return () => {

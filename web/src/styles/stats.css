@@ -73,7 +73,7 @@
 }
 
 .stats-filters .form-field span {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
 }
 
 .stats-apply {
@@ -85,7 +85,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   color: var(--muted-strong);
   font-weight: 700;
 }
@@ -94,7 +94,7 @@
   width: 84px;
   min-height: 34px;
   padding: 0.3rem 0.5rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .stats-meta {
@@ -135,7 +135,7 @@
 .stats-tab {
   flex: 0 0 auto;
   min-height: 34px;
-  padding: 0.35rem 0.7rem;
+  padding: 0.35rem 0.82rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -174,7 +174,7 @@
 }
 
 .stats-token-card small {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
 }
 
 .stats-highlights {
@@ -201,7 +201,7 @@
 }
 
 .stats-highlight-sub {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -314,7 +314,7 @@
 .stats-table th {
   text-align: left;
   padding: var(--space-2) var(--space-3);
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);

@@ -27,8 +27,8 @@
 }
 
 .scm-tabbtn.on {
-  color: var(--fg);
-  background: var(--hover-bg);
+  color: var(--text);
+  background: var(--surface-strong);
   font-weight: 600;
 }
 
@@ -37,7 +37,7 @@
 .scm-ab-badge {
   font-size: 10.5px;
   color: var(--muted);
-  background: var(--hover-bg);
+  background: var(--surface-strong);
   border-radius: var(--radius-md);
   padding: 2px 6px;
   white-space: nowrap;
@@ -52,8 +52,8 @@
 
 .scm-mini-btn {
   border: 1px solid var(--border);
-  background: transparent;
-  color: var(--fg);
+  background: var(--surface);
+  color: var(--text);
   font-size: 11px;
   padding: 3px 9px;
   border-radius: var(--radius-md);
@@ -62,11 +62,12 @@
 }
 
 .scm-mini-btn:disabled { opacity: 0.45; cursor: default; }
-.scm-mini-btn:not(:disabled):hover { background: var(--hover-bg); }
+.scm-mini-btn:not(:disabled):hover { background: var(--surface-strong); }
 
 .scm-mini-btn.scm-primary {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
 }
 
 /* Branch dropdown */
@@ -78,9 +79,9 @@
   gap: 6px;
   min-width: 0;
   max-width: 100%;
-  background: var(--hover-bg);
-  border: none;
-  color: var(--fg);
+  background: var(--surface-strong);
+  border: 1px solid var(--border-subtle);
+  color: var(--text);
   font-size: 11.5px;
   font-weight: 500;
   padding: 4px 8px;
@@ -88,7 +89,7 @@
   cursor: pointer;
 }
 
-.scm-branch-btn:hover { background: var(--active-bg); }
+.scm-branch-btn:hover { background: var(--surface-hover); border-color: var(--border); }
 
 .scm-trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scm-w22 { max-width: 88px; }
@@ -102,10 +103,10 @@
   width: 240px;
   max-height: 320px;
   overflow-y: auto;
-  background: var(--bg-elevated, var(--panel-bg));
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   padding: 4px;
 }
 
@@ -135,14 +136,14 @@
   text-align: left;
   background: transparent;
   border: none;
-  color: var(--fg);
+  color: var(--text);
   font-size: 12px;
   padding: 5px 8px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
-.scm-menu-item:hover { background: var(--hover-bg); }
+.scm-menu-item:hover { background: var(--surface-strong); }
 .scm-menu-static { cursor: default; }
 .scm-menu-col { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 
@@ -172,7 +173,7 @@
   padding: 0 var(--space-3);
   position: sticky;
   top: 0;
-  background: var(--panel-bg);
+  background: var(--surface);
   z-index: 1;
 }
 
@@ -188,7 +189,7 @@
   margin-left: auto;
   font-size: 10.5px;
   color: var(--muted);
-  background: var(--hover-bg);
+  background: var(--surface-strong);
   border-radius: 999px;
   padding: 1px 7px;
 }
@@ -209,8 +210,8 @@
 }
 
 .scm-check.on {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .scm-row {
@@ -222,7 +223,7 @@
   cursor: pointer;
 }
 
-.scm-row:hover { background: var(--hover-bg); }
+.scm-row:hover { background: var(--surface-strong); }
 .scm-row:hover .scm-row-action { opacity: 1; }
 
 .scm-badge {
@@ -254,7 +255,7 @@
 }
 
 .scm-dir { font-size: 11px; color: var(--muted); flex-shrink: 1; }
-.scm-name { font-size: 12px; color: var(--fg); flex-shrink: 0; max-width: 65%; }
+.scm-name { font-size: 12px; color: var(--text); flex-shrink: 0; max-width: 65%; }
 
 .scm-icon-btn {
   display: inline-flex;
@@ -268,7 +269,7 @@
   padding: 4px;
 }
 
-.scm-icon-btn:hover { color: var(--fg); background: var(--hover-bg); }
+.scm-icon-btn:hover { color: var(--text); background: var(--surface-strong); }
 
 .scm-row-action { opacity: 0; transition: opacity 0.12s ease; }
 
@@ -311,12 +312,12 @@
   resize: none;
   min-height: 44px;
   max-height: 120px;
-  font-family: inherit;
+  font-family: var(--font-mono);
   font-size: 12px;
-  background: var(--input-bg);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  color: var(--fg);
+  color: var(--text);
   padding: 6px 8px;
 }
 
@@ -325,9 +326,9 @@
   align-items: center;
   gap: 6px;
   align-self: flex-end;
-  background: var(--accent);
-  border: none;
-  color: #fff;
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  color: var(--on-primary);
   font-size: 12px;
   font-weight: 600;
   padding: 7px 14px;
@@ -379,7 +380,7 @@
   background: transparent;
   border: none;
   outline: none;
-  color: var(--fg);
+  color: var(--text);
   font-size: 12px;
   min-width: 0;
 }
@@ -396,8 +397,8 @@
   cursor: pointer;
 }
 
-.scm-commit:hover { background: var(--hover-bg); }
-.scm-commit.sel { background: var(--active-bg); }
+.scm-commit:hover { background: var(--surface-strong); }
+.scm-commit.sel { background: var(--primary-soft); border-left: 2px solid var(--primary); }
 
 .scm-commit-body {
   display: flex;
@@ -406,7 +407,7 @@
   line-height: 1.25;
 }
 
-.scm-commit-subj { font-size: 12px; color: var(--fg); }
+.scm-commit-subj { font-size: 12px; color: var(--text); }
 .scm-commit-meta { font-size: 10.5px; color: var(--muted); }
 
 .scm-commit-detail {
@@ -421,7 +422,7 @@
 
 .scm-remote-link {
   font-size: 11px;
-  color: var(--accent);
+  color: var(--primary);
   text-decoration: none;
 }
 
@@ -435,9 +436,9 @@
   gap: 6px;
   width: 100%;
   text-align: left;
-  background: transparent;
+  background: var(--surface);
   border: 1px solid var(--border-subtle);
-  color: var(--fg);
+  color: var(--text);
   font-size: 11px;
   border-radius: var(--radius-md);
   padding: 4px 8px;
@@ -445,9 +446,9 @@
   min-height: 28px;
 }
 
-.scm-file-chip:hover { background: var(--hover-bg); }
+.scm-file-chip:hover { background: var(--surface-strong); }
 .scm-file-chip em { font-style: normal; color: var(--muted); margin-left: auto; }
-.scm-full-patch { justify-content: center; color: var(--accent); }
+.scm-full-patch { justify-content: center; color: var(--primary); }
 
 /* Diff modal */
 .scm-diff {
@@ -456,7 +457,7 @@
   line-height: 1.45;
   max-height: 70vh;
   overflow: auto;
-  background: var(--bg-elevated, transparent);
+  background: var(--surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-2);

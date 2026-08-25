@@ -652,7 +652,7 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
                 <span className="desktop-picker-name"><strong>{t('desktop.fullScreen')}</strong></span>
               </button>
               {(info?.monitors ?? []).length > 1 && info?.monitors.map((m, i) => (
-                <button key={i} className="desktop-picker-item" onClick={() => pickSource({ mode: "screen", monitor: i, label: `${t('desktop.monitor')} ${i + 1}${m.primary ? " ★" : ""}` })}>
+                <button key={i} className="desktop-picker-item" onClick={() => pickSource({ mode: "screen", monitor: i, label: `${t('desktop.monitor')} ${i + 1}${m.primary ? " " : ""}` })}>
                   <span className="desktop-picker-icon"><MonitorIcon size={18} /></span>
                   <span className="desktop-picker-name"><strong>{t('desktop.monitor')} {i + 1}</strong></span>
                 </button>

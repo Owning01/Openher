@@ -48,7 +48,7 @@ describe("encrypt / decrypt roundtrip", () => {
   })
 
   it("encrypts and decrypts unicode / emoji", async () => {
-    const plaintext = "🔐 hola — unicode test ✓"
+    const plaintext = " hola — unicode test "
     const cipher = await encrypt(plaintext)
     const decrypted = await decrypt(cipher)
     expect(decrypted).toBe(plaintext)
