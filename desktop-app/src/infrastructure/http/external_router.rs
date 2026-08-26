@@ -32,9 +32,9 @@ fn defs() -> HashMap<&'static str, ExternalDef> {
     });
     m.insert("vioeditor", ExternalDef {
         dir: r"G:\Proyectos\17-vioeditor\aplicacion",
-        port: Some(5175),
-        url: Some("http://127.0.0.1:5175"),
-        dev_cmd: "pnpm exec vite --port 5175 --host 127.0.0.1",
+        port: Some(1420),
+        url: Some("http://127.0.0.1:1420"),
+        dev_cmd: "pnpm exec vite --port 1420 --host 127.0.0.1 --strictPort false",
     });
     m.insert("informes", ExternalDef {
         dir: r"G:\Proyectos\53plataforma-informes",
