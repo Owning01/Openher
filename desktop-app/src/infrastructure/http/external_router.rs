@@ -28,7 +28,7 @@ fn defs() -> HashMap<&'static str, ExternalDef> {
         dir: r"G:\Proyectos\open-design",
         port: Some(3000),
         url: Some("http://127.0.0.1:3000"),
-        dev_cmd: "pnpm exec tools-dev run web --web-port 3000 --daemon-port 3456",
+        dev_cmd: "pnpm tools-dev run web --web-port 3000 --daemon-port 3456",
     });
     m.insert("screenshots", ExternalDef {
         dir: r"G:\Proyectos\0 screenshots",
