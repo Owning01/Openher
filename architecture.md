@@ -45,7 +45,7 @@ opencode-remote-android/                         ← raíz, sin package.json ra�
 ├── desktop-app/        ← shell Windows portable (opencode-desktop.exe)
 │   └── src/{main,api,ptyx,fsx,gitx,...}.rs
 ├── opencode-stats/     ← lee opencode.db read-only → :8765 (crate propio)
-├── od-web/             ← VENDORIZADO nexu-io/open-design v0.19.2, SIN integración funcional
+├── (externo) G:/proyectos/open-design ← nexu-io/open-design on-demand (NO vendorizado)
 ├── Cargo.toml          ← workspace root: ["desktop-app","opencode-stats"]
 ├── build-desktop.ps1 / deploy-apk.ps1 / start-opencode-v2.bat / codemagic.yaml
 └── marketing/ · docs/ · scrum/ · .env (gitignored) · dist-desktop/ (build artifact)
@@ -56,12 +56,12 @@ opencode-remote-android/                         ← raíz, sin package.json ra�
 | `web/` | Frontend React 19 + Vite + TS + Capacitor. **El producto central** | Activo |
 | `desktop-app/` | Shell de escritorio Windows en Rust (wry + tiny_http) que embebe `web/dist` | Activo |
 | `opencode-stats/` | Server de estadísticas Rust sobre `opencode.db` read-only | Activo |
-| `od-web/` | Copia vendorizada de OpenDesign (proyecto ajeno), integración temprana | Vendored, aislado |
+| `open-design` (externo) | `G:/proyectos/open-design` — nexu-io/open-design, pestaña on-demand `◈ Open Design` (`/shell/design/*` + iframe, 0 MB en reposo) | Externo, no vendorizado |
 | `%SystemDrive%/` | **Basura**: jerarquía vacía por variable sin expandir en PowerShell | A eliminar |
 
 Workspace Cargo raíz: release con `strip + lto + codegen-units=1`. Sin `package.json`
-raíz: cada proyecto JS gestiona sus deps (web pnpm 10.32, od-web pnpm 10.33 aislado,
-Node 24 para od-web).
+raíz: cada proyecto JS gestiona sus deps (`web` pnpm 10.32, Node 24). `open-design` externo
+usa su propio workspace pnpm 10.33 aislado.
 
 ---
 
@@ -474,19 +474,17 @@ main.rs     server thread + ventana wry (close=exit(0), OPENCODE_STATS_HIDE_WIND
 
 ---
 
-## 5. `od-web/` — OpenDesign vendorizado
+## 5. OpenDesign — externo on-demand (ex `od-web/`)
 
-**Proyecto ajeno**: copia `github.com/nexu-io/open-design` v0.19.2 (Apache-2.0),
-vendorizada SIN `.git` propio (commit único `1af174e3`, ~12.8k archivos). Workspace
-pnpm aislado 10.33.2, Node 24, Next16+React18 (incompatible a propósito con React19+Vite).
+**Proyecto ajeno NO vendorizado**: `G:/proyectos/open-design` (`github.com/nexu-io/open-design`, Apache-2.0).
+Anteriormente vendorizado como `od-web/` v0.19.2 (~12.8k archivos, commit `1af174e3`), eliminado del repo.
+Workspace pnpm aislado 10.33.2, Node 24, Next 16 + React 18 (incompatible a propósito con React 19 + Vite del `web/`).
 
-- Contenido: `apps/web` (Studio chat+preview sandboxeada), `apps/desktop|daemon|
-  packaged|landing-page`, 16 packages (`host`, `dsh-runtime`, `plugin-runtime`,
-  `contracts`, `sidecar`…), `design-systems/` (150+ marcas), `skills/`, `plugins/`,
-  `clipper/`, `figma-plugin/`, `mocks/` (CLIs fake replay), `native/registry-core` napi.
-- Bin `od` en `apps/daemon/bin/od.mjs` (`RUNTIME_DATA_DIR/OD_DATA_DIR`).
-- Plan en `od-web/INTEGRATION.md` (port daemon Express→Rust, panel OD en desktop-app).
-  Hoy **sin conexión funcional**. NO tocar ni buildear como parte de este repo.
+- Contenido externo: `apps/web` (Studio), `apps/daemon` (Express + SQLite, bin `od`), `apps/desktop|packaged|landing-page`,
+  16 packages, `design-systems/` (150+ marcas), `skills/`, `plugins/`, `mocks/`, `native/registry-core` napi.
+- Ciclo de vida: desktop-app expone `/shell/design/status|start|stop|open` (probe `3000/3001/5173/7456`, spawn `pnpm tools-dev run web` en `G:/proyectos/open-design`,
+  kill al cerrar pestaña). La web lo muestra como `ShellPanelKind="design"` (`◈ Open Design`) en iframe on-demand — 0 MB en reposo.
+- Actualización: `git -C G:/proyectos/open-design pull && pnpm install` (fuera del repo). `.gitignore` ignora `/od-web/`.
 
 ---
 
