@@ -24,8 +24,8 @@ export const EXTERNAL_PROJECTS: ExternalProject[] = [
     title: "VioEditor",
     description: "Editor de video — Vite + Tauri",
     icon: "🎬",
-    port: 5175,
-    url: "http://127.0.0.1:5175",
+    port: 1420,
+    url: "http://127.0.0.1:1420",
     dir: "G:\\Proyectos\\17-vioeditor\\aplicacion",
   },
   {
