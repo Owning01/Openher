@@ -3,6 +3,7 @@
 //! Respeta regla FSD: no va en api.rs.
 
 use std::collections::HashMap;
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,6 +11,8 @@ use std::time::Duration;
 use tiny_http::{Method, Request, Response};
 
 use crate::state::{json_err, json_ok, AppState};
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Clone)]
 struct ExternalDef {
@@ -179,11 +182,12 @@ pub fn handle(
         let log_path = crate::state::data_dir().join(format!("external-{}.log", name));
         let _ = std::fs::create_dir_all(crate::state::data_dir());
         let log_file = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
-        // Spawn: manejar pnpm.cmd / flutter via cmd /c, redirigir a log si existe
+        // Spawn: sin ventana CMD (CREATE_NO_WINDOW), redirigir a log
         let mut child: std::process::Child = if cmd_str.starts_with("flutter") {
             let mut c = std::process::Command::new("cmd");
             c.args(["/c", cmd_str]);
             c.current_dir(&dir);
+            c.creation_flags(CREATE_NO_WINDOW);
             if let Some(f) = log_file {
                 // duplicar handle para stdout/stderr
                 if let Ok(cloned) = f.try_clone() {
@@ -202,6 +206,7 @@ pub fn handle(
             let mut c = std::process::Command::new("cmd");
             c.args(["/c", cmd_str]);
             c.current_dir(&dir);
+            c.creation_flags(CREATE_NO_WINDOW);
             if let Some(f) = log_file {
                 if let Ok(cloned) = f.try_clone() {
                     c.stdout(std::process::Stdio::from(cloned));
