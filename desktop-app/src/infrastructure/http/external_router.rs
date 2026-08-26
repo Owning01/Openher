@@ -175,31 +175,56 @@ pub fn handle(
             return Some(json_err(404, &format!("directorio no existe: {}", def.dir)));
         }
         let cmd_str = def.dev_cmd;
-        // Spawn: manejar pnpm.cmd / flutter via cmd /c
-        let child = if cmd_str.starts_with("flutter") {
+        // log file para debug (data/external-<name>.log)
+        let log_path = crate::state::data_dir().join(format!("external-{}.log", name));
+        let _ = std::fs::create_dir_all(crate::state::data_dir());
+        let log_file = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
+        // Spawn: manejar pnpm.cmd / flutter via cmd /c, redirigir a log si existe
+        let mut child: std::process::Child = if cmd_str.starts_with("flutter") {
             let mut c = std::process::Command::new("cmd");
             c.args(["/c", cmd_str]);
             c.current_dir(&dir);
-            // detach stdio para no bloquear
-            c.stdout(std::process::Stdio::null());
-            c.stderr(std::process::Stdio::null());
+            if let Some(f) = log_file {
+                // duplicar handle para stdout/stderr
+                if let Ok(cloned) = f.try_clone() {
+                    c.stdout(std::process::Stdio::from(cloned));
+                }
+                c.stderr(std::process::Stdio::from(f));
+            } else {
+                c.stdout(std::process::Stdio::null());
+                c.stderr(std::process::Stdio::null());
+            }
             match c.spawn() {
                 Ok(ch) => ch,
                 Err(e) => return Some(json_err(500, &e.to_string())),
             }
         } else {
-            // pnpm / npm : usar cmd /c para resolver .cmd
             let mut c = std::process::Command::new("cmd");
             c.args(["/c", cmd_str]);
             c.current_dir(&dir);
-            c.stdout(std::process::Stdio::null());
-            c.stderr(std::process::Stdio::null());
+            if let Some(f) = log_file {
+                if let Ok(cloned) = f.try_clone() {
+                    c.stdout(std::process::Stdio::from(cloned));
+                }
+                c.stderr(std::process::Stdio::from(f));
+            } else {
+                c.stdout(std::process::Stdio::null());
+                c.stderr(std::process::Stdio::null());
+            }
             match c.spawn() {
                 Ok(ch) => ch,
                 Err(e) => return Some(json_err(500, &e.to_string())),
             }
         };
         let pid = child.id();
+        // early exit check: si falla al instante (pnpm no encontrado, next no instalado), no quedarse en "iniciando"
+        std::thread::sleep(Duration::from_millis(900));
+        if let Ok(Some(status)) = child.try_wait() {
+            let code = status.code().unwrap_or(-1);
+            let log_tail = std::fs::read_to_string(crate::state::data_dir().join(format!("external-{}.log", name))).unwrap_or_default();
+            let tail = log_tail.chars().rev().take(800).collect::<String>().chars().rev().collect::<String>();
+            return Some(json_err(500, &format!("proceso salió inmediato (code {code}): {tail} | cmd: {cmd_str}")));
+        }
         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
         // guardar
         {
