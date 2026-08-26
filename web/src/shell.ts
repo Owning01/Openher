@@ -1,5 +1,6 @@
 // Cliente de la API de la shell (/shell/*) + utilidades del explorador.
-// Solo disponible cuando la app la sirve el exe de escritorio (mismo origen).
+// Originalmente solo mismo origen (:4848); ahora también Tailscale directo
+// (móvil deriva http://<tailscale-ip>:4848 del host de opencode).
 
 export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser" | "doc" | "design" | "quickchat"
 
@@ -89,35 +90,128 @@ export type ShellConfig = {
   quickchat_provider: string
   quickchat_model: string
   auto_opencode2?: boolean
+  opencode2_enabled?: boolean
+  opencode2_port?: number
+  opencode2_command?: string
 }
 
 let resolvedBase: string | null = null
+let resolvedBaseAt = 0
+const SHELL_TTL_MS = 30_000
+
+function toBase64(input: string): string {
+  const bytes = new TextEncoder().encode(input)
+  const binary = Array.from(bytes).map((b) => String.fromCodePoint(b)).join("")
+  return btoa(binary)
+}
+
+function shellAuthHeader(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem("opencode.remote.server")
+    if (!raw) return {}
+    const cfg = JSON.parse(raw) as { username?: string; password?: string }
+    if (cfg.username && cfg.password) {
+      return { Authorization: `Basic ${toBase64(`${cfg.username}:${cfg.password}`)}` }
+    }
+  } catch {}
+  return {}
+}
+
+function withShellAuth(headers: Record<string, string>, base: string): Record<string, string> {
+  if (!base) return headers
+  return { ...headers, ...shellAuthHeader() }
+}
+
+function shellRemoteOverride(): string | null {
+  try {
+    const v = localStorage.getItem("opencode.mobile.shellBase")
+    if (v && v.trim()) return v.trim().replace(/\/+$/, "")
+  } catch {}
+  return null
+}
+
+function deriveShellBaseFromServer(): string | null {
+  try {
+    const raw = localStorage.getItem("opencode.remote.server")
+    if (!raw) return null
+    const cfg = JSON.parse(raw) as { host?: string; port?: number }
+    if (!cfg.host) return null
+    let host = String(cfg.host).trim()
+    const schemeMatch = host.match(/^(https?):\/\//)
+    const scheme = schemeMatch ? schemeMatch[1] : "http"
+    if (schemeMatch) host = host.slice(schemeMatch[0].length)
+    host = host.split("/")[0]!.split(":")[0]!
+    if (!host || host === "localhost" || host === "127.0.0.1" || host === "::1") return null
+    return `${scheme}://${host}:4848`
+  } catch {
+    return null
+  }
+}
+
+async function probeShellBase(base: string, timeoutMs = 2000): Promise<boolean> {
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), timeoutMs)
+    const headers = withShellAuth({}, base)
+    const res = await fetch(`${base}/shell/health`, { cache: "no-store", signal: ctrl.signal, headers })
+    clearTimeout(t)
+    return res.ok
+  } catch {
+    return false
+  }
+}
 
 export async function resolveShellBase(): Promise<string> {
-  if (resolvedBase !== null) return resolvedBase
-  try {
-    const res = await fetch("/shell/health", { cache: "no-store" })
-    if (res.ok) {
-      resolvedBase = ""
-      return ""
-    }
-  } catch {}
-  try {
-    const res = await fetch("http://127.0.0.1:4848/shell/health", { cache: "no-store" })
-    if (res.ok) {
-      resolvedBase = "http://127.0.0.1:4848"
+  if (resolvedBase !== null && Date.now() - resolvedBaseAt < SHELL_TTL_MS) return resolvedBase
+  const override = shellRemoteOverride()
+  if (override) {
+    if (await probeShellBase(override)) {
+      resolvedBase = override
+      resolvedBaseAt = Date.now()
       return resolvedBase
     }
-  } catch {}
+  }
+  if (await probeShellBase("")) {
+    resolvedBase = ""
+    resolvedBaseAt = Date.now()
+    return ""
+  }
+  if (await probeShellBase("http://127.0.0.1:4848")) {
+    resolvedBase = "http://127.0.0.1:4848"
+    resolvedBaseAt = Date.now()
+    return resolvedBase
+  }
+  const derived = deriveShellBaseFromServer()
+  if (derived && derived !== "http://127.0.0.1:4848") {
+    if (await probeShellBase(derived)) {
+      resolvedBase = derived
+      resolvedBaseAt = Date.now()
+      return resolvedBase
+    }
+  }
   resolvedBase = ""
+  resolvedBaseAt = Date.now()
   return ""
+}
+
+export function invalidateShellBase() {
+  resolvedBase = null
+  resolvedBaseAt = 0
 }
 
 export async function shellAvailable(): Promise<boolean> {
   try {
     const base = await resolveShellBase()
-    const r = await fetch(`${base}/shell/health`, { cache: "no-store" })
-    return r.ok
+    if (base === "") {
+      try {
+        const r = await fetch("/shell/health", { cache: "no-store" })
+        if (r.ok) return true
+      } catch {}
+      const derived = deriveShellBaseFromServer()
+      if (derived && (await probeShellBase(derived))) return true
+      return false
+    }
+    return await probeShellBase(base)
   } catch {
     return false
   }
@@ -130,14 +224,17 @@ async function j<T>(res: Response): Promise<T> {
 
 const get = async <T>(url: string) => {
   const base = await resolveShellBase()
-  return fetch(`${base}${url}`).then(j<T>)
+  const headers = withShellAuth({}, base)
+  const h: Record<string, string> = { ...headers }
+  return fetch(`${base}${url}`, { headers: h }).then(j<T>)
 }
 
 const post = async <T>(url: string, body?: unknown) => {
   const base = await resolveShellBase()
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...withShellAuth({}, base) }
   return fetch(`${base}${url}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   }).then(j<T>)
 }
@@ -158,6 +255,16 @@ export const shell = {
     reveal: (path: string) => post<{ ok: boolean; path: string; is_dir: boolean }>("/shell/fs/reveal", { path }),
     execFile: (path: string) => post<{ ok: boolean; path: string }>("/shell/fs/exec", { path }),
     pickFolder: () => get<{ ok: boolean; path: string | null }>("/shell/fs/pick-folder"),
+    download: async (path: string): Promise<Blob> => {
+      const base = await resolveShellBase()
+      const headers: Record<string, string> = { ...withShellAuth({}, base) }
+      const res = await fetch(`${base}/shell/fs/download?path=${encodeURIComponent(path)}`, { headers })
+      if (!res.ok) {
+        const msg = (await res.json().catch(() => ({ error: res.statusText }))).error ?? res.statusText
+        throw new Error(String(msg))
+      }
+      return res.blob()
+    },
   },
   project: {
     serve: (path: string) => post<{
@@ -269,6 +376,12 @@ export const shell = {
   design: {
     status: () => get<{ running: boolean; url: string }>("/shell/design/status").catch(() => ({ running: false, url: "http://localhost:3000" } as any)),
     openExternal: (url: string) => post<{ ok: boolean }>("/shell/design/open", { url }).catch(() => ({ ok: false } as any)),
+  },
+  external: {
+    list: () => get<{ ok: boolean; items: Array<{ name: string; title: string; dir: string; port: number | null; url: string; running: boolean }> }>("/shell/external/list").catch(() => ({ ok: false, items: [] } as any)),
+    status: (name: string) => get<{ ok: boolean; name: string; running: boolean; url: string; dir: string; port: number | null }>(`/shell/external/${name}/status`).catch(() => ({ ok: false, running: false, url: "" } as any)),
+    start: (name: string) => post<{ ok: boolean; pid?: number; url?: string; already?: boolean }>(`/shell/external/${name}/start`).catch(() => ({ ok: false } as any)),
+    stop: (name: string) => post<{ ok: boolean }>(`/shell/external/${name}/stop`).catch(() => ({ ok: false } as any)),
   },
   browser: {
     open: (url: string, bounds: { x: number; y: number; w: number; h: number }) =>

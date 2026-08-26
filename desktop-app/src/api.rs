@@ -8,6 +8,50 @@ use tiny_http::{Header, Method, Request, Response, StatusCode};
 
 use crate::state::{json_err, json_ok, read_body, AppState};
 
+fn cors_headers() -> Vec<Header> {
+    vec![
+        Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap(),
+        Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap(),
+        Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept").unwrap(),
+        Header::from_bytes("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition, Authorization").unwrap(),
+        Header::from_bytes("Access-Control-Max-Age", "86400").unwrap(),
+    ]
+}
+
+fn is_loopback_host(req: &Request) -> bool {
+    for h in req.headers() {
+        if h.field.as_str().to_ascii_lowercase() == "host" {
+            let v = h.value.as_str().to_ascii_lowercase();
+            let host = v.split(':').next().unwrap_or(&v);
+            return host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "[::1]";
+        }
+    }
+    true
+}
+
+fn check_shell_auth(req: &Request, state: &AppState) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+    if is_loopback_host(req) {
+        return None;
+    }
+    let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+    if cfg.server.username.is_empty() && cfg.server.password.is_empty() {
+        return None;
+    }
+    let expected = format!("Basic {}", crate::state::base64_encode(format!("{}:{}", cfg.server.username, cfg.server.password).as_bytes()));
+    let got = req.headers().iter().find(|h| h.field.as_str().to_ascii_lowercase() == "authorization").map(|h| h.value.as_str().to_string()).unwrap_or_default();
+    if got == expected {
+        return None;
+    }
+    let mut r = Response::from_string(serde_json::json!({ "error": "unauthorized" }).to_string())
+        .with_status_code(StatusCode(401))
+        .with_header(Header::from_bytes("Content-Type", "application/json").unwrap())
+        .with_header(Header::from_bytes("WWW-Authenticate", "Basic realm=\"opencode-desktop\"").unwrap());
+    for h in cors_headers() {
+        r = r.with_header(h);
+    }
+    Some(r)
+}
+
 pub fn route(mut req: Request, state: Arc<AppState>) {
     let url = req.url().to_string();
     let method = req.method().clone();
@@ -21,6 +65,27 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             .map(|v| url_decode(&v))
             .unwrap_or_default()
     };
+
+    if method == Method::Options {
+        let origin = req.headers().iter().find(|h| h.field.as_str().to_ascii_lowercase() == "origin").map(|h| h.value.as_str().to_string()).unwrap_or_else(|| "*".to_string());
+        let req_headers = req.headers().iter().find(|h| h.field.as_str().to_ascii_lowercase() == "access-control-request-headers").map(|h| h.value.as_str().to_string()).unwrap_or_else(|| "Content-Type, Authorization, X-Requested-With".to_string());
+        let _ = req.respond(
+            Response::from_string("")
+                .with_status_code(StatusCode(204))
+                .with_header(Header::from_bytes("Access-Control-Allow-Origin", origin.as_bytes()).unwrap())
+                .with_header(Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap())
+                .with_header(Header::from_bytes("Access-Control-Allow-Headers", req_headers.as_bytes()).unwrap())
+                .with_header(Header::from_bytes("Access-Control-Max-Age", "86400").unwrap()),
+        );
+        return;
+    }
+
+    if path.starts_with("/shell/") {
+        if let Some(resp) = check_shell_auth(&req, &state) {
+            let _ = req.respond(resp);
+            return;
+        }
+    }
 
     if path == "/shell/health" {
         let body = serde_json::json!({
@@ -38,6 +103,16 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     if path.starts_with("/shell/git/") {
         if let Some(resp) =
             crate::infrastructure::http::scm_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+        {
+            let _ = req.respond(resp);
+            return;
+        }
+    }
+
+    // ============================== Proyectos externos on-demand (plugins)
+    if path.starts_with("/shell/external") {
+        if let Some(resp) =
+            crate::infrastructure::http::external_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
         {
             let _ = req.respond(resp);
             return;
@@ -157,6 +232,44 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             }
             Err(e) => {
                 let _ = req.respond(json_err(400, &e));
+            }
+        }
+        return;
+    }
+    if path == "/shell/fs/download" && method == Method::Get {
+        let p = q("path");
+        if p.is_empty() {
+            let _ = req.respond(json_err(400, "falta path"));
+            return;
+        }
+        let path_buf = Path::new(&p).to_path_buf();
+        if !path_buf.exists() {
+            let _ = req.respond(json_err(404, "no existe"));
+            return;
+        }
+        if path_buf.is_dir() {
+            let _ = req.respond(json_err(400, "es directorio, no archivo"));
+            return;
+        }
+        let mime = crate::common::mime_for(&path_buf);
+        let file_name = path_buf.file_name().and_then(|n| n.to_str()).unwrap_or("download").to_string();
+        let sanitized = file_name.replace('"', "_");
+        match std::fs::read(&path_buf) {
+            Ok(bytes) => {
+                let len = bytes.len().to_string();
+                let cd = format!("attachment; filename=\"{}\"", sanitized);
+                let _ = req.respond(
+                    Response::from_data(bytes)
+                        .with_status_code(StatusCode(200))
+                        .with_header(Header::from_bytes("Content-Type", mime).unwrap())
+                        .with_header(Header::from_bytes("Content-Length", len.as_bytes()).unwrap())
+                        .with_header(Header::from_bytes("Content-Disposition", cd.as_bytes()).unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Expose-Headers", "Content-Disposition, Content-Length, Content-Type").unwrap()),
+                );
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(500, &e.to_string()));
             }
         }
         return;
@@ -1257,7 +1370,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             let _ = req.respond(json_err(400, "Falta parámetro url (?url=)"));
             return;
         }
-        let target_url = if !url_param.starts_with("http://") && !url_param.starts_with("https://") {
+        let mut target_url = if !url_param.starts_with("http://") && !url_param.starts_with("https://") {
             format!("https://{url_param}")
         } else {
             url_param
@@ -1266,6 +1379,15 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         if !target_url.starts_with("http://") && !target_url.starts_with("https://") {
             let _ = req.respond(json_err(400, "URL debe ser http(s)"));
             return;
+        }
+        // 0.0.0.0 no es ruteable para el cliente; el server bindea en 0.0.0.0 pero el fetch debe ir a 127.0.0.1
+        if target_url.contains("://0.0.0.0:") {
+            target_url = target_url.replacen("://0.0.0.0:", "://127.0.0.1:", 1);
+        } else if target_url.contains("://[::]:") {
+            target_url = target_url.replacen("://[::]:", "://127.0.0.1:", 1);
+        } else if target_url.contains("://::1:") || target_url.contains("://[::1]:") {
+            // ::1 es loopback pero ureq+Windows puede fallar con corchetes; normalizar a 127.0.0.1
+            target_url = target_url.replacen("://::1:", "://127.0.0.1:", 1).replacen("://[::1]:", "://127.0.0.1:", 1);
         }
         // Leer body crudo si hay (para POST/PUT/PATCH que vienen via proxy)
         let mut fwd_body: Vec<u8> = Vec::new();
@@ -1785,5 +1907,14 @@ fn merge_config(cfg: &mut crate::state::ShellConfig, patch: &serde_json::Value) 
     }
     if let Some(b) = patch.get("auto_opencode2").and_then(|v| v.as_bool()) {
         cfg.auto_opencode2 = b;
+    }
+    if let Some(b) = patch.get("opencode2_enabled").and_then(|v| v.as_bool()) {
+        cfg.opencode2_enabled = b;
+    }
+    if let Some(p) = patch.get("opencode2_port").and_then(|v| v.as_u64()) {
+        cfg.opencode2_port = p as u16;
+    }
+    if let Some(s) = patch.get("opencode2_command").and_then(|v| v.as_str()) {
+        cfg.opencode2_command = s.to_string();
     }
 }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, useCallback, useRef, memo } from "react"
+import { lazy, Suspense, useEffect, useMemo, useState, useCallback, useRef, memo, useSyncExternalStore } from "react"
 import { api } from "./api"
 import { I18nProvider, useT, normalizeLanguage } from "./i18n-context"
 import { languageOptions } from "./i18n"
@@ -63,7 +63,12 @@ import { TabBar } from "./components/TabBar"
 import { transferTerminalTab, killTerminalPty } from "./utils/terminalStore"
 import type { ServerProfile } from "./types"
 import { useVisualSelection, formatSelectionForPrompt } from "./hooks/useVisualSelection"
-import { pluginHost, PluginSlot } from "./plugins"
+import { pluginHost, PluginSlot, tabRegistry } from "./plugins"
+import { useVirtualTabs } from "./hooks/useVirtualTabs"
+import { useSidebarPrefs } from "./hooks/useSidebarPrefs"
+import { PluginsModal } from "./components/PluginsModal"
+import { ExternalIframePanel } from "./features/external-plugins/ExternalIframePanel"
+import { EXTERNAL_PROJECTS } from "./features/external-plugins/config"
 
 const DESKTOP_STATE_KEY = "opencode.mobile.desktopState"
 
@@ -104,8 +109,9 @@ const PANEL_SUSPENSE_FALLBACK = (
 )
 const SourceControlPanel = lazyRetry(() => import("./components/SourceControlPanel").then((m) => ({ default: m.SourceControlPanel })))
 const LearningPage = lazyRetry(() => import("./features/learning/LearningPage").then((m) => ({ default: m.default })))
+const PCFilesPanel = lazyRetry(() => import("./features/pc-files/PCFilesPanel").then((m) => ({ default: m.PCFilesPanel })))
 
-type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm"
+type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm" | "pcFiles"
 
 let panelIdCounter = 0
 function genPanelId(): string {
@@ -126,6 +132,8 @@ type DesktopState = {
   terminalHeight?: number
   lastClosedPanel?: { index: number; kind: ShellPanelKind; sessionId: string | null } | null
   tabStacks?: Array<Array<string>>
+  rightSidebarWidth?: number
+  rightSidebarCollapsed?: boolean
 }
 
 function loadDesktopState(fallbackSessionID: string | null): DesktopState {
@@ -133,6 +141,8 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
     layout: { cols: 1, rows: 1, sessions: [fallbackSessionID], panelKinds: ["session"], panelIds: [genPanelId()], colSizes: [null], rowSizes: [null] } as DesktopLayout,
     sidebarWidth: 340,
     sidebarCollapsed: false,
+    rightSidebarWidth: 340,
+    rightSidebarCollapsed: true,
     activity: "sessions" as DesktopActivity,
     activePanel: 0,
     desktopDiffOpen: false,
@@ -192,25 +202,64 @@ function loadDesktopState(fallbackSessionID: string | null): DesktopState {
       for (const k of Object.keys(editorTabStacks)) {
         if (Number(k) >= total) { delete editorTabStacks[Number(k)]; delete editorActive[Number(k)] }
       }
+      // Migrar browserTabUrls + stats activity → tab
+      const rawBrowserTabUrls = (layout as any).browserTabUrls as Record<string, string> | undefined
+      const browserTabUrls: Record<string, string> = rawBrowserTabUrls && typeof rawBrowserTabUrls === "object" ? { ...rawBrowserTabUrls } : {}
+      // Si activity era stats, migrar a tab __stats__ en panel 0
+      let migratedTabStacks = finalTabStacks
+      const rawActivity = (raw as any)?.activity as string | undefined
+      if (rawActivity === "stats" || rawActivity === "quickchat") {
+        // stats → tab, quickchat → right sidebar (no tab)
+        if (rawActivity === "stats") {
+          const hasStats = migratedTabStacks.some((s) => s.includes("__stats__"))
+          if (!hasStats) {
+            migratedTabStacks = migratedTabStacks.map((s, idx) => idx === 0 ? [...s, "__stats__"] : [...s])
+            if (migratedTabStacks[0] && !migratedTabStacks[0].includes("__stats__")) migratedTabStacks[0].push("__stats__")
+          }
+        }
+      }
+      // Migrar panelKind stats/browser legacy → tabs + limpiar kind a session si queda vacío
+      let migratedSessions = layout.sessions.map((s: any) => (typeof s === "string" ? s : null)) as Array<string | null>
+      let migratedKinds = [...kinds] as Array<ShellPanelKind | "editor">
+      for (let idx = 0; idx < total; idx++) {
+        if (migratedKinds[idx] === "stats" as any) {
+          if (!migratedTabStacks[idx]?.includes("__stats__")) {
+            migratedTabStacks[idx] = [...(migratedTabStacks[idx] ?? []), "__stats__"]
+          }
+          migratedKinds[idx] = "session"
+          if (!migratedSessions[idx]) migratedSessions[idx] = "__stats__"
+        }
+        if (migratedKinds[idx] === "browser" as any) {
+          const legacyUrl = (layout as any).panelBrowserUrls?.[String(idx)] ?? (layout as any).panelBrowserUrls?.[idx] ?? "https://www.google.com"
+          const bId = `browser:${Date.now().toString(36)}-${idx}-${Math.random().toString(36).slice(2, 4)}`
+          browserTabUrls[bId] = String(legacyUrl)
+          migratedTabStacks[idx] = [...(migratedTabStacks[idx] ?? []), bId]
+          migratedKinds[idx] = "session"
+          if (!migratedSessions[idx]) migratedSessions[idx] = bId
+        }
+      }
       return {
         layout: {
           cols: layout.cols,
           rows: layout.rows,
-          sessions: layout.sessions.map((s: any) => (typeof s === "string" ? s : null)),
-          panelKinds: kinds as Array<ShellPanelKind | "editor">,
+          sessions: migratedSessions,
+          panelKinds: migratedKinds,
           panelIds,
           panelEditorTabStacks: editorTabStacks,
           panelEditorActive: editorActive,
           // compat: mantener panelEditorPaths para lectores que aún lo usan
           panelEditorPaths: rawEditorPaths,
           panelBrowserUrls: (layout as any).panelBrowserUrls,
+          browserTabUrls,
           colSizes: layout.cols === 1 ? [null] : (Array.isArray(layout.colSizes) && layout.colSizes.length === layout.cols ? layout.colSizes : new Array(layout.cols).fill(null)),
           rowSizes: layout.rows === 1 ? [null] : (Array.isArray(layout.rowSizes) && layout.rowSizes.length === layout.rows ? layout.rowSizes : new Array(layout.rows).fill(null)),
         },
-        tabStacks: finalTabStacks,
+        tabStacks: migratedTabStacks,
         sidebarWidth: Math.max(200, Math.min(480, raw?.sidebarWidth ?? 340)),
         sidebarCollapsed: !!raw?.sidebarCollapsed,
-        activity: (["sessions", "explorer", "stats", "kanban", "config", "design"].includes(raw?.activity ?? "") ? raw!.activity! : "sessions") as DesktopActivity,
+        rightSidebarWidth: Math.max(250, Math.min(480, (raw as any)?.rightSidebarWidth ?? 340)),
+        rightSidebarCollapsed: (raw as any)?.rightSidebarCollapsed !== false,
+        activity: (["sessions", "explorer", "kanban", "config", "design"].includes(rawActivity === "quickchat" || rawActivity === "stats" ? "sessions" : rawActivity ?? "") ? (rawActivity === "quickchat" || rawActivity === "stats" ? "sessions" as DesktopActivity : raw!.activity! as DesktopActivity) : "sessions") as DesktopActivity,
         activePanel: typeof raw?.activePanel === "number" ? raw.activePanel : 0,
         desktopDiffOpen: !!raw?.desktopDiffOpen,
         desktopDiffWidth: Math.max(280, Math.min(800, raw?.desktopDiffWidth ?? 440)),
@@ -296,12 +345,10 @@ const ShellPanelCell = memo(function ShellPanelCell({
           }
           const payload = parseDragPayload(raw)
           if (payload.kind === "panel") {
-            if (payload.idx !== index) {
-              if (zone === "center") {
-                onSwapPanels(payload.idx, index)
-              } else {
-                onSplitSession(index, zone, raw)
-              }
+            if (zone === "center") {
+              if (payload.idx !== index) onSwapPanels(payload.idx, index)
+            } else {
+              onSplitSession(index, zone, raw)
             }
           } else if (payload.kind === "session") {
             onSplitSession(index, zone, payload.id)
@@ -428,6 +475,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const { theme, setTheme } = useTheme()
   const isDesktop = useIsDesktop()
+  const pluginTabs = useSyncExternalStore(tabRegistry.subscribe, tabRegistry.getSnapshot, tabRegistry.getSnapshot)
   const handleToggleLightMode = useCallback(() => {
     const isLight = document.documentElement.getAttribute("data-theme") === "light"
     setTheme(isLight ? "dark" : "light")
@@ -711,6 +759,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   // ===== Feature: Theme Creator =====
   const [showThemeCreator, setShowThemeCreator] = useState(false)
+  const [showPluginsModal, setShowPluginsModal] = useState(false)
 
   // ===== Feature: Favorites Manager =====
   const [showFavoritesManager, setShowFavoritesManager] = useState(false)
@@ -1406,7 +1455,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
   }, [])
 
-  // Auto-abrir opencode2 en terminal al iniciar (si está activado en Ajustes > Inicio)
+  // Auto-abrir opencode2 en terminal al iniciar (si está activado en Ajustes > Inicio).
   useEffect(() => {
     if (!(window as any).__OPENCODE_DESKTOP__) return
     let cancelled = false
@@ -1421,35 +1470,20 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         } catch {}
       }
       if (!should || cancelled) return
-      try { sessionStorage.setItem("opencode.auto_opencode2.pending", "1") } catch {}
-      // Esperar a que el grid esté montado
-      await new Promise(r => setTimeout(r, 1200))
+      const { setPendingAutoOpencode2 } = await import("./utils/terminalStore")
+      setPendingAutoOpencode2(true)
+      await new Promise(r => setTimeout(r, 700))
       if (cancelled) return
-      // Crear la terminal via el mismo flujo que el botón Terminal, y marcarla para auto-enviar
-      const { shell } = await import("./shell")
-      // Crear PTY real y guardar marca para que SingleTerminal lo ejecute
       try { sessionStorage.setItem("opencode.auto_opencode2.fire", "1") } catch {}
       window.dispatchEvent(new CustomEvent("opencode:auto-opencode2:create"))
-      // Tras crear, enviar opencode2 por WS/pty al tab recién creado
-      setTimeout(async () => {
-        if (cancelled) return
-        try {
-          // Buscar el tab recién creado (empieza con terminal:term-auto)
-          const raw = localStorage.getItem("opencode.mobile.desktopState")
-          if (!raw) return
-          const st = JSON.parse(raw) as any
-          const stacks: string[][] = st?.tabStacks ?? st?.layout?.sessions ?? []
-          let targetTab: string | null = null
-          for (const stack of stacks) for (const id of (stack ?? [])) if (String(id).startsWith("terminal:")) targetTab = String(id)
-          if (!targetTab) return
-          const ptyId = targetTab.replace(/^terminal[:\-]/, "")
-          const write = (data: string) => shell.pty.write(ptyId, data).catch(() => {})
-          // Dar tiempo a que el PTY conecte
-          setTimeout(() => write("opencode2\r"), 900)
-        } catch {}
-      }, 900)
+      await new Promise(r => setTimeout(r, 1200))
+      if (cancelled) return
+      const { hasPendingAutoOpencode2 } = await import("./utils/terminalStore")
+      if (!hasPendingAutoOpencode2()) return
+      try { sessionStorage.setItem("opencode.auto_opencode2.fire", "1") } catch {}
+      window.dispatchEvent(new CustomEvent("opencode:auto-opencode2:create"))
     }
-    const t = setTimeout(check, 900)
+    const t = setTimeout(check, 700)
     return () => { cancelled = true; clearTimeout(t) }
   }, [])
 
@@ -1463,11 +1497,22 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   }, [])
   const sidebarWidth = desktopState.sidebarWidth
   const sidebarCollapsed = desktopState.sidebarCollapsed
+  const rightSidebarWidth = desktopState.rightSidebarWidth ?? 340
+  const rightSidebarCollapsed = desktopState.rightSidebarCollapsed ?? true
+  // Rail personalizable: posición (izq/der/arriba) + botones ocultos (Ajustes > Sistema)
+  const { prefs: sidebarPrefs } = useSidebarPrefs()
   const activity = desktopState.activity
   const setActivity = useCallback((a: DesktopActivity) => setDesktopState((prev) => ({ ...prev, activity: a })), [])
   const setSidebarWidth = useCallback((w: number) => setDesktopState((prev) => ({ ...prev, sidebarWidth: w })), [])
   const setSidebarCollapsed = useCallback((collapsed: boolean | ((v: boolean) => boolean)) => {
     const apply = () => setDesktopState((prev) => ({ ...prev, sidebarCollapsed: typeof collapsed === "function" ? collapsed(prev.sidebarCollapsed) : collapsed }))
+    const doc: any = document
+    if (doc.startViewTransition) doc.startViewTransition(apply)
+    else apply()
+  }, [])
+  const setRightSidebarWidth = useCallback((w: number) => setDesktopState((prev) => ({ ...prev, rightSidebarWidth: w })), [])
+  const setRightSidebarCollapsed = useCallback((collapsed: boolean | ((v: boolean) => boolean)) => {
+    const apply = () => setDesktopState((prev) => ({ ...prev, rightSidebarCollapsed: typeof collapsed === "function" ? (collapsed as any)(prev.rightSidebarCollapsed ?? true) : collapsed }))
     const doc: any = document
     if (doc.startViewTransition) doc.startViewTransition(apply)
     else apply()
@@ -1490,6 +1535,17 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     if (tabId && tabId.startsWith("terminal")) {
       const ptyId = tabId.replace(/^terminal[:\-]/, "")
       killTerminalPty(ptyId)
+    }
+    if (tabId && tabId.startsWith("browser:")) {
+      setDesktopLayout((prev) => {
+        const next = { ...(prev.browserTabUrls ?? {}) }
+        delete next[tabId]
+        return { ...prev, browserTabUrls: next }
+      })
+    }
+    // Limpieza genérica virtual tabs (__learning__/__design__/__kanban__/__stats__/plugin:)
+    if (tabId && (tabId.startsWith("__") || tabId.startsWith("plugin:"))) {
+      // No hay estado externo que limpiar además del tabStack; el placeholder se encarga
     }
     const wasActive = tabId ? desktopLayout.sessions[panelIndex] === tabId : false
     setTabStacks((prev) => {
@@ -1521,6 +1577,36 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       return next
     })
   }, [setTabStacks])
+
+  // Mover un tab a OTRO panel (drag entre barras de pestañas). Las terminales
+  // conservan su PTY: rememberTerminalPty indexa por tab id, no por panel.
+  const transferTab = useCallback((fromPanel: number, fromIndex: number, toPanel: number, toIndex: number) => {
+    if (fromPanel === toPanel) {
+      moveTab(fromPanel, fromIndex, toIndex)
+      return
+    }
+    const tabId = tabStacks?.[fromPanel]?.[fromIndex]
+    if (!tabId) return
+    const remainingFrom = (tabStacks?.[fromPanel] ?? []).filter((_, k) => k !== fromIndex)
+    setTabStacks((prev) => {
+      const next = prev.map((s) => [...s])
+      if (!next[fromPanel]) return next
+      next[fromPanel] = next[fromPanel].filter((_, k) => k !== fromIndex)
+      while (next.length <= toPanel) next.push([])
+      const at = Math.max(0, Math.min(toIndex, next[toPanel].length))
+      next[toPanel] = [...next[toPanel].slice(0, at), tabId, ...next[toPanel].slice(at)]
+      return next
+    })
+    setDesktopLayout((prev) => {
+      const sessions = [...prev.sessions]
+      const kinds = [...prev.panelKinds] as Array<ShellPanelKind | "editor">
+      sessions[fromPanel] = remainingFrom.length > 0 ? sessions[fromPanel] : null
+      sessions[toPanel] = tabId
+      kinds[toPanel] = "session"
+      return { ...prev, sessions, panelKinds: kinds }
+    })
+    setActivePanel(toPanel)
+  }, [tabStacks, moveTab, setTabStacks, setDesktopLayout])
   const [activePanel, setActivePanel] = useState(0)
   const [maximizedPanel, setMaximizedPanel] = useState<number | null>(null)
   // Refs para resize fluido: durante el drag se muta el DOM directamente
@@ -1547,6 +1633,95 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }, 300)
     return () => clearTimeout(id)
   }, [desktopState, isDesktop, activePanel, desktopDiffOpen, desktopDiffWidth, showTerminal, terminalDocked, terminalHeight])
+
+  // Helpers: abrir stats/browser/plugin como tab unificado
+  const openStatsAsTab = useCallback((targetPanel?: number) => {
+    const idx = targetPanel ?? Math.min(activePanel, Math.max(0, desktopLayout.sessions.length - 1))
+    // Si ya existe en algún panel, enfocarlo
+    const existingPanel = tabStacks?.findIndex((s) => s.includes("__stats__"))
+    if (existingPanel !== undefined && existingPanel >= 0) {
+      const tabIdx = tabStacks![existingPanel]!.indexOf("__stats__")
+      if (tabIdx >= 0) {
+        setDesktopLayout((prev) => {
+          const sessions = [...prev.sessions]
+          sessions[existingPanel] = "__stats__"
+          return { ...prev, sessions }
+        })
+        setActivePanel(existingPanel)
+        return
+      }
+    }
+    setTabStacks((prev) => {
+      const next = (prev ?? []).map((s) => [...s])
+      while (next.length <= idx) next.push([])
+      if (!next[idx].includes("__stats__")) next[idx] = [...next[idx], "__stats__"]
+      return next
+    })
+    setDesktopLayout((prev) => {
+      const sessions = [...prev.sessions]
+      while (sessions.length <= idx) sessions.push(null)
+      sessions[idx] = "__stats__"
+      return { ...prev, sessions }
+    })
+    setActivePanel(idx)
+  }, [activePanel, desktopLayout.sessions.length, tabStacks, setTabStacks, setDesktopLayout])
+
+  const openBrowserAsTab = useCallback((url: string, targetPanel?: number) => {
+    const idx = targetPanel ?? Math.min(activePanel, Math.max(0, desktopLayout.sessions.length - 1))
+    const tabId = `browser:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    setDesktopLayout((prev) => ({
+      ...prev,
+      browserTabUrls: { ...(prev.browserTabUrls ?? {}), [tabId]: url },
+    }))
+    setTabStacks((prev) => {
+      const next = (prev ?? []).map((s) => [...s])
+      while (next.length <= idx) next.push([])
+      next[idx] = [...next[idx], tabId]
+      return next
+    })
+    setDesktopLayout((prev) => {
+      const sessions = [...prev.sessions]
+      while (sessions.length <= idx) sessions.push(null)
+      sessions[idx] = tabId
+      return { ...prev, sessions, browserTabUrls: { ...(prev.browserTabUrls ?? {}), [tabId]: url } }
+    })
+    setActivePanel(idx)
+  }, [activePanel, desktopLayout.sessions.length, setTabStacks, setDesktopLayout])
+
+  const openPluginAsTab = useCallback((pluginKey: string, targetPanel?: number) => {
+    const tabId = `plugin:${pluginKey}`
+    const idx = targetPanel ?? Math.min(activePanel, Math.max(0, desktopLayout.sessions.length - 1))
+    const existingPanel = tabStacks?.findIndex((s) => s.includes(tabId))
+    if (existingPanel !== undefined && existingPanel >= 0) {
+      const tabIdx = tabStacks![existingPanel]!.indexOf(tabId)
+      if (tabIdx >= 0) {
+        setDesktopLayout((prev) => {
+          const sessions = [...prev.sessions]
+          sessions[existingPanel] = tabId
+          return { ...prev, sessions }
+        })
+        setActivePanel(existingPanel)
+        return
+      }
+    }
+    setTabStacks((prev) => {
+      const next = (prev ?? []).map((s) => [...s])
+      while (next.length <= idx) next.push([])
+      if (!next[idx].includes(tabId)) next[idx] = [...next[idx], tabId]
+      return next
+    })
+    setDesktopLayout((prev) => {
+      const sessions = [...prev.sessions]
+      while (sessions.length <= idx) sessions.push(null)
+      sessions[idx] = tabId
+      return { ...prev, sessions }
+    })
+    setActivePanel(idx)
+  }, [activePanel, desktopLayout.sessions.length, tabStacks, setTabStacks, setDesktopLayout])
+
+  const openExternalProject = useCallback((name: string) => {
+    openPluginAsTab(`external:${name}`)
+  }, [openPluginAsTab])
 
   const openInPanel = useCallback((index: number, id: string) => {
     setDesktopLayout((prev) => {
@@ -1634,7 +1809,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     const stack = tabStacks?.[panelIndex]
     if (!stack || tabIndex < 0 || tabIndex >= stack.length) return
     const id = stack[tabIndex]
-    if (id.startsWith("terminal")) {
+    // Virtual tabs: stats / browser / plugin / terminal → direct switch, no dedup across panels needed beyond keeping stack
+    if (id.startsWith("terminal") || id.startsWith("browser:") || id === "__stats__" || id.startsWith("plugin:")) {
       setDesktopLayout((prev) => {
         const sessions = [...prev.sessions]
         sessions[panelIndex] = id
@@ -1668,31 +1844,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setActivePanel(panelIndex)
   }, [setTabStacks])
 
-  // Listener para auto-crear terminal con opencode2 al inicio
+  // Listener para auto-crear terminal con opencode2 al inicio (SingleTerminal envía el comando vía pending)
   useEffect(() => {
     const h = () => {
       let fire = false
       try { fire = sessionStorage.getItem("opencode.auto_opencode2.fire") === "1" } catch {}
       if (!fire) return
       try { sessionStorage.removeItem("opencode.auto_opencode2.fire") } catch {}
-      // Crear tab exactamente como addTerminalToPanel pero en panel 0
-      const idx = 0
-      addTerminalToPanel(idx)
-      // El siguiente tick: escribir opencode2 en ese PTY (lo hace el efecto de arriba con timeout)
-      setTimeout(async () => {
-        try {
-          const raw = localStorage.getItem(DESKTOP_STATE_KEY)
-          const st = raw ? JSON.parse(raw) as any : null
-          const stacks: string[][] = st?.tabStacks ?? []
-          let last: string | null = null
-          for (const s of stacks) for (const id of (s ?? [])) if (String(id).startsWith("terminal:")) last = String(id)
-          // Fallback: buscar en DOM no confiable, mejor usar el tabStacks actual via timeout extra
-          if (!last) return
-          const ptyId = last.replace(/^terminal[:\-]/, "")
-          const { shell } = await import("./shell")
-          setTimeout(() => shell.pty.write(ptyId, "opencode2\r").catch(() => {}), 900)
-        } catch {}
-      }, 600)
+      addTerminalToPanel(0)
     }
     window.addEventListener("opencode:auto-opencode2:create", h as any)
     return () => window.removeEventListener("opencode:auto-opencode2:create", h as any)
@@ -2246,6 +2405,24 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     setActivePanel(to)
   }, [setDesktopLayout, setTabStacks])
 
+  // Plantilla del grid del shell según posición del rail — única fuente de verdad
+  // (inline style inicial + resizers deben usar esto para no divergir por posición).
+  const buildGridTemplate = useCallback((overrides?: { sidebarW?: number; rightW?: number }) => {
+    const activityCol = "calc(48px * var(--ui-scale, 1))"
+    const s = sidebarCollapsed ? "0px" : `calc(${overrides?.sidebarW ?? sidebarWidth}px * var(--ui-scale, 1))`
+    const r = rightSidebarCollapsed ? "0px" : `calc(${overrides?.rightW ?? rightSidebarWidth}px * var(--ui-scale, 1))`
+    const diff = desktopDiffOpen ? ` calc(${desktopDiffWidth}px * var(--ui-scale, 1))` : ""
+    if (sidebarPrefs.position === "top") {
+      return { gridTemplateColumns: `${s} minmax(0, 1fr) ${r}${diff}`, gridTemplateRows: "auto minmax(0, 1fr)" }
+    }
+    if (sidebarPrefs.position === "right") {
+      // order:10 (CSS) manda el rail a la última columna
+      return { gridTemplateColumns: `${s} minmax(0, 1fr) ${r}${diff} ${activityCol}` }
+    }
+    return { gridTemplateColumns: `${activityCol} ${s} minmax(0, 1fr) ${r}${diff}` }
+  }, [sidebarPrefs.position, sidebarCollapsed, sidebarWidth, rightSidebarCollapsed, rightSidebarWidth, desktopDiffOpen, desktopDiffWidth])
+  const shellGridStyle = useMemo(() => (isDesktop ? buildGridTemplate() : undefined), [isDesktop, buildGridTemplate])
+
   const startSidebarResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     // No bloquear la scrollbar nativa: el resizer de 4px ocupa el borde derecho
     // [right-4, right], la scrollbar ocupa [right-12, right]. Dejar 8px centrales
@@ -2263,7 +2440,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     document.body.style.userSelect = "none"
     document.body.style.cursor = "col-resize"
     const apply = (w: number) => {
-      if (shellRef.current) shellRef.current.style.gridTemplateColumns = `calc(48px * var(--ui-scale, 1)) calc(${w}px * var(--ui-scale, 1)) minmax(0, 1fr)${desktopDiffOpen ? ` calc(${desktopDiffWidth}px * var(--ui-scale, 1))` : ""}`
+      if (shellRef.current) {
+        Object.assign(shellRef.current.style, buildGridTemplate({ sidebarW: w }))
+      }
     }
     const onMove = (ev: PointerEvent) => {
       lastW = Math.max(200, Math.min(480, startWidth + (ev.clientX - startX)))
@@ -2281,7 +2460,44 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
     }
     window.addEventListener("pointermove", onMove)
     window.addEventListener("pointerup", onUp)
-  }, [sidebarWidth, setSidebarWidth, desktopDiffOpen, desktopDiffWidth])
+  }, [sidebarWidth, setSidebarWidth, buildGridTemplate])
+
+  const startRightSidebarResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const sidebarEl = (e.currentTarget as HTMLElement).closest(".app-desktop-sidebar--right") as HTMLElement | null
+    const scrollEl = (sidebarEl?.querySelector(".desktop-sidebar-body") ?? sidebarEl?.querySelector(".panel.sessions")) as HTMLElement | null
+    if (scrollEl && scrollEl.scrollHeight > scrollEl.clientHeight) {
+      const r = scrollEl.getBoundingClientRect()
+      if (e.clientX >= r.left + 4 && e.clientX < r.left + 14 && e.clientY >= r.top && e.clientY <= r.bottom) return
+    }
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = rightSidebarWidth
+    let lastW = rightSidebarWidth
+    document.body.style.userSelect = "none"
+    document.body.style.cursor = "col-resize"
+    const apply = (w: number) => {
+      if (shellRef.current) {
+        Object.assign(shellRef.current.style, buildGridTemplate({ rightW: w }))
+      }
+    }
+    const onMove = (ev: PointerEvent) => {
+      // dragging left reduces width
+      lastW = Math.max(250, Math.min(480, startWidth - (ev.clientX - startX)))
+      apply(lastW)
+    }
+    let committed = false
+    const onUp = () => {
+      if (committed) return
+      committed = true
+      document.body.style.userSelect = ""
+      document.body.style.cursor = ""
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      setRightSidebarWidth(lastW)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+  }, [rightSidebarWidth, setRightSidebarWidth, buildGridTemplate])
 
   // Atajos de escritorio (splits/sidebar/layouts/tabs) — solo desktop
   useDesktopShortcuts({
@@ -2815,134 +3031,32 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   const handleOpenBrowser = useCallback((url: string) => {
     if (isDesktop) {
-      const existingBrowserIdx = desktopLayout.panelKinds.findIndex((k) => k === "browser")
-      if (existingBrowserIdx >= 0) {
+      // Si ya hay un browser tab, navegarlo en lugar de abrir uno nuevo
+      const allBrowserTabs: Array<{ panelIdx: number; tabId: string }> = []
+      tabStacks?.forEach((stack, pIdx) => {
+        stack.forEach((id) => { if (id.startsWith("browser:")) allBrowserTabs.push({ panelIdx: pIdx, tabId: id }) })
+      })
+      if (allBrowserTabs.length > 0) {
+        const first = allBrowserTabs[0]!
         setDesktopLayout((prev) => ({
           ...prev,
-          panelBrowserUrls: { ...(prev.panelBrowserUrls ?? {}), [existingBrowserIdx]: url },
+          browserTabUrls: { ...(prev.browserTabUrls ?? {}), [first.tabId]: url },
         }))
-        setActivePanel(existingBrowserIdx)
+        setDesktopLayout((prev) => {
+          const sessions = [...prev.sessions]
+          sessions[first.panelIdx] = first.tabId
+          return { ...prev, sessions }
+        })
+        setActivePanel(first.panelIdx)
         return
       }
-
-      const hasActiveSession = desktopLayout.sessions.some(Boolean)
-      if (hasActiveSession) {
-        if (desktopLayout.cols === 1) {
-          setDesktopLayout((prev) => ({
-            ...prev,
-            cols: 2,
-            colSizes: [null, null],
-            panelKinds: [prev.panelKinds[0] ?? "session", "browser"],
-            panelBrowserUrls: { ...(prev.panelBrowserUrls ?? {}), 1: url },
-          }))
-          setActivePanel(1)
-        } else {
-          const targetPanel = activePanel === 0 ? 1 : activePanel
-          setDesktopLayout((prev) => ({
-            ...prev,
-            panelKinds: prev.panelKinds.map((k, idx) => (idx === targetPanel ? "browser" : k)),
-            panelBrowserUrls: { ...(prev.panelBrowserUrls ?? {}), [targetPanel]: url },
-          }))
-          setActivePanel(targetPanel)
-        }
-      } else {
-        setDesktopLayout((prev) => ({
-          ...prev,
-          cols: 1,
-          colSizes: [null],
-          panelKinds: ["browser"],
-          panelBrowserUrls: { ...(prev.panelBrowserUrls ?? {}), 0: url },
-        }))
-        setActivePanel(0)
-      }
+      openBrowserAsTab(url)
     } else {
       window.open(url, "_blank")
     }
-  }, [isDesktop, desktopLayout, activePanel])
+  }, [isDesktop, tabStacks, openBrowserAsTab])
 
-  const handleOpenDesign = useCallback(() => {
-    if (!isDesktop) return
-    const existingPanelIdx = desktopLayout.panelKinds.findIndex((k) => k === "design")
-    if (existingPanelIdx >= 0) {
-      setActivePanel(existingPanelIdx)
-      return
-    }
-    // Si ya hay un tab __design__ en algún panel de sesiones, enfocarlo
-    const designTabPanelIdx = tabStacks?.findIndex((stack) => stack.includes("__design__"))
-    if (designTabPanelIdx !== undefined && designTabPanelIdx >= 0) {
-      setActivePanel(designTabPanelIdx)
-      setDesktopLayout((prev) => {
-        const sessions = [...prev.sessions]
-        sessions[designTabPanelIdx] = "__design__"
-        const panelKinds = [...prev.panelKinds] as Array<ShellPanelKind | "editor">
-        panelKinds[designTabPanelIdx] = "session"
-        return { ...prev, sessions, panelKinds }
-      })
-      return
-    }
-    const hasSession = desktopLayout.sessions.some(Boolean)
-    if (hasSession) {
-      const targetIdx = Math.min(activePanel, desktopLayout.cols * desktopLayout.rows - 1)
-      // Abrir como pestaña más dentro de las pestañas de sesiones (si hay sesión abierta)
-      setTabStacks((prev) => {
-        const next = (prev ?? []).map((s) => [...s])
-        while (next.length <= targetIdx) next.push([])
-        if (!next[targetIdx].includes("__design__")) next[targetIdx] = [...next[targetIdx], "__design__"]
-        return next
-      })
-      setDesktopLayout((prev) => {
-        const sessions = [...prev.sessions]
-        sessions[targetIdx] = "__design__"
-        const panelKinds = [...prev.panelKinds] as Array<ShellPanelKind | "editor">
-        panelKinds[targetIdx] = "session"
-        return { ...prev, sessions, panelKinds }
-      })
-      setActivePanel(targetIdx)
-      return
-    }
-    addPanel("design")
-  }, [isDesktop, desktopLayout, activePanel, tabStacks, addPanel, setTabStacks, setDesktopLayout])
-
-  const handleOpenKanban = useCallback(() => {
-    if (!isDesktop) return
-    const existingPanelIdx = desktopLayout.panelKinds.findIndex((k) => k === "kanban")
-    if (existingPanelIdx >= 0) {
-      setActivePanel(existingPanelIdx)
-      return
-    }
-    const kanbanTabPanelIdx = tabStacks?.findIndex((stack) => stack.includes("__kanban__"))
-    if (kanbanTabPanelIdx !== undefined && kanbanTabPanelIdx >= 0) {
-      setActivePanel(kanbanTabPanelIdx)
-      setDesktopLayout((prev) => {
-        const sessions = [...prev.sessions]
-        sessions[kanbanTabPanelIdx] = "__kanban__"
-        const panelKinds = [...prev.panelKinds] as Array<ShellPanelKind | "editor">
-        panelKinds[kanbanTabPanelIdx] = "session"
-        return { ...prev, sessions, panelKinds }
-      })
-      return
-    }
-    const hasSession = desktopLayout.sessions.some(Boolean)
-    if (hasSession) {
-      const targetIdx = Math.min(activePanel, desktopLayout.cols * desktopLayout.rows - 1)
-      setTabStacks((prev) => {
-        const next = (prev ?? []).map((s) => [...s])
-        while (next.length <= targetIdx) next.push([])
-        if (!next[targetIdx].includes("__kanban__")) next[targetIdx] = [...next[targetIdx], "__kanban__"]
-        return next
-      })
-      setDesktopLayout((prev) => {
-        const sessions = [...prev.sessions]
-        sessions[targetIdx] = "__kanban__"
-        const panelKinds = [...prev.panelKinds] as Array<ShellPanelKind | "editor">
-        panelKinds[targetIdx] = "session"
-        return { ...prev, sessions, panelKinds }
-      })
-      setActivePanel(targetIdx)
-      return
-    }
-    addPanel("kanban")
-  }, [isDesktop, desktopLayout, activePanel, tabStacks, addPanel, setTabStacks, setDesktopLayout])
+  const { handleOpenDesign, handleOpenKanban, handleOpenLearning } = useVirtualTabs({ isDesktop, desktopLayout, activePanel, tabStacks, setTabStacks, setDesktopLayout, setActivePanel, addPanel, handleNavigate })
 
   const handleVisualSelect = useCallback((filePath: string, payload: { selectedText: string; lineStart: number | null; lineEnd: number | null; surroundingContext: string; boundingRect?: { x: number; y: number; w: number; h: number } }) => {
     const fileName = filePath.split(/[/\\]/).pop() || filePath
@@ -2991,7 +3105,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   return (
     <div className="app-shell" data-navbar="header" ref={shellRef}
-      style={isDesktop ? { gridTemplateColumns: `calc(48px * var(--ui-scale, 1)) ${sidebarCollapsed ? "0px" : `calc(${sidebarWidth}px * var(--ui-scale, 1))`} minmax(0, 1fr)${desktopDiffOpen ? ` calc(${desktopDiffWidth}px * var(--ui-scale, 1))` : ""}` } : undefined}>
+      data-sidebarpos={isDesktop ? sidebarPrefs.position : undefined}
+      data-sbhide={isDesktop && sidebarPrefs.hidden.length > 0 ? sidebarPrefs.hidden.join(" ") : undefined}
+      style={shellGridStyle}>
       {!isDesktop && view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={handleNavigate}
           onToggleLightMode={handleToggleLightMode} />
@@ -3000,42 +3116,61 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       {isDesktop && (
         <nav className="app-desktop-activity" aria-label="Actividades">
           <div className="app-desktop-activity-top">
-            <button type="button" className={`activity-btn${activity === "sessions" ? " active" : ""}`} title={t('shell.kindSession')} aria-label={t('shell.kindSession')}
+            <button type="button" data-item="sessions" className={`activity-btn${activity === "sessions" ? " active" : ""}`} title={t('shell.kindSession')} aria-label={t('shell.kindSession')}
               onClick={() => { if (activity === "sessions") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("sessions"); setSidebarCollapsed(false) } }}>
               <ChatIcon size={18} /></button>
-            <button type="button" className={`activity-btn${activity === "explorer" ? " active" : ""}`} title={t('shell.kindExplorer')} aria-label={t('shell.kindExplorer')}
+            <button type="button" data-item="explorer" className={`activity-btn${activity === "explorer" ? " active" : ""}`} title={t('shell.kindExplorer')} aria-label={t('shell.kindExplorer')}
               onClick={() => { if (activity === "explorer") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("explorer"); setSidebarCollapsed(false) } }}>
               <FolderIcon size={18} /></button>
-            <button type="button" className={`activity-btn${showTerminal ? " active" : ""}`} title={t('session.terminal')} aria-label={t('session.terminal')}
+            <button type="button" data-item="terminal" className={`activity-btn${showTerminal ? " active" : ""}`} title={t('session.terminal')} aria-label={t('session.terminal')}
               onClick={() => setShowTerminal((v) => !v)}>
               <TerminalIcon size={18} /></button>
-            <button type="button" className={`activity-btn${desktopLayout.panelKinds.includes("stats" as any) || activity === "stats" ? " active" : ""}`} title={t('shell.kindStats')} aria-label={t('shell.kindStats')}
-              onClick={() => {
-                const idx = desktopLayout.panelKinds.indexOf("stats" as any)
-                if (idx >= 0) {
-                  closePanel(idx)
-                } else {
-                  addPanel("stats")
-                }
-              }}>
+            <button type="button" data-item="stats" className={`activity-btn${tabStacks?.some((s) => s.includes("__stats__")) || desktopLayout.sessions.includes("__stats__") ? " active" : ""}`} title={t('shell.kindStats')} aria-label={t('shell.kindStats')}
+              onClick={() => openStatsAsTab()}>
               <StatsIcon size={18} /></button>
-            <button type="button" className="activity-btn" title="Navegador Web" aria-label="Navegador Web"
-              onClick={() => {
-                handleOpenBrowser("https://www.google.com")
-              }}>
+            <button type="button" data-item="browser" className={`activity-btn${tabStacks?.some((s) => s.some((id) => id.startsWith("browser:"))) || desktopLayout.sessions.some((s) => s?.startsWith("browser:")) ? " active" : ""}`} title="Navegador Web" aria-label="Navegador Web"
+              onClick={() => openBrowserAsTab("https://www.google.com")}>
               <GlobeIcon size={18} /></button>
-            <button type="button" className={`activity-btn${(tabStacks?.some((s) => s.includes("__kanban__")) || desktopLayout.sessions.includes("__kanban__") || desktopLayout.panelKinds.includes("kanban" as any) ? " active" : "")}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
+            <button type="button" data-item="kanban" className={`activity-btn${(tabStacks?.some((s) => s.includes("__kanban__")) || desktopLayout.sessions.includes("__kanban__") || desktopLayout.panelKinds.includes("kanban" as any) ? " active" : "")}`} title={t('shell.kindKanban')} aria-label={t('shell.kindKanban')}
               onClick={handleOpenKanban}>
               <LayersIcon size={18} /></button>
-            <button type="button" className={`activity-btn${activity === "quickchat" ? " active" : ""}`} title={t('quickchat.title')} aria-label={t('quickchat.title')}
-              onClick={() => { if (activity === "quickchat") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("quickchat"); setSidebarCollapsed(false) } }}>
+            <button type="button" data-item="quickchat" className={`activity-btn${!rightSidebarCollapsed ? " active" : ""}`} title={t('quickchat.title')} aria-label={t('quickchat.title')}
+              onClick={() => setRightSidebarCollapsed((v) => !v)}>
               <BrainIcon size={18} /></button>
-            <button type="button" className={`activity-btn${activity === "scm" ? " active" : ""}`} title={t('scm.title')} aria-label={t('scm.title')}
+            <button type="button" data-item="pcFiles" className={`activity-btn${activity === "pcFiles" ? " active" : ""}`} title="Archivos PC" aria-label="Archivos PC"
+              onClick={() => { if (activity === "pcFiles") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("pcFiles" as DesktopActivity); setSidebarCollapsed(false) } }}>
+              <FolderIcon size={18} /></button>
+            <button type="button" data-item="scm" className={`activity-btn${activity === "scm" ? " active" : ""}`} title={t('scm.title')} aria-label={t('scm.title')}
               onClick={() => { if (activity === "scm") setSidebarCollapsed(!sidebarCollapsed); else { setActivity("scm"); setSidebarCollapsed(false) } }}>
               <BranchIcon size={18} /></button>
-            <button type="button" className={`activity-btn${(tabStacks?.some((s) => s.includes("__design__")) || desktopLayout.sessions.includes("__design__") || desktopLayout.panelKinds.includes("design" as any) ? " active" : "")}`} title="Open Design" aria-label="Open Design"
+            <button type="button" data-item="design" className={`activity-btn${(tabStacks?.some((s) => s.includes("__design__")) || desktopLayout.sessions.includes("__design__") || desktopLayout.panelKinds.includes("design" as any) ? " active" : "")}`} title="Open Design" aria-label="Open Design"
               onClick={handleOpenDesign}>
               <PencilIcon size={18} /></button>
+            <button type="button" data-item="plugins" className={`activity-btn${(tabStacks?.some((s) => s.some((id) => id.startsWith("plugin:external:"))) ? " active" : "")}`} title="Plugins" aria-label="Plugins"
+              onClick={() => setShowPluginsModal(true)}>
+              <GlobeIcon size={18} /></button>
+            {pluginTabs.map((item) => {
+              const isActive = tabStacks?.some((s) => s.includes(`plugin:${item.key}`)) || desktopLayout.sessions.includes(`plugin:${item.key}`)
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`activity-btn${isActive ? " active" : ""}`}
+                  title={item.title || item.key}
+                  aria-label={item.title || item.key}
+                  draggable
+                  onDragStart={(e) => {
+                    const payload = `plugin:${item.key}`
+                    e.dataTransfer.setData("application/x-opencode-path", payload)
+                    e.dataTransfer.setData("text/plain", payload)
+                    e.dataTransfer.effectAllowed = "move"
+                  }}
+                  onClick={() => openPluginAsTab(item.key)}
+                >
+                  {item.icon ? <span style={{ display: "inline-flex" }}>{item.icon}</span> : <span style={{ fontSize: 14 }}>{(item.title || item.key).slice(0, 1).toUpperCase()}</span>}
+                </button>
+              )
+            })}
           </div>
           <div className="app-desktop-activity-bottom">
             {memInfo && (
@@ -3043,16 +3178,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 {formatBytes(memInfo.jsHeapUsed)}
               </div>
             )}
-            <button type="button" className={`activity-btn${view === "learning" ? " active" : ""}`} title={t('learning.title') || "Aprendizaje"} aria-label={t('learning.title') || "Aprendizaje"}
-              onClick={() => {
-                if (view === "learning") {
-                  handleNavigate(desktopLayout.sessions.some(Boolean) ? "detail" : "sessions")
-                } else {
-                  handleNavigate("learning")
-                }
-              }}>
+            <button type="button" data-item="learning" className={`activity-btn${(tabStacks?.some((s) => s.includes("__learning__")) || desktopLayout.sessions.includes("__learning__") ? " active" : "")}`} title={t('learning.title') || "Aprendizaje"} aria-label={t('learning.title') || "Aprendizaje"}
+              draggable
+              onDragStart={(e) => { const p = "plugin:learning"; e.dataTransfer.setData("application/x-opencode-path", p); e.dataTransfer.setData("text/plain", p); e.dataTransfer.effectAllowed = "move" }}
+              onClick={handleOpenLearning}>
               <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>📚</span></button>
-            <button type="button" className={`activity-btn${view === "settings" ? " active" : ""}`} title={t('nav.settings') || "Configuración"} aria-label={t('nav.settings') || "Configuración"}
+            <button type="button" data-item="settings" className={`activity-btn${view === "settings" ? " active" : ""}`} title={t('nav.settings') || "Configuración"} aria-label={t('nav.settings') || "Configuración"}
               onClick={() => {
                 if (view === "settings") {
                   handleNavigate(desktopLayout.sessions.some(Boolean) ? "detail" : "sessions")
@@ -3079,8 +3210,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 <span className="desktop-sidebar-title">
                   {activity === "sessions" ? "OpenHer"
                     : activity === "explorer" ? t('shell.kindExplorer')
-                    : activity === "stats" ? t('shell.kindStats')
-                    : activity === "quickchat" ? t('quickchat.title')
+                    : activity === "pcFiles" ? "Archivos PC"
                     : t('shell.kindConfig')}
                 </span>
                 <span className="desktop-sidebar-actions">
@@ -3091,9 +3221,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                 <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
                   {activity === "sessions" ? sessionsView
                     : activity === "explorer" ? <ExplorerPanel onOpenSessionDir={openSessionInDir} initialCwd={explorerCwd || activeSessionDir} onOpenFile={handleOpenFileFromExplorer} />
-                    : activity === "stats" ? <StatsPanel />
+                    : activity === "pcFiles" ? <PCFilesPanel />
                     : activity === "scm" ? <SourceControlPanel cwd={currentActiveSession?.directory || activeSessionDir || selectedSession?.directory || explorerCwd || sessions[0]?.directory} availableDirs={Array.from(new Set(sessions.map((s) => s.directory).filter(Boolean)))} onSelectDir={(d) => setExplorerCwd(d)} />
-                    : activity === "quickchat" ? <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} customKey={quickChatCustomKey} customUrl={quickChatCustomUrl} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
                     : <ConfigPanel />}
                   <PluginSlot id="sidebar.activity" />
                 </Suspense>
@@ -3240,7 +3369,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                             } else {
                               removeTab(i, idx)
                             }
-                          }} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} />
+                          }} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} />
                           <div style={{ flex: 1, minHeight: 0 }}>
                             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
                               <DesignPanel />
@@ -3286,10 +3415,27 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                             } else {
                               removeTab(i, idx)
                             }
-                          }} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} />
+                          }} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} />
                           <div style={{ flex: 1, minHeight: 0 }}>
                             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
                               <KanbanPanel />
+                            </Suspense>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                  if (sid === "__learning__") {
+                    const stack = (tabStacks?.[i] ?? ["__learning__"]).filter((x) => typeof x === "string")
+                    const allWithLearning = [...sessions] as any[]
+                    if (!allWithLearning.find((s: any) => s.id === "__learning__")) allWithLearning.push({ id: "__learning__", title: "Aprendizaje", directory: "" })
+                    return (
+                      <div key={panelId} style={placement} className="desktop-cell">
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                          <TabBar tabs={stack} activeIndex={Math.max(0, stack.indexOf("__learning__"))} sessions={allWithLearning} busySessionIds={busySessions} onSwitch={(idx) => switchTab(i, idx)} onClose={(idx) => removeTab(i, idx)} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} panelIndex={i} />
+                          <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+                            <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                              <LearningPage />
                             </Suspense>
                           </div>
                         </div>
@@ -3313,7 +3459,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                           onSwitch={(idx) => switchTab(i, idx)}
                           onClose={(idx) => removeTab(i, idx)}
                           onAdd={() => addTerminalToPanel(i)}
-                          onMoveTab={(from, to) => moveTab(i, from, to)}
+                          onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)}
                           panelIndex={i}
                           onDropTerminal={addTerminalToPanel}
                         />
@@ -3327,6 +3473,78 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                   )
                 }
                 if (!session) {
+                  // Check for virtual tabs without a matching session object
+                  if (sid === "__stats__") {
+                    const stack = tabStacks?.[i] ?? ["__stats__"]
+                    const allWithStats = [...sessions, { id: "__stats__", title: "Estadísticas", directory: "" } as any]
+                    return (
+                      <div key={panelId} style={placement} className="desktop-cell">
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                          <TabBar tabs={stack} activeIndex={Math.max(0, stack.indexOf("__stats__"))} sessions={allWithStats} busySessionIds={busySessions} onSwitch={(idx) => switchTab(i, idx)} onClose={(idx) => removeTab(i, idx)} onAdd={() => addTerminalToPanel(i)} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} panelIndex={i} onDropTerminal={addTerminalToPanel} />
+                          <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+                            <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><StatsPanel /></Suspense>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                  if (sid && sid.startsWith("browser:")) {
+                    const url = desktopLayout.browserTabUrls?.[sid] || "https://www.google.com"
+                    const stack = tabStacks?.[i] ?? [sid]
+                    const bSessions = [...sessions] as any[]
+                    for (const bid of stack) if (bid.startsWith("browser:")) { const u = desktopLayout.browserTabUrls?.[bid] || url; try { const host = new URL(u).hostname; bSessions.push({ id: bid, title: host, directory: "" }) } catch { bSessions.push({ id: bid, title: u.slice(0,20), directory: "" }) } }
+                    if (!bSessions.find((s:any)=>s.id==="__stats__") && stack.includes("__stats__")) bSessions.push({ id: "__stats__", title: "Estadísticas", directory: "" } as any)
+                    return (
+                      <div key={panelId} style={placement} className="desktop-cell">
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                          <TabBar tabs={stack} activeIndex={Math.max(0, stack.indexOf(sid))} sessions={bSessions} busySessionIds={busySessions} onSwitch={(idx) => switchTab(i, idx)} onClose={(idx) => removeTab(i, idx)} onAdd={() => addTerminalToPanel(i)} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} panelIndex={i} onDropTerminal={addTerminalToPanel} />
+                          <div style={{ flex: 1, minHeight: 0 }}>
+                            <Suspense fallback={<div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando navegador...</div>}>
+                              <BrowserPanel initialUrl={url} onClose={() => removeTab(i, stack.indexOf(sid))} visualSelection={vs.selection} inspectMode={vs.inspectMode} onVisualPick={(el:any) => handleBrowserVisualPick(url, el)} onToggleInspect={vs.toggleInspect} onClearVisual={vs.clearAnnotations} annotations={vs.annotations} onAnnotationComment={vs.setAnnotationComment} onRemoveAnnotation={vs.removeAnnotation} onAnnotationStyle={vs.setAnnotationStyle} onAnnotationStyleBefore={vs.setAnnotationStyleBefore} inspectTool={vs.inspectTool} onToggleInspectTool={handleToggleInspectTool} />
+                            </Suspense>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                  if (sid && sid.startsWith("plugin:")) {
+                    const pluginKey = sid.slice(7)
+                    const stack = tabStacks?.[i] ?? [sid]
+                    const pSessions = [...sessions] as any[]
+                    for (const pid of stack) if (pid.startsWith("plugin:")) pSessions.push({ id: pid, title: pid.slice(7).split(":").pop() || pid, directory: "" })
+                    // external projects (auto-start, sin tabRegistry)
+                    if (pluginKey.startsWith("external:")) {
+                      const extName = pluginKey.slice(9)
+                      const proj = EXTERNAL_PROJECTS.find((p) => p.name === extName)
+                      if (proj) {
+                        return (
+                          <div key={panelId} style={placement} className="desktop-cell">
+                            <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                              <TabBar tabs={stack} activeIndex={Math.max(0, stack.indexOf(sid))} sessions={pSessions} busySessionIds={busySessions} onSwitch={(idx) => switchTab(i, idx)} onClose={(idx) => removeTab(i, idx)} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} panelIndex={i} />
+                              <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                                <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                                  <ExternalIframePanel name={proj.name} title={proj.title} url={proj.url} isWidget={proj.isWidget} />
+                                </Suspense>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }
+                    }
+                    // tabRegistry render se hace inline abajo
+                    return (
+                      <div key={panelId} style={placement} className="desktop-cell">
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                          <TabBar tabs={stack} activeIndex={Math.max(0, stack.indexOf(sid))} sessions={pSessions} busySessionIds={busySessions} onSwitch={(idx) => switchTab(i, idx)} onClose={(idx) => removeTab(i, idx)} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} panelIndex={i} />
+                          <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 12 }}>
+                            <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                              {(() => { try { const d = tabRegistry.get(pluginKey); return d ? d.render({}) : <div style={{color:"var(--muted)"}}>Plugin no encontrado: {pluginKey}</div> } catch { return <div style={{color:"var(--muted)"}}>Plugin: {pluginKey}</div> } })()}
+                            </Suspense>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
                   return (
                     <DesktopCellPlaceholder
                       key={panelId}
@@ -3339,6 +3557,92 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onDock={handleDockSession}
                       label={t('sessions.selectOne')}
                     />
+                  )
+                }
+                // If active tab is a virtual one, render it instead of the session chat
+                if (sid === "__stats__" || sid === "__learning__") {
+                  const vId = sid
+                  const vComp = vId === "__stats__" ? <StatsPanel /> : <LearningPage />
+                  const stack = tabStacks?.[i] ?? [session.id, vId]
+                  const vTitle = vId === "__stats__" ? "Estadísticas" : "Aprendizaje"
+                  const allWithVirtual = [...sessions, { id: vId, title: vTitle, directory: "" } as any]
+                  for (const id of stack) {
+                    if (id.startsWith("browser:") && !allWithVirtual.find((s:any)=>s.id===id)) {
+                      const u = desktopLayout.browserTabUrls?.[id] || "https://www.google.com"
+                      try { const host = new URL(u).hostname; allWithVirtual.push({ id, title: host, directory: "" } as any) } catch { allWithVirtual.push({ id, title: u.slice(0,20), directory: "" } as any) }
+                    }
+                    if (id.startsWith("plugin:") && !allWithVirtual.find((s:any)=>s.id===id)) {
+                      allWithVirtual.push({ id, title: id.slice(7).split(":").pop() || id, directory: "" } as any)
+                    }
+                    if ((id === "__stats__" || id === "__learning__") && !allWithVirtual.find((s:any)=>s.id===id)) {
+                      allWithVirtual.push({ id, title: id === "__stats__" ? "Estadísticas" : "Aprendizaje", directory: "" } as any)
+                    }
+                  }
+                  return (
+                    <div key={panelId} style={placement} className="desktop-cell">
+                      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                        <TabBar tabs={stack} activeIndex={Math.max(0, stack.indexOf(vId))} sessions={allWithVirtual} busySessionIds={busySessions} onSwitch={(idx) => switchTab(i, idx)} onClose={(idx) => removeTab(i, idx)} onAdd={() => addTerminalToPanel(i)} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} panelIndex={i} onDropTerminal={addTerminalToPanel} />
+                        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+                          <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>{vComp}</Suspense>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                if (sid && sid.startsWith("browser:")) {
+                  const url = desktopLayout.browserTabUrls?.[sid] || "https://www.google.com"
+                  const stack = tabStacks?.[i] ?? [sid]
+                  const bSessions = [...sessions] as any[]
+                  for (const bid of stack) if (bid.startsWith("browser:") && !bSessions.find((s:any)=>s.id===bid)) { const u = desktopLayout.browserTabUrls?.[bid] || url; try { const host = new URL(u).hostname; bSessions.push({ id: bid, title: host, directory: "" }) } catch { bSessions.push({ id: bid, title: u.slice(0,20), directory: "" }) } }
+                  if (stack.includes("__stats__") && !bSessions.find((s:any)=>s.id==="__stats__")) bSessions.push({ id: "__stats__", title: "Estadísticas", directory: "" } as any)
+                  for (const pid of stack) if (pid.startsWith("plugin:") && !bSessions.find((s:any)=>s.id===pid)) bSessions.push({ id: pid, title: pid.slice(7).split(":").pop() || pid, directory: "" } as any)
+                  return (
+                    <div key={panelId} style={placement} className="desktop-cell">
+                      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                        <TabBar tabs={stack} activeIndex={Math.max(0, stack.indexOf(sid))} sessions={bSessions} busySessionIds={busySessions} onSwitch={(idx) => switchTab(i, idx)} onClose={(idx) => removeTab(i, idx)} onAdd={() => addTerminalToPanel(i)} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} panelIndex={i} onDropTerminal={addTerminalToPanel} />
+                        <div style={{ flex: 1, minHeight: 0 }}>
+                          <Suspense fallback={<div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando navegador...</div>}>
+                            <BrowserPanel initialUrl={url} onClose={() => removeTab(i, stack.indexOf(sid))} visualSelection={vs.selection} inspectMode={vs.inspectMode} onVisualPick={(el:any) => handleBrowserVisualPick(url, el)} onToggleInspect={vs.toggleInspect} onClearVisual={vs.clearAnnotations} annotations={vs.annotations} onAnnotationComment={vs.setAnnotationComment} onRemoveAnnotation={vs.removeAnnotation} onAnnotationStyle={vs.setAnnotationStyle} onAnnotationStyleBefore={vs.setAnnotationStyleBefore} inspectTool={vs.inspectTool} onToggleInspectTool={handleToggleInspectTool} />
+                          </Suspense>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                if (sid && sid.startsWith("plugin:")) {
+                  const pluginKey = sid.slice(7)
+                  const stack = tabStacks?.[i] ?? [sid]
+                  const pSessions = [...sessions] as any[]
+                  for (const pid of stack) if (pid.startsWith("plugin:") && !pSessions.find((s:any)=>s.id===pid)) pSessions.push({ id: pid, title: pid.slice(7).split(":").pop() || pid, directory: "" })
+                  if (pluginKey.startsWith("external:")) {
+                    const extName = pluginKey.slice(9)
+                    const proj = EXTERNAL_PROJECTS.find((p) => p.name === extName)
+                    if (proj) {
+                      return (
+                        <div key={panelId} style={placement} className="desktop-cell">
+                          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                            <TabBar tabs={stack} activeIndex={Math.max(0, stack.indexOf(sid))} sessions={pSessions} busySessionIds={busySessions} onSwitch={(idx) => switchTab(i, idx)} onClose={(idx) => removeTab(i, idx)} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} panelIndex={i} />
+                            <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                              <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                                <ExternalIframePanel name={proj.name} title={proj.title} url={proj.url} isWidget={proj.isWidget} />
+                              </Suspense>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    }
+                  }
+                  return (
+                    <div key={panelId} style={placement} className="desktop-cell">
+                      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                        <TabBar tabs={stack} activeIndex={Math.max(0, stack.indexOf(sid))} sessions={pSessions} busySessionIds={busySessions} onSwitch={(idx) => switchTab(i, idx)} onClose={(idx) => removeTab(i, idx)} onAdd={() => {}} onMoveTab={(from, to) => moveTab(i, from, to)} onTransferTab={(fp, fi, ti) => transferTab(fp, fi, i, ti)} panelIndex={i} />
+                        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 12 }}>
+                          <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                            {(() => { try { const d = tabRegistry.get(pluginKey); return d ? d.render({}) : <div style={{color:"var(--muted)"}}>Plugin no encontrado: {pluginKey}</div> } catch { return <div style={{color:"var(--muted)"}}>Plugin: {pluginKey}</div> } })()}
+                          </Suspense>
+                        </div>
+                      </div>
+                    </div>
                   )
                 }
                 return (
@@ -3372,13 +3676,24 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                         const extra: any[] = []
                         if (stack.includes("__design__")) extra.push({ id: "__design__", title: "Open Design", directory: "" })
                         if (stack.includes("__kanban__")) extra.push({ id: "__kanban__", title: "Kanban", directory: "" })
+                        if (stack.includes("__stats__")) extra.push({ id: "__stats__", title: "Estadísticas", directory: "" })
+                        for (const id of stack) {
+                          if (id.startsWith("browser:")) {
+                            const url = desktopLayout.browserTabUrls?.[id] || "https://www.google.com"
+                            try { const host = new URL(url).hostname || url; extra.push({ id, title: host, directory: "" }) } catch { extra.push({ id, title: url.slice(0,24), directory: "" }) }
+                          }
+                          if (id.startsWith("plugin:")) {
+                            const label = id.slice(7).split(":").pop() || id
+                            extra.push({ id, title: label, directory: "" })
+                          }
+                        }
                         return extra.length ? [...sessions, ...extra] : sessions
                       })()}
                       busySessionIds={busySessions}
                       onTabSwitch={(panelIdx, tabIdx) => {
                         const stack = tabStacks?.[panelIdx] ?? []
                         const tabId = stack[tabIdx] ?? (tabIdx === 0 && session ? session.id : undefined)
-                        if (tabId === "__design__" || tabId === "__kanban__") {
+                        if (tabId === "__design__" || tabId === "__kanban__" || tabId === "__stats__" || (tabId && (tabId.startsWith("browser:") || tabId.startsWith("plugin:")))) {
                           setDesktopLayout((prev) => {
                             const sessions = [...prev.sessions]
                             sessions[panelIdx] = tabId
@@ -3392,12 +3707,28 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
                       onTabClose={(panelIdx, tabIdx) => {
                         const stack = tabStacks?.[panelIdx] ?? []
                         const tabId = stack[tabIdx]
-                        if (tabId === "__design__" || tabId === "__kanban__") {
+                        if (tabId === "__design__" || tabId === "__kanban__" || tabId === "__stats__" || (tabId && (tabId.startsWith("browser:") || tabId.startsWith("plugin:")))) {
                           setTabStacks((prev) => {
                             const next = (prev ?? []).map((s) => [...s])
                             if (next[panelIdx]) next[panelIdx] = next[panelIdx].filter((id) => id !== tabId)
                             return next
                           })
+                          if (tabId && tabId.startsWith("browser:")) {
+                            setDesktopLayout((prev) => {
+                              const next = { ...(prev.browserTabUrls ?? {}) }
+                              delete next[tabId]
+                              return { ...prev, browserTabUrls: next }
+                            })
+                          }
+                          // If closed tab was active, activate neighbour
+                          if (desktopLayout.sessions[panelIdx] === tabId) {
+                            const remaining = (tabStacks?.[panelIdx] ?? []).filter((id) => id !== tabId)
+                            setDesktopLayout((prev) => {
+                              const sessions = [...prev.sessions]
+                              sessions[panelIdx] = remaining.length > 0 ? remaining[Math.min(tabIdx, remaining.length - 1)] ?? null : null
+                              return { ...prev, sessions }
+                            })
+                          }
                         } else {
                           removeTab(panelIdx, tabIdx)
                         }
@@ -3678,6 +4009,14 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         </div>
       )}
 
+      {view === "pcFiles" && (
+        <div className="pcf-view" style={{ height: isDesktop ? "100%" : "calc(100dvh - 56px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando archivos…</div>}>
+            <PCFilesPanel />
+          </Suspense>
+        </div>
+      )}
+
         {isDesktop && showTerminal && terminalDocked && (
           <Suspense fallback={null}>
             <TerminalView
@@ -3699,6 +4038,32 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           </Suspense>
         )}
       </main>
+
+      {isDesktop && (
+        <aside className={`app-desktop-sidebar app-desktop-sidebar--right${rightSidebarCollapsed ? " collapsed" : ""}`}>
+          {rightSidebarCollapsed ? (
+            <div className="desktop-sidebar-rail">
+              <button type="button" className="btn-icon compact" title={t('quickchat.title')} aria-label={t('quickchat.title')} onClick={() => setRightSidebarCollapsed(false)}><BrainIcon size={14} /></button>
+            </div>
+          ) : (
+            <>
+              <div className="desktop-sidebar-header">
+                <span className="desktop-sidebar-title">{t('quickchat.title')}</span>
+                <span className="desktop-sidebar-actions">
+                  <button type="button" className="btn-icon compact" title={t('desktop.collapseSidebar')} aria-label={t('desktop.collapseSidebar')} onClick={() => setRightSidebarCollapsed(true)}>»</button>
+                </span>
+              </div>
+              <div className="desktop-sidebar-body">
+                <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                  <QuickChatPanel cerebrasKey={quickChatKey} groqKey={quickChatGroqKey} goKey={quickChatGoKey} customKey={quickChatCustomKey} customUrl={quickChatCustomUrl} config={config} modelOptions={modelOptions} providers={providerList} onOpenSettings={() => handleNavigate("settings")} />
+                  <PluginSlot id="sidebar.right" />
+                </Suspense>
+              </div>
+              <div className="desktop-sidebar-resizer desktop-sidebar-resizer--right" onPointerDown={startRightSidebarResize} title={t('desktop.resizeSidebar')} />
+            </>
+          )}
+        </aside>
+      )}
 
       {isDesktop && desktopDiffOpen && (
         <ADEDiffPanel
@@ -3797,6 +4162,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         runtimeError={runtimeError}
         onCloseRuntimeError={() => setRuntimeError(null)}
       />
+      <PluginsModal open={showPluginsModal} onClose={() => setShowPluginsModal(false)} onOpenProject={openExternalProject} />
     </div>
   )
 }
