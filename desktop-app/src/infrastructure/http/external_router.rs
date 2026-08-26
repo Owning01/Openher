@@ -24,6 +24,12 @@ struct ExternalDef {
 
 fn defs() -> HashMap<&'static str, ExternalDef> {
     let mut m = HashMap::new();
+    m.insert("opendesign", ExternalDef {
+        dir: r"G:\Proyectos\open-design",
+        port: Some(3000),
+        url: Some("http://127.0.0.1:3000"),
+        dev_cmd: "pnpm exec tools-dev run web --web-port 3000 --daemon-port 3456",
+    });
     m.insert("screenshots", ExternalDef {
         dir: r"G:\Proyectos\0 screenshots",
         port: Some(3002),
@@ -116,6 +122,7 @@ pub fn handle(
             items.push(serde_json::json!({
                 "name": name,
                 "title": match *name {
+                    "opendesign" => "Open Design",
                     "screenshots" => "Screenshots",
                     "vioeditor" => "VioEditor",
                     "informes" => "Plataforma Informes",
