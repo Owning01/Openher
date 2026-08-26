@@ -10,7 +10,7 @@ Cliente Android/iOS (Capacitor) + escritorio Windows para un server remoto `open
 | `web/` | **Producto central**: React 19 + Vite + TS + Capacitor (un frontend para APK Android, IPA iOS y shell de escritorio) |
 | `desktop-app/` | Shell Windows en Rust (wry + tiny_http, NO Tauri): sirve `web/dist` en :4848, expone `/shell/*` + WS PTY (:4849) |
 | `opencode-stats/` | Crate Rust read-only sobre `opencode.db` (:8765). Tiene su propio `AGENTS.md` — aplicarlo al tocarlo |
-| `od-web/` | OpenDesign vendorizado (proyecto ajeno). **NO tocar ni buildear como parte de este repo** |
+| `open-design` (externo) | OpenDesign `nexu-io/open-design` en `G:/proyectos/open-design` (NO vendorizado). Se levanta on-demand como pestaña `◈ Open Design` vía `/shell/design/*` + iframe, se cierra y no consume RAM en reposo |
 
 Sin `package.json` raíz. JS usa **pnpm** (`web/pnpm-lock.yaml`). Cargo workspace raíz: `desktop-app` + `opencode-stats`.
 

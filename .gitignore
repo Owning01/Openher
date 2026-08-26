@@ -70,6 +70,8 @@ signaling-worker/.wrangler/
 "web/scripts/copy-dist.py"  
 ".playwright-mcp/"  
 
+# OpenDesign externo (vendorizado eliminado, vive en G:/proyectos/open-design)
+od-web/
 desktop-app/target/
 desktop-app/data/
 desktop-app/opencode-desktop.exe
