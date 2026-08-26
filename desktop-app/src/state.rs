@@ -37,6 +37,16 @@ pub struct ShellConfig {
     pub quickchat_model: String,
     /// Auto-abrir `opencode2` en una terminal al iniciar la app.
     pub auto_opencode2: bool,
+    #[serde(default)]
+    pub opencode2_enabled: bool,
+    #[serde(default = "default_opencode2_port")]
+    pub opencode2_port: u16,
+    #[serde(default)]
+    pub opencode2_command: String,
+}
+
+fn default_opencode2_port() -> u16 {
+    4097
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -75,6 +85,9 @@ impl Default for ShellConfig {
             quickchat_provider: String::new(),
             quickchat_model: String::new(),
             auto_opencode2: false,
+            opencode2_enabled: false,
+            opencode2_port: 4097,
+            opencode2_command: String::new(),
         }
     }
 }
@@ -100,6 +113,14 @@ pub struct PersistedState {
     pub last_panels: Vec<serde_json::Value>,
 }
 
+pub struct ExternalManager {
+    pub procs: std::sync::Mutex<std::collections::HashMap<String, std::process::Child>>,
+    pub urls: std::sync::Mutex<std::collections::HashMap<String, String>>,
+}
+impl ExternalManager {
+    pub fn new() -> Self { Self { procs: std::sync::Mutex::new(std::collections::HashMap::new()), urls: std::sync::Mutex::new(std::collections::HashMap::new()) } }
+}
+
 pub struct AppState {
     pub config: RwLock<ShellConfig>,
     pub persisted: RwLock<PersistedState>,
@@ -117,6 +138,8 @@ pub struct AppState {
     pub browser_picks: std::sync::Mutex<Vec<String>>,
     /// Raíces de proyectos para auto-servir en el panel navegador/diseño.
     pub projects: std::sync::RwLock<std::collections::HashMap<String, PathBuf>>,
+    /// Procesos externos on-demand (screenshots, vioeditor, informes, widget_notas) — auto start/stop al abrir pestaña.
+    pub external: Arc<ExternalManager>,
 }
 
 /// data/ vive al lado del exe (portable, cero escrituras en C:).
@@ -283,6 +306,10 @@ pub fn json_ok(body: &serde_json::Value) -> tiny_http::Response<std::io::Cursor<
             tiny_http::Header::from_bytes("Content-Type", "application/json; charset=utf-8")
                 .unwrap(),
         )
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap())
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept").unwrap())
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition, Authorization").unwrap())
 }
 
 pub fn json_err(code: u16, msg: &str) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
@@ -292,6 +319,10 @@ pub fn json_err(code: u16, msg: &str) -> tiny_http::Response<std::io::Cursor<Vec
             tiny_http::Header::from_bytes("Content-Type", "application/json; charset=utf-8")
                 .unwrap(),
         )
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap())
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept").unwrap())
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition, Authorization").unwrap())
 }
 
 /// Lee el body de un request HTTP y lo parsea como JSON.

@@ -244,7 +244,7 @@ impl ApplicationHandler<AppEvent> for App {
         }
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, _event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::Resized(size) => {
                 if let (Some(window), Some(webview)) = (&self.window, &self.webview) {
@@ -261,7 +261,9 @@ impl ApplicationHandler<AppEvent> for App {
             }
             WindowEvent::CloseRequested => {
                 self.save_geometry();
-                event_loop.exit();
+                if let Some(window) = &self.window {
+                    window.set_minimized(true);
+                }
             }
             WindowEvent::ModifiersChanged(m) => {
                 self.modifiers = m.state();
@@ -299,6 +301,7 @@ impl ApplicationHandler<AppEvent> for App {
             }
             AppEvent::Restore => {
                 if let Some(window) = &self.window {
+                    window.set_minimized(false);
                     window.set_visible(true);
                     window.focus_window();
                 }
@@ -447,12 +450,12 @@ fn main() {
     let config = state::load_config();
     let persisted = state::load_persisted();
 
-    // Server HTTP local (sirve web/dist + API /shell/*).
+    // Server HTTP local (sirve web/dist + API /shell/*). Bind 0.0.0.0 para que Tailscale (100.x) llegue directo al :4848 sin túnel.
     let port = config.port;
     let mut server = None;
     let mut chosen = port;
     for p in port..(port + 200) {
-        match Server::http(("127.0.0.1", p)) {
+        match Server::http(("0.0.0.0", p)) {
             Ok(s) => {
                 chosen = match s.server_addr() {
                     tiny_http::ListenAddr::IP(ip) => ip.port(),
@@ -486,6 +489,7 @@ fn main() {
         browser: browser_mgr,
         browser_picks: std::sync::Mutex::new(Vec::new()),
         projects: std::sync::RwLock::new(std::collections::HashMap::new()),
+        external: Arc::new(state::ExternalManager::new()),
     });
     state::save_config(&config);
     if !state::autostart_enabled() {
@@ -493,12 +497,34 @@ fn main() {
     }
 
     match &app_state.dist {
-        Some(d) => println!("opencode-desktop: sirviendo {} en http://127.0.0.1:{chosen}", d.display()),
+        Some(d) => println!("opencode-desktop: sirviendo {} en http://0.0.0.0:{chosen} (Tailscale directo)", d.display()),
         None => println!("opencode-desktop: AVISO - web/dist no encontrado; la app estará vacía"),
     }
 
     // Stats server arranca con la app (botón del panel izquierdo lo abre).
     statsx::ensure(&app_state);
+
+    // opencode2: si está habilitado y no responde, lanzarlo detached
+    {
+        let op2_enabled = config.opencode2_enabled;
+        let op2_port = config.opencode2_port;
+        let op2_cmd = config.opencode2_command.clone();
+        if op2_enabled && !op2_cmd.trim().is_empty() {
+            let probing = op2_port;
+            std::thread::Builder::new()
+                .name("opencode2-ensure".into())
+                .spawn(move || {
+                    let up = crate::common::probe_http(probing, "/session", std::time::Duration::from_millis(1200), &[200, 401]);
+                    if !up {
+                        match crate::common::spawn_detached(&op2_cmd, None) {
+                            Ok(child) => eprintln!("opencode-desktop: opencode2 lanzado pid={} cmd={op2_cmd}", child.id()),
+                            Err(e) => eprintln!("opencode-desktop: opencode2 no pudo lanzarse: {e}"),
+                        }
+                    }
+                })
+                .ok();
+        }
+    }
 
     // WebSocket para terminales en tiempo real (puerto del shell + 1).
     if let Err(e) = ptyx::start_ws_server(app_state.pty.clone(), chosen + 1) {
