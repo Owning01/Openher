@@ -20,6 +20,10 @@ export function baseUrl(config: { host: string; port: number }): string {
   const schemeMatch = host.match(/^(https?):\/\//)
   const scheme = schemeMatch ? schemeMatch[1] : "http"
   if (schemeMatch) host = host.slice(schemeMatch[0].length)
+  host = host.split("/")[0] ?? host
+  // 0.0.0.0/:: no es ruteable para el cliente; el server bindea en 0.0.0.0 pero el cliente debe usar loopback
+  if (host === "0.0.0.0" || host === "::" || host === "[::]" || host === "0:0:0:0:0:0:0:0") host = "127.0.0.1"
+  if (host === "::1" || host === "[::1]") host = "127.0.0.1"
   if (host.includes(":") && !host.startsWith("[")) {
     host = `[${host}]`
   }
@@ -135,7 +139,10 @@ export function serializedSize(value: unknown): number {
 }
 
 export async function requestWithHeaders<T>(config: ServerConfig, path: string, options: RequestOptions = {}): Promise<ResponseWithHeaders<T>> {
-  const autoV2 = !options.rawPath && config.apiVersion !== "v1" && config.apiVersion !== "v2"
+  if (options.rawPath) {
+    return requestRaw<T>(config, `${baseUrl(config)}${path}`, options)
+  }
+  const autoV2 = config.apiVersion !== "v1" && config.apiVersion !== "v2"
   if (autoV2) {
     const version = await ensureVersionDetected(config)
     if (version === "v2") {

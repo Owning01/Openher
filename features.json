@@ -1,0 +1,76 @@
+{
+  "features": [
+    {
+      "id": "F01-terminal-opencode2",
+      "title": "usuario abre terminal y ve opencode2 corriendo",
+      "status": "failing",
+      "priority": "P0"
+    },
+    {
+      "id": "F02-aprendizaje-tab",
+      "title": "aprendizaje abre como pestaña arrastrable",
+      "status": "failing",
+      "priority": "P0"
+    },
+    {
+      "id": "F03-cambiar-carpeta",
+      "title": "cambiar carpeta no se recorta",
+      "status": "failing",
+      "priority": "P1"
+    },
+    {
+      "id": "F04-prompt-sse-persist",
+      "title": "prompt → SSE delta → persistencia IndexedDB → reload restaura historial",
+      "status": "failing",
+      "priority": "P0"
+    },
+    {
+      "id": "F05-offline-queue",
+      "title": "cola offline encola prompt y drena al reconectar",
+      "status": "failing",
+      "priority": "P1"
+    },
+    {
+      "id": "F06-scm-stage-commit",
+      "title": "SCM stage/unstage/discard/commit/push/pull funcionan vía gitx",
+      "status": "failing",
+      "priority": "P1"
+    },
+    {
+      "id": "F07-desktop-grid-persist",
+      "title": "grid DesktopLayout cols*rows persiste tras reload y resize",
+      "status": "failing",
+      "priority": "P2"
+    },
+    {
+      "id": "F08-v2-prompt-reject",
+      "title": "v2 prompt rechaza model/agent en body (400) y usa sesión",
+      "status": "passing",
+      "priority": "P0"
+    },
+    {
+      "id": "F09-pty-buffer",
+      "title": "PTY WS :4849 buffer incremental ?since= y resize",
+      "status": "failing",
+      "priority": "P2"
+    },
+    {
+      "id": "F10-theme-contrast",
+      "title": "temas custom pasan check:contrast WCAG AA",
+      "status": "passing",
+      "priority": "P2"
+    },
+    {
+      "id": "F11-sidebar-custom",
+      "title": "rail personalizable: posición izq/der/arriba y visibilidad de botones desde Ajustes",
+      "status": "passing",
+      "priority": "P1"
+    },
+    {
+      "id": "F12-terminal-context-menu",
+      "title": "click derecho en header de terminal: menú mover/acoplar flotante + drag libre persistido",
+      "status": "passing",
+      "priority": "P2"
+    }
+  ]
+}

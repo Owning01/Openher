@@ -58,14 +58,16 @@ export const api = {
       rememberApiVersion(config, "v2")
       return data
     }
+    // auto: v2 primero porque v2 devuelve 200 text/html en /global/health (fallback SPA) en vez de 404,
+    // lo que rompería la detección si probamos v1 primero y el parser JSON lanza "Unexpected token '<'".
     try {
-      const data = (await requestWithHeaders<HealthResponse>(config, "/global/health", { rawPath: true })).data
-      rememberApiVersion(config, "v1")
-      return data
-    } catch (err) {
-      if (!(err instanceof Error) || !/404|not found/i.test(err.message)) throw err
       const data = (await requestWithHeaders<HealthResponse>(config, "/api/health", { rawPath: true })).data
       rememberApiVersion(config, "v2")
+      return data
+    } catch (err) {
+      if (!(err instanceof Error) || !/404|not found|Unexpected token|<!doctype|is not valid JSON/i.test(err.message)) throw err
+      const data = (await requestWithHeaders<HealthResponse>(config, "/global/health", { rawPath: true })).data
+      rememberApiVersion(config, "v1")
       return data
     }
   },
@@ -321,7 +323,8 @@ export const api = {
   },
 
   async loadMessages(config: ServerConfig, sessionID: string, directory?: string, limit = 100) {
-    const raw = await request<MessageEnvelope[] | V2Message[]>(config, withDirectory(`/session/${sessionID}/message?limit=${limit}`, directory), {
+    const safeLimit = Math.min(limit, 200)
+    const raw = await request<MessageEnvelope[] | V2Message[]>(config, withDirectory(`/session/${sessionID}/message?limit=${safeLimit}`, directory), {
       readTimeout: 12_000,
     })
     const list = resolveApiVersion(config) === "v2" ? (raw as V2Message[]).map(toMessageEnvelopeV1) : (raw as MessageEnvelope[])
@@ -568,7 +571,8 @@ export const api = {
 
   async listPendingQuestions(config: ServerConfig, directory?: string) {
     if ((await getApiVersion(config)) === "v2") {
-      return request<unknown>(config, withLocationDirectory("/question/request", directory)).then((raw) => {
+      try {
+        const raw = await request<unknown>(config, withLocationDirectory("/form/request", directory))
         if (!Array.isArray(raw)) return []
         return raw.map((q) => {
           const item = q as { id: string; sessionID?: string; questions?: unknown[]; tool?: { messageID: string; id: string } }
@@ -581,7 +585,9 @@ export const api = {
             tool: item.tool ? { messageID: item.tool.messageID, callID: item.tool.id } : undefined,
           }
         })
-      })
+      } catch {
+        return []
+      }
     }
     return request<unknown>(config, withDirectory("/question", directory)).then((raw) => {
       if (!Array.isArray(raw)) return []

@@ -17,6 +17,6 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.test.mjs", "src/features/**", "src/shared/sse/**"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.test.mjs"]
 }
 

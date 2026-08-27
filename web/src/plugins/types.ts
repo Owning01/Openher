@@ -17,10 +17,12 @@ export type PluginManifest = {
 
 export type SlotId =
   | "sidebar.activity"
+  | "sidebar.right"
   | "shell.overlay"
   | "composer.actions"
   | "message.decorate"
   | "settings.section"
+  | "tab"
   | (string & {})
 
 export type SlotItem = {
@@ -42,8 +44,17 @@ export type PluginEventCallback = (payload: any) => void
 
 export type PluginDisposer = () => void
 
+export type PluginTabDefinition = {
+  id: string
+  title: string
+  icon?: ReactNode
+  render: (props?: any) => ReactNode
+  order?: number
+}
+
 export type PluginContextUI = {
   registerSlot: (slotId: SlotId, item: Omit<SlotItem, "pluginName">) => PluginDisposer
+  registerTab?: (tab: Omit<PluginTabDefinition, never> & { id: string }) => PluginDisposer
 }
 
 export type PluginContextEvents = {

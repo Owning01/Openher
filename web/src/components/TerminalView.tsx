@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { useT } from "../i18n-context"
 import { TerminalPanel } from "./shellPanels"
 import type { ShellType, ShellLine } from "../hooks/useShell"
@@ -20,6 +20,28 @@ type Props = {
   onResizeHeight?: (height: number) => void
 }
 
+// Posición persistida de la ventana flotante (menú contextual > arrastrar header)
+const FLOAT_POS_KEY = "opencode.terminal.floatPos"
+type FloatPos = { x: number; y: number }
+
+function readFloatPos(): FloatPos | null {
+  try {
+    const raw = localStorage.getItem(FLOAT_POS_KEY)
+    if (!raw) return null
+    const p = JSON.parse(raw) as Partial<FloatPos>
+    if (typeof p.x === "number" && typeof p.y === "number") return { x: p.x, y: p.y }
+  } catch {}
+  return null
+}
+
+/** Clamp para restaurar la ventana dentro del viewport aunque cambie la resolución. */
+function clampPos(p: FloatPos, w: number): FloatPos {
+  return {
+    x: Math.max(-w + 80, Math.min(window.innerWidth - 80, p.x)),
+    y: Math.max(0, Math.min(window.innerHeight - 40, p.y)),
+  }
+}
+
 export const TerminalView = memo(function TerminalView({
   directory,
   onClose,
@@ -31,6 +53,65 @@ export const TerminalView = memo(function TerminalView({
   const t = useT()
   const [maximized, setMaximized] = useState(false)
   const dockRef = useRef<HTMLDivElement>(null)
+  // Ventana flotante: posición persistida + drag libre del header
+  const [floatPos, setFloatPos] = useState<FloatPos | null>(() => (isDocked ? null : readFloatPos()))
+  const floatPosRef = useRef(floatPos)
+  floatPosRef.current = floatPos
+  const floatRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (isDocked) return
+    // Menú contextual > "Centrar ventana": vuelve al centrado por CSS
+    const center = (): void => {
+      try { localStorage.removeItem(FLOAT_POS_KEY) } catch {}
+      setFloatPos(null)
+    }
+    window.addEventListener("terminal:float-center", center)
+    return () => window.removeEventListener("terminal:float-center", center)
+  }, [isDocked])
+
+  useEffect(() => {
+    if (isDocked || maximized) return
+    const modal = floatRef.current
+    if (!modal) return
+    const bar = modal.querySelector<HTMLElement>(".terminal-header-bar")
+    if (!bar) return
+    const onMouseDown = (e: MouseEvent): void => {
+      if (e.button !== 0) return
+      const target = e.target as HTMLElement
+      if (target.closest("button, select, input, .terminal-shell-picker, .terminal-zoom-group")) return
+      // preventDefault bloquea el dragstart nativo del header (payload de grid)
+      e.preventDefault()
+      let pos = floatPosRef.current ?? (() => {
+        const r = modal.getBoundingClientRect()
+        return { x: r.left, y: r.top }
+      })()
+      const offX = e.clientX - pos.x
+      const offY = e.clientY - pos.y
+      document.body.style.userSelect = "none"
+      document.body.style.cursor = "grabbing"
+      modal.style.transition = "none"
+      const onMove = (ev: MouseEvent): void => {
+        pos = clampPos({ x: ev.clientX - offX, y: ev.clientY - offY }, modal.offsetWidth)
+        modal.style.position = "fixed"
+        modal.style.margin = "0"
+        modal.style.left = `${pos.x}px`
+        modal.style.top = `${pos.y}px`
+      }
+      const onUp = (): void => {
+        document.body.style.userSelect = ""
+        document.body.style.cursor = ""
+        window.removeEventListener("mousemove", onMove)
+        window.removeEventListener("mouseup", onUp)
+        try { localStorage.setItem(FLOAT_POS_KEY, JSON.stringify(pos)) } catch {}
+        setFloatPos(pos)
+      }
+      window.addEventListener("mousemove", onMove)
+      window.addEventListener("mouseup", onUp)
+    }
+    bar.addEventListener("mousedown", onMouseDown)
+    return () => bar.removeEventListener("mousedown", onMouseDown)
+  }, [isDocked, maximized])
 
   // Drag resizer para el modo acoplado (DOM directo a 60fps)
   const startResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -93,6 +174,7 @@ export const TerminalView = memo(function TerminalView({
           panelId="bottom-terminal"
           onToggleDock={onToggleDock}
           isDocked={isDocked}
+          isFloating={!isDocked}
           onMaximize={() => setMaximized((v) => !v)}
           maximized={maximized}
           onClose={onClose}
@@ -108,10 +190,17 @@ export const TerminalView = memo(function TerminalView({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        ref={floatRef}
         className="terminal-floating-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={t("session.terminal")}
+        style={floatPos
+          ? (() => {
+              const p = clampPos(floatPos, 400)
+              return { position: "fixed" as const, margin: 0, left: p.x, top: p.y }
+            })()
+          : undefined}
       >
         {terminalContent}
       </div>

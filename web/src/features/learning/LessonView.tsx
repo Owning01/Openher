@@ -1,67 +1,144 @@
-// Vista de una lección: carga markdown y lo renderiza con el Markdown compartido.
-import { useEffect, useState } from "react"
+// Lector de lección — TOC autogenerado + diagrama editorial del tema + wrapper tipográfico.
+import { useEffect, useMemo, useState } from "react"
 import { Markdown } from "../../components/Markdown.tsx"
 import { loadLesson } from "./data.ts"
+import { DiagramForLesson, shouldShowDiagram } from "./diagrams.tsx"
 import type { LearningLesson, LearningProgress } from "./types.ts"
 
-interface LessonViewProps {
+interface Props {
   lesson: LearningLesson
   progress: LearningProgress
+  isFirstInCategory?: boolean
   onToggleDone: (id: string, done: boolean) => void
   onBack?: () => void
   onPrev?: () => void
   onNext?: () => void
 }
 
-export function LessonView({ lesson, progress, onToggleDone, onBack, onPrev, onNext }: LessonViewProps) {
+interface TocItem { level: number; text: string; id: string }
+
+function slugify(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+}
+
+function extractToc(md: string): TocItem[] {
+  const out: TocItem[] = []
+  const seen = new Set<string>()
+  for (const line of md.split("\n")) {
+    const m = line.match(/^(#{1,3})\s+(.+)$/)
+    if (!m) continue
+    const level = m[1].length
+    const text = m[2].replace(/[#`*_\[\]]/g, "").trim().slice(0, 80)
+    if (!text) continue
+    let id = slugify(text)
+    let n = 1
+    while (seen.has(id)) { n++; id = `${slugify(text)}-${n}` }
+    seen.add(id)
+    out.push({ level, text, id })
+  }
+  return out
+}
+
+export function LessonView({ lesson, progress, isFirstInCategory, onToggleDone, onBack, onPrev, onNext }: Props) {
   const [content, setContent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const storageKey = `learning:diagram:${lesson.category}`
+  const [expanded, setExpanded] = useState<boolean>(() => {
+    try { return localStorage.getItem(storageKey) === "1" } catch { return false }
+  })
+
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, expanded ? "1" : "0") } catch { /* ignore */ }
+  }, [storageKey, expanded])
+
+  // reset collapsed state when category changes (respect persisted value)
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(storageKey)
+      setExpanded(v === "1")
+    } catch { setExpanded(false) }
+  }, [storageKey])
 
   useEffect(() => {
     let cancelled = false
     setContent(null)
     setError(null)
-    loadLesson(lesson)
-      .then((md) => { if (!cancelled) setContent(md) })
-      .catch((err) => { if (!cancelled) setError(String(err)) })
+    loadLesson(lesson).then((md) => { if (!cancelled) setContent(md) }).catch((e) => { if (!cancelled) setError(String(e)) })
     return () => { cancelled = true }
   }, [lesson])
 
+  const toc = useMemo(() => content ? extractToc(content) : [], [content])
   const done = !!progress[lesson.id]?.done
+  const hasDiagram = shouldShowDiagram(lesson)
 
   return (
-    <article className="learning-lesson" style={articleStyle}>
-      <header style={headerStyle}>
-        {onBack && (
-          <button type="button" onClick={onBack} className="btn-icon compact" aria-label="Volver" style={backStyle}>←</button>
-        )}
+    <article className="learning-lesson">
+      <header className="learning-lesson-head">
+        {onBack && <button type="button" onClick={onBack} className="btn-icon compact" aria-label="Volver">←</button>}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 style={titleStyle}>{lesson.title}</h1>
-          <div style={metaStyle}>
-            <span className="learning-badge" style={badgeStyle}>{lesson.categoryTitle}</span>
-            {lesson.subCategory && <span className="learning-badge" style={{ ...badgeStyle, background: "var(--border)" }}>{lesson.subCategory}</span>}
-            <span style={depthStyle}>Profundidad: {lesson.depth}</span>
-            <span style={depthStyle}>~{lesson.minutes} min</span>
+          <h1 className="learning-lesson-title">{lesson.title}</h1>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 6, fontSize: "0.74rem", color: "var(--muted)" }}>
+            <span className="learning-badge primary">{lesson.categoryTitle}</span>
+            {lesson.subCategory && <span className="learning-badge">{lesson.subCategory}</span>}
+            <span className="learning-depth-dot" data-depth={lesson.depth} aria-hidden="true" title={lesson.depth} />
+            <span>{lesson.depth}</span>
+            <span>·</span>
+            <span>{lesson.minutes} min</span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => onToggleDone(lesson.id, !done)}
-          className={`btn${done ? " primary" : ""}`}
-          style={doneBtnStyle}
-        >
+        <button type="button" onClick={() => onToggleDone(lesson.id, !done)} className={`btn learning-done-btn${done ? " primary" : ""}`}>
           {done ? "✓ Completada" : "Marcar completada"}
         </button>
       </header>
 
-      <div className="learning-content markdown-body" style={contentWrapStyle}>
-        {content === null && !error && <p style={{ color: "var(--muted)", padding: "2rem", textAlign: "center" }}>Cargando…</p>}
-        {error && <p style={{ color: "#ef4444", padding: "2rem", textAlign: "center" }}>Error cargando lección: {error}</p>}
-        {content !== null && <Markdown text={content} />}
+      {isFirstInCategory && hasDiagram && (
+        <div className={`learning-lesson-diagram ${expanded ? "is-expanded" : "is-collapsed"}`}>
+          <DiagramForLesson lesson={lesson} />
+          <button
+            type="button"
+            className="learning-diagram-toggle"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-label={expanded ? "Ocultar diagrama" : "Ver diagrama del tema"}
+          >
+            {expanded ? "▾ Ocultar" : "▸ Ver diagrama del tema"}
+          </button>
+        </div>
+      )}
+
+      <div className="learning-lesson-body">
+        {toc.length >= 3 && (
+          <nav className="learning-toc" aria-label="Tabla de contenidos">
+            <p className="learning-toc-title">Contenido</p>
+            <ol className="learning-toc-list">
+              {toc.map((item) => (
+                <li key={item.id} style={{ paddingLeft: item.level === 1 ? 0 : item.level === 2 ? 10 : 20 }}>
+                  <a
+                    href={`#${item.id}`}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      const el = document.getElementById(item.id)
+                      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }}
+                    className="learning-toc-link"
+                  >
+                    {item.text}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )}
+
+        <div className="learning-content-wrap">
+          {content === null && !error && <p className="subtle" style={{ padding: "2rem", textAlign: "center" }}>Cargando…</p>}
+          {error && <p style={{ color: "var(--danger)", padding: "2rem" }}>Error: {String(error)}</p>}
+          {content !== null && <LessonMarkdownWithAnchors content={content} toc={toc} />}
+        </div>
       </div>
 
       {(onPrev || onNext) && (
-        <footer style={footerNavStyle}>
+        <footer className="learning-pager">
           {onPrev ? <button type="button" onClick={onPrev} className="btn">← Anterior</button> : <span />}
           {onNext ? <button type="button" onClick={onNext} className="btn primary">Siguiente →</button> : <span />}
         </footer>
@@ -70,32 +147,25 @@ export function LessonView({ lesson, progress, onToggleDone, onBack, onPrev, onN
   )
 }
 
-const articleStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  minHeight: 0,
-}
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: ".75rem",
-  padding: ".75rem 1rem",
-  borderBottom: "1px solid var(--border)",
-  flexWrap: "wrap",
-}
-const backStyle: React.CSSProperties = { flexShrink: 0 }
-const titleStyle: React.CSSProperties = { margin: 0, fontSize: "1.125rem", lineHeight: 1.3 }
-const metaStyle: React.CSSProperties = { display: "flex", gap: ".5rem", alignItems: "center", flexWrap: "wrap", marginTop: ".25rem", fontSize: ".75rem" }
-const badgeStyle: React.CSSProperties = { padding: ".125rem .5rem", borderRadius: "999px", background: "rgba(99,102,241,.15)", color: "var(--fg)", fontSize: ".6875rem" }
-const depthStyle: React.CSSProperties = { color: "var(--muted)" }
-const doneBtnStyle: React.CSSProperties = { flexShrink: 0, fontSize: ".8125rem" }
-const contentWrapStyle: React.CSSProperties = { flex: 1, overflowY: "auto", padding: "1rem 1.25rem", minHeight: 0 }
-const footerNavStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: ".5rem 1rem",
-  borderTop: "1px solid var(--border)",
-  gap: ".5rem",
+// Wrapper que inyecta ids en los headings para que el TOC funcione.
+function LessonMarkdownWithAnchors({ content, toc }: { content: string; toc: TocItem[] }) {
+  const patched = useMemo(() => {
+    let idx = 0
+    return content.split("\n").map((line) => {
+      const m = line.match(/^(#{1,3})\s+(.+)$/)
+      if (!m) return line
+      const item = toc[idx++]
+      if (!item) return line
+      // Inyecta id html detrás del heading: react-markdown renderiza <hN id=...>
+      // Usamos sintaxis que react-markdown preserva: envolvemos en <div id=...>
+      return `<a id="${item.id}" aria-hidden="true"></a>\n` + line
+    }).join("\n")
+  }, [content, toc])
+
+  return (
+    <div className="message-content markdown-body">
+      {/* El <a id> trick funciona aunque no reescriba el heading: react-markdown deja pasar raw html por default si remarkGfm lo permite. */}
+      <Markdown text={patched} />
+    </div>
+  )
 }

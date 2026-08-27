@@ -9,19 +9,21 @@ import "@xterm/xterm/css/xterm.css"
 import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
 import { VisualSelectOverlay } from "./VisualSelectOverlay"
+import { ContextMenu } from "./ContextMenu"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { useDevServer } from "../hooks/useDevServer"
 
 import { terminalStore, terminalPtyStore, rememberTerminalPty, killTerminalPty, transferTerminalTab, getTerminalFontSize, setTerminalFontSize, TERMINAL_FONT_MIN, TERMINAL_FONT_MAX } from "../utils/terminalStore"
 export { killTerminalPty, transferTerminalTab }
+import { createPortal } from "react-dom"
 import { useT } from "../i18n-context"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
 import { sanitizeHtml } from "../utils/sanitize"
-import { useOutsideClick } from "../hooks/useOutsideClick"
-
 const BrowserPanel = lazy(() => import("./BrowserPanel").then((m) => ({ default: m.BrowserPanel })))
 const DocEditorPanel = lazy(() => import("./DocEditorPanel").then((m) => ({ default: m.DocEditorPanel })))
+// Visor PDF bajo demanda: chunk + worker solo se descargan al abrir un .pdf
+const PdfViewer = lazy(() => import("./PdfViewer").then((m) => ({ default: m.PdfViewer })))
 export { BrowserPanel, DocEditorPanel }
 
 // ============================================================== Terminal
@@ -409,7 +411,7 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
         connectWs(wsPort, ptyId)
       }
     } else {
-      shell.pty.create(initialCwdRef.current, initialShellRef.current).then((res) => {
+      shell.pty.create(initialCwdRef.current, initialShellRef.current).then(async (res) => {
         if (disposed) {
           rememberTerminalPty(tabId, { ptyId: res.id, wsPort: res.ws_port })
           return
@@ -418,17 +420,19 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
         wsPort = res.ws_port
         rememberTerminalPty(tabId, { ptyId: res.id, wsPort: res.ws_port })
         connectWs(wsPort, ptyId)
-        // Si hay flag de auto-opencode2 pendiente, enviar el comando tras conectar
-        let shouldAuto = false
-        try { shouldAuto = sessionStorage.getItem("opencode.auto_opencode2.pending") === "1" } catch {}
-        if (shouldAuto) {
-          try { sessionStorage.removeItem("opencode.auto_opencode2.pending") } catch {}
-          const send = () => {
-            if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ cmd: "write", data: "opencode2\r" }))
-            else if (ptyId) shell.pty.write(ptyId, "opencode2\r").catch(() => {})
+        // Auto opencode2: inyectar "opencode2" si el flag está pendiente (Ajustes > Inicio)
+        try {
+          const { consumePendingAutoOpencode2 } = await import("../utils/terminalStore")
+          if (consumePendingAutoOpencode2()) {
+            console.info("[auto-opencode2] PTY listo, enviando opencode2 a", ptyId)
+            const send = () => {
+              try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ cmd: "write", data: "opencode2\r" })) } catch {}
+              if (ptyId) shell.pty.write(ptyId, "opencode2\r").then(() => console.info("[auto-opencode2] write OK", ptyId)).catch((e) => console.warn("[auto-opencode2] write fail", e))
+            }
+            setTimeout(send, 700)
+            setTimeout(send, 1600)
           }
-          setTimeout(send, 900)
-        }
+        } catch {}
       }).catch(() => {
         term.writeln("\r\n\x1b[31m[Terminal] No se pudo iniciar el proceso ConPTY. Verifique que el ejecutable de escritorio esté en ejecución.\x1b[0m\r\n")
       })
@@ -618,6 +622,7 @@ export const TerminalPanel = memo(function TerminalPanel({
   panelId,
   onToggleDock,
   isDocked,
+  isFloating,
   onMaximize,
   maximized,
   onClose,
@@ -629,6 +634,8 @@ export const TerminalPanel = memo(function TerminalPanel({
   panelId?: string
   onToggleDock?: () => void
   isDocked?: boolean
+  /** Instancia de la ventana flotante (modal), no un panel del grid. */
+  isFloating?: boolean
   onMaximize?: () => void
   maximized?: boolean
   onClose?: () => void
@@ -743,6 +750,9 @@ export const TerminalPanel = memo(function TerminalPanel({
   const zoomOut = () => { try { const cur = getTerminalFontSize(activeTabId); setTerminalFontSize(activeTabId, cur - 1) } catch {} }
   const zoomReset = () => { try { setTerminalFontSize(activeTabId, 13) } catch {} }
 
+  // Menú contextual del header (click derecho): movimiento + acople
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#0d1117" }}>
       {/* Barra superior estilo VS Code */}
@@ -750,6 +760,10 @@ export const TerminalPanel = memo(function TerminalPanel({
         <div className="terminal-header-bar"
           draggable={true}
           style={{ cursor: "grab" }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setCtxMenu({ x: e.clientX, y: e.clientY })
+          }}
           onDragStart={(e) => {
             const dragPayload = panelIndex !== undefined ? `panel:${panelIndex}:kind:terminal` : "kind:terminal"
             e.dataTransfer.setData("text/plain", dragPayload)
@@ -979,6 +993,37 @@ export const TerminalPanel = memo(function TerminalPanel({
           </>
         )}
       </div>
+
+      {/* Menú contextual del header: movimiento, acople como ventana, zoom, cerrar */}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          actions={[
+            ...(onToggleDock ? [{
+              id: "dock",
+              label: isDocked ? "Abrir como ventana flotante" : "Acoplar abajo",
+              onAction: () => onToggleDock(),
+            }] : []),
+            ...(!isDocked && isFloating ? [{
+              id: "center",
+              label: "Centrar ventana",
+              onAction: () => { try { window.dispatchEvent(new CustomEvent("terminal:float-center")) } catch {} },
+            }] : []),
+            ...(onMaximize ? [{
+              id: "maximize",
+              label: maximized ? "Restaurar tamaño" : "Maximizar",
+              onAction: () => onMaximize(),
+            }] : []),
+            ...(onClose ? [{
+              id: "close",
+              label: "Cerrar terminal",
+              onAction: () => onClose(),
+            }] : []),
+          ]}
+        />
+      )}
     </div>
   )
 })
@@ -1155,10 +1200,58 @@ export const ExplorerPanel = memo(function ExplorerPanel({
   const [execConfirm, setExecConfirm] = useState<{ path: string; name: string } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [showProjectMenu, setShowProjectMenu] = useState(false)
-  const projectMenuRef = useRef<HTMLDivElement | null>(null)
+  const projectAnchorRef = useRef<HTMLButtonElement | null>(null)
+  const projectMenuElRef = useRef<HTMLDivElement | null>(null)
   const [explorerRecent, setExplorerRecent] = useState<string[]>(() => loadExplorerRecent())
-  useOutsideClick(projectMenuRef, () => setShowProjectMenu(false), showProjectMenu)
+  const [projectMenuPos, setProjectMenuPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null)
   const refreshExplorerRecent = useCallback(() => setExplorerRecent(loadExplorerRecent()), [])
+
+  const toggleProjectMenu = useCallback(() => {
+    setShowProjectMenu((v) => {
+      const next = !v
+      if (next) {
+        const r = projectAnchorRef.current?.getBoundingClientRect()
+        if (r) {
+          const M = 8
+          const vw = window.innerWidth
+          const vh = window.innerHeight
+          const W = Math.min(420, vw - M * 2)
+          const estH = Math.min(360, Math.round(vh * 0.6))
+          // espacio disponible abajo vs arriba para elegir dirección (flip)
+          const below = vh - r.bottom - M
+          const left = Math.max(M, Math.min(r.right - W, vw - W - M))
+          if (below >= Math.min(estH, 220) || below >= r.top - M) {
+            setProjectMenuPos({ left, top: r.bottom + 6 })
+          } else {
+            setProjectMenuPos({ left, bottom: vh - r.top + 6 })
+          }
+        }
+      }
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!showProjectMenu) return
+    const onPointerDown = (e: PointerEvent): void => {
+      const t = e.target as Node
+      if (projectMenuElRef.current?.contains(t)) return
+      if (projectAnchorRef.current?.contains(t)) return
+      setShowProjectMenu(false)
+    }
+    const onKey = (e: KeyboardEvent): void => { if (e.key === "Escape") setShowProjectMenu(false) }
+    const onReflow = (): void => setShowProjectMenu(false)
+    document.addEventListener("pointerdown", onPointerDown, true)
+    document.addEventListener("keydown", onKey)
+    window.addEventListener("resize", onReflow)
+    window.addEventListener("scroll", onReflow, true)
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true)
+      document.removeEventListener("keydown", onKey)
+      window.removeEventListener("resize", onReflow)
+      window.removeEventListener("scroll", onReflow, true)
+    }
+  }, [showProjectMenu])
 
   const isExecScript = (path?: string) => {
     if (!path) return false
@@ -1422,40 +1515,44 @@ export const ExplorerPanel = memo(function ExplorerPanel({
       onDragLeave={() => setDragOverTree(false)}
       onDrop={(e) => handleDropExternal(e, cwd || initialCwd || "")}
     >
-      <div className="shell-explorer-top" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <div className="shell-explorer-top" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative" }}>
         <button className="btn-icon compact" onClick={back} title={t('shell.back')} aria-label={t('shell.back')}>←</button>
-        <span className="shell-path" title={cwd ?? ""} style={{ flex: "1 1 auto", minWidth: 0 }}>
+        <span className="shell-path" title={cwd ?? ""} style={{ flex: "1 1 auto", minWidth: 120 }}>
           {projName && cwd?.startsWith(initialCwd!) ? (
             cwd === initialCwd ? <><FolderIcon size={12} /> {projName}</> : <><FolderIcon size={12} /> {projName}/{cwd.slice(initialCwd!.length).replace(/^[/\\]+/, "")}</>
           ) : (cwd ?? "…")}
         </span>
-        <button
-          type="button"
-          onClick={openChangeFolder}
-          title="Cambiar carpeta"
-          aria-label="Cambiar carpeta"
-          style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: "0.78rem", fontWeight: 500, cursor: "pointer", padding: "2px 4px" }}
-        >
-          Cambiar carpeta
-        </button>
-        <div ref={projectMenuRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
           <button
             type="button"
-            onClick={() => setShowProjectMenu((v) => !v)}
+            className="btn-secondary compact"
+            onClick={openChangeFolder}
+            title="Cambiar carpeta"
+            aria-label="Cambiar carpeta"
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "0.75rem", fontWeight: 500, whiteSpace: "nowrap", padding: "4px 8px", minHeight: 26, lineHeight: 1 }}
+          >
+            <FolderIcon size={12} /> Cambiar carpeta
+          </button>
+          <button
+            ref={projectAnchorRef}
+            type="button"
+            className="btn-secondary compact"
+            onClick={toggleProjectMenu}
             title="Proyectos recientes"
             aria-label="Proyectos recientes"
             aria-expanded={showProjectMenu}
-            style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: "2px 4px", fontSize: "0.95rem", lineHeight: 1 }}
+            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 26, minHeight: 26, padding: "0 5px", lineHeight: 1 }}
           >
-            ▾
+            <ChevronDownIcon size={10} />
           </button>
-          {showProjectMenu && (
+          {showProjectMenu && projectMenuPos && createPortal(
             <div
+              ref={projectMenuElRef}
               className="modal-dropdown fade-in"
               style={{
-                position: "absolute",
-                right: 0,
-                top: "calc(100% + 6px)",
+                position: "fixed",
+                left: projectMenuPos.left,
+                ...(projectMenuPos.top !== undefined ? { top: projectMenuPos.top } : { bottom: projectMenuPos.bottom }),
                 zIndex: 100000,
                 background: "var(--surface)",
                 border: "1px solid var(--border)",
@@ -1500,8 +1597,8 @@ export const ExplorerPanel = memo(function ExplorerPanel({
               <button type="button" className="overflow-item" onClick={() => { setShowProjectMenu(false); openChangeFolder() }}>
                 <span><FolderIcon size={14} /></span> Cambiar carpeta…
               </button>
-            </div>
-          )}
+            </div>,
+            document.body)}
         </div>
         <button type="button" className="btn-icon compact" onClick={() => handleCreateFile(cwd || initialCwd || "")} title="Nuevo archivo">
           +<FileIcon size={13} />
@@ -1904,7 +2001,10 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   }, [isControlled, controlledTabs])
   const [filesState, setFilesState] = useState<Record<string, { content: string; dirty: boolean; loading: boolean; error: string | null }>>({})
   const [saving, setSaving] = useState(false)
-  const [mdViewMode, setMdViewMode] = useState<"edit" | "preview" | "split">("split")
+  // .md abre en vista previa por defecto; resto de archivos en dividido
+  const [mdViewMode, setMdViewMode] = useState<"edit" | "preview" | "split">(() =>
+    /\.(md|markdown|mdown|mkd)$/i.test(initialPath) ? "preview" : "split"
+  )
 
   const isMarkdown = /\.(md|markdown|mdown|mkd)$/i.test(activeTab)
 
@@ -1919,6 +2019,8 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   // Cargar contenido de la pestaña activa si no fue cargada aún
   useEffect(() => {
     if (!activeTab) return
+    // Los PDF son binarios: los maneja PdfViewer vía /shell/fs/download, no fs.read
+    if (/\.pdf$/i.test(activeTab)) return
     let cancelled = false
     setFilesState((prev) => {
       if (prev[activeTab] && (prev[activeTab].content || prev[activeTab].error)) return prev
@@ -2106,7 +2208,11 @@ export const FileEditorPanel = memo(function FileEditorPanel({
             onExit={onToggleInspect}
           />
         )}
-        {activeFile?.loading ? (
+        {/\.pdf$/i.test(activeTab) ? (
+          <Suspense fallback={<div style={{ padding: 16, color: "var(--muted)" }}>Cargando visor PDF…</div>}>
+            <PdfViewer path={activeTab} />
+          </Suspense>
+        ) : activeFile?.loading ? (
           <div style={{ padding: 16, color: "var(--muted)" }}>Cargando archivo...</div>
         ) : activeFile?.error ? (
           <div style={{ padding: 16, color: "var(--danger)" }}>{activeFile.error}</div>

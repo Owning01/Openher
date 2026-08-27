@@ -350,9 +350,102 @@ pub fn pick_folder() -> Result<Option<String>, String> {
     let path = dialog.pick_folder();
     Ok(path.map(|p| p.to_string_lossy().to_string()))
 }
+
+/// Busca texto recursivamente en archivos dentro de `path`.
+pub fn search_code(path: &str, query: &str, limit: usize) -> Result<serde_json::Value, String> {
+    let p = Path::new(path);
+    if !p.exists() || !p.is_dir() {
+        return Err("directorio no válido".into());
+    }
+    let q = query.trim();
+    if q.is_empty() {
+        return Ok(serde_json::json!({
+            "query": query,
+            "matches": [],
+            "total_matches": 0,
+            "total_files": 0,
+            "truncated": false,
+        }));
+    }
+
+    let q_lower = q.to_lowercase();
+    let mut matches = Vec::new();
+    let mut matched_files_set = std::collections::HashSet::new();
+    let mut truncated = false;
+    let max_results = if limit == 0 { 100 } else { limit.min(500) };
+
+    let mut stack = vec![p.to_path_buf()];
+    let max_depth = 12;
+
+    'outer: while let Some(dir) = stack.pop() {
+        if let Ok(rel) = dir.strip_prefix(p) {
+            if rel.components().count() > max_depth {
+                continue;
+            }
+        }
+
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for entry in rd.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with('.') || name == "node_modules" || name == "target" || name == "dist"
+                    || name == "build" || name == ".next" || name == "target-local" || name == ".cargo-target"
+                    || name == "vendor" || name == "__pycache__" || name == ".git" || name == "Pods" {
+                    continue;
+                }
+
+                let entry_path = entry.path();
+                if let Ok(ft) = entry.file_type() {
+                    if ft.is_dir() {
+                        stack.push(entry_path);
+                    } else if ft.is_file() {
+                        if let Ok(meta) = entry.metadata() {
+                            if meta.len() > 2 * 1024 * 1024 {
+                                continue;
+                            }
+                        }
+
+                        let ext = entry_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                        if matches!(ext.as_str(), "exe" | "dll" | "so" | "dylib" | "bin" | "png" | "jpg" | "jpeg" | "gif" | "webp" | "ico" | "pdf" | "zip" | "tar" | "gz" | "7z" | "woff" | "woff2" | "ttf" | "eot" | "mp3" | "mp4" | "wav" | "ogg" | "apk" | "ipa" | "jar" | "class" | "lock" | "pyc") {
+                            continue;
+                        }
+
+                        if let Ok(content) = std::fs::read_to_string(&entry_path) {
+                            let p_str = crate::state::pstring(&entry_path);
+                            for (line_idx, line) in content.lines().enumerate() {
+                                if line.to_lowercase().contains(&q_lower) {
+                                    matched_files_set.insert(p_str.clone());
+                                    matches.push(serde_json::json!({
+                                        "path": p_str.clone(),
+                                        "file_name": name.clone(),
+                                        "line_number": line_idx + 1,
+                                        "line_content": line.chars().take(300).collect::<String>(),
+                                    }));
+
+                                    if matches.len() >= max_results {
+                                        truncated = true;
+                                        break 'outer;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::json!({
+        "query": query,
+        "matches": matches,
+        "total_matches": matches.len(),
+        "total_files": matched_files_set.len(),
+        "truncated": truncated,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::move_entry;
+    use super::*;
 
     fn tmpdir(tag: &str) -> std::path::PathBuf {
         let d = std::env::temp_dir().join(format!("fsx_move_test_{tag}_{}", std::process::id()));
@@ -372,6 +465,18 @@ mod tests {
         assert!(!src.exists());
         assert!(dest.join("a.txt").exists());
         assert!(out.contains("a.txt"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn search_code_finds_matches() {
+        let root = tmpdir("search");
+        let src = root.join("hello.rs");
+        std::fs::write(&src, b"fn main() {\n    println!(\"search_target_token\");\n}\n").unwrap();
+        let res = search_code(root.to_str().unwrap(), "search_target_token", 10).unwrap();
+        assert_eq!(res["total_matches"], 1);
+        assert_eq!(res["matches"][0]["line_number"], 2);
+        assert!(res["matches"][0]["line_content"].as_str().unwrap().contains("search_target_token"));
         let _ = std::fs::remove_dir_all(&root);
     }
 

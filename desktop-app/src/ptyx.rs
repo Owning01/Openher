@@ -169,9 +169,6 @@ impl PtyRegistry {
         }
     }
 
-    pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
-        self.resize_px(id, cols, rows, 0, 0)
-    }
     pub fn resize_px(&self, id: &str, cols: u16, rows: u16, pixel_width: u16, pixel_height: u16) -> Result<(), String> {
         let map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get(id).ok_or("pty no existe")?;
@@ -289,7 +286,7 @@ pub fn default_shell() -> String {
 // ConPTY (escritura + flush directo al socket, sin buffers HTTP).
 
 pub fn start_ws_server(registry: Arc<PtyRegistry>, port: u16) -> std::io::Result<()> {
-    let listener = std::net::TcpListener::bind(("127.0.0.1", port))?;
+    let listener = std::net::TcpListener::bind(("0.0.0.0", port))?;
     std::thread::Builder::new()
         .name("pty-ws".into())
         .spawn(move || {

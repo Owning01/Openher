@@ -239,10 +239,27 @@ const post = async <T>(url: string, body?: unknown) => {
   }).then(j<T>)
 }
 
+export type CodeSearchMatch = {
+  path: string
+  file_name: string
+  line_number: number
+  line_content: string
+}
+
+export type CodeSearchResult = {
+  query: string
+  matches: CodeSearchMatch[]
+  total_matches: number
+  total_files: number
+  truncated: boolean
+}
+
 export const shell = {
   fs: {
     drives: () => get<{ drives: string[] }>("/shell/fs/drives"),
     list: (path: string) => get<{ path: string; dirs: FsEntry[]; files: FsEntry[] }>(`/shell/fs/list?path=${encodeURIComponent(path)}`),
+    searchCode: (path: string, query: string, limit = 100) =>
+      get<CodeSearchResult>(`/shell/fs/search?path=${encodeURIComponent(path)}&q=${encodeURIComponent(query)}&limit=${limit}`),
     read: (path: string) => get<{ path: string; content: string; truncated: boolean; size: number; ext: string }>(`/shell/fs/read?path=${encodeURIComponent(path)}`),
     favorites: () => get<{ favorites: string[] }>("/shell/fs/favorites"),
     toggleFavorite: (path: string, add: boolean) => post("/shell/fs/favorites", { path, add }),

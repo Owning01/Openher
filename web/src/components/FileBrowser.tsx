@@ -199,11 +199,16 @@ export const FileBrowser = memo(function FileBrowser({
   const t = useT()
   const [execConfirm, setExecConfirm] = useState<FileEntry | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [filter, setFilter] = useState("")
 
   const showNotice = (msg: string) => {
     setNotice(msg)
     window.setTimeout(() => setNotice((m) => (m === msg ? null : m)), 2500)
   }
+
+  const filteredItems = filter
+    ? items.filter((i) => i.name.toLowerCase().includes(filter.toLowerCase()))
+    : items
 
   return (
     <Modal onClose={onClose} className="file-browser" aria-labelledby="file-browser-title">
@@ -212,6 +217,16 @@ export const FileBrowser = memo(function FileBrowser({
         <button className="btn-icon btn-ghost" onClick={onClose} aria-label={t('session.cancel')}>
           <CloseIcon size={16} />
         </button>
+      </div>
+      <div style={{ padding: "0 12px 8px" }}>
+        <input
+          type="search"
+          className="search-input"
+          placeholder="Buscar archivos por nombre..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          style={{ width: "100%", padding: "6px 10px", fontSize: "0.85rem" }}
+        />
       </div>
       <div className="file-browser-path" title={currentPath}>
         <span className="subtle">{currentPath || directory || "\u00a0"}</span>
@@ -224,10 +239,10 @@ export const FileBrowser = memo(function FileBrowser({
           <div className="empty-state compact"><LoadingIcon size={28} /><p>{t('sessions.folderPickerLoading')}</p></div>
         ) : error ? (
           <p className="subtle" style={{ color: "var(--color-error)", padding: "12px" }}>{error}</p>
-        ) : items.length === 0 ? (
-          <p className="subtle" style={{ padding: "12px" }}>{t('sessions.folderPickerEmpty')}</p>
+        ) : filteredItems.length === 0 ? (
+          <p className="subtle" style={{ padding: "12px" }}>{filter ? "No se encontraron coincidencias" : t('sessions.folderPickerEmpty')}</p>
         ) : (
-          items.map((item) => (
+          filteredItems.map((item) => (
             <FileTreeItem
               key={item.absolute || item.path || item.name}
               item={item}

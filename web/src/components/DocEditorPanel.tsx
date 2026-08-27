@@ -13,7 +13,10 @@ export const DocEditorPanel = memo(function DocEditorPanel({ initialPath }: Prop
   const [loading, setLoading] = useState<boolean>(false)
   const [saving, setSaving] = useState<boolean>(false)
   const [statusMsg, setStatusMsg] = useState<string>("")
-  const [viewMode, setViewMode] = useState<"edit" | "preview" | "split">("split")
+  // .md abre en vista previa por defecto; resto de archivos en dividido
+  const [viewMode, setViewMode] = useState<"edit" | "preview" | "split">(() =>
+    /\.(md|markdown|mdown|mkd)$/i.test(initialPath || "") ? "preview" : "split"
+  )
 
   const loadFile = useCallback(async (path: string) => {
     if (!path) return

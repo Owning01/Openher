@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false">
+    <!-- La app es cliente de servers opencode propios por HTTP puro
+         (LAN/Tailscale, ej. 100.x.x.x). Cleartext permitido globalmente;
+         el auth lo maneja Basic auth por servidor. -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

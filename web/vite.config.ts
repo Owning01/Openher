@@ -26,9 +26,9 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined
           if (id.includes("@capacitor")) return "capacitor"
-          // @xterm: solo lo alcanzan chunks async (TerminalView/paneles desktop);
-          // sacarlo del catch-all evita ~385KB eager en el APK móvil.
-          if (id.includes("@xterm")) return undefined
+          // @xterm y pdf.js: solo los alcanzan chunks async (TerminalView/paneles desktop,
+          // visor de PDF). Sacarlos del catch-all evita ~385KB + ~1MB eager.
+          if (id.includes("@xterm") || id.includes("pdfjs-dist")) return undefined
           if (id.includes("react-markdown") || id.includes("remark-") || id.includes("rehype-") ||
               id.includes("highlight.js") || id.includes("hast-") || id.includes("micromark") ||
               id.includes("mdast-") || id.includes("unist-") || id.includes("unified")) return "markdown"

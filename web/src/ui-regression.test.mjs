@@ -8,6 +8,10 @@ const msgList = readFileSync(new URL('./components/MessageList.tsx', import.meta
 const composer = readFileSync(new URL('./components/Composer.tsx', import.meta.url), 'utf8')
 const sessionCard = readFileSync(new URL('./components/SessionCard.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
+const controller = readFileSync(new URL('./app/useAppController.ts', import.meta.url), 'utf8')
+const baseChatPropsSource = readFileSync(new URL('./features/chat/hooks/useBaseChatProps.ts', import.meta.url), 'utf8')
+const hostActions = readFileSync(new URL('./features/host-actions/hooks/useHostActions.ts', import.meta.url), 'utf8')
+const lifecycle = readFileSync(new URL('./features/app-lifecycle/hooks/useAppLifecycle.ts', import.meta.url), 'utf8')
 const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
 const useMessages = readFileSync(new URL('./hooks/useMessages.ts', import.meta.url), 'utf8')
 const useAI = readFileSync(new URL('./hooks/useAI.ts', import.meta.url), 'utf8')
@@ -41,7 +45,7 @@ assert.ok(useMessages.includes('awaitingAssistantReply'), 'typing bubble should 
 assert.ok(useMessages.includes('assistantResponseSignature'), 'typing bubble should be replaced by the next assistant response')
 assert.ok(useMessages.includes('optimisticUserMessages'), 'sent user messages should render immediately before the network round trip returns')
 assert.ok(useMessages.includes('createOptimisticUserMessage') || useMessages.includes('optimisticMessage'), 'send flow should create an optimistic user message envelope')
-assert.ok(app.includes('isWorking = awaitingAssistantReply || isSessionRunning'), 'working state should track assistant reply and session status for typing bubble')
+assert.ok((app + controller).includes('isWorking = awaitingAssistantReply || isSessionRunning'), 'working state should track assistant reply and session status for typing bubble')
 assert.ok(composer.includes('isWorking') && composer.includes('onAbort'), 'composer should show abort button when working')
 assert.ok(composer.includes('handleSendWithImages') && !composer.includes('onClick={isWorking ? onAbort : onSend}'), 'send button should always be available for multiple prompts')
 assert.ok(useMessages.includes('completionShouldPlayRef.current = true'), 'completion sound should be armed when a real assistant reply is expected')
@@ -146,7 +150,7 @@ const navBar = readFileSync(new URL('./components/NavBar.tsx', import.meta.url),
 assert.ok(navBar.includes("t('nav.lightMode')") && navBar.includes("t('nav.darkMode')"), 'theme toggle should use localized labels')
 
 // Memo de props del chat: sin objetos literales por render
-assert.ok(app.includes('const baseChatProps') && app.includes('= useMemo'), 'chat props should be memoized to avoid cascading re-renders')
+assert.ok((app + controller + baseChatPropsSource).includes('const baseChatProps') && (app + controller + baseChatPropsSource).includes('useMemo'), 'chat props should be memoized to avoid cascading re-renders')
 
 // Menú de niveles de pensamiento en el toggle del modelo del header
 const chatView = readFileSync(new URL('./components/ChatView.tsx', import.meta.url), 'utf8')
@@ -169,8 +173,8 @@ assert.ok(styles.includes('.header-model-menu'), 'model toggle menu should have 
 // Botón Reiniciar PC (Extras de Settings) con confirmación
 assert.ok(settingsPanel.includes("t('extras.restartHost')") && settingsPanel.includes('RefreshIcon'), 'settings extras should offer a restart action')
 assert.ok(settingsPanel.includes('onRestartHost'), 'settings restart should call the host restart handler')
-assert.ok(app.includes('handleRestartHost') && app.includes("shutdown /r /t 10"), 'host restart should run through the server shell with a delay')
-assert.ok(app.includes("shutdown /s /t 0"), 'host shutdown should still run through the server shell')
+assert.ok((app + hostActions).includes('handleRestartHost') && (app + hostActions).includes("shutdown /r /t 10"), 'host restart should run through the server shell with a delay')
+assert.ok((app + hostActions).includes("shutdown /s /t 0"), 'host shutdown should still run through the server shell')
 
 // Envío: una falla de confirmación/refresh NO debe parecer una falla de envío
 assert.ok(useMessages.includes('let ok = false'), 'send flow should track whether the POST itself succeeded')
@@ -204,7 +208,7 @@ assert.ok(useConfig.includes('apiVersion: "auto"'), 'default config should auto-
 
 // Polling: en no-full el fetch de mensajes NO se saltea si el SSE está caído
 // (túnel móvil) — si no, la respuesta del modelo nunca llega hasta el final.
-assert.ok(app.includes('const sseLive = streamState === "streaming"'), 'message fetch skip should require a live SSE stream')
-assert.ok(app.includes('!skip)'), 'message fetch should still run when the SSE is down')
+assert.ok((app + lifecycle).includes('const sseLive = streamState === "streaming"'), 'message fetch skip should require a live SSE stream')
+assert.ok((app + lifecycle).includes('!skip)'), 'message fetch should still run when the SSE is down')
 
 console.log('ui regression tests passed')

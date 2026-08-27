@@ -1,4 +1,4 @@
-//! Motor de conversión ultra-ligero y de cero memoria persistente en Rust puro:
+//! Motor de conversi├│n ultra-ligero y de cero memoria persistente en Rust puro:
 //! DOCX <-> Markdown <-> PDF <-> TXT <-> HTML.
 
 use std::io::{Cursor, Read, Write};
@@ -17,7 +17,7 @@ pub fn pdf_to_md(bytes: &[u8]) -> Result<String, String> {
             out.push_str("\n\n");
             continue;
         }
-        // Heurística de encabezados si está en mayúsculas o corto
+        // Heur├¡stica de encabezados si est├í en may├║sculas o corto
         if trimmed.len() < 50 && trimmed.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c.is_ascii_punctuation()) && trimmed.len() > 3 {
             out.push_str(&format!("## {}\n\n", trimmed));
         } else {
@@ -203,7 +203,7 @@ pub fn md_to_docx(md: &str) -> Result<Vec<u8>, String> {
             ));
         } else if let Some(rest) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
             body_xml.push_str(&format!(
-                r#"<w:p><w:r><w:t>• {}</w:t></w:r></w:p>"#,
+                r#"<w:p><w:r><w:t>ÔÇó {}</w:t></w:r></w:p>"#,
                 quick_xml::escape::escape(rest)
             ));
         } else {
@@ -222,23 +222,74 @@ pub fn md_to_docx(md: &str) -> Result<Vec<u8>, String> {
     Ok(buffer.into_inner())
 }
 
-/// Convierte texto Markdown a un documento PDF vectorial compacto usando lopdf.
-pub fn md_to_pdf(md: &str) -> Result<Vec<u8>, String> {
+/// CSS idéntico al preview de Markdown (chat.css .message-content en tema claro)
+fn markdown_pdf_css() -> &'static str {
+    r#"
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            font-size: 14px; line-height: 1.6; color: #24292e; background: #ffffff;
+            max-width: 800px; margin: 0 auto; padding: 24px;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        }
+        .markdown-body { font-size: 14px; line-height: 1.6; }
+        .markdown-body p { margin: 16px 0 0; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; }
+        .markdown-body p:first-child { margin-top: 0; }
+        .markdown-body strong { color: #24292e; font-weight: 600; }
+        .markdown-body em { color: #24292e; font-style: italic; }
+        .markdown-body a { color: #0366d6; text-decoration: none; } .markdown-body a:hover { text-decoration: underline; }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+            color: #24292e; font-weight: 600; line-height: 1.25; margin: 24px 0 16px;
+        }
+        .markdown-body h1 { font-size: 1.8em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; margin-top: 0; }
+        .markdown-body h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+        .markdown-body h3 { font-size: 1.25em; } .markdown-body h4 { font-size: 1em; }
+        .markdown-body h5 { font-size: 0.875em; } .markdown-body h6 { font-size: 0.85em; color: #6a737d; }
+        .markdown-body blockquote { color: #6a737d; border-left: 0.25em solid #dfe2e5; padding: 0 1em; margin: 0 0 16px; }
+        .markdown-body ul, .markdown-body ol { padding-left: 2em; margin: 0 0 16px; } .markdown-body li { margin: 0.25em 0; }
+        .markdown-body hr { border: none; border-top: 1px solid #eaecef; margin: 24px 0; }
+        .markdown-body img { max-width: 100%; border-radius: 6px; margin: 16px 0; }
+        .markdown-body code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 85%; background: rgba(27,31,35,0.05); border-radius: 3px; padding: 0.2em 0.4em; color: #24292e; }
+        .markdown-body pre { background: #f6f8fa; border: 1px solid #dfe2e5; border-radius: 6px; padding: 16px; overflow: auto; line-height: 1.45; margin: 16px 0; }
+        .markdown-body pre code { background: transparent; padding: 0; border: none; font-size: 85%; color: #24292e; white-space: pre; word-break: normal; }
+        .markdown-body .code-block-wrap { background: #f6f8fa; border: 1px solid #dfe2e5; border-radius: 6px; overflow: hidden; margin: 16px 0; }
+        .markdown-body .code-block-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; background: #f1f3f4; border-bottom: 1px solid #dfe2e5; font-size: 12px; color: #6a737d; }
+        .markdown-body table { width: 100%; border-collapse: collapse; margin: 0 0 16px; font-size: 14px; display: table; }
+        .markdown-body th, .markdown-body td { border: 1px solid #dfe2e5; padding: 6px 13px; text-align: left; }
+        .markdown-body th { background: #f6f8fa; font-weight: 600; } .markdown-body tr:nth-child(2n) { background: #f6f8fa; }
+        .markdown-body .hljs-keyword { color: #d73a49; } .markdown-body .hljs-string { color: #032f62; }
+        .markdown-body .hljs-comment { color: #6a737d; font-style: italic; } .markdown-body .hljs-function { color: #6f42c1; }
+        .markdown-body .hljs-number { color: #005cc5; }
+        @media print { body { padding: 0; } @page { margin: 12mm; size: A4; } pre, blockquote, table, img { break-inside: avoid; } }
+    "#
+}
+
+fn md_to_html_with_css(md: &str) -> String {
+    let mut opts = comrak::ComrakOptions::default();
+    opts.extension.strikethrough = true;
+    opts.extension.table = true;
+    opts.extension.autolink = true;
+    opts.extension.tasklist = true;
+    opts.extension.superscript = true;
+    opts.extension.footnotes = true;
+    opts.extension.description_lists = true;
+    let html_body = comrak::markdown_to_html(md, &opts);
+    format!(
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><style>{}</style></head><body class="markdown-body">{}</body></html>"#,
+        markdown_pdf_css(),
+        html_body
+    )
+}
+
+fn md_to_pdf_lopdf(md: &str) -> Result<Vec<u8>, String> {
     use lopdf::content::{Content, Operation};
     use lopdf::{Document, Object, Stream};
-
     let mut doc = Document::with_version("1.5");
     let pages_id = doc.new_object_id();
-    let font_id = doc.add_object(lopdf::dictionary! {
-        "Type" => "Font",
-        "Subtype" => "Type1",
-        "BaseFont" => "Helvetica",
-    });
-
+    let font_id = doc.add_object(lopdf::dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", });
     let mut page_ids = Vec::new();
     let lines_per_page = 42;
     let md_lines: Vec<&str> = md.lines().collect();
-
     for chunk in md_lines.chunks(lines_per_page) {
         let mut ops = vec![
             Operation::new("BT", vec![]),
@@ -246,69 +297,59 @@ pub fn md_to_pdf(md: &str) -> Result<Vec<u8>, String> {
             Operation::new("Td", vec![50.into(), 750.into()]),
             Operation::new("TL", vec![16.into()]),
         ];
-
         for (i, line) in chunk.iter().enumerate() {
-            let clean_line = line.replace('\t', "    ");
-            let escaped = clean_line.chars().filter(|c| c.is_ascii()).collect::<String>();
-            if i > 0 {
-                ops.push(Operation::new("T*", vec![]));
-            }
-            ops.push(Operation::new("Tj", vec![Object::string_literal(escaped)]));
+            let clean = line.replace('\t', "    ").chars().filter(|c| c.is_ascii()).collect::<String>();
+            if i > 0 { ops.push(Operation::new("T*", vec![])); }
+            ops.push(Operation::new("Tj", vec![Object::string_literal(clean)]));
         }
-
         ops.push(Operation::new("ET", vec![]));
-
         let content = Content { operations: ops };
         let content_id = doc.add_object(Stream::new(lopdf::dictionary! {}, content.encode().map_err(|e| e.to_string())?));
-
         let page_id = doc.add_object(lopdf::dictionary! {
-            "Type" => "Page",
-            "Parent" => pages_id,
-            "Contents" => content_id,
-            "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()], // A4
-            "Resources" => lopdf::dictionary! {
-                "Font" => lopdf::dictionary! {
-                    "F1" => font_id,
-                },
-            },
+            "Type" => "Page", "Parent" => pages_id, "Contents" => content_id,
+            "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()],
+            "Resources" => lopdf::dictionary! { "Font" => lopdf::dictionary! { "F1" => font_id, }, },
         });
         page_ids.push(page_id.into());
     }
-
     if page_ids.is_empty() {
         let content = Content { operations: vec![] };
         let content_id = doc.add_object(Stream::new(lopdf::dictionary! {}, content.encode().map_err(|e| e.to_string())?));
         let page_id = doc.add_object(lopdf::dictionary! {
-            "Type" => "Page",
-            "Parent" => pages_id,
-            "Contents" => content_id,
+            "Type" => "Page", "Parent" => pages_id, "Contents" => content_id,
             "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()],
-            "Resources" => lopdf::dictionary! {
-                "Font" => lopdf::dictionary! {
-                    "F1" => font_id,
-                },
-            },
+            "Resources" => lopdf::dictionary! { "Font" => lopdf::dictionary! { "F1" => font_id, }, },
         });
         page_ids.push(page_id.into());
     }
-
     let count = page_ids.len() as i64;
-    let pages_dict = lopdf::dictionary! {
-        "Type" => "Pages",
-        "Kids" => page_ids,
-        "Count" => count,
-    };
-    doc.objects.insert(pages_id, Object::Dictionary(pages_dict));
-
-    let catalog_id = doc.add_object(lopdf::dictionary! {
-        "Type" => "Catalog",
-        "Pages" => pages_id,
-    });
+    doc.objects.insert(pages_id, Object::Dictionary(lopdf::dictionary! { "Type" => "Pages", "Kids" => page_ids, "Count" => count, }));
+    let catalog_id = doc.add_object(lopdf::dictionary! { "Type" => "Catalog", "Pages" => pages_id, });
     doc.trailer.set("Root", catalog_id);
-
     let mut out = Vec::new();
     doc.save_to(&mut out).map_err(|e| format!("Error guardando PDF: {e}"))?;
     Ok(out)
+}
+
+/// Convierte Markdown a PDF vectorial con CSS idéntico al preview (vectorial, texto seleccionable)
+pub fn md_to_pdf(md: &str) -> Result<Vec<u8>, String> {
+    if let Ok(pdf) = md_to_pdf_via_chrome(md) { if !pdf.is_empty() { return Ok(pdf); } }
+    md_to_pdf_lopdf(md)
+}
+
+fn md_to_pdf_via_chrome(md: &str) -> Result<Vec<u8>, String> {
+    use base64::Engine as _;
+    use headless_chrome::{Browser, LaunchOptions};
+    let html = md_to_html_with_css(md);
+    let html_b64 = base64::engine::general_purpose::STANDARD.encode(html.as_bytes());
+    let data_url = format!("data:text/html;base64,{}", html_b64);
+    let browser = Browser::new(LaunchOptions::default_builder().headless(true).build().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let tab = browser.new_tab().map_err(|e| e.to_string())?;
+    tab.navigate_to(&data_url).map_err(|e| e.to_string())?;
+    tab.wait_until_navigated().map_err(|e| e.to_string())?;
+    std::thread::sleep(std::time::Duration::from_millis(350));
+    let pdf = tab.print_to_pdf(None).map_err(|e| e.to_string())?;
+    Ok(pdf)
 }
 
 /// Convierte archivos arbitrarios en disco a otro formato y opcionalmente guarda el resultado.

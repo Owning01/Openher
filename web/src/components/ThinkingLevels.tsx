@@ -14,12 +14,13 @@ type ThinkingLevelsProps = {
   onChange: (key: string, variant?: string | null) => void
   mode?: "combobox" | "pills"
   disabled?: boolean
+  hideLabel?: boolean
 }
 
 const KNOWN_LEVELS = ["high", "medium", "low"]
 
 export const ThinkingLevels = memo(function ThinkingLevels({
-  base, variants, activeVariant, onChange, mode = "pills", disabled
+  base, variants, activeVariant, onChange, mode = "pills", disabled, hideLabel
 }: ThinkingLevelsProps) {
   const t = useT()
   const baseKey = modelKey(base)
@@ -38,9 +39,11 @@ export const ThinkingLevels = memo(function ThinkingLevels({
   if (mode === "combobox") {
     return (
       <div className="thinking-combobox-wrap">
-        <label className="thinking-levels-label" htmlFor={`thinking-select-${baseKey}`}>
-          {t('detail.thinkingLevel')}
-        </label>
+        {!hideLabel && (
+          <label className="thinking-levels-label" htmlFor={`thinking-select-${baseKey}`}>
+            {t('detail.thinkingLevel')}
+          </label>
+        )}
         <select
           id={`thinking-select-${baseKey}`}
           className="thinking-combobox"
@@ -65,7 +68,7 @@ export const ThinkingLevels = memo(function ThinkingLevels({
 
   return (
     <div className="thinking-levels">
-      <span className="thinking-levels-label">{t('detail.thinkingLevel')}</span>
+      {!hideLabel && <span className="thinking-levels-label">{t('detail.thinkingLevel')}</span>}
       <div className="model-variant-pills">
         {pills.map((p) => (
           <button key={p.variant ?? "default"} type="button"
