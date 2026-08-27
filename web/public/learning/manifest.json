@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-25T20:04:42.665Z",
+  "generatedAt": "2026-08-26T11:40:49.568Z",
   "totalLessons": 79,
   "categories": [
     {
@@ -567,9 +567,9 @@
           "categoryTitle": "Especialización",
           "subCategory": "Vulnerability Research",
           "title": "Criptografia Cuantica y Canales Laterales",
-          "depth": "avanzado",
-          "minutes": 186,
-          "bytes": 280583
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 9349
         },
         {
           "id": "05-Especializacion__05-Hardware-RF__01-14-w1f1-4tt4cks",
@@ -615,9 +615,9 @@
           "categoryTitle": "Especialización",
           "subCategory": "Hardware & RF",
           "title": "Hacking Aeroespacial y Satelites",
-          "depth": "avanzado",
-          "minutes": 108,
-          "bytes": 166446
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 7130
         },
         {
           "id": "05-Especializacion__05-Hardware-RF__05-35-4ut0m0t1v3-s3c",
@@ -627,9 +627,9 @@
           "categoryTitle": "Especialización",
           "subCategory": "Hardware & RF",
           "title": "Automocion y redes V2X (Vehicle-to-Everything)",
-          "depth": "avanzado",
-          "minutes": 128,
-          "bytes": 178794
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 6964
         },
         {
           "id": "05-Especializacion__06-Industrial__01-23-0t-sc4d4",

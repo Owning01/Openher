@@ -27,7 +27,8 @@ export const STORAGE_KEYS = {
   QUICKCHAT_KEY_CEREBRAS: "opencode.mobile.quickchat.key.cerebras",
   QUICKCHAT_KEY_CUSTOM: "opencode.mobile.quickchat.key.custom",
   QUICKCHAT_CUSTOM_URL: "opencode.mobile.quickchat.custom.url",
-  QUICKCHAT_CUSTOM_MODEL: "opencode.mobile.quickchat.custom.model"
+  QUICKCHAT_CUSTOM_MODEL: "opencode.mobile.quickchat.custom.model",
+  SHELL_REMOTE: "opencode.mobile.shellBase"
 }
 
 export const DEFAULT_STATS_PORT = 8765

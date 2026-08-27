@@ -94,12 +94,12 @@ export const ProviderManager = memo(function ProviderManager({ providers, connec
               </div>
               <div className="provider-actions">
                 {p.connected ? (
-                  <button className="btn-sm btn-danger" onClick={() => onDisconnect(p.id)}>
+                  <button className="ag-btn-open ag-btn-danger" onClick={() => onDisconnect(p.id)}>
                     {t('settings.disconnect')}
                   </button>
                 ) : (
                   <button
-                    className="btn-sm btn-primary"
+                    className="ag-btn-open"
                     onClick={() => setSelected(p)}
                     disabled={connecting === p.id}
                   >
@@ -113,9 +113,9 @@ export const ProviderManager = memo(function ProviderManager({ providers, connec
       )}
 
       <button
-        className="btn-link"
+        className="setting-item-link"
         onClick={() => setShowArchived((v) => !v)}
-        style={{ fontSize: "0.75rem", marginTop: "var(--space-2)", opacity: 0.7 }}
+        style={{ marginTop: "4px", alignSelf: "center", cursor: "pointer", background: "none", border: "none" }}
       >
         {showArchived ? t('settings.hideEmpty') : t('settings.showEmpty')}
       </button>

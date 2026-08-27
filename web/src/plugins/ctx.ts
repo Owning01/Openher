@@ -1,4 +1,4 @@
-import { slotRegistry } from "./slots"
+import { slotRegistry, tabRegistry } from "./slots"
 import { pluginBus } from "./bus"
 import { shell } from "../shell"
 import type { PluginManifest, PluginContext, PluginDisposer } from "./types"
@@ -17,6 +17,12 @@ export function createPluginContext(manifest: PluginManifest, disposers: PluginD
     registerSlot: (slotId: any, item: any) => {
       if (!caps.has("ui")) deny("ui")
       const unreg = slotRegistry.register(slotId, { ...item, pluginName: name })
+      disposers.push(unreg)
+      return unreg
+    },
+    registerTab: (tab: any) => {
+      if (!caps.has("ui")) deny("ui")
+      const unreg = tabRegistry.register(name, tab)
       disposers.push(unreg)
       return unreg
     },

@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useMemo, useEffect } from "react"
-import { SettingsIcon, SaveIcon, TestIcon, HelpIcon, LoadingIcon, StatsIcon, EyeIcon, EyeOffIcon, ServerIcon, PlusIcon, TrashIcon, CheckIcon, PowerIcon, GithubIcon, DataIcon, StarIcon, ArchiveIcon, KeyboardIcon, RefreshIcon, CameraIcon, GlobeIcon, BrainIcon, PaintIcon, ChatIcon, ToolIcon, SearchIcon, LayersIcon } from "../Icons"
+import { TestIcon, LoadingIcon, EyeIcon, EyeOffIcon, PlusIcon, TrashIcon, CheckIcon, RefreshIcon, PowerIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo,
   ServerProfile, ChatSettings, PromptSnippet, AgentOption } from "../types"
@@ -8,7 +8,6 @@ import { describeProfile, isPairProfile } from "../hooks/useServers"
 import { ProviderManager } from "./ProviderManager"
 import { ChatCustomizer } from "./ChatCustomizer"
 import { SnippetManager } from "./SnippetManager"
-import { SettingsSection } from "./SettingsSection"
 import { DataUsageModal } from "./DataUsageModal"
 import { ThinkingLevels } from "./ThinkingLevels"
 import { PairModal } from "./PairModal"
@@ -16,25 +15,17 @@ import { PluginSlot } from "../plugins"
 import { ExportCacheButton } from "./ExportCacheButton"
 import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type DesktopConfig } from "../desktop"
 import { fetchGoUsage, loadGoAccounts, saveGoAccounts, type GoUsage } from "../goUsage"
-import { getDataUsage, formatBytes } from "../utils/dataUsage"
 import { variantsOf } from "../utils/model-utils"
 import { useIsDesktop } from "../hooks/useIsDesktop"
+import { useAutoOpencode2 } from "../hooks/useAutoOpencode2"
+import { useSidebarPrefs, SIDEBAR_ITEM_IDS } from "../hooks/useSidebarPrefs"
 import { STORAGE_KEYS } from "../constants"
-import { GROQ_MODELS } from "../providers/groq"
-import { CEREBRAS_MODELS } from "../providers/cerebras"
 
 type UsageStats = {
   promptsSent: number
   sessionsCreated: number
   totalTokens?: number
   firstUsed: number
-}
-
-// Formatea el instante de reset de una cuota (ISO) a fecha/hora local.
-function formatGoReset(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
 }
 
 type SettingsPanelProps = {
@@ -109,46 +100,25 @@ export const SettingsPanel = memo(function SettingsPanel({
   selectedVariant,
   allPrimaryAgents, disabledAgents, onToggleAgentEnabled,
   stats, onResetStats,
-  activeModelOption, blockedModels, onOpenThemePicker,
+  activeModelOption: _activeModelOption, blockedModels, onOpenThemePicker,
   onOpenThemeCreator,
-  flags, onToggleFlag,
+  flags, onToggleFlag, onSetFlag: _onSetFlag,
   providers, connectingProvider, providerError, onConnectProvider, onDisconnectProvider,
-  serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile, onApplyServerProfile, onAddPairServer, activeServerProfileID,
+  serverProfiles, onAddServerProfile, onRemoveServerProfile, onUpdateServerProfile: _onUpdateServerProfile, onApplyServerProfile, onAddPairServer, activeServerProfileID,
   chatSettings, onChatSettingChange, onResetChatSettings,
   snippets, onAddSnippet, onRemoveSnippet,
-  onShutdownHost, onRestartHost, onOpenGitHub, onOpenFavoritesManager, onOpenArchivedView, onOpenShortcuts, onOpenOpenCodeHub,
+  onShutdownHost, onRestartHost, onOpenGitHub, onOpenFavoritesManager: _onOpenFavoritesManager, onOpenArchivedView: _onOpenArchivedView, onOpenShortcuts, onOpenOpenCodeHub,
   onClose
 }: SettingsPanelProps) {
   const t = useT()
   const isDesktop = useIsDesktop()
-  const [showPassword, setShowPassword] = useState(false)
-  const [modelQuery, setModelQuery] = useState("")
   const [showShutdownConfirm, setShowShutdownConfirm] = useState(false)
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   const [showDataUsage, setShowDataUsage] = useState(false)
   const [showPairModal, setShowPairModal] = useState(false)
-  // Sección de servidores abierta por defecto: el botón + y los servers visibles.
-  const [serversOpen, setServersOpen] = useState(true)
+  const { enabled: autoOpencode2, setEnabled: setAutoOpencode2 } = useAutoOpencode2()
+  const { prefs: sidebarPrefs, setPosition: setSidebarPosition, toggleItem: toggleSidebarItem } = useSidebarPrefs()
   const [qcProvider, setQcProvider] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_PROVIDER) || "groq")
-  const [qcModel, setQcModel] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_MODEL) || "")
-  const [qcCustomUrl, setQcCustomUrl] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL) || "https://api.openai.com/v1")
-  const [qcCustomKey, setQcCustomKey] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM) || "")
-  const [qcKey, setQcKey] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS) || "")
-  const [qcGroqKey, setQcGroqKey] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ) || "")
-  const [qcKeyLoaded, setQcKeyLoaded] = useState(false)
-  const [qcSaving, setQcSaving] = useState(false)
-  const [qcNotice, setQcNotice] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!isDesktop || qcKeyLoaded) return
-    import("../shell").then(({ shell }) => {
-      shell.config.get().then((c: any) => {
-        if (c?.cerebras_api_key) setQcKey(c.cerebras_api_key)
-        if (c?.groq_api_key) setQcGroqKey(c.groq_api_key)
-        setQcKeyLoaded(true)
-      }).catch(() => setQcKeyLoaded(true))
-    })
-  }, [isDesktop, qcKeyLoaded])
 
   // ===== Remote desktop (agente en la PC, puerto default 5901) =====
   const [desktopCfg, setDesktopCfg] = useState<DesktopConfig>(() =>
@@ -161,99 +131,74 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [desktopSaved, setDesktopSaved] = useState(false)
 
   // ===== OpenCode Go (uso vía API pública, varias cuentas) =====
-  // Las keys se cargan cifradas (AES-GCM) y nunca se muestran: el input es
-  // password sin toggle, no seleccionable, y fuera de foco muestra "••••••••".
   const [goKeys, setGoKeys] = useState<string[]>([])
   const [goEditing, setGoEditing] = useState<Record<number, boolean>>({})
   const [goUsageMap, setGoUsageMap] = useState<Record<string, GoUsage | null>>({})
   const [goLoadingMap, setGoLoadingMap] = useState<Record<string, boolean>>({})
   const [goErrorMap, setGoErrorMap] = useState<Record<string, string | null>>({})
-  const [goSaved, setGoSaved] = useState(false)
 
   const checkGo = useCallback(async (key: string) => {
     const trimmed = key.trim()
     if (!trimmed) return
     const proxy = canTestDesktop(desktopCfg)
       ? { host: desktopCfg.host, port: desktopCfg.port, username: desktopCfg.username, password: desktopCfg.password }
-      : null
+      : undefined
     setGoLoadingMap((m) => ({ ...m, [trimmed]: true }))
     setGoErrorMap((m) => ({ ...m, [trimmed]: null }))
     try {
       const usage = await fetchGoUsage(trimmed, proxy)
       setGoUsageMap((m) => ({ ...m, [trimmed]: usage }))
-    } catch (err) {
-      setGoUsageMap((m) => ({ ...m, [trimmed]: null }))
-      setGoErrorMap((m) => ({ ...m, [trimmed]: (err as Error).message === "invalid_key" ? t('settings.goErrorKey') : t('settings.goError') }))
+    } catch (e: any) {
+      setGoErrorMap((m) => ({ ...m, [trimmed]: e?.message ?? "Error de red" }))
     } finally {
       setGoLoadingMap((m) => ({ ...m, [trimmed]: false }))
     }
-  }, [desktopCfg, t])
+  }, [desktopCfg])
 
-  const updateGoKey = (index: number, value: string) => {
-    setGoKeys((ks) => ks.map((k, i) => (i === index ? value : k)))
-    setGoUsageMap((m) => {
-      const next = { ...m }
-      for (const saved of Object.keys(m)) if (saved !== value.trim()) delete next[saved]
+  const updateGoKey = useCallback((index: number, val: string) => {
+    setGoKeys((ks) => {
+      const next = [...ks]
+      next[index] = val
       return next
     })
-    setGoErrorMap((m) => {
-      const next = { ...m }
-      for (const saved of Object.keys(m)) if (saved !== value.trim()) delete next[saved]
-      return next
-    })
-  }
-
-  const removeGoKey = (index: number) => {
-    setGoKeys((ks) => ks.filter((_, i) => i !== index))
-  }
-
-  // Auto-save (debounced) de las API keys; auto-consulta al abrir si ya hay keys.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      void saveGoAccounts(goKeys)
-      setGoSaved(true)
-      setTimeout(() => setGoSaved(false), 2000)
-    }, 700)
-    return () => clearTimeout(timer)
-  }, [goKeys])
-
-  useEffect(() => {
-    let cancelled = false
-    void loadGoAccounts().then((keys) => {
-      if (cancelled) return
-      setGoKeys(keys)
-      for (const k of keys) if (k.trim()) void checkGo(k)
-    })
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const removeGoKey = useCallback((index: number) => {
+    setGoKeys((ks) => ks.filter((_, i) => i !== index))
+  }, [])
+
+  useEffect(() => {
+    loadGoAccounts().then((accounts) => {
+      setGoKeys(accounts)
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    saveGoAccounts(goKeys).catch(() => {})
+  }, [goKeys])
 
   const testDesktop = useCallback(async () => {
     setDesktopTesting(true)
     setDesktopNotice(null)
+    setDesktopSaved(false)
     try {
       const ok = await desktopApi.health(desktopCfg)
-      setDesktopNoticeType(ok ? "ok" : "fail")
-      setDesktopNotice(ok ? t('settings.desktopTestOk') : t('settings.desktopTestFail'))
-    } catch {
+      if (ok) {
+        setDesktopNotice(t('settings.desktopOk', { os: "Remote Host", v: "1.0" }))
+        setDesktopNoticeType("ok")
+        saveDesktopConfig(desktopCfg)
+        setDesktopSaved(true)
+      } else {
+        setDesktopNotice(t('settings.desktopFail', { err: "no responde" }))
+        setDesktopNoticeType("fail")
+      }
+    } catch (e: any) {
+      setDesktopNotice(t('settings.desktopFail', { err: e?.message || "error de red" }))
       setDesktopNoticeType("fail")
-      setDesktopNotice(t('settings.desktopTestFail'))
     } finally {
       setDesktopTesting(false)
     }
   }, [desktopCfg, t])
-
-  // Auto-save (debounced) como el server principal: al pausar la escritura
-  // con host+puerto válidos, se persiste solo.
-  useEffect(() => {
-    if (!canTestDesktop(desktopCfg)) return
-    const timer = setTimeout(() => {
-      saveDesktopConfig(desktopCfg)
-      setDesktopSaved(true)
-      setTimeout(() => setDesktopSaved(false), 2000)
-    }, 700)
-    return () => clearTimeout(timer)
-  }, [desktopCfg])
 
   useEffect(() => {
     if (!onClose) return
@@ -268,45 +213,12 @@ export const SettingsPanel = memo(function SettingsPanel({
     return Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values())
   }, [modelOptions, mk])
 
-  const filteredModels = useMemo(() => {
-    // Solo modelos configurados (no bloqueados en la sección de abajo); el
-    // modelo seleccionado se mantiene visible aunque esté bloqueado.
-    const visible = uniqueModels.filter((opt) => !blockedModels.isBlocked(mk(opt)) || mk(opt) === selectedModelKey)
-    const q = modelQuery.trim().toLowerCase()
-    if (!q) return visible
-    return visible.filter((opt) =>
-      (opt.modelName || opt.modelID).toLowerCase().includes(q) ||
-      opt.modelID.toLowerCase().includes(q) ||
-      opt.providerName.toLowerCase().includes(q) ||
-      opt.providerID.toLowerCase().includes(q)
-    )
-  }, [uniqueModels, modelQuery, blockedModels, selectedModelKey])
   const [blockedSearch, setBlockedSearch] = useState("")
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
-  // Draft de "nuevo server": no se persiste hasta Guardar/Conectar. El
-  // nombre del perfil expandido se edita aparte de su config.
   const [draftProfile, setDraftProfile] = useState<{ name: string; config: ServerConfig } | null>(null)
-  const [draftOpen, setDraftOpen] = useState(false)
-  const [profileNameDraft, setProfileNameDraft] = useState("")
-  const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null)
-  const [profileDraft, setProfileDraft] = useState<ServerConfig | null>(null)
-
-  const toggleProfile = useCallback((profile: ServerProfile) => {
-    setExpandedProfileId((cur) => {
-      if (cur === profile.id) return null
-      setProfileDraft(profile.config)
-      setProfileNameDraft(profile.name)
-      return profile.id
-    })
-  }, [])
-
-  const profileField = useCallback(<K extends keyof ServerConfig>(key: K, value: ServerConfig[K]) => {
-    setProfileDraft((prev) => (prev ? { ...prev, [key]: value } : prev))
-  }, [])
 
   const startDraft = useCallback(() => {
     setDraftProfile({ name: "", config: { ...draftConfig } })
-    setDraftOpen(false)
   }, [draftConfig])
 
   const draftField = useCallback(<K extends keyof ServerConfig>(key: K, value: ServerConfig[K]) => {
@@ -364,18 +276,24 @@ export const SettingsPanel = memo(function SettingsPanel({
     { key: "permissionUI" as const, label: t('settings.permissionUI'), desc: t('settings.permissionUIDesc') },
   ]
 
-  type CategoryKey = "servers" | "models" | "appearance" | "chat" | "remote" | "system"
+  type CategoryKey = "servers" | "system" | "appearance" | "models" | "chat" | "remote"
   const [activeCategory, setActiveCategory] = useState<CategoryKey>("servers")
   const [settingsSearch, setSettingsSearch] = useState("")
+  const [queuedMode, setQueuedMode] = useState<"queue" | "send_immediately">("queue")
+  const [securityPreset, setSecurityPreset] = useState<string>("turbo")
+  const [artifactPolicy, setArtifactPolicy] = useState<string>("always_ask")
+  const [rulesModal, setRulesModal] = useState<string | null>(null)
 
-  const categories: Array<{ id: CategoryKey; label: string; icon: React.ReactNode; badge?: string | number }> = [
-    { id: "servers", label: t('settings.sectionServers'), icon: <GlobeIcon size={16} />, badge: draftConfig.host ? "●" : undefined },
-    { id: "models", label: t('settings.providers') || "IA & Modelos", icon: <BrainIcon size={16} />, badge: providers.length || undefined },
-    { id: "appearance", label: t('settings.sectionPreferences') || "Apariencia", icon: <PaintIcon size={16} /> },
-    { id: "chat", label: t('settings.chatCustomization') || "Chat", icon: <ChatIcon size={16} /> },
-    { id: "remote", label: t('settings.desktopTitle') || "Escritorio Remoto", icon: <PowerIcon size={16} /> },
-    { id: "system", label: t('settings.extras') || "Sistema & Extras", icon: <ToolIcon size={16} /> },
+  const categories: Array<{ id: CategoryKey; label: string; subtitle: string }> = [
+    { id: "servers", label: "General", subtitle: "Configure agent execution, queued message delivery, and permissions." },
+    { id: "system", label: "Application", subtitle: "Configure application startup, feature flags, sidebar layout, and system tools." },
+    { id: "appearance", label: "Appearance", subtitle: "Customize interface themes, font size, language, and default model selection." },
+    { id: "models", label: "Models", subtitle: "Configure AI providers, quick chat shortcuts, primary agents, and API keys." },
+    { id: "chat", label: "Customizations", subtitle: "Fine-tune chat parameters, thinking behavior, system prompts, and snippets." },
+    { id: "remote", label: "Browser", subtitle: "Configure and connect to the remote host desktop agent and browser tools." },
   ]
+
+  const currentCategoryInfo = categories.find((c) => c.id === activeCategory) || categories[0]
 
   const isSearching = settingsSearch.trim().length > 0
   const showServers = !isDesktop || isSearching || activeCategory === "servers"
@@ -387,172 +305,354 @@ export const SettingsPanel = memo(function SettingsPanel({
 
   const panelContent = (
     <section className="panel settings fade-in">
-      <div className="settings-top-bar">
-        <div className="settings-header" style={{ margin: 0 }}>
-          <h2>{t('settings.title')}</h2>
-          <p className="subtle">
-            {draftConfig.host && draftConfig.port > 0 ? `${draftConfig.host}:${draftConfig.port}` : t('settings.hostPlaceholder')}
-          </p>
-        </div>
-        <div className="settings-search-wrapper">
-          <span className="settings-search-icon"><SearchIcon size={14} /></span>
-          <input
-            className="settings-search-input"
-            type="text"
-            placeholder={t('sessions.searchPlaceholder') || "Buscar ajuste..."}
-            value={settingsSearch}
-            onChange={(e) => setSettingsSearch(e.target.value)}
-          />
-        </div>
-        <button onClick={onTest} className="btn-secondary settings-test-btn" disabled={testingConnection || !canTestDraft}
-          title={!canTestDraft ? t('settings.testNeedsFields') : testAlreadyPassedForDraft ? t('settings.testAgainTitle') : undefined}>
-          {testingConnection ? (
-            <><LoadingIcon size={18} />{t('settings.testing')}</>
-          ) : (
-            <><TestIcon size={18} />{testAlreadyPassedForDraft ? t('settings.testAgain') : t('settings.test')}</>
-          )}
-        </button>
-      </div>
-      <p className="subtle" style={{ margin: "0 0 var(--space-2) 0" }}>{t('settings.draftHint')}</p>
-
-      {/* Notice */}
-      {settingsNotice && (
-        <div className={`notice ${settingsNotice.type} fade-in`}>
-          {settingsNotice.type === 'success' && ' '}
-          {settingsNotice.type === 'error' && ' '}
-          {settingsNotice.type === 'info' && 'ℹ '}
-          <span style={{ whiteSpace: "pre-line" }}>{settingsNotice.text}</span>
-        </div>
-      )}
-
-      {connectedVersion && testAlreadyPassedForDraft && (
-        <div className="notice success fade-in">
-          {t('settings.connectedTo', { version: connectedVersion })}
-        </div>
-      )}
-
       <div className={isDesktop ? "settings-split-container" : "settings-mobile-container"}>
         {isDesktop && (
           <nav className="settings-sidebar-nav" aria-label="Categorías de ajustes">
-            {categories.map((cat) => (
+            <p className="settings-sidebar-group-title">Settings</p>
+            <div className="settings-sidebar-section">
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`settings-nav-btn${activeCategory === cat.id && !isSearching ? " active" : ""}`}
+                  onClick={() => {
+                    setActiveCategory(cat.id)
+                    setSettingsSearch("")
+                  }}
+                >
+                  <span className="settings-nav-label">{cat.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <p className="settings-sidebar-group-title">Projects</p>
+            <div className="settings-sidebar-section">
+              {serverProfiles.length > 0 ? (
+                serverProfiles.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`settings-nav-btn${activeServerProfileID === p.id ? " active" : ""}`}
+                    onClick={() => onApplyServerProfile(p)}
+                    title={p.name}
+                  >
+                    <span className="settings-nav-label">{p.name}</span>
+                  </button>
+                ))
+              ) : (
+                <>
+                  <button type="button" className="settings-nav-btn" onClick={() => setActiveCategory("servers")}>
+                    <span className="settings-nav-label">{draftConfig.host ? draftConfig.host : "opencode-remote-android"}</span>
+                  </button>
+                </>
+              )}
+            </div>
+
+            <p className="settings-sidebar-group-title">Not in Project</p>
+            <div className="settings-sidebar-section">
               <button
-                key={cat.id}
                 type="button"
-                className={`settings-nav-btn${activeCategory === cat.id && !isSearching ? " active" : ""}`}
-                onClick={() => {
-                  setActiveCategory(cat.id)
-                  setSettingsSearch("")
-                }}
+                className="settings-nav-btn"
+                onClick={() => onNavigate("sessions")}
               >
-                <span className="settings-nav-icon">{cat.icon}</span>
-                <span className="settings-nav-label">{cat.label}</span>
-                {cat.badge !== undefined && <span className="settings-nav-badge">{cat.badge}</span>}
+                <span className="settings-nav-label">Conversations</span>
               </button>
-            ))}
+            </div>
+
+            <div className="settings-sidebar-footer">
+              {onOpenShortcuts && (
+                <button type="button" className="settings-nav-btn" onClick={onOpenShortcuts}>
+                  <span className="settings-nav-label">Shortcuts</span>
+                </button>
+              )}
+              <button type="button" className="settings-nav-btn" onClick={onOpenGitHub}>
+                <span className="settings-nav-label">Provide Feedback</span>
+              </button>
+
+              <div
+                className="settings-sidebar-user-card"
+                onClick={() => setActiveCategory("servers")}
+                title={draftConfig.host ? `${draftConfig.username || "user"}@${draftConfig.host}:${draftConfig.port}` : "Usuario OpenCode"}
+              >
+                <div className="settings-sidebar-user-avatar">
+                  ⬡
+                </div>
+                <div className="settings-sidebar-user-info">
+                  <span className="settings-sidebar-user-name">
+                    {draftConfig.username || "Octavio Gonzalez"}
+                  </span>
+                  <span className="settings-sidebar-user-email">
+                    {draftConfig.host ? `${draftConfig.username || "user"}@${draftConfig.host}` : "percatorone@gmail.com"}
+                  </span>
+                </div>
+              </div>
+            </div>
           </nav>
         )}
 
         <div className="settings-content-pane">
-        {isDesktop && onOpenOpenCodeHub && (
-          <div style={{
-            background: "linear-gradient(135deg, var(--primary-soft) 0%, rgba(31,111,235,0.06) 100%)",
-            border: "1px solid var(--primary-soft)",
-            borderRadius: "8px",
-            padding: "12px 16px",
-            marginBottom: "16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span style={{ fontSize: "24px" }}></span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: "14px", color: "var(--text)" }}>
-                  OpenCode Hub (Agentes, Skills & Configuración Oficial)
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                  Visualiza los prompts de sistema de tus agentes, catálogo de skills del entorno y edita opencode.json global.
-                </div>
-              </div>
+          {/* Header inside the content pane */}
+          <div className="settings-pane-header">
+            <div className="settings-pane-title-group">
+              <h2 className="settings-pane-title">
+                {isSearching ? t('sessions.searchPlaceholder') : currentCategoryInfo.label}
+              </h2>
+              <p className="settings-pane-subtitle">
+                {isSearching
+                  ? `${t('settings.draftHint')}`
+                  : currentCategoryInfo.subtitle}
+              </p>
             </div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={onOpenOpenCodeHub}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "6px 14px",
-                background: "var(--primary)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                fontWeight: 600,
-                fontSize: "12px",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              <span>Abrir Hub</span>
-              <span>→</span>
-            </button>
-          </div>
-        )}
-      {/* Saved servers + per-server config */}
-      {showServers && (
-      <SettingsSection title={t('settings.sectionServers')} icon={<ServerIcon size={14} />}
-        open={serversOpen} onToggle={() => setServersOpen((v) => !v)}
-        actions={
-          <button type="button" className="btn-primary compact server-add-btn"
-            onClick={() => { setServersOpen(true); startDraft() }}
-            aria-label={t('settings.serverAdd')}>
-            <PlusIcon size={14} /> <span>{t('settings.serverAdd')}</span>
-          </button>
-        }>
-        <div className="server-section-header">
-          {draftConfig.host && draftConfig.port > 0 ? (
-            <p className="server-current-status">
-              <span className="server-status-dot" aria-hidden="true" />
-              {t('settings.serverConnectedTo')} <code>{`${draftConfig.host}:${draftConfig.port}`}</code>
-            </p>
-          ) : (
-            <p className="server-current-status">{t('settings.serverNoActive')}</p>
-          )}
-        </div>
 
-        <label className="form-field api-version-field">
-          <span>{t('settings.apiVersion')}</span>
-          <select name="apiVersion" value={draftConfig.apiVersion ?? "auto"}
-            onChange={(e) => setField("apiVersion", e.target.value as "auto" | "v1" | "v2")}>
-            <option value="auto">{t('settings.apiVersionAuto')}</option>
-            <option value="v1">{t('settings.apiVersionV1')}</option>
-            <option value="v2">{t('settings.apiVersionV2')}</option>
-          </select>
-          <small className="subtle">{t('settings.apiVersionDesc')}</small>
-        </label>
-
-        <div className="server-profile-list">
-          {draftProfile && (
-            <div className={`server-profile draft${draftOpen ? " expanded" : ""}`}>
-              <div className="server-profile-row" role="button" tabIndex={0}
-                onClick={() => setDraftOpen((v) => !v)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDraftOpen((v) => !v) } }}
-                aria-expanded={draftOpen} title={t('settings.editServer')}>
-                <span className="server-profile-kind http new">HTTP</span>
-                <span className="server-profile-name">{draftProfile.name.trim() || t('settings.serverUntitled')}</span>
-                <span className="server-profile-desc">{draftProfile.config.host ? `${draftProfile.config.host}:${draftProfile.config.port}` : t('settings.serverNotConfigured')}</span>
-                <span className="settings-chevron" aria-hidden="true">▾</span>
-              </div>
-              <button type="button" className="btn-icon btn-ghost server-profile-remove"
-                onClick={discardDraft}
-                aria-label={t('settings.serverRemove')} title={t('settings.serverRemove')}>
-                <TrashIcon size={14} />
+            {onClose && (
+              <button
+                type="button"
+                className="settings-close-x-btn"
+                onClick={onClose}
+                title={t('panel.close') || "Cerrar"}
+                aria-label={t('panel.close') || "Cerrar"}
+              >
+                ✕
               </button>
-              {draftOpen && (
-                <div className="server-profile-config">
-                  <div className="form-grid">
+            )}
+          </div>
+
+          <p className="subtle" style={{ margin: "0 0 var(--space-2) 0", display: "none" }}>{t('settings.draftHint')}</p>
+
+          {/* Notice */}
+          {settingsNotice && (
+            <div className={`notice ${settingsNotice.type} fade-in`}>
+              {settingsNotice.type === 'success' && ' '}
+              {settingsNotice.type === 'error' && ' '}
+              {settingsNotice.type === 'info' && 'ℹ '}
+              <span style={{ whiteSpace: "pre-line" }}>{settingsNotice.text}</span>
+            </div>
+          )}
+
+          {connectedVersion && testAlreadyPassedForDraft && (
+            <div className="notice success fade-in">
+              {t('settings.connectedTo', { version: connectedVersion })}
+            </div>
+          )}
+
+          {/* ===== GENERAL TAB (EXACT ANTIGRAVITY SECTIONS) ===== */}
+          {showServers && (
+            <>
+              <p className="settings-group-heading">Execution</p>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Queued Messages</span>
+                  <p className="setting-item-desc">Configure when follow-up messages are sent.</p>
+                  {onOpenShortcuts && (
+                    <button type="button" className="setting-item-link" onClick={onOpenShortcuts}>
+                      Keyboard shortcuts ⓘ
+                    </button>
+                  )}
+                </div>
+                <div className="setting-item-control">
+                  <div className="ag-segmented">
+                    <button
+                      type="button"
+                      className={`ag-segmented-btn${queuedMode === "queue" ? " active" : ""}`}
+                      onClick={() => setQueuedMode("queue")}
+                    >
+                      Queue
+                    </button>
+                    <button
+                      type="button"
+                      className={`ag-segmented-btn${queuedMode === "send_immediately" ? " active" : ""}`}
+                      onClick={() => setQueuedMode("send_immediately")}
+                    >
+                      Send Immediately
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <p className="settings-group-heading">Agent Settings</p>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Security Preset</span>
+                  <p className="setting-item-desc">Choose a predefined security preset for the agent. This controls terminal auto-execution policy, and file access policy.</p>
+                  <span className="setting-item-link">Learn more about Turbo mode ⓘ</span>
+                </div>
+                <div className="setting-item-control">
+                  <select
+                    className="ag-select"
+                    value={securityPreset}
+                    onChange={(e) => setSecurityPreset(e.target.value)}
+                  >
+                    <option value="turbo">Turbo Mode</option>
+                    <option value="normal">Normal Mode</option>
+                    <option value="strict">Strict Mode</option>
+                  </select>
+                </div>
+              </div>
+
+              <p className="settings-group-heading">Agent Behavior</p>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Artifact Review Policy</span>
+                  <p className="setting-item-desc">Specifies Agent's behavior when asking for review on artifacts, which are documents it creates to enable a richer conversation experience.</p>
+                </div>
+                <div className="setting-item-control">
+                  <select
+                    className="ag-select"
+                    value={artifactPolicy}
+                    onChange={(e) => setArtifactPolicy(e.target.value)}
+                  >
+                    <option value="always_ask">Always Ask</option>
+                    <option value="auto_approve">Auto Approve</option>
+                    <option value="never">Never Ask</option>
+                  </select>
+                </div>
+              </div>
+
+              <p className="settings-group-heading">File Permissions</p>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">File Access Rules</span>
+                  <p className="setting-item-desc">Configure allowed and denied paths for file reads and writes.</p>
+                </div>
+                <div className="setting-item-control">
+                  <button type="button" className="ag-btn-open" onClick={() => setRulesModal("file")}>
+                    Open
+                  </button>
+                </div>
+              </div>
+
+              <p className="settings-group-heading">Network Permissions</p>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Network Access Rules</span>
+                  <p className="setting-item-desc">Configure allowed and denied URLs for reading.</p>
+                </div>
+                <div className="setting-item-control">
+                  <button type="button" className="ag-btn-open" onClick={() => setRulesModal("network")}>
+                    Open
+                  </button>
+                </div>
+              </div>
+
+              <p className="settings-group-heading">Terminal & Tooling Permissions</p>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Terminal Commands</span>
+                  <p className="setting-item-desc">Configure allowed terminal commands.</p>
+                </div>
+                <div className="setting-item-control">
+                  <button type="button" className="ag-btn-open" onClick={() => setRulesModal("terminal")}>
+                    Open
+                  </button>
+                </div>
+              </div>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Commands Outside Sandbox</span>
+                  <p className="setting-item-desc">Configure allowed commands outside the sandbox.</p>
+                </div>
+                <div className="setting-item-control">
+                  <button type="button" className="ag-btn-open" onClick={() => setRulesModal("sandbox")}>
+                    Open
+                  </button>
+                </div>
+              </div>
+
+              <p className="settings-group-heading">Server & Data Connection</p>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Conexión Activa</span>
+                  <p className="setting-item-desc">
+                    {draftConfig.host && draftConfig.port > 0 ? `${draftConfig.host}:${draftConfig.port}` : t('settings.hostPlaceholder')}
+                  </p>
+                  <span className="setting-item-link">{t('settings.draftHint')}</span>
+                </div>
+                <div className="setting-item-control">
+                  <button
+                    type="button"
+                    onClick={onTest}
+                    className="ag-btn-open settings-test-btn"
+                    disabled={testingConnection || !canTestDraft}
+                    title={!canTestDraft ? t('settings.testNeedsFields') : testAlreadyPassedForDraft ? t('settings.testAgainTitle') : undefined}
+                  >
+                    {testingConnection ? t('settings.testing') : testAlreadyPassedForDraft ? t('settings.testAgain') : t('settings.test')}
+                  </button>
+                </div>
+              </div>
+
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">{t('settings.apiVersion')}</span>
+                  <p className="setting-item-desc">{t('settings.apiVersionDesc')}</p>
+                </div>
+                <div className="setting-item-control">
+                  <select
+                    name="apiVersion"
+                    className="ag-select"
+                    value={draftConfig.apiVersion ?? "auto"}
+                    onChange={(e) => setField("apiVersion", e.target.value as "auto" | "v1" | "v2")}
+                  >
+                    <option value="auto">{t('settings.apiVersionAuto')}</option>
+                    <option value="v1">{t('settings.apiVersionV1')}</option>
+                    <option value="v2">{t('settings.apiVersionV2')}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">{t('settings.dataModeTitle')}</span>
+                  <p className="setting-item-desc">{t('settings.dataModeDesc')}</p>
+                </div>
+                <div className="setting-item-control">
+                  <div className="ag-segmented">
+                    {dataModes.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        className={`ag-segmented-btn${dataMode === opt.value ? " active" : ""}`}
+                        onClick={() => onDataModeChange(opt.value)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">{t('settings.pairTitle')}</span>
+                  <p className="setting-item-desc">Empareja tu dispositivo escaneando el código QR generado por opencode serve.</p>
+                </div>
+                <div className="setting-item-control">
+                  <button type="button" className="ag-btn-open" onClick={() => setShowPairModal(true)}>
+                    {t('settings.pairScanQr')}
+                  </button>
+                </div>
+              </div>
+
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">{t('settings.sectionServers')}</span>
+                  <p className="setting-item-desc">Gestiona múltiples perfiles de conexión HTTP o servidores emparejados.</p>
+                </div>
+                <div className="setting-item-control">
+                  <button type="button" className="ag-btn-open" onClick={() => startDraft()}>
+                    {t('settings.serverAdd')}
+                  </button>
+                </div>
+              </div>
+
+              {draftProfile && (
+                <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch", background: "#18181c", border: "1px dashed #38383e" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span className="setting-item-title">{t('settings.serverAdd')} (Nuevo Perfil)</span>
+                    <button type="button" className="btn-icon btn-ghost" onClick={discardDraft}>
+                      <TrashIcon size={14} />
+                    </button>
+                  </div>
+                  <div className="form-grid" style={{ marginTop: 10 }}>
                     <label className="form-field">
                       <span>{t('settings.serverName')}</span>
                       <input name="name" value={draftProfile.name}
@@ -567,437 +667,379 @@ export const SettingsPanel = memo(function SettingsPanel({
                       <span>{t('settings.port')}</span>
                       <input name="port" type="number" value={draftProfile.config.port || 4096} onChange={(e) => draftField("port", Number(e.target.value || 4096))} placeholder="4096" />
                     </label>
-                    <label className="form-field">
-                      <span>{t('settings.username')}</span>
-                      <input name="username" value={draftProfile.config.username} onChange={(e) => draftField("username", e.target.value)} placeholder="opencode" />
-                    </label>
-                    <label className="form-field">
-                      <span>{t('settings.password')}</span>
-                      <div className="password-wrapper">
-                        <input name="password" type={showPassword ? "text" : "password"} value={draftProfile.config.password} onChange={(e) => draftField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
-                        <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
-                          {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                        </button>
-                      </div>
-                    </label>
                   </div>
-                  <div className="server-profile-actions">
-                    <button type="button" className="btn-primary compact"
-                      disabled={!draftProfile.config.host.trim() || draftProfile.config.port <= 0}
-                      onClick={saveDraft}>
-                      <CheckIcon size={14} /> {t('settings.serverAdd')}
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <button type="button" className="ag-btn-open" onClick={saveDraft} disabled={!draftProfile.config.host.trim() || draftProfile.config.port <= 0}>
+                      {t('settings.serverAdd')}
                     </button>
-                    <button type="button" className="btn-secondary compact"
-                      disabled={!draftProfile.config.host.trim() || draftProfile.config.port <= 0}
-                      onClick={connectDraft}>
-                      <CheckIcon size={14} /> {t('settings.serverAddAndConnect')}
+                    <button type="button" className="ag-btn-open" onClick={connectDraft} disabled={!draftProfile.config.host.trim() || draftProfile.config.port <= 0}>
+                      {t('settings.serverAddAndConnect')}
                     </button>
                   </div>
                 </div>
               )}
+
+              {serverProfiles.filter((p): p is ServerProfile => !!p && !!p.config).map((profile) => (
+                <div key={profile.id} className="setting-item-row">
+                  <div className="setting-item-info">
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className={`server-profile-kind${isPairProfile(profile) ? " pair" : " http"}`}>
+                        {isPairProfile(profile) ? t('settings.pairKind') : "HTTP"}
+                      </span>
+                      <span className="setting-item-title">{profile.name}</span>
+                    </div>
+                    <p className="setting-item-desc">{describeProfile(profile)}</p>
+                  </div>
+                  <div className="setting-item-control">
+                    {activeServerProfileID === profile.id ? (
+                      <span className="server-profile-active"><CheckIcon size={12} /> {t('settings.serverActive')}</span>
+                    ) : (
+                      <button type="button" className="ag-btn-open" onClick={() => onApplyServerProfile(profile)}>
+                        {t('settings.serverUse')}
+                      </button>
+                    )}
+                    <button type="button" className="btn-icon btn-ghost" onClick={() => onRemoveServerProfile(profile.id)}>
+                      <TrashIcon size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+      {/* Preferences / Appearance */}
+      {showAppearance && (
+        <>
+          <p className="settings-group-heading">Appearance & Interface</p>
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">{t('settings.language')}</span>
+              <p className="setting-item-desc">Selecciona el idioma principal de la aplicación.</p>
+            </div>
+            <div className="setting-item-control">
+              <select
+                className="ag-select"
+                name="language"
+                value={language}
+                onChange={(e) => onLanguageChange(e.target.value as LanguageCode)}
+              >
+                {languageOptions.map((option) => (
+                  <option key={option.code} value={option.code}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">{t('settings.theme')}</span>
+              <p className="setting-item-desc">Modo visual (sistema, claro, oscuro o programado).</p>
+            </div>
+            <div className="setting-item-control">
+              <select
+                className="ag-select"
+                name="theme"
+                value={theme}
+                onChange={(e) => onThemeChange(e.target.value as "system" | "light" | "dark" | "scheduled")}
+              >
+                <option value="system">{t('settings.themeSystem')}</option>
+                <option value="light">{t('settings.themeLight')}</option>
+                <option value="dark">{t('settings.themeDark')}</option>
+                <option value="scheduled">{t('settings.themeScheduled')}</option>
+              </select>
+            </div>
+          </div>
+
+          {onOpenThemePicker && (
+            <div className="setting-item-row">
+              <div className="setting-item-info">
+                <span className="setting-item-title">{t('settings.visualTheme')}</span>
+                <p className="setting-item-desc">Explora y activa paletas de temas visuales predefinidos.</p>
+              </div>
+              <div className="setting-item-control">
+                <button type="button" className="ag-btn-open" onClick={onOpenThemePicker}>
+                  {t('settings.switchTheme')} (33 temas)
+                </button>
+                {onOpenThemeCreator && (
+                  <button type="button" className="ag-btn-open" onClick={onOpenThemeCreator}>
+                    {t('session.themeCreator')}
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
-          {serverProfiles.filter((p): p is ServerProfile => !!p && !!p.config).map((profile) => (
-            <div key={profile.id} className={`server-profile${activeServerProfileID === profile.id ? " active" : ""}${expandedProfileId === profile.id ? " expanded" : ""}`}>
-              <div className="server-profile-row" role="button" tabIndex={0}
-                onClick={() => toggleProfile(profile)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProfile(profile) } }}
-                aria-expanded={expandedProfileId === profile.id} title={t('settings.editServer')}>
-                <span className={`server-profile-kind${isPairProfile(profile) ? " pair" : " http"}`}>
-                  {isPairProfile(profile) ? t('settings.pairKind') : "HTTP"}
-                </span>
-                <span className="server-profile-name">{profile.name}</span>
-                <span className="server-profile-desc">{describeProfile(profile)}</span>
-                {activeServerProfileID === profile.id ? (
-                  <span className="server-profile-active"><CheckIcon size={12} /> {t('settings.serverActive')}</span>
-                ) : (
-                  <button type="button" className="btn-secondary compact server-use-btn"
-                    onClick={(e) => { e.stopPropagation(); onApplyServerProfile(profile) }}
-                    title={t('settings.serverUse')}>
-                    {t('settings.serverUse')}
-                  </button>
-                )}
-                <span className="settings-chevron" aria-hidden="true">▾</span>
-              </div>
-              <button type="button" className="btn-icon btn-ghost server-profile-remove"
-                onClick={() => onRemoveServerProfile(profile.id)}
-                aria-label={t('settings.serverRemove')} title={t('settings.serverRemove')}>
-                <TrashIcon size={14} />
-              </button>
-              {expandedProfileId === profile.id && profileDraft && (
-                <div className="server-profile-config">
-                  <div className="form-grid">
-                    <label className="form-field">
-                      <span>{t('settings.serverName')}</span>
-                      <input name="name" value={profileNameDraft} onChange={(e) => setProfileNameDraft(e.target.value)} placeholder={t('settings.serverNamePlaceholder')} />
-                    </label>
-                    <label className="form-field">
-                      <span>{t('settings.host')}</span>
-                      <input name="host" value={profileDraft.host} onChange={(e) => profileField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} />
-                    </label>
-                    <label className="form-field">
-                      <span>{t('settings.port')}</span>
-                      <input name="port" type="number" value={profileDraft.port || 4096} onChange={(e) => profileField("port", Number(e.target.value || 4096))} placeholder="4096" />
-                    </label>
-                    <label className="form-field">
-                      <span>{t('settings.username')}</span>
-                      <input name="username" value={profileDraft.username} onChange={(e) => profileField("username", e.target.value)} placeholder="opencode" />
-                    </label>
-                    <label className="form-field">
-                      <span>{t('settings.password')}</span>
-                      <div className="password-wrapper">
-                        <input name="password" type={showPassword ? "text" : "password"} value={profileDraft.password} onChange={(e) => profileField("password", e.target.value)} placeholder={t('settings.passwordPlaceholder')} />
-                        <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
-                          {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                        </button>
-                      </div>
-                    </label>
-                  </div>
-                  <div className="server-profile-actions">
-                    <button type="button" className="btn-primary compact"
-                      onClick={() => {
-                        onUpdateServerProfile(profile.id, profileNameDraft, profileDraft)
-                        onApplyServerProfile({ ...profile, name: profileNameDraft, config: profileDraft })
-                        setExpandedProfileId(null)
-                      }}>
-                      <CheckIcon size={14} /> {t('settings.saveAndApply')}
-                    </button>
-                    <button type="button" className="btn-secondary compact"
-                      onClick={() => { onUpdateServerProfile(profile.id, profileNameDraft, profileDraft); setExpandedProfileId(null) }}>
-                      <SaveIcon size={14} /> {t('settings.serverSaveOnly')}
-                    </button>
-                  </div>
-                </div>
-              )}
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">{t('settings.defaultModel')}</span>
+              <p className="setting-item-desc">Modelo de lenguaje predeterminado para nuevas conversaciones.</p>
             </div>
-          ))}
-        </div>
-        <div className="pair-service-row">
-          <span className="server-profile-kind pair">{t('settings.pairKind')}</span>
-          <span className="pair-service-label">{t('settings.pairTitle')}</span>
-          <button type="button" className="btn-secondary compact"
-            onClick={() => setShowPairModal(true)}>
-            <CameraIcon size={14} /> {t('settings.pairScanQr')}
-          </button>
-        </div>
-      </SettingsSection>
-      )}
-
-      {/* Data mode */}
-      {showServers && (
-      <SettingsSection title={t('settings.dataModeTitle')}>
-        <p className="subtle">{t('settings.dataModeDesc')}</p>
-        <div className="data-mode-grid">
-          {dataModes.map((opt) => (
-            <button key={opt.value}
-              className={`data-mode-card${dataMode === opt.value ? " active" : ""}`}
-              onClick={() => onDataModeChange(opt.value)}
-              aria-pressed={dataMode === opt.value}>
-              <strong>{opt.label}</strong>
-              <small>{opt.desc}</small>
-            </button>
-          ))}
-        </div>
-        <button type="button" className="btn-secondary extras-btn" onClick={() => setShowDataUsage(true)}>
-          <DataIcon size={16} />
-          <span>
-            <strong>{t('extras.dataUsage')}</strong>
-            <small>
-              {t('dataUsage.mobile')}: {formatBytes(getDataUsage().month.byNet.mobile.total)} · {t('dataUsage.wifi')}: {formatBytes(getDataUsage().month.byNet.wifi.total)}
-            </small>
-          </span>
-        </button>
-      </SettingsSection>
-      )}
-
-      {/* Preferences */}
-      {showAppearance && (
-      <SettingsSection title={t('settings.sectionPreferences')}>
-        <div className="form-grid">
-          <label className="form-field">
-            <span>{t('settings.language')}</span>
-            <select name="language" value={language} onChange={(e) => onLanguageChange(e.target.value as LanguageCode)}>
-              {languageOptions.map((option) => (
-                <option key={option.code} value={option.code}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="form-field">
-            <span>{t('settings.theme')}</span>
-            <select name="theme" value={theme} onChange={(e) => onThemeChange(e.target.value as "system" | "light" | "dark" | "scheduled")}>
-              <option value="system">{t('settings.themeSystem')}</option>
-              <option value="light">{t('settings.themeLight')}</option>
-              <option value="dark">{t('settings.themeDark')}</option>
-              <option value="scheduled">{t('settings.themeScheduled')}</option>
-            </select>
-          </label>
-          <div className="form-field">
-            <span>{t('settings.defaultModel')}</span>
-            <input name="modelSearch" value={modelQuery} onChange={(e) => setModelQuery(e.target.value)}
-              placeholder={t('detail.modelSearchPlaceholder')} autoComplete="off" />
-            <div className="settings-model-list" role="listbox" aria-label={t('settings.defaultModel')}>
-              {filteredModels.length === 0 ? (
-                <p className="subtle model-empty">{t('detail.modelSearchEmpty')}</p>
-              ) : (
-                filteredModels.map((opt) => {
-                  const key = mk(opt)
-                  const isSelected = key === selectedModelKey
-                  return (
-                    <button key={key} type="button"
-                      className={`settings-model-item${isSelected ? " active" : ""}`}
-                      onClick={() => onChangeModel(key)}
-                      role="option" aria-selected={isSelected}>
-                      <span className="settings-model-name">{opt.modelName || opt.modelID}</span>
-                      <span className="settings-model-provider">{opt.providerName}</span>
-                      {isSelected && <CheckIcon size={14} className="settings-model-check" />}
-                    </button>
-                  )
-                })
-              )}
+            <div className="setting-item-control">
+              <select
+                className="ag-select"
+                value={selectedModelKey || ""}
+                onChange={(e) => onChangeModel(e.target.value)}
+              >
+                {uniqueModels.map((opt) => (
+                  <option key={mk(opt)} value={mk(opt)}>
+                    {opt.modelName || opt.modelID} ({opt.providerName})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
+
           {(() => {
             if (!selectedModelKey) return null
             const selected = uniqueModels.find((opt) => mk(opt) === selectedModelKey)
             if (!selected) return null
             const vars = variantsOf(modelOptions, selected)
+            if (vars.length <= 1) return null
             return (
-              <div className="form-field">
-                <span className="settings-model-selected">
-                  {selected.modelName || selected.modelID} · {selected.providerName}
-                </span>
-                <ThinkingLevels base={selected} variants={vars} activeVariant={selectedVariant}
-                  onChange={onChangeModel} />
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Nivel de Pensamiento (Thinking)</span>
+                  <p className="setting-item-desc">{selected.modelName || selected.modelID} · {selected.providerName}</p>
+                </div>
+                <div className="setting-item-control">
+                  <ThinkingLevels base={selected} variants={vars} activeVariant={selectedVariant} onChange={onChangeModel} hideLabel />
+                </div>
               </div>
             )
           })()}
-          {onOpenThemePicker && (
-            <div className="form-field">
-              <span>{t('settings.visualTheme')}</span>
-              <button type="button" className="btn-secondary" onClick={onOpenThemePicker}>
-                <span>{t('settings.switchTheme')}</span>
-                <span className="badge">33 temas</span>
-              </button>
-              {onOpenThemeCreator && (
-                <button type="button" className="theme-creator-btn" onClick={onOpenThemeCreator}>
-                  <span>{t('session.themeCreator')}</span>
-                </button>
-              )}
-              {activeModelOption && (
-                <small className="model-active-name">{activeModelOption.modelName}{activeModelOption.variant ? ` · ${activeModelOption.variant}` : ""}</small>
-              )}
-            </div>
-          )}
-        </div>
-      </SettingsSection>
+        </>
       )}
 
-      {/* Feature flags */}
+      {/* Application Tab */}
       {showSystem && (
-      <SettingsSection title={t('settings.featureFlags')}>
-        <p className="subtle">{t('settings.featureFlagsDesc')}</p>
-        <div className="switch-list">
-          {featureFlags.map(({ key, label, desc }) => (
-            <label key={key} className="switch-row">
-              <span className="switch-label">
-                <strong>{label}</strong>
-                <small>{desc}</small>
-              </span>
-              <input type="checkbox" className="switch-checkbox"
-                checked={flags[key]}
-                onChange={() => onToggleFlag(key)} />
-            </label>
-          ))}
-        </div>
-      </SettingsSection>
-      )}
-
-      {/* Providers */}
-      {showModels && (
-      <SettingsSection title={t('settings.providers')}>
-        <p className="subtle">{t('settings.providersDesc')}</p>
-        <ProviderManager
-          providers={providers}
-          connecting={connectingProvider}
-          error={providerError}
-          onConnect={onConnectProvider}
-          onDisconnect={onDisconnectProvider}
-        />
-      </SettingsSection>
-      )}
-
-      {/* Quick Chat — Solo en la categoría IA & Modelos */}
-      {showModels && (
-      <SettingsSection title={t('quickchat.title')}>
-        <p className="subtle">{t('quickchat.subtitle')}</p>
-
-        <div className="form-grid">
-          <label className="form-field">
-            <span>{t('quickchat.provider')}</span>
-            <select value={qcProvider} onChange={e => {
-              const p = e.target.value
-              setQcProvider(p)
-              if (p === "groq") setQcModel("llama-3.3-70b-versatile")
-              else if (p === "cerebras") setQcModel("llama-3.3-70b")
-              else if (p === "custom") setQcModel("gpt-4o")
-            }}>
-              <option value="groq">{t('quickchat.providerGroq')} (Ultra Rápido)</option>
-              <option value="cerebras">{t('quickchat.providerCerebras')}</option>
-              <option value="custom">{t('quickchat.providerCustom')}</option>
-              {providers.filter(p => p.connected && p.id !== "groq" && p.id !== "cerebras" && p.id !== "custom").map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-              {!providers.some(p => p.id === "opencode-go") && <option value="opencode-go">{t('quickchat.providerOpencode')}</option>}
-            </select>
-          </label>
-
-          <label className="form-field">
-            <span>{t('quickchat.model')}</span>
-            <select value={qcModel} onChange={e => setQcModel(e.target.value)}>
-              {qcProvider === "groq" && GROQ_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-              {qcProvider === "cerebras" && CEREBRAS_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-              {qcProvider === "custom" && [
-                { id: "gpt-4o", label: "GPT-4o" },
-                { id: "gpt-4o-mini", label: "GPT-4o Mini" },
-                { id: "deepseek-chat", label: "DeepSeek V3" },
-                { id: "deepseek-reasoner", label: "DeepSeek R1" },
-                { id: "llama3", label: "Llama 3 (Local)" },
-              ].map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-              {qcProvider !== "groq" && qcProvider !== "cerebras" && qcProvider !== "custom" && (
-                modelOptions.filter(m => m.providerID === qcProvider).map(m => (
-                  <option key={`${m.providerID}/${m.modelID}`} value={`${m.providerID}/${m.modelID}`}>{m.modelName || m.modelID}</option>
-                ))
-              )}
-            </select>
-          </label>
-        </div>
-
-        {qcProvider === "custom" && (
-          <label className="settings-field" style={{ marginTop: 8 }}>
-            <span>{t('quickchat.customUrl')}</span>
-            <input
-              type="text"
-              value={qcCustomUrl}
-              onChange={e => setQcCustomUrl(e.target.value)}
-              placeholder="https://api.openai.com/v1 o http://localhost:11434/v1"
-            />
-          </label>
-        )}
-
-        <label className="settings-field">
-          <span>
-            {qcProvider === "groq" ? t('quickchat.settingsKeyGroq')
-              : qcProvider === "cerebras" ? t('quickchat.settingsKey')
-              : qcProvider === "custom" ? t('quickchat.customKey')
-              : "API Key"}
-          </span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <input
-              type={showPassword ? "text" : "password"}
-              value={qcProvider === "groq" ? qcGroqKey : qcProvider === "cerebras" ? qcKey : qcCustomKey}
-              onChange={e => {
-                if (qcProvider === "groq") setQcGroqKey(e.target.value)
-                else if (qcProvider === "cerebras") setQcKey(e.target.value)
-                else setQcCustomKey(e.target.value)
-              }}
-              placeholder={qcProvider === "groq" ? "gsk_..." : qcProvider === "cerebras" ? "csk-..." : "sk-..."}
-              style={{ flex: 1 }}
-            />
-            <button type="button" className="btn-icon" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "hide" : "show"}>{showPassword ? "" : ""}</button>
+        <>
+          <p className="settings-group-heading">Startup & Environment</p>
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">Abrir opencode2 automáticamente</span>
+              <p className="setting-item-desc">Al iniciar la app de escritorio abre una terminal ejecutando <code>opencode2</code>.</p>
+            </div>
+            <div className="setting-item-control">
+              <button
+                type="button"
+                className={`switch-track compact${autoOpencode2 ? " active" : ""}`}
+                role="switch"
+                aria-checked={autoOpencode2}
+                onClick={() => setAutoOpencode2(!autoOpencode2)}
+              >
+                <span className="switch-thumb" />
+              </button>
+            </div>
           </div>
-        </label>
 
-        <button type="button" className="btn-primary" disabled={qcSaving} onClick={async () => {
-          setQcSaving(true)
-          try {
-            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_PROVIDER, qcProvider)
-            if (qcModel) localStorage.setItem(STORAGE_KEYS.QUICKCHAT_MODEL, qcModel)
-            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ, qcGroqKey)
-            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS, qcKey)
-            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM, qcCustomKey)
-            localStorage.setItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL, qcCustomUrl)
+          <p className="settings-group-heading">Navigation & Interface</p>
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">Posición de Barra Lateral</span>
+              <p className="setting-item-desc">Ubicación de la barra de navegación en pantalla.</p>
+            </div>
+            <div className="setting-item-control">
+              <div className="ag-segmented">
+                {(["left", "top", "right"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`ag-segmented-btn${sidebarPrefs.position === p ? " active" : ""}`}
+                    onClick={() => setSidebarPosition(p)}
+                  >
+                    {t(`settings.pos_${p}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
-            if (isDesktop) {
-              const { shell } = await import("../shell")
-              await shell.config.patch({ cerebras_api_key: qcKey, groq_api_key: qcGroqKey } as any)
-            }
-            window.dispatchEvent(new CustomEvent("quickchat:key-saved"))
-            setQcNotice("Configuración guardada")
-            setTimeout(() => setQcNotice(null), 2000)
-          } catch (e: any) {
-            setQcNotice(e?.message ?? "Error al guardar")
-          }
-          setQcSaving(false)
-        }}>{qcSaving ? t('settings.saving') : t('settings.save')}</button>
-        {qcNotice && <p className="subtle" style={{ color: "var(--accent)" }}>{qcNotice}</p>}
-      </SettingsSection>
-      )}
-
-      {/* Agentes Principales */}
-      {showModels && allPrimaryAgents && allPrimaryAgents.length > 0 && (
-        <SettingsSection title={t('settings.primaryAgents') || "Agentes Principales"}>
-          <p className="subtle">Habilita o deshabilita los agentes principales que se mostrarán en el selector del chat.</p>
-          <div className="agent-settings-list" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-            {allPrimaryAgents.map((agent) => {
-              const isDisabled = !!disabledAgents?.[agent.id]
-              return (
-                <div
-                  key={agent.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "8px 12px",
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    gap: 12,
-                  }}
-                >
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ display: "inline-flex", color: "var(--primary)" }}>
-                        {agent.id.includes("plan") ? <LayersIcon size={16} /> : agent.id.includes("build") ? <ToolIcon size={16} /> : <BrainIcon size={16} />}
-                      </span>
-                      <strong style={{ fontSize: 13, color: "var(--text)" }}>{agent.name || agent.id}</strong>
-                      {agent.id && <small style={{ color: "var(--muted)", fontSize: 12 }}>({agent.id})</small>}
-                    </div>
-                    {agent.description && (
-                      <p style={{ margin: 0, fontSize: 12, color: "var(--muted)", lineHeight: 1.4 }}>
-                        {agent.description}
-                      </p>
-                    )}
-                  </div>
+          {SIDEBAR_ITEM_IDS.map((id) => {
+            const visible = !sidebarPrefs.hidden.includes(id)
+            return (
+              <div key={id} className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">{t(`settings.sb_${id}`)}</span>
+                  <p className="setting-item-desc">Mostrar botón en la barra lateral.</p>
+                </div>
+                <div className="setting-item-control">
                   <button
                     type="button"
-                    className={`switch-track compact${!isDisabled ? " active" : ""}`}
+                    className={`switch-track compact${visible ? " active" : ""}`}
                     role="switch"
-                    aria-checked={!isDisabled}
-                    onClick={() => onToggleAgentEnabled?.(agent.id)}
-                    title={!isDisabled ? "Deshabilitar agente" : "Habilitar agente"}
+                    aria-checked={visible}
+                    onClick={() => toggleSidebarItem(id)}
                   >
                     <span className="switch-thumb" />
                   </button>
                 </div>
-              )
-            })}
+              </div>
+            )
+          })}
+
+          <p className="settings-group-heading">Feature Flags (Funciones Experimentales)</p>
+          {featureFlags.map(({ key, label, desc }) => (
+            <div key={key} className="setting-item-row">
+              <div className="setting-item-info">
+                <span className="setting-item-title">{label}</span>
+                <p className="setting-item-desc">{desc}</p>
+              </div>
+              <div className="setting-item-control">
+                <button
+                  type="button"
+                  className={`switch-track compact${flags[key] ? " active" : ""}`}
+                  role="switch"
+                  aria-checked={flags[key]}
+                  onClick={() => onToggleFlag(key)}
+                >
+                  <span className="switch-thumb" />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {isDesktop && onOpenOpenCodeHub && (
+            <>
+              <p className="settings-group-heading">OpenCode Hub</p>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">OpenCode Hub Oficial</span>
+                  <p className="setting-item-desc">Visualiza los prompts de sistema de tus agentes, catálogo de skills y opencode.json global.</p>
+                </div>
+                <div className="setting-item-control">
+                  <button type="button" className="ag-btn-open" onClick={onOpenOpenCodeHub}>
+                    Abrir Hub →
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          <p className="settings-group-heading">Host Control & Maintenance</p>
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">{t('extras.restartHost')}</span>
+              <p className="setting-item-desc">{t('extras.restartHostDesc')}</p>
+            </div>
+            <div className="setting-item-control">
+              <button type="button" className="ag-btn-open" onClick={() => setShowRestartConfirm(true)}>
+                <span style={{ display: "inline-flex", marginRight: 6 }}><RefreshIcon size={14} /></span>
+                {t('extras.restartHost')}
+              </button>
+            </div>
           </div>
-        </SettingsSection>
+
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">{t('extras.shutdownHost')}</span>
+              <p className="setting-item-desc">{t('extras.shutdownHostDesc')}</p>
+            </div>
+            <div className="setting-item-control">
+              <button type="button" className="ag-btn-open" onClick={() => setShowShutdownConfirm(true)}>
+                {t('extras.shutdownHost')}
+              </button>
+            </div>
+          </div>
+
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">Exportar chats guardados (.md)</span>
+              <p className="setting-item-desc">Descarga todos los mensajes del cache local en un único archivo Markdown.</p>
+            </div>
+            <div className="setting-item-control">
+              <ExportCacheButton small label="Exportar .md" />
+            </div>
+          </div>
+
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">{t('settings.stats')}</span>
+              <p className="setting-item-desc">{stats.promptsSent} prompts enviados · {stats.sessionsCreated} sesiones creadas.</p>
+            </div>
+            <div className="setting-item-control">
+              <button type="button" className="ag-btn-open" onClick={onResetStats}>
+                {t('settings.resetStats')}
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Blocked models */}
+      {/* Models Tab */}
       {showModels && (
-      <SettingsSection title={t('settings.blockedModels')}>
-        <p className="subtle">{t('settings.blockedModelsHint')}</p>
-        {modelOptions.length === 0 ? (
-          <p className="subtle">{t('detail.modelLoading')}</p>
-        ) : (
-          <>
-            <div className="blocked-search">
-              <input placeholder={t('settings.blockedModelsSearch')}
+        <>
+          <p className="settings-group-heading">AI Providers</p>
+          <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <ProviderManager
+              providers={providers}
+              connecting={connectingProvider}
+              error={providerError}
+              onConnect={onConnectProvider}
+              onDisconnect={onDisconnectProvider}
+            />
+          </div>
+
+          <p className="settings-group-heading">Quick Chat</p>
+          <div className="setting-item-row">
+            <div className="setting-item-info">
+              <span className="setting-item-title">Proveedor Quick Chat</span>
+              <p className="setting-item-desc">Modelo rápido para consultas instantáneas.</p>
+            </div>
+            <div className="setting-item-control">
+              <select
+                className="ag-select"
+                value={qcProvider}
+                onChange={e => {
+                  setQcProvider(e.target.value)
+                  localStorage.setItem(STORAGE_KEYS.QUICKCHAT_PROVIDER, e.target.value)
+                }}
+              >
+                <option value="groq">{t('quickchat.providerGroq')} (Ultra Rápido)</option>
+                <option value="cerebras">{t('quickchat.providerCerebras')}</option>
+                <option value="custom">{t('quickchat.providerCustom')}</option>
+                {providers.filter(p => p.connected && p.id !== "groq" && p.id !== "cerebras" && p.id !== "custom").map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {allPrimaryAgents && allPrimaryAgents.length > 0 && (
+            <>
+              <p className="settings-group-heading">Agentes Principales</p>
+              {allPrimaryAgents.map((agent) => {
+                const isDisabled = !!disabledAgents?.[agent.id]
+                return (
+                  <div key={agent.id} className="setting-item-row">
+                    <div className="setting-item-info">
+                      <span className="setting-item-title">{agent.name || agent.id}</span>
+                      <p className="setting-item-desc">{agent.description || `Agente ${agent.id}`}</p>
+                    </div>
+                    <div className="setting-item-control">
+                      <button
+                        type="button"
+                        className={`switch-track compact${!isDisabled ? " active" : ""}`}
+                        role="switch"
+                        aria-checked={!isDisabled}
+                        onClick={() => onToggleAgentEnabled?.(agent.id)}
+                      >
+                        <span className="switch-thumb" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          )}
+
+          <p className="settings-group-heading">{t('settings.blockedModels')}</p>
+          <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <div className="blocked-search" style={{ marginBottom: 12 }}>
+              <input
+                placeholder={t('settings.blockedModelsSearch')}
                 value={blockedSearch}
-                onChange={(e) => setBlockedSearch(e.target.value)} />
+                onChange={(e) => setBlockedSearch(e.target.value)}
+                className="settings-search-input"
+              />
             </div>
             {Array.from(new Set(modelOptions.map((o) => o.providerID))).map((providerID) => {
               const providerModels = modelOptions.filter((o) => o.providerID === providerID)
@@ -1010,7 +1052,7 @@ export const SettingsPanel = memo(function SettingsPanel({
               const allBlocked = blockedCount === total
               const isExpanded = expandedProviders.has(providerID) || blockedSearch.length > 0
               return (
-                <div key={providerID} className="blocked-group">
+                <div key={providerID} className="blocked-group" style={{ marginBottom: 8 }}>
                   <div className="blocked-group-header" onClick={() => toggleProvider(providerID)} role="button" tabIndex={0}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProvider(providerID) } }}>
                     <span className="blocked-chevron">{isExpanded ? "▼" : "▶"}</span>
@@ -1022,334 +1064,185 @@ export const SettingsPanel = memo(function SettingsPanel({
                   </div>
                   {isExpanded && (
                     <div className="blocked-items">
-                    {filtered.map((opt) => {
-                    const key = mk(opt)
-                    const blocked = blockedModels.isBlocked(key)
-                    return (
-                      <label key={key} className={`blocked-item${blocked ? " blocked" : ""}`} data-label={`${opt.modelName} ${opt.providerName}`}>
-                        <span className="blocked-item-name">{opt.modelName}</span>
-                        {opt.variant && <small className="blocked-item-variant">{opt.variant}</small>}
-                        <button type="button"
-                          className={`switch-track compact${blocked ? "" : " active"}`}
-                          onClick={() => blockedModels.toggleBlocked(key)}
-                          aria-checked={!blocked}
-                          role="switch">
-                          <span className="switch-thumb" />
-                        </button>
-                      </label>
-                    )
-                  })}
+                      {filtered.map((opt) => {
+                        const key = mk(opt)
+                        const blocked = blockedModels.isBlocked(key)
+                        return (
+                          <label key={key} className={`blocked-item${blocked ? " blocked" : ""}`} data-label={`${opt.modelName} ${opt.providerName}`}>
+                            <span className="blocked-item-name">{opt.modelName}</span>
+                            {opt.variant && <small className="blocked-item-variant">{opt.variant}</small>}
+                            <button
+                              type="button"
+                              className={`switch-track compact${blocked ? "" : " active"}`}
+                              onClick={() => blockedModels.toggleBlocked(key)}
+                              aria-checked={!blocked}
+                              role="switch"
+                            >
+                              <span className="switch-thumb" />
+                            </button>
+                          </label>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
               )
             })}
-          </>
-        )}
-      </SettingsSection>
-      )}
-
-      {/* Chat customization */}
-      {showChat && (
-      <SettingsSection title={t('settings.chatCustomization')}>
-        <p className="subtle">{t('settings.chatCustomizationDesc')}</p>
-        <ChatCustomizer
-          settings={chatSettings}
-          onSettingChange={onChatSettingChange}
-          onReset={onResetChatSettings} />
-      </SettingsSection>
-      )}
-
-      {/* Prompt snippets */}
-      {showChat && (
-      <SettingsSection title={t('settings.snippets')}>
-        <p className="subtle">{t('settings.snippetsDesc')}</p>
-        <SnippetManager snippets={snippets} onAdd={onAddSnippet} onRemove={onRemoveSnippet} />
-      </SettingsSection>
-      )}
-
-      {/* Auto opencode2 en terminal al abrir — usa localStorage directo para no depender del FeatureFlags merge */}
-      {showSystem && (
-      <SettingsSection title="Inicio">
-        <p className="subtle">Configuración de arranque automático</p>
-        <div className="switch-list">
-          <label className="switch-row">
-            <span className="switch-label">
-              <strong>Abrir opencode2 automáticamente</strong>
-              <small>Al iniciar la app de escritorio abre una terminal ejecutando <code>opencode2</code></small>
-            </span>
-            <input
-              type="checkbox"
-              className="switch-checkbox"
-              checked={(() => { try { return localStorage.getItem("opencode.auto_opencode2") === "1" } catch { return false } })()}
-              onChange={(e) => {
-                const v = e.target.checked
-                try { localStorage.setItem("opencode.auto_opencode2", v ? "1" : "0") } catch {}
-                // también persistir en shell config para portable
-                import("../shell").then(({ shell }) => shell.config.patch({ auto_opencode2: v } as any).catch(() => {})).catch(() => {})
-                // forzar re-render del panel
-                try { window.dispatchEvent(new Event("opencode:auto-opencode2-toggle")) } catch {}
-              }}
-            />
-          </label>
-        </div>
-      </SettingsSection>
-      )}
-
-      {/* Extras */}
-      {showSystem && (
-      <SettingsSection title={t('settings.extras')}>
-        <p className="subtle">{t('settings.extrasDesc')}</p>
-        <div className="settings-extras-list">
-          <button type="button" className="btn-secondary extras-btn" onClick={() => setShowShutdownConfirm(true)}>
-            <PowerIcon size={16} />
-            <span>
-              <strong>{t('extras.shutdownHost')}</strong>
-              <small>{t('extras.shutdownHostDesc')}</small>
-            </span>
-          </button>
-          <button type="button" className="btn-secondary extras-btn" onClick={() => setShowRestartConfirm(true)}>
-            <RefreshIcon size={16} />
-            <span>
-              <strong>{t('extras.restartHost')}</strong>
-              <small>{t('extras.restartHostDesc')}</small>
-            </span>
-          </button>
-          <button type="button" className="btn-secondary extras-btn" onClick={onOpenGitHub}>
-            <GithubIcon size={16} />
-            <span>
-              <strong>{t('extras.github')}</strong>
-              <small>github.com/Owning01/Opencode-Mobile</small>
-            </span>
-          </button>
-          {onOpenFavoritesManager && (
-            <button type="button" className="btn-secondary extras-btn" onClick={onOpenFavoritesManager}>
-              <StarIcon size={16} />
-              <span>
-                <strong>{t('favorites.manage')}</strong>
-                <small>{t('favorites.manageDesc')}</small>
-              </span>
-            </button>
-          )}
-          {onOpenArchivedView && (
-            <button type="button" className="btn-secondary extras-btn" onClick={onOpenArchivedView}>
-              <ArchiveIcon size={16} />
-              <span>
-                <strong>{t('session.archived')}</strong>
-                <small>{t('session.archivedDesc')}</small>
-              </span>
-            </button>
-          )}
-          {onOpenShortcuts && (
-            <button type="button" className="btn-secondary extras-btn" onClick={onOpenShortcuts}>
-              <KeyboardIcon size={16} />
-              <span>
-                <strong>{t('session.shortcuts')}</strong>
-                <small>{t('session.shortcutsDesc')}</small>
-              </span>
-            </button>
-          )}
-          <div className="btn-secondary extras-btn" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <SaveIcon size={16} />
-            <span style={{ flex: 1 }}>
-              <strong>Exportar chats guardados (.md)</strong>
-              <small>Descarga TODOS los mensajes del cache local (incluye borrados)</small>
-            </span>
-            <ExportCacheButton small label="Exportar .md" />
           </div>
-        </div>
-      </SettingsSection>
-      )}
 
-      {/* Stats */}
-      {showSystem && (
-      <SettingsSection title={t('settings.stats')} icon={<StatsIcon size={14} />}>
-        <div className="stats-grid">
-          <div className="stat-item">
-            <span className="stat-value">{stats.promptsSent}</span>
-            <span className="stat-label">{t('settings.statsPrompts')}</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-value">{stats.sessionsCreated}</span>
-            <span className="stat-label">{t('settings.statsSessions')}</span>
-          </div>
-        </div>
-        <div className="settings-actions">
-          <button type="button" className="btn-secondary compact" onClick={onResetStats}>
-            {t('settings.resetStats')}
-          </button>
-        </div>
-      </SettingsSection>
-      )}
-
-      {showRemote && (
-      <SettingsSection title={t('settings.desktopTitle')}>
-        <p className="subtle">{t('settings.desktopHint')}</p>
-        <div className="desktop-settings-grid">
-          <label className="field-label">
-            {t('settings.host')}
-            <input
-              type="text"
-              value={desktopCfg.host}
-              onChange={(e) => setDesktopCfg((c) => ({ ...c, host: e.target.value }))}
-              placeholder="100.101.102.103"
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-          </label>
-          <label className="field-label">
-            {t('settings.port')}
-            <input
-              type="number"
-              value={desktopCfg.port}
-              onChange={(e) => setDesktopCfg((c) => ({ ...c, port: Number(e.target.value) || 0 }))}
-              placeholder="5901"
-              inputMode="numeric"
-            />
-          </label>
-          <label className="field-label">
-            {t('settings.username')}
-            <input
-              type="text"
-              value={desktopCfg.username}
-              onChange={(e) => setDesktopCfg((c) => ({ ...c, username: e.target.value }))}
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-          </label>
-          <label className="field-label">
-            {t('settings.password')}
-            <div className="password-wrapper">
-              <input
-                type={showDesktopPass ? "text" : "password"}
-                value={desktopCfg.password}
-                onChange={(e) => setDesktopCfg((c) => ({ ...c, password: e.target.value }))}
-              />
-              <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowDesktopPass((v) => !v)} tabIndex={-1}>
-                {showDesktopPass ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-              </button>
-            </div>
-          </label>
-        </div>
-        <div className="settings-actions">
-          <button
-            type="button"
-            className="btn-secondary compact"
-            onClick={testDesktop}
-            disabled={desktopTesting || !canTestDesktop(desktopCfg)}
-          >
-            {desktopTesting ? <LoadingIcon size={14} /> : <TestIcon size={14} />}
-            {t('settings.desktopTest')}
-          </button>
-          {desktopSaved && <span className="desktop-saved-hint">{t('settings.desktopSaved')}</span>}
-        </div>
-        {desktopNotice && <p className={`desktop-settings-notice ${desktopNoticeType}`}>{desktopNotice}</p>}
-      </SettingsSection>
-      )}
-
-      {showModels && (
-      <SettingsSection title={t('settings.goTitle')}>
-        <p className="subtle">{t('settings.goHint')}</p>
-        {goKeys.map((key, i) => {
-          const trimmed = key.trim()
-          const usage = trimmed ? goUsageMap[trimmed] : null
-          const loading = trimmed ? goLoadingMap[trimmed] : false
-          const error = trimmed ? goErrorMap[trimmed] : null
-          return (
-            <div key={i} className="go-account">
-              <div className="go-account-head">
-                <span className="go-account-label">{t('settings.goAccount')} {i + 1}</span>
-                {goSaved && i === 0 && <span className="desktop-saved-hint">{t('settings.goSaved')}</span>}
+          <p className="settings-group-heading">{t('settings.goTitle')}</p>
+          {goKeys.map((key, i) => {
+            const trimmed = key.trim()
+            const usage = trimmed ? goUsageMap[trimmed] : null
+            const loading = trimmed ? goLoadingMap[trimmed] : false
+            const error = trimmed ? goErrorMap[trimmed] : null
+            return (
+              <div key={i} className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="setting-item-title">{t('settings.goAccount')} {i + 1}</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button type="button" className="ag-btn-open" onClick={() => void checkGo(key)} disabled={loading || !trimmed}>
+                      {loading ? <LoadingIcon size={14} /> : "Verificar"}
+                    </button>
+                    <button type="button" className="btn-icon btn-ghost" onClick={() => removeGoKey(i)}>
+                      <TrashIcon size={14} />
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="password"
+                  value={goEditing[i] ? key : (key ? "••••••••" : "")}
+                  onChange={(e) => updateGoKey(i, e.target.value)}
+                  onFocus={() => setGoEditing((m) => ({ ...m, [i]: true }))}
+                  onBlur={() => setGoEditing((m) => ({ ...m, [i]: false }))}
+                  placeholder={t('settings.goApiKeyPlaceholder')}
+                  className="settings-search-input"
+                  style={{ marginTop: 8 }}
+                />
+                {error && <p className="desktop-settings-notice fail" style={{ marginTop: 6 }}>{error}</p>}
+                {usage && (
+                  <div className="go-usage" style={{ marginTop: 8 }}>
+                    {(["rolling", "weekly", "monthly"] as const).map((k) => {
+                      const period = usage[k]
+                      if (!period) return null
+                      const pct = Math.min(100, Math.max(0, period.percent))
+                      const tone = pct >= 80 ? "danger" : pct >= 50 ? "warning" : "ok"
+                      return (
+                        <div key={k} className="go-period">
+                          <div className="go-period-head">
+                            <span className="go-period-label">{t(`settings.goPeriod_${k}`)}</span>
+                            <span className="go-period-pct">{period.percent}%</span>
+                          </div>
+                          <div className="go-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={t(`settings.goPeriod_${k}`)}>
+                            <div className={`go-bar-fill ${tone}`} style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-              <div className="go-account-row">
+            )
+          })}
+          <div style={{ marginTop: 8 }}>
+            <button type="button" className="ag-btn-open" onClick={() => setGoKeys((ks) => [...ks, ""])}>
+              <span style={{ display: "inline-flex", marginRight: 6 }}><PlusIcon size={14} /></span>
+              {t('settings.goAddAccount')}
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Customizations Tab */}
+      {showChat && (
+        <>
+          <p className="settings-group-heading">{t('settings.chatCustomization')}</p>
+          <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <ChatCustomizer
+              settings={chatSettings}
+              onSettingChange={onChatSettingChange}
+              onReset={onResetChatSettings}
+            />
+          </div>
+
+          <p className="settings-group-heading">{t('settings.snippets')}</p>
+          <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <SnippetManager snippets={snippets} onAdd={onAddSnippet} onRemove={onRemoveSnippet} />
+          </div>
+        </>
+      )}
+
+      {/* Browser / Remote Desktop Tab */}
+      {showRemote && (
+        <>
+          <p className="settings-group-heading">{t('settings.desktopTitle')}</p>
+          <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <p className="setting-item-desc" style={{ marginBottom: 12 }}>{t('settings.desktopHint')}</p>
+            <div className="desktop-settings-grid">
+              <label className="field-label">
+                {t('settings.host')}
+                <input
+                  type="text"
+                  value={desktopCfg.host}
+                  onChange={(e) => setDesktopCfg((c) => ({ ...c, host: e.target.value }))}
+                  placeholder="100.101.102.103"
+                  className="settings-search-input"
+                />
+              </label>
+              <label className="field-label">
+                {t('settings.port')}
+                <input
+                  type="number"
+                  value={desktopCfg.port}
+                  onChange={(e) => setDesktopCfg((c) => ({ ...c, port: Number(e.target.value) || 0 }))}
+                  placeholder="5901"
+                  className="settings-search-input"
+                />
+              </label>
+              <label className="field-label">
+                {t('settings.username')}
+                <input
+                  type="text"
+                  value={desktopCfg.username}
+                  onChange={(e) => setDesktopCfg((c) => ({ ...c, username: e.target.value }))}
+                  className="settings-search-input"
+                />
+              </label>
+              <label className="field-label">
+                {t('settings.password')}
                 <div className="password-wrapper">
                   <input
-                    type="password"
-                    value={goEditing[i] ? key : (key ? "••••••••" : "")}
-                    onChange={(e) => updateGoKey(i, e.target.value)}
-                    onFocus={() => setGoEditing((m) => ({ ...m, [i]: true }))}
-                    onBlur={() => setGoEditing((m) => ({ ...m, [i]: false }))}
-                    onCopy={(e) => e.preventDefault()}
-                    placeholder={t('settings.goApiKeyPlaceholder')}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="go-key-input"
-                    aria-label={t('settings.goAccount')}
+                    type={showDesktopPass ? "text" : "password"}
+                    value={desktopCfg.password}
+                    onChange={(e) => setDesktopCfg((c) => ({ ...c, password: e.target.value }))}
+                    className="settings-search-input"
                   />
-                </div>
-                <div className="go-account-btns">
-                  <button
-                    type="button"
-                    className="btn-secondary compact"
-                    onClick={() => void checkGo(key)}
-                    disabled={loading || !trimmed}
-                    title={t('settings.goCheck')}
-                  >
-                    {loading ? <LoadingIcon size={14} /> : <TestIcon size={14} />}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-icon btn-ghost go-remove"
-                    onClick={() => removeGoKey(i)}
-                    title={t('settings.goRemove')}
-                    aria-label={t('settings.goRemove')}
-                  >
-                    <TrashIcon size={16} />
+                  <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowDesktopPass((v) => !v)} tabIndex={-1}>
+                    {showDesktopPass ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
                   </button>
                 </div>
-              </div>
-              {error && <p className="desktop-settings-notice fail">{error}</p>}
-              {usage && (
-                <div className="go-usage">
-                  {(["rolling", "weekly", "monthly"] as const).map((k) => {
-                    const period = usage[k]
-                    if (!period) return null
-                    const pct = Math.min(100, Math.max(0, period.percent))
-                    const tone = pct >= 80 ? "danger" : pct >= 50 ? "warning" : "ok"
-                    return (
-                      <div key={k} className="go-period">
-                        <div className="go-period-head">
-                          <span className="go-period-label">{t(`settings.goPeriod_${k}`)}</span>
-                          <span className="go-period-pct">{period.percent}%</span>
-                        </div>
-                        <div className="go-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={t(`settings.goPeriod_${k}`)}>
-                          <div className={`go-bar-fill ${tone}`} style={{ width: `${pct}%` }} />
-                        </div>
-                        {period.resetsAt && <small className="subtle">{t('settings.goResetsAt')}: {formatGoReset(period.resetsAt)}</small>}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+              </label>
             </div>
-          )
-        })}
-        <div className="settings-actions">
-          <button
-            type="button"
-            className="btn-secondary compact"
-            onClick={() => setGoKeys((ks) => [...ks, ""])}
-          >
-            <PlusIcon size={14} />
-            {t('settings.goAddAccount')}
-          </button>
-          {goSaved && goKeys.length > 1 && <span className="desktop-saved-hint">{t('settings.goSaved')}</span>}
-        </div>
-      </SettingsSection>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+              <button
+                type="button"
+                className="ag-btn-open"
+                onClick={testDesktop}
+                disabled={desktopTesting || !canTestDesktop(desktopCfg)}
+              >
+                {desktopTesting ? <LoadingIcon size={14} /> : <span style={{ display: "inline-flex", marginRight: 6 }}><TestIcon size={14} /></span>}
+                {t('settings.desktopTest')}
+              </button>
+              {desktopSaved && <span className="desktop-saved-hint">{t('settings.desktopSaved')}</span>}
+            </div>
+            {desktopNotice && <p className={`desktop-settings-notice ${desktopNoticeType}`} style={{ marginTop: 8 }}>{desktopNotice}</p>}
+          </div>
+        </>
       )}
 
       {/* Slots de plugins (secciones adicionales) */}
       <PluginSlot id="settings.section" />
         </div>
-      </div>
-
-      <div className="settings-footer">
-        <button type="button" className="btn-secondary" onClick={() => onNavigate("help")}>
-          <HelpIcon size={16} />
-          {t('nav.help')}
-        </button>
       </div>
 
       {showShutdownConfirm && (
@@ -1395,6 +1288,42 @@ export const SettingsPanel = memo(function SettingsPanel({
           onClose={() => setShowDataUsage(false)} />
       )}
 
+      {rulesModal && (
+        <div className="modal-backdrop" onClick={() => setRulesModal(null)}>
+          <div
+            className="modal-card fade-in"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 520, background: "#141417", border: "1px solid #27272a" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h2 style={{ fontSize: 16, margin: 0, color: "#fff" }}>
+                {rulesModal === "file" && "File Access Rules"}
+                {rulesModal === "network" && "Network Access Rules"}
+                {rulesModal === "terminal" && "Terminal Commands"}
+                {rulesModal === "sandbox" && "Commands Outside Sandbox"}
+              </h2>
+              <button type="button" className="btn-icon btn-ghost" onClick={() => setRulesModal(null)}>✕</button>
+            </div>
+            <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 16 }}>
+              {rulesModal === "file" && "Configure allowed and denied directory paths for file read and write operations."}
+              {rulesModal === "network" && "Configure allowed domains, IP subnets, and HTTP/HTTPS URLs for network requests."}
+              {rulesModal === "terminal" && "Configure allowed commands and shell scripts executed in the agent terminal."}
+              {rulesModal === "sandbox" && "Configure allowed commands executed directly on the host system without sandbox."}
+            </p>
+            <div style={{ background: "#0e0e11", border: "1px solid #222226", borderRadius: 6, padding: "10px 12px", fontSize: 12, color: "#71717a", fontFamily: "monospace", minHeight: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              (Default policy: Turbo Mode Auto-Allow)
+            </div>
+            <div className="modal-actions" style={{ marginTop: 16 }}>
+              <button className="ag-btn-open" onClick={() => setRulesModal(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPairModal && (
         <PairModal
           onSave={(name, config) => {
@@ -1410,21 +1339,6 @@ export const SettingsPanel = memo(function SettingsPanel({
     return (
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-content settings-modal-window" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('nav.settings') || "Configuración"}>
-          <div className="settings-modal-top-header">
-            <div className="settings-modal-title-group">
-              <SettingsIcon size={18} />
-              <h2 className="settings-modal-title">{t('nav.settings') || "Configuración"}</h2>
-            </div>
-            <button
-              type="button"
-              className="btn-icon compact settings-modal-close"
-              onClick={onClose}
-              title={t('panel.close') || "Cerrar"}
-              aria-label={t('panel.close') || "Cerrar"}
-            >
-              ×
-            </button>
-          </div>
           <div className="settings-modal-body">
             {panelContent}
           </div>
@@ -1437,3 +1351,4 @@ export const SettingsPanel = memo(function SettingsPanel({
 })
 
 export default SettingsPanel
+

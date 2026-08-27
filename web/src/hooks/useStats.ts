@@ -4,7 +4,7 @@ import { useLocalStorage } from "./useLocalStorage"
 
 const STATS_KEY = STORAGE_KEYS.STATS
 
-type UsageStats = {
+export type UsageStats = {
   promptsSent: number
   sessionsCreated: number
   firstUsed: number

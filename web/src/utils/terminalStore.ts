@@ -8,6 +8,19 @@ export const terminalStore = new Map<string, TerminalPersist>()
 const MAX_PERSISTED_PTYS = 8
 export const terminalPtyStore = new Map<string, { ptyId: string; wsPort: number }>()
 
+// Flag en memoria para auto-opencode2 (evita carrera sessionStorage vs mount)
+let _pendingAutoOpencode2 = false
+export function setPendingAutoOpencode2(v: boolean) { _pendingAutoOpencode2 = v; try { if (v) sessionStorage.setItem("opencode.auto_opencode2.pending", "1"); else sessionStorage.removeItem("opencode.auto_opencode2.pending") } catch {} }
+export function consumePendingAutoOpencode2(): boolean {
+  if (_pendingAutoOpencode2) { _pendingAutoOpencode2 = false; try { sessionStorage.removeItem("opencode.auto_opencode2.pending") } catch {} return true }
+  try { if (sessionStorage.getItem("opencode.auto_opencode2.pending") === "1") { sessionStorage.removeItem("opencode.auto_opencode2.pending"); return true } } catch {}
+  return false
+}
+export function hasPendingAutoOpencode2(): boolean {
+  if (_pendingAutoOpencode2) return true
+  try { return sessionStorage.getItem("opencode.auto_opencode2.pending") === "1" } catch { return false }
+}
+
 export const TERMINAL_FONT_MIN = 9
 export const TERMINAL_FONT_MAX = 28
 export const TERMINAL_FONT_DEFAULT = 13

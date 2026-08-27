@@ -1,12 +1,21 @@
-// LearningPage — entry del plugin de formación. Lazy-loaded desde App.tsx.
+// LearningPage — entry del plugin. Lazy-loaded. Estilos en styles/learning.css
 import { useEffect, useMemo, useState } from "react"
 import { loadManifest } from "./data.ts"
 import { loadProgress, markDone, markVisited } from "./progress.ts"
 import { LearningSidebar } from "./Sidebar.tsx"
 import { LessonView } from "./LessonView.tsx"
+import { shouldShowDiagram } from "./diagrams.tsx"
 import type { LearningManifest, LearningLesson, LearningProgress } from "./types.ts"
 
 type MobilePane = "list" | "lesson"
+
+const LEVEL_ICON: Record<number, string> = {
+  0: "◈", // fundamentos
+  1: "⬢", // herramientas
+  2: "⬣", // web/sistemas
+  3: "⬔", // post/op
+  4: "⬥", // ops/inject
+}
 
 export default function LearningPage() {
   const [manifest, setManifest] = useState<LearningManifest | null>(null)
@@ -16,22 +25,12 @@ export default function LearningPage() {
   const [mobilePane, setMobilePane] = useState<MobilePane>("list")
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  // Lista plana en orden curricular para navegación prev/next.
-  const flatLessons = useMemo(() => {
-    if (!manifest) return []
-    return manifest.categories.flatMap((c) => c.items)
-  }, [manifest])
-
-  const currentIndex = useMemo(() => {
-    if (!selected) return -1
-    return flatLessons.findIndex((l) => l.id === selected.id)
-  }, [flatLessons, selected])
+  const flatLessons = useMemo(() => manifest ? manifest.categories.flatMap((c) => c.items) : [], [manifest])
+  const currentIndex = useMemo(() => selected ? flatLessons.findIndex((l) => l.id === selected.id) : -1, [flatLessons, selected])
 
   useEffect(() => {
     let cancelled = false
-    loadManifest()
-      .then((m) => { if (!cancelled) setManifest(m) })
-      .catch((err) => { if (!cancelled) setError(String(err)) })
+    loadManifest().then((m) => { if (!cancelled) setManifest(m) }).catch((e) => { if (!cancelled) setError(String(e)) })
     return () => { cancelled = true }
   }, [])
 
@@ -42,63 +41,50 @@ export default function LearningPage() {
     markVisited(lesson.id)
     setProgress(loadProgress())
   }
-
-  const handleToggleDone = (id: string, done: boolean) => {
-    setProgress(markDone(id, done))
-  }
-
+  const handleToggleDone = (id: string, done: boolean) => setProgress(markDone(id, done))
   const goPrev = () => { if (currentIndex > 0) handleSelect(flatLessons[currentIndex - 1]) }
   const goNext = () => { if (currentIndex >= 0 && currentIndex < flatLessons.length - 1) handleSelect(flatLessons[currentIndex + 1]) }
 
-  if (error) {
-    return (
-      <div style={centerStyle}>
-        <p style={{ color: "#ef4444" }}>Error cargando plataforma: {error}</p>
-      </div>
-    )
-  }
+  if (error) return <div className="learning-center"><p style={{ color: "var(--danger)" }}>Error: {error}</p></div>
+  if (!manifest) return <div className="learning-center"><p className="subtle">Cargando curriculum…</p></div>
 
-  if (!manifest) {
-    return <div style={centerStyle}><p style={{ color: "var(--muted)" }}>Cargando curriculum…</p></div>
-  }
-
-  const totalDone = manifest.categories.reduce(
-    (acc, cat) => acc + cat.items.filter((it) => progress[it.id]?.done).length,
-    0,
-  )
+  const totalDone = manifest.categories.reduce((a, c) => a + c.items.filter((it) => progress[it.id]?.done).length, 0)
   const percent = Math.round((totalDone / manifest.totalLessons) * 100)
 
+  const showDashboard = mobilePane !== "lesson" || !selected
+  const showLesson = !!selected
+  const isFirstInCategory = useMemo(() => {
+    if (!selected || !manifest) return false
+    const cat = manifest.categories.find((c) => c.id === selected.category)
+    if (!cat) return false
+    // Solo cuenta como "primero" si es el primer doc COMPLEJO de la sección
+    // (para categorías selectivas como 01/02, el primer doc simple no debería mostrar diagrama)
+    const firstComplex = cat.items.find((it) => shouldShowDiagram(it))
+    if (firstComplex) return firstComplex.id === selected.id
+    return cat.items[0]?.id === selected.id && shouldShowDiagram(selected)
+  }, [selected, manifest])
+
   return (
-    <div className="learning-page" style={pageStyle}>
-      {/* Header */}
-      <header style={topBarStyle}>
-        <button type="button" onClick={() => setSidebarOpen(true)} className="btn-icon compact learning-menu-btn" aria-label="Menú" style={{ display: sidebarOpen ? undefined : undefined }}>
-          ☰
-        </button>
-        <h2 style={brandStyle}>📚 Aprendizaje</h2>
-        <span style={statStyle}>{manifest.totalLessons} lecciones</span>
-        <span style={statStyle}>{percent}% completado</span>
+    <div className="learning-page">
+      <header className="learning-topbar">
+        <button type="button" onClick={() => setSidebarOpen(true)} className="btn-icon compact learning-menu-btn" aria-label="Menú">☰</button>
+        <h2 className="learning-brand">📚 Aprendizaje</h2>
+        <span className="learning-stat">{manifest.totalLessons} lecciones</span>
+        <span className="learning-stat" style={{ color: percent === 100 ? "var(--success)" : undefined }}>{percent}%</span>
       </header>
 
-      {/* Layout desktop: sidebar fija + contenido */}
-      <div style={layoutStyle}>
-        <aside style={{ ...desktopSidebarStyle }} className="learning-desktop-sidebar">
-          <LearningSidebar
-            manifest={manifest}
-            progress={progress}
-            selectedId={selected?.id ?? null}
-            onSelect={handleSelect}
-          />
+      <div className="learning-layout">
+        <aside className="learning-desktop-sidebar">
+          <LearningSidebar manifest={manifest} progress={progress} selectedId={selected?.id ?? null} onSelect={handleSelect} />
         </aside>
 
-        <main style={mainStyle} className="learning-main">
-          {mobilePane === "lesson" && selected ? null : (
-            <Dashboard manifest={manifest} progress={progress} onSelect={handleSelect} />
-          )}
-          {(mobilePane === "lesson" || window.innerWidth > 768) && selected && (
+        <main className="learning-main">
+          {showDashboard && <Dashboard manifest={manifest} progress={progress} onSelect={handleSelect} totalDone={totalDone} />}
+          {showLesson && (
             <LessonView
-              lesson={selected}
+              lesson={selected!}
               progress={progress}
+              isFirstInCategory={isFirstInCategory}
               onToggleDone={handleToggleDone}
               onBack={() => { setMobilePane("list"); setSelected(null) }}
               onPrev={currentIndex > 0 ? goPrev : undefined}
@@ -107,135 +93,113 @@ export default function LearningPage() {
           )}
         </main>
 
-        {/* Sidebar móvil como overlay */}
         {sidebarOpen && (
-          <div style={mobileOverlayStyle} onClick={() => setSidebarOpen(false)}>
-            <div style={mobileSidebarStyle} onClick={(e) => e.stopPropagation()}>
-              <LearningSidebar
-                manifest={manifest}
-                progress={progress}
-                selectedId={selected?.id ?? null}
-                onSelect={handleSelect}
-                onClose={() => setSidebarOpen(false)}
-              />
+          <div className="learning-mobile-overlay" onClick={() => setSidebarOpen(false)}>
+            <div className="learning-mobile-panel" onClick={(e) => e.stopPropagation()}>
+              <LearningSidebar manifest={manifest} progress={progress} selectedId={selected?.id ?? null} onSelect={handleSelect} onClose={() => setSidebarOpen(false)} />
             </div>
           </div>
         )}
       </div>
-
-      <style>{cssOverrides}</style>
     </div>
   )
 }
 
-function Dashboard({ manifest, progress, onSelect }: {
+function Dashboard({ manifest, progress, onSelect, totalDone }: {
   manifest: LearningManifest
   progress: LearningProgress
   onSelect: (lesson: LearningLesson) => void
+  totalDone: number
 }) {
+  const totalLessons = manifest.totalLessons
+  const pct = Math.round((totalDone / totalLessons) * 100)
+
   return (
-    <div style={dashStyle}>
-      {manifest.categories.map((cat) => {
-        const doneCount = cat.items.filter((it) => progress[it.id]?.done).length
-        return (
-          <section key={cat.id} style={dashCatStyle}>
-            <header style={dashCatHeaderStyle}>
-              <h3 style={dashTitleStyle}>{cat.title}</h3>
-              <span style={dashMetaStyle}>Nivel {cat.level} · {doneCount}/{cat.count} completadas</span>
-            </header>
-            <p style={dashDescStyle}>{cat.description}</p>
-            <ul style={dashListStyle}>
-              {cat.items.slice(0, 6).map((item) => (
-                <li key={item.id}>
-                  <button type="button" onClick={() => onSelect(item)} style={dashItemBtnStyle} title={`${item.minutes} min · ${item.depth}`}>
-                    {progress[item.id]?.done && <span style={{ color: "#10b981", marginRight: ".35rem" }}>✓</span>}
-                    <span>{item.subCategory && <em style={dashSubStyle}>{item.subCategory}: </em>}{item.title}</span>
-                    <span style={dashMinStyle}>{item.minutes}m</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {cat.count > 6 && (
-              <p style={{ fontSize: ".75rem", color: "var(--muted)", marginTop: ".25rem" }}>
-                …y {cat.count - 6} más. Usá el menú para ver todas.
-              </p>
-            )}
-          </section>
-        )
-      })}
+    <div className="learning-dash-scroll">
+      {/* Roadmap visual */}
+      <div className="learning-roadmap">
+        <div className="learning-roadmap-head">
+          <h3 className="learning-roadmap-title">Ruta de aprendizaje</h3>
+          <span className="learning-roadmap-meta">{totalDone}/{totalLessons} · {pct}%</span>
+        </div>
+        <div className="learning-progress-track" style={{ margin: "0 0 10px" }}><div className="learning-progress-fill" style={{ width: `${pct}%` }} /></div>
+        <RoadmapDiagram categories={manifest.categories} progress={progress} />
+        <p className="learning-roadmap-hint">Tocá una tarjeta para abrir sus lecciones. El orden vertical es el orden recomendado.</p>
+      </div>
+
+      <div className="learning-dash-grid">
+        {manifest.categories.map((cat) => {
+          const done = cat.items.filter((it) => progress[it.id]?.done).length
+          const catPct = Math.round((done / cat.count) * 100)
+          return (
+            <section key={cat.id} className="learning-cat-card">
+              <div className="learning-cat-card-header">
+                <div className="learning-icon-wrap" data-level={cat.level} aria-hidden="true">{LEVEL_ICON[cat.level] ?? "⬥"}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3 className="learning-cat-title">{cat.title}</h3>
+                  <p className="learning-cat-meta">Nivel {cat.level} · {done}/{cat.count} · {catPct}%</p>
+                </div>
+              </div>
+              <p className="learning-cat-desc" style={{ padding: "0 14px 8px" }}>{cat.description}</p>
+              <div className="learning-progress-track"><div className="learning-progress-fill" style={{ width: `${catPct}%` }} /></div>
+              <ul className="learning-cat-list">
+                {cat.items.slice(0, 6).map((item) => {
+                  const isDone = !!progress[item.id]?.done
+                  return (
+                    <li key={item.id}>
+                      <button type="button" onClick={() => onSelect(item)} className={`learning-lesson-row${isDone ? " done" : ""}`}>
+                        <span className="learning-check" aria-hidden="true">{isDone ? "✓" : "○"}</span>
+                        <span className="learning-depth-dot" data-depth={item.depth} title={item.depth} aria-hidden="true" />
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {item.subCategory && <em style={{ fontStyle: "normal", opacity: .7 }}>{item.subCategory}: </em>}{item.title}
+                        </span>
+                        <span className="learning-time">{item.minutes}m</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+              {cat.count > 6 && <p className="learning-more-hint">…y {cat.count - 6} más en el menú lateral</p>}
+            </section>
+          )
+        })}
+      </div>
     </div>
   )
 }
 
-// Estilos inline autocontenidos — el plugin no toca CSS global.
-const pageStyle: React.CSSProperties = { display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }
-const topBarStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: ".75rem",
-  padding: ".5rem .75rem",
-  borderBottom: "1px solid var(--border)",
-  flexShrink: 0,
+/** Diagrama del roadmap como SVG inline (sin dependencias externas). */
+function RoadmapDiagram({ categories, progress }: { categories: LearningManifest["categories"]; progress: LearningProgress }) {
+  const W = 720
+  const H = 64
+  const pad = 16
+  const n = categories.length
+  const step = (W - pad * 2) / Math.max(1, n - 1)
+  const cy = 30
+  return (
+    <div className="learning-diagram" style={{ padding: 10 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label="Roadmap de niveles">
+        {/* línea base */}
+        <line x1={pad} y1={cy} x2={W - pad} y2={cy} stroke="var(--border)" strokeWidth={2} strokeLinecap="round" />
+        {categories.map((cat, i) => {
+          const x = pad + i * step
+          const done = cat.items.filter((it) => progress[it.id]?.done).length
+          const ratio = done / cat.count
+          const r = 13 + ratio * 4
+          const fill = ratio === 1 ? "var(--success)" : ratio > 0 ? "var(--primary)" : "var(--surface-strong)"
+          const stroke = ratio > 0 ? "var(--primary)" : "var(--border-strong)"
+          return (
+            <g key={cat.id}>
+              <circle cx={x} cy={cy} r={r} fill={fill} stroke={stroke} strokeWidth={1.4} />
+              <text x={x} y={cy + 0.35} textAnchor="middle" dominantBaseline="middle" fontSize={9} fontWeight={800} fill={ratio > 0.4 ? "#fff" : "var(--muted-strong)"}>{i}</text>
+              <text x={x} y={H - 4} textAnchor="middle" fontSize={7.5} fill="var(--muted)" fontWeight={600}>{cat.title.split(" ")[0]}</text>
+              <title>{`${cat.title}: ${done}/${cat.count} completadas`}</title>
+            </g>
+          )
+        })}
+        {/* flecha final */}
+        <polygon points={`${W - pad + 6},${cy - 5} ${W - pad + 6},${cy + 5} ${W - pad + 12},${cy}`} fill="var(--border-strong)" />
+      </svg>
+    </div>
+  )
 }
-const brandStyle: React.CSSProperties = { margin: 0, fontSize: "1rem", fontWeight: 600, flex: 1 }
-const statStyle: React.CSSProperties = { fontSize: ".75rem", color: "var(--muted)", whiteSpace: "nowrap" }
-const layoutStyle: React.CSSProperties = { display: "flex", flex: 1, minHeight: 0, position: "relative" }
-const desktopSidebarStyle: React.CSSProperties = {
-  width: 260,
-  borderRight: "1px solid var(--border)",
-  background: "var(--bg-secondary)",
-  flexShrink: 0,
-}
-const mainStyle: React.CSSProperties = { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }
-const mobileOverlayStyle: React.CSSProperties = {
-  position: "absolute",
-  inset: 0,
-  background: "rgba(0,0,0,.5)",
-  zIndex: 50,
-  display: "flex",
-}
-const mobileSidebarStyle: React.CSSProperties = {
-  width: "min(80vw, 300px)",
-  background: "var(--bg)",
-  borderRight: "1px solid var(--border)",
-  height: "100%",
-  animation: "slideInLeft .15s ease-out",
-}
-const centerStyle: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", padding: "2rem" }
-const dashStyle: React.CSSProperties = { padding: "1rem", overflowY: "auto", flex: 1, display: "grid", gap: "1rem", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", alignContent: "start" }
-const dashCatStyle: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: ".5rem", padding: ".875rem", background: "var(--bg-secondary)" }
-const dashCatHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: ".5rem", flexWrap: "wrap" }
-const dashTitleStyle: React.CSSProperties = { margin: 0, fontSize: ".9375rem", fontWeight: 600 }
-const dashMetaStyle: React.CSSProperties = { fontSize: ".6875rem", color: "var(--muted)" }
-const dashDescStyle: React.CSSProperties = { margin: ".25rem 0 .5rem", fontSize: ".8125rem", color: "var(--muted)" }
-const dashListStyle: React.CSSProperties = { listStyle: "none", margin: 0, padding: 0, display: "grid", gap: ".25rem" }
-const dashItemBtnStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: ".5rem",
-  width: "100%",
-  padding: ".375rem .5rem",
-  borderRadius: ".25rem",
-  background: "transparent",
-  border: "none",
-  color: "var(--fg)",
-  cursor: "pointer",
-  textAlign: "left",
-  fontSize: ".8125rem",
-}
-const dashSubStyle: React.CSSProperties = { fontStyle: "italic", opacity: .8 }
-const dashMinStyle: React.CSSProperties = { fontSize: ".6875rem", color: "var(--muted)", flexShrink: 0 }
-
-// CSS responsivo mínimo para móvil/desktop switch.
-const cssOverrides = `
-.learning-desktop-sidebar { display: none; }
-@media (min-width: 769px) {
-  .learning-desktop-sidebar { display: block; }
-  .learning-menu-btn { display: none !important; }
-}
-@keyframes slideInLeft {
-  from { transform: translateX(-100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-`

@@ -70,6 +70,8 @@ export type DesktopLayout = {
   panelEditorTabStacks?: Record<number, string[]>
   panelEditorActive?: Record<number, number>
   panelBrowserUrls?: Record<number, string>
+  /** URLs por tab de navegador: tabId `browser:<id>` → url */
+  browserTabUrls?: Record<string, string>
   colSizes: Array<number | null>
   rowSizes: Array<number | null>
 }

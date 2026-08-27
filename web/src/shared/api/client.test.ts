@@ -33,17 +33,17 @@ describe("toBase64", () => {
     expect(toBase64("")).toBe("")
   })
   it("encodes unicode via utf8 bytes", () => {
-    //  = E2 9C 93 => 4pyT
-    expect(toBase64("")).toBe("4pyT")
+    // ✓ = E2 9C 93 => 4pyT
+    expect(toBase64("\u2713")).toBe("4pyT")
     // compare with Buffer for correctness if available
-    const expected = typeof Buffer !== "undefined" ? Buffer.from("", "utf8").toString("base64") : "4pyT"
-    expect(toBase64("")).toBe(expected)
+    const expected = typeof Buffer !== "undefined" ? Buffer.from("\u2713", "utf8").toString("base64") : "4pyT"
+    expect(toBase64("\u2713")).toBe(expected)
   })
   it("encodes string with colon", () => {
     expect(toBase64("user:pass")).toBe(btoa("user:pass"))
   })
   it("encodes high unicode emoji", () => {
-    const input = ""
+    const input = "\u{1F600}"
     const bytes = new TextEncoder().encode(input)
     const binary = Array.from(bytes).map((b) => String.fromCodePoint(b)).join("")
     expect(toBase64(input)).toBe(btoa(binary))

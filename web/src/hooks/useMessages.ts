@@ -292,7 +292,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // Podar anchors de subagentes: solo eran válidos para la sesión previa.
     // Sin poda, el map crece toda la vida de la app y retiene mensajes viejos.
     subagentAnchorRef.current.clear()
-    const limit = dataMode === "ultra" ? 100 : dataMode === "miser" ? 100 : 500
+    const limit = dataMode === "ultra" ? 100 : dataMode === "miser" ? 100 : 200
 
     const raw = await api.loadMessages(config, sessionID, directory, limit)
     if (requestID !== loadSelectedRequestRef.current) return

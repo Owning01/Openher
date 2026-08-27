@@ -183,25 +183,7 @@
 }
 
 .home-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.home-wordmark {
-  width: 60%;
-  max-width: 320px;
-  opacity: 0.06;
-}
-
-:root[data-theme="dark"] .home-wordmark {
-  filter: brightness(0) invert(1);
+  display: none;
 }
 
 /* ===== Help Panel ===== */
@@ -315,17 +297,14 @@
     height: 100%;
     border: none;
     border-radius: 0;
+    background: transparent;
   }
 
-  /* ===== Activity bar — 40px, visible flat =====
-     Fix zoom: px cromado escalado con --ui-scale para que Ctrl+rueda escale uniforme.
-     Sin esto, al subir fontSize (rem) solo el contenido crece y los botones parecen
-     achicarse (inverso). */
   .app-desktop-activity {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    background: var(--surface-subtle);
+    background: #09090b;
     border-right: 1px solid var(--border);
     padding: calc(8px * var(--ui-scale, 1)) 0;
     overflow-y: auto;
@@ -340,32 +319,32 @@
   }
 
   .activity-btn {
-    /* 44×44 mínimo accesible (WCAG 2.5.5) — escala con zoom */
-    width: calc(44px * var(--ui-scale, 1));
-    height: calc(44px * var(--ui-scale, 1));
-    min-width: calc(44px * var(--ui-scale, 1));
-    min-height: calc(44px * var(--ui-scale, 1));
+    width: calc(38px * var(--ui-scale, 1));
+    height: calc(38px * var(--ui-scale, 1));
+    min-width: calc(38px * var(--ui-scale, 1));
+    min-height: calc(38px * var(--ui-scale, 1));
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
+    border: 1px solid transparent;
     background: transparent;
     color: var(--muted);
     cursor: pointer;
     border-radius: var(--radius-md);
-    transition: color 0.12s, background 0.12s;
+    transition: color 0.12s, background 0.12s, border-color 0.12s;
   }
 
   .activity-btn:hover {
     color: var(--text);
-    background: var(--surface-strong);
-    border-color: var(--border);
+    background: #18181c;
+    border-color: #27272a;
   }
 
   .activity-btn.active {
-    color: var(--primary);
-    background: var(--primary-soft);
-    border-color: var(--primary-border);
+    color: #ffffff;
+    background: #222226;
+    border-color: #333338;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
 
   .activity-ram-chip {
@@ -845,7 +824,60 @@
 
   .desktop-sidebar-resizer:hover::after {
     background: var(--primary);
+  
+  /* ===== Right sidebar (QuickChat + plugins) — espejo de la izquierda ===== */
+  .app-desktop-sidebar--right {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    container-type: inline-size;
   }
+
+  .app-desktop-sidebar--right.collapsed {
+    overflow: visible;
+  }
+
+  .desktop-sidebar-resizer--right {
+    position: absolute;
+    top: 0;
+    left: calc(-3px * var(--ui-scale, 1));
+    right: auto;
+    bottom: 0;
+    width: calc(6px * var(--ui-scale, 1));
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 3;
+  }
+
+  .desktop-sidebar-resizer--right::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 2px;
+    right: 2px;
+    background: var(--border-subtle);
+    transition: background 0.12s;
+  }
+
+  .desktop-sidebar-resizer--right:hover::after {
+    background: var(--primary);
+  }
+
+  @media (max-width: 1100px) {
+    .app-desktop-sidebar--right:not(.collapsed) {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: calc(340px * var(--ui-scale, 1));
+      z-index: 20;
+      box-shadow: -8px 0 24px rgba(0,0,0,0.18);
+    }
+  }
+}
 
   /* ===== Área del grid de splits =====
      Contenedor del grid desktop (NO es la barra de layouts, que ya no existe):
@@ -945,3 +977,85 @@
 }
 
 
+
+/* ===== Rail personalizable (posición izq/der/arriba + visibilidad) =====
+   Ajustes > Sistema > Barra lateral. La posición se resuelve con la plantilla
+   inline de App (buildGridTemplate) + estos overrides de colocación. Los
+   botones ocultos via data-sbhide~="id" en .app-shell + data-item por botón. */
+@media (min-width: 781px) {
+  /* Derecha: order manda el rail a la última columna de la plantilla */
+  .app-shell[data-sidebarpos="right"] > .app-desktop-activity {
+    order: 10;
+    border-right: none;
+    border-left: 1px solid var(--border);
+  }
+
+  /* Arriba: fila completa antes del contenido */
+  .app-shell[data-sidebarpos="top"] > .app-desktop-activity {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    flex-direction: row;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 0 calc(8px * var(--ui-scale, 1));
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .app-shell[data-sidebarpos="top"] .app-desktop-activity-top,
+  .app-shell[data-sidebarpos="top"] .app-desktop-activity-bottom {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .app-shell[data-sidebarpos="top"] > .app-desktop-sidebar {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .app-shell[data-sidebarpos="top"] > .app-desktop-content {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+  }
+
+  .app-shell[data-sidebarpos="top"] > .app-desktop-sidebar--right {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .app-shell[data-sidebarpos="top"] > .ade-diff-panel {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  /* Botones ocultos por preferencia */
+  .app-shell[data-sbhide~="sessions"] .activity-btn[data-item="sessions"],
+  .app-shell[data-sbhide~="explorer"] .activity-btn[data-item="explorer"],
+  .app-shell[data-sbhide~="terminal"] .activity-btn[data-item="terminal"],
+  .app-shell[data-sbhide~="stats"] .activity-btn[data-item="stats"],
+  .app-shell[data-sbhide~="browser"] .activity-btn[data-item="browser"],
+  .app-shell[data-sbhide~="kanban"] .activity-btn[data-item="kanban"],
+  .app-shell[data-sbhide~="quickchat"] .activity-btn[data-item="quickchat"],
+  .app-shell[data-sbhide~="scm"] .activity-btn[data-item="scm"],
+  .app-shell[data-sbhide~="design"] .activity-btn[data-item="design"],
+  .app-shell[data-sbhide~="learning"] .activity-btn[data-item="learning"],
+  .app-shell[data-sbhide~="settings"] .activity-btn[data-item="settings"] {
+    display: none;
+  }
+}
+
+/* Selector de posición en Ajustes */
+.sidebar-pos-picker {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.sidebar-pos-picker button[aria-pressed="true"] {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: var(--primary-border);
+}

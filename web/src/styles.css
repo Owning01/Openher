@@ -25,7 +25,9 @@
 @import "./styles/desktop.css";
 @import "./styles/shell.css";
 @import "./styles/browser.css";
+@import "./styles/pc-files.css";
 @import "./styles/scm.css";
 @import "./styles/motion.css";
 @import "./styles/utilities.css";
+@import "./styles/learning.css";
 @import "./styles/responsive.css";

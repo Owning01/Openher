@@ -52,7 +52,7 @@ export type FeatureFlags = {
 // ViewType / HelpPage — navegación de alto nivel de la SPA
 // Duplicado con entities/ui/model.ts — se deduplicará en merge.
 // ---------------------------------------------------------------------------
-export type ViewType = "settings" | "sessions" | "detail" | "help" | "stats" | "quickchat" | "learning"
+export type ViewType = "settings" | "sessions" | "detail" | "help" | "stats" | "quickchat" | "learning" | "pcFiles"
 
 export type HelpPage = "overview" | "server" | "network" | "troubleshooting" | "commands"
 

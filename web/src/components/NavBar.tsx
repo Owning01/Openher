@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, type ReactNode } from "react"
-import { SettingsIcon, SunIcon, MoonIcon, BrainIcon } from "../Icons"
+import { SettingsIcon, SunIcon, MoonIcon, BrainIcon, FolderIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { ViewType } from "../types"
 
@@ -15,6 +15,7 @@ type NavBarProps = {
 // Navegación mínima: a las sesiones/proyectos se llega tocando el brand
 // "OpenCode"; al chat se entra tocando cada sesión.
 const navItems: Array<{ view: ViewType; icon: ReactNode; label: string }> = [
+  { view: "pcFiles", icon: <FolderIcon size={18} />, label: "Archivos" },
   { view: "quickchat", icon: <BrainIcon size={18} />, label: "quickchat.title" },
   { view: "learning", icon: <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>📚</span>, label: "learning.title" },
   { view: "settings", icon: <SettingsIcon size={18} />, label: "nav.settings" }
