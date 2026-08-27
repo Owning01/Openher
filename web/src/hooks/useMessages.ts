@@ -156,50 +156,18 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [])
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
-    // Optimización: si no hay optimistas pendientes, skip el trabajo
-    // pesado de extractText (O(n) por cada user message cada frame).
-    // Durante streaming la mayoría de frames no tiene optimistas.
+    // Optimización: si no hay optimistas pendientes, skip el trabajo pesado
     let merged: MessageEnvelope[]
     if (optimisticUserMessages.length === 0) {
       merged = messages
     } else {
-      // Filtrar optimistas que ya están presentes en messages (por id o por coincidencia de texto)
-      // Usa Map count para no colapsar duplicados ("hola" x2)
-      const existingUserTextCounts = new Map<string, number>()
-      for (const m of messages.filter((m) => m.info.role === "user")) {
-        const key = `${m.info.sessionID}:${extractText(m).trim()}`
-        if (key.endsWith(":")) continue
-        existingUserTextCounts.set(key, (existingUserTextCounts.get(key) ?? 0) + 1)
-      }
-      const existingImageCountMap = new Map<string, Map<number, number>>()
-      for (const m of messages.filter((m) => m.info.role === "user")) {
-        const imgCount = countImageParts(m.parts)
-        if (imgCount > 0) {
-          let inner = existingImageCountMap.get(m.info.sessionID)
-          if (!inner) { inner = new Map(); existingImageCountMap.set(m.info.sessionID, inner) }
-          inner.set(imgCount, (inner.get(imgCount) ?? 0) + 1)
-        }
-      }
-      const pendingOptimistic = optimisticUserMessages.filter((opt) => {
-        const key = `${opt.info.sessionID}:${extractText(opt).trim()}`
-        const cnt = existingUserTextCounts.get(key) ?? 0
-        if (cnt > 0) {
-          existingUserTextCounts.set(key, cnt - 1)
-          return false
-        }
-        if (!extractText(opt).trim()) {
-          const optImgCount = opt.parts.filter((p) => isImagePart(p)).length
-          if (optImgCount > 0) {
-            const inner = existingImageCountMap.get(opt.info.sessionID)
-            const icnt = inner?.get(optImgCount) ?? 0
-            if (icnt > 0) {
-              inner!.set(optImgCount, icnt - 1)
-              return false
-            }
-          }
-        }
-        return true
-      })
+      // Fix: no filtrar optimistas por texto contra todo el historial — eso
+      // ocultaba "hola" x2 cuando ya existía un "hola" antiguo y el nuevo
+      // parecía duplicado. Solo filtrar por id (nunca coincide, id local vs
+      // server) y dejar que loadSelected haga el dedupe por texto al confirmar.
+      // Así el mensaje se ve al instante incluso si el texto ya existe.
+      const existingIds = new Set(messages.map((m) => m.info.id))
+      const pendingOptimistic = optimisticUserMessages.filter((opt) => !existingIds.has(opt.info.id))
       merged = [...messages, ...pendingOptimistic]
     }
     const { out, cache } = computeRenderedMessages(merged, dataMode, renderedCacheRef.current)
