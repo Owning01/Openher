@@ -8,6 +8,7 @@ import { QuickAccessCard } from "./QuickAccessCard"
 import { ContextMenu } from "./ContextMenu"
 import { ExportCacheButton } from "./ExportCacheButton"
 import { shell } from "../shell"
+import { useDialog } from "./DialogProvider"
 import type { SessionView, ConnectionState, DataMode } from "../types"
 
 type SessionListProps = {
@@ -63,6 +64,7 @@ export const SessionList = memo(function SessionList({
   onDismissRecent, onNewSessionHere, onOpenExplorer, onDragStartSession, onDeleteMany, onArchiveMany
 }: SessionListProps) {
   const t = useT()
+  const { confirm } = useDialog()
   const containerRef = useRef<HTMLDivElement>(null)
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(true)
@@ -136,14 +138,15 @@ export const SessionList = memo(function SessionList({
     })
   }, [])
 
-  const handleDeleteMany = useCallback(() => {
+  const handleDeleteMany = useCallback(async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(t('sessions.deleteManyConfirm', { count: ids.length }))) return
+    const ok = await confirm({ message: t('sessions.deleteManyConfirm', { count: ids.length }), confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" })
+    if (!ok) return
     onDeleteMany?.(ids)
     setSelectMode(false)
     setSelectedIds(new Set())
-  }, [selectedIds, onDeleteMany, t])
+  }, [selectedIds, onDeleteMany, t, confirm])
 
   const handleArchiveMany = useCallback(() => {
     const ids = [...selectedIds]

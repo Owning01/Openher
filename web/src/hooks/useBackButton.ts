@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react"
 import { Capacitor } from "@capacitor/core"
 import { App as CapacitorApp } from "@capacitor/app"
-import { Dialog } from "@capacitor/dialog"
 import { useT } from "../i18n-context"
+import { useDialog } from "../components/DialogProvider"
 
 type UseBackButtonOpts = {
   view: string
@@ -15,6 +15,7 @@ type UseBackButtonOpts = {
 
 export function useBackButton(opts: UseBackButtonOpts) {
   const t = useT()
+  const { confirm } = useDialog()
 
   const viewRef = useRef(opts.view)
   viewRef.current = opts.view
@@ -49,13 +50,14 @@ export function useBackButton(opts: UseBackButtonOpts) {
       if (viewRef.current === "detail") {
         onBackRef.current()
       } else {
-        const result = await Dialog.confirm({
+        const ok = await confirm({
           title: tRef.current('app.exitTitle'),
           message: tRef.current('app.exitMessage'),
-          okButtonTitle: tRef.current('app.exitOk'),
-          cancelButtonTitle: tRef.current('app.exitCancel')
+          confirmText: tRef.current('app.exitOk'),
+          cancelText: tRef.current('app.exitCancel'),
+          variant: "danger",
         })
-        if (result.value) {
+        if (ok) {
           CapacitorApp.exitApp()
         }
       }

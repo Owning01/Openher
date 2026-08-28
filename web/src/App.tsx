@@ -8,6 +8,7 @@ import type { LanguageCode } from "./i18n"
 import { formatLimit } from "./utils"
 import { STORAGE_KEYS } from "./constants"
 import { ThemeVariantProvider } from "./context/themeVariant"
+import { DialogProvider } from "./components/DialogProvider"
 import { DesktopLayoutView } from "./widgets/desktop-layout/DesktopLayoutView"
 import { MobileLayoutView } from "./pages/mobile-layout/MobileLayoutView"
 import { AppModalsContainer } from "./app/AppModalsContainer"
@@ -418,7 +419,9 @@ export default function App() {
     <I18nProvider language={language}>
       <ThemeVariantProvider>
         <ErrorBoundary>
-          <AppInner language={language} setLanguage={setLanguage} />
+          <DialogProvider>
+            <AppInner language={language} setLanguage={setLanguage} />
+          </DialogProvider>
         </ErrorBoundary>
       </ThemeVariantProvider>
     </I18nProvider>
