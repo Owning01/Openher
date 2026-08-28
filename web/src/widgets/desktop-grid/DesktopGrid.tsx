@@ -1,22 +1,12 @@
-import React, { memo, useRef, useState } from "react"
+import React, { memo, useEffect, useRef, useState } from "react"
 import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../../types"
-import type { ShellPanelKind } from "../../shell"
 import type { ChatViewProps } from "../../components/ChatView"
 import { SessionChatPanel } from "../../components/SessionChatPanel"
 import { DesktopPanelRenderer } from "./DesktopPanelRenderer"
 import { calcDropZone, type DropZone } from "./model"
 
 export type DesktopGridProps = {
-  desktopLayout: {
-    cols: number
-    rows: number
-    colSizes: Array<number | null>
-    rowSizes: Array<number | null>
-    panelKinds: Array<ShellPanelKind | "editor">
-    panelIds: string[]
-    sessions: Array<string | null>
-    browserTabUrls?: Record<string, string>
-  }
+  desktopLayout: import("../../types").DesktopLayout
   tabStacks: string[][]
   activePanel: number
   maximizedPanel: number | null
@@ -117,6 +107,23 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
 
   const gridRef = useRef<HTMLDivElement | null>(null)
   const [gridDragOver, setGridDragOver] = useState<{ idx: number; zone: DropZone } | null>(null)
+
+  // Limpieza global: si el drag termina fuera del grid (Esc, drop fuera, ventana), quitar overlay
+  useEffect(() => {
+    const clear = () => setGridDragOver(null)
+    window.addEventListener("dragend", clear)
+    window.addEventListener("drop", clear)
+    // Cuando cambia el layout (split/close) el índice viejo queda huérfano
+    return () => {
+      window.removeEventListener("dragend", clear)
+      window.removeEventListener("drop", clear)
+    }
+  }, [])
+
+  // Si cols/rows cambian, el índice previo puede apuntar a celda inexistente
+  useEffect(() => {
+    setGridDragOver(null)
+  }, [desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions.length])
 
   const gridCols: Array<number | null | "handle"> = []
   if (desktopLayout.cols === 1) {
@@ -226,7 +233,32 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
     window.addEventListener("pointercancel", onUp)
   }
 
+  // Defensa: si el estado persistido quedó corrupto (sessions/panelKinds/panelIds desfasados), normalizar
   const totalPanels = desktopLayout.cols * desktopLayout.rows
+  // Si hay desfase, el grid se vería recortado (hueco negro). Auto-reparar sin perder tabs visibles.
+  if (
+    desktopLayout.sessions.length !== totalPanels ||
+    desktopLayout.panelKinds.length !== totalPanels ||
+    desktopLayout.panelIds.length !== totalPanels
+  ) {
+    // Corrección diferida para no mutar durante render
+    setTimeout(() => {
+      onSetDesktopLayout((prev: any) => {
+        const total = prev.cols * prev.rows
+        if (prev.sessions.length === total && prev.panelKinds.length === total && prev.panelIds.length === total) return prev
+        const sessions = [...prev.sessions]
+        const kinds = [...prev.panelKinds]
+        const ids = [...prev.panelIds]
+        while (sessions.length < total) sessions.push(null)
+        while (sessions.length > total) sessions.pop()
+        while (kinds.length < total) kinds.push("session")
+        while (kinds.length > total) kinds.pop()
+        while (ids.length < total) ids.push(`panel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
+        while (ids.length > total) ids.pop()
+        return { ...prev, sessions, panelKinds: kinds, panelIds: ids }
+      })
+    }, 0)
+  }
   const cells = Array.from({ length: totalPanels }).map((_, i) => {
     const col = i % desktopLayout.cols
     const row = Math.floor(i / desktopLayout.cols)
@@ -243,6 +275,10 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
     }
 
     const stack = tabStacks?.[i] ?? (session ? [session.id] : [])
+    const editorTabs = (desktopLayout as any).panelEditorTabStacks?.[i] as string[] | undefined
+    const editorActive = (desktopLayout as any).panelEditorActive?.[i] as number | undefined
+    const editorPath = (desktopLayout as any).panelEditorPaths?.[i] as string | undefined ?? editorTabs?.[editorActive ?? 0] ?? null
+    const effectiveFilePath = kind === "editor" ? (editorPath ?? fileEditorPath) : fileEditorPath
 
     return (
       <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
@@ -261,7 +297,10 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
           sessions={sessions}
           busySessions={busySessions}
           browserTabUrls={desktopLayout.browserTabUrls ?? {}}
-          fileEditorPath={fileEditorPath}
+          fileEditorPath={effectiveFilePath}
+          editorTabs={editorTabs}
+          editorActive={editorActive}
+          desktopLayout={desktopLayout}
           quickChatKeys={quickChatKeys}
           modelOptions={modelOptions}
           providerList={providerList}
@@ -395,10 +434,16 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
               .join(" "),
           }}
           onDragOver={(e) => {
-            const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
-            const isTabDrag =
-              e.dataTransfer.types.includes("application/x-opencode-tab-index") || raw.startsWith("panel:")
-            if (!isTabDrag) {
+            // Reorden de tabs dentro de la barra: lo maneja TabBar, no el grid (evita overlay y split accidental)
+            if ((e.target as HTMLElement).closest(".tab-bar")) {
+              setGridDragOver(null)
+              return
+            }
+            const isTabDrag = e.dataTransfer.types.includes("application/x-opencode-tab-index")
+            // Fallback para drags legacy con payload panel/kind/terminal: (text/plain no es fiable en dragover por spec)
+            const hasPath = e.dataTransfer.types.includes("application/x-opencode-path")
+            // Permitir tabs, panel:*, kind:* y terminal-tab:* (no solo panel:)
+            if (!isTabDrag && !hasPath) {
               setGridDragOver(null)
               return
             }
@@ -418,16 +463,28 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
             const zone = calcDropZone(e.clientX, e.clientY, target.getBoundingClientRect(), "session")
             setGridDragOver({ idx, zone })
           }}
-          onDragLeave={() => setGridDragOver(null)}
+          onDragLeave={(e) => {
+            // Solo limpiar al salir realmente del grid, no al pasar entre celdas hijas
+            const rt = e.relatedTarget as Node | null
+            if (!rt || !e.currentTarget.contains(rt)) {
+              setGridDragOver(null)
+            }
+          }}
           onDrop={(e) => {
             e.preventDefault()
             const wasTabDrag = gridDragOver !== null
             setGridDragOver(null)
             if (!wasTabDrag) return
+            // Ignorar drops sobre la barra de tabs (ya manejados por TabBar)
+            if ((e.target as HTMLElement).closest(".tab-bar")) return
             const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
             if (!raw) return
             const isTabDrag =
-              e.dataTransfer.types.includes("application/x-opencode-tab-index") || raw.startsWith("panel:")
+              e.dataTransfer.types.includes("application/x-opencode-tab-index") ||
+              raw.startsWith("panel:") ||
+              raw.startsWith("kind:") ||
+              raw.startsWith("terminal") ||
+              raw.includes("terminal-tab:")
             if (!isTabDrag) return
             if ((e.target as HTMLElement).closest(".desktop-shell-cell-wrapper, .desktop-cell-placeholder")) return
             const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null

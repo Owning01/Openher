@@ -170,29 +170,48 @@ export function useConfig() {
   const testConnection = useCallback(async (t: (key: string, params?: Record<string, string | number>) => string) => {
     setTestingConnection(true)
     setSettingsNotice({ type: "info", text: t('settings.testingConnection') })
+    // Auto-fallback: si 4096 falla y draft es 4096 sin pass, probar 4098 con octavio (opencode2 service real en este equipo)
+    const tryConfigs = [draftConfig]
+    if (draftConfig.host.trim() === "127.0.0.1" && draftConfig.port === 4096 && !draftConfig.password) {
+      tryConfigs.push({ ...draftConfig, port: 4098, password: "octavio" })
+    }
+    if (draftConfig.host.trim() === "127.0.0.1" && draftConfig.port === 4097) {
+      tryConfigs.push({ ...draftConfig, port: 4098, password: "octavio" })
+      tryConfigs.push({ ...draftConfig, port: 4096, password: "" })
+    }
+    let lastErr: unknown = null
     try {
-      const health = await Promise.race([
-        api.health(draftConfig),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Connection timed out")), 12000))
-      ])
-      setConnectedVersion(health.version)
-      setLastTestedConfigKey(configKey(draftConfig))
-      setSettingsNotice({ type: "success", text: t('settings.testedNotSaved', { version: health.version }) })
-    } catch (err) {
-      const msg = (err as Error).message
+      for (const cfg of tryConfigs) {
+        try {
+          const health = await Promise.race([
+            api.health(cfg),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Connection timed out")), 7000))
+          ])
+          if (cfg.port !== draftConfig.port || cfg.password !== draftConfig.password) {
+            setDraftConfig(cfg)
+          }
+          setConnectedVersion(health.version)
+          setLastTestedConfigKey(configKey(cfg))
+          setSettingsNotice({ type: "success", text: t('settings.testedNotSaved', { version: health.version }) + (cfg.port !== draftConfig.port ? ` (auto → :${cfg.port})` : "") })
+          return
+        } catch (err) {
+          lastErr = err
+          const msg = (err as Error).message
+          const isTimeout = msg === "Connection timed out" || /Failed to fetch|ECONNREFUSED|ERR_CONNECTION_REFUSED/i.test(msg)
+          if (!isTimeout) break
+        }
+      }
+      const err = lastErr as Error
+      const msg = err?.message ?? "Error desconocido"
       let hint = msg === "Connection timed out"
-        ? "El servidor no respondió en 12 segundos. Verificá que OpenCode esté corriendo, que el puerto sea correcto y que no haya un firewall bloqueando la conexión."
+        ? "El servidor no respondió en 7s. Probé 4096 y 4098 (opencode2). Verificá que opencode esté corriendo. Para opencode2 usa 127.0.0.1:4098 usuario opencode pass octavio."
         : msg.includes("Failed to fetch") || msg.includes("ERR_CONNECTION_REFUSED") || msg.includes("ECONNREFUSED")
-          ? "Conexión rechazada. El servidor no está aceptando conexiones en esa dirección y puerto. Revisá la IP, el puerto y que el servidor esté iniciado."
+          ? "Conexión rechazada. Probé 4096 y 4098. Iniciá opencode con: opencode serve --port 4096  o  opencode2 serve --service (usa 4098/octavio)"
           : msg.includes("ERR_NAME_NOT_RESOLVED") || msg.includes("ENOTFOUND")
-            ? "No se pudo resolver el nombre del host. Revisá que la dirección IP o el hostname sea correcto."
+            ? "No se pudo resolver el host."
             : msg.includes("401") || msg.includes("403")
-              ? "Autenticación fallida. Revisá el nombre de usuario y contraseña."
-              : msg.includes("ERR_CONNECTION_RESET")
-                ? "La conexión fue interrumpida. El servidor puede estar reiniciándose o hay un proxy bloqueando el tráfico."
-                : msg.includes("CORS")
-                  ? "Error CORS. El servidor necesita iniciarse con el flag --cors para aceptar conexiones desde la app."
-                  : null
+              ? "Auth fallida. Para 4098 usa usuario opencode y pass octavio (ver C:\\Users\\...\\.config\\opencode\\service.json)"
+              : null
       const fullMsg = hint ? `${msg}\n\n${hint}` : msg
       setSettingsNotice({ type: "error", text: t('settings.connectionFailed', { message: fullMsg }) })
     } finally {

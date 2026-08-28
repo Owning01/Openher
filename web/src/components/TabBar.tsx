@@ -1,7 +1,8 @@
 import { memo, useCallback, useRef, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { basename } from "../utils"
-import { PlusIcon, CloseIcon } from "../Icons"
+import { PlusIcon, CloseIcon, PencilIcon } from "../Icons"
+import { useTabTitles, setTabTitle } from "../hooks/useTabTitles"
 
 type SessionLike = { id: string; title?: string; directory: string }
 
@@ -22,12 +23,14 @@ export const TabBar = memo(function TabBar({
   onMoveTab,
   panelIndex,
   onDropTerminal,
+  onDropTerminalTab,
   onTransferTab,
   onCloseOthers,
   onCloseRight,
   onCloseLeft,
   onCloseAll,
   onDuplicate,
+  onRenameTab,
 }: {
   tabs: Array<string>
   activeIndex: number
@@ -41,19 +44,27 @@ export const TabBar = memo(function TabBar({
   onTransferTab?: (fromPanel: number, fromIndex: number, toIndex: number) => void
   panelIndex?: number
   onDropTerminal?: (panelIndex: number, targetIndex?: number) => void
+  onDropTerminalTab?: (raw: string, toIndex: number) => void
   onCloseOthers?: (keepIndex: number) => void
   onCloseRight?: (index: number) => void
   onCloseLeft?: (index: number) => void
   onCloseAll?: () => void
   onDuplicate?: (index: number) => void
+  onRenameTab?: (index: number, newTitle: string) => void
 }) {
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   const barRef = useRef<HTMLDivElement>(null)
   const [ctx, setCtx] = useState<{ x: number; y: number; idx: number } | null>(null)
   const ctxRef = useRef<HTMLDivElement | null>(null)
+  const [renamingIdx, setRenamingIdx] = useState<number | null>(null)
+  const [renameValue, setRenameValue] = useState("")
+  const renameInputRef = useRef<HTMLInputElement | null>(null)
+  const titlesMap = useTabTitles()
 
   const getLabel = useCallback((id: string) => {
+    const custom = titlesMap[id]
+    if (custom) return custom
     if (id.startsWith("browser:")) {
       // browser tab id stores url in browserTabUrls; fallback to label
       const suffix = id.slice(8)
@@ -85,7 +96,46 @@ export const TabBar = memo(function TabBar({
     if (session?.title && session.title !== "New Session") return session.title
     if (session?.directory) return basename(session.directory)
     return id.slice(0, 8)
-  }, [sessions])
+  }, [sessions, titlesMap])
+
+  const startRename = useCallback((idx: number) => {
+    const id = tabs[idx]
+    if (!id) return
+    setRenamingIdx(idx)
+    setRenameValue(getLabel(id).trim())
+    setCtx(null)
+    setTimeout(() => {
+      renameInputRef.current?.focus()
+      renameInputRef.current?.select()
+    }, 50)
+  }, [tabs, getLabel])
+
+  const confirmRename = useCallback(() => {
+    if (renamingIdx === null) return
+    const id = tabs[renamingIdx]
+    const v = renameValue.trim().slice(0, 80)
+    if (id) {
+      if (onRenameTab) onRenameTab(renamingIdx, v)
+      // Persistencia local inmediata (funciona para sesiones y virtuals)
+      setTabTitle(id, v || null)
+    }
+    setRenamingIdx(null)
+    setRenameValue("")
+  }, [renamingIdx, renameValue, tabs, onRenameTab])
+
+  const cancelRename = useCallback(() => {
+    setRenamingIdx(null)
+    setRenameValue("")
+  }, [])
+
+  useEffect(() => {
+    if (renamingIdx === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); cancelRename() }
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [renamingIdx, cancelRename])
 
   const handleTabContextMenu = useCallback((e: React.MouseEvent, idx: number) => {
     e.preventDefault()
@@ -150,9 +200,18 @@ export const TabBar = memo(function TabBar({
     e.preventDefault()
     e.stopPropagation() // evita doble manejo con el drop de la barra
     const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain") || ""
+    const isTerminalTab = path.includes("terminal-tab:")
     if (path.includes("kind:terminal") || path === "kind:terminal") {
       if (panelIndex !== undefined && onDropTerminal) {
         onDropTerminal(panelIndex, toIndex)
+      }
+      setDragIdx(null)
+      setDragOverIdx(null)
+      return
+    }
+    if (isTerminalTab) {
+      if (panelIndex !== undefined && onDropTerminalTab) {
+        onDropTerminalTab(path, toIndex)
       }
       setDragIdx(null)
       setDragOverIdx(null)
@@ -169,7 +228,7 @@ export const TabBar = memo(function TabBar({
       // Tab arrastrado desde otra barra de pestañas
       onTransferTab(origin.panel, origin.index, toIndex)
     }
-  }, [onMoveTab, onTransferTab, panelIndex, onDropTerminal, readDragOrigin])
+  }, [onMoveTab, onTransferTab, panelIndex, onDropTerminal, onDropTerminalTab, readDragOrigin])
 
   const handleDragEnd = useCallback(() => {
     setDragIdx(null)
@@ -188,12 +247,15 @@ export const TabBar = memo(function TabBar({
     const isInternal = e.dataTransfer.types.includes("application/x-opencode-tab-index")
     const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain") || ""
     const isTerminal = path.includes("kind:terminal") || path === "kind:terminal"
+    const isTerminalTab = path.includes("terminal-tab:")
     // Tipos desconocidos (ej. sesión desde sidebar): dejar pasar al handler de la celda (split)
-    if (!isInternal && !isTerminal) return
+    if (!isInternal && !isTerminal && !isTerminalTab) return
     e.preventDefault()
     e.stopPropagation()
     const at = getIndexFromX(e.clientX)
-    if (isTerminal) {
+    if (isTerminalTab) {
+      if (panelIndex !== undefined && onDropTerminalTab) onDropTerminalTab(path, at)
+    } else if (isTerminal) {
       if (panelIndex !== undefined && onDropTerminal) onDropTerminal(panelIndex, at)
     } else if (panelIndex !== undefined) {
       const origin = readDragOrigin(e)
@@ -210,7 +272,7 @@ export const TabBar = memo(function TabBar({
     }
     setDragIdx(null)
     setDragOverIdx(null)
-  }, [getIndexFromX, onDropTerminal, onMoveTab, onTransferTab, panelIndex, readDragOrigin])
+  }, [getIndexFromX, onDropTerminal, onDropTerminalTab, onMoveTab, onTransferTab, panelIndex, readDragOrigin])
 
   return (
     <div
@@ -230,6 +292,7 @@ export const TabBar = memo(function TabBar({
         const busy = busySessionIds?.has(id)
         const isDragging = dragIdx === i
         const isDragOver = dragOverIdx === i && dragIdx !== null && dragIdx !== i
+        const isRenaming = renamingIdx === i
         return (
           <div
             key={id}
@@ -238,14 +301,17 @@ export const TabBar = memo(function TabBar({
             aria-label={getLabel(id)}
             tabIndex={i === activeIndex ? 0 : -1}
             className={`tab${i === activeIndex ? " active" : ""}${isDragging ? " tab-dragging" : ""}${isDragOver ? " tab-drag-over" : ""}`}
-            draggable
-            onClick={() => onSwitch(i)}
+            draggable={isRenaming ? false : true}
+            onClick={() => { if (isRenaming) return; onSwitch(i) }}
+            onDoubleClick={(e) => { e.stopPropagation(); startRename(i) }}
             onContextMenu={(e) => handleTabContextMenu(e, i)}
             onKeyDown={(e) => {
+              if (isRenaming) return
               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSwitch(i) }
               else if (e.key === "ArrowRight") { e.preventDefault(); const n = barRef.current?.querySelectorAll('[role="tab"]'); (n?.[Math.min(i + 1, tabs.length - 1)] as HTMLElement)?.focus() }
               else if (e.key === "ArrowLeft") { e.preventDefault(); const n = barRef.current?.querySelectorAll('[role="tab"]'); (n?.[Math.max(i - 1, 0)] as HTMLElement)?.focus() }
               else if (e.key === "Delete") { e.preventDefault(); onClose(i) }
+              else if (e.key === "F2") { e.preventDefault(); startRename(i) }
             }}
             onDragStart={(e) => handleDragStart(e, i)}
             onDragOver={(e) => handleDragOver(e, i)}
@@ -253,7 +319,29 @@ export const TabBar = memo(function TabBar({
             onDragEnd={handleDragEnd}
             title={getLabel(id)}
           >
-            <span className="tab-label">{getLabel(id)}</span>
+            {isRenaming ? (
+              <input
+                ref={i === renamingIdx ? renameInputRef : undefined}
+                className="tab-rename-input"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={confirmRename}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); confirmRename() }
+                  else if (e.key === "Escape") { e.preventDefault(); cancelRename() }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                placeholder={getLabel(id)}
+                aria-label="Renombrar pestaña"
+                style={{
+                  width: `${Math.max(80, Math.min(200, renameValue.length * 8 + 24))}px`,
+                  maxWidth: "180px",
+                }}
+              />
+            ) : (
+              <span className="tab-label">{getLabel(id)}</span>
+            )}
             {busy && <span className="tab-busy" />}
             <button
               type="button"
@@ -318,6 +406,10 @@ export const TabBar = memo(function TabBar({
             const copy = (text: string) => { try { navigator.clipboard.writeText(text) } catch {} }
             return (
               <>
+                <button type="button" className="overflow-item" onClick={() => { const id = tabs[idx]; if (!id) return; setCtx(null); setTimeout(() => startRename(idx), 60) }}>
+                  <PencilIcon size={13} /> <span>Renombrar</span>
+                </button>
+                <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
                 <button type="button" className="overflow-item" onClick={() => { setCtx(null); onClose(idx) }}>
                   <span>Cerrar</span>
                 </button>

@@ -580,9 +580,9 @@
   }
 
   .session-panel-title {
-    font-size: 0.875rem;
+    font-size: 13px;
     font-weight: 700;
-    font-family: var(--font-mono);
+    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
     color: var(--muted-strong);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -622,8 +622,8 @@
     gap: var(--space-2);
     padding: 6px 10px;
     border-radius: var(--radius-sm);
-    font-size: 0.875rem;
-    font-family: var(--font-mono);
+    font-size: 13px;
+    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
     color: var(--muted-strong);
     cursor: pointer;
     white-space: nowrap;
@@ -733,6 +733,25 @@
   .tab-add:hover {
     background: rgba(128, 128, 128, 0.12);
     color: var(--text);
+  }
+
+  .tab-rename-input {
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-family: var(--font-mono);
+    padding: 2px 6px;
+    outline: none;
+    min-width: 0;
+    line-height: 1.2;
+  }
+
+  .tab-rename-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-soft);
   }
 
   /* ===== Sidebar de escritorio (resize + colapsar) ===== */

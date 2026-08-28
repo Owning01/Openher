@@ -127,6 +127,7 @@ export type V2Message = {
   finish?: string
   tokens?: import("../../types").TokenUsage
   cost?: number
+  text?: string
   content?: Array<{
     id?: string
     type?: string
@@ -141,6 +142,27 @@ export type V2Message = {
 
 export function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
   const content = raw.content ?? []
+  let parts: MessageEnvelope["parts"] = content.map((c, index) => ({
+    id: c.id ?? `${raw.id}_part_${index}`,
+    sessionID: raw.sessionID,
+    type: c.type ?? "text",
+    text: c.text,
+    data: c.data,
+    mimeType: c.mimeType,
+    callID: c.id,
+    tool: c.name,
+    state: c.state as MessageEnvelope["parts"][number]["state"],
+    time: c.time ? { start: c.time.created, end: c.time.completed } : undefined,
+  }))
+  // v2 user messages store text at top-level `text` (no `content` array) — e.g. {type:"user", text:"hola"}
+  // El mapper previo creaba parts vacío y el mensaje se filtraba en rendered.ts (sin texto).
+  if (parts.length === 0) {
+    const rawAny = raw as unknown as { text?: unknown; contentText?: unknown }
+    const topText = typeof rawAny.text === "string" ? rawAny.text : typeof rawAny.contentText === "string" ? rawAny.contentText : ""
+    if (topText) {
+      parts = [{ id: `${raw.id}_part_0`, sessionID: raw.sessionID, type: "text", text: topText } as unknown as MessageEnvelope["parts"][number]]
+    }
+  }
   return {
     info: {
       id: raw.id,
@@ -155,17 +177,6 @@ export function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
       tokens: raw.tokens,
       cost: raw.cost,
     },
-    parts: content.map((c, index) => ({
-      id: c.id ?? `${raw.id}_part_${index}`,
-      sessionID: raw.sessionID,
-      type: c.type ?? "text",
-      text: c.text,
-      data: c.data,
-      mimeType: c.mimeType,
-      callID: c.id,
-      tool: c.name,
-      state: c.state as MessageEnvelope["parts"][number]["state"],
-      time: c.time ? { start: c.time.created, end: c.time.completed } : undefined,
-    })),
+    parts,
   }
 }

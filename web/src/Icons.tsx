@@ -142,6 +142,17 @@ export const MinimizeIcon = (p: { className?: string; size?: number; style?: CSS
 
 export const ChevronDownIcon = (p: { className?: string; size?: number; style?: CSSProperties }) => (
   <Svg {...p} label="Chevron down"><polyline points="6 9 12 15 18 9"/></Svg>)
+export const ChevronRightIcon = (p: { className?: string; size?: number; style?: CSSProperties }) => (
+  <Svg {...p} label="Chevron right"><polyline points="9 6 15 12 9 18"/></Svg>)
+
+export const NewFileIcon = (p: { className?: string; size?: number; style?: CSSProperties }) => (
+  <Svg {...p} label="New file"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></Svg>)
+
+export const NewFolderIcon = (p: { className?: string; size?: number; style?: CSSProperties }) => (
+  <Svg {...p} label="New folder"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></Svg>)
+
+export const CollapseAllIcon = (p: { className?: string; size?: number; style?: CSSProperties }) => (
+  <Svg {...p} label="Collapse all"><path d="M4 4h16"/><path d="M4 20h16"/><polyline points="16 8 12 11 8 8"/><polyline points="16 16 12 13 8 16"/></Svg>)
 
 export const DiskIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Disk"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></Svg>)
@@ -156,3 +167,4 @@ export const LogoIcon = ({ className = "", size = 32 }: { className?: string; si
       style={{ objectFit: "contain", display: "inline-block", verticalAlign: "middle" }} />
   )
 }
+

@@ -32,8 +32,8 @@ impl StatsManager {
 fn probe(port: u16) -> bool {
     crate::common::probe_http(
         port,
-        "/api/data?raw=1",
-        std::time::Duration::from_millis(800),
+        "/api/data?raw=1&scope=summary",
+        std::time::Duration::from_millis(2000),
         &[200],
     )
 }

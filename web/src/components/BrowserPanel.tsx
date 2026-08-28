@@ -14,6 +14,8 @@ const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE
 export const BROWSER_HOME = "https://www.google.com"
 const BROWSER_BOOKMARKS_KEY = "opencode.browser.bookmarks"
 const BROWSER_HISTORY_KEY = "opencode.browser.history"
+const BROWSER_TABS_KEY = "opencode.browser.tabs"
+const BROWSER_ACTIVE_KEY = "opencode.browser.activeTabId"
 
 const ZONE_ICONS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"]
 
@@ -80,12 +82,15 @@ function isProbablyUrl(raw: string): boolean {
   const s = raw.trim()
   if (!s) return false
   if (/^\d{2,5}$/.test(s)) return true
-  if (/^(https?:\/\/)/i.test(s)) return true
+  if (/^https?:\/\//i.test(s)) return true
   if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(\/.*)?$/i.test(s)) return true
-  if (s.includes(" ") ) return false
-  if (s.includes(".") && !s.includes(" ")) return true
-  if (s.includes(":") && !s.includes(" ")) return true
-  if (s.includes("/") && s.includes(".")) return true
+  if (s.includes(" ")) return false
+  // scheme:// (about:blank, chrome://, etc.)
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) return true
+  // dominio con TLD real: github.com, google.com/search, ejemplo.com:8080
+  if (/^[a-zA-Z0-9.-]+\.[a-z]{2,}($|\/|:|\?|#).*/i.test(s)) return true
+  // host:port numérico (192.168.1.1:3000, myhost:8080)
+  if (/^[a-zA-Z0-9.-]+:\d{2,5}(\/.*)?$/.test(s)) return true
   return false
 }
 
@@ -211,17 +216,45 @@ export const BrowserPanel = memo(function BrowserPanel({
   inspectTool?: InspectTool
   onToggleInspectTool?: (tool: InspectTool) => void
 }) {
-  const [tabs, setTabs] = useState<BrowserTabItem[]>(() => [
-    {
-      id: "tab-1",
-      url: initialUrl,
-      title: formatDisplayTitle(initialUrl),
-      history: [initialUrl],
-      historyIdx: 0,
-    },
-  ])
-  const [activeTabId, setActiveTabId] = useState<string>("tab-1")
-  const [inputUrl, setInputUrl] = useState(initialUrl)
+  const [tabs, setTabs] = useState<BrowserTabItem[]>(() => {
+    try {
+      const raw = localStorage.getItem(BROWSER_TABS_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as BrowserTabItem[]
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((t: any) => t && typeof t.url === "string" && typeof t.id === "string")) {
+          return parsed
+        }
+      }
+    } catch {}
+    return [
+      {
+        id: "tab-1",
+        url: initialUrl,
+        title: formatDisplayTitle(initialUrl),
+        history: [initialUrl],
+        historyIdx: 0,
+      },
+    ]
+  })
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    try {
+      const v = localStorage.getItem(BROWSER_ACTIVE_KEY)
+      if (v) return v
+    } catch {}
+    return "tab-1"
+  })
+  const [inputUrl, setInputUrl] = useState(() => {
+    try {
+      const raw = localStorage.getItem(BROWSER_TABS_KEY)
+      const aid = localStorage.getItem(BROWSER_ACTIVE_KEY)
+      if (raw && aid) {
+        const parsed = JSON.parse(raw) as BrowserTabItem[]
+        const found = Array.isArray(parsed) ? parsed.find((t: any) => t.id === aid) : null
+        if (found?.url) return found.url
+      }
+    } catch {}
+    return initialUrl
+  })
   const [reloadKey, setReloadKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("responsive")
@@ -253,15 +286,27 @@ export const BrowserPanel = memo(function BrowserPanel({
     hasPackageJson: boolean
     scripts: Record<string, string>
   } | null>(null)
+  // Chrome-like omnibox suggestions
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestIdx, setSuggestIdx] = useState(-1)
+  void suggestions; void setSuggestions; void suggestIdx; void setSuggestIdx
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const nativeReady = useRef(false)
 
+  // Persistir tabs/sesión como Chrome (sobrevive a cerrar pestaña/panel/app)
+  useEffect(() => {
+    try { localStorage.setItem(BROWSER_TABS_KEY, JSON.stringify(tabs.slice(0, 20))) } catch {}
+  }, [tabs])
+  useEffect(() => {
+    try { localStorage.setItem(BROWSER_ACTIVE_KEY, activeTabId) } catch {}
+  }, [activeTabId])
+
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   useOutsideClick(dropdownRef, () => setShowTuneDropdown(false), showTuneDropdown)
   const histRef = useRef<HTMLDivElement | null>(null)
-  useOutsideClick(histRef, () => setShowHistory(false), showHistory)
+  useOutsideClick(histRef, () => { setShowHistory(false); setSuggestions([]); setSuggestIdx(-1) }, showHistory || suggestions.length > 0)
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0]
   const currentSrc = activeTab?.url || "about:blank"
@@ -280,6 +325,31 @@ export const BrowserPanel = memo(function BrowserPanel({
     const t = setTimeout(() => setLoading(false), 1200)
     return () => clearTimeout(t)
   }, [currentSrc, reloadKey])
+
+  // Sugerencias Chrome-like: debounced fetch a suggestqueries.google.com via proxy same-origin (evita CORS)
+  useEffect(() => {
+    const q = inputUrl.trim()
+    if (!q || isProbablyUrl(q) || q.length < 2 || q.startsWith("http")) {
+      setSuggestions([])
+      setSuggestIdx(-1)
+      return
+    }
+    const t = setTimeout(async () => {
+      try {
+        const suggestUrl = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(q)}`
+        const proxyUrl = `/shell/proxy?url=${encodeURIComponent(suggestUrl)}`
+        const res = await fetch(proxyUrl, { headers: { Accept: "application/json" } })
+        if (!res.ok) return
+        const data = await res.json()
+        const list: string[] = Array.isArray(data) && Array.isArray(data[1]) ? data[1].slice(0, 6) : []
+        setSuggestions(list.filter((s) => typeof s === "string" && s.trim()))
+        setSuggestIdx(-1)
+      } catch {
+        setSuggestions([])
+      }
+    }, 180)
+    return () => clearTimeout(t)
+  }, [inputUrl])
 
   const normalizeUrl = (raw: string): string => {
     let u = raw.trim()
@@ -379,13 +449,12 @@ export const BrowserPanel = memo(function BrowserPanel({
       window.removeEventListener("scroll", syncBounds, true)
       document.removeEventListener("visibilitychange", handleVis)
       if (debounceTimer) clearTimeout(debounceTimer)
-      // Orden: ocultar ANTES de cerrar — si el close falla (main thread
-      // ocupado), el HWND al menos no sigue tragando clicks del host.
+      // Mantener WebView vivo para que cookies/sesión Google persistan entre tabs
+      // Solo ocultar (MemoryUsageLevel::Low ~3MB), no destruir. close() solo en onClose explícito.
       shell.browser.setVisibility(false).catch(() => {})
-      shell.browser.close().catch(() => {})
       nativeReady.current = false
     }
-  }, []) // Solo en mount — el cleanup cierra
+  }, []) // Solo oculta, no destruye sesión
 
   // Navigate native WebView when URL changes
   useEffect(() => {
@@ -522,6 +591,9 @@ export const BrowserPanel = memo(function BrowserPanel({
     setInputUrl(norm)
     setLoading(true)
     setHasError(false)
+    setSuggestions([])
+    setSuggestIdx(-1)
+    setShowHistory(false)
     pushHistory(norm)
 
     setTabs((prev) =>
@@ -658,11 +730,38 @@ export const BrowserPanel = memo(function BrowserPanel({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      if (suggestions.length > 0) {
+        e.preventDefault()
+        const next = Math.min(suggestIdx + 1, suggestions.length - 1)
+        setSuggestIdx(next)
+        setInputUrl(suggestions[next] ?? inputUrl)
+        setShowHistory(true)
+      }
+      return
+    }
+    if (e.key === "ArrowUp") {
+      if (suggestions.length > 0) {
+        e.preventDefault()
+        const next = Math.max(suggestIdx - 1, -1)
+        setSuggestIdx(next)
+        if (next >= 0) setInputUrl(suggestions[next] ?? inputUrl)
+      }
+      return
+    }
     if (e.key === "Enter") {
-      navigateTab(inputUrl)
+      if (suggestIdx >= 0 && suggestions[suggestIdx]) {
+        navigateTab(suggestions[suggestIdx]!)
+      } else {
+        navigateTab(inputUrl)
+      }
       setShowHistory(false)
+      setSuggestions([])
+      setSuggestIdx(-1)
     } else if (e.key === "Escape") {
       setShowHistory(false)
+      setSuggestions([])
+      setSuggestIdx(-1)
     }
   }
 
@@ -848,29 +947,32 @@ export const BrowserPanel = memo(function BrowserPanel({
             {inputUrl && (
               <button type="button" onClick={() => setInputUrl("")} title="Borrar" aria-label="Borrar" style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: "0 4px" }}>×</button>
             )}
-            {showHistory && (
+            {(showHistory || suggestions.length > 0) && (
               <div ref={histRef} className="browser-suggest-dropdown">
                 {(() => {
                   const q = inputUrl.trim().toLowerCase()
                   const hist = loadHistory()
-                  const filtered = q ? hist.filter((u) => u.toLowerCase().includes(q)).slice(0, 8) : hist.slice(0, 8)
-                  const suggestions: Array<{ label: string; url: string }> = []
-                  if (q && !isProbablyUrl(q)) {
-                    suggestions.push({ label: `Buscar "${inputUrl.trim()}" en Google`, url: `https://www.google.com/search?q=${encodeURIComponent(inputUrl.trim())}` })
-                  }
+                  const filtered = q ? hist.filter((u) => u.toLowerCase().includes(q)).slice(0, 6) : hist.slice(0, 6)
+                  const qTrim = inputUrl.trim()
+                  const showSearch = qTrim && !isProbablyUrl(qTrim)
                   return (
                     <>
-                      {suggestions.map((s) => (
-                        <button key={s.url} type="button" className="browser-suggest-item" onClick={() => { setShowHistory(false); navigateTab(s.url) }}>
-                          <SearchIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
+                      {showSearch && qTrim && (
+                        <button type="button" className="browser-suggest-item" style={{ fontWeight: 600 }} onClick={() => { setShowHistory(false); setSuggestions([]); navigateTab(`https://www.google.com/search?q=${encodeURIComponent(qTrim)}`) }}>
+                          <SearchIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Buscar "{qTrim}" en Google</span>
+                        </button>
+                      )}
+                      {suggestions.map((s, idx) => (
+                        <button key={s} type="button" className={`browser-suggest-item${idx === suggestIdx ? " active" : ""}`} style={idx === suggestIdx ? { background: "var(--primary-soft)", color: "var(--primary)" } : undefined} onClick={() => { setShowHistory(false); setSuggestions([]); setSuggestIdx(-1); navigateTab(`https://www.google.com/search?q=${encodeURIComponent(s)}`) }}>
+                          <SearchIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</span>
                         </button>
                       ))}
                       {filtered.map((u) => (
-                        <button key={u} type="button" className="browser-suggest-item" onClick={() => { setShowHistory(false); navigateTab(u) }}>
+                        <button key={u} type="button" className="browser-suggest-item" onClick={() => { setShowHistory(false); setSuggestions([]); navigateTab(u) }}>
                           <GlobeIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u}</span>
                         </button>
                       ))}
-                      {filtered.length === 0 && suggestions.length === 0 && (
+                      {filtered.length === 0 && suggestions.length === 0 && !showSearch && (
                         <div style={{ padding: "8px 10px", color: "var(--muted)", fontSize: 12 }}>Sin historial. Escribí para buscar en Google.</div>
                       )}
                     </>

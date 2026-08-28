@@ -109,10 +109,10 @@ describe("numeric constants", () => {
   })
 
   it("SSE timeouts son coherentes", () => {
-    expect(SSE_CONNECT_TIMEOUT_MS).toBe(8000)
+    expect(SSE_CONNECT_TIMEOUT_MS).toBe(3000)
     expect(SSE_RECONNECT_BASE_MS).toBe(1000)
     expect(SSE_RECONNECT_MAX_MS).toBe(30000)
-    expect(SSE_HEARTBEAT_TIMEOUT_MS).toBe(35000)
+    expect(SSE_HEARTBEAT_TIMEOUT_MS).toBe(15000)
     expect(SSE_RECONNECT_BASE_MS).toBeLessThan(SSE_RECONNECT_MAX_MS)
     expect(SSE_CONNECT_TIMEOUT_MS).toBeLessThan(SSE_HEARTBEAT_TIMEOUT_MS)
   })

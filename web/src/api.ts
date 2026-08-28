@@ -37,6 +37,7 @@ import {
   toSessionV1
 } from "./shared/api/mappers"
 import type { V2Message, V2Session, ConfigProvidersResponse, AgentResponse } from "./shared/api/mappers"
+import { getOpencodeClient } from "./shared/api/opencodeClient"
 
 // Re-exports for compatibilidad — api.ts sigue siendo el entry point público
 export { toBase64, authHeader, baseUrl } from "./shared/api/client"
@@ -324,6 +325,50 @@ export const api = {
 
   async loadMessages(config: ServerConfig, sessionID: string, directory?: string, limit = 100) {
     const safeLimit = Math.min(limit, 200)
+    try {
+      const client = await getOpencodeClient(config)
+      // prefer session.context; fallback to message.list
+      let res: unknown
+      try {
+        res = await (client as any).session.context({ sessionID })
+      } catch {}
+      if (!res) {
+        try {
+          res = await (client as any).message.list({ sessionID, limit: safeLimit })
+        } catch {}
+      }
+      const rawList: unknown = Array.isArray(res) ? res : (res as any)?.data ?? res
+      if (Array.isArray(rawList)) {
+        const mapped = (rawList as any[]).map((m: any) => {
+          if (m && typeof m === "object" && "info" in m && "parts" in m) return m as MessageEnvelope
+          try {
+            return toMessageEnvelopeV1(m as V2Message)
+          } catch {
+            // naive mapping for SessionMessageInfo
+            const text = m?.text ?? m?.content ?? ""
+            return {
+              info: {
+                id: m?.id ?? `${sessionID}_${Math.random()}`,
+                role: m?.type ?? "assistant",
+                sessionID: m?.sessionID ?? sessionID,
+                time: { created: m?.time?.created ?? Date.now() },
+                agent: m?.agent,
+                modelID: m?.model?.id,
+                providerID: m?.model?.providerID,
+              },
+              parts: [{ id: `${m?.id ?? "part"}_0`, sessionID, type: "text", text: typeof text === "string" ? text : "" }],
+            } as MessageEnvelope
+          }
+        }) as MessageEnvelope[]
+        if (mapped) {
+          return mapped.map((mm) => ({
+            ...mm,
+            info: { ...mm.info, sessionID: mm.info?.sessionID || sessionID },
+            parts: (mm.parts ?? []).map((p) => ({ ...p, sessionID: (p as any).sessionID ?? mm.info?.sessionID ?? sessionID })),
+          }))
+        }
+      }
+    } catch {}
     const raw = await request<MessageEnvelope[] | V2Message[]>(config, withDirectory(`/session/${sessionID}/message?limit=${safeLimit}`, directory), {
       readTimeout: 12_000,
     })
@@ -385,6 +430,20 @@ export const api = {
     agentID?: string,
     images?: Array<{ base64: string; mime: string }>,
   ) {
+    try {
+      const client = await getOpencodeClient(config)
+      const res = await (client as any).session.prompt({
+        sessionID,
+        text,
+        files: images?.map((img) => ({
+          uri: `data:${img.mime};base64,${img.base64.includes(",") ? img.base64.split(",")[1] : img.base64}`,
+          name: `clipboard.${img.mime.split("/")[1] || "png"}`,
+        })),
+        ...(model ? { model: { providerID: model.providerID, id: model.modelID, variant: model.variant } } : {}),
+        ...(agentID ? { agents: [{ name: agentID }] } : {}),
+      })
+      if (res) return true as unknown as boolean
+    } catch {}
     if ((await getApiVersion(config)) === "v2") {
       let v2Text = text
       if (images && images.length > 0) {
@@ -394,9 +453,16 @@ export const api = {
             : `[${images.length} images omitted — v2 doesn't support image parts]`
         v2Text = text ? `${text}\n\n${imgNote}` : imgNote
       }
+      const body: Record<string, unknown> = { text: v2Text }
+      if (model) {
+        body.model = { id: model.modelID, providerID: model.providerID, variant: model.variant }
+        body.providerID = model.providerID
+        body.modelID = model.modelID
+      }
+      if (agentID) body.agent = agentID
       return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt`, directory), {
         method: "POST",
-        body: { text: v2Text },
+        body,
       })
     }
     const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string; mime?: string; url?: string; filename?: string }> = []
@@ -431,6 +497,17 @@ export const api = {
     model?: ModelSelection,
     agentID?: string,
   ) {
+    try {
+      const client = await getOpencodeClient(config)
+      const res = await (client as any).session.command({ sessionID, command, text: argumentsText })
+      if (res) {
+        try {
+          return toMessageEnvelopeV1(res as V2Message)
+        } catch {
+          return res as MessageEnvelope
+        }
+      }
+    } catch {}
     if ((await getApiVersion(config)) === "v2") {
       const body: Record<string, unknown> = { command, arguments: argumentsText }
       if (agentID) body.agent = agentID
@@ -456,6 +533,11 @@ export const api = {
   },
 
   async abort(config: ServerConfig, sessionID: string, directory?: string) {
+    try {
+      const client = await getOpencodeClient(config)
+      const res = await (client as any).session.interrupt({ sessionID })
+      if (res) return (res as any).interrupted ?? true
+    } catch {}
     const isV2 = (await getApiVersion(config)) === "v2"
     const primary = isV2 ? `/session/${sessionID}/interrupt` : `/session/${sessionID}/abort`
     const secondary = isV2 ? `/session/${sessionID}/abort` : `/session/${sessionID}/interrupt`
@@ -471,6 +553,17 @@ export const api = {
   },
 
   async revert(config: ServerConfig, sessionID: string, messageID: string, directory?: string) {
+    try {
+      const client = await getOpencodeClient(config)
+      const res = await (client as any).session.revert.stage({ sessionID, messageID })
+      if (res) {
+        try {
+          return toSessionV1(res as V2Session)
+        } catch {
+          return res as unknown as Session
+        }
+      }
+    } catch {}
     return request<Session>(config, withDirectory(`/session/${sessionID}/revert`, directory), {
       method: "POST",
       body: { messageID },
@@ -478,6 +571,17 @@ export const api = {
   },
 
   async unrevert(config: ServerConfig, sessionID: string, directory?: string) {
+    try {
+      const client = await getOpencodeClient(config)
+      const res = await (client as any).session.revert.clear({ sessionID })
+      if (res) {
+        try {
+          return toSessionV1(res as V2Session)
+        } catch {
+          return res as unknown as Session
+        }
+      }
+    } catch {}
     return request<Session>(config, withDirectory(`/session/${sessionID}/unrevert`, directory), {
       method: "POST",
       body: {},
@@ -485,6 +589,11 @@ export const api = {
   },
 
   async summarize(config: ServerConfig, sessionID: string, providerID: string, modelID: string, directory?: string, auto = false, readTimeout = 300_000) {
+    try {
+      const client = await getOpencodeClient(config)
+      const res = await (client as any).session.compact({ sessionID })
+      if (res) return true as unknown as boolean
+    } catch {}
     if ((await getApiVersion(config)) === "v2") {
       return request<boolean>(config, withDirectory(`/session/${sessionID}/compact`, directory), {
         method: "POST",
@@ -697,20 +806,63 @@ export const api = {
     })
   },
 
-  fetchStats(config: ServerConfig, statsPort: number, since = "", until = "", model = "") {
-    const host = config.host.replace(/^https?:\/\//, "").replace(/\/+$/, "")
+  async fetchStats(config: ServerConfig, statsPort: number, since = "", until = "", model = "", scope = "summary") {
     const params = new URLSearchParams({ raw: "1" })
     if (since) params.set("since", since)
     if (until) params.set("until", until)
     if (model) params.set("model", model)
-    return fetch(`http://${host}:${statsPort}/api/data?${params.toString()}`, {
-      cache: "no-store",
-    }).then(async (res) => {
+    if (scope) params.set("scope", scope)
+    const qs = params.toString()
+    // Local primero (desktop shell proxy) — rápido, sin CORS, lee opencode.db local.
+    // El proxy Rust en desktop-app/src/api.rs:544 → http://127.0.0.1:8765/api/{rest}
+    const tryLocal = async (): Promise<import("./types").StatsPayload> => {
+      // Asegurar que el server de stats esté levantado (idempotente) — no bloquea, el proxy espera 15s
+      try { await fetch("/shell/stats/start", { method: "POST", cache: "no-store" }) } catch {}
+      const url = `/shell/stats/proxy/data?${qs}`
+      // Reintento corto para el arranque del thread de stats (primer hit puede ser 502 mientras levanta)
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const ctl = new AbortController()
+        const t = setTimeout(() => ctl.abort(), 12000)
+        try {
+          const res = await fetch(url, { cache: "no-store", signal: ctl.signal })
+          if (!res.ok) throw new Error(`Stats HTTP ${res.status}`)
+          const data = await res.json()
+          if ((data as any)?.error) throw new Error((data as any).error)
+          return data as import("./types").StatsPayload
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          const isRetryable = /502|AbortError|Failed to fetch|NetworkError/i.test(msg) && attempt === 0
+          if (isRetryable) {
+            await new Promise((r) => setTimeout(r, 600))
+            continue
+          }
+          throw e
+        } finally { clearTimeout(t) }
+      }
+      throw new Error("Stats local no disponible")
+    }
+    const tryRemote = async (): Promise<import("./types").StatsPayload> => {
+      const host = config.host.replace(/^https?:\/\//, "").replace(/\/+$/, "")
+      const url = `http://${host}:${statsPort}/api/data?${qs}`
+      const res = await fetch(url, { cache: "no-store" })
       if (!res.ok) throw new Error(`Stats HTTP ${res.status}`)
       const data = await res.json()
-      if (data?.error) throw new Error(data.error)
+      if ((data as any)?.error) throw new Error((data as any).error)
       return data as import("./types").StatsPayload
-    })
+    }
+    // Intentar local (mismo origen) — si estamos en desktop (127.0.0.1:4848) funciona; en mobile falla rápido y cae a remote.
+    try {
+      return await tryLocal()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      // Si es 404 (no hay proxy, no estamos en desktop) → fallback remoto
+      // Si es 502 stats unavailable → también fallback
+      const isLocalNotAvailable = /404|502|Failed to fetch|Load failed|NetworkError|AbortError/i.test(msg)
+      if (isLocalNotAvailable) {
+        return await tryRemote()
+      }
+      throw e
+    }
   },
 }
 

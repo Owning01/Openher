@@ -46,6 +46,7 @@ export function LessonView({ lesson, progress, isFirstInCategory, onToggleDone, 
   const [expanded, setExpanded] = useState<boolean>(() => {
     try { return localStorage.getItem(storageKey) === "1" } catch { return false }
   })
+  const [lightbox, setLightbox] = useState(false)
 
   useEffect(() => {
     try { localStorage.setItem(storageKey, expanded ? "1" : "0") } catch { /* ignore */ }
@@ -91,18 +92,38 @@ export function LessonView({ lesson, progress, isFirstInCategory, onToggleDone, 
         </button>
       </header>
 
-      {isFirstInCategory && hasDiagram && (
+      {hasDiagram && (
         <div className={`learning-lesson-diagram ${expanded ? "is-expanded" : "is-collapsed"}`}>
+          {isFirstInCategory && <div className="learning-diagram-badge">Resumen de la sección</div>}
           <DiagramForLesson lesson={lesson} />
           <button
             type="button"
             className="learning-diagram-toggle"
             onClick={() => setExpanded((v) => !v)}
             aria-expanded={expanded}
-            aria-label={expanded ? "Ocultar diagrama" : "Ver diagrama del tema"}
+            aria-label={expanded ? "Ocultar diagrama" : "Ver diagrama completo"}
           >
-            {expanded ? "▾ Ocultar" : "▸ Ver diagrama del tema"}
+            <span>{expanded ? "▾ Ocultar diagrama" : "▸ Ver diagrama completo"}</span>
+            <span className="learning-diagram-actions">
+              <span
+                role="button"
+                tabIndex={0}
+                className="learning-diagram-expand"
+                onClick={(e) => { e.stopPropagation(); setLightbox(true) }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setLightbox(true) } }}
+              >
+                ⤢ Ampliar
+              </span>
+            </span>
           </button>
+        </div>
+      )}
+      {lightbox && hasDiagram && (
+        <div className="learning-lightbox" onClick={() => setLightbox(false)} role="dialog" aria-modal="true">
+          <div className="learning-lightbox-inner" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="learning-lightbox-close" onClick={() => setLightbox(false)} aria-label="Cerrar">✕</button>
+            <DiagramForLesson lesson={lesson} />
+          </div>
         </div>
       )}
 

@@ -180,15 +180,15 @@ export function useAI(config: ServerConfig) {
 
   const loadAgents = useCallback(async (directory?: string, attempt = 0) => {
     if (!config.host || config.port <= 0) return
+    const timeout = <T>(p: Promise<T>, ms = 6000) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Agent list timeout")), ms))]) as Promise<T>
     try {
-      const list = await api.listAgents(config, directory)
-      if (list.length === 0 && attempt < 2) {
-        // Server puede devolver [] si aún no inicializó agentes — reintentar
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+      const list = await timeout(api.listAgents(config, directory))
+      if (list.length === 0 && attempt < 1) {
+        await new Promise((r) => setTimeout(r, 600))
         return loadAgents(directory, attempt + 1)
       }
       setAgentOptions(list)
-      setAgentLoadError(list.length === 0 ? "No agents returned — retrying" : null)
+      setAgentLoadError(list.length === 0 ? "Sin agentes — reintentando" : null)
       const saved = localStorage.getItem(STORAGE_KEYS.AGENT) || localStorage.getItem(agentStorageKey(directory)) || ""
       const primary = filterPrimary(list)
       const next = primary.find((agent) => agent.id === saved) ?? primary[0]
@@ -200,25 +200,26 @@ export function useAI(config: ServerConfig) {
         }
       }
     } catch (err) {
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+      if (attempt < 1) {
+        await new Promise((r) => setTimeout(r, 600))
         return loadAgents(directory, attempt + 1)
       }
-      // No limpiar agentOptions previos — evita "agente no anda" falso cuando el server sí anda pero hubo glitch de red
       setAgentLoadError((err as Error).message)
     }
   }, [config])
 
   const loadModels = useCallback(async (directory?: string, attempt = 0) => {
     if (!config.host || config.port <= 0) return
+    // timeout 8s para no colgar UI si opencode está lento (antes 12s + reintentos = 20s bloqueado)
+    const timeout = <T>(p: Promise<T>, ms = 8000) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Model list timeout — opencode lento")), ms))]) as Promise<T>
     try {
-      const list = await api.listModels(config, directory)
-      if (list.length === 0 && attempt < 2) {
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+      const list = await timeout(api.listModels(config, directory))
+      if (list.length === 0 && attempt < 1) {
+        await new Promise((r) => setTimeout(r, 600))
         return loadModels(directory, attempt + 1)
       }
       setModelOptions(list)
-      setModelLoadError(list.length === 0 ? "No models returned — retrying" : null)
+      setModelLoadError(list.length === 0 ? "Sin modelos — verifica proveedores en opencode" : null)
       const saved = selectedModelKey ? modelFromKey(selectedModelKey) : null
       if (saved && list.some((option) => sameModel(option, saved))) {
         if (selectedVariant && !list.some((option) => sameModel(option, saved) && option.variant === selectedVariant)) {
@@ -238,8 +239,8 @@ export function useAI(config: ServerConfig) {
       }
       modelsLoadedRef.current = true
     } catch (err) {
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+      if (attempt < 1) {
+        await new Promise((r) => setTimeout(r, 600))
         return loadModels(directory, attempt + 1)
       }
       setModelLoadError((err as Error).message)

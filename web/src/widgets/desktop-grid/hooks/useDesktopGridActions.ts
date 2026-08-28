@@ -99,6 +99,99 @@ export function useDesktopGridActions({
       if (!stack || tabIndex < 0 || tabIndex >= stack.length) return
       const targetId = stack[tabIndex]
       const nextStack = stack.filter((_, i) => i !== tabIndex)
+      // Si se cierra la última pestaña, cerrar el panel completo (como closePanel)
+      if (nextStack.length === 0) {
+        // Reusar lógica de closePanel: colapsar filas/columnas vacías
+        const total = desktopLayout.cols * desktopLayout.rows
+        if (panelIndex < 0 || panelIndex >= total) return
+        const sessions = [...desktopLayout.sessions]
+        const panelKinds = [...desktopLayout.panelKinds]
+        const panelIds = [...desktopLayout.panelIds]
+        // Verificar si quedaría al menos un panel no vacío
+        const remaining = sessions
+          .map((s, i) => ({ s, k: panelKinds[i], i }))
+          .filter(({ s, k, i }) => i !== panelIndex && (s !== null || k !== "session"))
+        if (remaining.length === 0) {
+          setTabStacks(() => [[]])
+          setDesktopLayout((prev) => ({
+            ...prev,
+            cols: 1,
+            rows: 1,
+            sessions: [null],
+            panelKinds: ["session" as const],
+            panelIds: [panelIds[panelIndex] ?? genPanelId()],
+            panelEditorPaths: {},
+            panelEditorTabStacks: {},
+            panelEditorActive: {},
+            colSizes: [null],
+            rowSizes: [null],
+          }))
+          setActivePanel(0)
+          return
+        }
+        // Panel vacío: aplicar colapso de filas/columnas (copiado de closePanel)
+        let nextSessions = [...sessions]
+        let nextKinds = [...panelKinds]
+        let nextIds = [...panelIds]
+        let nextStacks: string[][] = tabStacks.map((s) => [...s])
+        while (nextStacks.length < total) nextStacks.push([])
+        nextStacks[panelIndex] = []
+        nextSessions[panelIndex] = null
+        nextKinds[panelIndex] = "session"
+        let { cols, rows, colSizes, rowSizes } = desktopLayout as unknown as DesktopLayout & {
+          colSizes: (number | null)[]
+          rowSizes: (number | null)[]
+        }
+        const isEmpty = (i: number) => nextSessions[i] === null && nextKinds[i] === "session"
+        let changed = true
+        while (changed) {
+          changed = false
+          for (let r = 0; r < rows; r++) {
+            const rowEmpty = nextSessions.slice(r * cols, r * cols + cols).every((_, i) => isEmpty(r * cols + i))
+            if (rowEmpty && rows > 1) {
+              nextSessions = nextSessions.filter((_, i) => Math.floor(i / cols) !== r)
+              nextKinds = nextKinds.filter((_, i) => Math.floor(i / cols) !== r)
+              nextIds = nextIds.filter((_, i) => Math.floor(i / cols) !== r)
+              nextStacks = nextStacks.filter((_, i) => Math.floor(i / cols) !== r)
+              rows -= 1
+              rowSizes = (rowSizes as (number | null)[]).filter((_, i) => i !== r)
+              changed = true
+              break
+            }
+          }
+          if (changed) continue
+          const emptyCols: number[] = []
+          for (let c = 0; c < cols; c++) {
+            const colEmpty = Array.from({ length: rows }, (_, r) => r * cols + c).every((i) => isEmpty(i))
+            if (colEmpty) emptyCols.push(c)
+          }
+          if (emptyCols.length > 0 && cols > emptyCols.length) {
+            const removeSet = new Set(emptyCols)
+            nextSessions = nextSessions.filter((_, i) => !removeSet.has(i % cols))
+            nextKinds = nextKinds.filter((_, i) => !removeSet.has(i % cols))
+            nextIds = nextIds.filter((_, i) => !removeSet.has(i % cols))
+            nextStacks = nextStacks.filter((_, i) => !removeSet.has(i % cols))
+            cols -= emptyCols.length
+            colSizes = (colSizes as (number | null)[]).filter((_, i) => !removeSet.has(i))
+            changed = true
+          }
+          if (cols === 1) colSizes = [null]
+          if (rows === 1) rowSizes = [null]
+        }
+        setTabStacks(() => nextStacks)
+        setDesktopLayout((prev) => ({
+          ...prev,
+          cols,
+          rows,
+          sessions: nextSessions,
+          panelKinds: nextKinds,
+          panelIds: nextIds,
+          colSizes: colSizes as any,
+          rowSizes: rowSizes as any,
+        }))
+        setActivePanel((prev) => (prev >= panelIndex ? Math.max(0, prev - 1) : prev))
+        return
+      }
       setTabStacks((prev: string[][]) => {
         const next = prev.map((s: string[]) => [...s])
         next[panelIndex] = nextStack
@@ -112,7 +205,7 @@ export function useDesktopGridActions({
         return { ...prev, sessions }
       })
     },
-    [tabStacks, setTabStacks, setDesktopLayout]
+    [tabStacks, desktopLayout, setTabStacks, setDesktopLayout, setActivePanel]
   )
 
   const moveTab = useCallback(
@@ -892,13 +985,25 @@ export function useDesktopGridActions({
           }
         }
 
+        // Si ya está abierto en algún editor, enfocarlo en vez de duplicar
+        for (const [k, tabs] of Object.entries(prev.panelEditorTabStacks ?? {})) {
+          const idx = Number(k)
+          if (Array.isArray(tabs) && tabs.includes(filePath)) {
+            return {
+              ...prev,
+              panelEditorActive: { ...prev.panelEditorActive, [idx]: tabs.indexOf(filePath) },
+              panelEditorPaths: { ...prev.panelEditorPaths, [idx]: filePath },
+            }
+          }
+        }
+        for (const [, p] of Object.entries(prev.panelEditorPaths ?? {})) {
+          if (p === filePath) return prev
+        }
         const existingEditorIdx = prev.panelKinds.indexOf("editor")
         if (existingEditorIdx >= 0) {
           const prevTabs =
             prev.panelEditorTabStacks?.[existingEditorIdx] ??
-            (prev.panelEditorPaths?.[existingEditorIdx]
-              ? [prev.panelEditorPaths[existingEditorIdx]]
-              : [])
+            (prev.panelEditorPaths?.[existingEditorIdx] ? [prev.panelEditorPaths[existingEditorIdx]] : [])
           const nextTabs = prevTabs.includes(filePath) ? prevTabs : [...prevTabs, filePath]
           const nextActive = nextTabs.indexOf(filePath)
           return {

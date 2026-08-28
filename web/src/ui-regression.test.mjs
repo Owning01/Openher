@@ -133,7 +133,7 @@ assert.ok(msgList.includes('aria-hidden="true"'), 'loading text should not dupli
 assert.ok(useMessages.includes('optimisticIDsRef'), 'send flow should track optimistic ids in a ref for async confirmation')
 assert.ok(useMessages.includes('optimisticTextsRef'), 'send flow should track optimistic texts to recognize the SSE echo')
 assert.ok(useMessages.includes('part.type === "text"'), 'SSE echo must be a text part to be matched as a user message')
-assert.ok(useMessages.includes('deadline = Date.now() + 8000'), 'optimistic confirmation should retry loadSelected with a deadline')
+assert.ok(useMessages.includes('await then().catch'), 'optimistic confirmation should fetch once after POST (TUI-like, sin poll)')
 assert.ok(useMessages.includes('merged.sort((a, b) => (a.info.time.created'), 'message merge should sort by time.created so confirmed user messages land in position')
 
 // Touch: hit targets táctiles (WCAG 2.5.8); excepción: composer compacto (36px) por pedido

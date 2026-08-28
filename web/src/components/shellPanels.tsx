@@ -420,17 +420,30 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
         wsPort = res.ws_port
         rememberTerminalPty(tabId, { ptyId: res.id, wsPort: res.ws_port })
         connectWs(wsPort, ptyId)
-        // Auto opencode2: inyectar "opencode2" si el flag está pendiente (Ajustes > Inicio)
+        // Auto opencode2: solo la primera terminal de la sesión si el flag está pendiente (evita que cada nueva pestaña ejecute opencode2)
         try {
           const { consumePendingAutoOpencode2 } = await import("../utils/terminalStore")
-          if (consumePendingAutoOpencode2()) {
-            console.info("[auto-opencode2] PTY listo, enviando opencode2 a", ptyId)
+          const pending = consumePendingAutoOpencode2()
+          if (pending) {
+            // Resolver exe real desde shell config (evita PATH no encontrado con instalación bun global)
+            let cmd = "opencode2"
+            try {
+              const cfg = await shell.config.get().catch(() => null) as any
+              const raw: string = cfg?.opencode2_command ?? ""
+              if (raw.trim()) {
+                const exe = raw.trim().split(/\s+/)[0] ?? ""
+                if (exe) cmd = exe.includes(" ") ? `"${exe}"` : exe
+              }
+            } catch {}
+            console.info("[auto-opencode2] PTY listo, enviando", cmd, "a", ptyId)
+            const payload = cmd + "\r"
             const send = () => {
-              try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ cmd: "write", data: "opencode2\r" })) } catch {}
-              if (ptyId) shell.pty.write(ptyId, "opencode2\r").then(() => console.info("[auto-opencode2] write OK", ptyId)).catch((e) => console.warn("[auto-opencode2] write fail", e))
+              try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ cmd: "write", data: payload })) } catch {}
+              if (ptyId) shell.pty.write(ptyId, payload).then(() => console.info("[auto-opencode2] write OK", ptyId)).catch((e) => console.warn("[auto-opencode2] write fail", e))
             }
-            setTimeout(send, 700)
-            setTimeout(send, 1600)
+            setTimeout(send, 500)
+            setTimeout(send, 1100)
+            setTimeout(send, 1800)
           }
         } catch {}
       }).catch(() => {

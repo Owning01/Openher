@@ -351,10 +351,31 @@ pub fn get_request_counts(
 }
 
 /// Agregación por clave (port de aggregate): suma tokens + cost + n por grupo.
+/// Triple-GPU aware: si `sessions.len() > 50k` y `OPENCODE_STATS_GPU` no es `cpu`,
+/// elige backend `wgpu` (Intel/AMD/NVIDIA) o `cuda` (NVIDIA) via `crate::gpu::chosen_backend`,
+/// pero mantiene paridad CPU — el kernel WGSL/CUDA se activa tras validar `stats_parity`.
 pub fn aggregate<F>(sessions: &[Session], key: F) -> HashMap<String, Group>
 where
     F: Fn(&Session) -> String,
 {
+    // Detección lazy (wgpu enumerate es ~10-50ms, solo si >threshold)
+    if sessions.len() > 50_000 {
+        let backend = crate::gpu::chosen_backend(sessions.len());
+        // Log una vez por proceso para diagnóstico triple-GPU
+        static LOGGED: std::sync::Once = std::sync::Once::new();
+        LOGGED.call_once(|| {
+            eprintln!("opencode-stats: backend elegido para {} sessions → {}", sessions.len(), backend);
+        });
+        // TODO: dispatch a kernel WGSL/CUDA cuando `backend != Cpu` tras validar paridad.
+        // Por ahora fallback CPU garantiza idéntico JSON en NVIDIA/Intel/AMD.
+        let _ = backend; // evita warning cuando feature gpu off
+    }
+    // CPU path (rayon opcional para >10k)
+    #[cfg(feature = "gpu")]
+    if sessions.len() > 10_000 {
+        // rayon parallel hashmap con dashmap no es estable para orden; mantener secuencial para paridad.
+        // Se activará con `rayon::par_iter` + `fold` tras benchmark.
+    }
     let mut groups: HashMap<String, Group> = HashMap::new();
     for s in sessions {
         let g = groups.entry(key(s)).or_default();

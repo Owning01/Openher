@@ -63,15 +63,19 @@ export const ModelSelectorModal = memo(function ModelSelectorModal({
     }
   }, [isOpen])
 
-  // Filtrado de modelos
+  // Filtrado de modelos — debounce Simple y límite 80 resultados para no trabar UI con 300+ modelos
   const query = search.trim().toLowerCase()
   const allGroups = useMemo(() => groupModels(modelOptions), [modelOptions])
 
   const filteredGroups = useMemo(() => {
     const list: Array<{ key: string; group: VariantGroup }> = []
+    let count = 0
+    const LIMIT = 80
     for (const [key, group] of allGroups) {
+      if (count >= LIMIT) break
       if (!query) {
         list.push({ key, group })
+        count++
         continue
       }
       const matchName = group.base.modelName?.toLowerCase().includes(query)
@@ -79,6 +83,7 @@ export const ModelSelectorModal = memo(function ModelSelectorModal({
       const matchID = group.base.modelID?.toLowerCase().includes(query)
       if (matchName || matchProv || matchID) {
         list.push({ key, group })
+        count++
       }
     }
     return list

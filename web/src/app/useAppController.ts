@@ -403,6 +403,43 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setTerminalHeight,
   } = useDesktopLayoutState(isDesktop, selectedSession?.id ?? null)
 
+  // Auto-mostrar terminal inferior si auto_opencode2 está activado (solo 1 vez por sesión)
+  useEffect(() => {
+    if (!isDesktop) return
+    let cancelled = false
+    // Ya auto-mostrado en esta sesión
+    try { if (sessionStorage.getItem("opencode.auto_opencode2.shown") === "1") return } catch {}
+    const ensure = async () => {
+      if (cancelled) return
+      let enabled = false
+      try { enabled = localStorage.getItem("opencode.auto_opencode2") === "1" } catch {}
+      if (!enabled) {
+        try {
+          const { shell } = await import("../shell")
+          const c = (await shell.config.get().catch(() => null)) as any
+          if (cancelled) return
+          if (c?.auto_opencode2) {
+            enabled = true
+            try { localStorage.setItem("opencode.auto_opencode2", "1") } catch {}
+          }
+        } catch {}
+      }
+      if (!enabled) return
+      if (!showTerminal) setShowTerminal(true)
+      // pending solo se marca si aún no se consumió en esta sesión
+      try {
+        if (sessionStorage.getItem("opencode.auto_opencode2.pendingDone") !== "1") {
+          const { setPendingAutoOpencode2 } = await import("../utils/terminalStore")
+          setPendingAutoOpencode2(true)
+          sessionStorage.setItem("opencode.auto_opencode2.pendingDone", "1")
+        }
+      } catch {}
+      try { sessionStorage.setItem("opencode.auto_opencode2.shown", "1") } catch {}
+    }
+    const t = setTimeout(ensure, 600)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [isDesktop])
+
   const {
     switchTab,
     removeTab,

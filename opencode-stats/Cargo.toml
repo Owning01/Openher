@@ -28,6 +28,22 @@ wry = "0.51"
 winit = "0.30"
 ureq = "2"
 flate2 = "1"
+# Triple-GPU stats (portable): wgpu para Intel/AMD/NVIDIA (Vulkan/D3D12), arrow para columnar, rayon para CPU fallback
+wgpu = { version = "24", optional = true }
+arrow = { version = "53", optional = true, features = ["prettyprint"] }
+rayon = { version = "1", optional = true }
+pollster = { version = "0.4", optional = true }
+# CUDA opcional solo NVIDIA (PTX via cudarc) — driver feature auto-detecta toolkit
+cudarc = { version = "0.11", optional = true }
+
+[features]
+default = ["gpu"]
+gpu = ["dep:wgpu", "dep:arrow", "dep:rayon", "dep:pollster"]
+cuda = ["gpu", "dep:cudarc"]
+# aliases para compatibilidad triple (mismo wgpu, diferente vendor detectado en runtime)
+intel = ["gpu"]
+amd = ["gpu"]
+cuda-full = ["cuda"]
 
 [build-dependencies]
 embed-resource = "2"

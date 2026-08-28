@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-26T11:40:49.568Z",
-  "totalLessons": 79,
+  "generatedAt": "2026-08-27T14:29:01.425Z",
+  "totalLessons": 85,
   "categories": [
     {
       "id": "00-Fundamentos",
@@ -847,11 +847,80 @@
       ]
     },
     {
+      "id": "07-Agentes-IA",
+      "title": "Agentes IA",
+      "level": 2,
+      "description": "Hacking y defensa con agentes IA — sin escribir código, agentes especializados.",
+      "count": 5,
+      "items": [
+        {
+          "id": "07-Agentes-IA__01-A1-4g3nt3s-f0nd4m3nt0s",
+          "file": "docs/07-Agentes-IA__01-A1-4g3nt3s-f0nd4m3nt0s.md",
+          "originalPath": "07-Agentes-IA/01-A1-4g3nt3s-f0nd4m3nt0s.md",
+          "category": "07-Agentes-IA",
+          "categoryTitle": "Agentes IA",
+          "subCategory": null,
+          "title": "🤖 A1 — Fundamentos de Agentes IA para Hacking — Sin Código",
+          "depth": "intro",
+          "minutes": 29,
+          "bytes": 37030
+        },
+        {
+          "id": "07-Agentes-IA__02-A2-0ff3ns1v3-4g3nt3s",
+          "file": "docs/07-Agentes-IA__02-A2-0ff3ns1v3-4g3nt3s.md",
+          "originalPath": "07-Agentes-IA/02-A2-0ff3ns1v3-4g3nt3s.md",
+          "category": "07-Agentes-IA",
+          "categoryTitle": "Agentes IA",
+          "subCategory": null,
+          "title": "⚔️ A2 — Agentes Ofensivos — Todo el Hacking Sin Escribir Código",
+          "depth": "intermedio",
+          "minutes": 46,
+          "bytes": 53595
+        },
+        {
+          "id": "07-Agentes-IA__03-A3-d3f3ns1v3-4g3nt3s",
+          "file": "docs/07-Agentes-IA__03-A3-d3f3ns1v3-4g3nt3s.md",
+          "originalPath": "07-Agentes-IA/03-A3-d3f3ns1v3-4g3nt3s.md",
+          "category": "07-Agentes-IA",
+          "categoryTitle": "Agentes IA",
+          "subCategory": null,
+          "title": "🛡️ A3 — Agentes Defensivos — Detectar, Responder y Endurecer Sin Código",
+          "depth": "intermedio",
+          "minutes": 42,
+          "bytes": 50423
+        },
+        {
+          "id": "07-Agentes-IA__04-A4-0rqu3st4c10n-m9lt1-4g3nt3",
+          "file": "docs/07-Agentes-IA__04-A4-0rqu3st4c10n-m9lt1-4g3nt3.md",
+          "originalPath": "07-Agentes-IA/04-A4-0rqu3st4c10n-m9lt1-4g3nt3.md",
+          "category": "07-Agentes-IA",
+          "categoryTitle": "Agentes IA",
+          "subCategory": null,
+          "title": "🧩 A4 — Orquestación Multi-Agente — Equipos de IA que Hackean y Defienden Juntos",
+          "depth": "intro",
+          "minutes": 34,
+          "bytes": 45376
+        },
+        {
+          "id": "07-Agentes-IA__05-A5-n0c0d3-aut0m4t1z4c10n",
+          "file": "docs/07-Agentes-IA__05-A5-n0c0d3-aut0m4t1z4c10n.md",
+          "originalPath": "07-Agentes-IA/05-A5-n0c0d3-aut0m4t1z4c10n.md",
+          "category": "07-Agentes-IA",
+          "categoryTitle": "Agentes IA",
+          "subCategory": null,
+          "title": "⚡ A5 — Automatización No-Code — De la Idea al Informe Sin Tocar un Editor",
+          "depth": "intermedio",
+          "minutes": 45,
+          "bytes": 54726
+        }
+      ]
+    },
+    {
       "id": "99-Prompt-Injection",
       "title": "Prompt Injection",
       "level": 4,
       "description": "Técnicas de manipulación de LLMs — estudio defensivo.",
-      "count": 13,
+      "count": 14,
       "items": [
         {
           "id": "99-Prompt-Injection__01-academico-irb",
@@ -984,6 +1053,18 @@
           "depth": "intro",
           "minutes": 10,
           "bytes": 7158
+        },
+        {
+          "id": "99-Prompt-Injection__12-plimius-s1nth3s1s-d3f3ns1v0",
+          "file": "docs/99-Prompt-Injection__12-plimius-s1nth3s1s-d3f3ns1v0.md",
+          "originalPath": "99-Prompt-Injection/12-plimius-s1nth3s1s-d3f3ns1v0.md",
+          "category": "99-Prompt-Injection",
+          "categoryTitle": "Prompt Injection",
+          "subCategory": null,
+          "title": "🛡️ Síntesis Plimius — Estudio Defensivo de Técnicas de Prompt Injection y Jailbreak",
+          "depth": "intro",
+          "minutes": 12,
+          "bytes": 14476
         },
         {
           "id": "99-Prompt-Injection__99-guia-unificada",

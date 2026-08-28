@@ -117,6 +117,15 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [showDataUsage, setShowDataUsage] = useState(false)
   const [showPairModal, setShowPairModal] = useState(false)
   const { enabled: autoOpencode2, setEnabled: setAutoOpencode2 } = useAutoOpencode2()
+  const [autostartEnabled, setAutostartEnabled] = useState(false)
+  const [startMinimized, setStartMinimized] = useState(false)
+  useEffect(() => {
+    if (!isDesktop) return
+    import("../shell").then(({ shell }) => {
+      shell.autostart.get().then((r) => setAutostartEnabled(!!r.enabled)).catch(() => {})
+      shell.config.get().then((c) => setStartMinimized(!!(c as any).start_minimized)).catch(() => {})
+    })
+  }, [isDesktop])
   const { prefs: sidebarPrefs, setPosition: setSidebarPosition, toggleItem: toggleSidebarItem } = useSidebarPrefs()
   const [qcProvider, setQcProvider] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_PROVIDER) || "groq")
 
@@ -128,6 +137,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   const [desktopNotice, setDesktopNotice] = useState<string | null>(null)
   const [desktopNoticeType, setDesktopNoticeType] = useState<"ok" | "fail">("ok")
   const [showDesktopPass, setShowDesktopPass] = useState(false)
+  const [showServerPass, setShowServerPass] = useState(false)
   const [desktopSaved, setDesktopSaved] = useState(false)
 
   // ===== OpenCode Go (uso vía API pública, varias cuentas) =====
@@ -580,6 +590,30 @@ export const SettingsPanel = memo(function SettingsPanel({
                 </div>
               </div>
 
+              <div className="form-grid" style={{ marginBottom: 12 }}>
+                <label className="form-field">
+                  <span>{t('settings.host')}</span>
+                  <input name="host" value={draftConfig.host} onChange={(e) => setField("host", e.target.value)} placeholder={t('settings.hostPlaceholder')} inputMode="text" autoCapitalize="off" autoCorrect="off" />
+                </label>
+                <label className="form-field">
+                  <span>{t('settings.port')}</span>
+                  <input name="port" type="number" value={draftConfig.port || 4096} onChange={(e) => setField("port", Number(e.target.value || 4096))} placeholder="4096" inputMode="numeric" />
+                </label>
+                <label className="form-field">
+                  <span>{t('settings.username')}</span>
+                  <input name="username" value={draftConfig.username} onChange={(e) => setField("username", e.target.value)} placeholder="opencode" autoCapitalize="off" autoCorrect="off" />
+                </label>
+                <label className="form-field">
+                  <span>{t('settings.password')}</span>
+                  <div className="password-wrapper" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input name="password" type={showServerPass ? "text" : "password"} value={draftConfig.password} onChange={(e) => setField("password", e.target.value)} placeholder="••••••••" style={{ flex: 1 }} />
+                    <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowServerPass((v) => !v)} tabIndex={-1} aria-label={showServerPass ? "Ocultar" : "Mostrar"}>
+                      {showServerPass ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
+                    </button>
+                  </div>
+                </label>
+              </div>
+
               <div className="setting-item-row">
                 <div className="setting-item-info">
                   <span className="setting-item-title">{t('settings.apiVersion')}</span>
@@ -666,6 +700,19 @@ export const SettingsPanel = memo(function SettingsPanel({
                     <label className="form-field">
                       <span>{t('settings.port')}</span>
                       <input name="port" type="number" value={draftProfile.config.port || 4096} onChange={(e) => draftField("port", Number(e.target.value || 4096))} placeholder="4096" />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.username')}</span>
+                      <input name="username" value={draftProfile.config.username} onChange={(e) => draftField("username", e.target.value)} placeholder="opencode" autoCapitalize="off" autoCorrect="off" />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('settings.password')}</span>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input name="password" type={showServerPass ? "text" : "password"} value={draftProfile.config.password} onChange={(e) => draftField("password", e.target.value)} placeholder="••••••••" style={{ flex: 1 }} />
+                        <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowServerPass((v) => !v)} tabIndex={-1}>
+                          {showServerPass ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
+                        </button>
+                      </div>
                     </label>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -813,10 +860,62 @@ export const SettingsPanel = memo(function SettingsPanel({
       {showSystem && (
         <>
           <p className="settings-group-heading">Startup & Environment</p>
+          {isDesktop && (
+            <>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Iniciar con Windows</span>
+                  <p className="setting-item-desc">Abre OpenHer automáticamente al iniciar sesión (registro HKCU\Run).</p>
+                </div>
+                <div className="setting-item-control">
+                  <button
+                    type="button"
+                    className={`switch-track compact${autostartEnabled ? " active" : ""}`}
+                    role="switch"
+                    aria-checked={autostartEnabled}
+                    onClick={async () => {
+                      const next = !autostartEnabled
+                      try {
+                        const { shell } = await import("../shell")
+                        await shell.autostart.set(next)
+                        setAutostartEnabled(next)
+                      } catch {}
+                    }}
+                  >
+                    <span className="switch-thumb" />
+                  </button>
+                </div>
+              </div>
+              <div className="setting-item-row">
+                <div className="setting-item-info">
+                  <span className="setting-item-title">Iniciar minimizado</span>
+                  <p className="setting-item-desc">Al arrancar (autostart o manual) queda en la bandeja sin abrir ventana.</p>
+                </div>
+                <div className="setting-item-control">
+                  <button
+                    type="button"
+                    className={`switch-track compact${startMinimized ? " active" : ""}`}
+                    role="switch"
+                    aria-checked={startMinimized}
+                    onClick={async () => {
+                      const next = !startMinimized
+                      try {
+                        const { shell } = await import("../shell")
+                        await shell.config.patch({ start_minimized: next } as any)
+                        setStartMinimized(next)
+                      } catch {}
+                    }}
+                  >
+                    <span className="switch-thumb" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
           <div className="setting-item-row">
             <div className="setting-item-info">
               <span className="setting-item-title">Abrir opencode2 automáticamente</span>
-              <p className="setting-item-desc">Al iniciar la app de escritorio abre una terminal ejecutando <code>opencode2</code>.</p>
+              <p className="setting-item-desc">Al iniciar la app de escritorio abre la terminal inferior ejecutando <code>opencode2</code> (visible en la app, no consola externa).</p>
             </div>
             <div className="setting-item-control">
               <button

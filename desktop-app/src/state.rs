@@ -343,8 +343,13 @@ pub fn read_body(req: &mut tiny_http::Request) -> Result<serde_json::Value, Stri
         }
         buf.extend_from_slice(&chunk[..n]);
     }
-    let s = String::from_utf8_lossy(&buf);
-    serde_json::from_str(&s).map_err(|e| format!("json inválido: {e}"))
+    // simd-json fast path >1KB, fallback serde
+    if buf.len() > 1024 {
+        crate::common::parse_json_simd(&mut buf)
+    } else {
+        let s = String::from_utf8_lossy(&buf);
+        serde_json::from_str(&s).map_err(|e| format!("json inválido: {e}"))
+    }
 }
 
 /// Escapa un path para salida JSON sin romper backslashes.

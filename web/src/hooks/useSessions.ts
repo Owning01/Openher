@@ -3,6 +3,8 @@ import type { ServerConfig, Session, SessionView, SessionStatus, ModelSelection,
 import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
 import { useLocalStorage } from "./useLocalStorage"
+import { getOpencodeClient } from "../shared/api/opencodeClient"
+import { toSessionV1 } from "../shared/api/mappers"
 
 const FAVORITES_KEY = STORAGE_KEYS.FAVORITES
 
@@ -94,8 +96,37 @@ export function useSessions(
   const refreshSessions = useCallback(async (full = false) => {
     if (!config.host || config.port <= 0) return
     try {
+      // Intento con client tipado @opencode-ai/client (nuevo), fallback a api manual
+      // V2 devuelve V2Session {location:{directory}} → hay que mapear a Session {directory} vía toSessionV1
+      const tryTypedList = async (): Promise<Session[]> => {
+        try {
+          const client = await getOpencodeClient(config)
+          // @ts-ignore — client generado, método puede variar según versión beta
+          const raw = await (client as any).session?.list?.({ directory: undefined })
+          const normalize = (arr: unknown[]): Session[] => {
+            if (arr.length === 0) return [] as Session[]
+            const first = arr[0] as Record<string, unknown>
+            const dir = (first as unknown as { directory?: unknown }).directory
+            const hasEmptyDir = dir === "" || dir == null
+            const isV2 = first && typeof first === "object" && "location" in first && (!("directory" in first) || hasEmptyDir)
+            if (isV2) {
+              try {
+                return (arr as unknown as import("../shared/api/mappers").V2Session[]).map(toSessionV1)
+              } catch {
+                return arr as Session[]
+              }
+            }
+            return arr as Session[]
+          }
+          if (Array.isArray(raw)) return normalize(raw)
+          if (raw && Array.isArray((raw as unknown as { data: unknown[] }).data)) return normalize((raw as unknown as { data: unknown[] }).data)
+        } catch {
+          // fallback silencioso
+        }
+        return api.listGlobalSessions(config).catch(() => api.listSessions(config))
+      }
       const [items, projects] = await Promise.all([
-        api.listGlobalSessions(config).catch(() => api.listSessions(config)),
+        tryTypedList(),
         api.listProjects(config).catch(() => []),
       ])
 

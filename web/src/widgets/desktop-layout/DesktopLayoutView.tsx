@@ -379,6 +379,7 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         sessions={sessions}
         setExplorerCwd={setExplorerCwd}
         startSidebarResize={startSidebarResize}
+        onOpenFile={onOpenFile}
       />
 
       <main className="app-desktop-content">

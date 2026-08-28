@@ -606,15 +606,15 @@
   border-radius: 2px;
 }
 
-/* file-editor tabs — 36px altura profesional, 0.82rem legible */
+/* file-editor tabs — 13px sans como explorer */
 .file-editor-tab {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: 6px 10px;
   border-radius: var(--radius-sm);
-  font-size: 0.875rem;
-  font-family: var(--font-mono);
+  font-size: 13px;
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   color: var(--muted-strong);
   cursor: pointer;
   white-space: nowrap;
@@ -1415,10 +1415,10 @@
   .browser-nav-btn { width: 30px; height: 30px; font-size: 1.05rem; }
   .browser-tune-btn { font-size: 0.95rem; }
 
-  /* Tabs de editor / diff en desktop — de 0.82rem a legible */
-  .file-editor-tab { font-size: 0.875rem; }
-  .tab { font-size: 0.875rem; }
-  .session-panel-title { font-size: 0.875rem; }
+  /* Tabs de editor / diff en desktop — 13px sans como explorer */
+  .file-editor-tab { font-size: 13px; font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif); }
+  .tab { font-size: 13px; font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif); }
+  .session-panel-title { font-size: 13px; font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif); }
 }
 
 

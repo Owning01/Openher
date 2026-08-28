@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import type { ServerConfig, StatsPayload } from "../types"
 import { api } from "../api"
 import { STORAGE_KEYS, DEFAULT_STATS_PORT } from "../constants"
@@ -29,10 +29,10 @@ export function setCachedServerStats(data: StatsPayload) {
 export async function prefetchServerStats(config: ServerConfig, statsPort = DEFAULT_STATS_PORT): Promise<StatsPayload | null> {
   if (!config?.host) return null
   try {
-    const payload = await api.fetchStats(config, statsPort)
+    const payload = await api.fetchStats(config, statsPort, "", "", "", "summary")
     if (payload) {
-      setCachedServerStats(payload)
-      return payload
+      setCachedServerStats(payload as StatsPayload)
+      return payload as StatsPayload
     }
   } catch {}
   return null
@@ -75,62 +75,69 @@ export function useServerStats(config: ServerConfig | null) {
     try { localStorage.setItem(STORAGE_KEYS.STATS_PORT, String(n)) } catch {}
   }, [])
 
-  const refresh = useCallback(async (opts?: { since?: string; until?: string; model?: string; silent?: boolean }) => {
-    if (!config?.host) {
+  // Fetch por scope (summary es 1-2s, sin scan de peticiones). Se mergea al payload existente
+  // para que cada pestaña abra instantáneo y solo pague su scope cuando se abre (bajo demanda).
+  // Local primero: funciona sin config.host en desktop (lee opencode.db local vía /shell/stats/proxy).
+  const fetchScope = useCallback(async (scope: string = "summary", opts?: { since?: string; until?: string; model?: string }) => {
+    const isLocalHost = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+    if (!config?.host && !isLocalHost) {
       setError("Sin servidor configurado")
-      setLoading(false)
-      return
+      return null
     }
-    if (!opts?.silent && !data) {
-      setLoading(true)
-    }
+    // Config dummy para tryLocal (host no usado local), si no hay config usar localhost
+    const cfg = config ?? { host: "http://127.0.0.1", port: 4096, username: "", password: "" } as unknown as ServerConfig
+    setLoading(true)
     setError(null)
     try {
       const payload = await api.fetchStats(
-        config,
+        cfg,
         statsPort,
         opts?.since ?? since,
         opts?.until ?? until,
-        opts?.model ?? model
+        opts?.model ?? model,
+        scope
       )
-      setCachedServerStats(payload)
-      setData(payload)
+      // Merge shallow: cada scope aporta sus keys (SCOPE_KEYS en payload.rs). Conservar lo ya cacheado.
+      setData((prev) => {
+        const merged = (prev ? { ...prev, ...payload } : payload) as StatsPayload
+        setCachedServerStats(merged)
+        return merged
+      })
       setLoadedAt(Date.now())
+      return payload as StatsPayload
     } catch (err) {
-      if (!data) {
-        setError(err instanceof Error ? err.message : String(err))
-      }
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(msg)
+      throw err
     } finally {
       setLoading(false)
     }
-  }, [config, statsPort, since, until, model, data])
+  }, [config, statsPort, since, until, model])
+
+  const refresh = useCallback(async (opts?: { since?: string; until?: string; model?: string; scope?: string; silent?: boolean }) => {
+    const scope = opts?.scope ?? "summary"
+    return fetchScope(scope, opts)
+  }, [fetchScope])
 
   const applyFilters = useCallback((s: string, u: string, m: string) => {
     setSince(s)
     setUntil(u)
     setModel(m)
-    void refresh({ since: s, until: u, model: m })
-  }, [refresh])
+    // Al cambiar filtros, descartar cache y recargar summary (el resto se recargará bajo demanda)
+    globalCachedStats = null
+    try { localStorage.removeItem("opencode.stats.cache") } catch {}
+    setData(null)
+    void fetchScope("summary", { since: s, until: u, model: m })
+  }, [fetchScope])
 
-  useEffect(() => {
-    if (config?.host) {
-      void refresh({ silent: !!data })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config?.host, config?.port, statsPort])
-
-  useEffect(() => {
-    if (!config?.host) return
-    const id = setInterval(() => { void refresh({ silent: true }) }, 30_000)
-    return () => clearInterval(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config?.host, statsPort])
+  // Sin auto-fetch ni polling: el stats se abre bajo demanda (StatsView monta y pide summary).
+  // Se mantiene compat: si hay cache, se muestra instantáneo sin fetch.
 
   return {
     data, loading, error, loadedAt,
     statsPort, setStatsPort,
     since, until, model,
     setSince, setUntil, setModel,
-    refresh, applyFilters
+    refresh, fetchScope, applyFilters
   }
 }
