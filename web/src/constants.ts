@@ -41,10 +41,10 @@ export const DEFAULT_POLL_INTERVALS: Record<string, number> = {
   miser: 60000,
 }
 
-export const SSE_CONNECT_TIMEOUT_MS = 8_000
+export const SSE_CONNECT_TIMEOUT_MS = 3_000
 export const SSE_RECONNECT_BASE_MS = 1_000
 export const SSE_RECONNECT_MAX_MS = 30_000
-export const SSE_HEARTBEAT_TIMEOUT_MS = 35_000
+export const SSE_HEARTBEAT_TIMEOUT_MS = 15_000
 export const POLL_BACKOFF_BASE_MS = 1_000
 export const POLL_BACKOFF_MAX_MS = 60_000
 export const POLL_BACKOFF_JITTER = 0.3

@@ -207,7 +207,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
     mountedRef.current = true
     const enabled = Boolean(config)
     if (enabled) {
-      const timeout = setTimeout(() => connect(), 500)
+      const timeout = setTimeout(() => connect(), 0)
       return () => {
         mountedRef.current = false
         clearTimeout(timeout)

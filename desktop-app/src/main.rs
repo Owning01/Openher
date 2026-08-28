@@ -13,7 +13,9 @@ mod browser_view;
 mod common;
 mod docsx;
 mod fsx;
+mod fswatch;
 mod gitx;
+mod http_server;
 mod infrastructure;
 mod kanban;
 mod plugins;
@@ -24,6 +26,7 @@ mod statsx;
 mod updates;
 mod doc_engine;
 
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
@@ -52,7 +55,7 @@ fn web_dist_dir() -> Option<PathBuf> {
     }
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("opencode-desktop.exe"));
     let dir = exe.parent().unwrap_or(Path::new("."));
-    let mut candidates = vec![dir.join("data").join("web-dist")];
+    let mut candidates = vec![dir.join("data").join("web-dist"), dir.join("web").join("dist")];
     for up in 1..=3 {
         if let Some(base) = dir.ancestors().nth(up) {
             candidates.push(base.join("web").join("dist"));
@@ -77,6 +80,7 @@ struct App {
     /// Último instante en que se persistió la geometría (throttle de escritura).
     last_geom_save: std::time::Instant,
     modifiers: winit::keyboard::ModifiersState,
+    start_minimized: bool,
 }
 
 enum AppEvent {
@@ -135,18 +139,26 @@ fn install_webview2_runtime_bg() {
                 return;
             }
             drop(file);
-            let _ = std::process::Command::new(&target)
-                .args(["/silent", "/install"])
-                .spawn();
+            let mut c = std::process::Command::new(&target);
+            c.args(["/silent", "/install"]);
+            c.creation_flags(0x08000000 | 0x00000008 | 0x00000200);
+            c.stdin(std::process::Stdio::null());
+            c.stdout(std::process::Stdio::null());
+            c.stderr(std::process::Stdio::null());
+            let _ = c.spawn();
         })
         .ok();
 }
 
-/// Abre la URL en el navegador por defecto (fallback si WebView2 no existe).
+/// Abre la URL en el navegador por defecto (fallback si WebView2 no existe). Sin consola visible.
 fn open_browser_mode(url: &str) {
-    let _ = std::process::Command::new("cmd")
-        .args(["/c", "start", "", url])
-        .spawn();
+    let mut c = std::process::Command::new("cmd");
+    c.args(["/c", "start", "", url]);
+    c.creation_flags(0x08000000 | 0x00000008 | 0x00000200);
+    c.stdin(std::process::Stdio::null());
+    c.stdout(std::process::Stdio::null());
+    c.stderr(std::process::Stdio::null());
+    let _ = c.spawn();
 }
 
 impl ApplicationHandler<AppEvent> for App {
@@ -200,6 +212,10 @@ impl ApplicationHandler<AppEvent> for App {
         if let Ok(rgba) = load_window_icon() {
             attributes.window_icon = Some(rgba);
         }
+        // Si inicia minimizado (--autostart o config), crear ventana oculta para no flashear
+        if self.start_minimized {
+            attributes.visible = false;
+        }
         let Ok(window) = event_loop.create_window(attributes) else {
             event_loop.exit();
             return;
@@ -219,8 +235,13 @@ impl ApplicationHandler<AppEvent> for App {
             .with_additional_browser_args(browser_view::WEBVIEW_BROWSER_ARGS);
         match builder.build_as_child(&window) {
             Ok(wv) => {
-                window.set_visible(true);
-                window.focus_window();
+                if self.start_minimized {
+                    window.set_visible(false);
+                    eprintln!("opencode-desktop: iniciado minimizado (--autostart/start_minimized) en bandeja");
+                } else {
+                    window.set_visible(true);
+                    window.focus_window();
+                }
                 // Centrar si no se restauró geometría (primera vez)
                 if !use_saved_geometry {
                     // Dejar que el WM centre la ventana (sin posición explícita)
@@ -236,7 +257,10 @@ impl ApplicationHandler<AppEvent> for App {
                     eprintln!("opencode-desktop: WebView2 runtime no encontrado; instalando...");
                     install_webview2_runtime_bg();
                 }
-                open_browser_mode(&self.url);
+                // En modo minimizado no abrir navegador automáticamente
+                if !self.start_minimized {
+                    open_browser_mode(&self.url);
+                }
                 self.browser_mode = true;
                 // El server/tray siguen vivos: la app funciona en el browser.
                 drop(window);
@@ -244,7 +268,7 @@ impl ApplicationHandler<AppEvent> for App {
         }
     }
 
-    fn window_event(&mut self, _event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::Resized(size) => {
                 if let (Some(window), Some(webview)) = (&self.window, &self.webview) {
@@ -255,15 +279,25 @@ impl ApplicationHandler<AppEvent> for App {
                     });
                 }
                 self.save_geometry();
+                // Minimizar (—) → ocultar a bandeja, no a barra de tareas
+                if let Some(window) = &self.window {
+                    if window.is_minimized().unwrap_or(false) {
+                        window.set_visible(false);
+                    }
+                }
             }
             WindowEvent::Moved(_pos) => {
                 self.save_geometry();
             }
             WindowEvent::CloseRequested => {
                 self.save_geometry();
-                if let Some(window) = &self.window {
-                    window.set_minimized(true);
-                }
+                // Flush cookies/sesión a disco antes de salir: WebView2 escribe Cookies/Storage de forma async.
+                // Droppear los WebViews + dar 250ms asegura que data/webview/Default/Cookies persista.
+                self.webview = None;
+                self.browser_inner.webview = None;
+                self.web_context = None;
+                std::thread::sleep(std::time::Duration::from_millis(280));
+                event_loop.exit();
             }
             WindowEvent::ModifiersChanged(m) => {
                 self.modifiers = m.state();
@@ -293,7 +327,13 @@ impl ApplicationHandler<AppEvent> for App {
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
-            AppEvent::Quit => event_loop.exit(),
+            AppEvent::Quit => {
+                self.webview = None;
+                self.browser_inner.webview = None;
+                self.web_context = None;
+                std::thread::sleep(std::time::Duration::from_millis(280));
+                event_loop.exit()
+            }
             AppEvent::BrowserWork => {
                 // No-op intencional: despertó el loop; about_to_wait bombea
                 // process_browser_commands. Con Wait, el wake ya reprogramó.
@@ -449,6 +489,12 @@ fn main() {
 
     let config = state::load_config();
     let persisted = state::load_persisted();
+    // Flag --autostart o --minimized (registro autostart + config start_minimized) -> iniciar en bandeja
+    let args_min = std::env::args().any(|a| a == "--autostart" || a == "--minimized" || a == "--start-minimized");
+    let start_minimized = args_min || config.start_minimized;
+    if start_minimized {
+        eprintln!("opencode-desktop: flag minimizado detectado (args_min={args_min} config={})", config.start_minimized);
+    }
 
     // Server HTTP local (sirve web/dist + API /shell/*). Bind 0.0.0.0 para que Tailscale (100.x) llegue directo al :4848 sin túnel.
     let port = config.port;
@@ -504,6 +550,24 @@ fn main() {
     // Stats server arranca con la app (botón del panel izquierdo lo abre).
     statsx::ensure(&app_state);
 
+    // hyper static server (mmap+br) en chosen+2 — IOCP tokio, coexiste con tiny_http
+    {
+        let hyper_state = app_state.clone();
+        let hyper_port = chosen + 2;
+        std::thread::Builder::new().name("hyper-static".into()).spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async move {
+                match crate::http_server::serve_hyper(hyper_state, hyper_port).await {
+                    Ok(p) => eprintln!("opencode-desktop: hyper static en http://127.0.0.1:{p} (mmap+br)"),
+                    Err(e) => eprintln!("opencode-desktop: hyper no iniciado: {e}"),
+                }
+                loop { tokio::time::sleep(Duration::from_secs(3600)).await; }
+            });
+        }).ok();
+    }
+    // fswatch global — inicia watcher kernel para proyectos
+    crate::fswatch::global().ensure_init();
+
     // opencode2: si está habilitado y no responde, lanzarlo detached
     {
         let op2_enabled = config.opencode2_enabled;
@@ -524,6 +588,73 @@ fn main() {
                 })
                 .ok();
         }
+    }
+
+    // Prewarm warm-pool: arranca todos los plugins en background (staggered) para que el primer click sea 0.05s
+    // Usa effective_cmd (prod si .next/dist existe, sino dev) + Node 24 oculto. Si ya está, probe 350ms y skip.
+    // Opendesign es el más pesado (9s cold → 0.3s prod), va primero; el resto staggered para no picar CPU.
+    {
+        let app_state_clone = app_state.clone();
+        std::thread::Builder::new()
+            .name("plugins-prewarm".into())
+            .spawn(move || {
+                // Definición local mirror de external_router::defs() para no hacer pub el HashMap
+                struct Prewarm<'a> { name: &'a str, dir: &'a str, port: u16, prod_check: Option<&'a str>, dev_cmd: &'a str, prod_cmd: Option<&'a str> }
+                let list = [
+                    Prewarm { name: "opendesign", dir: r"G:\Proyectos\open-design", port: 3000, prod_check: None, dev_cmd: "pnpm tools-dev start web --web-port 3000 --daemon-port 3456", prod_cmd: None },
+                    Prewarm { name: "screenshots", dir: r"G:\Proyectos\0 screenshots", port: 3002, prod_check: Some(r".next\BUILD_ID"), dev_cmd: "pnpm exec next dev -p 3002 -H 127.0.0.1", prod_cmd: Some("pnpm exec next start -p 3002 -H 127.0.0.1") },
+                    Prewarm { name: "vioeditor", dir: r"G:\Proyectos\17-vioeditor\aplicacion", port: 1420, prod_check: Some(r"dist\index.html"), dev_cmd: "pnpm exec vite --port 1420 --host 127.0.0.1 --strictPort false", prod_cmd: Some("pnpm exec vite preview --port 1420 --host 127.0.0.1 --strictPort") },
+                    Prewarm { name: "informes", dir: r"G:\Proyectos\53plataforma-informes", port: 5174, prod_check: Some(r"dist\index.html"), dev_cmd: "pnpm exec vite --port 5174 --host 127.0.0.1", prod_cmd: Some("pnpm exec vite preview --port 5174 --host 127.0.0.1") },
+                ];
+                for (idx, p) in list.iter().enumerate() {
+                    let delay = if idx == 0 { 2500 } else { 2500 + (idx as u64) * 2200 };
+                    std::thread::sleep(Duration::from_millis(delay - if idx>0 { 2500 + ((idx as u64)-1)*2200 } else {0}));
+                    // Vite embed: si dist/index.html existe, no spawnear Node, usar mmap 0ms
+                    if (p.name == "vioeditor" || p.name == "informes") && PathBuf::from(p.dir).join("dist").join("index.html").exists() {
+                        eprintln!("opencode-desktop: prewarm {} embed static (mmap, sin Node) :{}", p.name, p.port);
+                        app_state_clone.external.urls.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), format!("http://127.0.0.1:{}/shell/external/{}/embed/", app_state_clone.port, p.name));
+                        continue;
+                    }
+                    if crate::infrastructure::http::external_router::probe_external(p.name) {
+                        eprintln!("opencode-desktop: prewarm {} ya corriendo :{}", p.name, p.port);
+                        continue;
+                    }
+                    let effective = if let (Some(prod), Some(check)) = (p.prod_cmd, p.prod_check) {
+                        if PathBuf::from(p.dir).join(check).exists() { prod } else { p.dev_cmd }
+                    } else { p.dev_cmd };
+                    eprintln!("opencode-desktop: prewarm {} → {} (prod={})", p.name, effective, p.prod_check.map(|c| PathBuf::from(p.dir).join(c).exists()).unwrap_or(false));
+                    let _ = std::fs::create_dir_all(crate::state::data_dir());
+                    let log_path = crate::state::data_dir().join(format!("external-{}.log", p.name));
+                    let log_file = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
+                    // pnpm directo oculto (sin cmd) para evitar conhost S/N
+                    let pnpm_bin = r"G:\Dev\nodejs-24\pnpm.cmd";
+                    let args: Vec<&str> = effective.split_whitespace().skip(1).collect();
+                    let mut c = std::process::Command::new(pnpm_bin);
+                    if !args.is_empty() { c.args(&args); }
+                    c.current_dir(p.dir);
+                    let cur_path = std::env::var("PATH").unwrap_or_default();
+                    c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
+                    c.creation_flags(0x08000000 | 0x00000008 | 0x00000200);
+                    c.stdin(std::process::Stdio::null());
+                    if let Some(f) = log_file {
+                        if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
+                        c.stderr(std::process::Stdio::from(f));
+                    } else {
+                        c.stdout(std::process::Stdio::null());
+                        c.stderr(std::process::Stdio::null());
+                    }
+                    match c.spawn() {
+                        Ok(child) => {
+                            let pid = child.id();
+                            eprintln!("opencode-desktop: prewarm {} pid={pid} :{}", p.name, p.port);
+                            app_state_clone.external.procs.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), child);
+                            app_state_clone.external.urls.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), format!("http://127.0.0.1:{}", p.port));
+                        }
+                        Err(e) => eprintln!("opencode-desktop: prewarm {} fallo {e}", p.name),
+                    }
+                }
+            })
+            .ok();
     }
 
     // WebSocket para terminales en tiempo real (puerto del shell + 1).
@@ -579,6 +710,7 @@ fn main() {
         },
         last_geom_save: std::time::Instant::now(),
         modifiers: winit::keyboard::ModifiersState::empty(),
+        start_minimized,
     };
     event_loop.run_app(&mut app).unwrap();
 }

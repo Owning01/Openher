@@ -29,7 +29,7 @@ const S = {
 
 function SvgFrame({ viewBox, children, title, desc, id }: { viewBox: string; children: ReactNode; title: string; desc: string; id: string }) {
   return (
-    <svg viewBox={viewBox} role="img" aria-labelledby={`${id}-title ${id}-desc`} style={{ width: "100%", height: "auto", display: "block" }}>
+    <svg viewBox={viewBox} role="img" aria-labelledby={`${id}-title ${id}-desc`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "auto", display: "block", vectorEffect: "non-scaling-stroke" } as React.CSSProperties}>
       <title id={`${id}-title`}>{title}</title>
       <desc id={`${id}-desc`}>{desc}</desc>
       <rect width="100%" height="100%" rx={8} fill={S.paper} />
@@ -820,6 +820,55 @@ function DiagramEspecializacionFallback() {
   )
 }
 
+export function DiagramAgentesIA() {
+  const id = "dg-agentes"
+  return (
+    <div className="learning-diagram-wrap">
+      <SvgFrame viewBox="0 0 720 360" title="Equipo de agentes IA sin código" desc="Humano describe objetivo en lenguaje natural; orquestador reparte a agentes especializados que usan tools y devuelven evidencia para aprobación humana." id={id}>
+        {/* Humano */}
+        <rect x={280} y={16} width={160} height={36} rx={18} fill={S.paper} stroke={S.ink} strokeWidth={1.2} />
+        <text x={360} y={34} fill={S.ink} fontSize={11} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">Humano — lenguaje natural</text>
+        <text x={360} y={46} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">scope + aprobación</text>
+        {/* Flecha a orquestador */}
+        <line x1={360} y1={52} x2={360} y2={72} stroke={S.muted} strokeWidth={1.2} markerEnd={`url(#${id}-arrow)`} />
+        {/* Orquestador — focal */}
+        <rect x={260} y={72} width={200} height={44} rx={6} fill={S.accentTint} stroke={S.accent} strokeWidth={1.2} />
+        <text x={360} y={92} fill={S.ink} fontSize={11} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">Orquestador</text>
+        <text x={360} y={106} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">OpenCode · MCP · A2A</text>
+        {/* 3 agentes especializados */}
+        {[
+          { x: 88, y: 140, label: "Recon Agent", sub: "nmap · nuclei · crt.sh" },
+          { x: 360, y: 140, label: "Exploit Agent", sub: "metasploit · nuclei", focal: true },
+          { x: 532, y: 140, label: "Defense Agent", sub: "Wazuh · Sigma · Lynis" },
+        ].map((n) => (
+          <g key={n.label}>
+            <rect x={n.x - 72} y={n.y} width={144} height={40} rx={6} fill={(n as unknown as { focal?: boolean }).focal ? S.accentTint : S.paper} stroke={(n as unknown as { focal?: boolean }).focal ? S.accent : S.ink} strokeWidth={(n as unknown as { focal?: boolean }).focal ? 1.2 : 1} />
+            <text x={n.x} y={n.y + 16} fill={S.ink} fontSize={9} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">{n.label}</text>
+            <text x={n.x} y={n.y + 28} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">{n.sub}</text>
+            <line x1={360} y1={116} x2={n.x} y2={n.y} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-arrow)`} />
+          </g>
+        ))}
+        {/* Report agent */}
+        <rect x={260} y={200} width={200} height={40} rx={6} fill={S.paper2} stroke={S.rule} strokeWidth={1} />
+        <text x={360} y={218} fill={S.ink} fontSize={10} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">Report Agent</text>
+        <text x={360} y={230} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">PTES · CVSS · markdown/PDF</text>
+        {[88, 360, 532].map((x) => (
+          <line key={x} x1={x} y1={180} x2={360} y2={200} stroke={S.muted} strokeWidth={0.8} strokeDasharray="3,3" markerEnd={`url(#${id}-arrow)`} />
+        ))}
+        {/* Vuelta a humano con aprobación */}
+        <line x1={360} y1={240} x2={360} y2={268} stroke={S.accent} strokeWidth={1.2} markerEnd={`url(#${id}-arrow-accent)`} />
+        <rect x={280} y={268} width={160} height={36} rx={6} fill={S.paper} stroke={S.ink} strokeWidth={1} />
+        <text x={360} y={286} fill={S.ink} fontSize={10} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">Validación humana</text>
+        <text x={360} y={298} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">evidencia · traza · aprobación</text>
+        <line x1={24} y1={324} x2={696} y2={324} stroke="color-mix(in srgb, var(--text) 10%, transparent)" strokeWidth={0.8} />
+        <text x={24} y={338} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" letterSpacing="0.14em">LEYENDA</text>
+        <rect x={80} y={330} width={10} height={10} rx={2} fill={S.accentTint} stroke={S.accent} strokeWidth={1} />
+        <text x={96} y={339} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)">Focal — donde se ejecuta sin escribir código</text>
+      </SvgFrame>
+    </div>
+  )
+}
+
 // ── Gate de complejidad: filtra diagramas innecesarios ──
 export function shouldShowDiagram(lesson: { category: string; subCategory: string | null; id: string; originalPath: string }): boolean {
   const cat = lesson.category
@@ -849,7 +898,7 @@ export function shouldShowDiagram(lesson: { category: string; subCategory: strin
   }
 
   // Imprescindibles: mantener siempre
-  if (cat === "00-Fundamentos" || cat === "03-Sistemas" || cat === "04-Post-Explotacion" || cat === "06-Operaciones") return true
+  if (cat === "00-Fundamentos" || cat === "03-Sistemas" || cat === "04-Post-Explotacion" || cat === "06-Operaciones" || cat === "07-Agentes-IA") return true
 
   // Resto de 05 (01 Cloud-Identity, 03 IA-Adversarial, 04 Vuln-Research, 05 Hardware-RF, 06 Industrial, 07 Defensive, 09 Cloud-Native): mantener 1 diagrama focal
   return true
@@ -867,6 +916,7 @@ export function DiagramForCategory({ categoryId, subCategory, id, originalPath }
     case "04-Post-Explotacion": return <DiagramPostLoop />
     case "05-Especializacion": return <DiagramEspecializacion subCategory={subCategory ?? null} />
     case "06-Operaciones": return <DiagramOperacionesGantt />
+    case "07-Agentes-IA": return <DiagramAgentesIA />
     case "99-Prompt-Injection": return <DiagramPromptInjectionFlow />
     default: return null
   }

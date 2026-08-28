@@ -45,6 +45,9 @@ export type DesktopPanelRendererProps = {
   activeSessionDir?: string
   selectedSessionDir?: string
   fileEditorPath: string | null
+  editorTabs?: string[]
+  editorActive?: number
+  desktopLayout?: import("../../types").DesktopLayout
   quickChatKeys: { cerebras: string; groq: string; go: string; custom: string; customUrl: string }
   modelOptions: any[]
   providerList: any[]
@@ -170,6 +173,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
             panelIndex={i}
             onDropTerminal={onAddTerminal}
+            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
             onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
@@ -209,7 +213,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       else if (sid === "__kanban__") vComp = <KanbanPanel />
       else if (sid === "__stats__") vComp = <StatsPanel />
       else if (sid === "__learning__") vComp = <LearningPage />
-      else if (sid === "__pcFiles__") vComp = <PCFilesPanel />
+      else if (sid === "__pcFiles__") vComp = <PCFilesPanel onOpenFile={props.onOpenFile} />
 
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -225,6 +229,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
             panelIndex={i}
             onDropTerminal={onAddTerminal}
+            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
             onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
@@ -266,6 +271,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
             panelIndex={i}
             onDropTerminal={onAddTerminal}
+            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
             onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
@@ -321,6 +327,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
                 onMoveTab={onMoveTab}
                 onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
                 panelIndex={i}
+                onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
                 onCloseOthers={onCloseOthers}
                 onCloseRight={onCloseRight}
                 onCloseLeft={onCloseLeft}
@@ -348,7 +355,8 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onMoveTab={onMoveTab}
             onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
             panelIndex={i}
-            onCloseOthers={onCloseOthers}
+            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
+                onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
             onCloseAll={onCloseAll}
@@ -427,13 +435,9 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
   if (kind === "editor") {
     return (
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
-          <span>{fileEditorPath ? fileEditorPath.split(/[/\\]/).pop() : "Editor"}</span>
-          <button className="btn-icon compact" onClick={onClose} aria-label="Cerrar panel">×</button>
-        </div>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
-            <FileEditorPanel path={fileEditorPath || ""} />
+            <FileEditorPanel path={fileEditorPath || ""} onClose={onClose} />
           </Suspense>
         </div>
       </div>

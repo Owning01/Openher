@@ -22,6 +22,7 @@ const CATEGORY_META = {
   "04-Post-Explotacion": { title: "Post-Explotación", level: 3, description: "Persistencia, evasión EDR, movimiento lateral, dominio." },
   "05-Especializacion": { title: "Especialización", level: 3, description: "Ramas avanzadas por dominio (cloud, mobile, IA, hardware...)." },
   "06-Operaciones": { title: "Operaciones", level: 4, description: "Operación como equipo: purple team, infraestructura, reportes." },
+  "07-Agentes-IA": { title: "Agentes IA", level: 2, description: "Hacking y defensa con agentes IA — sin escribir código, agentes especializados." },
   "99-Prompt-Injection": { title: "Prompt Injection", level: 4, description: "Técnicas de manipulación de LLMs — estudio defensivo." },
 }
 
@@ -130,7 +131,7 @@ for (const abs of files) {
 for (const [, arr] of grouped) arr.sort((a, b) => a.originalPath.localeCompare(b.originalPath))
 
 // Orden global de categorías
-const order = ["00-Fundamentos", "01-Herramientas", "02-Web-y-Apps", "03-Sistemas", "04-Post-Explotacion", "05-Especializacion", "06-Operaciones", "99-Prompt-Injection"]
+const order = ["00-Fundamentos", "01-Herramientas", "02-Web-y-Apps", "03-Sistemas", "04-Post-Explotacion", "05-Especializacion", "06-Operaciones", "07-Agentes-IA", "99-Prompt-Injection"]
 const categories = order.filter((c) => grouped.has(c)).map((c) => ({
   id: c,
   ...CATEGORY_META[c],

@@ -28,6 +28,7 @@ export interface DesktopSidebarProps {
   sessions: SessionView[]
   setExplorerCwd: (d: string) => void
   startSidebarResize: (e: React.PointerEvent<HTMLDivElement>) => void
+  onOpenFile?: (path: string) => void
 }
 
 export const DesktopSidebar = memo(function DesktopSidebar({
@@ -42,6 +43,7 @@ export const DesktopSidebar = memo(function DesktopSidebar({
   sessions,
   setExplorerCwd,
   startSidebarResize,
+  onOpenFile,
 }: DesktopSidebarProps) {
   const t = useT()
   const isFiles = activity === "explorer" || activity === "pcFiles"
@@ -89,7 +91,7 @@ export const DesktopSidebar = memo(function DesktopSidebar({
               {activity === "sessions" ? (
                 sessionsView
               ) : isFiles ? (
-                <PCFilesPanel onCollapseSidebar={() => setSidebarCollapsed(true)} />
+                <PCFilesPanel onCollapseSidebar={() => setSidebarCollapsed(true)} onOpenFile={onOpenFile} />
               ) : activity === "scm" ? (
                 <SourceControlPanel
                   cwd={

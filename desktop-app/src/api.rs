@@ -540,10 +540,14 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         let _ = req.respond(json_ok(&state.stats.status()));
         return;
     }
-    // Proxy a opencode-stats: /shell/stats/proxy/* → http://127.0.0.1:8765/api/*
+    // Proxy a opencode-stats: /shell/stats/proxy/* → http://127.0.0.1:8765/api/*?{query}
+    // Local, rápido, mismo origen (sin CORS). Reenvía query string tal cual.
     if let Some(rest) = path.strip_prefix("/shell/stats/proxy/") {
-        let stats_url = format!("http://127.0.0.1:8765/api/{rest}");
-        match ureq::get(&stats_url).call() {
+        let qs = if query.is_empty() { String::new() } else { format!("?{query}") };
+        let stats_url = format!("http://127.0.0.1:8765/api/{rest}{qs}");
+        // Timeout 15s — el primer scope completo puede tardar por el scan de opencode.db
+        let agent = ureq::builder().timeout(std::time::Duration::from_secs(15)).build();
+        match agent.get(&stats_url).call() {
             Ok(resp) => {
                 let mut body = Vec::new();
                 resp.into_reader().read_to_end(&mut body).unwrap_or_default();
@@ -551,8 +555,16 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(
                     Response::from_string(String::from_utf8_lossy(&body).to_string())
                         .with_header(Header::from_bytes("Content-Type", ct).unwrap())
-                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap()),
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+                        .with_header(Header::from_bytes("Cache-Control", "no-store").unwrap()),
                 );
+            }
+            Err(ureq::Error::Status(code, resp)) => {
+                let mut body = Vec::new();
+                resp.into_reader().read_to_end(&mut body).unwrap_or_default();
+                let msg = String::from_utf8_lossy(&body).to_string();
+                let body_json = if msg.is_empty() { format!("stats HTTP {code}") } else { msg };
+                let _ = req.respond(json_err(code, &body_json));
             }
             Err(_) => {
                 let _ = req.respond(json_err(502, "stats server unavailable"));
@@ -696,6 +708,8 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 // Generar token único / estable
                 let token = format!("p{:x}", dir.to_string_lossy().as_bytes().iter().fold(0u64, |acc: u64, &b| acc.wrapping_mul(31).wrapping_add(b as u64)));
                 state.projects.write().unwrap_or_else(|e| e.into_inner()).insert(token.clone(), dir.clone());
+                // Registrar watcher kernel para invalidación live (ReadDirectoryChangesW/USN)
+                crate::fswatch::global().watch_dir(&dir);
 
                 // Escanear archivos html
                 let mut html_files = Vec::new();
@@ -789,12 +803,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         let rel = if rel.is_empty() { "index.html" } else { rel };
         let root = state.projects.read().unwrap_or_else(|e| e.into_inner()).get(token).cloned();
         if let Some(root_path) = root {
-            let served = crate::common::serve_file(&root_path, rel)
-                .or_else(|| crate::common::serve_file(&root_path.join("dist"), rel))
-                .or_else(|| crate::common::serve_file(&root_path.join("public"), rel))
-                .or_else(|| crate::common::serve_file(&root_path.join("build"), rel))
-                .or_else(|| crate::common::serve_file(&root_path.join("web").join("dist"), rel))
-                .or_else(|| crate::common::serve_file(&root_path.join("web"), rel));
+            let served = crate::common::serve_file_mmap(&root_path, rel)
+                .or_else(|| crate::common::serve_file_mmap(&root_path.join("dist"), rel))
+                .or_else(|| crate::common::serve_file_mmap(&root_path.join("public"), rel))
+                .or_else(|| crate::common::serve_file_mmap(&root_path.join("build"), rel))
+                .or_else(|| crate::common::serve_file_mmap(&root_path.join("web").join("dist"), rel))
+                .or_else(|| crate::common::serve_file_mmap(&root_path.join("web"), rel));
 
             if let Some((mut bytes, mime)) = served {
                 if mime.starts_with("text/html") {
@@ -1284,23 +1298,41 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     if !path.starts_with("/shell/") {
         if let Some(base) = state.dist.as_ref() {
         let rel = path.trim_start_matches('/');
+        // brotli precomprimido: si Accept-Encoding incluye br y existe .br, servirlo
+        let accept_br = req.headers().iter().any(|h| h.field.as_str().to_ascii_lowercase() == "accept-encoding" && h.value.as_str().contains("br"));
         let mut file = base.join(rel);
         if !file.starts_with(base) {
             file = base.join("index.html");
         }
-        let mut bytes = if file.is_file() {
-            std::fs::read(&file).ok()
-        } else {
-            None
-        };
-        if bytes.is_none() && !rel.contains('.') {
-            file = base.join("index.html");
-            bytes = std::fs::read(&file).ok();
+        // intentar .br primero
+        if accept_br {
+            let br_file = if rel.is_empty() { base.join("index.html.br") } else { base.join(format!("{rel}.br")) };
+            if br_file.is_file() && br_file.starts_with(base) {
+                if let Ok(br_bytes) = std::fs::read(&br_file) {
+                    let mime = mime_for(&file);
+                    let _ = req.respond(
+                        Response::from_data(br_bytes)
+                            .with_status_code(StatusCode(200))
+                            .with_header(Header::from_bytes("Content-Type", mime).unwrap())
+                            .with_header(Header::from_bytes("Content-Encoding", "br").unwrap())
+                            .with_header(Header::from_bytes("Cache-Control", "public, max-age=31536000, immutable").unwrap()),
+                    );
+                    return;
+                }
+            }
         }
-        if let Some(bytes) = bytes {
-            let is_index = file.file_name().and_then(|n| n.to_str()) == Some("index.html");
-            let mime = mime_for(&file);
+        // mmap fast path (zero-copy-ish, usa page cache)
+        let mut served = crate::common::serve_file_mmap(base, rel);
+        if served.is_none() && !rel.contains('.') {
+            served = crate::common::serve_file_mmap(base, "index.html");
+            file = base.join("index.html");
+        }
+        if let Some((bytes, mime)) = served {
+            let is_index = file.file_name().and_then(|n| n.to_str()) == Some("index.html")
+                || (!rel.contains('.') && file.ends_with("index.html"));
+            // Para index.html, inyectar config script (no cache)
             if is_index {
+                // Si fue mmap, bytes ya es Vec<u8>; intentar utf8
                 if let Ok(mut s) = String::from_utf8(bytes.clone()) {
                     let inject = inject_config_script(&state.config.read().unwrap_or_else(|e| e.into_inner()));
                     if let Some(pos) = s.rfind("</head>") {
@@ -1317,11 +1349,13 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                     return;
                 }
             }
+            // Cache agresivo para assets hasheados, no-cache para index
+            let cache = if is_index { "no-cache" } else { "public, max-age=31536000, immutable" };
             let _ = req.respond(
                 Response::from_data(bytes)
                     .with_status_code(StatusCode(200))
                     .with_header(Header::from_bytes("Content-Type", mime).unwrap())
-                    .with_header(Header::from_bytes("Cache-Control", "no-cache").unwrap()),
+                    .with_header(Header::from_bytes("Cache-Control", cache).unwrap()),
             );
             return;
         }

@@ -130,7 +130,15 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     })
   }, [])
 
-  const queueMessageUpdate = useCallback((patch: (prev: MessageEnvelope[]) => MessageEnvelope[], sid: string | null = null) => {
+  const queueMessageUpdate = useCallback((patch: (prev: MessageEnvelope[]) => MessageEnvelope[], sid: string | null = null, immediate = false) => {
+    if (immediate) {
+      setMessages((prev) => {
+        const loaded = loadedSessionIDRef.current
+        if (sid && loaded && sid !== loaded) return prev
+        return patch(prev)
+      })
+      return
+    }
     messageBatchRef.current.push({ sid, patch })
     if (batchFrameRef.current === null && batchMountedRef.current) {
       batchFrameRef.current = requestAnimationFrame(flushMessageBatch)
@@ -572,7 +580,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         return { ...m, parts: nextParts }
       })
       return changed ? next : prev
-    }, sessionID)
+    }, sessionID, partType === "text" && replace)
   }, [queueMessageUpdate])
 
   // Materializa un part emitido por `message.part.updated`: crea el mensaje/part
@@ -728,25 +736,12 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       }
 
       if (ok) {
-        // Send OK: esperar confirmación. El server puede tardar (payloads
-        // de imagen grandes) — poll hasta que el optimistic desaparezca
-        // (merge por id de loadSelected / echo SSE) o expire el deadline.
-        // isSendingRef ya es false aquí — no bloquea envíos rápidos posteriores.
+        // TUI-like: 1 fetch inmediato; el SSE echo ya borra el optimista sin poll
         try {
-          // Al menos un fetch inmediato para traer el assistant aunque el optimistic ya haya sido confirmado por SSE
           await then().catch(() => undefined)
-          const hasImages = Boolean(images && images.length > 0)
-          const deadline = Date.now() + 8000 + (hasImages ? 12000 : 0)
-          while (optimisticIDsRef.current.has(optimisticMessage.info.id) && Date.now() < deadline) {
-            await then()
-            if (!optimisticIDsRef.current.has(optimisticMessage.info.id)) break
-            await new Promise((r) => setTimeout(r, 1500))
-          }
         } catch {
           // nunca tratar una falla de confirmación como falla de envío
         }
-        // Si no confirmó (timeout): conservar el optimistic — el server lo
-        // entregará con el próximo fetch (merge por id nunca se encoge).
       }
 
       try {

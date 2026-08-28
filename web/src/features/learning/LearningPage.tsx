@@ -12,7 +12,7 @@ type MobilePane = "list" | "lesson"
 const LEVEL_ICON: Record<number, string> = {
   0: "◈", // fundamentos
   1: "⬢", // herramientas
-  2: "⬣", // web/sistemas
+  2: "⬣", // web/sistemas/agentes
   3: "⬔", // post/op
   4: "⬥", // ops/inject
 }
@@ -24,6 +24,9 @@ export default function LearningPage() {
   const [selected, setSelected] = useState<LearningLesson | null>(null)
   const [mobilePane, setMobilePane] = useState<MobilePane>("list")
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem("learning:sidebarCollapsed") === "1" } catch { return false }
+  })
 
   const flatLessons = useMemo(() => manifest ? manifest.categories.flatMap((c) => c.items) : [], [manifest])
   const currentIndex = useMemo(() => selected ? flatLessons.findIndex((l) => l.id === selected.id) : -1, [flatLessons, selected])
@@ -44,6 +47,10 @@ export default function LearningPage() {
   const handleToggleDone = (id: string, done: boolean) => setProgress(markDone(id, done))
   const goPrev = () => { if (currentIndex > 0) handleSelect(flatLessons[currentIndex - 1]) }
   const goNext = () => { if (currentIndex >= 0 && currentIndex < flatLessons.length - 1) handleSelect(flatLessons[currentIndex + 1]) }
+
+  useEffect(() => {
+    try { localStorage.setItem("learning:sidebarCollapsed", sidebarCollapsed ? "1" : "0") } catch { /* ignore */ }
+  }, [sidebarCollapsed])
 
   if (error) return <div className="learning-center"><p style={{ color: "var(--danger)" }}>Error: {error}</p></div>
   if (!manifest) return <div className="learning-center"><p className="subtle">Cargando curriculum…</p></div>
@@ -74,9 +81,19 @@ export default function LearningPage() {
       </header>
 
       <div className="learning-layout">
-        <aside className="learning-desktop-sidebar">
+        <aside className={`learning-desktop-sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
           <LearningSidebar manifest={manifest} progress={progress} selectedId={selected?.id ?? null} onSelect={handleSelect} />
         </aside>
+        <button
+          type="button"
+          className="learning-sidebar-toggle"
+          onClick={() => setSidebarCollapsed((v) => !v)}
+          aria-label={sidebarCollapsed ? "Mostrar barra lateral" : "Ocultar barra lateral"}
+          aria-expanded={!sidebarCollapsed}
+          title={sidebarCollapsed ? "Mostrar" : "Ocultar"}
+        >
+          {sidebarCollapsed ? "»" : "«"}
+        </button>
 
         <main className="learning-main">
           {showDashboard && <Dashboard manifest={manifest} progress={progress} onSelect={handleSelect} totalDone={totalDone} />}

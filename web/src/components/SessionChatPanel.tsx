@@ -439,6 +439,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           onMoveTab={(from, to) => onTabMove?.(panelIndex, from, to)}
           panelIndex={panelIndex}
           onDropTerminal={onDropTerminal}
+          onDropTerminalTab={(raw) => onSplitSession(panelIndex, "center", raw)}
         />
       ) : null}
       {showStats && (

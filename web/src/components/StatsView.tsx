@@ -1,8 +1,18 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useT } from "../i18n-context"
 import type { ServerConfig } from "../types"
 import { useServerStats } from "../hooks/useServerStats"
 import { RefreshIcon, LoadingIcon, ArrowLeftIcon } from "../Icons"
+
+const TAB_SCOPE: Record<TabId, string> = {
+  resumen: "summary",
+  modelo: "modelo",
+  proyecto: "proyecto",
+  dia: "dia",
+  mes: "mes",
+  sesiones: "sesiones",
+  limites: "limites",
+}
 
 type StatsViewProps = {
   config: ServerConfig
@@ -146,9 +156,38 @@ function StatsTable({ cols, rows, empty }: { cols: Col[]; rows: Record<string, u
 
 export function StatsView({ config, onBack }: StatsViewProps) {
   const t = useT()
-  const { data, loading, error, statsPort, setStatsPort, since, until, model, setSince, setUntil, setModel, refresh, applyFilters } = useServerStats(config)
+  const { data, loading, error, since, until, model, setSince, setUntil, setModel, refresh, fetchScope, applyFilters } = useServerStats(config)
   const [tab, setTab] = useState<TabId>("resumen")
   const [copied, setCopied] = useState(false)
+
+  // Abrir bajo demanda: solo summary al montar (1-2s, sin scan de peticiones). El resto se pide al cambiar de pestaña.
+  useEffect(() => {
+    if (!data) {
+      void fetchScope("summary").catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Al cambiar de pestaña, traer su scope si aún no está en data (merge local).
+  useEffect(() => {
+    const scope = TAB_SCOPE[tab]
+    if (scope === "summary") return
+    const hasData = (() => {
+      if (!data) return false
+      const d = data as unknown as Record<string, unknown>
+      if (tab === "modelo" && Array.isArray(d.by_model) && (d.by_model as unknown[]).length > 0) return true
+      if (tab === "proyecto" && Array.isArray(d.by_project) && (d.by_project as unknown[]).length > 0) return true
+      if (tab === "dia" && Array.isArray(d.by_day) && (d.by_day as unknown[]).length > 0) return true
+      if (tab === "mes" && Array.isArray(d.by_month) && (d.by_month as unknown[]).length > 0) return true
+      if (tab === "sesiones" && Array.isArray(d.sessions) && (d.sessions as unknown[]).length > 0) return true
+      if (tab === "limites" && Array.isArray(d.limits) && (d.limits as unknown[]).length > 0) return true
+      return false
+    })()
+    if (!hasData) {
+      void fetchScope(scope).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   const tabs: Array<{ id: TabId; label: string }> = [
     { id: "resumen", label: t('stats.tabOverview') },
@@ -161,23 +200,26 @@ export function StatsView({ config, onBack }: StatsViewProps) {
   ]
 
   const maxDayCost = useMemo(() => {
-    if (!data?.days.length) return 1
-    return Math.max(...data.days.map((d) => d.cost), 1)
+    if (!data?.days?.length) return 1
+    return Math.max(...(data.days as Array<{ cost: number }>).map((d: { cost: number }) => d.cost), 1)
   }, [data])
 
   const modelChart = useMemo(() => {
-    if (!data) return []
-    const top = data.models_chart.slice(0, 6)
-    const other = data.models_chart.slice(6).reduce((acc, m) => acc + m.cost, 0)
+    if (!data?.models_chart) return []
+    const chart = data.models_chart as Array<{ model: string; cost: number }>
+    const top = chart.slice(0, 6)
+    const other = chart.slice(6).reduce((acc: number, m: { cost: number }) => acc + m.cost, 0)
     if (other > 0) top.push({ model: "Otros", cost: other })
     return top
   }, [data])
 
-  const maxModelCost = useMemo(() => Math.max(...modelChart.map((m) => m.cost), 1), [modelChart])
+  const maxModelCost = useMemo(() => Math.max(...modelChart.map((m: { cost: number }) => m.cost), 1), [modelChart])
 
   const handleApply = () => {
     applyFilters(since, until, model)
   }
+
+  const isLocal = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
 
   return (
     <section className="panel stats-view fade-in">
@@ -187,7 +229,7 @@ export function StatsView({ config, onBack }: StatsViewProps) {
         </button>
         <h2>{t('stats.title')}</h2>
         <div className="stats-topbar-actions">
-          <button className="btn-secondary compact" onClick={() => void refresh()} disabled={loading}>
+          <button className="btn-secondary compact" onClick={() => void refresh({ scope: TAB_SCOPE[tab] } as unknown as Record<string, unknown>)} disabled={loading}>
             {loading ? <LoadingIcon size={14} className="animate-spin" /> : <RefreshIcon size={14} />}
             {t('stats.refresh')}
           </button>
@@ -210,12 +252,9 @@ export function StatsView({ config, onBack }: StatsViewProps) {
         <button className="btn-primary compact stats-apply" onClick={handleApply}>{t('stats.apply')}</button>
       </div>
 
-      <label className="stats-port-row">
-        <span>{t('stats.port')}</span>
-        <input type="number" value={statsPort} min={1} max={65535}
-          onChange={(e) => setStatsPort(Number(e.target.value))} />
-        <small className="subtle">{t('stats.portHint')}</small>
-      </label>
+      {isLocal && data?.meta && (
+        <p className="subtle" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>Local · {String((data.meta as unknown as { db: string }).db)} · {fmtNum((data.meta as unknown as { sessions: number }).sessions)} sesiones</p>
+      )}
 
       {error && (
         <div className="notice error fade-in">
@@ -228,9 +267,10 @@ export function StatsView({ config, onBack }: StatsViewProps) {
           <strong>{t('stats.setupTitle')}</strong>
           <p className="subtle">{t('stats.setupHint')}</p>
           <div className="stats-setup-row">
-            <code className="stats-setup-cmd">cd G:\Proyectos\opencode-stats &amp;&amp; start start-stats.bat</code>
+            <code className="stats-setup-cmd">{isLocal ? "Reiniciá OpenHer Desktop (el stats se levanta solo en :8765)" : "Abrí Stats en Desktop para lectura local rápida"}</code>
             <button type="button" className="btn-secondary compact" onClick={() => {
-              navigator.clipboard.writeText("cd G:\\Proyectos\\opencode-stats && start start-stats.bat").then(() => {
+              const cmd = isLocal ? "Reiniciá OpenHer Desktop" : "Stats local solo en Desktop"
+              void navigator.clipboard.writeText(cmd).then(() => {
                 setCopied(true)
                 setTimeout(() => setCopied(false), 2000)
               }).catch(() => {})
@@ -256,12 +296,12 @@ export function StatsView({ config, onBack }: StatsViewProps) {
         <>
           <p className="stats-meta">
             {t('stats.metaLine', {
-              sessions: fmtNum(data.meta.sessions),
-              models: fmtNum(data.meta.models),
-              since: data.meta.since,
-              until: data.meta.until,
-              avg: fmtCost(data.meta.avg_cost),
-              db: data.meta.db
+              sessions: fmtNum((data.meta as unknown as { sessions: number }).sessions),
+              models: fmtNum((data.meta as unknown as { models: number }).models),
+              since: String((data.meta as unknown as { since: string }).since),
+              until: String((data.meta as unknown as { until: string }).until),
+              avg: fmtCost(Number((data.meta as unknown as { avg_cost: number }).avg_cost)),
+              db: String((data.meta as unknown as { db: string }).db)
             })}
           </p>
 
@@ -279,38 +319,38 @@ export function StatsView({ config, onBack }: StatsViewProps) {
               <div className="stats-cards">
                 {TOKEN_CARDS.map((c) => (
                   <div key={c.key} className="stat-item stats-token-card" style={{ borderLeft: `4px solid ${c.color}` }}>
-                    <span className="stat-value">{fmtTokens(data.totals[c.key as keyof typeof data.totals])}</span>
+                    <span className="stat-value">{fmtTokens(Number((data.totals as unknown as Record<string, number>)[c.key] ?? 0))}</span>
                     <span className="stat-label">{c.label}</span>
                   </div>
                 ))}
                 <div className="stat-item stats-token-card" style={{ borderLeft: "4px solid var(--danger)" }}>
-                  <span className="stat-value">{fmtCost(data.cost)}</span>
+                  <span className="stat-value">{fmtCost(Number((data as unknown as { cost: number }).cost ?? 0))}</span>
                   <span className="stat-label">{t('stats.cost')}</span>
-                  <small className="subtle">{t('stats.estCost')}: {fmtCost(data.est_total)}</small>
+                  <small className="subtle">{t('stats.estCost')}: {fmtCost(Number((data as unknown as { est_total: number }).est_total ?? 0))}</small>
                 </div>
               </div>
 
               <div className="stats-highlights">
                 <div className="stats-highlight">
                   <span className="stat-label">{t('stats.mostExpensive')}</span>
-                  <span className="stats-highlight-value">{fmtCost(data.stats.mas_cara.cost)}</span>
-                  <span className="stats-highlight-sub">«{data.stats.mas_cara.title}» · {data.stats.mas_cara.model}</span>
+                  <span className="stats-highlight-value">{fmtCost(Number((data.stats as unknown as { mas_cara: { cost: number } }).mas_cara?.cost ?? 0))}</span>
+                  <span className="stats-highlight-sub">«{String((data.stats as unknown as { mas_cara: { title: string } }).mas_cara?.title ?? "—")}» · {String((data.stats as unknown as { mas_cara: { model: string } }).mas_cara?.model ?? "—")}</span>
                 </div>
                 <div className="stats-highlight">
                   <span className="stat-label">{t('stats.mostTokens')}</span>
-                  <span className="stats-highlight-sub">«{data.stats.mas_tokens.title}» · {data.stats.mas_tokens.model}</span>
+                  <span className="stats-highlight-sub">«{String((data.stats as unknown as { mas_tokens: { title: string } }).mas_tokens?.title ?? "—")}» · {String((data.stats as unknown as { mas_tokens: { model: string } }).mas_tokens?.model ?? "—")}</span>
                 </div>
                 <div className="stats-highlight">
                   <span className="stat-label">{t('stats.avgInput')}</span>
-                  <span className="stats-highlight-value">{fmtTokens(data.stats.input_medio)}</span>
+                  <span className="stats-highlight-value">{fmtTokens(Number((data.stats as unknown as { input_medio: number }).input_medio ?? 0))}</span>
                 </div>
               </div>
 
-              {data.days.length > 0 && (
+              {(data.days as Array<{ day: string; cost: number }>)?.length > 0 && (
                 <div className="stats-chart">
                   <h3 className="settings-section-title">{t('stats.costPerDay')}</h3>
                   <div className="stats-bar-days">
-                    {data.days.map((d) => (
+                    {(data.days as Array<{ day: string; cost: number }>).map((d: { day: string; cost: number }) => (
                       <div key={d.day} className="stats-bar-day" title={`${d.day}: ${fmtCost(d.cost)}`}>
                         <div className="stats-bar-day-fill" style={{ height: `${Math.max((d.cost / maxDayCost) * 100, 2)}%`, background: "#3b82f6" }} />
                         <span className="stats-bar-day-label">{d.day.slice(5)}</span>
@@ -324,7 +364,7 @@ export function StatsView({ config, onBack }: StatsViewProps) {
                 <div className="stats-chart">
                   <h3 className="settings-section-title">{t('stats.costPerModel')}</h3>
                   <div className="stats-model-bars">
-                    {modelChart.map((m, i) => (
+                    {modelChart.map((m: { model: string; cost: number }, i: number) => (
                       <div key={m.model} className="stats-model-row">
                         <span className="stats-model-name">{m.model}</span>
                         <div className="stats-model-track">
@@ -340,18 +380,19 @@ export function StatsView({ config, onBack }: StatsViewProps) {
             </>
           )}
 
-          {tab === "modelo" && <StatsTable cols={COLS.modelo} rows={data.by_model as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
-          {tab === "proyecto" && <StatsTable cols={COLS.generico} rows={data.by_project as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
-          {tab === "dia" && <StatsTable cols={COLS.generico} rows={data.by_day as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
-          {tab === "mes" && <StatsTable cols={COLS.generico} rows={data.by_month as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
-          {tab === "sesiones" && <StatsTable cols={COLS.sesiones} rows={data.sessions as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
+          {tab === "modelo" && <StatsTable cols={COLS.modelo} rows={(data.by_model ?? []) as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
+          {tab === "proyecto" && <StatsTable cols={COLS.generico} rows={(data.by_project ?? []) as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
+          {tab === "dia" && <StatsTable cols={COLS.generico} rows={(data.by_day ?? []) as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
+          {tab === "mes" && <StatsTable cols={COLS.generico} rows={(data.by_month ?? []) as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
+          {tab === "sesiones" && <StatsTable cols={COLS.sesiones} rows={(data.sessions ?? []) as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />}
           {tab === "limites" && (
             <>
-              <StatsTable cols={COLS.uso} rows={data.limits as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />
+              <StatsTable cols={COLS.uso} rows={(data.limits ?? []) as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />
               <h3 className="settings-section-title stats-prices-title">{t('stats.prices')}</h3>
-              <StatsTable cols={COLS.precios} rows={data.prices as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />
+              <StatsTable cols={COLS.precios} rows={(data.prices ?? []) as unknown as Record<string, unknown>[]} empty={t('stats.empty')} />
             </>
           )}
+          {loading && <p className="subtle" style={{ textAlign: "center", marginTop: 12 }}><LoadingIcon size={14} className="animate-spin" /> Cargando {tab}…</p>}
         </>
       )}
     </section>

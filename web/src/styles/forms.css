@@ -150,7 +150,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .switch-row:hover {
-  background: #18181c;
+  background: #3a3a3c;
   border-color: #27272a;
 }
 
@@ -176,14 +176,15 @@ input[type="range"]::-moz-range-thumb {
 .switch-track {
   flex: 0 0 auto;
   position: relative;
-  width: 40px;
-  height: 22px;
-  border: 1px solid #27272a;
-  border-radius: 11px;
+  width: 42px;
+  height: 26px;
+  border: none;
+  border-radius: 13px;
   background: #18181c;
   cursor: pointer;
   padding: 0;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.25);
+  transition: background 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .switch-track.active {
@@ -192,9 +193,9 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .switch-track.compact {
-  width: 34px;
-  height: 18px;
-  border-radius: 9px;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
 }
 
 .switch-thumb {
@@ -210,7 +211,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .switch-track.active .switch-thumb {
-  left: 20px;
+  transform: translateX(16px);
 }
 
 .switch-track.compact .switch-thumb {
@@ -221,7 +222,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .switch-track.compact.active .switch-thumb {
-  left: 18px;
+  transform: translateX(12px);
 }
 
 .switch-checkbox {

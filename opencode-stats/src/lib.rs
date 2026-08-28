@@ -10,6 +10,7 @@
 
 pub mod admin;
 pub mod db;
+pub mod gpu;
 pub mod payload;
 pub mod pricing;
 pub mod server;
