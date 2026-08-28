@@ -10,6 +10,7 @@ import type { QuickChatProviderId } from "../providers/types"
 import type { ModelOption, ProviderInfo } from "../types"
 import { Markdown } from "./Markdown"
 import { BrainIcon, SettingsIcon, TrashIcon } from "../Icons"
+import { useDialog } from "./DialogProvider"
 import "../styles/quickchat.css"
 
 type Props = {
@@ -113,6 +114,7 @@ export function QuickChatPanel({
   onOpenSettings,
 }: Props) {
   const t = useT()
+  const { alert } = useDialog()
   const [provider, setProvider] = useState<QuickChatProviderId>(() => (localStorage.getItem(STORAGE_KEYS.QUICKCHAT_PROVIDER) as QuickChatProviderId) || "groq")
   const [model, setModel] = useState(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_MODEL) || "")
   const [goModels, setGoModels] = useState<{ id: string; label: string }[]>([])
@@ -268,7 +270,7 @@ export function QuickChatPanel({
       setShowConfig(false)
       window.dispatchEvent(new CustomEvent("quickchat:key-saved"))
     } catch (err: any) {
-      alert("Error al guardar: " + (err?.message || String(err)))
+      void alert({ title: t("common.error") ?? "Error", message: "Error al guardar: " + (err?.message || String(err)) })
     }
   }
 

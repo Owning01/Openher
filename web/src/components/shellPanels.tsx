@@ -17,6 +17,7 @@ import { terminalStore, terminalPtyStore, rememberTerminalPty, killTerminalPty, 
 export { killTerminalPty, transferTerminalTab }
 import { createPortal } from "react-dom"
 import { useT } from "../i18n-context"
+import { useDialog } from "./DialogProvider"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
 import { sanitizeHtml } from "../utils/sanitize"
@@ -1198,6 +1199,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
   onOpenFile?: (path: string) => void
 }) {
   const t = useT()
+  const { confirm } = useDialog()
   const [drives, setDrives] = useState<string[]>([])
   const [showDrives, setShowDrives] = useState(false)
   const [cwd, setCwd] = useState<string | null>(initialCwd || null)
@@ -1402,7 +1404,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
 
   const handleDeleteItem = async (entry: FsEntry) => {
     setContextMenu(null)
-    if (!window.confirm(`¿Eliminar definitivamente "${entry.name}"?`)) return
+    if (!(await confirm({ title: t('common.confirmDelete') ?? "Confirmar", message: `¿Eliminar definitivamente "${entry.name}"?`, confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" }))) return
     try {
       await shell.fs.delete(entry.path)
       showNotice(`Eliminado: ${entry.name}`)
@@ -2331,6 +2333,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
 
 export const KanbanPanel = memo(function KanbanPanel() {
   const t = useT()
+  const { confirm } = useDialog()
   const [boards, setBoards] = useState<KanbanBoard[]>([])
   const [active, setActive] = useState<string | null>(null)
   const [drag, setDrag] = useState<string | null>(null)
@@ -2414,7 +2417,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
   }
 
   const delCard = async (cardId: string) => {
-    if (!window.confirm(t('shell.deleteCard') ?? "¿Eliminar tarjeta?")) return
+    if (!(await confirm({ message: t('shell.deleteCard') ?? "¿Eliminar tarjeta?", confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" }))) return
     await shell.kanban.delCard(cardId)
     load()
   }
@@ -2472,7 +2475,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
           </div>
           <span style={{ fontSize: "0.72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>{totalCards} tarjetas · {colCount} columnas</span>
           <button type="button" className={`btn-secondary compact${showNotes ? " active" : ""}`} onClick={() => setShowNotes((v) => !v)} title="Notas del tablero"></button>
-          <button className="btn-icon compact" title={t('shell.deleteBoard')} onClick={() => { if (board && window.confirm(t('shell.deleteBoard'))) shell.kanban.delBoard(board.id).then(load) }} style={{ color: "var(--muted)" }}>×</button>
+          <button className="btn-icon compact" title={t('shell.deleteBoard')} onClick={async () => { if (board && !(await confirm({ message: t('shell.deleteBoard'), confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" }))) return; shell.kanban.delBoard(board.id).then(load) }} style={{ color: "var(--muted)" }}>×</button>
         </div>
       </div>
 
@@ -2529,7 +2532,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
               <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: "var(--muted)" }}>{boardNotes.length} caracteres</span>
                 <button type="button" className="btn-icon compact" title="Copiar" onClick={() => navigator.clipboard?.writeText(boardNotes)}>Copiar</button>
-                <button type="button" className="btn-icon compact" title="Limpiar" onClick={() => { if (window.confirm("¿Limpiar notas?")) handleNotesChange("") }}>Limpiar</button>
+                <button type="button" className="btn-icon compact" title="Limpiar" onClick={async () => { if (!(await confirm({ message: "¿Limpiar notas?", confirmText: t('common.yes'), cancelText: t('common.cancel') }))) return; handleNotesChange("") }}>Limpiar</button>
               </span>
             </div>
             <textarea value={boardNotes} onChange={(e) => handleNotesChange(e.target.value)} placeholder="Notas del tablero — se guardan automáticamente..." />
@@ -2768,6 +2771,7 @@ export const StatsPanel = memo(function StatsPanel() {
 
 export const LabsPanel = memo(function LabsPanel() {
   const t = useT()
+  const { alert } = useDialog()
   const [apps, setApps] = useState<any[]>([])
   const [server, setServer] = useState<any>(null)
   const [autostart, setAutostart] = useState(false)
@@ -2789,7 +2793,7 @@ export const LabsPanel = memo(function LabsPanel() {
     try {
       await shell.labs.start(appId)
     } catch (e: any) {
-      window.alert(e.message ?? String(e))
+      void alert({ title: "Error", message: e.message ?? String(e) })
     }
     setBusy(null)
     load()
@@ -2871,6 +2875,7 @@ export const ConfigPanel = memo(function ConfigPanel() {
 
 // ============================================================== Open Design & Auto-Servidor de Proyectos Locales
 export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUrl?: string }) {
+  const { alert } = useDialog()
   const [url, setUrl] = useState(() => localStorage.getItem("od.web.url") || initialUrl || "")
   const [iframeKey, setIframeKey] = useState(0)
   const [status, setStatus] = useState<"loading" | "ready" | "offline">("loading")
@@ -2959,7 +2964,7 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
         }
       }
     } catch (err: any) {
-      alert("Error al servir proyecto: " + (err?.message || String(err)))
+      void alert({ title: "Error", message: "Error al servir proyecto: " + (err?.message || String(err)) })
       setStatus("offline")
     }
   }
@@ -2974,7 +2979,7 @@ export const DesignPanel = memo(function DesignPanel({ initialUrl }: { initialUr
         setIframeKey((k) => k + 1)
       }
     } catch (err: any) {
-      alert("Error al iniciar dev server: " + (err?.message || String(err)))
+      void alert({ title: "Error", message: "Error al iniciar dev server: " + (err?.message || String(err)) })
       setStatus("offline")
     }
   }

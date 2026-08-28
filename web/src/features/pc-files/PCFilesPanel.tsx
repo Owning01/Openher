@@ -25,6 +25,7 @@ import {
 } from "../../Icons"
 import { shell, type FsEntry, type CodeSearchResult } from "../../shell"
 import { useT } from "../../i18n-context"
+import { useDialog } from "../../components/DialogProvider"
 import { useOutsideClick } from "../../hooks/useOutsideClick"
 import { FileRow } from "./FileRow"
 import { TreeFolder } from "./TreeFolder"
@@ -65,6 +66,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   onOpenFile?: (path: string) => void
 }) {
   const t = useT()
+  const { confirm } = useDialog()
   const [cwd, setCwd] = useState<string | null>(null)
   const [dirs, setDirs] = useState<FsEntry[]>([])
   const [files, setFiles] = useState<FsEntry[]>([])
@@ -214,7 +216,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
 
   const handleDeleteItem = async (entry: FsEntry) => {
     setContextMenu(null)
-    if (!window.confirm(`¿Eliminar definitivamente "${entry.name}"?`)) return
+    if (!(await confirm({ message: `¿Eliminar definitivamente "${entry.name}"?`, confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" }))) return
     try {
       await shell.fs.delete(entry.path)
       showNotice(`Eliminado: ${entry.name}`)
@@ -388,6 +390,41 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   void activePane; void setActivePane; void contextMenuPane; void setContextMenuPane
 
   const isHtmlFile = (name: string) => /\.html?$/i.test(name)
+
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null)
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+  }, [])
+  const handleDragEnter = useCallback((e: React.DragEvent, dest: string) => {
+    e.preventDefault()
+    setDragOverPath(dest)
+  }, [])
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) return
+    setDragOverPath(null)
+  }, [])
+  const handleFileDrop = useCallback(
+    async (e: React.DragEvent, destDir: string) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragOverPath(null)
+      const src = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
+      if (!src || !destDir || src === destDir) return
+      if (destDir.startsWith(src + "\\") || destDir.startsWith(src + "/")) return
+      try {
+        await shell.fs.move(src, destDir)
+        showNotice(`Movido a ${destDir.split(/[/\\]/).pop()}`)
+        if (cwd && (src.startsWith(cwd) || destDir === cwd)) load(cwd)
+        if (showSecondPane && secondPane.cwd && (src.startsWith(secondPane.cwd) || destDir === secondPane.cwd))
+          secondPane.load(secondPane.cwd)
+      } catch (err) {
+        showNotice(`Error al mover: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    },
+    [cwd, showSecondPane, secondPane, load, showNotice],
+  )
 
   // Abrir en editor/visor — click primario NO descarga
   const handleOpenFile = useCallback(
@@ -737,6 +774,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
               role="tree"
               aria-label="Archivos"
               onContextMenu={(e) => handleContextMenuFirst(e, null, true)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => cwd && handleFileDrop(e, cwd)}
             >
               {creatingType && (
                 <div className="pcf-row pcf-inline-create" onClick={(e) => e.stopPropagation()}>
@@ -796,23 +835,31 @@ export const PCFilesPanel = memo(function PCFilesPanel({
               {!loading && !error && (
                 <>
                   {filteredDirs.map((d) => (
-                    <TreeFolder
+                    <div
                       key={d.path}
-                      entry={d}
-                      depth={0}
-                      onEnterDir={load}
-                      query={query}
-                      downloading={downloading}
-                      onDownload={handleDownload}
-                      onOpenFile={handleOpenFile}
-                      favorites={favorites}
-                      onFav={fav}
-                      showNotice={showNotice}
-                      getFileGitStatus={getFileGitStatus}
-                      getFolderGitStatus={getFolderGitStatus}
-                      collapseSignal={collapseSignal}
-                      onContextMenu={handleContextMenuFirst}
-                    />
+                      onDragOver={handleDragOver}
+                      onDragEnter={(e) => handleDragEnter(e, d.path)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleFileDrop(e, d.path)}
+                      className={dragOverPath === d.path ? "pcf-drop-target" : ""}
+                    >
+                      <TreeFolder
+                        entry={d}
+                        depth={0}
+                        onEnterDir={load}
+                        query={query}
+                        downloading={downloading}
+                        onDownload={handleDownload}
+                        onOpenFile={handleOpenFile}
+                        favorites={favorites}
+                        onFav={fav}
+                        showNotice={showNotice}
+                        getFileGitStatus={getFileGitStatus}
+                        getFolderGitStatus={getFolderGitStatus}
+                        collapseSignal={collapseSignal}
+                        onContextMenu={handleContextMenuFirst}
+                      />
+                    </div>
                   ))}
 
                   {filteredDirs.length === 0 && qLower && <div className="pcf-empty">Sin carpetas</div>}
@@ -889,29 +936,37 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   </button>
                 </div>
               </div>
-              <div className="pcf-tree" role="tree" aria-label="Archivos (2)" onContextMenu={(e) => handleContextMenuSecond(e, null, true)}>
+              <div className="pcf-tree" role="tree" aria-label="Archivos (2)" onContextMenu={(e) => handleContextMenuSecond(e, null, true)} onDragOver={handleDragOver} onDrop={(e) => secondPane.cwd && handleFileDrop(e, secondPane.cwd)}>
                 {secondPane.loading && <div className="pcf-loading">Cargando…</div>}
                 {secondPane.error && !secondPane.loading && <div className="pcf-error">{secondPane.error}</div>}
                 {!secondPane.loading && !secondPane.error && (
                   <>
                     {secondFilteredDirs.map((d) => (
-                      <TreeFolder
+                      <div
                         key={d.path}
-                        entry={d}
-                        depth={0}
-                        onEnterDir={secondPane.load}
-                        query={query}
-                        downloading={downloading}
-                        onDownload={handleDownload}
-                        onOpenFile={handleOpenFile}
-                        favorites={favorites}
-                        onFav={fav}
-                        showNotice={showNotice}
-                        getFileGitStatus={getFileGitStatus}
-                        getFolderGitStatus={getFolderGitStatus}
-                        collapseSignal={collapseSignal}
-                        onContextMenu={handleContextMenuSecond}
-                      />
+                        onDragOver={handleDragOver}
+                        onDragEnter={(e) => handleDragEnter(e, d.path)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleFileDrop(e, d.path)}
+                        className={dragOverPath === d.path ? "pcf-drop-target" : ""}
+                      >
+                        <TreeFolder
+                          entry={d}
+                          depth={0}
+                          onEnterDir={secondPane.load}
+                          query={query}
+                          downloading={downloading}
+                          onDownload={handleDownload}
+                          onOpenFile={handleOpenFile}
+                          favorites={favorites}
+                          onFav={fav}
+                          showNotice={showNotice}
+                          getFileGitStatus={getFileGitStatus}
+                          getFolderGitStatus={getFolderGitStatus}
+                          collapseSignal={collapseSignal}
+                          onContextMenu={handleContextMenuSecond}
+                        />
+                      </div>
                     ))}
                     {secondFilteredDirs.length === 0 && qLower && <div className="pcf-empty">Sin carpetas</div>}
                     <div className="pcf-files">

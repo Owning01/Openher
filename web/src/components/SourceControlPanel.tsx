@@ -4,6 +4,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useT } from "../i18n-context"
 import { Modal } from "./Modal"
+import { useDialog } from "./DialogProvider"
 import { CheckIcon, ChevronIcon, FolderIcon, LoadingIcon, RefreshIcon, UndoIcon } from "../Icons"
 import { shell, type GitChangedFile, type GitStatusSnapshot } from "../shell"
 import { HistoryPane } from "./scm/HistoryPane"
@@ -95,6 +96,7 @@ const EntryRow = memo(function EntryRow({ entry, staged, onToggleStage, onOpenDi
 
 export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availableDirs = [], onSelectDir }: Props) {
   const t = useT()
+  const { confirm } = useDialog()
   const [activeCwd, setActiveCwd] = useState(cwd || "")
   const [tab, setTab] = useState<"changes" | "history">("changes")
   const [snapshot, setSnapshot] = useState<GitStatusSnapshot | null>(null)
@@ -175,10 +177,11 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
       stage ? shell.git.stage(repoRoot!, entries.map((e) => e.path)) : shell.git.unstage(repoRoot!, entries.map((e) => e.path)))
   }, [runAction, repoRoot])
 
-  const discardEntry = useCallback((entry: GitChangedFile) => {
-    if (!window.confirm(t("scm.discardConfirm").replace("{file}", basename(entry.path)))) return
+  const discardEntry = useCallback(async (entry: GitChangedFile) => {
+    const ok = await confirm({ message: t("scm.discardConfirm").replace("{file}", basename(entry.path)), confirmText: t("common.yes"), cancelText: t("common.cancel"), variant: "danger" })
+    if (!ok) return
     void runAction(() => shell.git.discard(repoRoot!, [{ path: entry.path, untracked: entry.untracked }]))
-  }, [runAction, repoRoot, t])
+  }, [runAction, repoRoot, t, confirm])
 
   const doCommit = useCallback(async () => {
     if (!repoRoot || !commitMessage.trim()) return
