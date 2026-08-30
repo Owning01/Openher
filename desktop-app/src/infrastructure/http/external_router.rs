@@ -58,6 +58,48 @@ fn effective_cmd(def: &ExternalDef) -> &str {
     def.dev_cmd
 }
 
+fn file_mtime_ms(path: &PathBuf) -> u128 {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis())
+        .unwrap_or(0)
+}
+
+fn dir_max_mtime(dir: &PathBuf, depth: usize) -> u128 {
+    let mut max = file_mtime_ms(dir);
+    if depth == 0 { return max; }
+    let entries = match std::fs::read_dir(dir) { Ok(e) => e, Err(_) => return max };
+    for ent in entries.flatten() {
+        let p = ent.path();
+        let name = ent.file_name().to_string_lossy().to_string();
+        // ignorar directorios pesados que no aportan a HMR / build
+        if p.is_dir() {
+            if name == "node_modules" || name == ".git" || name == "target" || name == ".next" || name == "dist" { 
+                // para dist sí queremos su mtime ya capturado vía file, pero no recursivo profundo
+                let m = file_mtime_ms(&p);
+                if m > max { max = m; }
+                continue;
+            }
+            let m = dir_max_mtime(&p, depth - 1);
+            if m > max { max = m; }
+        } else {
+            let m = file_mtime_ms(&p);
+            if m > max { max = m; }
+        }
+    }
+    max
+}
+
+fn plugin_mtime(def: &ExternalDef) -> u128 {
+    let dist_html = PathBuf::from(def.dir).join("dist").join("index.html");
+    if dist_html.is_file() {
+        return file_mtime_ms(&dist_html);
+    }
+    // para dev sin dist, mirar src/public y root con profundidad 2
+    let root = PathBuf::from(def.dir);
+    dir_max_mtime(&root, 2)
+}
+
 // Cache de probe 1.5s para que /list no haga 5 HTTP secuenciales de 350ms (=1.7s)
 static PROBE_CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u16, (bool, std::time::Instant)>>> = std::sync::OnceLock::new();
 fn cached_probe(port: u16, probe_fn: impl FnOnce() -> bool) -> bool {
@@ -74,6 +116,14 @@ fn cached_probe(port: u16, probe_fn: impl FnOnce() -> bool) -> bool {
         map.insert(port, (res, std::time::Instant::now()));
     }
     res
+}
+
+fn invalidate_probe(port: u16) {
+    if let Some(cache) = PROBE_CACHE.get() {
+        if let Ok(mut map) = cache.lock() {
+            map.remove(&port);
+        }
+    }
 }
 
 fn defs() -> HashMap<&'static str, ExternalDef> {
@@ -148,7 +198,7 @@ fn probe(def: &ExternalDef) -> bool {
         } else {
             Duration::from_millis(700)
         };
-        return cached_probe(port, || {
+        cached_probe(port, || {
             let url = format!("http://127.0.0.1:{port}/");
             if ureq::builder()
                 .timeout(timeout)
@@ -160,7 +210,7 @@ fn probe(def: &ExternalDef) -> bool {
                 return true;
             }
             crate::common::probe_http(port, "/", timeout, &[200, 301, 302, 304])
-        });
+        })
     } else {
         false
     }
@@ -276,6 +326,24 @@ pub fn handle(
                                 html.insert_str(insert_pos, &format!("<base href=\"{}\">", base));
                             }
                         }
+                    }
+                    // inyectar reenvío de contextmenu + Ctrl+Shift+R hacia el parent (para menú Reiniciar / Borrar caché)
+                    let fwd_script = format!(
+                        r#"<script>(function(){{var PLUGIN='{}';document.addEventListener('contextmenu',function(e){{try{{e.preventDefault();parent.postMessage({{type:'plugin-contextmenu',plugin:PLUGIN,x:e.clientX,y:e.clientY}},'*');}}catch(_ ){{}} }});document.addEventListener('keydown',function(e){{if((e.ctrlKey||e.metaKey)&&e.shiftKey&&String(e.key).toLowerCase()==='r'){{try{{e.preventDefault();parent.postMessage({{type:'plugin-hard-reload',plugin:PLUGIN}},'*');}}catch(_ ){{}} }} }});}})();</script>"#,
+                        embed_name
+                    );
+                    if html.contains("</head>") {
+                        html = html.replacen("</head>", &format!("{}</head>", fwd_script), 1);
+                    } else if html.contains("<head>") || html.contains("<head ") {
+                        // ya tiene base inyectada, añadir después de <head...>
+                        if let Some(pos) = html.find("<base") {
+                            if let Some(end) = html[pos..].find('>') {
+                                let ins = pos + end + 1;
+                                html.insert_str(ins, &fwd_script);
+                            }
+                        }
+                    } else {
+                        html = format!("{}{}", fwd_script, html);
                     }
                     tiny_http::Response::from_data(html.into_bytes())
                         .with_status_code(200)
@@ -433,7 +501,7 @@ pub fn handle(
             }
         } else if cmd_str.trim_start().starts_with("G:\\Dev\\nodejs") {
             // Direct node (screenshots/opendesign) - evita pnpm y conhost, oculta ventana
-            let parts = split_cmd(&cmd_str);
+            let parts = split_cmd(cmd_str);
             let mut c = std::process::Command::new(&parts[0]);
             if parts.len() > 1 {
                 c.args(&parts[1..]);
@@ -555,6 +623,146 @@ pub fn handle(
         });
 
         return Some(json_ok(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir })));
+    }
+
+    if action == "mtime" && method == Method::Get {
+        let m = plugin_mtime(&def);
+        return Some(json_ok(&serde_json::json!({ "ok": true, "name": name, "mtime": m, "dir": def.dir, "port": def.port })));
+    }
+
+    if action == "restart" && method == Method::Post {
+        // Embed estático: no hay proceso, solo invalidar probe y devolver ok para que el frontend recargue con cache-bust
+        let is_vite_embed_restart = (name == "vioeditor" || name == "informes") && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
+        if is_vite_embed_restart {
+            if let Some(port) = def.port { invalidate_probe(port); }
+            let url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
+            return Some(json_ok(&serde_json::json!({ "ok": true, "restarted": true, "embed": true, "url": url, "mtime": plugin_mtime(&def) })));
+        }
+        // Matar proceso existente si lo hay
+        {
+            let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(mut child) = procs.remove(&name) {
+                let pid = child.id();
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .stdin(std::process::Stdio::null())
+                    .spawn()
+                    .and_then(|mut c| c.wait());
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+        // Matar huérfanos por puerto (daemon) si corresponde
+        if name == "opendesign" {
+            // matar node huérfanos de open-design para liberar 3000/3456
+            let _ = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-Command", "Get-CimInstance Win32_Process -Filter \"Name='node.exe' OR Name='node_hidden.exe'\" | Where-Object { $_.CommandLine -like \"*open-design*\" -or $_.CommandLine -like \"*tools-dev*\" } | ForEach-Object { taskkill /F /PID $_.ProcessId }"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+            std::thread::sleep(Duration::from_millis(600));
+        }
+        if let Some(port) = def.port { invalidate_probe(port); }
+        // Pequeña pausa para liberar el puerto
+        std::thread::sleep(Duration::from_millis(350));
+        // Reutilizar lógica de start: verificar directorio, elegir comando y spawnear
+        let dir = PathBuf::from(def.dir);
+        if !dir.exists() {
+            return Some(json_err(404, &format!("directorio no existe: {}", def.dir)));
+        }
+        // Para plugins con dist y prod, tras restart preferir dev si el puerto estaba en uso? No, usar effective_cmd igual que start
+        let cmd_str = effective_cmd(&def);
+        let log_path = crate::state::data_dir().join(format!("external-{}.log", name));
+        let _ = std::fs::create_dir_all(crate::state::data_dir());
+        let log_file = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
+        let mut child: std::process::Child = if cmd_str.starts_with("flutter") {
+            let mut c = std::process::Command::new("cmd");
+            c.args(["/c", cmd_str]);
+            c.current_dir(&dir);
+            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+            c.stdin(std::process::Stdio::null());
+            if let Some(f) = log_file {
+                if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
+                c.stderr(std::process::Stdio::from(f));
+            } else { c.stdout(std::process::Stdio::null()); c.stderr(std::process::Stdio::null()); }
+            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(json_err(500, &e.to_string())) }
+        } else if cmd_str.trim_start().starts_with("G:\\Dev\\nodejs") {
+            let parts = split_cmd(cmd_str);
+            let mut c = std::process::Command::new(&parts[0]);
+            if parts.len() > 1 { c.args(&parts[1..]); }
+            c.current_dir(&dir);
+            let cur_path = std::env::var("PATH").unwrap_or_default();
+            c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
+            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+            c.stdin(std::process::Stdio::null());
+            if let Some(f) = log_file {
+                if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
+                c.stderr(std::process::Stdio::from(f));
+            } else { c.stdout(std::process::Stdio::null()); c.stderr(std::process::Stdio::null()); }
+            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(json_err(500, &e.to_string())) }
+        } else {
+            let pnpm_bin = r"G:\Dev\nodejs-24\node_modules\pnpm\pnpm.exe";
+            let pnpm_bin_alt = r"G:\Dev\nodejs-24\node_modules\pnpm\bin\pnpm.cjs";
+            let use_node = !std::path::Path::new(pnpm_bin).exists();
+            let args: Vec<&str> = cmd_str.split_whitespace().skip(1).collect();
+            let mut c = if use_node {
+                let mut cc = std::process::Command::new(r"G:\Dev\nodejs-24\node.exe");
+                cc.arg(pnpm_bin_alt); cc
+            } else { std::process::Command::new(pnpm_bin) };
+            if !args.is_empty() { c.args(&args); }
+            c.current_dir(&dir);
+            let cur_path = std::env::var("PATH").unwrap_or_default();
+            c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
+            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+            c.stdin(std::process::Stdio::null());
+            if let Some(f) = log_file {
+                if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
+                c.stderr(std::process::Stdio::from(f));
+            } else { c.stdout(std::process::Stdio::null()); c.stderr(std::process::Stdio::null()); }
+            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(json_err(500, &e.to_string())) }
+        };
+        let pid = child.id();
+        std::thread::sleep(Duration::from_millis(1200));
+        if let Ok(Some(status)) = child.try_wait() {
+            if name == "opendesign" {
+                std::thread::sleep(Duration::from_millis(800));
+                let probe_ok = crate::common::probe_http(3000, "/", Duration::from_millis(1500), &[200, 301, 302, 304]) || probe(&def);
+                if probe_ok || probe(&def) {
+                    let url = def.url.map(|s| s.to_string()).unwrap_or_default();
+                    { let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()); urls.insert(name.clone(), url.clone()); }
+                    return Some(json_ok(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "restarted": true, "daemon_already": true })));
+                }
+            }
+            let code = status.code().unwrap_or(-1);
+            let log_tail = std::fs::read_to_string(crate::state::data_dir().join(format!("external-{}.log", name))).unwrap_or_default();
+            let tail = log_tail.chars().rev().take(800).collect::<String>().chars().rev().collect::<String>();
+            return Some(json_err(500, &format!("reinicio falló, proceso salió (code {code}): {tail} | cmd: {cmd_str}")));
+        }
+        let url = def.url.map(|s| s.to_string()).unwrap_or_default();
+        { let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner()); procs.insert(name.clone(), child); }
+        { let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()); urls.insert(name.clone(), url.clone()); }
+        let mgr_clone = mgr.clone();
+        let name_clone = name.clone();
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_secs(2));
+                let mut procs = match mgr_clone.procs.lock() { Ok(g) => g, Err(_) => break };
+                if let Some(ch) = procs.get_mut(&name_clone) {
+                    match ch.try_wait() {
+                        Ok(Some(_)) => { procs.remove(&name_clone); break; }
+                        Ok(None) => {},
+                        Err(_) => { procs.remove(&name_clone); break; }
+                    }
+                } else { break; }
+                drop(procs);
+            }
+        });
+        return Some(json_ok(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "restarted": true })));
     }
 
     if action == "stop" && method == Method::Post {

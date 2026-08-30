@@ -341,16 +341,36 @@ export const shell = {
     },
     write: (id: string, data: string) => post(`/shell/pty/${id}/write`, { data }),
     resize: (id: string, cols: number, rows: number, pixelWidth?: number, pixelHeight?: number) => post(`/shell/pty/${id}/resize`, { cols, rows, pixel_width: pixelWidth, pixel_height: pixelHeight }),
-    kill: (id: string) => fetch(`/shell/pty/${id}`, { method: "DELETE" }).then(() => undefined),
+    kill: async (id: string) => {
+      const base = await resolveShellBase()
+      const headers = withShellAuth({}, base)
+      const res = await fetch(`${base}/shell/pty/${id}`, { method: "DELETE", headers })
+      if (!res.ok) throw new Error(String(res.status))
+    },
     poll: (id: string, since: number) => get<{ len: number; done: boolean; data?: string; error?: string }>(`/shell/pty/${id}/buffer?since=${since}`),
   },
   kanban: {
     all: () => get<{ boards: KanbanBoard[] }>("/shell/kanban"),
     addBoard: (name: string) => post("/shell/kanban/board", { name }),
-    delBoard: (id: string) => fetch(`/shell/kanban/board?id=${id}`, { method: "DELETE" }).then(j),
+    delBoard: async (id: string) => {
+      const base = await resolveShellBase()
+      const headers = withShellAuth({}, base)
+      const res = await fetch(`${base}/shell/kanban/board?id=${encodeURIComponent(id)}`, { method: "DELETE", headers })
+      return j(await res) as Promise<unknown>
+    },
     addCard: (board: string, column: string, title: string, notes: string, color: string) => post("/shell/kanban/card", { board, column, title, notes, color }),
-    updateCard: (id: string, patch: Partial<{ column: string; title: string; notes: string; color: string }>) => fetch("/shell/kanban/card", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...patch }) }).then(j),
-    delCard: (id: string) => fetch(`/shell/kanban/card?id=${id}`, { method: "DELETE" }).then(j),
+    updateCard: async (id: string, patch: Partial<{ column: string; title: string; notes: string; color: string }>) => {
+      const base = await resolveShellBase()
+      const headers: Record<string, string> = { "Content-Type": "application/json", ...withShellAuth({}, base) }
+      const res = await fetch(`${base}/shell/kanban/card`, { method: "PATCH", headers, body: JSON.stringify({ id, ...patch }) })
+      return j(await res) as Promise<unknown>
+    },
+    delCard: async (id: string) => {
+      const base = await resolveShellBase()
+      const headers = withShellAuth({}, base)
+      const res = await fetch(`${base}/shell/kanban/card?id=${encodeURIComponent(id)}`, { method: "DELETE", headers })
+      return j(await res) as Promise<unknown>
+    },
   },
   updates: {
     get: (refresh = false) => get<any>(`/shell/updates${refresh ? "?refresh=1" : ""}`),
@@ -399,6 +419,8 @@ export const shell = {
     status: (name: string) => get<{ ok: boolean; name: string; running: boolean; url: string; dir: string; port: number | null }>(`/shell/external/${name}/status`).catch(() => ({ ok: false, running: false, url: "" } as any)),
     start: (name: string) => post<{ ok: boolean; pid?: number; url?: string; already?: boolean }>(`/shell/external/${name}/start`).catch(() => ({ ok: false } as any)),
     stop: (name: string) => post<{ ok: boolean }>(`/shell/external/${name}/stop`).catch(() => ({ ok: false } as any)),
+    restart: (name: string) => post<{ ok: boolean; pid?: number; url?: string; restarted?: boolean; embed?: boolean }>(`/shell/external/${name}/restart`).catch(() => ({ ok: false } as any)),
+    mtime: (name: string) => get<{ ok: boolean; mtime: number; dir: string; port: number | null }>(`/shell/external/${name}/mtime`).catch(() => ({ ok: false, mtime: 0, dir: "", port: null } as any)),
   },
   browser: {
     open: (url: string, bounds: { x: number; y: number; w: number; h: number }) =>
