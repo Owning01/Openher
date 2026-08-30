@@ -96,26 +96,25 @@ export function LessonView({ lesson, progress, isFirstInCategory, onToggleDone, 
         <div className={`learning-lesson-diagram ${expanded ? "is-expanded" : "is-collapsed"}`}>
           {isFirstInCategory && <div className="learning-diagram-badge">Resumen de la sección</div>}
           <DiagramForLesson lesson={lesson} />
-          <button
-            type="button"
-            className="learning-diagram-toggle"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            aria-label={expanded ? "Ocultar diagrama" : "Ver diagrama completo"}
-          >
-            <span>{expanded ? "▾ Ocultar diagrama" : "▸ Ver diagrama completo"}</span>
-            <span className="learning-diagram-actions">
-              <span
-                role="button"
-                tabIndex={0}
-                className="learning-diagram-expand"
-                onClick={(e) => { e.stopPropagation(); setLightbox(true) }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setLightbox(true) } }}
-              >
-                ⤢ Ampliar
-              </span>
-            </span>
-          </button>
+          <div className="learning-diagram-toggle">
+            <button
+              type="button"
+              className="learning-diagram-toggle-main"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              aria-label={expanded ? "Ocultar diagrama" : "Ver diagrama completo"}
+            >
+              {expanded ? "▾ Ocultar diagrama" : "▸ Ver diagrama completo"}
+            </button>
+            <button
+              type="button"
+              className="learning-diagram-expand"
+              onClick={() => setLightbox(true)}
+              aria-label="Ampliar diagrama"
+            >
+              ⤢ Ampliar
+            </button>
+          </div>
         </div>
       )}
       {lightbox && hasDiagram && (

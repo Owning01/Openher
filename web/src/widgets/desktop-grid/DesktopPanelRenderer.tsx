@@ -311,9 +311,17 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
         }
       }
       if (pluginKey.startsWith("external:")) {
-        const extName = pluginKey.slice(9)
-        const proj = EXTERNAL_PROJECTS.find((p) => p.name === extName)
-        if (proj) {
+        // Keep all external iframes mounted (hidden) to avoid reload on tab switch
+        const externalPlugins = stack
+          .filter((id) => id.startsWith("plugin:external:"))
+          .map((id) => {
+            const n = id.slice(16)
+            return EXTERNAL_PROJECTS.find((p) => p.name === n)
+          })
+          .filter((p): p is NonNullable<typeof p> => !!p)
+        const activeProj = EXTERNAL_PROJECTS.find((p) => p.name === pluginKey.slice(9))
+        const allProjs = externalPlugins.length > 0 ? externalPlugins : activeProj ? [activeProj] : []
+        if (allProjs.length > 0) {
           return (
             <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
               <TabBar
@@ -333,10 +341,26 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
                 onCloseLeft={onCloseLeft}
                 onCloseAll={onCloseAll}
               />
-              <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-                <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
-                  <ExternalIframePanel name={proj.name} title={proj.title} url={proj.url} isWidget={proj.isWidget} />
-                </Suspense>
+              <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
+                {allProjs.map((proj) => {
+                  const isActive = `plugin:external:${proj.name}` === sid
+                  return (
+                    <div
+                      key={proj.name}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        visibility: isActive ? "visible" : "hidden",
+                        pointerEvents: isActive ? "auto" : "none",
+                        zIndex: isActive ? 1 : 0,
+                      }}
+                    >
+                      <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                        <ExternalIframePanel name={proj.name} title={proj.title} url={proj.url} isWidget={proj.isWidget} />
+                      </Suspense>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )

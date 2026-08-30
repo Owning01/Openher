@@ -44,6 +44,12 @@ export function buildGridTemplate({
   }
 }
 
+export const TAB_BAR_GUARD = 40
+
+export function isOverTabBar(clientY: number, rect: { top: number }): boolean {
+  return clientY - rect.top < TAB_BAR_GUARD
+}
+
 export function calcDropZone(
   clientX: number,
   clientY: number,
@@ -55,10 +61,11 @@ export function calcDropZone(
   const w = rect.width
   const h = rect.height
 
-  if (x < w * 0.25) return "left"
-  if (x > w * 0.75) return "right"
-  if (y < h * 0.25) return "top"
-  if (y > h * 0.75) return "bottom"
+  const edge = 0.18
+  if (x < w * edge) return "left"
+  if (x > w * (1 - edge)) return "right"
+  if (y < h * edge) return "top"
+  if (y > h * (1 - edge)) return "bottom"
   return kind === "editor" ? "center" : (x >= w / 2 ? "right" : "left")
 }
 

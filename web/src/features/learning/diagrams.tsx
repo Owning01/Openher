@@ -29,7 +29,7 @@ const S = {
 
 function SvgFrame({ viewBox, children, title, desc, id }: { viewBox: string; children: ReactNode; title: string; desc: string; id: string }) {
   return (
-    <svg viewBox={viewBox} role="img" aria-labelledby={`${id}-title ${id}-desc`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "auto", display: "block", vectorEffect: "non-scaling-stroke" } as React.CSSProperties}>
+    <svg viewBox={viewBox} role="img" aria-labelledby={`${id}-title ${id}-desc`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "auto", display: "block" }}>
       <title id={`${id}-title`}>{title}</title>
       <desc id={`${id}-desc`}>{desc}</desc>
       <rect width="100%" height="100%" rx={8} fill={S.paper} />

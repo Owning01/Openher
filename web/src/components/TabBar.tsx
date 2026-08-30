@@ -239,6 +239,7 @@ export const TabBar = memo(function TabBar({
     const isInternal = e.dataTransfer.types.includes("application/x-opencode-tab-index")
     // Drops externos (terminal desde el rail) y reorden interno: ambos válidos
     e.preventDefault()
+    e.stopPropagation()
     e.dataTransfer.dropEffect = isInternal ? "move" : "copy"
     if (isInternal) setDragOverIdx(getIndexFromX(e.clientX))
   }, [getIndexFromX])

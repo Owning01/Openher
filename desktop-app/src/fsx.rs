@@ -53,9 +53,6 @@ pub fn list_dir(path: &str) -> Result<serde_json::Value, String> {
     if let Ok(rd) = std::fs::read_dir(p) {
         for e in rd.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
-            if name.starts_with(".") {
-                continue;
-            }
             let path = e.path();
             let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
             let meta = e.metadata().ok();

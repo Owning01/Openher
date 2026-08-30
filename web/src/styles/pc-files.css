@@ -820,6 +820,13 @@
   color: #ffffff;
 }
 
+.pcf-drop-target {
+  background: rgba(59, 130, 246, 0.15) !important;
+  outline: 1px dashed var(--primary, #3b82f6);
+  outline-offset: -1px;
+  border-radius: 4px;
+}
+
 /* HTML preview — visor tipo navegador (CSS embebido o externo) */
 .pcf-html-preview {
   display: flex;

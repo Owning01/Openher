@@ -16,6 +16,28 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 const DETACHED_PROCESS: u32 = 0x00000008;
 const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
 
+fn split_cmd(cmd: &str) -> Vec<String> {
+    let mut res = Vec::new();
+    let mut cur = String::new();
+    let mut in_quotes = false;
+    for c in cmd.chars() {
+        match c {
+            '"' => in_quotes = !in_quotes,
+            ' ' | '\t' if !in_quotes => {
+                if !cur.is_empty() {
+                    res.push(cur.clone());
+                    cur.clear();
+                }
+            }
+            _ => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        res.push(cur);
+    }
+    res
+}
+
 #[derive(Clone)]
 struct ExternalDef {
     dir: &'static str,
@@ -60,7 +82,7 @@ fn defs() -> HashMap<&'static str, ExternalDef> {
         dir: r"G:\Proyectos\open-design",
         port: Some(3000),
         url: Some("http://127.0.0.1:3000"),
-        dev_cmd: "pnpm tools-dev start web --web-port 3000 --daemon-port 3456",
+        dev_cmd: r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\open-design\tools\dev\bin\tools-dev.mjs" start web --web-port 3000 --daemon-port 3456"#,
         // opendesign prod (`start --prod`) cuelga en este entorno (IPC del daemon);
         // el path dev `start` queda vivo y prewarm lo hace instantáneo al click.
         prod_cmd: None,
@@ -70,8 +92,8 @@ fn defs() -> HashMap<&'static str, ExternalDef> {
         dir: r"G:\Proyectos\0 screenshots",
         port: Some(3002),
         url: Some("http://127.0.0.1:3002"),
-        dev_cmd: "pnpm exec next dev -p 3002 -H 127.0.0.1",
-        prod_cmd: Some("pnpm exec next start -p 3002 -H 127.0.0.1"),
+        dev_cmd: r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" dev -p 3002 -H 127.0.0.1"#,
+        prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" start -p 3002 -H 127.0.0.1"#),
         prod_check: Some(r".next\BUILD_ID"),
     });
     m.insert("vioeditor", ExternalDef {
@@ -112,10 +134,24 @@ fn defs() -> HashMap<&'static str, ExternalDef> {
 
 fn probe(def: &ExternalDef) -> bool {
     if let Some(port) = def.port {
+        // TCP connect rápido: si el puerto está LISTENING, considerar running aunque HTTP tarde en compilar (Next Turbopack)
+        let tcp_ok = {
+            use std::net::{SocketAddr, TcpStream};
+            let addr: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
+            TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok()
+        };
+        if tcp_ok {
+            return true;
+        }
+        let timeout = if def.port == Some(3000) || def.port == Some(3002) {
+            Duration::from_millis(1800)
+        } else {
+            Duration::from_millis(700)
+        };
         return cached_probe(port, || {
             let url = format!("http://127.0.0.1:{port}/");
             if ureq::builder()
-                .timeout(Duration::from_millis(350))
+                .timeout(timeout)
                 .build()
                 .get(&url)
                 .call()
@@ -123,7 +159,7 @@ fn probe(def: &ExternalDef) -> bool {
             {
                 return true;
             }
-            crate::common::probe_http(port, "/", Duration::from_millis(350), &[200, 301, 302, 304])
+            crate::common::probe_http(port, "/", timeout, &[200, 301, 302, 304])
         });
     } else {
         false
@@ -174,7 +210,8 @@ pub fn handle(
                 if is_vite_embed {
                     true
                 } else {
-                    if procs_snapshot.contains(*name) { true } else { probe(def) }
+                    // verificar probe incluso si hay proc (evita zombie con puerto caído)
+                    probe(def)
                 }
             } else {
                 procs_snapshot.contains(*name)
@@ -217,11 +254,30 @@ pub fn handle(
                     embed_root = embed_root.join("dist");
                 }
             }
-            // mmap fast path
+            // mmap fast path — para HTML inyectar <base href> y reescribir /assets absolutos (vite build base="/")
             if let Some((bytes, mime)) = crate::common::serve_file_mmap(&embed_root, rel) {
                 let is_html = mime.starts_with("text/html");
                 let resp = if is_html {
-                    tiny_http::Response::from_data(bytes)
+                    let mut html = String::from_utf8_lossy(&bytes).to_string();
+                    let base = format!("/shell/external/{}/embed/", embed_name);
+                    // reescribir antes de inyectar <base> para no duplicar el propio base href
+                    // <base> no afecta rutas absolutas /assets — convertir a embed base para compat con builds viejos base="/"
+                    html = html.replace("href=\"/", &format!("href=\"{base}"));
+                    html = html.replace("src=\"/", &format!("src=\"{base}"));
+                    html = html.replace("href='/", &format!("href='{}", base));
+                    html = html.replace("src='/", &format!("src='{}", base));
+                    if html.contains("<head>") {
+                        html = html.replacen("<head>", &format!("<head><base href=\"{}\">", base), 1);
+                    } else if html.contains("<head ") {
+                        // <head attr> → insertar después
+                        if let Some(pos) = html.find("<head") {
+                            if let Some(end) = html[pos..].find('>') {
+                                let insert_pos = pos + end + 1;
+                                html.insert_str(insert_pos, &format!("<base href=\"{}\">", base));
+                            }
+                        }
+                    }
+                    tiny_http::Response::from_data(html.into_bytes())
                         .with_status_code(200)
                         .with_header(tiny_http::Header::from_bytes("Content-Type", mime).unwrap())
                         .with_header(tiny_http::Header::from_bytes("Cache-Control", "no-cache").unwrap())
@@ -257,8 +313,7 @@ pub fn handle(
             if is_vite_embed {
                 true
             } else {
-                let has_proc = mgr.procs.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&name);
-                if has_proc { true } else { probe(&def) }
+                probe(&def)
             }
         } else {
             mgr.procs.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&name)
@@ -276,8 +331,8 @@ pub fn handle(
     }
 
     if action == "start" && method == Method::Post {
-        // si ya running, retornar ok — verificar zombie (try_wait) sin mantener lock durante probe
-        let already_running = {
+        // si ya running, retornar ok — verificar zombie (try_wait) y probe del puerto
+        let already_running: Option<String> = {
             let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(child) = procs.get_mut(&name) {
                 match child.try_wait() {
@@ -291,8 +346,18 @@ pub fn handle(
             } else { None }
         };
         if let Some(url) = already_running {
-            let stored = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned().unwrap_or(url.clone());
-            return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "url": stored })));
+            // verificar que el puerto realmente responda; si no, tratar como zombie y continuar al spawn
+            let is_vite_embed = (name == "vioeditor" || name == "informes") && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
+            let need_probe = !is_vite_embed && def.port.is_some();
+            if need_probe && !probe(&def) {
+                // zombie: el child sigue vivo pero el puerto no responde → limpiar y seguir
+                let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
+                procs.remove(&name);
+                // no retornar, caer al spawn
+            } else {
+                let stored = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned().unwrap_or(url.clone());
+                return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "url": stored })));
+            }
         }
         // probe si ya está corriendo externamente (usuario lo lanzó manual) — skip para vite embed, sin lock
         {
@@ -302,21 +367,24 @@ pub fn handle(
                 return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "url": url, "external": true })));
             }
         }
-        // Nunca permitir que dos plugins compartan el mismo puerto
-        if let Some(port) = def.port {
-            for (other_name, other_def) in defs_map.iter() {
-                if *other_name == name.as_str() || *other_name == "plataforma-informes" { continue; }
-                if other_def.port == Some(port) {
-                    return Some(json_err(409, &format!("puerto {} ya configurado para '{}', '{}' no puede usar el mismo puerto", port, other_name, name)));
+        // Nunca permitir que dos plugins compartan el mismo puerto — skip para vite embed (mmap, sin Node)
+        let is_vite_embed_check = (name == "vioeditor" || name == "informes" || name == "plataforma-informes") && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
+        if !is_vite_embed_check {
+            if let Some(port) = def.port {
+                for (other_name, other_def) in defs_map.iter() {
+                    if *other_name == name.as_str() || *other_name == "plataforma-informes" { continue; }
+                    if other_def.port == Some(port) {
+                        return Some(json_err(409, &format!("puerto {} ya configurado para '{}', '{}' no puede usar el mismo puerto", port, other_name, name)));
+                    }
                 }
-            }
-            if probe(&def) {
-                let owner = defs_map
-                    .iter()
-                    .find(|(n, d)| *n != &name.as_str() && d.port == Some(port))
-                    .map(|(n, _)| *n)
-                    .unwrap_or("proceso externo");
-                return Some(json_err(409, &format!("puerto {} ya en uso por '{}', no se puede iniciar '{}'", port, owner, name)));
+                if probe(&def) {
+                    let owner = defs_map
+                        .iter()
+                        .find(|(n, d)| *n != &name.as_str() && d.port == Some(port))
+                        .map(|(n, _)| *n)
+                        .unwrap_or("proceso externo");
+                    return Some(json_err(409, &format!("puerto {} ya en uso por '{}', no se puede iniciar '{}'", port, owner, name)));
+                }
             }
         }
         // Embed static 0ms para vite plugins con dist (sin Node) — vite preview reemplazado por mmap
@@ -363,11 +431,44 @@ pub fn handle(
                 Ok(ch) => ch,
                 Err(e) => return Some(json_err(500, &e.to_string())),
             }
+        } else if cmd_str.trim_start().starts_with("G:\\Dev\\nodejs") {
+            // Direct node (screenshots/opendesign) - evita pnpm y conhost, oculta ventana
+            let parts = split_cmd(&cmd_str);
+            let mut c = std::process::Command::new(&parts[0]);
+            if parts.len() > 1 {
+                c.args(&parts[1..]);
+            }
+            c.current_dir(&dir);
+            let cur_path = std::env::var("PATH").unwrap_or_default();
+            c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
+            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+            c.stdin(std::process::Stdio::null());
+            if let Some(f) = log_file {
+                if let Ok(cloned) = f.try_clone() {
+                    c.stdout(std::process::Stdio::from(cloned));
+                }
+                c.stderr(std::process::Stdio::from(f));
+            } else {
+                c.stdout(std::process::Stdio::null());
+                c.stderr(std::process::Stdio::null());
+            }
+            match c.spawn() {
+                Ok(ch) => ch,
+                Err(e) => return Some(json_err(500, &e.to_string())),
+            }
         } else {
-            // pnpm directo oculto sin cmd visible: evita conhost S/N y WindowsTerminal. Usa pnpm.cmd de Node24.
-            let pnpm_bin = r"G:\Dev\nodejs-24\pnpm.cmd";
+            // pnpm directo oculto sin cmd visible: evita conhost S/N y WindowsTerminal. Usa binario Rust directo.
+            let pnpm_bin = r"G:\Dev\nodejs-24\node_modules\pnpm\pnpm.exe";
+            let pnpm_bin_alt = r"G:\Dev\nodejs-24\node_modules\pnpm\bin\pnpm.cjs";
+            let use_node = !std::path::Path::new(pnpm_bin).exists();
             let args: Vec<&str> = cmd_str.split_whitespace().skip(1).collect();
-            let mut c = std::process::Command::new(pnpm_bin);
+            let mut c = if use_node {
+                let mut cc = std::process::Command::new(r"G:\Dev\nodejs-24\node.exe");
+                cc.arg(pnpm_bin_alt);
+                cc
+            } else {
+                std::process::Command::new(pnpm_bin)
+            };
             if !args.is_empty() {
                 c.args(&args);
             }
@@ -393,12 +494,15 @@ pub fn handle(
         };
         let pid = child.id();
         // early exit check: si falla al instante, verificar si es daemon already running (opendesign) con web sí arrancada
-        std::thread::sleep(Duration::from_millis(900));
+        std::thread::sleep(Duration::from_millis(1200));
         if let Ok(Some(status)) = child.try_wait() {
             // Para opendesign, tools-dev start con daemon ya corriendo sale con code 1 pero web sí inicia (manual start lo hace)
             if name == "opendesign" {
-                std::thread::sleep(Duration::from_millis(500));
-                if probe(&def) {
+                std::thread::sleep(Duration::from_millis(800));
+                // bypass cache para no devolver false stale de 1.5s
+                let probe_ok = crate::common::probe_http(3000, "/", Duration::from_millis(1500), &[200, 301, 302, 304])
+                    || crate::common::probe_http(3000, "/", Duration::from_millis(1500), &[200, 301, 302, 304]);
+                if probe_ok || probe(&def) {
                     let url = def.url.map(|s| s.to_string()).unwrap_or_default();
                     {
                         let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner());

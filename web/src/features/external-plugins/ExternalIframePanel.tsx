@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 import { shell } from "../../shell"
 
 type Props = { name: string; title: string; url: string; isWidget?: boolean }
@@ -7,7 +7,13 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
   const [url, setUrl] = useState(defaultUrl)
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
   const [error, setError] = useState<string | null>(null)
-  const startedRef = useRef(false)
+
+  // reset cuando cambia el plugin (evita mostrar URL stale del plugin anterior)
+  useEffect(() => {
+    setUrl(defaultUrl)
+    setStatus("loading")
+    setError(null)
+  }, [name, defaultUrl])
 
   useEffect(() => {
     let cancelled = false
@@ -41,8 +47,6 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
     }
 
     const start = async () => {
-      if (startedRef.current) return
-      startedRef.current = true
       try {
         // widget_notas no tiene url, solo lanza proceso
         if (isWidget) {
@@ -73,8 +77,8 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
     return () => {
       cancelled = true
       clearTimeout(pollTimer)
-      // auto-stop al cerrar pestaña (profesional, sin botón)
-      shell.external.stop(name).catch(() => {})
+      // No auto-stop al cambiar de pestaña: el iframe queda vivo y no se reinicia.
+      // El stop se hace solo al cerrar la pestaña (onRemoveTab) o al desmontar el grid.
     }
   }, [name, defaultUrl, isWidget])
 
