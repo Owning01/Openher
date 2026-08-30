@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { shell } from "../../shell"
 
 type Props = { name: string; title: string; url: string; isWidget?: boolean }
@@ -7,6 +7,14 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
   const [url, setUrl] = useState(defaultUrl)
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
   const [error, setError] = useState<string | null>(null)
+  const [zoom, setZoom] = useState(() => {
+    try {
+      const v = localStorage.getItem(`opencode.plugin.zoom.${name}`)
+      const n = v ? parseFloat(v) : 1
+      return Number.isFinite(n) ? Math.min(2, Math.max(0.5, n)) : 1
+    } catch { return 1 }
+  })
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // reset cuando cambia el plugin (evita mostrar URL stale del plugin anterior)
   useEffect(() => {
@@ -82,6 +90,49 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
     }
   }, [name, defaultUrl, isWidget])
 
+  useEffect(() => {
+    try { localStorage.setItem(`opencode.plugin.zoom.${name}`, String(zoom)) } catch {}
+  }, [name, zoom])
+
+  const clampZoom = useCallback((v: number) => Math.min(2, Math.max(0.5, Math.round(v * 10) / 10)), [])
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      const step = e.deltaY > 0 ? -0.1 : 0.1
+      setZoom((z) => clampZoom(z + step))
+    }
+  }, [clampZoom])
+
+  // evita zoom nativo del WebView2 (Ctrl+rueda) y deja solo nuestro zoom
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onNativeWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) e.preventDefault()
+    }
+    el.addEventListener("wheel", onNativeWheel, { passive: false })
+    return () => el.removeEventListener("wheel", onNativeWheel)
+  }, [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      if (e.key === "0") {
+        e.preventDefault()
+        setZoom(1)
+      } else if (e.key === "+" || e.key === "=" || e.key === "Add") {
+        e.preventDefault()
+        setZoom((z) => clampZoom(z + 0.1))
+      } else if (e.key === "-" || e.key === "Subtract") {
+        e.preventDefault()
+        setZoom((z) => clampZoom(z - 0.1))
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [clampZoom])
+
   if (isWidget) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)", alignItems: "center", justifyContent: "center", gap: 16, padding: 32, textAlign: "center" }}>
@@ -118,14 +169,87 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
-      <iframe
-        src={url}
-        title={title}
-        style={{ flex: 1, width: "100%", border: "none", background: "var(--surface)" }}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
-        allow="clipboard-read; clipboard-write"
-      />
+    <div
+      ref={containerRef}
+      onWheel={handleWheel}
+      style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)", position: "relative", overflow: "hidden" }}
+      title="Ctrl + rueda para zoom"
+    >
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", position: "relative", background: "var(--surface)" }}>
+        <iframe
+          src={url}
+          title={title}
+          style={{
+            width: `${100 / zoom}%`,
+            height: `${100 / zoom}%`,
+            border: "none",
+            background: "var(--surface)",
+            transform: `scale(${zoom})`,
+            transformOrigin: "0 0",
+            position: "absolute",
+            inset: 0,
+          }}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+          allow="clipboard-read; clipboard-write"
+        />
+      </div>
+      {/* zoom bar — gris suave, no intrusivo */}
+      <div
+        style={{
+          position: "absolute",
+          right: 10,
+          bottom: 10,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          background: "rgba(24,24,27,0.92)",
+          border: "1px solid rgba(161,161,170,0.18)",
+          borderRadius: 8,
+          padding: "4px 6px",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+          backdropFilter: "blur(6px)",
+          zIndex: 5,
+        }}
+        onMouseDown={(e) => e.preventDefault()}
+      >
+        <button
+          type="button"
+          onClick={() => setZoom((z) => clampZoom(z - 0.1))}
+          disabled={zoom <= 0.5}
+          title="Alejar (Ctrl -)"
+          style={{
+            width: 26, height: 26, borderRadius: 6, border: "1px solid rgba(161,161,170,0.14)",
+            background: "rgba(161,161,170,0.10)", color: "rgba(244,244,245,0.95)",
+            cursor: zoom <= 0.5 ? "not-allowed" : "pointer", fontSize: 14, lineHeight: 1, opacity: zoom <= 0.5 ? 0.45 : 1,
+          }}
+        >
+          −
+        </button>
+        <span
+          onClick={() => setZoom(1)}
+          title="Click para 100% (Ctrl+0)"
+          style={{
+            minWidth: 44, textAlign: "center", fontSize: 11, fontWeight: 600, fontFamily: "monospace",
+            color: "rgba(161,161,170,0.95)", background: "rgba(161,161,170,0.08)",
+            border: "1px solid rgba(161,161,170,0.10)", borderRadius: 6, padding: "3px 6px", cursor: "pointer",
+          }}
+        >
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          type="button"
+          onClick={() => setZoom((z) => clampZoom(z + 0.1))}
+          disabled={zoom >= 2}
+          title="Acercar (Ctrl +)"
+          style={{
+            width: 26, height: 26, borderRadius: 6, border: "1px solid rgba(161,161,170,0.14)",
+            background: "rgba(161,161,170,0.10)", color: "rgba(244,244,245,0.95)",
+            cursor: zoom >= 2 ? "not-allowed" : "pointer", fontSize: 14, lineHeight: 1, opacity: zoom >= 2 ? 0.45 : 1,
+          }}
+        >
+          +
+        </button>
+      </div>
     </div>
   )
 }
