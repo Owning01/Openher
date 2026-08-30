@@ -838,10 +838,16 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         return;
     }
     if path == "/shell/opencode/global" && method == Method::Get {
-        let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).unwrap_or_default();
+        // mecanismo robusto: resuelve HOME desde múltiples envs y APPDATA en Windows
+        let home = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .or_else(|_| std::env::var("HOMEPATH").map(|hp| format!("{}{}", std::env::var("HOMEDRIVE").unwrap_or_default(), hp)))
+            .or_else(|_| std::env::var("APPDATA").map(|a| std::path::PathBuf::from(&a).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().to_string()).unwrap_or(a)))
+            .unwrap_or_default();
         let home_path = std::path::PathBuf::from(&home);
+        let appdata_path = std::env::var("APPDATA").ok().map(std::path::PathBuf::from);
 
-        let candidate_configs = vec![
+        let mut candidate_configs = vec![
             home_path.join(".config").join("opencode").join("opencode.json"),
             home_path.join(".opencode").join("config.json"),
             home_path.join(".config").join("opencode3").join("opencode.json"),
@@ -850,6 +856,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             home_path.join("AppData").join("Roaming").join("opencode").join("config.json"),
             std::path::PathBuf::from("opencode.json"),
         ];
+        if let Some(appdata) = &appdata_path {
+            let p = appdata.join("opencode").join("config.json");
+            if !candidate_configs.iter().any(|c| c == &p) { candidate_configs.insert(0, p); }
+            let p2 = appdata.join("opencode").join("opencode.json");
+            if !candidate_configs.iter().any(|c| c == &p2) { candidate_configs.insert(1, p2); }
+        }
 
         let mut config_files = Vec::new();
         let mut config_path_found = String::new();
@@ -903,20 +915,29 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             }
         }
 
-        let candidate_skill_roots = vec![
+        let mut candidate_skill_roots = vec![
             home_path.join(".agents").join("skills"),
             home_path.join(".claude").join("skills"),
+            home_path.join(".opencode").join("skills"),
             home_path.join(".gemini").join("config").join("skills"),
             home_path.join(".gemini").join("antigravity").join("builtin").join("skills"),
             home_path.join(".config").join("skills"),
+            std::path::PathBuf::from("skills"),
         ];
+        if let Some(appdata) = &appdata_path {
+            candidate_skill_roots.push(appdata.join("opencode").join("skills"));
+        }
 
         let mut skills = Vec::new();
-        let mut scanned_roots = Vec::new();
+        let mut scanned_roots: Vec<String> = Vec::new();
 
         for root in candidate_skill_roots {
+            // deja la ruta visible siempre (gris suave en frontend), aunque no exista
+            let root_str = root.to_string_lossy().to_string();
+            if !scanned_roots.contains(&root_str) {
+                scanned_roots.push(root_str.clone());
+            }
             if root.is_dir() {
-                scanned_roots.push(root.to_string_lossy().to_string());
                 if let Ok(entries) = std::fs::read_dir(&root) {
                     for entry in entries.flatten() {
                         let path = entry.path();
