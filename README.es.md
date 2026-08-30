@@ -2,21 +2,23 @@
 
   <img src="https://raw.githubusercontent.com/Owning01/Opencode-Mobile/main/web/public/img/opencode-logo-dark.jpg" width="64" height="64" alt="OpenCode Logo" style="border-radius: 12px;" />
 
-# OpenCode Mobile
+# OpenCode Mobile + Desktop
 
-**Cliente Android/iOS para [OpenCode](https://opencode.ai) — tu asistente de codificación AI desde el celular**
+**Cliente Android/iOS + Windows para [OpenCode](https://opencode.ai) — tu asistente de código IA en el celular y el escritorio**
 
 <p align="center">
-  <img src="https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=white" alt="React 18"/>
+  <img src="https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=white" alt="React 19"/>
   <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
   <img src="https://img.shields.io/badge/Vite-8.0-646CFF?logo=vite&logoColor=white" alt="Vite"/>
+  <img src="https://img.shields.io/badge/pnpm-12.0-F69220?logo=pnpm&logoColor=white" alt="pnpm 12"/>
+  <img src="https://img.shields.io/badge/Rust-1.98-CE422B?logo=rust&logoColor=white" alt="Rust"/>
   <img src="https://img.shields.io/badge/Capacitor-8.0-119EFF?logo=capacitor&logoColor=white" alt="Capacitor"/>
-  <img src="https://img.shields.io/badge/4%20suites%20de%20tests-%E2%9C%85%20passing-4caf7d" alt="Tests"/>
+  <img src="https://img.shields.io/badge/Node-24.20-339933?logo=nodedotjs&logoColor=white" alt="Node 24"/>
   <br/>
   <img src="https://img.shields.io/badge/SSE%20streaming-%E2%9C%85-6c8cff" alt="SSE"/>
   <img src="https://img.shields.io/badge/Cache%20offline-%E2%9C%85-6c8cff" alt="Offline"/>
-  <img src="https://img.shields.io/badge/i18n-4%20idiomas-6c8cff" alt="i18n"/>
-  <img src="https://img.shields.io/badge/30%2B%20temas-%E2%9C%85-6c8cff" alt="Themes"/>
+  <img src="https://img.shields.io/badge/Desktop%20híbrido-mmap%2Bbr%20%7C%20hyper-6c8cff" alt="Desktop"/>
+  <img src="https://img.shields.io/badge/5%20plugins%20externos-%E2%9C%85-6c8cff" alt="Plugins"/>
 </p>
 
 **Español** · [**English**](README.md)
@@ -27,7 +29,7 @@
 
 <div align="center">
 
-**Tu asistente de codificación AI, desde el celular** — respuestas en streaming, herramientas en tiempo real, terminal, escritorio remoto y control total de la configuración.
+**Tu asistente de código IA, en todos lados** — respuestas en streaming, tools en tiempo real, terminal, explorador, git (SCM), escritorio remoto, kanban, stats y OpenCode Hub.
 
 </div>
 
@@ -49,13 +51,10 @@
 ┌──────────────────────────────────────────────┐
 │                🖥️ TU PC                       │
 │           Tailscale node                      │
-└──────────────────────┬───────────────────────┘
-                       │
-                       │  ② localhost:4096
-                       ▼
-┌──────────────────────────────────────────────┐
-│               🤖 OPENCODE                     │
-│     el servidor con tu código y tus tools    │
+│  opencode serve v1  → 0.0.0.0:4096            │
+│  opencode2        → 0.0.0.0:4097              │
+│  desktop-app.exe  → 127.0.0.1:4848 + WS 4849  │
+│  opencode-stats   → 127.0.0.1:8765            │
 └──────────────────────────────────────────────┘
 ```
 
@@ -69,7 +68,9 @@
 
 O construíla vos mismo (ver [desarrollo](#-desarrollo)).
 
-**iOS** (requiere macOS + Xcode 16+): cloná el repo y abrí `web/ios/App/App.xcworkspace` en Xcode, seleccioná tu team de desarrollo y Build & Run.
+**iOS** (requiere macOS + Xcode 16+): cloná el repo y abrí `web/ios/App/App.xcworkspace` en Xcode, seleccioná tu team y Build & Run.
+
+**Desktop (Windows)**: `.\build-desktop.ps1` (compila `web` con `G:\Dev\nodejs-24\pnpm.cmd` + `cargo build --release` → `desktop-app/opencode-desktop.exe` portable, `data/` junto al exe). Requiere **Node ~24** (`G:\Dev\nodejs-24\node.exe` v24.20) y **pnpm 12.0.0** binario Rust + **Rust 1.98** (`CARGO_HOME=G:\Dev\cargo`). Sin Tauri, wry+WebView2.
 
 ---
 
@@ -142,6 +143,24 @@ Si siempre estás en la misma red:
 
 ---
 
+## 🖥️ Desktop híbrido (Windows)
+
+Un solo frontend (`web/`) servido por shell Rust (`desktop-app/`) en `127.0.0.1:4848` + `4850` hyper estático (mmap+br) + `4849` WS PTY. Portable — `data/` junto al exe: `config.json`, `kanban.json`, `window-geometry.json`, `web-dist/`, `webview/`.
+
+- **Plugins externos** (`/shell/external/*`): `opendesign` 3000 + daemon 3456 (`G:\Dev\nodejs-24\node_hidden.exe "…\tools-dev.mjs" start web`), `screenshots` 3002 (Next `next start`), `vioeditor` 1420 embed, `informes` 5174 embed (mmap + `<base href="/shell/external/<name>/embed/">` para Vite `/assets/*`), `widgetnotas`. Probe TCP 250ms + `cached_probe` 1500ms, `409` si puerto ocupado. Pestañas mantienen iframes montados `visibility:hidden` (no reinicia al volver). `CloseRequested/Quit` mata todos los hijos `taskkill /F /T`.
+- **Archivos**: doble panel (`PCFilesPanel` `SplitIcon`), drag&drop `shell.fs.move`, dotfiles visibles (`.git` etc.), preview HTML `HtmlPreview` vía `/shell/preview/{token}/{file}` mmap.
+- **Build**: `.\build-desktop.ps1` arregla PATH (`G:\Dev\nodejs-24` primero, `corepack disable`), `G:\Dev\nodejs-24\pnpm.cmd run build` (~14s) + `G:\Dev\Python311\python.exe scripts/copy-dist.py` (`failures: none`, `vite emptyOutDir:false`) + `cargo build --release` (~4m `G:\cache\cargo-target\release\opencode-desktop.exe`).
+
+## 🧠 OpenCode Hub
+
+`Ajustes → OpenCode Hub` — inspecciona config viva, agentes, skills y ubicaciones.
+
+- **Agentes**: agentes oficiales con prompts de sistema (copiar/expandir).
+- **Skills**: escanea `~/.agents/skills`, `~/.claude/skills`, `~/.opencode/skills`, `~/.gemini/*`, `~/.config/skills`, `./skills`, `APPDATA\opencode\skills` — `scannedRoots` siempre visible ruta completa en gris suave `rgba(161,161,170,0.95)` sobre `rgba(161,161,170,0.10)` pill con `title`+ellipsis (backend `api.rs:840` robusto `USERPROFILE||HOME||HOMEDRIVE+HOMEPATH||APPDATA`).
+- **Config**: todos los `opencode.json` encontrados (`~/.config/opencode/opencode.json` primario, `~/.config/opencode3`, `APPDATA\opencode\config.json`, etc.) — file switcher pills + **Ruta:** pill gris suave + editor JSON (formatear/guardar). Fix `better-sqlite3@13.0.3` para Node 24 (12.10 crashea `RemoveEnvironmentCleanupHook`).
+
+---
+
 ## 📱 Datos móviles
 
 <details>
@@ -172,17 +191,37 @@ Cifras estimadas sobre HTTP/2 comprimido con ~10 sesiones en el servidor.
 <summary><b>Estructura del proyecto</b> (clic para expandir)</summary>
 
 ```
-web/
+web/                           # EL PRODUCTO (un frontend para APK/iPA/desktop)
 ├── src/
-│   ├── components/       # 57 componentes UI
-│   ├── hooks/            # 32 hooks React
-│   ├── api.ts            # Cliente HTTP (36 endpoints)
-│   ├── App.tsx           # Orquestador principal
-│   ├── types.ts          # Tipos TypeScript
-│   ├── i18n.ts           # 4 idiomas
-│   └── styles.css        # Sistema de diseño completo
-├── android/              # Proyecto nativo Android
-├── ios/                  # Proyecto nativo iOS (Xcode)
+│   ├── app/                   # composition root (placeholder)
+│   ├── pages/ widgets/ features/ entities/ shared/  # FSD hexagonal (migrando)
+│   ├── components/            # ~80 componentes UI (ChatView, TabBar, OpenCodeHubModal…)
+│   ├── features/pc-files/     # explorador doble panel + HtmlPreview
+│   ├── features/external-plugins/  # ExternalIframePanel (keep-mounted)
+│   ├── shell.ts               # /shell/* cliente tipado + fileIcon
+│   ├── hooks/                 # 41 hooks (useMessages, useSSE, usePolling…)
+│   ├── styles/                # 17 archivos css (tokens, shell, pc-files…)
+│   ├── App.tsx                # ~3600L God Component (deuda)
+│   └── api.ts / types.ts      # 36 endpoints facade
+├── android/ ios/              # proyectos nativos Capacitor (com.gbro.opencode)
+├── dist/                      # output Vite (web/data/web-dist en desktop)
+└── scripts/copy-dist.py       # workaround EPERM cap copy
+
+desktop-app/                   # shell Windows Rust (wry + tiny_http + hyper)
+├── src/
+│   ├── main.rs                # wry child WebView2, prewarm external, kill_all_external
+│   ├── api.rs                 # /shell/* + /shell/opencode/global + mmap
+│   ├── infrastructure/http/   # external_router.rs (+ fs/scm/pty/kanban/doc)
+│   ├── common.rs              # mmap+br, simd-json, probe
+│   ├── fsx.rs / gitx.rs / ptyx.rs / kanban.rs / state.rs
+│   └── browser_view.rs / plugins.rs
+
+opencode-stats/                # crate Rust read-only opencode.db → :8765
+
+(externo) G:/proyectos/open-design  # nexu-io/open-design on-demand
+
+Cargo.toml                     # workspace ["desktop-app","opencode-stats"]
+build-desktop.ps1/.bat · deploy-apk.ps1 · codemagic.yaml
 ```
 
 </details>
@@ -202,6 +241,34 @@ web/
 | **⚡ Optimistic updates** | Los mensajes del usuario se renderizan inmediatamente antes del round-trip al servidor |
 | **🛡️ Stale request rejection** | `loadSelected` usa un ID de request para descartar respuestas de polling obsoletas |
 | **🎨 Temas dinámicos** | 30+ temas con variables CSS aplicadas en runtime via `resolveTheme.ts` |
+| **🧩 Plugins externos** | 5 proyectos vía `external_router.rs` — mmap embed + `<base href>` + node_hidden, iframes keep-mounted |
+| **🧠 OpenCode Hub** | Config global viva + skills + scannedRoots (siempre visibles gris suave) vía `/shell/opencode/global` |
+
+</details>
+
+---
+
+## 🛠️ Desarrollo
+
+```bash
+# web (Node 24 + pnpm 12)
+G:\Dev\nodejs-24\pnpm.cmd install
+G:\Dev\nodejs-24\pnpm.cmd run dev       # Vite :5173
+G:\Dev\nodejs-24\pnpm.cmd run build    # tsc -b && vite build (~14s)
+G:\Dev\Python311\python.exe scripts/copy-dist.py  # → desktop-app/data/web-dist
+
+# desktop (Rust 1.98, CARGO_HOME=G:\Dev\cargo)
+cargo check && cargo build --release   # → G:\cache\cargo-target\release\opencode-desktop.exe
+.\build-desktop.ps1 [-SkipWeb] [-Run]  # web build + cargo + package
+
+# apk
+.\deploy-apk.ps1                       # build + upload tmpfiles.org + LINK
+```
+
+<details>
+<summary><b>Stack</b></summary>
+
+React 19.2 + react-compiler, TS 7.0, Vite 8, Vitest 4, pnpm 12 (binario Rust), Capacitor 8, Node 24.20, Rust 1.98 (tokio+hyper, memmap2, simd-json, notify), WebView2 vía wry/winit, portable-pty (pwsh7), crate opencode-stats.
 
 </details>
 

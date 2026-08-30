@@ -509,13 +509,16 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
             </div>
           ) : activeTab === "skills" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--muted)" }}>
-                <span> Rutas escaneadas:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--muted)", flexWrap: "wrap" }}>
+                <span style={{ whiteSpace: "nowrap" }}> Rutas escaneadas:</span>
                 {globalData?.scannedRoots?.map((r) => (
-                  <span key={r} style={{ background: "var(--surface-strong)", padding: "2px 6px", borderRadius: "4px", fontFamily: "monospace", fontSize: "12px" }}>
-                    {r.split(/[\\/]/).slice(-2).join("/")}
+                  <span key={r} title={r} style={{ background: "rgba(161,161,170,0.10)", color: "rgba(161,161,170,0.95)", padding: "3px 8px", borderRadius: "4px", fontFamily: "monospace", fontSize: "11px", border: "1px solid rgba(161,161,170,0.14)", maxWidth: "340px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r}
                   </span>
                 ))}
+                {(!globalData?.scannedRoots || globalData.scannedRoots.length === 0) && (
+                  <span style={{ fontSize: "11px", color: "var(--muted)", opacity: 0.7, fontStyle: "italic" }}>ninguna carpeta encontrada</span>
+                )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "12px" }}>
@@ -551,7 +554,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                         {skill.description}
                       </div>
 
-                      <div style={{ fontSize: "12px", color: "var(--muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={skill.path}>
+                      <div style={{ fontSize: "11px", color: "rgba(161,161,170,0.90)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "rgba(161,161,170,0.08)", padding: "3px 6px", borderRadius: "4px", border: "1px solid rgba(161,161,170,0.10)" }} title={skill.path}>
                         {skill.path}
                       </div>
                     </div>
@@ -571,16 +574,18 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                       <button
                         key={file.path}
                         type="button"
+                        title={file.path}
                         onClick={() => handleSelectConfigFile(file.path)}
                         style={{
-                          background: isActive ? "var(--primary)" : "var(--surface-strong)",
-                          color: isActive ? "#fff" : "var(--text)",
-                          border: "none",
+                          background: isActive ? "var(--primary)" : "rgba(161,161,170,0.10)",
+                          color: isActive ? "#fff" : "rgba(161,161,170,0.95)",
+                          border: isActive ? "none" : "1px solid rgba(161,161,170,0.14)",
                           borderRadius: "4px",
                           padding: "3px 8px",
-                          fontSize: "12px",
+                          fontSize: "11px",
                           cursor: "pointer",
                           whiteSpace: "nowrap",
+                          fontFamily: "monospace",
                         }}
                       >
                          {file.name}
@@ -590,9 +595,28 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                 </div>
               )}
 
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ fontSize: "12px", color: "var(--muted)" }}>
-                  Ruta: <span style={{ color: "var(--primary)", fontFamily: "monospace" }}>{selectedConfigPath || globalData?.configPath || "opencode.json"}</span>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                <div style={{ fontSize: "12px", color: "var(--muted)", display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flex: 1 }}>
+                  <span style={{ whiteSpace: "nowrap", opacity: 0.8 }}>Ruta:</span>{" "}
+                  <span
+                    title={selectedConfigPath || globalData?.configPath || "opencode.json"}
+                    style={{
+                      color: "rgba(161,161,170,0.95)",
+                      fontFamily: "monospace",
+                      fontSize: "11px",
+                      background: "rgba(161,161,170,0.08)",
+                      padding: "3px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid rgba(161,161,170,0.12)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: "520px",
+                      flex: 1,
+                    }}
+                  >
+                    {selectedConfigPath || globalData?.configPath || "opencode.json"}
+                  </span>
                 </div>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                   {jsonError && <span style={{ fontSize: "12px", color: "var(--danger)" }}>️ {jsonError}</span>}
