@@ -35,6 +35,28 @@ use std::time::Duration;
 use state::AppState;
 use tiny_http::Server;
 use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
+
+fn split_cmd(cmd: &str) -> Vec<String> {
+    let mut res = Vec::new();
+    let mut cur = String::new();
+    let mut in_quotes = false;
+    for c in cmd.chars() {
+        match c {
+            '"' => in_quotes = !in_quotes,
+            ' ' | '\t' if !in_quotes => {
+                if !cur.is_empty() {
+                    res.push(cur.clone());
+                    cur.clear();
+                }
+            }
+            _ => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        res.push(cur);
+    }
+    res
+}
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::WindowEvent;
@@ -81,6 +103,49 @@ struct App {
     last_geom_save: std::time::Instant,
     modifiers: winit::keyboard::ModifiersState,
     start_minimized: bool,
+    app_state: Option<Arc<AppState>>,
+}
+
+fn kill_all_external(state: &AppState) {
+    // Mata todos los childs gestionados (screenshots, opendesign, etc.)
+    let mut procs = state.external.procs.lock().unwrap_or_else(|e| e.into_inner());
+    for (name, mut child) in procs.drain() {
+        let pid = child.id();
+        // tree kill sin ventana
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .creation_flags(0x08000000)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .and_then(|mut c| c.wait());
+        let _ = child.kill();
+        let _ = child.wait();
+        eprintln!("opencode-desktop: external {} pid {} killed on exit", name, pid);
+    }
+    // Por si quedaron huérfanos (prewarm viejo, namespace default), matar por CommandLine
+    // No bloqueante: best-effort
+    let _ = std::process::Command::new("taskkill")
+        .args(["/F", "/FI", "IMAGENAME eq node.exe", "/FI", "WINDOWTITLE eq G:\\Dev\\nodejs-24\\node.exe"])
+        .creation_flags(0x08000000)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    // Fallback: matar cualquier node con open-design o screenshots en cmdline (huérfanos de otro desktop)
+    std::thread::spawn(|| {
+        // pequeño delay para que taskkill anterior termine
+        std::thread::sleep(Duration::from_millis(200));
+        // usa wmic via powershell para no depender de lib
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", "Get-CimInstance Win32_Process -Filter \"Name='node.exe' OR Name='node_hidden.exe'\" | Where-Object { $_.CommandLine -like \"*open-design*\" -or $_.CommandLine -like \"*0 screenshots*\" -or $_.CommandLine -like \"*tools-dev*\" } | ForEach-Object { taskkill /F /PID $_.ProcessId }"])
+            .creation_flags(0x08000000)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+    });
 }
 
 enum AppEvent {
@@ -291,12 +356,15 @@ impl ApplicationHandler<AppEvent> for App {
             }
             WindowEvent::CloseRequested => {
                 self.save_geometry();
+                if let Some(state) = &self.app_state {
+                    kill_all_external(state);
+                }
                 // Flush cookies/sesión a disco antes de salir: WebView2 escribe Cookies/Storage de forma async.
                 // Droppear los WebViews + dar 250ms asegura que data/webview/Default/Cookies persista.
                 self.webview = None;
                 self.browser_inner.webview = None;
                 self.web_context = None;
-                std::thread::sleep(std::time::Duration::from_millis(280));
+                std::thread::sleep(std::time::Duration::from_millis(400));
                 event_loop.exit();
             }
             WindowEvent::ModifiersChanged(m) => {
@@ -328,10 +396,13 @@ impl ApplicationHandler<AppEvent> for App {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
             AppEvent::Quit => {
+                if let Some(state) = &self.app_state {
+                    kill_all_external(state);
+                }
                 self.webview = None;
                 self.browser_inner.webview = None;
                 self.web_context = None;
-                std::thread::sleep(std::time::Duration::from_millis(280));
+                std::thread::sleep(std::time::Duration::from_millis(400));
                 event_loop.exit()
             }
             AppEvent::BrowserWork => {
@@ -601,8 +672,8 @@ fn main() {
                 // Definición local mirror de external_router::defs() para no hacer pub el HashMap
                 struct Prewarm<'a> { name: &'a str, dir: &'a str, port: u16, prod_check: Option<&'a str>, dev_cmd: &'a str, prod_cmd: Option<&'a str> }
                 let list = [
-                    Prewarm { name: "opendesign", dir: r"G:\Proyectos\open-design", port: 3000, prod_check: None, dev_cmd: "pnpm tools-dev start web --web-port 3000 --daemon-port 3456", prod_cmd: None },
-                    Prewarm { name: "screenshots", dir: r"G:\Proyectos\0 screenshots", port: 3002, prod_check: Some(r".next\BUILD_ID"), dev_cmd: "pnpm exec next dev -p 3002 -H 127.0.0.1", prod_cmd: Some("pnpm exec next start -p 3002 -H 127.0.0.1") },
+                    Prewarm { name: "opendesign", dir: r"G:\Proyectos\open-design", port: 3000, prod_check: None, dev_cmd: r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\open-design\tools\dev\bin\tools-dev.mjs" start web --web-port 3000 --daemon-port 3456"#, prod_cmd: None },
+                    Prewarm { name: "screenshots", dir: r"G:\Proyectos\0 screenshots", port: 3002, prod_check: Some(r".next\BUILD_ID"), dev_cmd: r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" dev -p 3002 -H 127.0.0.1"#, prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" start -p 3002 -H 127.0.0.1"#) },
                     Prewarm { name: "vioeditor", dir: r"G:\Proyectos\17-vioeditor\aplicacion", port: 1420, prod_check: Some(r"dist\index.html"), dev_cmd: "pnpm exec vite --port 1420 --host 127.0.0.1 --strictPort false", prod_cmd: Some("pnpm exec vite preview --port 1420 --host 127.0.0.1 --strictPort") },
                     Prewarm { name: "informes", dir: r"G:\Proyectos\53plataforma-informes", port: 5174, prod_check: Some(r"dist\index.html"), dev_cmd: "pnpm exec vite --port 5174 --host 127.0.0.1", prod_cmd: Some("pnpm exec vite preview --port 5174 --host 127.0.0.1") },
                 ];
@@ -626,11 +697,31 @@ fn main() {
                     let _ = std::fs::create_dir_all(crate::state::data_dir());
                     let log_path = crate::state::data_dir().join(format!("external-{}.log", p.name));
                     let log_file = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
-                    // pnpm directo oculto (sin cmd) para evitar conhost S/N
-                    let pnpm_bin = r"G:\Dev\nodejs-24\pnpm.cmd";
-                    let args: Vec<&str> = effective.split_whitespace().skip(1).collect();
-                    let mut c = std::process::Command::new(pnpm_bin);
-                    if !args.is_empty() { c.args(&args); }
+                    // spawn oculto: node directo (screenshots/opendesign) o pnpm
+                    let mut c = if effective.trim_start().starts_with("G:\\Dev\\nodejs") {
+                        let parts = split_cmd(effective);
+                        let mut cc = std::process::Command::new(&parts[0]);
+                        if parts.len() > 1 {
+                            cc.args(&parts[1..]);
+                        }
+                        cc
+                    } else {
+                        let pnpm_bin = r"G:\Dev\nodejs-24\node_modules\pnpm\pnpm.exe";
+                        let pnpm_bin_alt = r"G:\Dev\nodejs-24\node_modules\pnpm\bin\pnpm.cjs";
+                        let use_node = !std::path::Path::new(pnpm_bin).exists();
+                        let args: Vec<&str> = effective.split_whitespace().skip(1).collect();
+                        let mut cc = if use_node {
+                            let mut ccc = std::process::Command::new(r"G:\Dev\nodejs-24\node.exe");
+                            ccc.arg(pnpm_bin_alt);
+                            ccc
+                        } else {
+                            std::process::Command::new(pnpm_bin)
+                        };
+                        if !args.is_empty() {
+                            cc.args(&args);
+                        }
+                        cc
+                    };
                     c.current_dir(p.dir);
                     let cur_path = std::env::var("PATH").unwrap_or_default();
                     c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
@@ -711,6 +802,7 @@ fn main() {
         last_geom_save: std::time::Instant::now(),
         modifiers: winit::keyboard::ModifiersState::empty(),
         start_minimized,
+        app_state: Some(app_state.clone()),
     };
     event_loop.run_app(&mut app).unwrap();
 }

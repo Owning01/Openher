@@ -3,7 +3,7 @@ import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../..
 import type { ChatViewProps } from "../../components/ChatView"
 import { SessionChatPanel } from "../../components/SessionChatPanel"
 import { DesktopPanelRenderer } from "./DesktopPanelRenderer"
-import { calcDropZone, type DropZone } from "./model"
+import { calcDropZone, isOverTabBar, type DropZone } from "./model"
 
 export type DesktopGridProps = {
   desktopLayout: import("../../types").DesktopLayout
@@ -434,33 +434,36 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
               .join(" "),
           }}
           onDragOver={(e) => {
-            // Reorden de tabs dentro de la barra: lo maneja TabBar, no el grid (evita overlay y split accidental)
-            if ((e.target as HTMLElement).closest(".tab-bar")) {
-              setGridDragOver(null)
-              return
-            }
             const isTabDrag = e.dataTransfer.types.includes("application/x-opencode-tab-index")
-            // Fallback para drags legacy con payload panel/kind/terminal: (text/plain no es fiable en dragover por spec)
             const hasPath = e.dataTransfer.types.includes("application/x-opencode-path")
-            // Permitir tabs, panel:*, kind:* y terminal-tab:* (no solo panel:)
             if (!isTabDrag && !hasPath) {
               setGridDragOver(null)
               return
             }
-            e.preventDefault()
-            e.dataTransfer.dropEffect = "move"
             const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
             if (!target || (e.target as HTMLElement).closest(".desktop-shell-cell-wrapper, .desktop-cell-placeholder")) {
               setGridDragOver(null)
               return
             }
+            const rect = target.getBoundingClientRect()
+            // Banda de 40px superior: drag de pestaña hacia la barra → delegar a TabBar, sin overlay split
+            if (isTabDrag && ((e.target as HTMLElement).closest(".tab-bar") || isOverTabBar(e.clientY, rect))) {
+              setGridDragOver(null)
+              return
+            }
+            if ((e.target as HTMLElement).closest(".tab-bar")) {
+              setGridDragOver(null)
+              return
+            }
+            e.preventDefault()
+            e.dataTransfer.dropEffect = "move"
             const allCells = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
             const idx = allCells.indexOf(target)
             if (idx === -1) {
               setGridDragOver(null)
               return
             }
-            const zone = calcDropZone(e.clientX, e.clientY, target.getBoundingClientRect(), "session")
+            const zone = calcDropZone(e.clientX, e.clientY, rect, "session")
             setGridDragOver({ idx, zone })
           }}
           onDragLeave={(e) => {
@@ -472,11 +475,7 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
           }}
           onDrop={(e) => {
             e.preventDefault()
-            const wasTabDrag = gridDragOver !== null
             setGridDragOver(null)
-            if (!wasTabDrag) return
-            // Ignorar drops sobre la barra de tabs (ya manejados por TabBar)
-            if ((e.target as HTMLElement).closest(".tab-bar")) return
             const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
             if (!raw) return
             const isTabDrag =
@@ -485,14 +484,64 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
               raw.startsWith("kind:") ||
               raw.startsWith("terminal") ||
               raw.includes("terminal-tab:")
-            if (!isTabDrag) return
             if ((e.target as HTMLElement).closest(".desktop-shell-cell-wrapper, .desktop-cell-placeholder")) return
             const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
             if (!target) return
+            const rect = target.getBoundingClientRect()
+            const overBar = !!(e.target as HTMLElement).closest(".tab-bar") || isOverTabBar(e.clientY, rect)
+            // Banda superior 40px o .tab-bar: pestaña → reorder (no split). TabBar ya maneja si cae exacto, pero gap queda sin handler → hacerlo aquí
+            if (isTabDrag && overBar) {
+              if (raw.includes("terminal-tab:")) {
+                const allCellsForTerm = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
+                const idxTerm = allCellsForTerm.indexOf(target)
+                if (idxTerm !== -1) onDockSession(idxTerm, "center", raw)
+                return
+              }
+              if (raw.includes("kind:terminal")) {
+                const allCellsForTerm2 = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
+                const idxTerm2 = allCellsForTerm2.indexOf(target)
+                if (idxTerm2 !== -1) onDockSession(idxTerm2, "center", raw)
+                return
+              }
+              // Reordenar en la barra del panel destino
+              const bar = target.querySelector(".tab-bar") as HTMLElement | null
+              let at = 0
+              if (bar) {
+                const els = Array.from(bar.querySelectorAll<HTMLDivElement>('[role="tab"]'))
+                if (els.length === 0) at = 0
+                else {
+                  at = els.length
+                  for (let k = 0; k < els.length; k++) {
+                    const r = els[k]!.getBoundingClientRect()
+                    if (e.clientX < r.left + r.width / 2) { at = k; break }
+                  }
+                }
+              }
+              const tabIdxStr = e.dataTransfer.getData("application/x-opencode-tab-index")
+              const srcPanelStr = (e.dataTransfer.getData("application/x-opencode-tab-src") || "").split("|")[0]
+              const originIdx = parseInt(tabIdxStr, 10)
+              const originPanel = parseInt(srcPanelStr, 10)
+              const allCellsForReorder = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
+              const idxReorder = allCellsForReorder.indexOf(target)
+              if (idxReorder === -1) return
+              if (!isNaN(originIdx)) {
+                const fromPanel = isNaN(originPanel) ? -1 : originPanel
+                if (fromPanel === -1 || fromPanel === idxReorder) {
+                  let to = at
+                  if (originIdx < to) to -= 1
+                  if (to !== originIdx && to >= 0) onMoveTab(idxReorder, originIdx, to)
+                } else {
+                  onTransferTab(fromPanel, originIdx, idxReorder, at)
+                }
+              }
+              return
+            }
+            if ((e.target as HTMLElement).closest(".tab-bar")) return
+            if (!isTabDrag) return
             const allCells = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
             const idx = allCells.indexOf(target)
             if (idx === -1) return
-            const zone = calcDropZone(e.clientX, e.clientY, target.getBoundingClientRect(), "session")
+            const zone = calcDropZone(e.clientX, e.clientY, rect, "session")
             onDockSession(idx, zone, raw)
           }}
         >
