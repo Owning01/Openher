@@ -370,16 +370,14 @@ impl ApplicationHandler<AppEvent> for App {
             WindowEvent::ModifiersChanged(m) => {
                 self.modifiers = m.state();
             }
-            WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == winit::event::ElementState::Pressed {
-                    let is_f12 = matches!(event.physical_key, winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F12));
-                    let is_i = matches!(event.physical_key, winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyI));
-                    let ctrl = self.modifiers.control_key();
-                    let shift = self.modifiers.shift_key();
-                    if is_f12 || (is_i && ctrl && shift) {
-                        if let Some(wv) = &self.webview {
-                            wv.open_devtools();
-                        }
+            WindowEvent::KeyboardInput { event, .. } if event.state == winit::event::ElementState::Pressed => {
+                let is_f12 = matches!(event.physical_key, winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F12));
+                let is_i = matches!(event.physical_key, winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyI));
+                let ctrl = self.modifiers.control_key();
+                let shift = self.modifiers.shift_key();
+                if is_f12 || (is_i && ctrl && shift) {
+                    if let Some(wv) = &self.webview {
+                        wv.open_devtools();
                     }
                 }
             }
@@ -636,8 +634,13 @@ fn main() {
             });
         }).ok();
     }
-    // fswatch global — inicia watcher kernel para proyectos
+    // fswatch global — inicia watcher kernel para proyectos + plugins externos (cambios → mtime)
     crate::fswatch::global().ensure_init();
+    {
+        for d in [r"G:\Proyectos\open-design", r"G:\Proyectos\0 screenshots", r"G:\Proyectos\17-vioeditor\aplicacion", r"G:\Proyectos\53plataforma-informes"] {
+            crate::fswatch::global().watch_dir(std::path::Path::new(d));
+        }
+    }
 
     // opencode2: si está habilitado y no responde, lanzarlo detached
     {
