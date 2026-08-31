@@ -1072,7 +1072,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     sessions[0]?.directory ??
     undefined
 
-  const { handleOpenDesign, handleOpenKanban, handleOpenLearning } = useVirtualTabs({
+  const { handleOpenDesign, handleOpenKanban, handleOpenLearning, handleOpenReports, handleOpenScreenshots } = useVirtualTabs({
     isDesktop,
     desktopLayout,
     activePanel,
@@ -1222,6 +1222,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     memInfo,
     formatBytes,
     handleOpenLearning,
+    handleOpenReports,
+    handleOpenScreenshots,
     handleNavigate,
     currentActiveSession,
     activeSessionDir,

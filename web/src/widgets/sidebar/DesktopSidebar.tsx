@@ -68,7 +68,7 @@ export const DesktopSidebar = memo(function DesktopSidebar({
             <div className="desktop-sidebar-header">
               <span className="desktop-sidebar-title">
                 {activity === "sessions"
-                  ? "OpenHer"
+                  ? t("sessions.title") || "Sesiones"
                   : activity === "scm"
                   ? t("scm.title")
                   : t("shell.kindConfig")}

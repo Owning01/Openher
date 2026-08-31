@@ -272,24 +272,33 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     [refreshGit]
   )
 
+  const loadRef = useRef(load)
+  useEffect(() => { loadRef.current = load }, [load])
+  const didInit = useRef(false)
   useEffect(() => {
-    shell.fs
-      .drives()
-      .then(({ drives: d }) => {
-        setDrives(d)
-        if (!cwd && d.length > 0 && d[0]) {
-          const recent = loadExplorerRecent()
-          if (recent.length === 0) load(d[0])
-        }
-      })
-      .catch(() => {})
+    if (didInit.current) return
+    didInit.current = true
     shell.fs
       .favorites()
       .then(({ favorites: f }) => setFavorites(f))
       .catch(() => {})
     const recent = loadExplorerRecent()
-    if (recent.length > 0 && recent[0]) load(recent[0])
-  }, [load, cwd])
+    if (recent.length > 0 && recent[0]) {
+      loadRef.current(recent[0])
+      shell.fs
+        .drives()
+        .then(({ drives: d }) => setDrives(d))
+        .catch(() => {})
+    } else {
+      shell.fs
+        .drives()
+        .then(({ drives: d }) => {
+          setDrives(d)
+          if (d.length > 0 && d[0]) loadRef.current(d[0])
+        })
+        .catch(() => {})
+    }
+  }, [])
 
   useEffect(() => {
     if (searchMode !== "code" || !query.trim() || !cwd) {

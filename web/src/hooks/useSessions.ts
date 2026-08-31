@@ -176,6 +176,16 @@ export function useSessions(
       }
 
       setSessions((current) => {
+        // full=true (delete/rename/crear) => reemplazo para que borrados desaparezcan
+        if (full) {
+          const result = [...mapped].sort((a, b) => b.updated - a.updated)
+          const selected = selectedID ? result.find((s) => s.id === selectedID) : null
+          if (!selected && selectedID) {
+            const keep = current.find((s) => s.id === selectedID)
+            if (keep) return [keep, ...result].sort((a, b) => b.updated - a.updated)
+          }
+          return result
+        }
         const currentMap = new Map(current.map((s) => [s.id, s]))
         for (const m of mapped) {
           const existing = currentMap.get(m.id)
@@ -252,11 +262,23 @@ export function useSessions(
   }, [config, creatingSession])
 
   const deleteSession = useCallback(async (id: string) => {
-    await api.deleteSession(config, id, sessionToDelete?.directory)
+    const dir = sessionToDelete?.directory ?? sessions.find((s) => s.id === id)?.directory
+    // optimista: quitar de UI inmediato
+    setSessions((prev) => prev.filter((s) => s.id !== id))
     if (selectedID === id) setSelectedID(null)
     setSessionToDelete(null)
+    try {
+      await api.deleteSession(config, id, dir)
+    } catch (e) {
+      // fallback sin directory si el server responde 404 por mismatch de path
+      try {
+        await api.deleteSession(config, id, undefined)
+      } catch {
+        throw e
+      }
+    }
     await refreshSessions(true)
-  }, [config, sessionToDelete?.directory, selectedID, refreshSessions])
+  }, [config, sessionToDelete?.directory, sessions, selectedID, refreshSessions])
 
   const renameSession = useCallback(async (id: string, title: string, directory: string) => {
     if (!title.trim()) return

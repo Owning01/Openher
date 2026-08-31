@@ -1,7 +1,7 @@
 import { memo, type ReactNode } from "react"
 import { StarIcon, CloseIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import { formatTime } from "../utils"
+import { formatTimeCompact, formatTime } from "../utils"
 import type { SessionView } from "../types"
 import { GridSpinner } from "./GridSpinner"
 
@@ -25,6 +25,7 @@ export const QuickAccessCard = memo(function QuickAccessCard({
     <div
       className="quick-access-card"
       onClick={() => onOpen(session.id, session.directory)}
+      title={session.title}
       onContextMenu={(e) => {
         if (onContextMenu) {
           e.preventDefault()
@@ -56,7 +57,7 @@ export const QuickAccessCard = memo(function QuickAccessCard({
         <StarIcon size={12} className={isFavorite ? "star-filled" : "star-empty"} />
       </button>
       <span className="quick-access-title">{session.title}</span>
-      <span className="quick-access-time">{formatTime(session.updated)}</span>
+      <span className="quick-access-time" title={formatTime(session.updated)}>{formatTimeCompact(session.updated)}</span>
       {session.status === "busy" && (
         <GridSpinner label={t('session.statusBusy')} title={t('session.statusBusy')} />
       )}

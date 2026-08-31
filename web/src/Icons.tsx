@@ -94,6 +94,12 @@ export const ScrollDownIcon = (p: { className?: string; size?: number }) => (
 export const LayersIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Layers"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></Svg>)
 
+export const GraduationCapIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Aprendizaje"><path d="M12 3L2 8l10 5 10-5-10-5z"/><path d="M6 12l6 3 6-3"/><path d="M6 16l6 3 6-3"/><path d="M12 11v6"/></Svg>)
+
+export const PanelLeftIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Panel"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></Svg>)
+
 export const UndoIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Undo"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></Svg>)
 export const RedoIcon = (p: { className?: string; size?: number }) => (

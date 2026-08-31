@@ -3,6 +3,7 @@ import {
   isSessionActive,
   hasFileChanges,
   formatTime,
+  formatTimeCompact,
   noopCatch,
   formatLimit,
   formatCompact,
@@ -89,6 +90,18 @@ describe("formatTime", () => {
     expect(result).not.toBe("-")
     expect(typeof result).toBe("string")
     expect(result.length).toBeGreaterThan(0)
+  })
+})
+
+describe("formatTimeCompact", () => {
+  it("returns empty string for 0 or negative", () => {
+    expect(formatTimeCompact(0)).toBe("")
+    expect(formatTimeCompact(-1)).toBe("")
+  })
+  it("returns compact representation for recent timestamp", () => {
+    const now = Date.now()
+    expect(formatTimeCompact(now - 10000)).toBe("ahora")
+    expect(formatTimeCompact(now - 300000)).toBe("5m")
   })
 })
 

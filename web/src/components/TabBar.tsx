@@ -91,6 +91,8 @@ export const TabBar = memo(function TabBar({
     if (id === "labs") return " Labs"
     if (id === "__design__") return "◈ Open Design"
     if (id === "__learning__" || id === "learning") return "📚 Aprendizaje"
+    if (id === "__reports__") return " Informes"
+    if (id === "__screenshots__") return " Screenshots"
 
     const session = sessions.find((s) => s.id === id)
     if (session?.title && session.title !== "New Session") return session.title

@@ -34,7 +34,16 @@ function CheckboxIcon({ size = 14 }: { size?: number }) {
 }
 
 export const SessionToolbar = memo(function SessionToolbar({
-  refreshing, creating, onRefresh, onNewSession, onOpenSettings, dataMode, onSearchToggle, searchOpen, selecting = false, onToggleSelect
+  refreshing,
+  creating,
+  onRefresh,
+  onNewSession,
+  onOpenSettings,
+  dataMode,
+  onSearchToggle,
+  searchOpen,
+  selecting = false,
+  onToggleSelect,
 }: SessionToolbarProps) {
   const t = useT()
   const [refreshFeedback, setRefreshFeedback] = useState<"ok" | "fail" | null>(null)
@@ -49,43 +58,71 @@ export const SessionToolbar = memo(function SessionToolbar({
     feedbackTimerRef.current = setTimeout(() => setRefreshFeedback(null), 1600)
   }, [refreshing, onRefresh])
 
-  const btnStyle: React.CSSProperties = { flexShrink: 0, width: 40, height: 40, padding: 0 }
-  const btnClass = "btn-icon btn-secondary compact"
-
   return (
-    <div className="session-toolbar-wrap session-toolbar-row" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "10px", flexWrap: "nowrap", width: "100%", margin: "0.25rem 0" }}>
-      <button onClick={handleRefresh} className="btn-icon" disabled={refreshing} title={t('sessions.refresh')} aria-label={t('sessions.refresh')} style={{ ...btnStyle, background: "transparent", border: "none" }}>
-        {refreshing ? <LoadingIcon size={20} /> : refreshFeedback === "fail" ? <CloseIcon size={16} className="toolbar-refresh-fail" /> : <RefreshIcon size={20} />}
-      </button>
-      {refreshFeedback === "ok" && (
-        <span className="conn-ok" title={t('connection.connected')}>
-          <CheckIcon size={14} />
-          <span>{t('connection.connected')}</span>
+    <div className="session-toolbar-wrap session-toolbar-row">
+      <div className="session-toolbar-left">
+        <button onClick={handleRefresh} className="btn-icon pcf-hbtn" disabled={refreshing} title={t("sessions.refresh")} aria-label={t("sessions.refresh")}>
+          {refreshing ? <LoadingIcon size={16} /> : refreshFeedback === "fail" ? <CloseIcon size={15} className="toolbar-refresh-fail" /> : <RefreshIcon size={16} />}
+        </button>
+        {refreshFeedback === "ok" && (
+          <span className="conn-ok" title={t("connection.connected")}>
+            <CheckIcon size={13} />
+            <span>{t("connection.connected")}</span>
+          </span>
+        )}
+      </div>
+
+      <div className="session-toolbar-right">
+        {onSearchToggle && (
+          <button
+            type="button"
+            onClick={onSearchToggle}
+            className={`btn-icon pcf-hbtn session-search-toggle${searchOpen ? " active" : ""}`}
+            title={t("sessions.searchPlaceholder")}
+            aria-label={t("sessions.searchPlaceholder")}
+            aria-expanded={searchOpen}
+          >
+            <SearchIcon size={15} />
+          </button>
+        )}
+        {onToggleSelect && (
+          <button
+            type="button"
+            onClick={onToggleSelect}
+            className={`btn-icon pcf-hbtn${selecting ? " active" : ""}`}
+            title={t("sessions.select")}
+            aria-label={t("sessions.select")}
+            aria-pressed={selecting}
+          >
+            <CheckboxIcon size={15} />
+          </button>
+        )}
+        <span className="mode-indicator" title={t("settings.dataModeTitle")}>
+          <span className="mode-btn-text">{modeLabel(dataMode, t)}</span>
         </span>
-      )}
-      {onSearchToggle && (
-        <button onClick={onSearchToggle} className={`${btnClass} session-search-toggle`} title={t('sessions.searchPlaceholder')} aria-label={t('sessions.searchPlaceholder')} aria-expanded={searchOpen} style={btnStyle}>
-          <SearchIcon size={18} />
+        {onOpenSettings && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="btn-icon pcf-hbtn"
+            title={t("nav.settings") || "Settings"}
+            aria-label={t("nav.settings") || "Settings"}
+          >
+            <SettingsIcon size={15} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onNewSession}
+          className="btn-primary compact btn-new-session"
+          disabled={creating}
+          title={t("sessions.new")}
+          aria-label={t("sessions.new")}
+        >
+          {creating ? <LoadingIcon size={15} /> : <PlusIcon size={15} />}
+          <span className="btn-new-session-text">{t("sessions.new") || "Nueva"}</span>
         </button>
-      )}
-      {onToggleSelect && (
-        <button onClick={onToggleSelect} className={`${btnClass}${selecting ? " active" : ""}`}
-          title={t('sessions.select')} aria-label={t('sessions.select')} aria-pressed={selecting}
-          style={btnStyle}>
-          <CheckboxIcon size={18} />
-        </button>
-      )}
-      <button onClick={onNewSession} className="btn-primary compact btn-new-session" disabled={creating} title={t('sessions.new')} aria-label={t('sessions.new')} style={{ ...btnStyle, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-        {creating ? <LoadingIcon size={18} /> : <PlusIcon size={18} />}
-      </button>
-      <span className="mode-indicator" title={t('settings.dataModeTitle')}>
-        <span className="mode-btn-text">{modeLabel(dataMode, t)}</span>
-      </span>
-      {onOpenSettings && (
-        <button onClick={onOpenSettings} className={btnClass} title={t('nav.settings') || "Settings"} style={btnStyle}>
-          <SettingsIcon size={18} />
-        </button>
-      )}
+      </div>
     </div>
   )
 })

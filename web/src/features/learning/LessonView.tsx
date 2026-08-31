@@ -92,31 +92,6 @@ export function LessonView({ lesson, progress, isFirstInCategory, onToggleDone, 
         </button>
       </header>
 
-      {hasDiagram && (
-        <div className={`learning-lesson-diagram ${expanded ? "is-expanded" : "is-collapsed"}`}>
-          {isFirstInCategory && <div className="learning-diagram-badge">Resumen de la sección</div>}
-          <DiagramForLesson lesson={lesson} />
-          <div className="learning-diagram-toggle">
-            <button
-              type="button"
-              className="learning-diagram-toggle-main"
-              onClick={() => setExpanded((v) => !v)}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Ocultar diagrama" : "Ver diagrama completo"}
-            >
-              {expanded ? "▾ Ocultar diagrama" : "▸ Ver diagrama completo"}
-            </button>
-            <button
-              type="button"
-              className="learning-diagram-expand"
-              onClick={() => setLightbox(true)}
-              aria-label="Ampliar diagrama"
-            >
-              ⤢ Ampliar
-            </button>
-          </div>
-        </div>
-      )}
       {lightbox && hasDiagram && (
         <div className="learning-lightbox" onClick={() => setLightbox(false)} role="dialog" aria-modal="true">
           <div className="learning-lightbox-inner" onClick={(e) => e.stopPropagation()}>
@@ -151,6 +126,31 @@ export function LessonView({ lesson, progress, isFirstInCategory, onToggleDone, 
         )}
 
         <div className="learning-content-wrap">
+          {hasDiagram && (
+            <div className={`learning-lesson-diagram ${expanded ? "is-expanded" : "is-collapsed"}`}>
+              {isFirstInCategory && <div className="learning-diagram-badge">Resumen de la sección</div>}
+              <DiagramForLesson lesson={lesson} />
+              <div className="learning-diagram-toggle">
+                <button
+                  type="button"
+                  className="learning-diagram-toggle-main"
+                  onClick={() => setExpanded((v) => !v)}
+                  aria-expanded={expanded}
+                  aria-label={expanded ? "Ocultar diagrama" : "Ver diagrama completo"}
+                >
+                  {expanded ? "▾ Ocultar diagrama" : "▸ Ver diagrama completo"}
+                </button>
+                <button
+                  type="button"
+                  className="learning-diagram-expand"
+                  onClick={() => setLightbox(true)}
+                  aria-label="Ampliar diagrama"
+                >
+                  ⤢ Ampliar
+                </button>
+              </div>
+            </div>
+          )}
           {content === null && !error && <p className="subtle" style={{ padding: "2rem", textAlign: "center" }}>Cargando…</p>}
           {error && <p style={{ color: "var(--danger)", padding: "2rem" }}>Error: {String(error)}</p>}
           {content !== null && <LessonMarkdownWithAnchors content={content} toc={toc} />}
@@ -167,25 +167,37 @@ export function LessonView({ lesson, progress, isFirstInCategory, onToggleDone, 
   )
 }
 
-// Wrapper que inyecta ids en los headings para que el TOC funcione.
+// Wrapper que inyecta ids en los headings para que el TOC funcione — sin HTML crudo visible.
 function LessonMarkdownWithAnchors({ content, toc }: { content: string; toc: TocItem[] }) {
-  const patched = useMemo(() => {
-    let idx = 0
-    return content.split("\n").map((line) => {
-      const m = line.match(/^(#{1,3})\s+(.+)$/)
-      if (!m) return line
-      const item = toc[idx++]
-      if (!item) return line
-      // Inyecta id html detrás del heading: react-markdown renderiza <hN id=...>
-      // Usamos sintaxis que react-markdown preserva: envolvemos en <div id=...>
-      return `<a id="${item.id}" aria-hidden="true"></a>\n` + line
-    }).join("\n")
-  }, [content, toc])
+  const headingComponents = useMemo(() => {
+    // Mapa texto normalizado → id (por si hay duplicados, el primero gana)
+    const textToId = new Map<string, string>()
+    toc.forEach((item) => {
+      const k = item.text.toLowerCase().trim()
+      if (!textToId.has(k)) textToId.set(k, item.id)
+      const sk = slugify(item.text)
+      if (!textToId.has(sk)) textToId.set(sk, item.id)
+    })
+    const makeHeading = (level: number) => {
+      const Tag = `h${level}` as "h1" | "h2" | "h3"
+      return ({ children, ...props }: any) => {
+        // Extrae texto plano de children para mapear al id
+        const raw = Array.isArray(children) ? children.map((c: any) => (typeof c === "string" ? c : c?.props?.children ?? "")).join("") : String(children ?? "")
+        const key = raw.toLowerCase().trim().slice(0, 80)
+        const id = textToId.get(key) || textToId.get(slugify(raw)) || (props as any).id
+        return <Tag id={id} {...props}>{children}</Tag>
+      }
+    }
+    return {
+      h1: makeHeading(1),
+      h2: makeHeading(2),
+      h3: makeHeading(3),
+    }
+  }, [toc])
 
   return (
     <div className="message-content markdown-body">
-      {/* El <a id> trick funciona aunque no reescriba el heading: react-markdown deja pasar raw html por default si remarkGfm lo permite. */}
-      <Markdown text={patched} />
+      <Markdown text={content} components={headingComponents} />
     </div>
   )
 }

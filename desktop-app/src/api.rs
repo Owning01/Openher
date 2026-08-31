@@ -135,7 +135,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "config": cfg })));
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -159,7 +159,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_err(400, "config inválida"));
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -179,12 +179,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                         let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "enabled": enabled })));
                     }
                     Err(e) => {
-                        let _ = req.respond(json_err(500, &e));
+                        let _ = req.respond(json_err(500, &e.to_string()));
                     }
                 }
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -213,7 +213,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -241,12 +241,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                         let _ = req.respond(json_ok(&val));
                     }
                     Err(e) => {
-                        let _ = req.respond(json_err(500, &e));
+                        let _ = req.respond(json_err(500, &e.to_string()));
                     }
                 }
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -274,12 +274,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                         let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "path": path_str })));
                     }
                     Err(e) => {
-                        let _ = req.respond(json_err(500, &e));
+                        let _ = req.respond(json_err(500, &e.to_string()));
                     }
                 }
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -303,7 +303,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_ok(&serde_json::json!({ "id": id, "ws_port": state.port + 1 })));
             }
             Err(e) => {
-                let _ = req.respond(json_err(500, &e));
+                let _ = req.respond(json_err(500, &e.to_string()));
             }
         }
         return;
@@ -350,7 +350,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                     }
                 }
                 Err(e) => {
-                    let _ = req.respond(json_err(400, &e));
+                    let _ = req.respond(json_err(400, &e.to_string()));
                 }
             }
             return;
@@ -372,7 +372,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                     }
                 }
                 Err(e) => {
-                    let _ = req.respond(json_err(400, &e));
+                    let _ = req.respond(json_err(400, &e.to_string()));
                 }
             }
             return;
@@ -398,12 +398,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                         let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "board": v })));
                     }
                     Err(e) => {
-                        let _ = req.respond(json_err(500, &e));
+                        let _ = req.respond(json_err(500, &e.to_string()));
                     }
                 }
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -433,12 +433,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                         let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "card": v })));
                     }
                     Err(e) => {
-                        let _ = req.respond(json_err(500, &e));
+                        let _ = req.respond(json_err(500, &e.to_string()));
                     }
                 }
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -457,7 +457,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 }
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -488,7 +488,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_ok(&v));
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -499,7 +499,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_ok(&v));
             }
             Err(e) => {
-                let _ = req.respond(json_err(500, &e));
+                let _ = req.respond(json_err(500, &e.to_string()));
             }
         }
         return;
@@ -526,6 +526,119 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             Err(e) => {
                 let _ = req.respond(json_err(404, &e));
             }
+        }
+        return;
+    }
+
+    // ============================== Computer control v2 — JPEG+region+batch+etag (token 70% + speed)
+    if path == "/shell/computer/screenshot" {
+        let w = q("width").parse::<u32>().ok();
+        let fmt = q("format");
+        let qual = q("quality").parse::<u8>().ok();
+        let x = q("x").parse::<i32>().ok();
+        let y = q("y").parse::<i32>().ok();
+        let rw = q("w").parse::<u32>().ok();
+        let rh = q("h").parse::<u32>().ok();
+        let bare = q("bare") == "1" || q("bare") == "true";
+        let cursor = q("cursor") == "1" || q("cursor") == "true";
+        let screen = q("screen").parse::<u32>().ok();
+        let etag_q = if q("etag").is_empty() { None } else { Some(q("etag")) };
+        let etag_hdr = req.headers().iter().find(|h| h.field.as_str().to_ascii_lowercase()=="if-none-match").map(|h| h.value.as_str().to_string());
+        let etag = etag_q.or(etag_hdr);
+        let opts = crate::computer::ScreenshotOpts { width: w, format: if fmt.is_empty() { None } else { Some(fmt) }, quality: qual, x, y, w: rw, h: rh, bare: Some(bare), cursor: Some(cursor), screen };
+        match crate::computer::screenshot_v2(&opts, etag) {
+            Ok(v) => {
+                let _ = req.respond(json_ok(&serde_json::to_value(v).unwrap_or_default()));
+            }
+            Err(e) => {
+                let _ = req.respond(json_err(500, &e.to_string()));
+            }
+        }
+        return;
+    }
+    if path == "/shell/computer/batch" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let r: Result<crate::computer::BatchReq, _> = serde_json::from_value(b.clone());
+                match r {
+                    Ok(req_batch) => match crate::computer::batch(&req_batch) {
+                        Ok(v) => {
+                            if let Some(s) = v {
+                                let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "screenshot": s })));
+                            } else {
+                                let _ = req.respond(json_ok(&serde_json::json!({ "ok": true })));
+                            }
+                        }
+                        Err(e) => { let _ = req.respond(json_err(500, &e.to_string())); }
+                    },
+                    Err(e) => { let _ = req.respond(json_err(400, &format!("batch json: {e}"))); }
+                }
+            }
+            Err(e) => { let _ = req.respond(json_err(400, &e.to_string())); }
+        }
+        return;
+    }
+    if path == "/shell/computer/mouse" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let r: Result<crate::computer::MouseReq, _> = serde_json::from_value(b.clone());
+                match r {
+                    Ok(m) => match crate::computer::mouse(&m) {
+                        Ok(()) => { let _ = req.respond(json_ok(&serde_json::json!({ "ok": true }))); }
+                        Err(e) => { let _ = req.respond(json_err(500, &e.to_string())); }
+                    },
+                    Err(e) => { let _ = req.respond(json_err(400, &format!("mouse json: {e}"))); }
+                }
+            }
+            Err(e) => { let _ = req.respond(json_err(400, &e.to_string())); }
+        }
+        return;
+    }
+    if path == "/shell/computer/key" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let r: Result<crate::computer::KeyReq, _> = serde_json::from_value(b.clone());
+                match r {
+                    Ok(k) => match crate::computer::key(&k) {
+                        Ok(()) => { let _ = req.respond(json_ok(&serde_json::json!({ "ok": true }))); }
+                        Err(e) => { let _ = req.respond(json_err(500, &e.to_string())); }
+                    },
+                    Err(e) => { let _ = req.respond(json_err(400, &format!("key json: {e}"))); }
+                }
+            }
+            Err(e) => { let _ = req.respond(json_err(400, &e.to_string())); }
+        }
+        return;
+    }
+    if path == "/shell/computer/type" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let r: Result<crate::computer::TypeReq, _> = serde_json::from_value(b.clone());
+                match r {
+                    Ok(t) => match crate::computer::type_text(&t) {
+                        Ok(()) => { let _ = req.respond(json_ok(&serde_json::json!({ "ok": true }))); }
+                        Err(e) => { let _ = req.respond(json_err(500, &e.to_string())); }
+                    },
+                    Err(e) => { let _ = req.respond(json_err(400, &format!("type json: {e}"))); }
+                }
+            }
+            Err(e) => { let _ = req.respond(json_err(400, &e.to_string())); }
+        }
+        return;
+    }
+    if path == "/shell/computer/scroll" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let r: Result<crate::computer::ScrollReq, _> = serde_json::from_value(b.clone());
+                match r {
+                    Ok(s) => match crate::computer::scroll(&s) {
+                        Ok(()) => { let _ = req.respond(json_ok(&serde_json::json!({ "ok": true }))); }
+                        Err(e) => { let _ = req.respond(json_err(500, &e.to_string())); }
+                    },
+                    Err(e) => { let _ = req.respond(json_err(400, &format!("scroll json: {e}"))); }
+                }
+            }
+            Err(e) => { let _ = req.respond(json_err(400, &e.to_string())); }
         }
         return;
     }
@@ -619,7 +732,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_ok(&serde_json::json!({ "ok": true, "url": url })));
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -645,7 +758,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 let _ = req.respond(json_ok(&serde_json::json!({ "ok": updated })));
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -663,12 +776,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                         let _ = req.respond(json_ok(&v));
                     }
                     Err(e) => {
-                        let _ = req.respond(json_err(500, &e));
+                        let _ = req.respond(json_err(500, &e.to_string()));
                     }
                 }
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -792,7 +905,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 })));
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -1013,7 +1126,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 }
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -1031,12 +1144,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                         let _ = req.respond(json_ok(&v));
                     }
                     Err(e) => {
-                        let _ = req.respond(json_err(500, &e));
+                        let _ = req.respond(json_err(500, &e.to_string()));
                     }
                 }
             }
             Err(e) => {
-                let _ = req.respond(json_err(400, &e));
+                let _ = req.respond(json_err(400, &e.to_string()));
             }
         }
         return;
@@ -1397,7 +1510,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             };
             let resp = match state.browser.open(url, bounds) {
                 Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(500, &e),
+                Err(e) => json_err(500, &e.to_string()),
             };
             let _ = req.respond(resp);
             return;
@@ -1415,7 +1528,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             };
             let resp = match state.browser.set_bounds(bounds) {
                 Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(500, &e),
+                Err(e) => json_err(500, &e.to_string()),
             };
             let _ = req.respond(resp);
             return;
@@ -1426,7 +1539,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             let visible = v["visible"].as_bool().unwrap_or(true);
             let resp = match state.browser.set_visible(visible) {
                 Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(500, &e),
+                Err(e) => json_err(500, &e.to_string()),
             };
             let _ = req.respond(resp);
             return;
@@ -1438,7 +1551,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             let action = v["action"].as_str();
             let resp = match state.browser.navigate(url, action) {
                 Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(500, &e),
+                Err(e) => json_err(500, &e.to_string()),
             };
             let _ = req.respond(resp);
             return;
@@ -1447,7 +1560,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     if path == "/shell/browser/close" && method == Method::Post {
         let resp = match state.browser.close() {
             Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-            Err(e) => json_err(500, &e),
+            Err(e) => json_err(500, &e.to_string()),
         };
         let _ = req.respond(resp);
         return;
@@ -1455,7 +1568,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     if path == "/shell/browser/url" && method == Method::Get {
         let resp = match state.browser.current_url() {
             Ok(url) => json_ok(&serde_json::json!({ "url": url })),
-            Err(e) => json_err(500, &e),
+            Err(e) => json_err(500, &e.to_string()),
         };
         let _ = req.respond(resp);
         return;
@@ -1476,7 +1589,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             }
             let resp = match state.browser.eval(code) {
                 Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(500, &e),
+                Err(e) => json_err(500, &e.to_string()),
             };
             let _ = req.respond(resp);
             return;

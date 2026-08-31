@@ -49,6 +49,8 @@ export type DesktopLayoutViewProps = {
   memInfo: any
   formatBytes: (bytes: number) => string
   handleOpenLearning: () => void
+  handleOpenReports: () => void
+  handleOpenScreenshots: () => void
   view: ViewType
   handleNavigate: (v: ViewType) => void
   sessionsView: React.ReactNode
@@ -204,6 +206,8 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     memInfo,
     formatBytes,
     handleOpenLearning,
+    handleOpenReports,
+    handleOpenScreenshots,
     view,
     handleNavigate,
     sessionsView,
@@ -363,6 +367,8 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         memInfo={memInfo}
         formatBytes={formatBytes}
         handleOpenLearning={handleOpenLearning}
+        handleOpenReports={handleOpenReports}
+        handleOpenScreenshots={handleOpenScreenshots}
         view={view}
         handleNavigate={handleNavigate}
       />

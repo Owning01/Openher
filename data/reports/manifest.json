@@ -1,0 +1,220 @@
+[
+  {
+    "id": "warzone-competitive",
+    "title": "WARZONE COMPETITIVO — Historia, Equipos y Jugadores",
+    "description": "Guía completa del competitivo de Call of Duty Warzone: historia, equipos profesionales, jugadores destacados, formato de torneos, meta actual y escena LATAM.",
+    "file": "reports/warzone-competitive.md",
+    "date": "2026-07-30",
+    "category": "Guía",
+    "tags": [
+      "warzone",
+      "competitivo",
+      "call-of-duty",
+      "equipos",
+      "jugadores",
+      "torneos",
+      "wsow",
+      "latam",
+      "faze",
+      "optic"
+    ]
+  },
+  {
+    "id": "skill-inventory-gap-analysis-2026",
+    "title": "SKILL INVENTORY — Gap Analysis 2026",
+    "description": "Análisis exhaustivo de skills, MCP servers, plugins y herramientas que faltan instalar. 12 categorías, 50+ recomendaciones, top 10 prioridades con enlaces e instrucciones de instalación.",
+    "file": "reports/skill-inventory-gap-analysis-2026.md",
+    "date": "2026-07-18",
+    "category": "Investigación",
+    "tags": [
+      "skills",
+      "opencode",
+      "mcp",
+      "herramientas",
+      "gap-analysis",
+      "plugins",
+      "tauri",
+      "rust",
+      "testing"
+    ]
+  },
+  {
+    "id": "opencode-api-guide",
+    "title": "OpenCode API Guide",
+    "description": "Guía compacta de la API de OpenCode: Zen (pay-as-you-go), Go (suscripción), Server local HTTP y SDK @opencode-ai/sdk. Todos los modelos, endpoints y ejemplos en curl/Python/TypeScript.",
+    "file": "reports/opencode-api-guide.md",
+    "date": "2026-07-18",
+    "category": "Guía",
+    "tags": [
+      "opencode",
+      "api",
+      "zen",
+      "go",
+      "sdk",
+      "modelos",
+      "guide"
+    ]
+  },
+  {
+    "id": "openmontage-vs-videouse",
+    "title": "Research: OpenMontage vs video-use",
+    "description": "Comparativa entre OpenMontage y video-use como workflows de HyperFrames para edición de video por conversación. Análisis de capacidades, pros/contra y casos de uso.",
+    "file": "reports/openmontage-vs-videouse.md",
+    "date": "2026-07-18",
+    "category": "Investigación",
+    "tags": [
+      "hyperframes",
+      "video",
+      "openmontage",
+      "video-use",
+      "comparativa"
+    ]
+  },
+  {
+    "id": "research-ai-code-review-arsenal-2026",
+    "title": "Research: AI Code Review Arsenal — 2026",
+    "description": "Arsenal de code review con IA en 2026: herramientas, técnicas, integración continua y mejores prácticas para revisiones de código automatizadas con agentes.",
+    "file": "reports/research-ai-code-review-arsenal-2026.md",
+    "date": "2026-07-18",
+    "category": "Investigación",
+    "tags": [
+      "code-review",
+      "ai",
+      "herramientas",
+      "2026",
+      "investigación"
+    ]
+  },
+  {
+    "id": "skills-report",
+    "title": "Inventario de Skills — Reporte Completo",
+    "description": "Inventario completo de skills instaladas en el ecosistema OpenCode. Cobertura por categoría, versiones, estado y recomendaciones de actualización.",
+    "file": "reports/skills-report.md",
+    "date": "2026-07-18",
+    "category": "Inventario",
+    "tags": [
+      "skills",
+      "opencode",
+      "inventario",
+      "plugins",
+      "reporte"
+    ]
+  },
+  {
+    "id": "research-vision-model-mcp-traductor",
+    "title": "Modelos de Visión Pequeños para MCP Traductor",
+    "description": "Ranking de modelos de visión pequeños/baratos/gratis para usar como traductor de imágenes vía MCP. Moondream, Gemini API, SmolVLM2, Qwen-VL y más. Con código MCP server incluido.",
+    "file": "reports/research-vision-model-mcp-traductor.md",
+    "date": "2026-07-18",
+    "category": "Investigación",
+    "tags": [
+      "vision",
+      "vlm",
+      "mcp",
+      "moondream",
+      "gemini",
+      "smolvlm",
+      "qwen",
+      "traductor",
+      "ia",
+      "modelos-pequeños"
+    ]
+  },
+  {
+    "id": "opencode-token-optimization",
+    "title": "Token Warfare — OpenCode + Antigravity + Gemini 3.5 Flash",
+    "description": "Guía definitiva de optimización de tokens para OpenCode en Antigravity con Gemini 3.5 Flash. Estrategias DCP, RTK, Caveman, MCP delegation, AGENTS.md, subagentes y plan mode. Reporte neobrutalista con tablas comparativas y ejemplos de configuración.",
+    "file": "reports/opencode-token-optimization.md",
+    "date": "2026-07-19",
+    "category": "Guía",
+    "tags": [
+      "opencode",
+      "antigravity",
+      "gemini",
+      "tokens",
+      "optimización",
+      "dcp",
+      "rtk",
+      "caveman",
+      "mcp",
+      "agentsmd",
+      "plan-mode",
+      "2026"
+    ]
+  },
+  {
+    "id": "token-efficiency-research-2026",
+    "title": "Token Warfare 2026 — Guía Definitiva de Optimización",
+    "description": "Investigación exhaustiva sobre reducción de tokens en LLMs (Gemini 3.5 Flash, DeepSeek V4 Flash, Claude) sin perder inteligencia. 10 áreas: MCP servers, skills, system prompts, context window, tool calling, output compression, plugins, model-specific, codebase-memory-mcp, y agent/subagent design. Con ranking de impacto y ejemplos de configuración.",
+    "file": "reports/token-efficiency-research-2026.md",
+    "date": "2026-07-28",
+    "category": "Investigación",
+    "tags": [
+      "tokens",
+      "optimización",
+      "gemini",
+      "deepseek",
+      "claude",
+      "mcp",
+      "skills",
+      "prompt-compression",
+      "caching",
+      "context-window",
+      "codebase-memory",
+      "agentes",
+      "neobrutalist"
+    ]
+  },
+  {
+    "id": "optimizacion-agentes-scraping-2025-2026",
+    "title": "Optimización Emergente + Scraping Agéntico + Radar X/GitHub 2025-2026",
+    "description": "Investigación triple eje: 18 técnicas de optimización emergentes (FlashAttention-3/4, PagedAttention/KV-Cache, EAGLE/FastEagle 5.67x, VPTQ/QuIP#, SuperCoder/LPO, GEAK/K-Search, React Compiler), scraping agéntico en X/Facebook/IG con Browser-Use 86K★/Stagehand/Firecrawl/Apify y arquitectura coordinator+browser agents, y radar X/GitHub trends. 32 fuentes, tablas comparativas y 7 recomendaciones accionables.",
+    "file": "reports/optimizacion-agentes-scraping-2025-2026.md",
+    "date": "2026-08-27",
+    "category": "Investigación",
+    "tags": [
+      "optimización",
+      "flashattention",
+      "vllm",
+      "pagedattention",
+      "quantization",
+      "vptq",
+      "speculative-decoding",
+      "eagle",
+      "scraping",
+      "browser-use",
+      "stagehand",
+      "firecrawl",
+      "apify",
+      "x-api",
+      "github-trending",
+      "agentes",
+      "2026",
+      "neobrutalist"
+    ]
+  },
+  {
+    "id": "guia-maxima-optimizacion-windows11-gaming-programacion-2026",
+    "title": "Guía Máxima Optimización Windows 11 — Gaming + Programación (i5-13400F + RTX 3090 | 24H2/25H2)",
+    "description": "Informe exhaustivo y accionable para 13400F+3090+32GB: Windows base debloat seguro, VBS/HAGS benchmarks, BIOS XMP/ReBAR, drivers NVIDIA App vs GFE, DLSS 4/Reflex/G-Sync, DirectStorage, WSL2/Docker vs Podman, Defender exclusions para Vite/pnpm, NVMe Native, pagefile 32GB, ISLC, red Bufferbloat, checklist por impacto Esencial/Recomendado/Extremo con fuentes 2025-2026.",
+    "file": "reports/guia-maxima-optimizacion-windows11-gaming-programacion-2026.md",
+    "date": "2026-08-28",
+    "category": "Guía",
+    "tags": [
+      "windows11",
+      "24H2",
+      "25H2",
+      "gaming",
+      "programacion",
+      "i5-13400F",
+      "RTX3090",
+      "optimizacion",
+      "VBS",
+      "ReBAR",
+      "DLSS",
+      "WSL2",
+      "NVMe",
+      "guia"
+    ]
+  }
+]

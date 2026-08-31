@@ -2,7 +2,7 @@ import { useCallback } from "react"
 import type { ShellPanelKind } from "../shell"
 import type { DesktopLayout, ViewType } from "../types"
 
-export type VirtualTabId = "__design__" | "__kanban__" | "__learning__" | (string & {})
+export type VirtualTabId = "__design__" | "__kanban__" | "__learning__" | "__reports__" | "__screenshots__" | (string & {})
 
 export interface UseVirtualTabsOptions {
   isDesktop: boolean
@@ -31,6 +31,8 @@ export function useVirtualTabs({
   handleOpenDesign: () => void
   handleOpenKanban: () => void
   handleOpenLearning: () => void
+  handleOpenReports: () => void
+  handleOpenScreenshots: () => void
 } {
   const openVirtualTab = useCallback(
     (id: VirtualTabId): void => {
@@ -105,9 +107,11 @@ export function useVirtualTabs({
   const handleOpenDesign = useCallback(() => openVirtualTab("__design__"), [openVirtualTab])
   const handleOpenKanban = useCallback(() => openVirtualTab("__kanban__"), [openVirtualTab])
   const handleOpenLearning = useCallback(() => openVirtualTab("__learning__"), [openVirtualTab])
+  const handleOpenReports = useCallback(() => openVirtualTab("__reports__"), [openVirtualTab])
+  const handleOpenScreenshots = useCallback(() => openVirtualTab("__screenshots__"), [openVirtualTab])
 
   // _addPanel kept for API compatibility (panel dedicado fallback ya cubierto por tabs)
   void _addPanel
 
-  return { openVirtualTab, handleOpenDesign, handleOpenKanban, handleOpenLearning }
+  return { openVirtualTab, handleOpenDesign, handleOpenKanban, handleOpenLearning, handleOpenReports, handleOpenScreenshots }
 }

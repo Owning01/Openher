@@ -1,11 +1,13 @@
 // LearningPage — entry del plugin. Lazy-loaded. Estilos en styles/learning.css
-import { useEffect, useMemo, useState } from "react"
-import { loadManifest } from "./data.ts"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { loadProgress, markDone, markVisited } from "./progress.ts"
+import { GraduationCapIcon, PanelLeftIcon } from "../../Icons.tsx"
 import { LearningSidebar } from "./Sidebar.tsx"
 import { LessonView } from "./LessonView.tsx"
 import { shouldShowDiagram } from "./diagrams.tsx"
 import type { LearningManifest, LearningLesson, LearningProgress } from "./types.ts"
+import { loadCustomCategories, saveCustomCategories, saveCustomDoc, createCustomCategory, createCustomLesson, persistLessonMove, persistCategoryOrder } from "./customStore.ts"
+import { loadManifest, invalidateManifestCache, cacheLessonContent } from "./data.ts"
 
 type MobilePane = "list" | "lesson"
 
@@ -48,18 +50,6 @@ export default function LearningPage() {
   const goPrev = () => { if (currentIndex > 0) handleSelect(flatLessons[currentIndex - 1]) }
   const goNext = () => { if (currentIndex >= 0 && currentIndex < flatLessons.length - 1) handleSelect(flatLessons[currentIndex + 1]) }
 
-  useEffect(() => {
-    try { localStorage.setItem("learning:sidebarCollapsed", sidebarCollapsed ? "1" : "0") } catch { /* ignore */ }
-  }, [sidebarCollapsed])
-
-  if (error) return <div className="learning-center"><p style={{ color: "var(--danger)" }}>Error: {error}</p></div>
-  if (!manifest) return <div className="learning-center"><p className="subtle">Cargando curriculum…</p></div>
-
-  const totalDone = manifest.categories.reduce((a, c) => a + c.items.filter((it) => progress[it.id]?.done).length, 0)
-  const percent = Math.round((totalDone / manifest.totalLessons) * 100)
-
-  const showDashboard = mobilePane !== "lesson" || !selected
-  const showLesson = !!selected
   const isFirstInCategory = useMemo(() => {
     if (!selected || !manifest) return false
     const cat = manifest.categories.find((c) => c.id === selected.category)
@@ -71,18 +61,195 @@ export default function LearningPage() {
     return cat.items[0]?.id === selected.id && shouldShowDiagram(selected)
   }, [selected, manifest])
 
+  const reloadWithCustom = useCallback(async () => {
+    invalidateManifestCache()
+    try {
+      const m = await loadManifest()
+      setManifest(m)
+    } catch (e) { setError(String(e)) }
+  }, [])
+
+  const handleMoveLesson = useCallback((lessonId: string, toCategoryId: string, toIndex: number) => {
+    if (!manifest) return
+    persistLessonMove(lessonId, toCategoryId, toIndex)
+    setManifest((prev) => {
+      if (!prev) return prev
+      const lessonMap = new Map<string, LearningLesson>()
+      for (const c of prev.categories) for (const it of c.items) lessonMap.set(it.id, it)
+      const lesson = lessonMap.get(lessonId)
+      if (!lesson) return prev
+      const nextCats = prev.categories.map(c => ({ ...c, items: c.items.filter(it => it.id !== lessonId) }))
+      const target = nextCats.find(c => c.id === toCategoryId)
+      if (!target) return prev
+      const updated: LearningLesson = { ...lesson, category: toCategoryId, categoryTitle: target.title }
+      const idx = Math.max(0, Math.min(toIndex, target.items.length))
+      target.items.splice(idx, 0, updated)
+      for (const c of nextCats) c.count = c.items.length
+      return { ...prev, categories: nextCats, totalLessons: nextCats.reduce((a, c) => a + c.items.length, 0) }
+    })
+  }, [manifest])
+
+  const handleReorderCategory = useCallback((categoryId: string, toIndex: number) => {
+    if (!manifest) return
+    const ids = manifest.categories.map(c => c.id)
+    const fromIdx = ids.indexOf(categoryId)
+    if (fromIdx === -1) return
+    const nextIds = [...ids]
+    nextIds.splice(fromIdx, 1)
+    const clamped = Math.max(0, Math.min(toIndex, nextIds.length))
+    nextIds.splice(clamped, 0, categoryId)
+    persistCategoryOrder(nextIds)
+    setManifest((prev) => {
+      if (!prev) return prev
+      const map = new Map(prev.categories.map(c => [c.id, c] as const))
+      const ordered = nextIds.map(id => map.get(id)!).filter(Boolean)
+      for (const c of prev.categories) if (!nextIds.includes(c.id)) ordered.push(c)
+      return { ...prev, categories: ordered }
+    })
+  }, [manifest])
+
+  const handleCreateCategory = useCallback(async (title: string) => {
+    const newCat = createCustomCategory(title)
+    const existing = loadCustomCategories()
+    saveCustomCategories([...existing, newCat])
+    await reloadWithCustom()
+  }, [reloadWithCustom])
+
+  const handleAddDoc = useCallback(async (categoryId: string, file: File) => {
+    const text = await file.text()
+    const cats = loadCustomCategories()
+    const allCats = manifest ? [...manifest.categories] : []
+    let target = allCats.find(c => c.id === categoryId) || cats.find(c => c.id === categoryId)
+    if (!target) return
+    const lesson = createCustomLesson(target, file.name, text)
+    saveCustomDoc(lesson.id, text)
+    cacheLessonContent(lesson.id, text)
+    if (target.isCustom) {
+      const updatedCats = cats.map(c => c.id === categoryId ? { ...c, items: [...c.items, lesson], count: c.items.length + 1 } : c)
+      // si no estaba en cats (es base custom? no debería)
+      const found = cats.some(c => c.id === categoryId)
+      if (found) saveCustomCategories(updatedCats)
+      else {
+        // fallback: agregar a primera custom o crear pool
+        if (cats.length > 0) {
+          cats[0].items.push(lesson)
+          cats[0].count = cats[0].items.length
+          saveCustomCategories(cats)
+        } else {
+          const pool: import("./types.ts").LearningCategory = { id: "__custom_pool__", title: "Mis docs", level: 2, description: "Documentos importados", count: 1, items: [lesson], isCustom: true }
+          saveCustomCategories([pool])
+        }
+      }
+      await reloadWithCustom()
+    } else {
+      // categoría base: persistir movimiento para que aparezca ahí
+      persistLessonMove(lesson.id, categoryId, target.items.length)
+      // guardar lección en pool custom para que applyCustom la encuentre
+      let pool = cats.find(c => c.id === "__custom_pool__")
+      if (!pool && cats.length === 0) {
+        pool = { id: "__custom_pool__", title: "Mis docs", level: 2, description: "Documentos importados", count: 0, items: [], isCustom: true }
+        cats.push(pool)
+      }
+      if (pool) {
+        pool.items.push(lesson)
+        pool.count = pool.items.length
+        saveCustomCategories(cats)
+      } else if (cats.length > 0) {
+        cats[0].items.push(lesson)
+        cats[0].count = cats[0].items.length
+        saveCustomCategories(cats)
+      }
+      await reloadWithCustom()
+    }
+    setTimeout(() => handleSelect(lesson), 100)
+  }, [manifest])
+
+  const handleCreateEmptyDoc = useCallback(async (categoryId: string) => {
+    const title = prompt("Nombre del nuevo documento (sin extensión):")
+    if (!title) return
+    const fileName = title.trim().replace(/\.md$/i, "") + ".md"
+    const content = `# ${title.trim()}\n\nEscribí tu contenido acá...\n`
+    const fakeFile = new File([content], fileName, { type: "text/markdown" })
+    await handleAddDoc(categoryId, fakeFile)
+  }, [handleAddDoc])
+
+  const handleDropFiles = useCallback(async (categoryId: string, files: FileList) => {
+    for (const file of Array.from(files)) {
+      if (file.name.endsWith(".md") || file.name.endsWith(".txt") || file.type.startsWith("text/") || file.name.endsWith(".markdown")) {
+        await handleAddDoc(categoryId, file)
+      }
+    }
+  }, [handleAddDoc])
+
+  useEffect(() => {
+    try { localStorage.setItem("learning:sidebarCollapsed", sidebarCollapsed ? "1" : "0") } catch { /* ignore */ }
+  }, [sidebarCollapsed])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        // solo cuando el foco está dentro de learning
+        const target = e.target as HTMLElement | null
+        if (target && target.closest && target.closest(".learning-page")) {
+          e.preventDefault()
+          setSidebarCollapsed((v) => !v)
+        } else if (!target || target === document.body) {
+          // permitir también cuando no hay foco específico pero estamos en learning
+          const inLearning = document.querySelector(".learning-page")
+          if (inLearning) {
+            e.preventDefault()
+            setSidebarCollapsed((v) => !v)
+          }
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
+
+  if (error) return <div className="learning-center"><p style={{ color: "var(--danger)" }}>Error: {error}</p></div>
+  if (!manifest) return <div className="learning-center"><p className="subtle">Cargando curriculum…</p></div>
+
+  const totalDone = manifest.categories.reduce((a, c) => a + c.items.filter((it) => progress[it.id]?.done).length, 0)
+  const percent = Math.round((totalDone / manifest.totalLessons) * 100)
+
+  const showDashboard = mobilePane !== "lesson" || !selected
+  const showLesson = !!selected
+
   return (
     <div className="learning-page">
       <header className="learning-topbar">
         <button type="button" onClick={() => setSidebarOpen(true)} className="btn-icon compact learning-menu-btn" aria-label="Menú">☰</button>
-        <h2 className="learning-brand">📚 Aprendizaje</h2>
-        <span className="learning-stat">{manifest.totalLessons} lecciones</span>
+        <h2 className="learning-brand" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><GraduationCapIcon size={18} /> Aprendizaje</h2>
+        <button
+          type="button"
+          onClick={() => setSidebarCollapsed((v) => !v)}
+          className="btn-icon compact learning-dock-btn"
+          aria-label={sidebarCollapsed ? "Mostrar barra lateral" : "Ocultar barra lateral"}
+          aria-expanded={!sidebarCollapsed}
+          title={sidebarCollapsed ? "Acoplar barra (Ctrl+B)" : "Desacoplar barra (Ctrl+B)"}
+          style={{ marginLeft: 8 }}
+        >
+          <PanelLeftIcon size={16} />
+        </button>
+        <span className="learning-stat" style={{ marginLeft: "auto" }}>{manifest.totalLessons} lecciones</span>
         <span className="learning-stat" style={{ color: percent === 100 ? "var(--success)" : undefined }}>{percent}%</span>
       </header>
 
       <div className="learning-layout">
         <aside className={`learning-desktop-sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
-          <LearningSidebar manifest={manifest} progress={progress} selectedId={selected?.id ?? null} onSelect={handleSelect} />
+          <LearningSidebar
+            manifest={manifest}
+            progress={progress}
+            selectedId={selected?.id ?? null}
+            onSelect={handleSelect}
+            onMoveLesson={handleMoveLesson}
+            onReorderCategory={handleReorderCategory}
+            onCreateCategory={handleCreateCategory}
+            onAddDoc={handleAddDoc}
+            onCreateEmptyDoc={handleCreateEmptyDoc}
+            onDropFiles={handleDropFiles}
+          />
         </aside>
         <button
           type="button"
@@ -113,7 +280,19 @@ export default function LearningPage() {
         {sidebarOpen && (
           <div className="learning-mobile-overlay" onClick={() => setSidebarOpen(false)}>
             <div className="learning-mobile-panel" onClick={(e) => e.stopPropagation()}>
-              <LearningSidebar manifest={manifest} progress={progress} selectedId={selected?.id ?? null} onSelect={handleSelect} onClose={() => setSidebarOpen(false)} />
+              <LearningSidebar
+                manifest={manifest}
+                progress={progress}
+                selectedId={selected?.id ?? null}
+                onSelect={handleSelect}
+                onMoveLesson={handleMoveLesson}
+                onReorderCategory={handleReorderCategory}
+                onCreateCategory={handleCreateCategory}
+                onAddDoc={handleAddDoc}
+                onCreateEmptyDoc={handleCreateEmptyDoc}
+                onDropFiles={handleDropFiles}
+                onClose={() => setSidebarOpen(false)}
+              />
             </div>
           </div>
         )}

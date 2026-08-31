@@ -55,7 +55,18 @@ export function rememberTerminalPty(tabId: string, entry: { ptyId: string; wsPor
     if (!oldest) break
     const victim = terminalPtyStore.get(oldest)
     terminalPtyStore.delete(oldest)
-    if (victim) shell.pty.kill(victim.ptyId).catch(() => {})
+    if (victim) {
+      shell.pty.kill(victim.ptyId).catch(() => {})
+      // limpiar tab huérfana que referenciaba el pty evictado
+      for (const [panelId, persist] of terminalStore.entries()) {
+        const has = persist.tabs.some(t => t.id === oldest)
+        if (has) {
+          const filtered = persist.tabs.filter(t => t.id !== oldest)
+          if (filtered.length === 0) terminalStore.delete(panelId)
+          else terminalStore.set(panelId, { ...persist, tabs: filtered, activeId: persist.activeId === oldest ? filtered[0].id : persist.activeId, splitId: persist.splitId === oldest ? null : persist.splitId })
+        }
+      }
+    }
   }
 }
 

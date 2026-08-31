@@ -11,6 +11,7 @@
 mod api;
 mod browser_view;
 mod common;
+mod computer;
 mod docsx;
 mod fsx;
 mod fswatch;

@@ -6,6 +6,9 @@ description = "OpenHer Desktop - shell Rust portable que embebe la web app, stat
 license = "MIT"
 
 [dependencies]
+enigo = "0.2"
+screenshots = "0.8"
+image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tiny_http = "0.12" # se mantiene para fallback; hyper es el path nuevo

@@ -111,6 +111,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           memInfo={c.memInfo}
           formatBytes={c.formatBytes}
           handleOpenLearning={c.handleOpenLearning}
+          handleOpenReports={c.handleOpenReports}
+          handleOpenScreenshots={c.handleOpenScreenshots}
           view={c.view}
           handleNavigate={c.handleNavigate}
           sessionsView={sessionsView}

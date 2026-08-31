@@ -1,7 +1,7 @@
 import { memo, useCallback, useRef } from "react"
 import { StarIcon, ChevronIcon, CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import { formatTime } from "../utils"
+import { formatTimeCompact, formatTime } from "../utils"
 import { InlineRename } from "./InlineRename"
 import type { SessionView } from "../types"
 
@@ -57,8 +57,6 @@ export const SessionCard = memo(function SessionCard({
       return
     }
     if (hasChildren && onToggleCollapse) {
-      // Evita que el doble-click dispare el toggle: el segundo click se
-      // ignora y el onDoubleClick cancella el timer y abre el padre.
       if (clickTimer.current) return
       clickTimer.current = window.setTimeout(() => {
         clickTimer.current = null
@@ -85,6 +83,7 @@ export const SessionCard = memo(function SessionCard({
       draggable={!!onDragStartSession && !selectMode}
       onClick={handleCardClick}
       onDoubleClick={handleCardDoubleClick}
+      title={session.title}
       onContextMenu={(e) => {
         if (onContextMenu) {
           e.preventDefault()
@@ -103,7 +102,7 @@ export const SessionCard = memo(function SessionCard({
         <div className="session-card-title-group">
           {hasChildren && (
             <span className={`session-expand-icon${isCollapsed ? "" : " expanded"}`} aria-hidden="true">
-              <ChevronIcon size={14} />
+              <ChevronIcon size={12} />
             </span>
           )}
           {selectMode ? (
@@ -111,15 +110,19 @@ export const SessionCard = memo(function SessionCard({
               {isChecked && <CheckIcon size={10} />}
             </span>
           ) : (
-            <button className="star-btn" onClick={handleToggleFavorite}
+            <button
+              type="button"
+              className="star-btn"
+              onClick={handleToggleFavorite}
               aria-pressed={isFavorite}
               aria-label={isFavorite ? t('favorites.remove') : t('favorites.add')}
-              title={isFavorite ? t('favorites.remove') : t('favorites.add')}>
-              <StarIcon size={15} className={isFavorite ? "star-filled" : "star-empty"} />
+              title={isFavorite ? t('favorites.remove') : t('favorites.add')}
+            >
+              <StarIcon size={13} className={isFavorite ? "star-filled" : "star-empty"} />
             </button>
           )}
           {isChild && (
-            <span className="subagent-branch-tag" title="Subagente" style={{ fontSize: "0.72rem", color: "var(--muted)", opacity: 0.8, marginRight: 2 }}>
+            <span className="subagent-branch-tag" title="Subagente">
               ↳
             </span>
           )}
@@ -130,11 +133,11 @@ export const SessionCard = memo(function SessionCard({
               onCancel={onRenameCancel}
               placeholder={t('session.renamePlaceholder')} />
           ) : (
-            <h3 className="session-title">{session.title}</h3>
+            <span className="session-title">{session.title}</span>
           )}
         </div>
-        <span className="subtle time-label" style={{ fontSize: "0.72rem", flexShrink: 0 }}>
-          {formatTime(session.updated)}
+        <span className="time-label" title={formatTime(session.updated)}>
+          {formatTimeCompact(session.updated)}
         </span>
       </div>
     </article>

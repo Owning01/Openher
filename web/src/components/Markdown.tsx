@@ -174,7 +174,7 @@ function InlineCode({ className, children, ...props }: ComponentProps<"code">) {
   )
 }
 
-const components = { table: Table, a: Link, code: InlineCode, pre: CodeBlock }
+const baseComponents = { table: Table, a: Link, code: InlineCode, pre: CodeBlock }
 
 // Caché del árbol renderizado por (texto, highlight): reusar el elemento evita
 // re-parsear react-markdown + lowlight en re-renders sin cambio de texto
@@ -182,19 +182,25 @@ const components = { table: Table, a: Link, code: InlineCode, pre: CodeBlock }
 const mdCache = new Map<string, ReactNode>()
 const MD_CACHE_MAX = 16
 
-export const Markdown = memo(function Markdown({ text, highlight }: { text: string; highlight?: string }) {
-  const key = `${highlight ?? ""}\u0000${text}`
-  let el = mdCache.get(key)
-  if (!el) {
-    el = (
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkHighlight(highlight)]}
-        rehypePlugins={[rehypeHighlightLocal]}
-        components={components}
-      >
-        {text}
-      </ReactMarkdown>
-    )
+export const Markdown = memo(function Markdown({ text, highlight, components: extraComponents }: { text: string; highlight?: string; components?: Record<string, any> }) {
+  const key = `${highlight ?? ""}\u0000${text}\u0000${extraComponents ? JSON.stringify(Object.keys(extraComponents)) : ""}`
+  // Si hay componentes custom, no usar caché (depende de closures)
+  const useCache = !extraComponents
+  if (useCache) {
+    const cached = mdCache.get(key)
+    if (cached) return cached
+  }
+  const mergedComponents = extraComponents ? { ...baseComponents, ...extraComponents } : baseComponents
+  const el = (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkHighlight(highlight)]}
+      rehypePlugins={[rehypeHighlightLocal]}
+      components={mergedComponents}
+    >
+      {text}
+    </ReactMarkdown>
+  )
+  if (useCache) {
     if (mdCache.size >= MD_CACHE_MAX) {
       const oldest = mdCache.keys().next().value
       if (oldest !== undefined) mdCache.delete(oldest)
