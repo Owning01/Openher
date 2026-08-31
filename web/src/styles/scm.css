@@ -162,41 +162,59 @@
   padding: 10px 8px;
 }
 
-/* Lista de archivos */
-.scm-list { flex: 1; overflow-y: auto; min-height: 0; padding-bottom: var(--space-2); }
+/* Lista de archivos — Terax parity */
+.scm-listbox { position: relative; flex: 1; min-height: 0; outline: none; }
+.scm-listbox:focus-visible { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent); }
+.scm-list { height: 100%; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; padding-bottom: var(--space-2); }
 
 .scm-lh {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 30px;
+  height: 28px;
   padding: 0 var(--space-3);
   position: sticky;
   top: 0;
   background: var(--surface);
   z-index: 1;
 }
-
 .scm-lh-label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  letter-spacing: 0.16em;
+  color: color-mix(in srgb, var(--muted) 85%, transparent);
 }
-
 .scm-lh-count {
-  margin-left: auto;
-  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  min-width: 16px;
+  font-size: 9.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
   background: var(--surface-strong);
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  padding: 1px 7px;
+  padding: 0 5px;
 }
+.scm-lh-all {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+}
+.scm-lh-all:hover { color: var(--text); }
 
 .scm-check {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -208,23 +226,60 @@
   cursor: pointer;
   padding: 0;
 }
-
 .scm-check.on {
   background: var(--primary);
   border-color: var(--primary);
 }
+.scm-check.ind {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--bg);
+}
+.scm-check-dash {
+  width: 7px; height: 2px;
+  background: var(--bg);
+  border-radius: 1px;
+  display: block;
+}
 
 .scm-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   height: 30px;
-  padding: 0 var(--space-3);
+  padding: 0 8px 0 10px;
+  border-radius: 6px;
   cursor: pointer;
+  transition: background 0.1s;
 }
-
-.scm-row:hover { background: var(--surface-strong); }
+.scm-row:hover { background: color-mix(in srgb, var(--surface-strong) 70%, transparent); }
+.scm-row.focused { background: color-mix(in srgb, var(--primary) 8%, var(--surface-strong)); }
+.scm-row.selected { background: color-mix(in srgb, var(--primary) 10%, var(--surface-strong)); }
 .scm-row:hover .scm-row-action { opacity: 1; }
+.scm-row-accent {
+  position: absolute;
+  left: 0; top: 4px; bottom: 4px;
+  width: 2px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0.55;
+  transition: opacity 0.1s;
+}
+.scm-row.focused .scm-row-accent,
+.scm-row.selected .scm-row-accent,
+.scm-row:hover .scm-row-accent { opacity: 1; }
+.scm-status-code {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 4px;
+}
 
 .scm-badge {
   width: 16px;
@@ -253,9 +308,9 @@
   min-width: 0;
   flex: 1;
 }
-
-.scm-dir { font-size: 11px; color: var(--muted); flex-shrink: 1; }
-.scm-name { font-size: 12px; color: var(--text); flex-shrink: 0; max-width: 65%; }
+.scm-dir { font-size: 10.5px; color: color-mix(in srgb, var(--muted) 75%, transparent); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scm-name { font-size: 12px; font-weight: 500; color: color-mix(in srgb, var(--text) 95%, transparent); flex-shrink: 0; max-width: 58%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scm-name.strong { font-weight: 600; color: var(--text); }
 
 .scm-icon-btn {
   display: inline-flex;
@@ -278,35 +333,126 @@
 }
 
 .scm-banner-warn {
-  margin: var(--space-2) var(--space-3) 0;
-  font-size: 11.5px;
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.12);
-  border: 1px solid rgba(251, 191, 36, 0.35);
-  border-radius: var(--radius-md);
-  padding: 6px 10px;
+  margin: 4px 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  font-size: 10.5px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0 8px;
 }
+.scm-banner-dot { width: 8px; height: 8px; border-radius: 999px; background: #fbbf24; flex-shrink: 0; }
 
 .scm-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
+  gap: 8px;
   color: var(--muted);
   font-size: 12px;
-  padding: var(--space-6) var(--space-3);
+  padding: 24px 12px;
   text-align: center;
 }
+.scm-clean-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  color: var(--muted);
+}
+.scm-clean-title { font-size: 12px; font-weight: 500; color: var(--text); }
+.scm-clean-sub { font-size: 10.5px; color: var(--muted); }
+.scm-mono { font-family: var(--font-mono); color: color-mix(in srgb, var(--text) 80%, transparent); }
 
-/* Commit box */
+/* Commit box — Terax parity */
+.scm-commitbox-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 65%, transparent), color-mix(in srgb, var(--surface) 30%, transparent));
+}
+.scm-commitbox-card {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.scm-commitbox-card.has-text { border-color: color-mix(in srgb, var(--border) 70%, transparent); }
+.scm-commitbox-card:focus-within { border-color: color-mix(in srgb, var(--primary) 45%, transparent); box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 8%, transparent); }
+.scm-commit-textarea {
+  width: 100%;
+  resize: none;
+  min-height: 72px;
+  max-height: 140px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 10px 12px 28px;
+}
+.scm-commit-textarea::placeholder { color: color-mix(in srgb, var(--muted) 65%, transparent); }
+.scm-commitbox-meta {
+  pointer-events: none;
+  position: absolute;
+  left: 12px; right: 12px; bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+.scm-commitbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.scm-commitbox-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.scm-dot {
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.scm-dot.on { background: color-mix(in srgb, var(--text) 80%, transparent); }
+.scm-dot.mid { background: color-mix(in srgb, var(--muted) 60%, transparent); }
+.scm-push-label { margin-left: auto; color: color-mix(in srgb, var(--muted) 65%, transparent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scm-commit-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
 .scm-commitbox {
   display: flex;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--border-subtle);
 }
-
 .scm-commitbox textarea {
   flex: 1;
   resize: none;
@@ -320,23 +466,24 @@
   color: var(--text);
   padding: 6px 8px;
 }
-
 .scm-commit-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  align-self: flex-end;
+  height: 28px;
   background: var(--primary);
   border: 1px solid var(--primary);
   color: var(--on-primary);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
-  padding: 7px 14px;
+  letter-spacing: -0.01em;
+  padding: 0 12px;
   border-radius: var(--radius-md);
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
-
-.scm-commit-btn:disabled { opacity: 0.45; cursor: default; }
+.scm-commit-btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
 
 .scm-feedback {
   margin: 0 var(--space-3) var(--space-2);
@@ -356,25 +503,34 @@
   background: rgba(251, 113, 133, 0.1);
 }
 
-/* History / git graph */
+/* History / git graph — Terax parity */
 .scm-history {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
 }
+.scm-history-header {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  padding-right: 12px;
+}
+.scm-mark { background: color-mix(in srgb, var(--primary) 25%, transparent); border-radius: 3px; padding: 0 2px; color: var(--text); }
+.scm-strong { font-weight: 600; color: var(--text); }
 
 .scm-search {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: var(--space-2) var(--space-3);
+  margin: 8px 12px;
   padding: 5px 9px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--muted);
 }
-
 .scm-search input {
   flex: 1;
   background: transparent;
@@ -384,8 +540,21 @@
   font-size: 12px;
   min-width: 0;
 }
-
-.scm-log { flex: 1; overflow-y: auto; min-height: 0; padding-bottom: var(--space-3); }
+.scm-log { flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; padding-bottom: 12px; scrollbar-gutter: stable; }
+.scm-history-row {
+  display: grid;
+  align-items: center;
+  height: 32px;
+  padding-right: 12px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  background: transparent;
+  border-right: none; border-top: none; border-bottom: none;
+  width: 100%;
+}
+.scm-history-row:hover { background: color-mix(in srgb, var(--surface-strong) 60%, transparent); }
+.scm-history-row.active { background: color-mix(in srgb, var(--primary) 8%, transparent); border-left-color: color-mix(in srgb, var(--primary) 70%, transparent); }
 
 .scm-rail { flex-shrink: 0; overflow: visible; }
 

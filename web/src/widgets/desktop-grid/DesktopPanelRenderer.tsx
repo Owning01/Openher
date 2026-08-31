@@ -20,6 +20,8 @@ import { BrowserPanel } from "../../components/BrowserPanel"
 import LearningPage from "../../features/learning/LearningPage"
 import { PCFilesPanel } from "../../features/pc-files/PCFilesPanel"
 import { QuickChatPanel } from "../../components/QuickChatPanel"
+import ReportsPage from "../../features/reports/ReportsPage"
+import ScreenshotsPage from "../../features/screenshots/ScreenshotsPage"
 
 export const PANEL_SUSPENSE_FALLBACK = (
   <div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando…</div>
@@ -207,6 +209,12 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       if (stack.includes("__pcFiles__") && !allWithVirtual.find((s) => s.id === "__pcFiles__")) {
         allWithVirtual.push({ id: "__pcFiles__", title: "Archivos PC", directory: "" })
       }
+      if (stack.includes("__reports__") && !allWithVirtual.find((s) => s.id === "__reports__")) {
+        allWithVirtual.push({ id: "__reports__", title: "Informes", directory: "" })
+      }
+      if (stack.includes("__screenshots__") && !allWithVirtual.find((s) => s.id === "__screenshots__")) {
+        allWithVirtual.push({ id: "__screenshots__", title: "Screenshots", directory: "" })
+      }
 
       let vComp: React.ReactNode = null
       if (sid === "__design__") vComp = <DesignPanel />
@@ -214,6 +222,8 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       else if (sid === "__stats__") vComp = <StatsPanel />
       else if (sid === "__learning__") vComp = <LearningPage />
       else if (sid === "__pcFiles__") vComp = <PCFilesPanel onOpenFile={props.onOpenFile} />
+      else if (sid === "__reports__") vComp = <ReportsPage />
+      else if (sid === "__screenshots__") vComp = <ScreenshotsPage />
 
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>

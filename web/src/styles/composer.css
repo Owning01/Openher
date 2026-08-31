@@ -54,6 +54,39 @@
   position: relative;
   display: flex;
   align-items: flex-end;
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.composer-input-wrap.drag-over {
+  border: 1.5px dashed #0284c7 !important;
+  background: rgba(2, 132, 199, 0.08) !important;
+  box-shadow: 0 0 16px rgba(2, 132, 199, 0.18);
+}
+
+.composer-input-wrap.drag-over textarea {
+  opacity: 0.25;
+}
+
+.composer-drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 10;
+  animation: fade-in 0.12s ease-out;
+}
+
+.composer-drop-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
 .composer-input-wrap textarea {

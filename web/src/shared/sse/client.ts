@@ -65,6 +65,7 @@ export function createSSEClient(opts: SSEClientOptions) {
       state = "streaming"
       opts.onStateChange?.(state)
       es.onmessage = (msg) => {
+        attempt = 0
         const ev = parseSSEChunk(`data: ${msg.data}\nevent: ${msg.type || "message"}`)
         if (ev) opts.onEvent(ev)
       }
@@ -73,9 +74,12 @@ export function createSSEClient(opts: SSEClientOptions) {
         opts.onStateChange?.(state)
         es?.close()
         if (shouldReconnect(state, attempt)) {
-          const delay = 1000 * Math.min(attempt + 1, 10)
+          const delay = Math.min(500 * Math.pow(1.8, attempt), 10000)
           attempt++
           reconnectTimer = setTimeout(connect, delay)
+        } else {
+          state = "polling"
+          opts.onStateChange?.(state)
         }
       }
     } catch {

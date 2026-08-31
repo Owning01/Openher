@@ -319,8 +319,26 @@ export const api = {
     return request<Session>(config, withDirectory(`/session/${id}`, directory), { method: "PATCH", body: { title } })
   },
 
-  deleteSession(config: ServerConfig, id: string, directory?: string) {
-    return request<boolean>(config, withDirectory(`/session/${id}`, directory), { method: "DELETE" })
+  async deleteSession(config: ServerConfig, id: string, directory?: string) {
+    const attempt = async (dir?: string) => {
+      const path = withDirectory(`/session/${id}`, dir)
+      try {
+        await request<boolean>(config, path, { method: "DELETE" })
+        return true as boolean
+      } catch (e) {
+        const msg = String((e as Error).message || e)
+        if (msg.includes("Unexpected token") || msg.includes("is not valid JSON") || msg.includes("JSON")) return true as boolean
+        throw e
+      }
+    }
+    try {
+      return await attempt(directory)
+    } catch (e) {
+      if (directory) {
+        try { return await attempt(undefined) } catch { /* ignore */ }
+      }
+      throw e
+    }
   },
 
   async loadMessages(config: ServerConfig, sessionID: string, directory?: string, limit = 100) {

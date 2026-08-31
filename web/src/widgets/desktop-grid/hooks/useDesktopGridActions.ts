@@ -609,20 +609,83 @@ export function useDesktopGridActions({
     if (stack.length === 0) return
     for (const id of stack) if (id.startsWith("terminal")) killTerminalPty(id.replace(/^terminal[:\-]/, ""))
     const browserToDelete = stack.filter((id) => id.startsWith("browser:"))
-    setTabStacks((prev) => {
-      const next = prev.map((s) => [...s])
-      if (!next[panelIndex]) return next
-      next[panelIndex] = []
-      return next
-    })
-    setDesktopLayout((prev) => {
-      const sessions = [...prev.sessions]
-      const urls = { ...(prev.browserTabUrls ?? {}) }
-      for (const id of browserToDelete) delete urls[id]
-      sessions[panelIndex] = null
-      return { ...prev, sessions, browserTabUrls: urls }
-    })
-  }, [tabStacks, setTabStacks, setDesktopLayout])
+    // Reusar lógica de removeTab cuando queda vacío: colapsar panel en vez de dejar placeholder sin barra
+    const total = desktopLayout.cols * desktopLayout.rows
+    const sessions = [...desktopLayout.sessions]
+    const panelKinds = [...desktopLayout.panelKinds]
+    const panelIds = [...desktopLayout.panelIds]
+    const remaining = sessions.map((s, i) => ({ s, k: panelKinds[i], i })).filter(({ s, k, i }) => i !== panelIndex && (s !== null || k !== "session"))
+    if (remaining.length === 0) {
+      setTabStacks(() => [[]])
+      setDesktopLayout((prev) => ({
+        ...prev,
+        cols: 1,
+        rows: 1,
+        sessions: [null],
+        panelKinds: ["session" as const],
+        panelIds: [panelIds[panelIndex] ?? genPanelId()],
+        panelEditorPaths: {},
+        panelEditorTabStacks: {},
+        panelEditorActive: {},
+        colSizes: [null],
+        rowSizes: [null],
+        browserTabUrls: {},
+      }))
+      setActivePanel(0)
+      return
+    }
+    // Colapsar filas/columnas vacías como en removeTab/closePanel
+    let nextSessions = [...sessions]
+    let nextKinds = [...panelKinds]
+    let nextIds = [...panelIds]
+    let nextStacks: string[][] = tabStacks.map((s) => [...s])
+    while (nextStacks.length < total) nextStacks.push([])
+    nextStacks[panelIndex] = []
+    nextSessions[panelIndex] = null
+    nextKinds[panelIndex] = "session"
+    let { cols, rows, colSizes, rowSizes } = desktopLayout as unknown as DesktopLayout & { colSizes: (number | null)[]; rowSizes: (number | null)[] }
+    const isEmpty = (i: number) => nextSessions[i] === null && nextKinds[i] === "session"
+    let changed = true
+    while (changed) {
+      changed = false
+      for (let r = 0; r < rows; r++) {
+        const rowEmpty = nextSessions.slice(r * cols, r * cols + cols).every((_, i) => isEmpty(r * cols + i))
+        if (rowEmpty && rows > 1) {
+          nextSessions = nextSessions.filter((_, i) => Math.floor(i / cols) !== r)
+          nextKinds = nextKinds.filter((_, i) => Math.floor(i / cols) !== r)
+          nextIds = nextIds.filter((_, i) => Math.floor(i / cols) !== r)
+          nextStacks = nextStacks.filter((_, i) => Math.floor(i / cols) !== r)
+          rows -= 1
+          rowSizes = (rowSizes as (number | null)[]).filter((_, i) => i !== r)
+          changed = true
+          break
+        }
+      }
+      if (changed) continue
+      const emptyCols: number[] = []
+      for (let c = 0; c < cols; c++) {
+        const colEmpty = Array.from({ length: rows }, (_, r) => r * cols + c).every((i) => isEmpty(i))
+        if (colEmpty) emptyCols.push(c)
+      }
+      if (emptyCols.length > 0 && cols > emptyCols.length) {
+        const removeSet = new Set(emptyCols)
+        nextSessions = nextSessions.filter((_, i) => !removeSet.has(i % cols))
+        nextKinds = nextKinds.filter((_, i) => !removeSet.has(i % cols))
+        nextIds = nextIds.filter((_, i) => !removeSet.has(i % cols))
+        nextStacks = nextStacks.filter((_, i) => !removeSet.has(i % cols))
+        cols -= emptyCols.length
+        colSizes = (colSizes as (number | null)[]).filter((_, i) => !removeSet.has(i))
+        changed = true
+      }
+      if (cols === 1) colSizes = [null]
+      if (rows === 1) rowSizes = [null]
+    }
+    const urls: Record<string, string> = { ...(desktopLayout.browserTabUrls ?? {}) }
+    for (const id of browserToDelete) delete urls[id]
+    setTabStacks(() => nextStacks)
+    setDesktopLayout((prev) => ({ ...prev, cols, rows, sessions: nextSessions, panelKinds: nextKinds, panelIds: nextIds, colSizes: colSizes as any, rowSizes: rowSizes as any, browserTabUrls: urls }))
+    setActivePanel((prev) => (prev >= panelIndex ? Math.max(0, prev - 1) : prev))
+  }, [tabStacks, desktopLayout, setTabStacks, setDesktopLayout, setActivePanel])
 
   const handleSwapPanels = useCallback(
     (from: number, to: number) => {

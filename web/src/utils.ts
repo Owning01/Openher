@@ -18,6 +18,30 @@ export function formatTime(epoch: number): string {
   return new Date(epoch).toLocaleString()
 }
 
+export function formatTimeCompact(epoch: number): string {
+  if (!epoch || epoch <= 0 || Number.isNaN(epoch)) return ""
+  const date = new Date(epoch)
+  if (isNaN(date.getTime())) return ""
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+
+  if (diffMin < 1) return "ahora"
+  if (diffMin < 60) return `${diffMin}m`
+  if (diffMin < 1440 && date.getDate() === now.getDate()) {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  }
+  const isYesterday = new Date(now.getTime() - 86400000).getDate() === date.getDate()
+  if (isYesterday) return "ayer"
+  if (diffMs < 6 * 86400000) {
+    return date.toLocaleDateString([], { weekday: "short" })
+  }
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString([], { month: "short", day: "numeric" })
+  }
+  return date.toLocaleDateString([], { year: "2-digit", month: "numeric", day: "numeric" })
+}
+
 export function noopCatch<T>(fn: () => Promise<T>, def: T): Promise<T> {
   return fn().catch(() => def)
 }

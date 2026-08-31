@@ -570,21 +570,47 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     }
   }, [localValue, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, handleChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput, isSending])
 
+  const [isDraggingOver, setIsDraggingOver] = useState(false)
+  const dragDepthRef = useRef(0)
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepthRef.current += 1
+    if (e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.length > 0) {
+      setIsDraggingOver(true)
+    }
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = "copy"
+    if (!isDraggingOver) setIsDraggingOver(true)
+  }, [isDraggingOver])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) {
+      setIsDraggingOver(false)
+    }
+  }, [])
+
   const handleComposerDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
+    dragDepthRef.current = 0
+    setIsDraggingOver(false)
     // 1. Archivos externos arrastrados desde el SO
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       for (const f of Array.from(e.dataTransfer.files)) {
-        if (f.type.startsWith("image/")) {
-          downscaleImage(f).then((base64) => addImage(base64, f.type, f.name))
-        } else {
-          const sep = localValue ? (localValue.endsWith(" ") ? "" : " ") : ""
-          handleChange(localValue + sep + f.name)
-        }
+        downscaleImage(f).then((base64) => addImage(base64, f.type || "application/octet-stream", f.name))
       }
       return
     }
-    // 2. Elemento arrastrado desde el panel Explorador interno
+    // 2. Elemento arrastrado desde el panel Explorador interno o pestañas
     const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
     if (path) {
       const sep = localValue ? (localValue.endsWith(" ") ? "" : " ") : ""
@@ -672,8 +698,10 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         </div>
       )}
       <div
-        className={`composer-input-wrap${supported ? " has-mic" : ""}`}
-        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy" }}
+        className={`composer-input-wrap${supported ? " has-mic" : ""}${isDraggingOver ? " drag-over" : ""}`}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         onDrop={handleComposerDrop}
       >
         <button onClick={handleFilePick} disabled={disabled}
@@ -684,6 +712,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
         <textarea
           ref={textareaRef}
           value={localValue}
+          placeholder={t('composer.placeholder') || "Ask anything, @ to mention, / for actions"}
           onBlur={() => {
             // Contrato: al perder foco, el padre queda SIEMPRE sincronizado
             // (persistencia de draft, atajos, queue offline).
@@ -716,6 +745,13 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           disabled={disabled}
           maxLength={charLimit > 0 ? charLimit : undefined}
         />
+        {isDraggingOver && (
+          <div className="composer-drop-overlay" aria-hidden="true">
+            <span className="composer-drop-text">
+              {t('composer.dropToAdd') || "Drop to add to Agent"}
+            </span>
+          </div>
+        )}
         {supported && (
           <button onClick={handleMicClick}
             className={`composer-inline-btn composer-mic-btn${isListening ? " recording" : ""}`}

@@ -11,6 +11,7 @@ export interface LearningLesson {
   depth: "intro" | "intermedio" | "avanzado"
   minutes: number
   bytes: number
+  isCustom?: boolean
 }
 
 export interface LearningCategory {
@@ -20,6 +21,7 @@ export interface LearningCategory {
   description: string
   count: number
   items: LearningLesson[]
+  isCustom?: boolean
 }
 
 export interface LearningManifest {

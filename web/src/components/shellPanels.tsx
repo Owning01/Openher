@@ -721,8 +721,8 @@ export const TerminalPanel = memo(function TerminalPanel({
 
   const handleCloseTab = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
-    killTerminalPty(id)
     if (termTabs.length <= 1) {
+      killTerminalPty(id)
       const newId = `term-${Date.now()}`
       setTermTabs([{ id: newId, title: `${currentShell} 1`, shell: currentShell }])
       setActiveTabId(newId)

@@ -10,11 +10,12 @@ import {
   BranchIcon,
   PencilIcon,
   SettingsIcon,
+  GraduationCapIcon,
 } from "../../Icons"
 import { useT } from "../../i18n-context"
 import type { DesktopLayout, ViewType } from "../../types"
 
-export type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm" | "pcFiles"
+export type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm" | "pcFiles" | "reports"
 
 export interface PluginTabItem {
   key: string
@@ -43,6 +44,8 @@ export interface ActivityBarProps {
   memInfo: { jsHeapUsed: number; jsHeapTotal: number } | null
   formatBytes: (bytes: number) => string
   handleOpenLearning: () => void
+  handleOpenReports: () => void
+  handleOpenScreenshots: () => void
   view: ViewType
   handleNavigate: (v: ViewType) => void
 }
@@ -68,6 +71,8 @@ export const ActivityBar = memo(function ActivityBar({
   memInfo,
   formatBytes,
   handleOpenLearning,
+  handleOpenReports,
+  handleOpenScreenshots,
   view,
   handleNavigate,
 }: ActivityBarProps) {
@@ -168,6 +173,38 @@ export const ActivityBar = memo(function ActivityBar({
           onClick={handleOpenKanban}
         >
           <LayersIcon size={18} />
+        </button>
+
+        <button
+          type="button"
+          data-item="reports"
+          className={`activity-btn${
+            tabStacks?.some((s) => s.includes("__reports__")) ||
+            desktopLayout.sessions.includes("__reports__")
+              ? " active"
+              : ""
+          }`}
+          title="Informes"
+          aria-label="Informes"
+          onClick={handleOpenReports}
+        >
+          <span style={{ fontSize: 14, fontWeight: 800 }}>≡</span>
+        </button>
+
+        <button
+          type="button"
+          data-item="screenshots"
+          className={`activity-btn${
+            tabStacks?.some((s) => s.includes("__screenshots__")) ||
+            desktopLayout.sessions.includes("__screenshots__")
+              ? " active"
+              : ""
+          }`}
+          title="Screenshots"
+          aria-label="Screenshots"
+          onClick={handleOpenScreenshots}
+        >
+          <span style={{ fontSize: 14 }}>📸</span>
         </button>
 
         <button
@@ -289,9 +326,7 @@ export const ActivityBar = memo(function ActivityBar({
           }}
           onClick={handleOpenLearning}
         >
-          <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
-            📚
-          </span>
+          <GraduationCapIcon size={18} />
         </button>
         <button
           type="button"

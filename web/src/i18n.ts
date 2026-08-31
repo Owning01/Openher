@@ -17,6 +17,8 @@ type TranslationKey =
   | 'nav.lightMode'
   | 'nav.darkMode'
   | 'composer.inputLabel'
+  | 'composer.placeholder'
+  | 'composer.dropToAdd'
   | 'composer.send'
   | 'composer.stop'
   | 'settings.serverStats'

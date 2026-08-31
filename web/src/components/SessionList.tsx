@@ -6,7 +6,6 @@ import { ConnectionNotices } from "./ConnectionNotices"
 import { SessionToolbar } from "./SessionToolbar"
 import { QuickAccessCard } from "./QuickAccessCard"
 import { ContextMenu } from "./ContextMenu"
-import { ExportCacheButton } from "./ExportCacheButton"
 import { shell } from "../shell"
 import { useDialog } from "./DialogProvider"
 import type { SessionView, ConnectionState, DataMode } from "../types"
@@ -67,7 +66,6 @@ export const SessionList = memo(function SessionList({
   const { confirm } = useDialog()
   const containerRef = useRef<HTMLDivElement>(null)
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
-  const [listOpen, setListOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -430,20 +428,36 @@ export const SessionList = memo(function SessionList({
     onDragStartSession, handleSessionContextMenu, selectMode, selectedIds, toggleCheck
   ])
 
+  const getProjectDisplay = (dir: string) => {
+    const clean = dir.replace(/[/\\]+$/, "")
+    const parts = clean.split(/[/\\]/)
+    const name = parts[parts.length - 1] || clean
+    const parent = parts.slice(0, -1).join("/")
+    return { name, parent }
+  }
+
   if (selectedProjectDir) {
+    const { name: projName, parent: projParent } = getProjectDisplay(selectedProjectDir)
     return (
       <section ref={containerRef} className="panel sessions fade-in">
-        <div className="section-heading">
-          <div>
-            <h2 onContextMenu={(e) => handleProjectContextMenu(e, selectedProjectDir, projectSessions)}>{selectedProjectDir}</h2>
-            <p className="subtle">
-              <button className="btn-link" onClick={() => onSelectProject(null)}>← {t('sessions.title')}</button>
-              <span style={{ marginLeft: 'var(--space-3)' }}>{t('sessions.count', { count: projectSessions.length })}</span>
+        <div className="section-heading project-view-heading">
+          <div className="project-heading-info">
+            <div className="project-heading-nav" onContextMenu={(e) => handleProjectContextMenu(e, selectedProjectDir, projectSessions)}>
+              <button type="button" className="btn-link project-back-btn" onClick={() => onSelectProject(null)}>
+                ← {t('sessions.title')}
+              </button>
+              <div className="project-heading-titles">
+                <h2 className="project-heading-name">{projName}</h2>
+                {projParent && <span className="project-heading-path">{projParent}</span>}
+              </div>
+            </div>
+            <p className="subtle project-heading-count">
+              <span>{t('sessions.count', { count: projectSessions.length })}</span>
             </p>
           </div>
           <div className="section-actions">
             {onNewSessionHere && (
-              <button className="btn-icon btn-primary compact" onClick={() => onNewSessionHere(selectedProjectDir!)} title={t('sessions.newHere') || "New session here"} aria-label={t('sessions.newHere') || "New session here"}>
+              <button type="button" className="btn-icon btn-primary compact" onClick={() => onNewSessionHere(selectedProjectDir!)} title={t('sessions.newHere') || "New session here"} aria-label={t('sessions.newHere') || "New session here"}>
                 <PlusIcon size={16} />
               </button>
             )}
@@ -453,15 +467,12 @@ export const SessionList = memo(function SessionList({
               selecting={selectMode} onToggleSelect={toggleSelectMode} />
           </div>
         </div>
-        <div className={`toolbar${searchOpen ? " search-open" : ""}`}>
-<input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
-onChange={(e) => onQueryChange(e.target.value)} className="search" />
+        <div className={`toolbar${searchOpen || query.trim() ? " search-open" : ""}`}>
+          <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
+            onChange={(e) => onQueryChange(e.target.value)} className="search" />
         </div>
         {notices}
         {selectionBar}
-        <div style={{ display: "flex", justifyContent: "center", margin: "8px 0 4px" }}>
-          <ExportCacheButton small />
-        </div>
         <div className="session-list">{renderSessionCards(projectSessions)}</div>
         {sessionContextMenuElement}
         {projectContextMenuElement}
@@ -478,15 +489,12 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
         dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen}
         selecting={selectMode} onToggleSelect={toggleSelectMode} />
-      <div className={`toolbar${searchOpen ? " search-open" : ""}`}>
+      <div className={`toolbar${searchOpen || query.trim() ? " search-open" : ""}`}>
         <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />
       </div>
       {notices}
       {selectionBar}
-      <div style={{ display: "flex", justifyContent: "center", margin: "8px 0 4px", gap: 8 }}>
-        <ExportCacheButton />
-      </div>
 
       {!selectedProjectDir && !query.trim() && (favorites.size > 0 || activeSessions.length > 0 || recentSessions.length > 0) && (
         <div className="quick-access">
@@ -546,8 +554,8 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                     <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
                       <span>{t('sessions.recentDismiss')}</span>
                       <div className="dismiss-confirm-actions">
-                        <button className="btn-danger compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null); onDismissRecent?.(session.id) }}>{t('common.yes')}</button>
-                        <button className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null) }}>{t('common.no')}</button>
+                        <button type="button" className="btn-danger compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null); onDismissRecent?.(session.id) }}>{t('common.yes')}</button>
+                        <button type="button" className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null) }}>{t('common.no')}</button>
                       </div>
                     </div>
                   </div>
@@ -565,18 +573,6 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
         </div>
       )}
 
-      <div className="section-divider" />
-
-      <div className="list-mode-toggle">
-        <button type="button" className={`list-mode-pill${listOpen ? " active" : ""}`}
-          onClick={() => setListOpen((v) => !v)} aria-pressed={listOpen}>
-          <FolderIcon size={14} />
-          {t('sessions.title')}
-          <ChevronIcon size={12} className={`quick-access-chevron${listOpen ? "" : " collapsed"}`} />
-        </button>
-      </div>
-
-      {listOpen && (
       <div className="session-list">
         {projects.length === 0 && ['connecting', 'reconnecting'].includes(connectionState) ? (
           <div className="empty-state connection-pending">
@@ -593,6 +589,7 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
         ) : (
           projects.map(([dir, projectSessionsList]) => {
             const isExpanded = expandedProject === dir
+            const { name: projName, parent: projParent } = getProjectDisplay(dir)
             return (
               <div key={dir} className="project-card-wrap fade-in">
                 <article className={`project-card${isExpanded ? " expanded" : ""}`} role="button" tabIndex={0}
@@ -600,7 +597,35 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
                   onContextMenu={(e) => handleProjectContextMenu(e, dir, projectSessionsList)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProject(dir) } }}>
                   <div className="project-card-header">
-                    <strong className="project-path">{dir}</strong>
+                    <div className="project-title-group">
+                      <span className={`project-expand-icon${isExpanded ? " expanded" : ""}`} aria-hidden="true">
+                        <ChevronIcon size={12} />
+                      </span>
+                      <FolderIcon size={14} className="project-folder-icon" />
+                      <div className="project-names">
+                        <strong className="project-name">{projName}</strong>
+                        {projParent && <span className="project-parent-path">{projParent}</span>}
+                      </div>
+                    </div>
+                    <div className="project-meta-actions" onClick={(e) => e.stopPropagation()}>
+                      <span className="project-count-badge" title={`${projectSessionsList.length} sesiones`}>
+                        {projectSessionsList.length}
+                      </span>
+                      {onNewSessionHere && (
+                        <button
+                          type="button"
+                          className="btn-icon pcf-hbtn project-quick-btn"
+                          title={t('project.newSession')}
+                          aria-label={t('project.newSession')}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onNewSessionHere(dir)
+                          }}
+                        >
+                          <PlusIcon size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </article>
                 {isExpanded && (
@@ -613,7 +638,6 @@ onChange={(e) => onQueryChange(e.target.value)} className="search" />
           })
         )}
       </div>
-      )}
 
       {sessionContextMenuElement}
       {projectContextMenuElement}
