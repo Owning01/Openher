@@ -24,6 +24,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   const mountedRef = useRef(true)
   const onEventRef = useRef(onEvent)
   onEventRef.current = onEvent
+  const seenEventIDsRef = useRef<Map<string, number>>(new Map())
 
   // El /event del server filtra por instance.directory: sin el directory de la
   // sesión en el query, descarta todos los eventos (solo pasan heartbeats).
@@ -36,6 +37,10 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   // descartan los eventos de otra sesión con el ref más reciente.
   const sessionIDRef = useRef<string | null | undefined>(sessionID)
   sessionIDRef.current = sessionID
+
+  useEffect(() => {
+    seenEventIDsRef.current.clear()
+  }, [directory, sessionID])
 
     // Watchdog de heartbeat: 1 SOLO timer permanente por conexión (startHeartbeat
     // abajo, junto a scheduleReconnect). Cada evento solo actualiza un timestamp
@@ -101,6 +106,18 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
 
       const dispatch = (event: Partial<SSEEvent>) => {
         if (event.type === "server.heartbeat") return
+        const eventID = typeof event.id === "string" ? event.id : ""
+        if (eventID) {
+          if (seenEventIDsRef.current.has(eventID)) return
+          seenEventIDsRef.current.set(eventID, Date.now())
+          // El stream no ofrece replay por cursor; aun así, algunos proxies
+          // repiten los últimos frames al reconectar. Mantener una ventana
+          // acotada evita duplicar deltas sin crecer con la sesión.
+          if (seenEventIDsRef.current.size > 2000) {
+            const oldest = seenEventIDsRef.current.keys().next().value
+            if (oldest !== undefined) seenEventIDsRef.current.delete(oldest)
+          }
+        }
         if (event.type === "server.instance.disposed") {
           onEventRef.current({ id: String(event.id ?? ""), type: event.type as string, properties: (event.properties as Record<string, unknown>) ?? {} })
           abort.abort()

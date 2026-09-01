@@ -46,6 +46,9 @@ export function useDesktopShortcuts({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!isDesktop || (view !== "sessions" && view !== "detail") || !(e.ctrlKey || e.metaKey)) return
+      const target = e.target as HTMLElement | null
+      if (target && typeof target.closest === "function" && target.closest(".browser-shell")) return
+      if (document.body.dataset.opencodeBrowserFocused === "true") return
 
       // 1. Tab switching
       const nextTabSc = shortcuts.find((s: ShortcutItem) => s.id === "switch_tab_next" && s.enabled)
@@ -77,12 +80,13 @@ export function useDesktopShortcuts({
         return
       }
 
-      const inEditable = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isEditableTarget = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement)?.isContentEditable
 
-      // 2. Close split
+      // 2. Close split (permitido incluso en inputs para salir rapido)
       const closeSc = shortcuts.find((s: ShortcutItem) => s.id === "close_split" && s.enabled)
       if (closeSc && matchesShortcut(e, closeSc.keys)) {
         e.preventDefault()
+        e.stopPropagation()
         if (maximizedPanel !== null) { setMaximizedPanel(null); return }
         if (desktopLayout.cols > 1 || desktopLayout.rows > 1 || desktopLayout.sessions.some((s: string | null) => s !== null)) {
           closePanel(activePanel)
@@ -90,7 +94,9 @@ export function useDesktopShortcuts({
         return
       }
 
-      if (inEditable) return
+      // Nota: split/maximize/sidebar/new_session/new_terminal deben funcionar incluso con el Composer enfocado.
+      // Solo bloqueamos atajos que colisionan con edicion si el target es input y el atajo es de una sola letra sin Ctrl+Shift.
+      // Por eso NO hacemos "if (isEditableTarget) return" global.
 
       // 3. Split right
       const splitRightSc = shortcuts.find((s: ShortcutItem) => s.id === "split_right" && s.enabled)
@@ -138,10 +144,26 @@ export function useDesktopShortcuts({
         e.stopPropagation()
         if (onAddTerminal) onAddTerminal(activePanel)
         else {
-          // fallback: crear tab terminal directo
           try { window.dispatchEvent(new CustomEvent("opencode:new-terminal", { detail: { panel: activePanel } })) } catch {}
         }
         return
+      }
+      // Alias universal: Ctrl+T (sin Shift) para terminal en desktop — muchos esperan Ctrl+T, no Ctrl+Shift+Ñ
+      if (!isEditableTarget || e.ctrlKey || e.metaKey) {
+        const aliasT = e.ctrlKey || e.metaKey
+        if (aliasT && !e.altKey && e.key.toLowerCase() === "t" && !e.shiftKey) {
+          const sc = shortcuts.find((s) => s.id === "new_terminal")
+          if (sc && sc.enabled) {
+            // Evitar colision con Ctrl+T del navegador solo en desktop-app (wry); en browser dev no lo interceptamos si hay input
+            if (isDesktop && (view === "sessions" || view === "detail")) {
+              e.preventDefault()
+              e.stopPropagation()
+              if (onAddTerminal) onAddTerminal(activePanel)
+              else try { window.dispatchEvent(new CustomEvent("opencode:new-terminal", { detail: { panel: activePanel } })) } catch {}
+              return
+            }
+          }
+        }
       }
 
       const k = e.key.toLowerCase()

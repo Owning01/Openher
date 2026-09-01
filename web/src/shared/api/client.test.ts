@@ -12,6 +12,7 @@ import {
   serializedSize,
   arrayBufferToBase64,
   fetchFileBytes,
+  shouldRetryRequest,
 } from "./client"
 import { Capacitor, CapacitorHttp } from "@capacitor/core"
 
@@ -47,6 +48,19 @@ describe("toBase64", () => {
     const bytes = new TextEncoder().encode(input)
     const binary = Array.from(bytes).map((b) => String.fromCodePoint(b)).join("")
     expect(toBase64(input)).toBe(btoa(binary))
+  })
+})
+
+describe("shouldRetryRequest", () => {
+  it("only retries GET by default", () => {
+    expect(shouldRetryRequest("GET")).toBe(true)
+    expect(shouldRetryRequest("POST")).toBe(false)
+    expect(shouldRetryRequest("PATCH")).toBe(false)
+  })
+
+  it("allows an explicit opt-in for an idempotent write", () => {
+    expect(shouldRetryRequest("POST", true)).toBe(true)
+    expect(shouldRetryRequest("POST", false)).toBe(false)
   })
 })
 

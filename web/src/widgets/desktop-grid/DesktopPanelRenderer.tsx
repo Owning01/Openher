@@ -58,6 +58,7 @@ export type DesktopPanelRendererProps = {
   onMoveTab: (from: number, to: number) => void
   onTransferTab: (fromPanel: number, fromIdx: number, toIdx: number) => void
   onAddTerminal: () => void
+  onDetachTab: (tabIdx: number, dir?: "right" | "bottom") => void
   onCloseOthers: (keep: number) => void
   onCloseRight: (idx: number) => void
   onCloseLeft: (idx: number) => void
@@ -109,6 +110,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     onMoveTab,
     onTransferTab,
     onAddTerminal,
+    onDetachTab,
     onCloseOthers,
     onCloseRight,
     onCloseLeft,
@@ -174,6 +176,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onDropTerminal={onAddTerminal}
             onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
             onDropUrl={(url) => onOpenBrowser(url, i)}
+            onDetach={onDetachTab}
             onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
@@ -224,6 +227,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       else if (sid === "__reports__") vComp = <LearningPage />
       else if (sid === "__screenshots__") vComp = <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><ExternalIframePanel name="screenshots" title="Screenshots" url="http://127.0.0.1:3002" /></Suspense>
 
+      const isScrollableVirtual = sid === "__pcFiles__" || sid === "__kanban__" || sid === "__stats__"
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <TabBar
@@ -240,12 +244,13 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onDropTerminal={onAddTerminal}
             onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
             onDropUrl={(url) => onOpenBrowser(url, i)}
+            onDetach={onDetachTab}
             onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
             onCloseAll={onCloseAll}
           />
-          <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: isScrollableVirtual ? "hidden" : "auto", display: isScrollableVirtual ? "flex" : undefined, flexDirection: isScrollableVirtual ? "column" as const : undefined }}>
             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>{vComp}</Suspense>
           </div>
         </div>
@@ -283,6 +288,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onDropTerminal={onAddTerminal}
             onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
             onDropUrl={(url) => onOpenBrowser(url, i)}
+            onDetach={onDetachTab}
             onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
@@ -292,6 +298,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
               <BrowserPanel
                 initialUrl={url}
+                isActive={active}
                 onClose={() => onRemoveTab(stack.indexOf(sid))}
                 visualSelection={vs.selection}
                 inspectMode={vs.inspectMode}
@@ -348,7 +355,8 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
                 panelIndex={i}
                 onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
                 onDropUrl={(url) => onOpenBrowser(url, i)}
-                onCloseOthers={onCloseOthers}
+                onDetach={onDetachTab}
+            onCloseOthers={onCloseOthers}
                 onCloseRight={onCloseRight}
                 onCloseLeft={onCloseLeft}
                 onCloseAll={onCloseAll}
@@ -393,7 +401,8 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             panelIndex={i}
             onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
             onDropUrl={(url) => onOpenBrowser(url, i)}
-                onCloseOthers={onCloseOthers}
+                onDetach={onDetachTab}
+            onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
             onCloseAll={onCloseAll}

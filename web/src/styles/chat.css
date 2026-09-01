@@ -611,6 +611,23 @@
   font-size: inherit;
 }
 
+.message-error {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: var(--space-2);
+  padding: 0.65rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.86rem;
+}
+
+.message-error strong {
+  font-weight: 650;
+}
+
 .message-image-wrap {
   position: relative;
   display: inline-block;
@@ -2437,6 +2454,31 @@
 }
 
 /* ===== Thinking Block ===== */
+.thinking-plain .collapsible-toggle {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 4px 0 !important;
+  color: var(--muted) !important;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+.thinking-plain .collapsible-toggle:hover {
+  background: transparent !important;
+  color: var(--muted-strong) !important;
+}
+.thinking-plain .collapsible-content {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+.thinking-plain .thinking-text {
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-style: italic;
+}
 .thinking-block {
   margin-bottom: var(--space-3);
 }

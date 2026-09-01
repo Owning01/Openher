@@ -404,8 +404,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const abortSession = useCallback(async (sessionID: string, directory: string) => {
     setAwaitingAssistantReply(false)
     completionShouldPlayRef.current = false
-    // Fire-and-forget: no await race, UI ya está en idle
-    api.abort(config, sessionID, directory).catch(() => {})
+    await api.abort(config, sessionID, directory)
   }, [config])
 
   const isUndoingRef = useRef(false)
@@ -421,9 +420,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   ) => {
     if (isUndoingRef.current) return
     isUndoingRef.current = true
+    const currentRevertID = revert?.messageID
     try {
       const userMessages = messages.filter((m) => (!m.info.sessionID || m.info.sessionID === sessionID) && m.info.role === "user")
-      const currentRevertID = revert?.messageID
       const boundary = currentRevertID ? userMessages.findIndex((m) => m.info.id === currentRevertID) : userMessages.length
       if (boundary <= 0) {
         setRuntimeError("No messages to undo")
@@ -446,13 +445,15 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
       if (awaitingAssistantReply) {
         setAwaitingAssistantReply(false)
-        api.abort(config, sessionID, directory).catch(() => {})
+        await api.abort(config, sessionID, directory).catch(() => {})
       }
 
       await api.revert(config, sessionID, targetID, directory)
       await onLoadSelected().catch(() => {})
       await _onRefreshSessions().catch(() => {})
     } catch (err) {
+      onSetRevertID?.(currentRevertID ?? null)
+      onPatchSession?.(currentRevertID ? { revert: { messageID: currentRevertID } } : { revert: undefined })
       setRuntimeError(formatServerError(err))
     } finally {
       isUndoingRef.current = false
@@ -468,9 +469,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     onPatchSession?: (patch: Partial<{ revert: { messageID: string } | undefined }>) => void,
     onSetRevertID?: (id: string | null) => void,
   ) => {
+    const currentRevertID = revert?.messageID
     try {
       const userMessages = messages.filter((m) => (!m.info.sessionID || m.info.sessionID === sessionID) && m.info.role === "user")
-      const currentRevertID = revert?.messageID
       if (!currentRevertID) return
       const boundary = userMessages.findIndex((m) => m.info.id === currentRevertID)
       if (boundary < 0) return
@@ -489,6 +490,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       await onLoadSelected().catch(() => {})
       await _onRefreshSessions().catch(() => {})
     } catch (err) {
+      onSetRevertID?.(currentRevertID ?? null)
+      onPatchSession?.(currentRevertID ? { revert: { messageID: currentRevertID } } : { revert: undefined })
       setRuntimeError(formatServerError(err))
     }
   }, [config, messages])

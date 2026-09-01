@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
-import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon, FolderIcon, GlobeIcon, SearchIcon, FileIcon, PaintIcon } from "../Icons"
+import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon, FolderIcon, GlobeIcon, SearchIcon, FileIcon, PaintIcon, KeyboardIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
 import { BrowserVisualOverlay, type BrowserPickedElement } from "./BrowserVisualOverlay"
@@ -187,6 +187,7 @@ function formatDisplayTitle(url: string): string {
 
 export const BrowserPanel = memo(function BrowserPanel({
   initialUrl = BROWSER_HOME,
+  isActive = true,
   onClose,
   visualSelection,
   inspectMode,
@@ -202,6 +203,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   onToggleInspectTool,
 }: {
   initialUrl?: string
+  isActive?: boolean
   onClose?: () => void
   visualSelection?: VisualSelection | null
   inspectMode?: boolean
@@ -297,6 +299,8 @@ export const BrowserPanel = memo(function BrowserPanel({
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const omniboxRef = useRef<HTMLInputElement | null>(null)
+  const findInputRef = useRef<HTMLInputElement | null>(null)
   const nativeReady = useRef(false)
 
   // Persistir tabs/sesión como Chrome (sobrevive a cerrar pestaña/panel/app)
@@ -325,6 +329,18 @@ export const BrowserPanel = memo(function BrowserPanel({
   }, [activeTabId, activeTab])
 
   useEffect(() => { try { localStorage.setItem("opencode.browser.minimal", minimal ? "1" : "0") } catch {} }, [minimal])
+
+  // El sub-WebView nativo no propaga focus al DOM del host. Marcamos el panel
+  // activo para que los shortcuts del navegador tengan prioridad sobre OpenHer.
+  useEffect(() => {
+    if (!IS_DESKTOP || !isActive) return
+    document.body.dataset.opencodeBrowserFocused = "true"
+    return () => {
+      if (document.body.dataset.opencodeBrowserFocused === "true") {
+        delete document.body.dataset.opencodeBrowserFocused
+      }
+    }
+  }, [isActive])
   // F11 fullscreen, F12 inspect, Ctrl+wheel zoom
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -862,10 +878,61 @@ export const BrowserPanel = memo(function BrowserPanel({
     }
   }
 
+  // Atajos del navegador: se registran en capture para ganar al listener
+  // global de OpenHer y solo viven mientras este BrowserPanel está montado.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const modifier = e.ctrlKey || e.metaKey
+      const key = e.key.toLowerCase()
+      if (e.key === "F5" || (modifier && key === "r")) {
+        e.preventDefault(); e.stopPropagation(); handleReload(); return
+      }
+      if (modifier && key === "l") {
+        e.preventDefault(); e.stopPropagation(); omniboxRef.current?.focus(); omniboxRef.current?.select(); return
+      }
+      if (modifier && key === "f") {
+        e.preventDefault(); e.stopPropagation(); setFindOpen(true)
+        requestAnimationFrame(() => findInputRef.current?.focus()); return
+      }
+      if (modifier && key === "t") {
+        e.preventDefault(); e.stopPropagation(); handleAddTab(); return
+      }
+      if (modifier && key === "w") {
+        e.preventDefault(); e.stopPropagation()
+        if (activeTab) handleCloseTab(e as unknown as React.MouseEvent, activeTab.id)
+        return
+      }
+      if (modifier && key === "d") {
+        e.preventDefault(); e.stopPropagation(); toggleBookmark(); return
+      }
+      if (modifier && key === "0") {
+        e.preventDefault(); e.stopPropagation(); applyZoom(1); return
+      }
+      if (modifier && (key === "+" || key === "=")) {
+        e.preventDefault(); e.stopPropagation(); applyZoom(zoomLevel + 0.1); return
+      }
+      if (modifier && (key === "-" || key === "_")) {
+        e.preventDefault(); e.stopPropagation(); applyZoom(zoomLevel - 0.1); return
+      }
+      if (e.altKey && e.key === "ArrowLeft") {
+        e.preventDefault(); e.stopPropagation(); handleBack(); return
+      }
+      if (e.altKey && e.key === "ArrowRight") {
+        e.preventDefault(); e.stopPropagation(); handleForward(); return
+      }
+    }
+    window.addEventListener("keydown", onKeyDown, true)
+    return () => window.removeEventListener("keydown", onKeyDown, true)
+  }, [activeTab, zoomLevel, handleBack, handleForward])
+
   const targetWidth = DEVICE_WIDTHS[deviceMode]
 
   return (
-    <div className={`browser-shell${minimal ? " browser-minimal" : ""}${isFullscreen ? " browser-fullscreen" : ""}`} style={minimal ? { height: "100%" } : undefined}>
+    <div
+      className={`browser-shell${minimal ? " browser-minimal" : ""}${isFullscreen ? " browser-fullscreen" : ""}`}
+      onFocusCapture={() => { document.body.dataset.opencodeBrowserFocused = "true" }}
+      style={minimal ? { height: "100%" } : undefined}
+    >
       {/* Minimal toggle floating */}
       {minimal && (
         <button type="button" onClick={() => setMinimal(false)} title="Mostrar barra (F11)" aria-label="Mostrar barra" style={{ position: "absolute", top: 6, right: 8, zIndex: 5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "var(--muted)", cursor: "pointer" }}>⛶ Mostrar</button>
@@ -1001,6 +1068,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             <input
               type="text"
               className="browser-omnibox-input"
+              ref={omniboxRef}
               value={inputUrl}
               onChange={(e) => { setInputUrl(e.target.value); if (e.target.value.trim().length >= 1) setShowHistory(true) }}
               onFocus={() => { if (inputUrl.trim() === "" || inputUrl === homeUrl) setShowHistory(true); else if (loadHistory().length > 0) setShowHistory(true) }}
@@ -1105,6 +1173,18 @@ export const BrowserPanel = memo(function BrowserPanel({
                   </button>
                 </div>
               </div>
+              <div className="browser-tune-section browser-shortcuts">
+                <div className="browser-tune-section-title"><KeyboardIcon size={13} /> Atajos del navegador</div>
+                <div className="browser-shortcuts-list">
+                  <span><kbd>Ctrl</kbd><kbd>L</kbd><em>Ir a la URL</em></span>
+                  <span><kbd>Ctrl</kbd><kbd>F</kbd><em>Buscar en la página</em></span>
+                  <span><kbd>Alt</kbd><kbd>←</kbd><em>Volver</em></span>
+                  <span><kbd>Ctrl</kbd><kbd>T</kbd><em>Nueva pestaña</em></span>
+                  <span><kbd>Ctrl</kbd><kbd>W</kbd><em>Cerrar pestaña</em></span>
+                  <span><kbd>Ctrl</kbd><kbd>D</kbd><em>Guardar favorito</em></span>
+                  <span><kbd>Ctrl</kbd><kbd>0</kbd><em>Restablecer zoom</em></span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1112,10 +1192,10 @@ export const BrowserPanel = memo(function BrowserPanel({
             <button type="button" className={`browser-tune-btn${isBookmarked ? " browser-star-on" : ""}`} onClick={toggleBookmark} title={isBookmarked ? "Quitar favorito" : "Agregar a favoritos"} aria-label="Favorito">
               <span style={{ fontSize: 14 }}>{isBookmarked ? "★" : "☆"}</span>
             </button>
-            <button type="button" className="browser-tune-btn" onClick={handleCopyUrl} title="Copiar URL" aria-label="Copiar URL">
+            <button type="button" className="browser-tune-btn browser-utility-secondary" onClick={handleCopyUrl} title="Copiar URL" aria-label="Copiar URL">
               <span style={{ fontSize: 12 }}>⧉</span>
             </button>
-            <div className="browser-zoom-group" title="Zoom de página">
+            <div className="browser-zoom-group browser-utility-secondary" title="Zoom de página">
               <button type="button" className="browser-tune-btn" onClick={() => applyZoom(zoomLevel - 0.1)} aria-label="Alejar">−</button>
               <span style={{ fontSize: 11, minWidth: 34, textAlign: "center" }}>{Math.round(zoomLevel * 100)}%</span>
               <button type="button" className="browser-tune-btn" onClick={() => applyZoom(zoomLevel + 0.1)} aria-label="Acercar">+</button>
@@ -1159,10 +1239,10 @@ export const BrowserPanel = memo(function BrowserPanel({
                 ×
               </button>
             )}
-            <button type="button" className="browser-tune-btn" onClick={() => setMinimal((v) => !v)} title={minimal ? "Mostrar barra" : "Modo minimalista (F11)"} aria-label="Minimal">⛶</button>
+            <button type="button" className="browser-tune-btn browser-utility-secondary" onClick={() => setMinimal((v) => !v)} title={minimal ? "Mostrar barra" : "Modo minimalista (F11)"} aria-label="Minimal">⛶</button>
             <button
               type="button"
-              className="browser-tune-btn"
+              className="browser-tune-btn browser-utility-secondary"
               onClick={handleOpenExternal}
               title="Abrir en navegador externo (Chrome/Edge)"
               aria-label="Abrir en navegador externo"
@@ -1189,6 +1269,7 @@ export const BrowserPanel = memo(function BrowserPanel({
         <div className="browser-findbar">
           <SearchIcon size={13} />
           <input
+            ref={findInputRef}
             autoFocus
             value={findQuery}
             onChange={(e) => setFindQuery(e.target.value)}

@@ -62,11 +62,21 @@ export type RequestOptions = {
   body?: unknown
   readTimeout?: number
   rawPath?: boolean
+  /**
+   * Las escrituras no se reintentan automáticamente: si el request llegó al
+   * server pero la respuesta se perdió, repetirlo puede duplicar el prompt.
+   * Solo habilitarlo para operaciones realmente idempotentes.
+   */
+  retryable?: boolean
 }
 
 export type ResponseWithHeaders<T> = {
   data: T
   headers: Record<string, string>
+}
+
+export function shouldRetryRequest(method: RequestOptions["method"] = "GET", explicit?: boolean): boolean {
+  return explicit ?? method === "GET"
 }
 
 export async function fetchFileBytes(config: ServerConfig, target: string): Promise<Uint8Array> {
@@ -166,7 +176,8 @@ export async function requestRaw<T>(config: ServerConfig, target: string, option
 
   const method = options.method ?? "GET"
   const timeout = options.readTimeout ?? 30_000
-  const maxRetries = 1
+  const retryAllowed = shouldRetryRequest(method, options.retryable)
+  const maxRetries = retryAllowed ? 1 : 0
   let lastError: Error | null = null
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -258,10 +269,11 @@ export async function requestRaw<T>(config: ServerConfig, target: string, option
       return { data: unwrapData(json), headers: responseHeaders }
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
-      const retryable =
+      const retryable = maxRetries > 0 && (
         lastError instanceof TypeError ||
         lastError.name === "AbortError" ||
         /network|timeout|fetch failed|ERR_/i.test(lastError.message)
+      )
       if (!retryable) break
       if (attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, computeBackoff(1_000, 10_000, attempt)))

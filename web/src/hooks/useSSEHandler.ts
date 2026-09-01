@@ -55,7 +55,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     if (type === "server.heartbeat") return
     if (type === "server.connected") {
       // Upstream server-sdk refresca sesiones al reconectar; aquí refrescamos la sesión visible.
-      if (deps.sessionID && deps.directory) deps.loadSelected(deps.sessionID, deps.directory)
+      if (deps.sessionID && deps.directory) deps.onSettled(deps.sessionID, deps.directory)
       return
     }
     if (type === "server.instance.disposed") {
@@ -220,7 +220,6 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
         : (rawStatus as { type?: string } | undefined)?.type
       if (sessionID && sessionID === deps.sessionID && statusType === "idle") {
         deps.setAwaitingAssistantReply(false)
-        deps.loadSelected(sessionID, deps.directory ?? "")
         deps.onSettled(sessionID, deps.directory ?? "")
       }
       return
@@ -230,7 +229,6 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const sessionID = p.sessionID as string | undefined
       if (sessionID && sessionID === deps.sessionID) {
         deps.setAwaitingAssistantReply(false)
-        deps.loadSelected(sessionID, deps.directory ?? "")
         deps.onSettled(sessionID, deps.directory ?? "")
       }
       return

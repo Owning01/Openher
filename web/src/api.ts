@@ -39,6 +39,30 @@ import {
 import type { V2Message, V2Session, ConfigProvidersResponse, AgentResponse } from "./shared/api/mappers"
 import { getOpencodeClient } from "./shared/api/opencodeClient"
 
+function errorStatus(error: unknown): number | undefined {
+  if (!(error instanceof Error)) return undefined
+  const cause = error.cause as { status?: unknown } | undefined
+  return typeof cause?.status === "number" ? cause.status : undefined
+}
+
+async function syncV2SessionContext(
+  client: Awaited<ReturnType<typeof getOpencodeClient>>,
+  sessionID: string,
+  model?: ModelSelection,
+  agentID?: string,
+) {
+  // En v2 modelo y agente viven en la sesión; no deben viajar como campos
+  // inventados dentro de /prompt. Las operaciones son 204 y por eso no
+  // generan un segundo prompt ni dependen de una respuesta JSON.
+  if (model) {
+    await (client as any).session.switchModel({
+      sessionID,
+      model: { id: model.modelID, providerID: model.providerID, ...(model.variant ? { variant: model.variant } : {}) },
+    })
+  }
+  if (agentID) await (client as any).session.switchAgent({ sessionID, agent: agentID })
+}
+
 // Re-exports for compatibilidad — api.ts sigue siendo el entry point público
 export { toBase64, authHeader, baseUrl } from "./shared/api/client"
 export type { ApiVersion } from "./shared/api/version"
@@ -448,8 +472,10 @@ export const api = {
     agentID?: string,
     images?: Array<{ base64: string; mime: string }>,
   ) {
-    try {
+    const version = await getApiVersion(config)
+    if (version === "v2") {
       const client = await getOpencodeClient(config)
+      await syncV2SessionContext(client, sessionID, model, agentID)
       const res = await (client as any).session.prompt({
         sessionID,
         text,
@@ -457,31 +483,8 @@ export const api = {
           uri: `data:${img.mime};base64,${img.base64.includes(",") ? img.base64.split(",")[1] : img.base64}`,
           name: `clipboard.${img.mime.split("/")[1] || "png"}`,
         })),
-        ...(model ? { model: { providerID: model.providerID, id: model.modelID, variant: model.variant } } : {}),
-        ...(agentID ? { agents: [{ name: agentID }] } : {}),
       })
-      if (res) return true as unknown as boolean
-    } catch {}
-    if ((await getApiVersion(config)) === "v2") {
-      let v2Text = text
-      if (images && images.length > 0) {
-        const imgNote =
-          images.length === 1
-            ? "[image omitted — v2 doesn't support image parts]"
-            : `[${images.length} images omitted — v2 doesn't support image parts]`
-        v2Text = text ? `${text}\n\n${imgNote}` : imgNote
-      }
-      const body: Record<string, unknown> = { text: v2Text }
-      if (model) {
-        body.model = { id: model.modelID, providerID: model.providerID, variant: model.variant }
-        body.providerID = model.providerID
-        body.modelID = model.modelID
-      }
-      if (agentID) body.agent = agentID
-      return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt`, directory), {
-        method: "POST",
-        body,
-      })
+      return (res ?? true) as boolean
     }
     const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string; mime?: string; url?: string; filename?: string }> = []
     if (text) {
@@ -503,6 +506,7 @@ export const api = {
     return request<boolean>(config, withDirectory(`/session/${sessionID}/prompt_async`, directory), {
       method: "POST",
       body: { parts, model: toModelBody(model), agent: agentID, variant: model?.variant || undefined },
+      retryable: false,
     })
   },
 
@@ -515,31 +519,21 @@ export const api = {
     model?: ModelSelection,
     agentID?: string,
   ) {
-    try {
+    const version = await getApiVersion(config)
+    if (version === "v2") {
       const client = await getOpencodeClient(config)
+      await syncV2SessionContext(client, sessionID, model, agentID)
       const res = await (client as any).session.command({ sessionID, command, text: argumentsText })
       if (res) {
-        try {
-          return toMessageEnvelopeV1(res as V2Message)
-        } catch {
-          return res as MessageEnvelope
-        }
+        try { return toMessageEnvelopeV1(res as V2Message) } catch { return res as MessageEnvelope }
       }
-    } catch {}
-    if ((await getApiVersion(config)) === "v2") {
-      const body: Record<string, unknown> = { command, arguments: argumentsText }
-      if (agentID) body.agent = agentID
-      if (model) body.model = { id: model.modelID, providerID: model.providerID, variant: model.variant || undefined }
-      return request<MessageEnvelope>(config, withDirectory(`/session/${sessionID}/command`, directory), {
-        method: "POST",
-        body,
-        readTimeout: 300_000,
-      })
+      return true as unknown as MessageEnvelope
     }
     return request<MessageEnvelope>(config, withDirectory(`/session/${sessionID}/command`, directory), {
       method: "POST",
       body: { command, arguments: argumentsText, agent: agentID, model: modelWireName(model), variant: model?.variant || undefined },
       readTimeout: 300_000,
+      retryable: false,
     })
   },
 
@@ -547,82 +541,81 @@ export const api = {
     return request<boolean>(config, withDirectory(`/session/${sessionID}/shell`, directory), {
       method: "POST",
       body: { command },
+      retryable: false,
     })
   },
 
   async abort(config: ServerConfig, sessionID: string, directory?: string) {
-    try {
+    const version = await getApiVersion(config)
+    if (version === "v2") {
       const client = await getOpencodeClient(config)
       const res = await (client as any).session.interrupt({ sessionID })
-      if (res) return (res as any).interrupted ?? true
-    } catch {}
-    const isV2 = (await getApiVersion(config)) === "v2"
-    const primary = isV2 ? `/session/${sessionID}/interrupt` : `/session/${sessionID}/abort`
-    const secondary = isV2 ? `/session/${sessionID}/abort` : `/session/${sessionID}/interrupt`
+      return (res as any)?.interrupted ?? true
+    }
+    const primary = `/session/${sessionID}/abort`
+    const secondary = `/session/${sessionID}/interrupt`
     try {
       return await request<boolean>(config, withDirectory(primary, directory), {
         method: "POST",
+        retryable: false,
       })
-    } catch {
+    } catch (error) {
+      if (errorStatus(error) !== 404) throw error
       return await request<boolean>(config, withDirectory(secondary, directory), {
         method: "POST",
-      }).catch(() => false)
+        retryable: false,
+      })
     }
   },
 
   async revert(config: ServerConfig, sessionID: string, messageID: string, directory?: string) {
-    try {
+    const version = await getApiVersion(config)
+    if (version === "v2") {
       const client = await getOpencodeClient(config)
       const res = await (client as any).session.revert.stage({ sessionID, messageID })
-      if (res) {
-        try {
-          return toSessionV1(res as V2Session)
-        } catch {
-          return res as unknown as Session
-        }
+      try {
+        return toSessionV1(res as V2Session)
+      } catch {
+        return res as unknown as Session
       }
-    } catch {}
+    }
     return request<Session>(config, withDirectory(`/session/${sessionID}/revert`, directory), {
       method: "POST",
       body: { messageID },
+      retryable: false,
     })
   },
 
   async unrevert(config: ServerConfig, sessionID: string, directory?: string) {
-    try {
+    const version = await getApiVersion(config)
+    if (version === "v2") {
       const client = await getOpencodeClient(config)
       const res = await (client as any).session.revert.clear({ sessionID })
-      if (res) {
-        try {
-          return toSessionV1(res as V2Session)
-        } catch {
-          return res as unknown as Session
-        }
+      try {
+        return toSessionV1(res as V2Session)
+      } catch {
+        return res as unknown as Session
       }
-    } catch {}
+    }
     return request<Session>(config, withDirectory(`/session/${sessionID}/unrevert`, directory), {
       method: "POST",
       body: {},
+      retryable: false,
     })
   },
 
   async summarize(config: ServerConfig, sessionID: string, providerID: string, modelID: string, directory?: string, auto = false, readTimeout = 300_000) {
-    try {
+    const version = await getApiVersion(config)
+    if (version === "v2") {
       const client = await getOpencodeClient(config)
       const res = await (client as any).session.compact({ sessionID })
-      if (res) return true as unknown as boolean
-    } catch {}
-    if ((await getApiVersion(config)) === "v2") {
-      return request<boolean>(config, withDirectory(`/session/${sessionID}/compact`, directory), {
-        method: "POST",
-        body: {},
-        readTimeout,
-      })
+      return (res ?? true) as boolean
     }
     return request<boolean>(config, withDirectory(`/session/${sessionID}/summarize`, directory), {
       method: "POST",
       body: { providerID, modelID, auto },
       readTimeout,
+      retryable: false,
     })
   },
 
@@ -632,11 +625,13 @@ export const api = {
       return request<boolean>(config, withDirectory(`/session/${sessionID}/question/${encodeURIComponent(requestID)}/reply`, directory), {
         method: "POST",
         body: { answers },
+        retryable: false,
       })
     }
     return request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reply`, directory), {
       method: "POST",
       body: { answers },
+      retryable: false,
     })
   },
 
@@ -646,11 +641,13 @@ export const api = {
       return request<boolean>(config, withDirectory(`/session/${sessionID}/question/${encodeURIComponent(requestID)}/reject`, directory), {
         method: "POST",
         body: {},
+        retryable: false,
       })
     }
     return request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reject`, directory), {
       method: "POST",
       body: {},
+      retryable: false,
     })
   },
 
@@ -755,7 +752,7 @@ export const api = {
         })
       })
     }
-    return request<{ requestID: string; permission: string; status: string }[]>(config, withDirectory("/permission", directory))
+    return request<{ requestID: string; permission: string; status: string; sessionID?: string }[]>(config, withDirectory("/permission", directory))
   },
 
   async permissionReply(config: ServerConfig, requestID: string, approve: boolean, directory?: string, sessionID?: string) {
@@ -764,11 +761,13 @@ export const api = {
       return request<boolean>(config, withDirectory(`/session/${sessionID}/permission/${encodeURIComponent(requestID)}/reply`, directory), {
         method: "POST",
         body: { reply: approve ? "once" : "reject" },
+        retryable: false,
       })
     }
     return request<boolean>(config, withDirectory(`/permission/${encodeURIComponent(requestID)}/reply`, directory), {
       method: "POST",
       body: { approve },
+      retryable: false,
     })
   },
 

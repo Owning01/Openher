@@ -145,6 +145,34 @@
   }
 }
 
+/* Splits: el contenido no debe quedar encajonado cuando el panel es estrecho.
+   El centrado se activa solo cuando existe espacio real a ambos lados. */
+@media (min-width: 781px) {
+  .desktop-cell { container-type: inline-size; }
+  .desktop-cell .messages-wrap,
+  .desktop-cell .composer {
+    max-width: none !important;
+    margin-inline: 0 !important;
+    padding-inline: clamp(12px, 3cqw, 24px) !important;
+  }
+  .desktop-cell .message {
+    max-width: none !important;
+    margin-inline: 0 !important;
+  }
+  @container (min-width: 900px) {
+    .desktop-cell .messages-wrap,
+    .desktop-cell .composer {
+      max-width: var(--chat-max-width, 720px) !important;
+      margin-inline: auto !important;
+      padding-inline: 24px !important;
+    }
+    .desktop-cell .message {
+      max-width: var(--chat-max-width, 720px) !important;
+      margin-inline: auto !important;
+    }
+  }
+}
+
 
 /* ===== Responsive: max-width 430px ===== */
 @media (max-width: 430px) {

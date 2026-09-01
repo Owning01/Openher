@@ -39,6 +39,16 @@ describe("computeRenderedMessages", () => {
     expect(cache.size).toBe(0)
   })
 
+  it("keeps an assistant error visible even without text or parts", () => {
+    const msg = makeEnvelope({
+      info: { ...baseInfo("m-error"), role: "assistant", error: { name: "ProviderError", message: "rate limited" } },
+      parts: [],
+    })
+    const { out } = computeRenderedMessages([msg], undefined, new Map())
+    expect(out).toHaveLength(1)
+    expect(out[0]!.info.error?.message).toBe("rate limited")
+  })
+
   it("renders single text message and sets text trimmed with join", () => {
     const msg = makeEnvelope({
       info: baseInfo("m1"),

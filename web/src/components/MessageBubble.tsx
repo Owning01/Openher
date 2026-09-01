@@ -282,6 +282,13 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           </div>
         )}
 
+        {message.info.error && (
+          <div className="message-error" role="alert">
+            <strong>{message.info.error.name || "Server error"}</strong>
+            {message.info.error.message && <span>{message.info.error.message}</span>}
+          </div>
+        )}
+
         <TranslationOriginal messageId={message.info.id} />
 
         {message.parts.filter((p) => !!getPartImageData(p)).map((p) => {
