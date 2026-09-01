@@ -289,10 +289,6 @@ export const SettingsPanel = memo(function SettingsPanel({
   type CategoryKey = "servers" | "system" | "appearance" | "models" | "chat" | "remote"
   const [activeCategory, setActiveCategory] = useState<CategoryKey>("servers")
   const [settingsSearch, setSettingsSearch] = useState("")
-  const [queuedMode, setQueuedMode] = useState<"queue" | "send_immediately">("queue")
-  const [securityPreset, setSecurityPreset] = useState<string>("turbo")
-  const [artifactPolicy, setArtifactPolicy] = useState<string>("always_ask")
-  const [rulesModal, setRulesModal] = useState<string | null>(null)
 
   const categories: Array<{ id: CategoryKey; label: string; subtitle: string }> = [
     { id: "servers", label: "General", subtitle: "Configure agent execution, queued message delivery, and permissions." },
@@ -448,126 +444,6 @@ export const SettingsPanel = memo(function SettingsPanel({
           {/* ===== GENERAL TAB (EXACT ANTIGRAVITY SECTIONS) ===== */}
           {showServers && (
             <>
-              <p className="settings-group-heading">Execution</p>
-              <div className="setting-item-row">
-                <div className="setting-item-info">
-                  <span className="setting-item-title">Queued Messages</span>
-                  <p className="setting-item-desc">Configure when follow-up messages are sent.</p>
-                  {onOpenShortcuts && (
-                    <button type="button" className="setting-item-link" onClick={onOpenShortcuts}>
-                      Keyboard shortcuts ⓘ
-                    </button>
-                  )}
-                </div>
-                <div className="setting-item-control">
-                  <div className="ag-segmented">
-                    <button
-                      type="button"
-                      className={`ag-segmented-btn${queuedMode === "queue" ? " active" : ""}`}
-                      onClick={() => setQueuedMode("queue")}
-                    >
-                      Queue
-                    </button>
-                    <button
-                      type="button"
-                      className={`ag-segmented-btn${queuedMode === "send_immediately" ? " active" : ""}`}
-                      onClick={() => setQueuedMode("send_immediately")}
-                    >
-                      Send Immediately
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <p className="settings-group-heading">Agent Settings</p>
-              <div className="setting-item-row">
-                <div className="setting-item-info">
-                  <span className="setting-item-title">Security Preset</span>
-                  <p className="setting-item-desc">Choose a predefined security preset for the agent. This controls terminal auto-execution policy, and file access policy.</p>
-                  <span className="setting-item-link">Learn more about Turbo mode ⓘ</span>
-                </div>
-                <div className="setting-item-control">
-                  <select
-                    className="ag-select"
-                    value={securityPreset}
-                    onChange={(e) => setSecurityPreset(e.target.value)}
-                  >
-                    <option value="turbo">Turbo Mode</option>
-                    <option value="normal">Normal Mode</option>
-                    <option value="strict">Strict Mode</option>
-                  </select>
-                </div>
-              </div>
-
-              <p className="settings-group-heading">Agent Behavior</p>
-              <div className="setting-item-row">
-                <div className="setting-item-info">
-                  <span className="setting-item-title">Artifact Review Policy</span>
-                  <p className="setting-item-desc">Specifies Agent's behavior when asking for review on artifacts, which are documents it creates to enable a richer conversation experience.</p>
-                </div>
-                <div className="setting-item-control">
-                  <select
-                    className="ag-select"
-                    value={artifactPolicy}
-                    onChange={(e) => setArtifactPolicy(e.target.value)}
-                  >
-                    <option value="always_ask">Always Ask</option>
-                    <option value="auto_approve">Auto Approve</option>
-                    <option value="never">Never Ask</option>
-                  </select>
-                </div>
-              </div>
-
-              <p className="settings-group-heading">File Permissions</p>
-              <div className="setting-item-row">
-                <div className="setting-item-info">
-                  <span className="setting-item-title">File Access Rules</span>
-                  <p className="setting-item-desc">Configure allowed and denied paths for file reads and writes.</p>
-                </div>
-                <div className="setting-item-control">
-                  <button type="button" className="ag-btn-open" onClick={() => setRulesModal("file")}>
-                    Open
-                  </button>
-                </div>
-              </div>
-
-              <p className="settings-group-heading">Network Permissions</p>
-              <div className="setting-item-row">
-                <div className="setting-item-info">
-                  <span className="setting-item-title">Network Access Rules</span>
-                  <p className="setting-item-desc">Configure allowed and denied URLs for reading.</p>
-                </div>
-                <div className="setting-item-control">
-                  <button type="button" className="ag-btn-open" onClick={() => setRulesModal("network")}>
-                    Open
-                  </button>
-                </div>
-              </div>
-
-              <p className="settings-group-heading">Terminal & Tooling Permissions</p>
-              <div className="setting-item-row">
-                <div className="setting-item-info">
-                  <span className="setting-item-title">Terminal Commands</span>
-                  <p className="setting-item-desc">Configure allowed terminal commands.</p>
-                </div>
-                <div className="setting-item-control">
-                  <button type="button" className="ag-btn-open" onClick={() => setRulesModal("terminal")}>
-                    Open
-                  </button>
-                </div>
-              </div>
-              <div className="setting-item-row">
-                <div className="setting-item-info">
-                  <span className="setting-item-title">Commands Outside Sandbox</span>
-                  <p className="setting-item-desc">Configure allowed commands outside the sandbox.</p>
-                </div>
-                <div className="setting-item-control">
-                  <button type="button" className="ag-btn-open" onClick={() => setRulesModal("sandbox")}>
-                    Open
-                  </button>
-                </div>
-              </div>
-
               <p className="settings-group-heading">Server & Data Connection</p>
               <div className="setting-item-row">
                 <div className="setting-item-info">
@@ -1385,42 +1261,6 @@ export const SettingsPanel = memo(function SettingsPanel({
       {showDataUsage && (
         <DataUsageModal
           onClose={() => setShowDataUsage(false)} />
-      )}
-
-      {rulesModal && (
-        <div className="modal-backdrop" onClick={() => setRulesModal(null)}>
-          <div
-            className="modal-card fade-in"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 520, background: "#141417", border: "1px solid #27272a" }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h2 style={{ fontSize: 16, margin: 0, color: "#fff" }}>
-                {rulesModal === "file" && "File Access Rules"}
-                {rulesModal === "network" && "Network Access Rules"}
-                {rulesModal === "terminal" && "Terminal Commands"}
-                {rulesModal === "sandbox" && "Commands Outside Sandbox"}
-              </h2>
-              <button type="button" className="btn-icon btn-ghost" onClick={() => setRulesModal(null)}>✕</button>
-            </div>
-            <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 16 }}>
-              {rulesModal === "file" && "Configure allowed and denied directory paths for file read and write operations."}
-              {rulesModal === "network" && "Configure allowed domains, IP subnets, and HTTP/HTTPS URLs for network requests."}
-              {rulesModal === "terminal" && "Configure allowed commands and shell scripts executed in the agent terminal."}
-              {rulesModal === "sandbox" && "Configure allowed commands executed directly on the host system without sandbox."}
-            </p>
-            <div style={{ background: "#0e0e11", border: "1px solid #222226", borderRadius: 6, padding: "10px 12px", fontSize: 12, color: "#71717a", fontFamily: "monospace", minHeight: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              (Default policy: Turbo Mode Auto-Allow)
-            </div>
-            <div className="modal-actions" style={{ marginTop: 16 }}>
-              <button className="ag-btn-open" onClick={() => setRulesModal(null)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {showPairModal && (

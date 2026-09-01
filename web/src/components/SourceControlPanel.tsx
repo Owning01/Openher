@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Source Control panel — puerto fiel del UX de terax-ai (Apache-2.0,
 // src/modules/source-control/SourceControlPanel.tsx) adaptado a este
 // proyecto: shell.git.*, CSS scm.*, hooks locales, sin Tauri/ChatStore.

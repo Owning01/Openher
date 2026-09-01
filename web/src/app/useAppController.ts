@@ -395,50 +395,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setDesktopDiffOpen,
     desktopDiffWidth,
     setDesktopDiffWidth,
-    showTerminal,
-    setShowTerminal,
-    terminalDocked,
-    setTerminalDocked,
-    terminalHeight,
-    setTerminalHeight,
   } = useDesktopLayoutState(isDesktop, selectedSession?.id ?? null)
 
-  // Auto-mostrar terminal inferior si auto_opencode2 está activado (solo 1 vez por sesión)
-  useEffect(() => {
-    if (!isDesktop) return
-    let cancelled = false
-    // Ya auto-mostrado en esta sesión
-    try { if (sessionStorage.getItem("opencode.auto_opencode2.shown") === "1") return } catch {}
-    const ensure = async () => {
-      if (cancelled) return
-      let enabled = false
-      try { enabled = localStorage.getItem("opencode.auto_opencode2") === "1" } catch {}
-      if (!enabled) {
-        try {
-          const { shell } = await import("../shell")
-          const c = (await shell.config.get().catch(() => null)) as any
-          if (cancelled) return
-          if (c?.auto_opencode2) {
-            enabled = true
-            try { localStorage.setItem("opencode.auto_opencode2", "1") } catch {}
-          }
-        } catch {}
-      }
-      if (!enabled) return
-      if (!showTerminal) setShowTerminal(true)
-      // pending solo se marca si aún no se consumió en esta sesión
-      try {
-        if (sessionStorage.getItem("opencode.auto_opencode2.pendingDone") !== "1") {
-          const { setPendingAutoOpencode2 } = await import("../utils/terminalStore")
-          setPendingAutoOpencode2(true)
-          sessionStorage.setItem("opencode.auto_opencode2.pendingDone", "1")
-        }
-      } catch {}
-      try { sessionStorage.setItem("opencode.auto_opencode2.shown", "1") } catch {}
-    }
-    const t = setTimeout(ensure, 600)
-    return () => { cancelled = true; clearTimeout(t) }
-  }, [isDesktop])
+  // auto_opencode2 now handled via terminal tab pty injection (see SingleTerminal); no bottom dock
 
   const {
     switchTab,
@@ -467,7 +426,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setTabStacks: setTabStacks as any,
     activePanel,
     setActivePanel,
-    setShowTerminal,
     setFileEditorPath,
     setDesktopState,
   })
@@ -576,15 +534,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     fb.open()
   }, [fb])
 
-  const {
-    lines: shellLines,
-    running: shellRunning,
-    shell: terminalShell,
-    setShell: setTerminalShell,
-    execute: shellExecute,
-    clear: shellClear,
-    history: shellHistory,
-  } = useShell(config, selectedSession?.directory)
+  const { execute: shellExecute } = useShell(config, selectedSession?.directory)
 
   const {
     providers: providerList,
@@ -880,8 +830,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setSidebarCollapsed,
     handleOpenNewSession,
     setDesktopLayout,
-    setShowTerminal,
     setActivePanel,
+    onAddTerminal: addTerminalToPanel,
   })
 
   const handleOpenSession = useCallback(
@@ -1040,7 +990,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handleCompact,
     handleCreateSession,
     fb,
-    setShowTerminal,
     setShowMCPBrowser,
     setDesktopCfg,
     loadDesktopConfig,
@@ -1072,7 +1021,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     sessions[0]?.directory ??
     undefined
 
-  const { handleOpenDesign, handleOpenKanban, handleOpenLearning, handleOpenReports, handleOpenScreenshots } = useVirtualTabs({
+  const { handleOpenKanban, handleOpenLearning } = useVirtualTabs({
     isDesktop,
     desktopLayout,
     activePanel,
@@ -1203,8 +1152,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setActivity,
     sidebarCollapsed,
     setSidebarCollapsed,
-    showTerminal,
-    setShowTerminal,
     tabStacks,
     desktopLayout,
     openStatsAsTab,
@@ -1213,7 +1160,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handleOpenKanban,
     rightSidebarCollapsed,
     setRightSidebarCollapsed,
-    handleOpenDesign,
     setShowPluginsModal,
     showPluginsModal,
     pluginTabs,
@@ -1222,8 +1168,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     memInfo,
     formatBytes,
     handleOpenLearning,
-    handleOpenReports,
-    handleOpenScreenshots,
     handleNavigate,
     currentActiveSession,
     activeSessionDir,
@@ -1269,16 +1213,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handleToggleInspectTool,
     handleBrowserVisualPick,
     switchTab,
-    terminalDocked,
-    setTerminalDocked,
-    terminalHeight,
-    setTerminalHeight,
-    shellLines,
-    shellRunning,
-    terminalShell,
-    setTerminalShell,
-    shellClear,
-    shellHistory,
     desktopDiffOpen,
     setDesktopDiffOpen,
     desktopDiffData,

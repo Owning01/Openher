@@ -2,7 +2,7 @@ import { useCallback } from "react"
 import type { ShellPanelKind } from "../shell"
 import type { DesktopLayout, ViewType } from "../types"
 
-export type VirtualTabId = "__design__" | "__kanban__" | "__learning__" | "__reports__" | "__screenshots__" | (string & {})
+export type VirtualTabId = "__kanban__" | "__learning__" | (string & {})
 
 export interface UseVirtualTabsOptions {
   isDesktop: boolean
@@ -28,11 +28,8 @@ export function useVirtualTabs({
   handleNavigate,
 }: UseVirtualTabsOptions): {
   openVirtualTab: (id: VirtualTabId) => void
-  handleOpenDesign: () => void
   handleOpenKanban: () => void
   handleOpenLearning: () => void
-  handleOpenReports: () => void
-  handleOpenScreenshots: () => void
 } {
   const openVirtualTab = useCallback(
     (id: VirtualTabId): void => {
@@ -43,8 +40,8 @@ export function useVirtualTabs({
 
       handleNavigate?.("detail")
 
-      if (id === "__design__" || id === "__kanban__") {
-        const kind: ShellPanelKind = id === "__design__" ? "design" : "kanban"
+      if (id === "__kanban__") {
+        const kind: ShellPanelKind = "kanban"
         const existingPanelIdx = desktopLayout.panelKinds.indexOf(kind)
         if (existingPanelIdx >= 0) {
           setActivePanel(existingPanelIdx)
@@ -104,14 +101,10 @@ export function useVirtualTabs({
     [isDesktop, desktopLayout, activePanel, tabStacks, setTabStacks, setDesktopLayout, setActivePanel, handleNavigate],
   )
 
-  const handleOpenDesign = useCallback(() => openVirtualTab("__design__"), [openVirtualTab])
   const handleOpenKanban = useCallback(() => openVirtualTab("__kanban__"), [openVirtualTab])
   const handleOpenLearning = useCallback(() => openVirtualTab("__learning__"), [openVirtualTab])
-  const handleOpenReports = useCallback(() => openVirtualTab("__reports__"), [openVirtualTab])
-  const handleOpenScreenshots = useCallback(() => openVirtualTab("__screenshots__"), [openVirtualTab])
 
-  // _addPanel kept for API compatibility (panel dedicado fallback ya cubierto por tabs)
   void _addPanel
 
-  return { openVirtualTab, handleOpenDesign, handleOpenKanban, handleOpenLearning, handleOpenReports, handleOpenScreenshots }
+  return { openVirtualTab, handleOpenKanban, handleOpenLearning }
 }

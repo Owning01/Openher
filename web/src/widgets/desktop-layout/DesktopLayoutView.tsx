@@ -2,7 +2,6 @@ import React, { memo } from "react"
 import type { SessionView, ServerConfig, ConnectionState, DataMode, ViewType, ModelOption, ServerProfile, PromptSnippet, AgentOption, NoticeType, FeatureFlags, ChatSettings } from "../../types"
 import type { UsageStats } from "../../hooks/useStats"
 import type { ShellPanelKind } from "../../shell"
-import type { ShellType } from "../../hooks/useShell"
 import type { ChatViewProps } from "../../components/ChatView"
 import type { LanguageCode } from "../../i18n"
 import { ActivityBar, type DesktopActivity, type PluginTabItem } from "../activity-bar/ActivityBar"
@@ -12,7 +11,6 @@ import { ADEDiffPanel } from "../../components/ADEDiffPanel"
 import { BrainIcon } from "../../Icons"
 import { PluginSlot } from "../../plugins"
 import { useT } from "../../i18n-context"
-import { TerminalView } from "../../components/TerminalView"
 import { QuickChatPanel } from "../../components/QuickChatPanel"
 import { SettingsPanel } from "../../components/SettingsPanel"
 
@@ -24,8 +22,6 @@ export type DesktopLayoutViewProps = {
   setActivity: (act: any) => void
   sidebarCollapsed: boolean
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>
-  showTerminal: boolean
-  setShowTerminal: React.Dispatch<React.SetStateAction<boolean>>
   tabStacks: string[][]
   desktopLayout: {
     cols: number
@@ -42,15 +38,12 @@ export type DesktopLayoutViewProps = {
   handleOpenKanban: () => void
   rightSidebarCollapsed: boolean
   setRightSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>
-  handleOpenDesign: () => void
   setShowPluginsModal: (s: boolean) => void
   pluginTabs: PluginTabItem[]
   openPluginAsTab: (key: string, targetPanel?: number) => void
   memInfo: any
   formatBytes: (bytes: number) => string
   handleOpenLearning: () => void
-  handleOpenReports: () => void
-  handleOpenScreenshots: () => void
   view: ViewType
   handleNavigate: (v: ViewType) => void
   sessionsView: React.ReactNode
@@ -104,24 +97,11 @@ export type DesktopLayoutViewProps = {
   onToggleInspectTool: (tool: "picker" | "pod") => void
   onBrowserVisualPick: (url: string, el: any) => void
   onSwitchTab: (panelIdx: number, tabIdx: number) => void
-  // Terminal dock
-  terminalDocked: boolean
-  setTerminalDocked: (d: boolean) => void
-  terminalHeight: number
-  setTerminalHeight: (h: number) => void
-  shellLines: any[]
-  shellRunning: boolean
-  terminalShell: ShellType
-  setTerminalShell: (sh: ShellType) => void
-  shellClear: () => void
-  shellHistory: string[]
-  // ADE Diff
   desktopDiffOpen: boolean
   setDesktopDiffOpen: (o: boolean) => void
   desktopDiffData: any
   diffFiles: any[]
   setDesktopDiffWidth: (w: number) => void
-  // Settings props
   draftConfig?: ServerConfig
   setDraftConfig?: (c: ServerConfig) => void
   handleTest?: () => void
@@ -190,8 +170,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     setActivity,
     sidebarCollapsed,
     setSidebarCollapsed,
-    showTerminal,
-    setShowTerminal,
     tabStacks,
     desktopLayout,
     openStatsAsTab,
@@ -199,15 +177,12 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     handleOpenKanban,
     rightSidebarCollapsed,
     setRightSidebarCollapsed,
-    handleOpenDesign,
     setShowPluginsModal,
     pluginTabs,
     openPluginAsTab,
     memInfo,
     formatBytes,
     handleOpenLearning,
-    handleOpenReports,
-    handleOpenScreenshots,
     view,
     handleNavigate,
     sessionsView,
@@ -261,24 +236,11 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     onToggleInspectTool,
     onBrowserVisualPick,
     onSwitchTab,
-    // Terminal
-    terminalDocked,
-    setTerminalDocked,
-    terminalHeight,
-    setTerminalHeight,
-    shellLines,
-    shellRunning,
-    terminalShell,
-    setTerminalShell,
-    shellClear,
-    shellHistory,
-    // Diff
     desktopDiffOpen,
     setDesktopDiffOpen,
     desktopDiffData,
     diffFiles,
     setDesktopDiffWidth,
-    // Settings props
     draftConfig,
     setDraftConfig,
     handleTest,
@@ -340,6 +302,7 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
   return (
     <div
       className="app-shell"
+      data-desktop="true"
       data-navbar="header"
       ref={shellRef}
       data-sidebarpos={sidebarPrefs.position}
@@ -351,8 +314,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         setActivity={setActivity}
         sidebarCollapsed={sidebarCollapsed}
         setSidebarCollapsed={setSidebarCollapsed}
-        showTerminal={showTerminal}
-        setShowTerminal={setShowTerminal}
         tabStacks={tabStacks}
         desktopLayout={desktopLayout}
         openStatsAsTab={openStatsAsTab}
@@ -360,15 +321,12 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         handleOpenKanban={handleOpenKanban}
         rightSidebarCollapsed={rightSidebarCollapsed}
         setRightSidebarCollapsed={setRightSidebarCollapsed}
-        handleOpenDesign={handleOpenDesign}
         setShowPluginsModal={setShowPluginsModal}
         pluginTabs={pluginTabs}
         openPluginAsTab={openPluginAsTab}
         memInfo={memInfo}
         formatBytes={formatBytes}
         handleOpenLearning={handleOpenLearning}
-        handleOpenReports={handleOpenReports}
-        handleOpenScreenshots={handleOpenScreenshots}
         view={view}
         handleNavigate={handleNavigate}
       />
@@ -523,25 +481,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
             onToggleInspectTool={onToggleInspectTool}
             onBrowserVisualPick={onBrowserVisualPick}
             onSwitchTab={onSwitchTab}
-          />
-        )}
-
-        {showTerminal && terminalDocked && (
-          <TerminalView
-            lines={shellLines}
-            running={shellRunning}
-            sessionID={currentActiveSession?.id || selectedSession?.id || ""}
-            directory={activeSessionDir || selectedSession?.directory || ""}
-            shell={terminalShell}
-            onShellChange={setTerminalShell}
-            onExecute={onShellExecute}
-            onClear={shellClear}
-            onClose={() => setShowTerminal(false)}
-            history={shellHistory}
-            isDocked={true}
-            onToggleDock={() => setTerminalDocked(false)}
-            height={terminalHeight}
-            onResizeHeight={setTerminalHeight}
           />
         )}
       </main>

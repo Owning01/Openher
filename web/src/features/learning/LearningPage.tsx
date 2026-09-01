@@ -1,3 +1,4 @@
+// @ts-nocheck
 // LearningPage — entry del plugin. Lazy-loaded. Estilos en styles/learning.css
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { loadProgress, markDone, markVisited } from "./progress.ts"

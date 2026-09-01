@@ -166,12 +166,6 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
         }
         return false
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "v" && e.type === "keydown") {
-        navigator.clipboard.readText().then((text) => {
-          if (text) term.paste(text)
-        }).catch(() => {})
-        return false
-      }
       return true
     })
 

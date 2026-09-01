@@ -106,7 +106,12 @@ impl PtyRegistry {
             cmd.arg(arg);
         }
         if let Some(dir) = &cwd {
-            cmd.cwd(dir);
+            let p = std::path::Path::new(dir);
+            if p.is_dir() {
+                cmd.cwd(dir);
+            } else {
+                eprintln!("pty: cwd no existe, usando default: {}", dir);
+            }
         }
         // Env para TUI bbox: UTF-8 + 256color + sin CI poisoning (termenv degrada a ASCII con CI=1)
         cmd.env("TERM", "xterm-256color");

@@ -31,6 +31,7 @@ export const TabBar = memo(function TabBar({
   onCloseAll,
   onDuplicate,
   onRenameTab,
+  onDropUrl,
 }: {
   tabs: Array<string>
   activeIndex: number
@@ -51,6 +52,7 @@ export const TabBar = memo(function TabBar({
   onCloseAll?: () => void
   onDuplicate?: (index: number) => void
   onRenameTab?: (index: number, newTitle: string) => void
+  onDropUrl?: (url: string, toIndex: number) => void
 }) {
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
@@ -239,18 +241,34 @@ export const TabBar = memo(function TabBar({
 
   const handleBarDragOver = useCallback((e: React.DragEvent) => {
     const isInternal = e.dataTransfer.types.includes("application/x-opencode-tab-index")
-    // Drops externos (terminal desde el rail) y reorden interno: ambos válidos
-    e.preventDefault()
-    e.stopPropagation()
-    e.dataTransfer.dropEffect = isInternal ? "move" : "copy"
-    if (isInternal) setDragOverIdx(getIndexFromX(e.clientX))
+    const hasUrl = e.dataTransfer.types.includes("application/x-opencode-browser-tab") || e.dataTransfer.types.includes("text/plain")
+    // Drops externos (terminal, browser url) y reorden interno: ambos válidos
+    const isExternal = !isInternal && (hasUrl || e.dataTransfer.types.includes("application/x-opencode-path"))
+    if (isInternal || isExternal) {
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = isInternal ? "move" : "copy"
+      if (isInternal) setDragOverIdx(getIndexFromX(e.clientX))
+    }
   }, [getIndexFromX])
 
   const handleBarDrop = useCallback((e: React.DragEvent) => {
     const isInternal = e.dataTransfer.types.includes("application/x-opencode-tab-index")
     const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain") || ""
+    const browserUrl = e.dataTransfer.getData("application/x-opencode-browser-tab") || ""
+    const urlPayload = browserUrl || path
+    const isUrl = /^https?:\/\//i.test(urlPayload) || urlPayload.startsWith("browser:") || (urlPayload.includes(".") && !urlPayload.includes("kind:") && !urlPayload.includes("terminal-tab:"))
     const isTerminal = path.includes("kind:terminal") || path === "kind:terminal"
     const isTerminalTab = path.includes("terminal-tab:")
+    if (isUrl && onDropUrl) {
+      e.preventDefault()
+      e.stopPropagation()
+      const at = getIndexFromX(e.clientX)
+      onDropUrl(urlPayload, at)
+      setDragIdx(null)
+      setDragOverIdx(null)
+      return
+    }
     // Tipos desconocidos (ej. sesión desde sidebar): dejar pasar al handler de la celda (split)
     if (!isInternal && !isTerminal && !isTerminalTab) return
     e.preventDefault()
@@ -264,7 +282,6 @@ export const TabBar = memo(function TabBar({
       const origin = readDragOrigin(e)
       if (origin) {
         if (origin.panel === -1 || origin.panel === panelIndex) {
-          // Drop en el hueco de la barra: ajustar por la remoción previa
           let to = at
           if (origin.index < to) to -= 1
           if (to !== origin.index) onMoveTab(origin.index, to)
@@ -275,7 +292,7 @@ export const TabBar = memo(function TabBar({
     }
     setDragIdx(null)
     setDragOverIdx(null)
-  }, [getIndexFromX, onDropTerminal, onDropTerminalTab, onMoveTab, onTransferTab, panelIndex, readDragOrigin])
+  }, [getIndexFromX, onDropTerminal, onDropTerminalTab, onMoveTab, onTransferTab, panelIndex, readDragOrigin, onDropUrl])
 
   return (
     <div

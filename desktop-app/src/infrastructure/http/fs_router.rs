@@ -160,6 +160,17 @@ pub fn handle(
             }
             Err(e) => json_err(400, &e),
         },
+        (Method::Post, "/rename") => match read_body(req) {
+            Ok(b) => {
+                let old = b["oldPath"].as_str().or(b["path"].as_str()).unwrap_or("");
+                let name = b["newName"].as_str().or(b["name"].as_str()).unwrap_or("");
+                match fsx::rename_entry(old, name) {
+                    Ok(target) => json_ok(&serde_json::json!({ "ok": true, "path": target })),
+                    Err(e) => json_err(400, &e),
+                }
+            }
+            Err(e) => json_err(400, &e),
+        },
         (Method::Post, "/reveal") => match read_body(req) {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");

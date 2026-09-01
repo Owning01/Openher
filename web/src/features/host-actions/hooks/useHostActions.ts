@@ -206,8 +206,12 @@ export function useHostActions({
   )
 
   const handleOpenBrowser = useCallback(
-    (url: string) => {
+    (url: string, targetPanel?: number) => {
       if (isDesktop) {
+        if (typeof targetPanel === "number") {
+          openBrowserAsTab(url, targetPanel)
+          return
+        }
         const allBrowserTabs: Array<{ panelIdx: number; tabId: string }> = []
         tabStacks?.forEach((stack, pIdx) => {
           stack.forEach((id) => {

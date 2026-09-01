@@ -869,6 +869,253 @@ export function DiagramAgentesIA() {
   )
 }
 
+export function DiagramPapers({ subCategory }: { subCategory?: string | null } = {}) {
+  const id = "dg-papers"
+  const key = (subCategory ?? "").toLowerCase()
+  // Variante por subcategoría
+  if (key.includes("reasoning")) return <DiagramPapersReasoning />
+  if (key.includes("harness") || key.includes("tool")) return <DiagramPapersHarness />
+  if (key.includes("agentes") || key.includes("orquest")) return <DiagramPapersAgentes />
+  if (key.includes("memoria") || key.includes("context")) return <DiagramPapersMemoria />
+  if (key.includes("evaluacion") || key.includes("benchmark")) return <DiagramPapersEval />
+  if (key.includes("skills") || key.includes("jit")) return <DiagramPapersSkills />
+  // fallback: mapa general de 6 pilares
+  return (
+    <div className="learning-diagram-wrap">
+      <SvgFrame viewBox="0 0 720 380" title="Mapa de papers — 6 pilares del harness" desc="Seis pilares (reasoning, harness, agentes, memoria, evaluación, skills) convergen en el harness opencode-remote; el harness es focal." id={`${id}-map`}>
+        {/* título */}
+        <text x={360} y={22} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" letterSpacing="0.14em" textAnchor="middle">6 PILARES → 1 HARNESS</text>
+        {/* 6 pilares */}
+        {[
+          { x: 88, y: 44, label: "Reasoning", sub: "CoT · ReAct · ToT", icon: "◈" },
+          { x: 260, y: 44, label: "Harness", sub: "Toolformer · MCP", icon: "⬢" },
+          { x: 432, y: 44, label: "Agentes", sub: "AutoGen · MetaGPT", icon: "⬣" },
+          { x: 88, y: 212, label: "Memoria", sub: "RAG · MemGPT", icon: "⬔" },
+          { x: 260, y: 212, label: "Evaluación", sub: "SWE-bench · GAIA", icon: "⬥" },
+          { x: 432, y: 212, label: "Skills", sub: "Voyager · JIT", icon: "⬢" },
+        ].map((n) => (
+          <g key={n.label}>
+            <rect x={n.x - 64} y={n.y} width={128} height={52} rx={6} fill={S.paper} stroke={S.ink} strokeWidth={1} />
+            <text x={n.x} y={n.y + 16} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle" letterSpacing="0.08em">{n.icon} {n.label.toUpperCase()}</text>
+            <text x={n.x} y={n.y + 32} fill={S.ink} fontSize={9} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">{n.sub}</text>
+            <text x={n.x} y={n.y + 44} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">papers</text>
+          </g>
+        ))}
+        {/* hub central focal */}
+        <rect x={520} y={100} width={176} height={80} rx={8} fill={S.accentTint} stroke={S.accent} strokeWidth={1.4} />
+        <text x={608} y={126} fill={S.ink} fontSize={11} fontWeight={700} fontFamily="var(--font-family)" textAnchor="middle">Harness</text>
+        <text x={608} y={142} fill={S.ink} fontSize={9} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">opencode-remote</text>
+        <text x={608} y={156} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">desktop :4848 + thin client</text>
+        {/* conexiones */}
+        <line x1={152} y1={96} x2={520} y2={120} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-map-arrow)`} />
+        <line x1={260} y1={70} x2={520} y2={130} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-map-arrow)`} />
+        <line x1={432} y1={70} x2={520} y2={140} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-map-arrow)`} />
+        <line x1={152} y1={212} x2={520} y2={160} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-map-arrow)`} />
+        <line x1={260} y1={212} x2={520} y2={150} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-map-arrow)`} />
+        <line x1={432} y1={212} x2={520} y2={170} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-map-arrow-accent)`} />
+        {/* leyenda */}
+        <line x1={24} y1={320} x2={696} y2={320} stroke="color-mix(in srgb, var(--text) 10%, transparent)" strokeWidth={0.8} />
+        <text x={24} y={334} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" letterSpacing="0.14em">LEYENDA</text>
+        <rect x={80} y={326} width={10} height={10} rx={2} fill={S.accentTint} stroke={S.accent} strokeWidth={1} />
+        <text x={96} y={335} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)">Focal — donde confluyen los papers</text>
+        <text x={24} y={354} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)">29 papers · 6 subcategorías · prioridad Imprescindible → Complementario</text>
+      </SvgFrame>
+    </div>
+  )
+}
+
+function DiagramPapersReasoning() {
+  const id = "dg-papers-reason"
+  return (
+    <div className="learning-diagram-wrap">
+      <SvgFrame viewBox="0 0 720 340" title="Reasoning — del CoT al árbol" desc="CoT lineal, Self-Consistency ramificado, ReAct con loop tool, ToT como búsqueda, Reflexion como memoria verbal." id={id}>
+        <line x1={40} y1={80} x2={680} y2={80} stroke="color-mix(in srgb, var(--text) 8%, transparent)" strokeWidth={0.8} />
+        {[
+          ["CoT", "1 camino\nlineal", false],
+          ["Self-Consistency", "k caminos\nvoto", false],
+          ["ReAct", "Thought→Act\nObservation", true],
+          ["Tree of Thoughts", "BFS/DFS\nsobre thoughts", false],
+          ["Reflexion", "memoria\nverbal", false],
+        ].map((pair, i) => {
+          const x = 80 + i * 136
+          const focal = pair[2] as boolean
+          return (
+            <g key={pair[0] as string}>
+              <rect x={x - 52} y={48} width={104} height={64} rx={6} fill={focal ? S.accentTint : S.paper} stroke={focal ? S.accent : S.ink} strokeWidth={focal ? 1.4 : 1} />
+              <text x={x} y={66} fill={S.ink} fontSize={9} fontWeight={700} fontFamily="var(--font-family)" textAnchor="middle">{pair[0] as string}</text>
+              <text x={x} y={82} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">{(pair[1] as string).split("\n")[0]}</text>
+              <text x={x} y={92} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">{(pair[1] as string).split("\n")[1]}</text>
+              <circle cx={x} cy={118} r={6} fill={focal ? S.accent : S.paper} stroke={focal ? S.accent : S.muted} strokeWidth={1} />
+              <text x={x} y={122} fill={focal ? "#fff" : S.muted} fontSize={7} fontWeight={700} fontFamily="var(--font-family)" textAnchor="middle">{i + 1}</text>
+              {i < 4 && <line x1={x + 58} y1={80} x2={x + 78} y2={80} stroke={S.muted} strokeWidth={1.2} markerEnd={`url(#${id}-arrow)`} />}
+            </g>
+          )
+        })}
+        <rect x={24} y={150} width={672} height={64} rx={8} fill="color-mix(in srgb, var(--text) 3%, transparent)" stroke={S.rule} strokeWidth={1} />
+        <text x={36} y={170} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" letterSpacing="0.12em">COSTE →</text>
+        <text x={36} y={186} fill={S.ink} fontSize={9} fontFamily="var(--font-family)">CoT barato → Reflexion/ToT caro (usar solo si vale)</text>
+        <text x={36} y={202} fill={S.muted} fontSize={8} fontFamily="var(--font-mono)">ReAct es el default de tu SSE; ToT solo para planner multi-archivo</text>
+      </SvgFrame>
+    </div>
+  )
+}
+
+function DiagramPapersHarness() {
+  const id = "dg-papers-harness"
+  return (
+    <div className="learning-diagram-wrap">
+      <SvgFrame viewBox="0 0 720 340" title="Harness — de Toolformer a MCP" desc="Toolformer aprende tool use, Gorilla evalúa, ToolLLM escala, SWE-agent diseña ACI, MCP estandariza." id={id}>
+        {[
+          { y: 36, label: "Toolformer", sub: "self-supervised · perplexity filter", w: 640, focal: false },
+          { y: 84, label: "Gorilla / BFCL", sub: "AST + ejecución · retriever top-k", w: 640, focal: false },
+          { y: 132, label: "ToolLLM / ToolBench", sub: "16k APIs · DFS backtrack", w: 640, focal: false },
+          { y: 180, label: "SWE-agent ACI", sub: "viewer numerado · edit linted → +10 pts", w: 640, focal: true },
+          { y: 228, label: "MCP", sub: "LSP de tools · discovery · allowlist", w: 640, focal: false },
+        ].map((n) => (
+          <g key={n.label}>
+            <rect x={40} y={n.y} width={n.w} height={40} rx={6} fill={n.focal ? S.accentTint : S.paper2} stroke={n.focal ? S.accent : S.rule} strokeWidth={n.focal ? 1.4 : 1} />
+            <text x={56} y={n.y + 16} fill={S.ink} fontSize={10} fontWeight={600} fontFamily="var(--font-family)">{n.label}</text>
+            <text x={56} y={n.y + 30} fill={S.muted} fontSize={8} fontFamily="var(--font-mono)">{n.sub}</text>
+            {n.focal && <text x={670} y={n.y + 24} fill={S.accent} fontSize={7} fontFamily="var(--font-mono)" textAnchor="end">★ FOCAL</text>}
+          </g>
+        ))}
+        <line x1={14} y1={36} x2={14} y2={268} stroke={S.muted} strokeWidth={0.8} strokeDasharray="3,3" />
+        <text x={16} y={24} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" letterSpacing="0.14em">EVOLUCIÓN →</text>
+      </SvgFrame>
+    </div>
+  )
+}
+
+function DiagramPapersAgentes() {
+  const id = "dg-papers-agentes"
+  return (
+    <div className="learning-diagram-wrap">
+      <SvgFrame viewBox="0 0 720 360" title="Agentes — workflow vs agentic loop" desc="Anthropic: 5 workflows deterministas; solo si no alcanza, loop agéntico; ejemplos AutoGen, MetaGPT, OpenHands, Voyager." id={id}>
+        <rect x={24} y={32} width={320} height={180} rx={8} fill="color-mix(in srgb, var(--text) 2%, transparent)" stroke={S.rule} strokeWidth={1} />
+        <rect x={30} y={36} width={72} height={12} rx={2} fill={S.paper} />
+        <text x={66} y={45} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle" letterSpacing="0.12em">WORKFLOWS</text>
+        {["Chaining", "Routing", "Parallel", "Orchestrator", "Evaluator"].map((l, i) => (
+          <g key={l}>
+            <rect x={36} y={56 + i * 28} width={296} height={22} rx={4} fill={S.paper2} stroke={S.rule} strokeWidth={1} />
+            <text x={48} y={70 + i * 28} fill={S.ink} fontSize={8} fontWeight={600} fontFamily="var(--font-family)">{i + 1}. {l}</text>
+            <text x={320} y={70 + i * 28} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="end">determinista</text>
+          </g>
+        ))}
+        <rect x={380} y={32} width={316} height={180} rx={8} fill={S.accentTint} stroke={S.accent} strokeWidth={1.4} />
+        <rect x={386} y={36} width={56} height={12} rx={2} fill={S.paper} />
+        <text x={414} y={45} fill={S.accent} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle" letterSpacing="0.12em">AGENTIC ★</text>
+        {[
+          { label: "AutoGen", sub: "chat conversable" },
+          { label: "MetaGPT", sub: "SOPs + artefactos" },
+          { label: "OpenHands", sub: "bash+browser+Doker" },
+          { label: "Voyager", sub: "skill library" },
+        ].map((n, i) => (
+          <g key={n.label}>
+            <rect x={392} y={56 + i * 32} width={292} height={26} rx={6} fill={S.paper} stroke={S.ink} strokeWidth={1} />
+            <text x={404} y={72 + i * 32} fill={S.ink} fontSize={9} fontWeight={600} fontFamily="var(--font-family)">{n.label}</text>
+            <text x={672} y={72 + i * 32} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="end">{n.sub}</text>
+          </g>
+        ))}
+        <text x={360} y={240} fill={S.muted} fontSize={8} fontFamily="var(--font-mono)" textAnchor="middle">Regla Anthropic: usa workflow si podés; agentic solo si el task es abierto</text>
+        <line x1={24} y1={268} x2={696} y2={268} stroke="color-mix(in srgb, var(--text) 10%, transparent)" strokeWidth={0.8} />
+        <text x={24} y={282} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" letterSpacing="0.14em">LEYENDA</text>
+        <rect x={80} y={274} width={10} height={10} rx={2} fill={S.accentTint} stroke={S.accent} strokeWidth={1} />
+        <text x={96} y={283} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)">Agentic = ReAct loop + memoria</text>
+      </SvgFrame>
+    </div>
+  )
+}
+
+function DiagramPapersMemoria() {
+  const id = "dg-papers-mem"
+  return (
+    <div className="learning-diagram-wrap">
+      <SvgFrame viewBox="0 0 720 340" title="Memoria — de RAG a context engineering" desc="RAG recupera, MemGPT pagina, Lost-in-Middle ordena, Context Engineering compacta y aisla." id={id}>
+        <rect x={24} y={32} width={680} height={48} rx={8} fill={S.paper2} stroke={S.rule} strokeWidth={1} />
+        <text x={36} y={50} fill={S.ink} fontSize={10} fontWeight={600} fontFamily="var(--font-family)">RAG 2020 — DPR + generación condicionada</text>
+        <text x={36} y={64} fill={S.muted} fontSize={8} fontFamily="var(--font-mono)">FAISS · top-k docs → prompt</text>
+        <line x1={360} y1={80} x2={360} y2={100} stroke={S.muted} strokeWidth={1.2} markerEnd={`url(#${id}-arrow)`} />
+        <rect x={24} y={100} width={680} height={64} rx={8} fill={S.accentTint} stroke={S.accent} strokeWidth={1.4} />
+        <text x={36} y={120} fill={S.ink} fontSize={10} fontWeight={700} fontFamily="var(--font-family)">MemGPT 2023 — RAM vs Disco ★ FOCAL</text>
+        <text x={36} y={134} fill={S.muted} fontSize={8} fontFamily="var(--font-mono)">main (30 msgs) · queue · archival (IndexedDB) · interrupts</text>
+        <text x={36} y={150} fill={S.muted} fontSize={8} fontFamily="var(--font-mono)">tu IndexedDB v2 es archival; context window es RAM</text>
+        <line x1={360} y1={164} x2={360} y2={184} stroke={S.muted} strokeWidth={1.2} markerEnd={`url(#${id}-arrow)`} />
+        <rect x={24} y={184} width={328} height={56} rx={8} fill={S.paper} stroke={S.ink} strokeWidth={1} />
+        <text x={36} y={204} fill={S.ink} fontSize={9} fontWeight={600} fontFamily="var(--font-family)">Lost in the Middle 2023</text>
+        <text x={36} y={218} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)">U-curve: inicio/final 75% → medio 45%</text>
+        <rect x={368} y={184} width={328} height={56} rx={8} fill={S.paper} stroke={S.ink} strokeWidth={1} />
+        <text x={380} y={204} fill={S.ink} fontSize={9} fontWeight={600} fontFamily="var(--font-family)">Context Eng. 2025</text>
+        <text x={380} y={218} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)">compaction · isolation · pruning</text>
+      </SvgFrame>
+    </div>
+  )
+}
+
+function DiagramPapersEval() {
+  const id = "dg-papers-eval"
+  return (
+    <div className="learning-diagram-wrap">
+      <SvgFrame viewBox="0 0 720 320" title="Evaluación — de SWE-bench a GAIA" desc="SWE-bench mide fix real por tests, GAIA mide tool-use en wild, BFCL mide AST correcto." id={id}>
+        <rect x={24} y={40} width={208} height={100} rx={8} fill={S.paper} stroke={S.ink} strokeWidth={1} />
+        <text x={128} y={64} fill={S.ink} fontSize={11} fontWeight={700} fontFamily="var(--font-family)" textAnchor="middle">SWE-bench</text>
+        <text x={128} y={80} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">2,294 issues · fail→pass</text>
+        <text x={128} y={92} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">métrica: resolved %</text>
+        <text x={128} y={108} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">tu ACI a prueba</text>
+        <rect x={256} y={40} width={208} height={100} rx={8} fill={S.accentTint} stroke={S.accent} strokeWidth={1.4} />
+        <text x={360} y={64} fill={S.ink} fontSize={11} fontWeight={700} fontFamily="var(--font-family)" textAnchor="middle">GAIA ★</text>
+        <text x={360} y={80} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">466 tareas wild</text>
+        <text x={360} y={92} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">browse + tool + multi</text>
+        <text x={360} y={108} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">humano 92% · GPT-4 15%</text>
+        <rect x={488} y={40} width={208} height={100} rx={8} fill={S.paper} stroke={S.ink} strokeWidth={1} />
+        <text x={592} y={64} fill={S.ink} fontSize={11} fontWeight={700} fontFamily="var(--font-family)" textAnchor="middle">BFCL</text>
+        <text x={592} y={80} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">AST + ejecución</text>
+        <text x={592} y={92} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">retriever top-k</text>
+        <text x={592} y={108} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">tool use real</text>
+        <line x1={24} y1={180} x2={696} y2={180} stroke="color-mix(in srgb, var(--text) 10%, transparent)" strokeWidth={0.8} />
+        <text x={24} y={196} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" letterSpacing="0.14em">CÓMO MEDIR TU HARNESS</text>
+        <text x={24} y={212} fill={S.ink} fontSize={9} fontFamily="var(--font-family)">SWE-bench Lite (20 issues) + BFCL-mini (10 tools) + 10 GAIA-L1 = score honesto sin hype</text>
+      </SvgFrame>
+    </div>
+  )
+}
+
+function DiagramPapersSkills() {
+  const id = "dg-papers-skills"
+  return (
+    <div className="learning-diagram-wrap">
+      <SvgFrame viewBox="0 0 720 360" title="Skills & JIT — de Voyager a Phi-3" desc="Voyager acumula skills como código, Agent Skills estandariza paquetes, JIT sintetiza harness, Phi-3 ejecuta local barato." id={id}>
+        <line x1={360} y1={32} x2={360} y2={52} stroke={S.muted} strokeWidth={1.2} markerEnd={`url(#${id}-arrow)`} />
+        <rect x={260} y={12} width={200} height={20} rx={10} fill={S.paper} stroke={S.muted} strokeWidth={0.8} />
+        <text x={360} y={26} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">TASK: "fix bug en fsx.rs"</text>
+        <rect x={240} y={52} width={240} height={44} rx={6} fill={S.accentTint} stroke={S.accent} strokeWidth={1.4} />
+        <text x={360} y={72} fill={S.ink} fontSize={10} fontWeight={700} fontFamily="var(--font-family)" textAnchor="middle">JIT-Agent — sintetiza harness ★</text>
+        <text x={360} y={86} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">elige {`{memory, planning, tool, skill}`} óptimo</text>
+        <rect x={40} y={116} width={200} height={64} rx={8} fill={S.paper} stroke={S.ink} strokeWidth={1} />
+        <text x={140} y={136} fill={S.ink} fontSize={10} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">Voyager — skill library</text>
+        <text x={140} y={152} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">código · curriculum · verify</text>
+        <text x={140} y={164} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">300 skills versionadas</text>
+        <rect x={260} y={116} width={200} height={64} rx={8} fill={S.paper2} stroke={S.rule} strokeWidth={1} />
+        <text x={360} y={136} fill={S.ink} fontSize={10} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">Agent Skills — spec</text>
+        <text x={360} y={152} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">SKILL.md · tools · permissions</text>
+        <text x={360} y={164} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">~/.opencode/skills</text>
+        <rect x={480} y={116} width={200} height={64} rx={8} fill="color-mix(in srgb, var(--success) 8%, transparent)" stroke={S.success} strokeWidth={1} />
+        <text x={580} y={136} fill={S.ink} fontSize={10} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">Phi-3 — local 3.8B</text>
+        <text x={580} y={152} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">routing barato · guardrails</text>
+        <text x={580} y={164} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">4-bit on-device</text>
+        <line x1={280} y1={96} x2={140} y2={116} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-arrow)`} />
+        <line x1={360} y1={96} x2={360} y2={116} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-arrow)`} />
+        <line x1={440} y1={96} x2={580} y2={116} stroke={S.muted} strokeWidth={1} markerEnd={`url(#${id}-arrow)`} />
+        <rect x={200} y={200} width={320} height={48} rx={8} fill={S.paper} stroke={S.ink} strokeWidth={1} />
+        <text x={360} y={220} fill={S.ink} fontSize={10} fontWeight={600} fontFamily="var(--font-family)" textAnchor="middle">Code as Harness — artefactos persistentes</text>
+        <text x={360} y={234} fill={S.muted} fontSize={7} fontFamily="var(--font-mono)" textAnchor="middle">tests · workflows · DSLs versionados en git</text>
+        <line x1={140} y1={180} x2={280} y2={200} stroke={S.muted} strokeWidth={0.8} strokeDasharray="3,3" />
+        <line x1={360} y1={180} x2={360} y2={200} stroke={S.muted} strokeWidth={0.8} strokeDasharray="3,3" />
+        <line x1={580} y1={180} x2={440} y2={200} stroke={S.muted} strokeWidth={0.8} strokeDasharray="3,3" />
+      </SvgFrame>
+    </div>
+  )
+}
+
 // ── Gate de complejidad: filtra diagramas innecesarios ──
 export function shouldShowDiagram(lesson: { category: string; subCategory: string | null; id: string; originalPath: string }): boolean {
   const cat = lesson.category
@@ -898,7 +1145,7 @@ export function shouldShowDiagram(lesson: { category: string; subCategory: strin
   }
 
   // Imprescindibles: mantener siempre
-  if (cat === "00-Fundamentos" || cat === "03-Sistemas" || cat === "04-Post-Explotacion" || cat === "06-Operaciones" || cat === "07-Agentes-IA") return true
+  if (cat === "00-Fundamentos" || cat === "03-Sistemas" || cat === "04-Post-Explotacion" || cat === "06-Operaciones" || cat === "07-Agentes-IA" || cat === "08-Papers") return true
 
   // Resto de 05 (01 Cloud-Identity, 03 IA-Adversarial, 04 Vuln-Research, 05 Hardware-RF, 06 Industrial, 07 Defensive, 09 Cloud-Native): mantener 1 diagrama focal
   return true
@@ -917,6 +1164,7 @@ export function DiagramForCategory({ categoryId, subCategory, id, originalPath }
     case "05-Especializacion": return <DiagramEspecializacion subCategory={subCategory ?? null} />
     case "06-Operaciones": return <DiagramOperacionesGantt />
     case "07-Agentes-IA": return <DiagramAgentesIA />
+    case "08-Papers": return <DiagramPapers subCategory={subCategory ?? null} />
     case "99-Prompt-Injection": return <DiagramPromptInjectionFlow />
     default: return null
   }

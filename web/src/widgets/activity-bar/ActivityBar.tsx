@@ -2,18 +2,17 @@ import { memo, type ReactNode } from "react"
 import {
   ChatIcon,
   FolderIcon,
-  TerminalIcon,
   StatsIcon,
   GlobeIcon,
   LayersIcon,
   BrainIcon,
   BranchIcon,
-  PencilIcon,
   SettingsIcon,
   GraduationCapIcon,
 } from "../../Icons"
 import { useT } from "../../i18n-context"
 import type { DesktopLayout, ViewType } from "../../types"
+import { EXTERNAL_PROJECTS } from "../../features/external-plugins/config"
 
 export type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm" | "pcFiles" | "reports"
 
@@ -28,8 +27,6 @@ export interface ActivityBarProps {
   setActivity: (act: DesktopActivity) => void
   sidebarCollapsed: boolean
   setSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
-  showTerminal: boolean
-  setShowTerminal: (v: boolean | ((prev: boolean) => boolean)) => void
   tabStacks?: string[][]
   desktopLayout: DesktopLayout
   openStatsAsTab: () => void
@@ -37,15 +34,12 @@ export interface ActivityBarProps {
   handleOpenKanban: () => void
   rightSidebarCollapsed: boolean
   setRightSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
-  handleOpenDesign: () => void
   setShowPluginsModal: (v: boolean) => void
   pluginTabs: PluginTabItem[]
   openPluginAsTab: (key: string) => void
   memInfo: { jsHeapUsed: number; jsHeapTotal: number } | null
   formatBytes: (bytes: number) => string
   handleOpenLearning: () => void
-  handleOpenReports: () => void
-  handleOpenScreenshots: () => void
   view: ViewType
   handleNavigate: (v: ViewType) => void
 }
@@ -55,8 +49,6 @@ export const ActivityBar = memo(function ActivityBar({
   setActivity,
   sidebarCollapsed,
   setSidebarCollapsed,
-  showTerminal,
-  setShowTerminal,
   tabStacks,
   desktopLayout,
   openStatsAsTab,
@@ -64,19 +56,17 @@ export const ActivityBar = memo(function ActivityBar({
   handleOpenKanban,
   rightSidebarCollapsed,
   setRightSidebarCollapsed,
-  handleOpenDesign,
   setShowPluginsModal,
   pluginTabs,
   openPluginAsTab,
   memInfo,
   formatBytes,
   handleOpenLearning,
-  handleOpenReports,
-  handleOpenScreenshots,
   view,
   handleNavigate,
 }: ActivityBarProps) {
   const t = useT()
+  const hasExternalActive = tabStacks?.some((s) => s.some((id) => id.startsWith("plugin:external:"))) ?? false
 
   return (
     <nav className="app-desktop-activity" aria-label="Actividades">
@@ -113,17 +103,6 @@ export const ActivityBar = memo(function ActivityBar({
           }}
         >
           <FolderIcon size={18} />
-        </button>
-
-        <button
-          type="button"
-          data-item="terminal"
-          className={`activity-btn${showTerminal ? " active" : ""}`}
-          title={t("session.terminal")}
-          aria-label={t("session.terminal")}
-          onClick={() => setShowTerminal((v) => !v)}
-        >
-          <TerminalIcon size={18} />
         </button>
 
         <button
@@ -177,38 +156,6 @@ export const ActivityBar = memo(function ActivityBar({
 
         <button
           type="button"
-          data-item="reports"
-          className={`activity-btn${
-            tabStacks?.some((s) => s.includes("__reports__")) ||
-            desktopLayout.sessions.includes("__reports__")
-              ? " active"
-              : ""
-          }`}
-          title="Informes"
-          aria-label="Informes"
-          onClick={handleOpenReports}
-        >
-          <span style={{ fontSize: 14, fontWeight: 800 }}>≡</span>
-        </button>
-
-        <button
-          type="button"
-          data-item="screenshots"
-          className={`activity-btn${
-            tabStacks?.some((s) => s.includes("__screenshots__")) ||
-            desktopLayout.sessions.includes("__screenshots__")
-              ? " active"
-              : ""
-          }`}
-          title="Screenshots"
-          aria-label="Screenshots"
-          onClick={handleOpenScreenshots}
-        >
-          <span style={{ fontSize: 14 }}>📸</span>
-        </button>
-
-        <button
-          type="button"
           data-item="quickchat"
           className={`activity-btn${!rightSidebarCollapsed ? " active" : ""}`}
           title={t("quickchat.title")}
@@ -235,29 +182,37 @@ export const ActivityBar = memo(function ActivityBar({
           <BranchIcon size={18} />
         </button>
 
-        <button
-          type="button"
-          data-item="design"
-          className={`activity-btn${
-            tabStacks?.some((s) => s.includes("__design__")) ||
-            desktopLayout.sessions.includes("__design__") ||
-            (desktopLayout.panelKinds as any[]).includes("design")
-              ? " active"
-              : ""
-          }`}
-          title="Open Design"
-          aria-label="Open Design"
-          onClick={handleOpenDesign}
-        >
-          <PencilIcon size={18} />
-        </button>
+        {/* External plugins: Open Design, VioEditor, Screenshots — replaces former design/reports/screenshots buttons */}
+        {EXTERNAL_PROJECTS.map((p) => {
+          const pluginKey = `external:${p.name}`
+          const tabId = `plugin:${pluginKey}`
+          const isActive = tabStacks?.some((s) => s.includes(tabId)) || desktopLayout.sessions.includes(tabId)
+          return (
+            <button
+              key={p.name}
+              type="button"
+              data-item={`plugin-${p.name}`}
+              className={`activity-btn${isActive ? " active" : ""}${hasExternalActive && !isActive ? "" : ""}`}
+              title={p.title}
+              aria-label={p.title}
+              draggable
+              onDragStart={(e) => {
+                const payload = `plugin:${pluginKey}`
+                e.dataTransfer.setData("application/x-opencode-path", payload)
+                e.dataTransfer.setData("text/plain", payload)
+                e.dataTransfer.effectAllowed = "move"
+              }}
+              onClick={() => openPluginAsTab(pluginKey)}
+            >
+              <span style={{ fontSize: 14, lineHeight: 1 }}>{p.icon}</span>
+            </button>
+          )
+        })}
 
         <button
           type="button"
           data-item="plugins"
-          className={`activity-btn${
-            tabStacks?.some((s) => s.some((id) => id.startsWith("plugin:external:"))) ? " active" : ""
-          }`}
+          className={`activity-btn${hasExternalActive ? " active" : ""}`}
           title="Plugins"
           aria-label="Plugins"
           onClick={() => setShowPluginsModal(true)}

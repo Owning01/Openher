@@ -307,6 +307,48 @@
 
 }
 
+/* ===== Desktop (wry) isolate — no hereda visual APK =====
+   wry inyecta html[data-desktop="true"] + .app-shell[data-desktop="true"] (useIsDesktop.ts).
+   Evita que al achicar la ventana el desktop caiga en layout móvil (bottom-nav).
+   <600px: single-column maximizado (solo terminal o solo chat) sin sidebars. */
+@media (max-width: 780px) {
+  html[data-desktop="true"] .app-shell,
+  .app-shell[data-desktop="true"] {
+    display: grid !important;
+    grid-template-columns: calc(44px * var(--ui-scale,1)) minmax(0,1fr) !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+  html[data-desktop="true"] .top-nav { display: none !important; }
+  html[data-desktop="true"] .bottom-nav { display: none !important; }
+  html[data-desktop="true"] .app-mobile-content { display: contents !important; }
+  html[data-desktop="true"] .app-desktop-activity { display: flex !important; }
+  html[data-desktop="true"] .app-desktop-sidebar,
+  html[data-desktop="true"] .app-desktop-sidebar--right { display: flex !important; }
+  html[data-desktop="true"] .app-desktop-content { padding: var(--space-3) !important; gap: var(--space-3) !important; }
+}
+@media (max-width: 600px) {
+  html[data-desktop="true"] .app-shell,
+  .app-shell[data-desktop="true"] {
+    grid-template-columns: calc(44px * var(--ui-scale,1)) 1fr !important;
+  }
+  html[data-desktop="true"] .app-desktop-sidebar,
+  html[data-desktop="true"] .app-desktop-sidebar--right { display: none !important; }
+  html[data-desktop="true"] .app-desktop-content { padding: 0 !important; }
+  html[data-desktop="true"] .desktop-grid {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+  }
+  html[data-desktop="true"] .desktop-grid,
+  html[data-desktop="true"] .app-desktop-content > .panel,
+  html[data-desktop="true"] .terminal-container.is-docked { flex: 1 !important; min-height: 0 !important; height: 100% !important; }
+}
+
 
 
 

@@ -642,6 +642,110 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         }
         return;
     }
+    if path == "/shell/computer/screenshot.bin" {
+        let w = q("width").parse::<u32>().ok();
+        let fmt = q("format");
+        let qual = q("quality").parse::<u8>().ok();
+        let x = q("x").parse::<i32>().ok();
+        let y = q("y").parse::<i32>().ok();
+        let rw = q("w").parse::<u32>().ok();
+        let rh = q("h").parse::<u32>().ok();
+        let cursor = q("cursor") == "1" || q("cursor") == "true";
+        let screen = q("screen").parse::<u32>().ok();
+        let opts = crate::computer::ScreenshotOpts { width: w, format: if fmt.is_empty() { None } else { Some(fmt) }, quality: qual, x, y, w: rw, h: rh, bare: Some(true), cursor: Some(cursor), screen };
+        match crate::computer::screenshot_v2(&opts, None) {
+            Ok(v) => {
+                let b64 = if v.image.starts_with("data:") { v.image.split(',').nth(1).unwrap_or("").to_string() } else { v.image.clone() };
+                if let Ok(raw) = crate::state::base64_decode(&b64) {
+                    let mime = if v.format=="jpeg" { "image/jpeg" } else { "image/png" };
+                    let _ = req.respond(Response::from_data(raw)
+                        .with_header(Header::from_bytes("Content-Type", mime).unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+                        .with_header(Header::from_bytes("ETag", v.etag.as_bytes()).unwrap())
+                        .with_header(Header::from_bytes("Cache-Control", "no-store").unwrap()));
+                } else {
+                    let _ = req.respond(json_err(500, "base64 decode fail"));
+                }
+            }
+            Err(e) => { let _ = req.respond(json_err(500, &e.to_string())); }
+        }
+        return;
+    }
+    if path == "/shell/computer/find_element" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let name = b["name"].as_str().unwrap_or("").to_string();
+                let timeout = b["timeout"].as_u64().unwrap_or(b["timeout_ms"].as_u64().unwrap_or(2000));
+                match crate::computer::find_element(&name, timeout) {
+                    Ok(Some((x,y,w,h))) => { let _ = req.respond(json_ok(&serde_json::json!({"found":true,"x":x,"y":y,"w":w,"h":h,"cx":x+w/2,"cy":y+h/2}))); }
+                    Ok(None) => { let _ = req.respond(json_ok(&serde_json::json!({"found":false}))); }
+                    Err(e) => { let _ = req.respond(json_err(500, &e)); }
+                }
+            }
+            Err(e) => { let _ = req.respond(json_err(400, &e.to_string())); }
+        }
+        return;
+    }
+    if path == "/shell/computer/list_windows" {
+        let filter = q("filter");
+        let f = if filter.is_empty() { None } else { Some(filter) };
+        let wins = crate::computer::list_windows(f);
+        let arr: Vec<serde_json::Value> = wins.into_iter().map(|(n,x,y,w,h)| serde_json::json!({"name":n,"x":x,"y":y,"w":w,"h":h})).collect();
+        let _ = req.respond(json_ok(&serde_json::json!({"windows":arr})));
+        return;
+    }
+    if path == "/shell/computer/screenshot.bin" {
+        let w = q("width").parse::<u32>().ok();
+        let fmt = q("format");
+        let qual = q("quality").parse::<u8>().ok();
+        let x = q("x").parse::<i32>().ok();
+        let y = q("y").parse::<i32>().ok();
+        let rw = q("w").parse::<u32>().ok();
+        let rh = q("h").parse::<u32>().ok();
+        let cursor = q("cursor") == "1" || q("cursor") == "true";
+        let screen = q("screen").parse::<u32>().ok();
+        let opts = crate::computer::ScreenshotOpts { width: w, format: if fmt.is_empty() { None } else { Some(fmt) }, quality: qual, x, y, w: rw, h: rh, bare: Some(true), cursor: Some(cursor), screen };
+        match crate::computer::screenshot_v2(&opts, None) {
+            Ok(v) => {
+                let b64 = if v.image.starts_with("data:") { v.image.split(',').nth(1).unwrap_or("").to_string() } else { v.image.clone() };
+                if let Ok(raw) = crate::state::base64_decode(&b64) {
+                    let mime = if v.format=="jpeg" { "image/jpeg" } else { "image/png" };
+                    let _ = req.respond(Response::from_data(raw)
+                        .with_header(Header::from_bytes("Content-Type", mime).unwrap())
+                        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+                        .with_header(Header::from_bytes("ETag", v.etag.as_bytes()).unwrap())
+                        .with_header(Header::from_bytes("Cache-Control", "no-store").unwrap()));
+                } else {
+                    let _ = req.respond(json_err(500, "base64 decode fail"));
+                }
+            }
+            Err(e) => { let _ = req.respond(json_err(500, &e.to_string())); }
+        }
+        return;
+    }
+    if path == "/shell/computer/find_element" && method == Method::Post {
+        match read_body(&mut req) {
+            Ok(b) => {
+                let name = b["name"].as_str().unwrap_or("").to_string();
+                let timeout = b["timeout"].as_u64().unwrap_or(b["timeout_ms"].as_u64().unwrap_or(2000));
+                match crate::computer::find_element(&name, timeout) {
+                    Ok(Some((x,y,w,h))) => { let _ = req.respond(json_ok(&serde_json::json!({"found":true,"x":x,"y":y,"w":w,"h":h,"cx":x+w/2,"cy":y+h/2}))); }
+                    Ok(None) => { let _ = req.respond(json_ok(&serde_json::json!({"found":false}))); }
+                    Err(e) => { let _ = req.respond(json_err(500, &e)); }
+                }
+            }
+            Err(e) => { let _ = req.respond(json_err(400, &e.to_string())); }
+        }
+        return;
+    }
+    if path == "/shell/computer/list_windows" {
+        let filter = q("filter");
+        let f = if filter.is_empty() { None } else { Some(filter) };
+        let wins = crate::computer::list_windows(f);
+        let arr: Vec<serde_json::Value> = wins.into_iter().map(|(n,x,y,w,h)| serde_json::json!({"name":n,"x":x,"y":y,"w":w,"h":h})).collect();
+        let _ = req.respond(json_ok(&serde_json::json!({"windows":arr})));
+        return;
+    }
 
     // ============================== Stats
     if path == "/shell/stats" {
@@ -1497,9 +1601,12 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     } // fin guard /shell/*
 
     // ============================== Browser (Sub-WebView2 nativo ultra-ligero)
+    // FIX layout bug: /shell/browser/open sin bounds válido (0,0,800,600) rompía layout y no se podía cerrar
+    // — ahora si no vienen bounds explícitos, abre oculto (visible=false) hasta que BrowserPanel sincronice.
     if path == "/shell/browser/open" && method == Method::Post {
         if let Ok(v) = read_body(&mut req) {
             let url = v["url"].as_str().unwrap_or("about:blank");
+            let has_bounds = v.get("bounds").is_some() && v["bounds"].is_object();
             let bx = v["bounds"]["x"].as_f64().unwrap_or(0.0);
             let by = v["bounds"]["y"].as_f64().unwrap_or(0.0);
             let bw = v["bounds"]["w"].as_f64().unwrap_or(800.0);
@@ -1508,8 +1615,15 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                 position: wry::dpi::LogicalPosition::new(bx, by).into(),
                 size: wry::dpi::LogicalSize::new(bw, bh).into(),
             };
+            let is_default_bounds = !has_bounds && bx == 0.0 && by == 0.0 && bw == 800.0 && bh == 600.0;
             let resp = match state.browser.open(url, bounds) {
-                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+                Ok(()) => {
+                    // Si vino sin bounds (caso MCP computer_login viejo), ocultar inmediatamente para no tapar UI
+                    if is_default_bounds {
+                        let _ = state.browser.set_visible(false);
+                    }
+                    json_ok(&serde_json::json!({ "ok": true, "hidden_default": is_default_bounds }))
+                },
                 Err(e) => json_err(500, &e.to_string()),
             };
             let _ = req.respond(resp);
