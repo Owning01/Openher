@@ -102,7 +102,7 @@ export function computeRenderedMessages(
     // Filtro: no renderizar notificaciones internas del sistema (pty tool)
     if (text.includes("<pty_exited>") || text.includes("Use pty_read to check")) continue
     const hasImages = message.parts.some((p) => isImagePart(p as any))
-    if (text || thinkingParts.length > 0 || toolParts.length > 0 || hasImages) {
+    if (text || thinkingParts.length > 0 || toolParts.length > 0 || hasImages || message.info.error) {
       const rendered: RenderedMessage = { ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffs, dataMode, turnMode }
       out.push(rendered)
       nextCache.set(message.info.id, { src: message, rendered, diffs, turnMode, dataMode })

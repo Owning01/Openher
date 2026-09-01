@@ -32,6 +32,7 @@ import { useQuestions } from "../hooks/useQuestions"
 import { useSSEHandler } from "../hooks/useSSEHandler"
 import { useServers } from "../hooks/useServers"
 import { loadDesktopConfig } from "../desktop"
+import { loadGoAccounts } from "../goUsage"
 import { useVisualSelection } from "../hooks/useVisualSelection"
 import { pluginHost, tabRegistry } from "../plugins"
 import { useVirtualTabs } from "../hooks/useVirtualTabs"
@@ -92,26 +93,42 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setTheme(isLight ? "dark" : "light")
   }, [setTheme])
 
-  const [quickChatKey] = useState(
+  const [quickChatKey, setQuickChatKey] = useState(
     () => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS) || ""
   )
-  const [quickChatGroqKey] = useState(
+  const [quickChatGroqKey, setQuickChatGroqKey] = useState(
     () => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ) || ""
   )
   const [quickChatGoKey, setQuickChatGoKey] = useState("")
-  const [quickChatCustomKey] = useState(
+  const [quickChatCustomKey, setQuickChatCustomKey] = useState(
     () => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM) || ""
   )
-  const [quickChatCustomUrl] = useState(
+  const [quickChatCustomUrl, setQuickChatCustomUrl] = useState(
     () => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL) || "https://api.openai.com/v1"
   )
 
   useEffect(() => {
-    import("../goUsage").then(({ loadGoAccounts }) => {
-      loadGoAccounts()
-        .then((keys) => setQuickChatGoKey(keys[0] ?? ""))
-        .catch(() => {})
-    })
+    loadGoAccounts()
+      .then((keys) => setQuickChatGoKey(keys[0] ?? ""))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const reloadKeys = () => {
+      try {
+        setQuickChatKey(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS) || "")
+        setQuickChatGroqKey(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ) || "")
+        setQuickChatCustomKey(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM) || "")
+        setQuickChatCustomUrl(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL) || "https://api.openai.com/v1")
+        loadGoAccounts().then((keys) => setQuickChatGoKey(keys[0] ?? "")).catch(() => {})
+      } catch {}
+    }
+    window.addEventListener("quickchat:key-saved", reloadKeys as EventListener)
+    window.addEventListener("storage", reloadKeys)
+    return () => {
+      window.removeEventListener("quickchat:key-saved", reloadKeys as EventListener)
+      window.removeEventListener("storage", reloadKeys)
+    }
   }, [])
 
   const { prefs: sidebarPrefs } = useSidebarPrefs()
@@ -233,7 +250,22 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
   const { flags, toggleFlag, setFlag } = useFeatureFlags()
   const vs = useVisualSelection()
 
-  const [shortcuts] = useState<ShortcutItem[]>(() => loadShortcutsConfig())
+  const [shortcuts, setShortcuts] = useState<ShortcutItem[]>(() => loadShortcutsConfig())
+
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const ce = e as CustomEvent<ShortcutItem[]>
+      if (ce.detail && Array.isArray(ce.detail)) setShortcuts(ce.detail as ShortcutItem[])
+      else setShortcuts(loadShortcutsConfig())
+    }
+    const onStorage = () => setShortcuts(loadShortcutsConfig())
+    window.addEventListener("opencode-shortcuts-changed", onChange as EventListener)
+    window.addEventListener("storage", onStorage)
+    return () => {
+      window.removeEventListener("opencode-shortcuts-changed", onChange as EventListener)
+      window.removeEventListener("storage", onStorage)
+    }
+  }, [])
 
   const {
     showShortcuts,
@@ -413,6 +445,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     splitPanel,
     openInPanel,
     addTerminalToPanel,
+    detachTab,
     handleSessionDragStart,
     handleSwapPanels,
     handleDockSession,
@@ -566,7 +599,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     [setDraftConfig, saveConfig, t]
   )
 
-  const { enqueue: queueAction, dequeueAll } = useOfflineQueue()
+  const { enqueue: queueAction, listPending, ack: ackQueuedAction, markFailed: markQueuedActionFailed } = useOfflineQueue()
   const { notify } = useNotifications()
 
   const {
@@ -578,7 +611,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handlePermissionReject,
     handleDismissQuestion,
     handleDismissPermission,
-  } = useQuestions({ config, directory: selectedSession?.directory, enabled: true, notify, t })
+  } = useQuestions({ config, directory: selectedSession?.directory, fallbackSessionID: selectedSession?.id, enabled: true, notify, t })
 
   const currentSessionAI = useMemo(() => {
     return getModelForSession(selectedSession?.id)
@@ -648,7 +681,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     activeDetailSheet,
     loadDiffs,
     loadDashboard,
-    dequeueAll,
+    listPending,
+    ackQueuedAction,
+    markQueuedActionFailed,
     navigate,
     openSession,
     setDraftConfig,
@@ -1193,6 +1228,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     moveTab,
     transferTab,
     addTerminalToPanel,
+    detachTab,
     closeOthers,
     closeRight,
     closeLeft,

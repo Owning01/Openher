@@ -5,6 +5,7 @@ import { Share } from "@capacitor/share"
 import { api } from "../../../api"
 import type { SessionView, ServerConfig, ConnectionState, ModelOption } from "../../../types"
 import { formatSelectionForPrompt } from "../../../hooks/useVisualSelection"
+import { keepMessagesThrough } from "../domain/message-order"
 
 export type UseChatActionsParams = {
   selectedSession: SessionView | null
@@ -168,11 +169,18 @@ export function useChatActions(params: UseChatActionsParams) {
       if (!selectedSession) return
       const composerText = text ?? composerRef.current
       if (connectionState === "offline") {
+        const queuedText = vs.hasSelection && vs.promptContext
+          ? formatSelectionForPrompt(composerText, vs.promptContext)
+          : composerText
         queueAction({
           type: "prompt",
           sessionID: selectedSession.id,
           directory: selectedSession.directory,
-          payload: composerText,
+          payload: queuedText,
+          model: activeModel ? { providerID: activeModel.providerID, modelID: activeModel.modelID, variant: activeModel.variant } : undefined,
+          agentID: activeAgentID || undefined,
+          images,
+          options,
         })
         setComposer("")
         setRuntimeError("Prompt queued - will send when connection is restored")
@@ -203,9 +211,7 @@ export function useChatActions(params: UseChatActionsParams) {
       const revertMsgId = localRevertID ?? selectedSession?.revert?.messageID
       if (revertMsgId) {
         const sid = selectedSession.id
-        setMessages((prev) =>
-          prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id <= revertMsgId)
-        )
+        setMessages((prev) => keepMessagesThrough(prev, sid, revertMsgId))
       }
       setLocalRevertID(null)
       setSessions((prev) =>
@@ -275,17 +281,18 @@ export function useChatActions(params: UseChatActionsParams) {
     const revertMsgId = localRevertID ?? selectedSession?.revert?.messageID
     if (revertMsgId) {
       const sid = selectedSession.id
-      setMessages((prev) =>
-        prev.filter((m) => m.info.sessionID !== sid || !m.info.id || m.info.id <= revertMsgId)
-      )
+      setMessages((prev) => keepMessagesThrough(prev, sid, revertMsgId))
       setLocalRevertID(null)
     }
-    const visible = revertMsgId
-      ? renderedMessages.filter((m) => m.info.id <= revertMsgId)
-      : renderedMessages
+    const targetIndex = revertMsgId ? renderedMessages.findIndex((m) => m.info.id === revertMsgId) : -1
+    const visible = targetIndex >= 0 ? renderedMessages.slice(0, targetIndex + 1) : renderedMessages
     const lastUser = [...visible].reverse().find((m) => m.info.role === "user")
     if (!lastUser?.text) return
     if (lastUser.parts.some((p: any) => p.type === "image")) return
+    if (connectionState === "offline") {
+      await handleSend(undefined, undefined, lastUser.text)
+      return
+    }
     if (awaitingAssistantReply) {
       completionShouldPlayRef.current = false
       await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => undefined)
@@ -322,6 +329,8 @@ export function useChatActions(params: UseChatActionsParams) {
     setLocalRevertID,
     completionShouldPlayRef,
     setAwaitingAssistantReply,
+    connectionState,
+    handleSend,
   ])
 
   const handleInsertPrompt = useCallback(
@@ -394,9 +403,8 @@ export function useChatActions(params: UseChatActionsParams) {
     })
     const sid = selectedSession.id
     const dir = selectedSession.directory
-    abortSession(sid, dir).catch(() => {})
-    loadSelected(sid, dir).catch(() => undefined)
-    settleSession(sid, dir).catch(() => undefined)
+    await abortSession(sid, dir).catch(() => {})
+    await settleSession(sid, dir).catch(() => undefined)
     setTimeout(() => {
       stopGenerationRef.current = false
     }, 2000)
@@ -417,7 +425,7 @@ export function useChatActions(params: UseChatActionsParams) {
       if (!selectedSession) return
       try {
         if (awaitingAssistantReply) {
-          api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
+          await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
         }
         const target = renderedMessages.find((m) => m.info.id === messageID)
         const sid = selectedSession.id
@@ -427,6 +435,7 @@ export function useChatActions(params: UseChatActionsParams) {
         await refreshSessions().catch(() => {})
         if (target?.text) setComposer(target.text)
       } catch (err) {
+        setLocalRevertID(null)
         setRuntimeError((err as Error).message)
         await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
       }
@@ -449,7 +458,7 @@ export function useChatActions(params: UseChatActionsParams) {
       if (!selectedSession) return
       try {
         if (awaitingAssistantReply) {
-          api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
+          await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
         }
         const sid = selectedSession.id
         setLocalRevertID(messageID)
@@ -458,6 +467,7 @@ export function useChatActions(params: UseChatActionsParams) {
         await refreshSessions().catch(() => {})
         setComposer(text)
       } catch (err) {
+        setLocalRevertID(null)
         setRuntimeError((err as Error).message)
         await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
       }

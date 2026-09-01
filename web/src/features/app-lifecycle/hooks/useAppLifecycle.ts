@@ -37,7 +37,9 @@ export type UseAppLifecycleParams = {
   activeDetailSheet: string | null
   loadDiffs: (id: string, dir: string) => Promise<any>
   loadDashboard: (dir: string) => Promise<any>
-  dequeueAll: () => Promise<any[]>
+  listPending: () => Promise<any[]>
+  ackQueuedAction: (id: number) => Promise<boolean>
+  markQueuedActionFailed: (action: any, error: unknown) => Promise<boolean>
   navigate: (view: any) => void
   openSession: (id: string, dir: string) => Promise<void>
   setDraftConfig: React.Dispatch<React.SetStateAction<any>>
@@ -72,13 +74,16 @@ export function useAppLifecycle({
   activeDetailSheet,
   loadDiffs,
   loadDashboard,
-  dequeueAll,
+  listPending,
+  ackQueuedAction,
+  markQueuedActionFailed,
   navigate,
   openSession,
   setDraftConfig,
   t,
 }: UseAppLifecycleParams) {
   const lastMsgFetchUpdatedRef = useRef<Record<string, number>>({})
+  const replayingQueueRef = useRef(false)
   const isStreaming = streamState === "streaming" && dataMode === "full" && flags.streamingFull
   const isStreamingActive = isStreaming && Boolean(selectedSession)
 
@@ -115,7 +120,10 @@ export function useAppLifecycle({
         throw new Error("offline")
       }
       if (!selectedSession) return
-      if (dataMode === "full" || dataMode === "saver" || isSessionActive(selectedSession)) {
+      // Con SSE saludable los deltas y el evento idle son la fuente en vivo.
+      // El polling queda como reconciliación cuando el stream está caído o en
+      // modos donde el stream no se usa.
+      if (!sseLive && (dataMode === "full" || dataMode === "saver" || isSessionActive(selectedSession))) {
         const prevUpdated = lastMsgFetchUpdatedRef.current[selectedSession.id]
         const skip =
           dataMode !== "full" &&
@@ -246,24 +254,42 @@ export function useAppLifecycle({
 
   // Replay offline queue when connected
   useEffect(() => {
-    if (connectionState !== "connected" || !config || !selectedSession) return
+    if (connectionState !== "connected" || !config) return
     let active = true
-    dequeueAll().then((actions) => {
+    if (replayingQueueRef.current) return () => { active = false }
+    replayingQueueRef.current = true
+    listPending().then(async (actions) => {
       if (!active) return
+      // FIFO y una acción por vez: conservar las siguientes si una escritura
+      // falla permite reanudar sin perder trabajo ni reordenar prompts.
       for (const a of actions) {
-        if (a.type === "prompt") {
-          api.sendPrompt(config, a.sessionID, a.payload, a.directory).catch(() => {})
-        } else if (a.type === "command") {
-          api.sendCommand(config, a.sessionID, a.payload, "", a.directory).catch(() => {})
-        } else if (a.type === "shell") {
-          api.sendShell(config, a.sessionID, a.payload, a.directory).catch(() => {})
+        if (!active) break
+        try {
+          let payload = a.payload
+          if (a.type === "prompt" && a.options?.translate && payload.trim()) {
+            const { translateToEnglish } = await import("../../../utils/translate")
+            payload = await translateToEnglish(payload)
+          }
+          if (a.type === "prompt") {
+            await api.sendPrompt(config, a.sessionID, payload, a.directory, a.model, a.agentID, a.images)
+          } else if (a.type === "command") {
+            await api.sendCommand(config, a.sessionID, payload, "", a.directory, a.model, a.agentID)
+          } else if (a.type === "shell") {
+            await api.sendShell(config, a.sessionID, payload, a.directory)
+          }
+          await ackQueuedAction(a.id)
+        } catch (error) {
+          await markQueuedActionFailed(a, error)
+          break
         }
       }
+    }).finally(() => {
+      replayingQueueRef.current = false
     })
     return () => {
       active = false
     }
-  }, [connectionState, config, selectedSession, dequeueAll])
+  }, [connectionState, config, listPending, ackQueuedAction, markQueuedActionFailed])
 
   return {
     memInfo,

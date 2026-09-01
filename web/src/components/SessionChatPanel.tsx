@@ -1,9 +1,9 @@
-import { memo, useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense } from "react"
+import { memo, useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react"
 import { ChatView } from "./ChatView"
 import { ErrorModal } from "./ErrorModal"
 // Lazy: rompe el borde estático con shellPanels (que arrastra @xterm) para que
 // el bundle inicial móvil no descargue terminal/kanban/browser del desktop.
-const SessionStatsPanel = lazy(() => import("./shellPanels").then((m) => ({ default: m.SessionStatsPanel })))
+import { SessionStatsPanel } from "./shellPanels"
 import { useMessages } from "../hooks/useMessages"
 import { useSSE } from "../hooks/useSSE"
 import { useSSEHandler } from "../hooks/useSSEHandler"
@@ -18,6 +18,7 @@ import type { ChatViewProps } from "./ChatView"
 import type { ServerConfig, DataMode, SessionView, CommandInfo } from "../types"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { formatSelectionForPrompt } from "../hooks/useVisualSelection"
+import { keepMessagesThrough } from "../features/chat/domain/message-order"
 
 type Props = {
   session: SessionView
@@ -36,7 +37,7 @@ type Props = {
   onRefreshSessions: () => Promise<void> | void
   onSetCommands: (commands: CommandInfo[]) => void
   onRecordPrompt: (text: string) => void
-  onQueueAction: (action: { type: "command" | "shell" | "prompt"; sessionID: string; directory: string; payload: string }) => Promise<void> | void
+  onQueueAction: (action: { type: "command" | "shell" | "prompt"; sessionID: string; directory: string; payload: string; model?: { providerID: string; modelID: string; variant?: string }; agentID?: string; images?: Array<{ base64: string; mime: string }>; options?: { translate?: boolean } }) => Promise<void> | void
   onShellExecute: (cmd: string, sessionID: string, directory: string) => void
   onChangeAgentGlobal: (agentID: string, directory?: string) => void
   onOpenInThisPanel: (sessionID: string, directory: string) => void
@@ -163,7 +164,16 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     const currentComposer = visualPromptContext ? formatSelectionForPrompt(rawComposer, visualPromptContext) : rawComposer
     if (!currentComposer.trim() && (!images || images.length === 0)) return
     if (connectionState === "offline") {
-      onQueueAction({ type: "prompt", sessionID: session.id, directory: session.directory, payload: currentComposer })
+      onQueueAction({
+        type: "prompt",
+        sessionID: session.id,
+        directory: session.directory,
+        payload: currentComposer,
+        model: panelModelOption ? { providerID: panelModelOption.providerID, modelID: panelModelOption.modelID, variant: panelModelOption.variant } : undefined,
+        agentID: baseProps.activeAgentID || undefined,
+        images,
+        options,
+      })
       msgs.setComposer("")
       composerRef.current = ""
       msgs.setRuntimeError("Prompt queued - will send when connection is restored")
@@ -190,7 +200,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     stopGenerationRef.current = false
     const revertMsgId = localRevertID ?? session?.revert?.messageID
     if (revertMsgId) {
-      msgs.setMessages((prev) => prev.filter((m) => !m.info.id || m.info.id <= revertMsgId))
+      msgs.setMessages((prev) => keepMessagesThrough(prev, session.id, revertMsgId))
     }
     setLocalRevertID(null)
     const res = await msgs.send(session, panelModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
@@ -228,12 +238,14 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       }
       const target = msgs.renderedMessages.find((m) => m.info.id === messageID)
       // S3: filtro optimista instantáneo — oculta mensajes después del target.
-      msgs.setMessages((prev) => prev.filter((m) => m.info.sessionID !== session.id || !m.info.id || m.info.id <= messageID))
+      msgs.setMessages((prev) => keepMessagesThrough(prev, session.id, messageID))
       setLocalRevertID(messageID)
-      await api.revert(config, session.id, messageID, session.directory).catch(() => {})
-      await msgs.loadSelected(session.id, session.directory).catch(() => {})
+      await api.revert(config, session.id, messageID, session.directory)
+      await msgs.loadSelected(session.id, session.directory)
       if (target?.text) msgs.setComposer(target.text)
     } catch (err) {
+      setLocalRevertID(null)
+      await msgs.loadSelected(session.id, session.directory).catch(() => {})
       msgs.setRuntimeError((err as Error).message)
     }
   }, [msgs, config, session])
@@ -243,12 +255,14 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       if (msgs.awaitingAssistantReply) {
         await api.abort(config, session.id, session.directory).catch(() => {})
       }
-      msgs.setMessages((prev) => prev.filter((m) => m.info.sessionID !== session.id || !m.info.id || m.info.id <= messageID))
+      msgs.setMessages((prev) => keepMessagesThrough(prev, session.id, messageID))
       setLocalRevertID(messageID)
-      await api.revert(config, session.id, messageID, session.directory).catch(() => {})
-      await msgs.loadSelected(session.id, session.directory).catch(() => {})
+      await api.revert(config, session.id, messageID, session.directory)
+      await msgs.loadSelected(session.id, session.directory)
       msgs.setComposer(text)
     } catch (err) {
+      setLocalRevertID(null)
+      await msgs.loadSelected(session.id, session.directory).catch(() => {})
       msgs.setRuntimeError((err as Error).message)
     }
   }, [msgs, config, session])
@@ -287,7 +301,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const isStreamingActive = streamState === "streaming"
   const pollInterval = isWorking ? 3000 : dataMode === "full" ? 5000 : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
   usePolling(async () => {
-    if (!isWorking) return
+    if (!isWorking || isStreamingActive) return
     await msgs.loadSelected(session.id, session.directory).catch(() => undefined)
   }, pollInterval, [session.id, session.directory, dataMode, isWorking, isStreamingActive], isStreamingActive)
 

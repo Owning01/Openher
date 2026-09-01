@@ -28,9 +28,13 @@ export function createSSEFrameParser() {
       if (line.startsWith("event: ")) {
         if (!pending) pending = {}
         pending.type = line.slice(7).trim()
+      } else if (line.startsWith("id:")) {
+        if (!pending) pending = {}
+        pending.id = line.slice(3).trim()
       } else if (line.startsWith("data: ")) {
+        const data = line.slice(6)
         try {
-          const parsed = JSON.parse(line.slice(6)) as {
+          const parsed = JSON.parse(data) as {
             id?: string
             type?: string
             properties?: Record<string, unknown>
@@ -41,10 +45,10 @@ export function createSSEFrameParser() {
           if (parsed.id) pending.id = parsed.id
         } catch {
           if (!pending) pending = {}
-          pending.properties = { raw: line.slice(6) }
+          pending.properties = { raw: data }
         }
-      } else if (line === "" && pending?.type) {
-        frames.push(pending)
+      } else if (line === "") {
+        if (pending?.type) frames.push(pending)
         pending = null
       }
     }

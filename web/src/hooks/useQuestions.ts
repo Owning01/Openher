@@ -29,7 +29,10 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
     const poll = async () => {
       try {
         const qs = await api.listPendingQuestions(config, directory)
-        const fresh = qs.filter((q) => !dismissedQuestions.has(q.id))
+        const fresh = qs.filter((q) =>
+          (!fallbackSessionID || !q.sessionID || q.sessionID === fallbackSessionID) &&
+          !dismissedQuestions.has(q.id),
+        )
         setPendingQuestions(fresh)
         if (notify) {
           for (const q of fresh) {
@@ -50,8 +53,10 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
     const poll = async () => {
       try {
         const perms = await api.listPermissions(config, directory)
-        const pending = perms.find((p) => p.status === "pending")
-        if (pending) setPermissionRequest(pending)
+        const pending = perms.find((p) =>
+          p.status === "pending" && (!fallbackSessionID || !p.sessionID || p.sessionID === fallbackSessionID),
+        )
+        setPermissionRequest(pending ?? null)
         if (pending && notify && !notifiedPermissionIDs.current.has(pending.requestID)) {
           notifiedPermissionIDs.current.add(pending.requestID)
           notify(tFn('notification.permissionTitle'), pending.permission ?? "")
