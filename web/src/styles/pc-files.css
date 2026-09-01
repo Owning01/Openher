@@ -827,6 +827,19 @@
   border-radius: 4px;
 }
 
+.pcf-row.is-renaming {
+  background: rgba(99, 102, 241, 0.12) !important;
+  outline: 1px solid var(--primary, #6366f1);
+  outline-offset: -1px;
+}
+.pcf-row.is-renaming .pcf-inline-input {
+  background: var(--surface-strong, #1e1e24);
+  border: 1px solid var(--primary, #6366f1);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
 /* HTML preview — visor tipo navegador (CSS embebido o externo) */
 .pcf-html-preview {
   display: flex;

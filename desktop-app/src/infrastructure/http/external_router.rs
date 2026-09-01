@@ -138,14 +138,6 @@ fn defs() -> HashMap<&'static str, ExternalDef> {
         prod_cmd: None,
         prod_check: Some(r"apps\web\.next\BUILD_ID"),
     });
-    m.insert("screenshots", ExternalDef {
-        dir: r"G:\Proyectos\0 screenshots",
-        port: Some(3002),
-        url: Some("http://127.0.0.1:3002"),
-        dev_cmd: r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" dev -p 3002 -H 127.0.0.1"#,
-        prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" start -p 3002 -H 127.0.0.1"#),
-        prod_check: Some(r".next\BUILD_ID"),
-    });
     m.insert("vioeditor", ExternalDef {
         dir: r"G:\Proyectos\17-vioeditor\aplicacion",
         port: Some(1420),
@@ -154,13 +146,13 @@ fn defs() -> HashMap<&'static str, ExternalDef> {
         prod_cmd: Some("pnpm exec vite preview --port 1420 --host 127.0.0.1 --strictPort"),
         prod_check: Some(r"dist\index.html"),
     });
-    m.insert("widgetnotas", ExternalDef {
-        dir: r"G:\Proyectos\HERRAMIENTAS-VARIAS\46widgetnotas",
-        port: None,
-        url: None,
-        dev_cmd: "flutter run -d windows",
-        prod_cmd: None,
-        prod_check: None,
+    m.insert("screenshots", ExternalDef {
+        dir: r"G:\Proyectos\0 screenshots",
+        port: Some(3002),
+        url: Some("http://127.0.0.1:3002"),
+        dev_cmd: r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" dev -p 3002 -H 127.0.0.1"#,
+        prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" start -p 3002 -H 127.0.0.1"#),
+        prod_check: Some(r".next\BUILD_ID"),
     });
     m
 }

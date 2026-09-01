@@ -22,6 +22,7 @@ import {
   MoreHorizontalIcon,
   SplitIcon,
   EyeIcon,
+  PencilIcon,
 } from "../../Icons"
 import { shell, type FsEntry, type CodeSearchResult } from "../../shell"
 import { useT } from "../../i18n-context"
@@ -104,6 +105,9 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const [copiedItem, setCopiedItem] = useState<FsEntry | null>(null)
   const [execConfirm, setExecConfirm] = useState<{ path: string; name: string } | null>(null)
+  const [renamingPath, setRenamingPath] = useState<string | null>(null)
+  const [renamingValue, setRenamingValue] = useState("")
+  const [renamingPane, setRenamingPane] = useState<"first" | "second" | null>(null)
 
   const { refreshGit, getFileGitStatus, getFolderGitStatus } = useGitStatus(cwd)
 
@@ -226,6 +230,25 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       showNotice("Error al eliminar")
     }
   }
+
+  const startRenameFirst = useCallback((entry: FsEntry) => {
+    setRenamingPath(entry.path)
+    setRenamingValue(entry.name)
+    setRenamingPane("first")
+    setContextMenu(null)
+  }, [])
+  const startRenameSecond = useCallback((entry: FsEntry) => {
+    setRenamingPath(entry.path)
+    setRenamingValue(entry.name)
+    setRenamingPane("second")
+    setContextMenu(null)
+  }, [])
+
+  const cancelRename = useCallback(() => {
+    setRenamingPath(null)
+    setRenamingValue("")
+    setRenamingPane(null)
+  }, [])
 
   const handleCreateFileHere = (dir: string) => {
     setContextMenu(null)
@@ -396,9 +419,24 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const secondPane = usePaneState()
   const [activePane, setActivePane] = useState<"first" | "second">("first")
   const [contextMenuPane, setContextMenuPane] = useState<"first" | "second">("first")
-  void activePane; void setActivePane; void contextMenuPane; void setContextMenuPane
 
   const isHtmlFile = (name: string) => /\.html?$/i.test(name)
+
+  const commitRename = useCallback(async (entry: FsEntry) => {
+    const clean = renamingValue.trim()
+    if (!clean || clean === entry.name) { setRenamingPath(null); setRenamingValue(""); setRenamingPane(null); return }
+    if (/[/\\]/.test(clean)) { showNotice("El nombre no puede contener / o \\"); return }
+    try {
+      await shell.fs.rename(entry.path, clean)
+      showNotice(`Renombrado a ${clean}`)
+      const pane = renamingPane ?? contextMenuPane
+      setRenamingPath(null); setRenamingValue(""); setRenamingPane(null)
+      if (pane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
+      else if (cwd) load(cwd)
+    } catch (e: any) {
+      showNotice(`Error al renombrar: ${e?.message || String(e)}`)
+    }
+  }, [renamingValue, cwd, secondPane, contextMenuPane, renamingPane, showNotice, load])
 
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -867,6 +905,12 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         getFolderGitStatus={getFolderGitStatus}
                         collapseSignal={collapseSignal}
                         onContextMenu={handleContextMenuFirst}
+                        renamingPath={renamingPath}
+                        renamingValue={renamingValue}
+                        onRenamingChange={setRenamingValue}
+                        onRenameCommit={commitRename}
+                        onRenameCancel={cancelRename}
+                        onStartRename={startRenameFirst}
                       />
                     </div>
                   ))}
@@ -887,6 +931,12 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         showNotice={showNotice}
                         gitStatus={getFileGitStatus(f.path)}
                         onContextMenu={handleContextMenuFirst}
+                        renamingPath={renamingPath}
+                        renamingValue={renamingValue}
+                        onRenamingChange={setRenamingValue}
+                        onRenameCommit={commitRename}
+                        onRenameCancel={cancelRename}
+                        onStartRename={startRenameFirst}
                       />
                     ))}
                     {filteredFiles.length === 0 && filteredDirs.length === 0 && !qLower && (
@@ -974,6 +1024,12 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                           getFolderGitStatus={getFolderGitStatus}
                           collapseSignal={collapseSignal}
                           onContextMenu={handleContextMenuSecond}
+                          renamingPath={renamingPath}
+                          renamingValue={renamingValue}
+                          onRenamingChange={setRenamingValue}
+                          onRenameCommit={commitRename}
+                          onRenameCancel={cancelRename}
+                          onStartRename={startRenameSecond}
                         />
                       </div>
                     ))}
@@ -992,6 +1048,12 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                           showNotice={showNotice}
                           gitStatus={getFileGitStatus(f.path)}
                           onContextMenu={handleContextMenuSecond}
+                          renamingPath={renamingPath}
+                          renamingValue={renamingValue}
+                          onRenamingChange={setRenamingValue}
+                          onRenameCommit={commitRename}
+                          onRenameCancel={cancelRename}
+                          onStartRename={startRenameSecond}
                         />
                       ))}
                       {secondFilteredFiles.length === 0 && secondFilteredDirs.length === 0 && !qLower && (
@@ -1198,6 +1260,22 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                     <SaveIcon size={14} />
                   </span>{" "}
                   Copiar {contextMenu.isDir ? "carpeta" : "archivo"}
+                </button>
+                <button
+                  type="button"
+                  className="overflow-item"
+                  onClick={() => {
+                    const e = contextMenu.entry!
+                    setRenamingPath(e.path)
+                    setRenamingValue(e.name)
+                    setRenamingPane(contextMenuPane)
+                    setContextMenu(null)
+                  }}
+                >
+                  <span>
+                    <PencilIcon size={14} />
+                  </span>{" "}
+                  Renombrar
                 </button>
                 <button
                   type="button"

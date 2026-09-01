@@ -18,8 +18,9 @@ export interface UseDesktopShortcutsOptions {
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>
   handleOpenNewSession: () => void
   setDesktopLayout: (updater: (prev: DesktopLayout) => DesktopLayout) => void
-  setShowTerminal: React.Dispatch<React.SetStateAction<boolean>>
+  setShowTerminal?: React.Dispatch<React.SetStateAction<boolean>>
   setActivePanel: (panel: number) => void
+  onAddTerminal?: (panel: number) => void
 }
 
 export function useDesktopShortcuts({
@@ -38,8 +39,9 @@ export function useDesktopShortcuts({
   setSidebarCollapsed,
   handleOpenNewSession,
   setDesktopLayout,
-  setShowTerminal,
+  setShowTerminal: _setShowTerminal,
   setActivePanel,
+  onAddTerminal,
 }: UseDesktopShortcutsOptions) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -134,14 +136,10 @@ export function useDesktopShortcuts({
       if (newTermSc && matchesShortcut(e, newTermSc.keys)) {
         e.preventDefault()
         e.stopPropagation()
-        if (isDesktop) {
-          setDesktopLayout((prev: DesktopLayout) => {
-            const panelKinds = [...prev.panelKinds]
-            panelKinds[activePanel] = "terminal"
-            return { ...prev, panelKinds }
-          })
-        } else {
-          setShowTerminal(true)
+        if (onAddTerminal) onAddTerminal(activePanel)
+        else {
+          // fallback: crear tab terminal directo
+          try { window.dispatchEvent(new CustomEvent("opencode:new-terminal", { detail: { panel: activePanel } })) } catch {}
         }
         return
       }
@@ -171,7 +169,7 @@ export function useDesktopShortcuts({
     setSidebarCollapsed,
     handleOpenNewSession,
     setDesktopLayout,
-    setShowTerminal,
     setActivePanel,
+    onAddTerminal,
   ])
 }

@@ -374,12 +374,19 @@ impl ApplicationHandler<AppEvent> for App {
             WindowEvent::KeyboardInput { event, .. } if event.state == winit::event::ElementState::Pressed => {
                 let is_f12 = matches!(event.physical_key, winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F12));
                 let is_i = matches!(event.physical_key, winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyI));
+                let is_esc = matches!(event.physical_key, winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape));
                 let ctrl = self.modifiers.control_key();
                 let shift = self.modifiers.shift_key();
                 if is_f12 || (is_i && ctrl && shift) {
                     if let Some(wv) = &self.webview {
                         wv.open_devtools();
                     }
+                }
+                // FIX: Esc cierra el SubWebView aunque tape el toolbar (no se podía cerrar)
+                if is_esc && self.browser_inner.visible {
+                    self.browser_inner.webview = None;
+                    self.browser_inner.url.clear();
+                    self.browser_inner.visible = false;
                 }
             }
             _ => {}
@@ -544,6 +551,12 @@ fn setup_tray(proxy: EventLoopProxy<AppEvent>) -> Result<(), Box<dyn std::error:
 }
 
 fn main() {
+    // P0 DPI: per-monitor V2 antes de cualquier winit/COM — sin esto BoundingRectangle y screenshots mezclan logical/physical (AgentCtrl)
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
+        SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
     std::panic::set_hook(Box::new(|info| {
         let msg = format!("Error crítico en OpenHer Desktop:\n\n{}", info);
         eprintln!("{}", msg);

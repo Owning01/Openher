@@ -52,18 +52,18 @@ export type AppModalsContainerProps = {
   currentActiveSession: SessionView | null
   activeSessionDir?: string
   fb: any
-  showTerminal: boolean
+  showTerminal?: boolean
   isDesktop: boolean
-  terminalDocked: boolean
-  shellLines: any[]
-  shellRunning: boolean
-  terminalShell: ShellType
-  setTerminalShell: (s: ShellType) => void
+  terminalDocked?: boolean
+  shellLines?: any[]
+  shellRunning?: boolean
+  terminalShell?: ShellType
+  setTerminalShell?: (s: ShellType) => void
   shellExecute: (cmd: string, sid?: string, dir?: string) => void
-  shellClear: () => void
-  setShowTerminal: React.Dispatch<React.SetStateAction<boolean>>
-  shellHistory: string[]
-  setTerminalDocked: (d: boolean) => void
+  shellClear?: () => void
+  setShowTerminal?: React.Dispatch<React.SetStateAction<boolean>>
+  shellHistory?: string[]
+  setTerminalDocked?: (d: boolean) => void
   showRemoteDesktop: boolean
   setShowRemoteDesktop: (s: boolean) => void
   desktopCfg: any
@@ -134,18 +134,18 @@ export const AppModalsContainer = memo(function AppModalsContainer(props: AppMod
     currentActiveSession,
     activeSessionDir,
     fb,
-    showTerminal,
+    showTerminal = false,
     isDesktop,
-    terminalDocked,
-    shellLines,
-    shellRunning,
-    terminalShell,
-    setTerminalShell,
+    terminalDocked = true,
+    shellLines = [],
+    shellRunning = false,
+    terminalShell = "pwsh" as any,
+    setTerminalShell = (()=>{}) as any,
     shellExecute,
-    shellClear,
-    setShowTerminal,
-    shellHistory,
-    setTerminalDocked,
+    shellClear = (()=>{}) as any,
+    setShowTerminal = (()=>{}) as any,
+    shellHistory = [],
+    setTerminalDocked = (()=>{}) as any,
     showRemoteDesktop,
     setShowRemoteDesktop,
     desktopCfg,

@@ -290,6 +290,10 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestIdx, setSuggestIdx] = useState(-1)
   void suggestions; void setSuggestions; void suggestIdx; void setSuggestIdx
+  const [minimal, setMinimal] = useState(() => {
+    try { return localStorage.getItem("opencode.browser.minimal") === "1" } catch { return false }
+  })
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -319,6 +323,51 @@ export const BrowserPanel = memo(function BrowserPanel({
       setHasError(false)
     }
   }, [activeTabId, activeTab])
+
+  useEffect(() => { try { localStorage.setItem("opencode.browser.minimal", minimal ? "1" : "0") } catch {} }, [minimal])
+  // F11 fullscreen, F12 inspect, Ctrl+wheel zoom
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "F11") {
+        e.preventDefault()
+        if (!viewportRef.current) return
+        if (!document.fullscreenElement) viewportRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => setMinimal((v) => !v))
+        else document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {})
+      }
+      if (e.key === "F12") {
+        e.preventDefault()
+        if (onToggleInspect) onToggleInspect()
+        else if (onToggleInspectTool) onToggleInspectTool(inspectTool === "picker" ? "pod" : "picker")
+      }
+    }
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        const delta = e.deltaY > 0 ? -0.1 : 0.1
+        const next = Math.max(0.5, Math.min(2.5, Math.round((zoomLevel + delta) * 10) / 10))
+        if (next !== zoomLevel) {
+          // inline apply to avoid stale closure
+          const v = next
+          try { localStorage.setItem("opencode.browser.zoom", String(v)) } catch {}
+          const css = `document.documentElement.style.zoom='${v}'; document.body.style.zoom='${v}';`
+          if (IS_DESKTOP) shell.browser.eval(css).catch(() => {})
+          else {
+            try {
+              const doc = iframeRef.current?.contentDocument as any
+              if (doc?.documentElement) { doc.documentElement.style.zoom = String(v); if (doc.body) doc.body.style.zoom = String(v) }
+            } catch {}
+          }
+          setZoomLevel(v)
+        }
+      }
+    }
+    const el = viewportRef.current
+    window.addEventListener("keydown", onKey)
+    el?.addEventListener("wheel", onWheel as any, { passive: false } as any)
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener("fullscreenchange", onFsChange)
+    return () => { window.removeEventListener("keydown", onKey); el?.removeEventListener("wheel", onWheel as any); document.removeEventListener("fullscreenchange", onFsChange) }
+  }, [zoomLevel, onToggleInspect, onToggleInspectTool, inspectTool])
 
   // Watchdog de carga: asegura que el spinner desaparezca tras timeout
   useEffect(() => {
@@ -816,8 +865,13 @@ export const BrowserPanel = memo(function BrowserPanel({
   const targetWidth = DEVICE_WIDTHS[deviceMode]
 
   return (
-    <div className="browser-shell">
+    <div className={`browser-shell${minimal ? " browser-minimal" : ""}${isFullscreen ? " browser-fullscreen" : ""}`} style={minimal ? { height: "100%" } : undefined}>
+      {/* Minimal toggle floating */}
+      {minimal && (
+        <button type="button" onClick={() => setMinimal(false)} title="Mostrar barra (F11)" aria-label="Mostrar barra" style={{ position: "absolute", top: 6, right: 8, zIndex: 5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "var(--muted)", cursor: "pointer" }}>⛶ Mostrar</button>
+      )}
       {/* 1. Chrome-like Tab Bar on Top (Preserves tabs styling) */}
+      {!minimal && (
       <div className="browser-tabbar">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId
@@ -827,6 +881,13 @@ export const BrowserPanel = memo(function BrowserPanel({
               className={`browser-tab${isActive ? " active" : ""}`}
               onClick={() => setActiveTabId(tab.id)}
               title={tab.url}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/x-opencode-path", tab.url)
+                e.dataTransfer.setData("text/plain", tab.url)
+                e.dataTransfer.setData("application/x-opencode-browser-tab", tab.url)
+                e.dataTransfer.effectAllowed = "copyMove"
+              }}
             >
               <span className="browser-tab-icon">{getFavicon(tab.url)}</span>
               <span className="browser-tab-title">{tab.title}</span>
@@ -853,8 +914,10 @@ export const BrowserPanel = memo(function BrowserPanel({
           +
         </button>
       </div>
+      )}
 
       {/* 2. Navigation Toolbar — full chrome-like browser */}
+      {!minimal && (
       <div className="browser-toolbar">
         <div className="browser-nav-actions">
           <button
@@ -1096,6 +1159,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                 ×
               </button>
             )}
+            <button type="button" className="browser-tune-btn" onClick={() => setMinimal((v) => !v)} title={minimal ? "Mostrar barra" : "Modo minimalista (F11)"} aria-label="Minimal">⛶</button>
             <button
               type="button"
               className="browser-tune-btn"
@@ -1120,6 +1184,7 @@ export const BrowserPanel = memo(function BrowserPanel({
           </button>
         )}
       </div>
+      )}
       {findOpen && (
         <div className="browser-findbar">
           <SearchIcon size={13} />
@@ -1140,7 +1205,7 @@ export const BrowserPanel = memo(function BrowserPanel({
           <button type="button" className="browser-nav-btn" onClick={() => setFindOpen(false)} aria-label="Cerrar">×</button>
         </div>
       )}
-      {showBookmarks && bookmarks.length > 0 && (
+      {!minimal && showBookmarks && bookmarks.length > 0 && (
         <div className="browser-bookmarks-bar">
           {bookmarks.slice(0, 20).map((b) => (
             <button key={b.url} type="button" className="browser-bookmark" onClick={() => navigateTab(b.url)} title={b.url}>
@@ -1165,7 +1230,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       )}
 
       {/* Quick Project Bar */}
-      {projectBanner && (
+      {!minimal && projectBanner && (
         <div style={{
           display: "flex",
           alignItems: "center",

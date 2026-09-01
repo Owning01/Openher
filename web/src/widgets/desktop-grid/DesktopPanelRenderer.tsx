@@ -14,14 +14,11 @@ import {
   StatsPanel,
   KanbanPanel,
   FileEditorPanel,
-  DesignPanel,
 } from "../../components/shellPanels"
 import { BrowserPanel } from "../../components/BrowserPanel"
 import LearningPage from "../../features/learning/LearningPage"
 import { PCFilesPanel } from "../../features/pc-files/PCFilesPanel"
 import { QuickChatPanel } from "../../components/QuickChatPanel"
-import ReportsPage from "../../features/reports/ReportsPage"
-import ScreenshotsPage from "../../features/screenshots/ScreenshotsPage"
 
 export const PANEL_SUSPENSE_FALLBACK = (
   <div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando…</div>
@@ -77,7 +74,7 @@ export type DesktopPanelRendererProps = {
   onSwapPanels: (a: number, b: number) => void
   onOpenFile: (file: string) => void
   onOpenConnect: () => void
-  onOpenBrowser: (url: string) => void
+  onOpenBrowser: (url: string, panelIndex?: number) => void
   onOpenSessionDir: (dir: string) => void
   onNavigateSettings: () => void
   onToggleInspectTool: (tool: "picker" | "pod") => void
@@ -176,6 +173,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             panelIndex={i}
             onDropTerminal={onAddTerminal}
             onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
+            onDropUrl={(url) => onOpenBrowser(url, i)}
             onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
@@ -190,13 +188,10 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       )
     }
 
-    // Virtual tabs (__design__, __kanban__, __stats__, __learning__, __pcFiles__)
+    // Virtual tabs (__kanban__, __stats__, __learning__, __pcFiles__) — legacy __design__/__reports__/__screenshots__ kept for migration
     const isVirtual = sid.startsWith("__")
     if (isVirtual) {
       const allWithVirtual = [...sessions] as any[]
-      if (stack.includes("__design__") && !allWithVirtual.find((s) => s.id === "__design__")) {
-        allWithVirtual.push({ id: "__design__", title: "Open Design", directory: "" })
-      }
       if (stack.includes("__kanban__") && !allWithVirtual.find((s) => s.id === "__kanban__")) {
         allWithVirtual.push({ id: "__kanban__", title: "Kanban", directory: "" })
       }
@@ -209,21 +204,25 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       if (stack.includes("__pcFiles__") && !allWithVirtual.find((s) => s.id === "__pcFiles__")) {
         allWithVirtual.push({ id: "__pcFiles__", title: "Archivos PC", directory: "" })
       }
+      // legacy tabs also pushed for tabBar rendering if stack still contains them
       if (stack.includes("__reports__") && !allWithVirtual.find((s) => s.id === "__reports__")) {
-        allWithVirtual.push({ id: "__reports__", title: "Informes", directory: "" })
+        allWithVirtual.push({ id: "__reports__", title: "Aprendizaje", directory: "" })
+      }
+      if (stack.includes("__design__") && !allWithVirtual.find((s) => s.id === "__design__")) {
+        allWithVirtual.push({ id: "__design__", title: "Open Design", directory: "" })
       }
       if (stack.includes("__screenshots__") && !allWithVirtual.find((s) => s.id === "__screenshots__")) {
         allWithVirtual.push({ id: "__screenshots__", title: "Screenshots", directory: "" })
       }
 
       let vComp: React.ReactNode = null
-      if (sid === "__design__") vComp = <DesignPanel />
-      else if (sid === "__kanban__") vComp = <KanbanPanel />
+      if (sid === "__kanban__") vComp = <KanbanPanel />
       else if (sid === "__stats__") vComp = <StatsPanel />
       else if (sid === "__learning__") vComp = <LearningPage />
       else if (sid === "__pcFiles__") vComp = <PCFilesPanel onOpenFile={props.onOpenFile} />
-      else if (sid === "__reports__") vComp = <ReportsPage />
-      else if (sid === "__screenshots__") vComp = <ScreenshotsPage />
+      else if (sid === "__design__") vComp = <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><ExternalIframePanel name="opendesign" title="Open Design" url="http://127.0.0.1:3000" /></Suspense>
+      else if (sid === "__reports__") vComp = <LearningPage />
+      else if (sid === "__screenshots__") vComp = <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><ExternalIframePanel name="screenshots" title="Screenshots" url="http://127.0.0.1:3002" /></Suspense>
 
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -240,6 +239,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             panelIndex={i}
             onDropTerminal={onAddTerminal}
             onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
+            onDropUrl={(url) => onOpenBrowser(url, i)}
             onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
@@ -282,6 +282,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             panelIndex={i}
             onDropTerminal={onAddTerminal}
             onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
+            onDropUrl={(url) => onOpenBrowser(url, i)}
             onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
@@ -346,6 +347,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
                 onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
                 panelIndex={i}
                 onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
+                onDropUrl={(url) => onOpenBrowser(url, i)}
                 onCloseOthers={onCloseOthers}
                 onCloseRight={onCloseRight}
                 onCloseLeft={onCloseLeft}
@@ -390,6 +392,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
             panelIndex={i}
             onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
+            onDropUrl={(url) => onOpenBrowser(url, i)}
                 onCloseOthers={onCloseOthers}
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}

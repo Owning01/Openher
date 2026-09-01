@@ -853,7 +853,8 @@
 
   .desktop-sidebar-resizer:hover::after {
     background: var(--primary);
-  
+  }
+
   /* ===== Right sidebar (QuickChat + plugins) — espejo de la izquierda ===== */
   .app-desktop-sidebar--right {
     position: relative;
@@ -906,7 +907,6 @@
       box-shadow: -8px 0 24px rgba(0,0,0,0.18);
     }
   }
-}
 
   /* ===== Área del grid de splits =====
      Contenedor del grid desktop (NO es la barra de layouts, que ya no existe):

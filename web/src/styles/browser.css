@@ -338,3 +338,7 @@
   background: #ffffff;
   transition: width 0.2s ease;
 }
+.browser-minimal .browser-viewport-container { flex: 1; min-height: 0; height: 100%; }
+.browser-minimal { background: #fff; }
+.browser-fullscreen { position: fixed !important; inset: 0 !important; z-index: 9999; background: #fff; }
+.browser-fullscreen .browser-viewport-container { height: 100vh; }

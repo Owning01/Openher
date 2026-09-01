@@ -269,6 +269,7 @@ export const shell = {
     copy: (src: string, dest: string) => post<{ ok: boolean; path: string }>("/shell/fs/copy", { src, dest }),
     write: (path: string, dataBase64: string) => post("/shell/fs/write", { path, data: dataBase64 }),
     mkdir: (path: string) => post("/shell/fs/mkdir", { path }),
+    rename: (oldPath: string, newName: string) => post<{ ok: boolean; path: string }>("/shell/fs/rename", { oldPath, newName }),
     reveal: (path: string) => post<{ ok: boolean; path: string; is_dir: boolean }>("/shell/fs/reveal", { path }),
     execFile: (path: string) => post<{ ok: boolean; path: string }>("/shell/fs/exec", { path }),
     pickFolder: () => get<{ ok: boolean; path: string | null }>("/shell/fs/pick-folder"),

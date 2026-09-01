@@ -1,0 +1,15 @@
+﻿{
+  "`$schema": "https://opencode.ai/config.json",
+  "plugins": ["./.opencode/plugins/acme-shell.ts"],
+  "mcp": {
+    "computer": {
+      "type": "local",
+      "command": ["G:\\Dev\\nodejs-24\\node.exe", "G:\\Proyectos\\MCP\\computer-use\\src\\index.js"],
+      "enabled": true,
+      "environment": {
+        "OPENCODE_DESKTOP_URL": "http://127.0.0.1:4848",
+        "COMPUTER_USE_URL": "http://127.0.0.1:5901"
+      }
+    }
+  }
+}

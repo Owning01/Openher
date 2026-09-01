@@ -280,6 +280,34 @@ pub fn move_entry(src: &str, dest_dir: &str) -> Result<String, String> {
     Ok(crate::state::pstring(&target))
 }
 
+pub fn rename_entry(old_path: &str, new_name: &str) -> Result<String, String> {
+    let name = new_name.trim();
+    if name.is_empty() {
+        return Err("Nombre vacío".into());
+    }
+    if name.contains('/') || name.contains('\\') {
+        return Err("El nombre no puede contener / o \\".into());
+    }
+    if name.contains(':') || name.contains('*') || name.contains('?') || name.contains('"') || name.contains('<') || name.contains('>') || name.contains('|') {
+        return Err("Caracter inválido en el nombre".into());
+    }
+    let s = Path::new(old_path);
+    if !s.exists() {
+        return Err("Origen no existe".into());
+    }
+    let parent = s.parent().ok_or("Sin carpeta padre")?;
+    let target = parent.join(name);
+    if target.exists() {
+        return Err("Ya existe un archivo o carpeta con ese nombre".into());
+    }
+    // Evitar renombrar a mismo nombre (case insensitive check en Windows)
+    if s.file_name().and_then(|n| n.to_str()) == Some(name) {
+        return Err("Mismo nombre".into());
+    }
+    std::fs::rename(s, &target).map_err(|e| e.to_string())?;
+    Ok(crate::state::pstring(&target))
+}
+
 pub fn write_file(path: &str, data_base64: &str) -> Result<(), String> {
     let p = Path::new(path);
     if let Some(parent) = p.parent() {

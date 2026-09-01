@@ -82,7 +82,7 @@ export type UseBaseChatPropsParams = {
   handleCompact: () => Promise<void>
   handleCreateSession: (dir?: string) => Promise<void>
   fb: any
-  setShowTerminal: (show: boolean) => void
+  setShowTerminal?: (show: boolean) => void
   setShowMCPBrowser: (show: boolean) => void
   setDesktopCfg: (cfg: any) => void
   loadDesktopConfig: () => any
@@ -289,7 +289,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       onForkSession: () => selectedSession && handleCreateSession(selectedSession.directory),
       onOpenFileBrowser: () => selectedSession && fb.open(),
       fileBrowserPath: fb.currentPath,
-      onOpenTerminal: () => setShowTerminal(true),
+      onOpenTerminal: () => { try { window.dispatchEvent(new CustomEvent("opencode:new-terminal")) } catch {}; setShowTerminal?.(true) },
       onOpenMCPBrowser: () => setShowMCPBrowser(true),
       onOpenRemoteDesktop: () => {
         setDesktopCfg(loadDesktopConfig())

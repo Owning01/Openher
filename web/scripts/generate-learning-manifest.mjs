@@ -1,16 +1,31 @@
-// Genera web/public/learning/manifest.json desde docs/raw del proyecto forense.
+// Genera web/public/learning/manifest.json desde docs/raw del proyecto forense + learning-raw local.
 // Uso: node scripts/generate-learning-manifest.mjs [rutaDocsRaw]
+// - Sin args: escanea forense (G:/Proyectos/10)forense/docs/raw) + web/learning-raw (vive en el repo, preferencia local para 08-Papers)
+// - Con arg: escanea solo esa ruta (compatibilidad).
 import { readdirSync, statSync, readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from "node:fs"
 import { join, relative, basename } from "node:path"
 
 const DEFAULT_RAW = "G:/Proyectos/10)forense/docs/raw"
+const LOCAL_RAW = join(process.cwd(), "learning-raw")
 const RAW_DIR = process.argv[2] || DEFAULT_RAW
 const OUT_DIR = join(process.cwd(), "public", "learning")
 const DOCS_OUT = join(OUT_DIR, "docs")
 
-if (!existsSync(RAW_DIR)) {
-  console.error(`No existe ${RAW_DIR}`)
-  process.exit(1)
+// Fuentes: forense (externo) + local (vive en el repo). Si se pasa arg, usa solo esa.
+let SOURCES = []
+if (process.argv[2]) {
+  if (!existsSync(RAW_DIR)) {
+    console.error(`No existe ${RAW_DIR}`)
+    process.exit(1)
+  }
+  SOURCES = [RAW_DIR]
+} else {
+  if (existsSync(DEFAULT_RAW)) SOURCES.push(DEFAULT_RAW)
+  if (existsSync(LOCAL_RAW)) SOURCES.push(LOCAL_RAW)
+  if (SOURCES.length === 0) {
+    console.error(`No existe ni ${DEFAULT_RAW} ni ${LOCAL_RAW}`)
+    process.exit(1)
+  }
 }
 
 /** Categorías con metadata pedagógica */
@@ -23,6 +38,7 @@ const CATEGORY_META = {
   "05-Especializacion": { title: "Especialización", level: 3, description: "Ramas avanzadas por dominio (cloud, mobile, IA, hardware...)." },
   "06-Operaciones": { title: "Operaciones", level: 4, description: "Operación como equipo: purple team, infraestructura, reportes." },
   "07-Agentes-IA": { title: "Agentes IA", level: 2, description: "Hacking y defensa con agentes IA — sin escribir código, agentes especializados." },
+  "08-Papers": { title: "Papers", level: 2, description: "Papers fundacionales y actuales de IA, agentes, harness, memoria y evaluación — lo esencial destilado." },
   "99-Prompt-Injection": { title: "Prompt Injection", level: 4, description: "Técnicas de manipulación de LLMs — estudio defensivo." },
 }
 
@@ -36,6 +52,15 @@ const SPECIALIZATION_META = {
   "07-Defensive": "Defensivo & Forense",
   "08-Social-Web": "Social & Bug Bounty",
   "09-Cloud-Native": "Cloud Native & Web3",
+}
+
+const PAPERS_META = {
+  "01-Reasoning": "Reasoning & Planning",
+  "02-Harness": "Harness & Tool Use",
+  "03-Agentes": "Agentes & Orquestación",
+  "04-Memoria": "Memoria & Context",
+  "05-Evaluacion": "Evaluación & Benchmarks",
+  "06-Skills": "Skills & JIT",
 }
 
 /** Extrae título del primer heading # del markdown */
@@ -70,17 +95,19 @@ function scanMarkdown(dir) {
   return out
 }
 
-console.log(`Escaneando ${RAW_DIR}...`)
-const files = scanMarkdown(RAW_DIR)
-console.log(`${files.length} archivos markdown encontrados.`)
+for (const src of SOURCES) console.log(`Escaneando ${src}...`)
+const filesWithSource = SOURCES.flatMap((src) => scanMarkdown(src).map((abs) => ({ abs, src })))
+console.log(`${filesWithSource.length} archivos markdown encontrados (total ${SOURCES.length} fuentes).`)
 
 mkdirSync(DOCS_OUT, { recursive: true })
 
-// Agrupamos por categoría top-level
+// Agrupamos por categoría top-level — deduplica por id (local sobre forense)
 const grouped = new Map()
+const seen = new Map() // id -> { category, idx }
 let copied = 0
-for (const abs of files) {
-  const rel = relative(RAW_DIR, abs).replace(/\\/g, "/")
+let skippedForensePapers = 0
+for (const { abs, src } of filesWithSource) {
+  const rel = relative(src, abs).replace(/\\/g, "/")
   const parts = rel.split("/")
   // Ignorar assets
   if (parts.includes("assets")) continue
@@ -105,6 +132,11 @@ for (const abs of files) {
   let subMeta = null
   if (category === "05-Especializacion" && subCategory && SPECIALIZATION_META[subCategory]) {
     subMeta = SPECIALIZATION_META[subCategory]
+  } else if (category === "08-Papers" && subCategory && PAPERS_META[subCategory]) {
+    subMeta = PAPERS_META[subCategory]
+  } else if (category === "08-Papers" && subCategory) {
+    // fallback: humaniza "01-Reasoning" -> "Reasoning"
+    subMeta = subCategory.replace(/^\d+-/, "").replace(/-/g, " ")
   }
 
   const entry = {
@@ -120,6 +152,25 @@ for (const abs of files) {
     bytes: stats.size,
   }
 
+  // Dedupe: si ya existe (forense + local con mismo id), local pisa forense
+  if (seen.has(entry.id)) {
+    const prev = seen.get(entry.id)
+    const prevArr = grouped.get(prev.category)
+    if (prevArr) {
+      const idx = prevArr.findIndex((e) => e.id === entry.id)
+      if (idx !== -1) prevArr.splice(idx, 1)
+      if (prevArr.length === 0) grouped.delete(prev.category)
+    }
+    skippedForensePapers++
+    // no increment copied (reemplazo), solo sobrescribe archivo
+    copyFileSync(abs, join(DOCS_OUT, flatName))
+    if (!grouped.has(category)) grouped.set(category, [])
+    grouped.get(category).push(entry)
+    seen.set(entry.id, { category, src })
+    continue
+  }
+  seen.set(entry.id, { category, src })
+
   if (!grouped.has(category)) grouped.set(category, [])
   grouped.get(category).push(entry)
 
@@ -131,7 +182,7 @@ for (const abs of files) {
 for (const [, arr] of grouped) arr.sort((a, b) => a.originalPath.localeCompare(b.originalPath))
 
 // Orden global de categorías
-const order = ["00-Fundamentos", "01-Herramientas", "02-Web-y-Apps", "03-Sistemas", "04-Post-Explotacion", "05-Especializacion", "06-Operaciones", "07-Agentes-IA", "99-Prompt-Injection"]
+const order = ["00-Fundamentos", "01-Herramientas", "02-Web-y-Apps", "03-Sistemas", "04-Post-Explotacion", "05-Especializacion", "06-Operaciones", "07-Agentes-IA", "08-Papers", "99-Prompt-Injection"]
 const categories = order.filter((c) => grouped.has(c)).map((c) => ({
   id: c,
   ...CATEGORY_META[c],
@@ -147,5 +198,5 @@ const manifest = {
 }
 
 writeFileSync(join(OUT_DIR, "manifest.json"), JSON.stringify(manifest, null, 2))
-console.log(`✓ ${copied} lecciones copiadas a public/learning/docs/`)
-console.log(`✓ manifest.json generado (${categories.length} categorías)`)
+console.log(`✓ ${copied} lecciones copiadas a public/learning/docs/` + (skippedForensePapers ? ` (${skippedForensePapers} duplicadas forense→local resueltas)` : ""))
+console.log(`✓ manifest.json generado (${categories.length} categorías) — fuentes: ${SOURCES.join(" + ")}`)

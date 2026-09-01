@@ -16,6 +16,12 @@ export type FileRowProps = {
   showNotice: (msg: string) => void
   gitStatus?: GitFileStatus | null
   onContextMenu?: (e: React.MouseEvent, entry: FsEntry, isDir: boolean) => void
+  renamingPath?: string | null
+  renamingValue?: string
+  onRenamingChange?: (v: string) => void
+  onRenameCommit?: (entry: FsEntry) => void
+  onRenameCancel?: () => void
+  onStartRename?: (entry: FsEntry) => void
 }
 
 export function formatFileSize(size: number | null): string {
@@ -36,21 +42,29 @@ export const FileRow = memo(function FileRow({
   showNotice,
   gitStatus,
   onContextMenu,
+  renamingPath,
+  renamingValue,
+  onRenamingChange,
+  onRenameCommit,
+  onRenameCancel,
+  onStartRename,
 }: FileRowProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   useOutsideClick(menuRef, () => setMenuOpen(false), menuOpen)
   const isDownloading = downloading === f.path
+  const isRenaming = renamingPath === f.path
 
   return (
     <div
-      className={`pcf-row pcf-file ${gitStatus ? `git-${gitStatus.status.toLowerCase()}` : ""}`}
+      className={`pcf-row pcf-file ${gitStatus ? `git-${gitStatus.status.toLowerCase()}` : ""} ${isRenaming ? "is-renaming" : ""}`}
       style={{ paddingLeft: `${depth * 14 + 18}px` }}
       title={f.path}
-      onClick={() => (onOpenFile ? onOpenFile(f) : onDownload(f))}
+      onClick={() => !isRenaming && (onOpenFile ? onOpenFile(f) : onDownload(f))}
       onContextMenu={onContextMenu ? (e) => onContextMenu(e, f, false) : undefined}
-      draggable
+      draggable={!isRenaming}
       onDragStart={(e) => {
+        if (isRenaming) { e.preventDefault(); return }
         const isImg = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f.name)
         e.dataTransfer.setData("text/plain", f.path)
         e.dataTransfer.setData("application/x-opencode-path", f.path)
@@ -60,18 +74,36 @@ export const FileRow = memo(function FileRow({
       role="treeitem"
       tabIndex={0}
       onKeyDown={(e) => {
+        if (isRenaming) return
         if (e.key === "Enter") (onOpenFile ? onOpenFile(f) : onDownload(f))
+        else if (e.key === "F2" && onStartRename) { e.preventDefault(); onStartRename(f) }
       }}
     >
       <span className="pcf-icon-wrap">
         <VSCodeFileIcon name={f.name} size={15} />
       </span>
-      <span
-        className="pcf-name"
-        style={gitStatus ? { color: gitStatus.color } : undefined}
-      >
-        {f.name}
-      </span>
+      {isRenaming ? (
+        <input
+          className="pcf-inline-input"
+          value={renamingValue ?? ""}
+          autoFocus
+          onChange={(e) => onRenamingChange?.(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); onRenameCommit?.(f) }
+            else if (e.key === "Escape") { e.preventDefault(); onRenameCancel?.() }
+          }}
+          onBlur={() => onRenameCommit?.(f)}
+          onClick={(e) => e.stopPropagation()}
+          onFocus={(e) => e.currentTarget.select()}
+        />
+      ) : (
+        <span
+          className="pcf-name"
+          style={gitStatus ? { color: gitStatus.color } : undefined}
+        >
+          {f.name}
+        </span>
+      )}
 
       {gitStatus && (
         <span

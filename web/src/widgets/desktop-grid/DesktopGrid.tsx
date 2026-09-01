@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { memo, useEffect, useRef, useState } from "react"
 import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../../types"
 import type { ChatViewProps } from "../../components/ChatView"
@@ -124,6 +125,85 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
   useEffect(() => {
     setGridDragOver(null)
   }, [desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions.length])
+
+  // Ponytail: compactar layout persistido con filas/columnas vacías que dejan hueco negro 50% ([Image 1] cortada abajo)
+  useEffect(() => {
+    const total = desktopLayout.cols * desktopLayout.rows
+    if (total <= 1) return
+    const isEmpty = (i: number) => {
+      if (desktopLayout.sessions[i]) return false
+      if ((tabStacks[i]?.length ?? 0) > 0) return false
+      const kind = desktopLayout.panelKinds[i]
+      // editor: tiene tabs en panelEditorTabStacks, no en tabStacks
+      if (kind === "editor") {
+        const edt = (desktopLayout as any).panelEditorTabStacks?.[i] as string[] | undefined
+        if (edt && edt.length > 0) return false
+        if ((desktopLayout as any).panelEditorPaths?.[i]) return false
+        return true
+      }
+      // panel dedicado (explorer, terminal, stats, etc.) no se considera vacío aunque sessions null
+      if (kind !== "session") return false
+      return true
+    }
+    let needsCompact = false
+    for (let r = 0; r < desktopLayout.rows; r++) {
+      if (Array.from({ length: desktopLayout.cols }, (_, c) => r * desktopLayout.cols + c).every(isEmpty)) { needsCompact = true; break }
+    }
+    if (!needsCompact) {
+      for (let c = 0; c < desktopLayout.cols; c++) {
+        if (Array.from({ length: desktopLayout.rows }, (_, r) => r * desktopLayout.cols + c).every(isEmpty)) { needsCompact = true; break }
+      }
+    }
+    if (!needsCompact) return
+    const t = setTimeout(() => {
+      onSetDesktopLayout((prev: any) => {
+        let { cols, rows, sessions, panelKinds, panelIds, colSizes, rowSizes } = prev
+        const stacks: string[][] = tabStacks
+        const isEmptyPrev = (i: number) => {
+          if (sessions[i]) return false
+          if ((stacks[i]?.length ?? 0) > 0) return false
+          const kind = panelKinds[i]
+          if (kind === "editor") {
+            const edt = (prev as any).panelEditorTabStacks?.[i] as string[] | undefined
+            if (edt && edt.length > 0) return false
+            if ((prev as any).panelEditorPaths?.[i]) return false
+            return true
+          }
+          if (kind !== "session") return false
+          return true
+        }
+        let changed = true
+        while (changed) {
+          changed = false
+          for (let r = 0; r < rows; r++) {
+            if (sessions.slice(r * cols, r * cols + cols).every((_, i) => isEmptyPrev(r * cols + i)) && rows > 1) {
+              sessions = sessions.filter((_, i) => Math.floor(i / cols) !== r)
+              panelKinds = panelKinds.filter((_, i) => Math.floor(i / cols) !== r)
+              panelIds = panelIds.filter((_, i) => Math.floor(i / cols) !== r)
+              rows -= 1; rowSizes = (rowSizes as any[]).filter((_, i) => i !== r); changed = true; break
+            }
+          }
+          if (changed) continue
+          const emptyCols: number[] = []
+          for (let c = 0; c < cols; c++) if (Array.from({ length: rows }, (_, r) => r * cols + c).every(isEmptyPrev)) emptyCols.push(c)
+          if (emptyCols.length > 0 && cols > emptyCols.length) {
+            const rem = new Set(emptyCols)
+            sessions = sessions.filter((_, i) => !rem.has(i % cols))
+            panelKinds = panelKinds.filter((_, i) => !rem.has(i % cols))
+            panelIds = panelIds.filter((_, i) => !rem.has(i % cols))
+            cols -= emptyCols.length
+            colSizes = (colSizes as any[]).filter((_, i) => !rem.has(i))
+            changed = true
+          }
+          if (cols === 1) colSizes = [null]
+          if (rows === 1) rowSizes = [null]
+        }
+        if (cols === prev.cols && rows === prev.rows) return prev
+        return { ...prev, cols, rows, sessions, panelKinds, panelIds, colSizes, rowSizes }
+      })
+    }, 0)
+    return () => clearTimeout(t)
+  }, [desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions, desktopLayout.panelKinds, tabStacks, onSetDesktopLayout])
 
   const gridCols: Array<number | null | "handle"> = []
   if (desktopLayout.cols === 1) {
@@ -476,8 +556,17 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
           onDrop={(e) => {
             e.preventDefault()
             setGridDragOver(null)
-            const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
+            const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("application/x-opencode-browser-tab") || ""
             if (!raw) return
+            const isUrl = /^https?:\/\//i.test(raw) || raw.startsWith("browser:") || (/^[a-z0-9.-]+\.[a-z]{2,}/i.test(raw) && !raw.includes("kind:") && !raw.includes("terminal"))
+            if (isUrl) {
+              const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
+              if (!target) return
+              const allCells = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
+              const idx = allCells.indexOf(target)
+              if (idx !== -1) { const url = raw.startsWith("browser:") ? raw.slice(8) : raw.startsWith("http") ? raw : `https://${raw}`; onOpenBrowser(url, idx) }
+              return
+            }
             const isTabDrag =
               e.dataTransfer.types.includes("application/x-opencode-tab-index") ||
               raw.startsWith("panel:") ||

@@ -17,7 +17,7 @@ export type UseDesktopGridActionsParams = {
   setTabStacks: (updater: (prev: string[][]) => string[][]) => void
   activePanel: number
   setActivePanel: (idx: number | ((prev: number) => number)) => void
-  setShowTerminal: React.Dispatch<React.SetStateAction<boolean>>
+  setShowTerminal?: React.Dispatch<React.SetStateAction<boolean>>
   setFileEditorPath: (path: string | null) => void
   setDesktopState?: React.Dispatch<React.SetStateAction<any>>
 }
@@ -31,7 +31,7 @@ export function useDesktopGridActions({
   setTabStacks,
   activePanel,
   setActivePanel,
-  setShowTerminal,
+  setShowTerminal: _setShowTerminal,
   setFileEditorPath,
   setDesktopState,
 }: UseDesktopGridActionsParams) {
@@ -142,7 +142,20 @@ export function useDesktopGridActions({
           colSizes: (number | null)[]
           rowSizes: (number | null)[]
         }
-        const isEmpty = (i: number) => nextSessions[i] === null && nextKinds[i] === "session"
+        const isEmpty = (i: number) => {
+          if (nextSessions[i]) return false
+          if ((nextStacks[i]?.length ?? 0) > 0) return false
+          const kind = nextKinds[i]
+          if (kind === "editor") {
+            // editor guarda tabs en layout, no en tabStacks
+            const layoutAny = desktopLayout as any
+            if (layoutAny.panelEditorTabStacks?.[i]?.length) return false
+            if (layoutAny.panelEditorPaths?.[i]) return false
+            return true
+          }
+          if (kind !== "session") return false
+          return true
+        }
         let changed = true
         while (changed) {
           changed = false
@@ -426,7 +439,18 @@ export function useDesktopGridActions({
         nextStacks[index] = []
 
         let { cols, rows, colSizes, rowSizes } = prev
-        const isEmpty = (i: number) => sessions[i] === null && panelKinds[i] === "session"
+        const isEmpty = (i: number) => {
+          if (sessions[i]) return false
+          if ((nextStacks[i]?.length ?? 0) > 0) return false
+          const kind = panelKinds[i]
+          if (kind === "editor") {
+            if ((prev as any).panelEditorTabStacks?.[i]?.length) return false
+            if ((prev as any).panelEditorPaths?.[i]) return false
+            return true
+          }
+          if (kind !== "session") return false
+          return true
+        }
         let changed = true
         while (changed) {
           changed = false
@@ -644,7 +668,18 @@ export function useDesktopGridActions({
     nextSessions[panelIndex] = null
     nextKinds[panelIndex] = "session"
     let { cols, rows, colSizes, rowSizes } = desktopLayout as unknown as DesktopLayout & { colSizes: (number | null)[]; rowSizes: (number | null)[] }
-    const isEmpty = (i: number) => nextSessions[i] === null && nextKinds[i] === "session"
+    const isEmpty = (i: number) => {
+      if (nextSessions[i]) return false
+      if ((nextStacks[i]?.length ?? 0) > 0) return false
+      const kind = nextKinds[i]
+      if (kind === "editor") {
+        if ((desktopLayout as any).panelEditorTabStacks?.[i]?.length) return false
+        if ((desktopLayout as any).panelEditorPaths?.[i]) return false
+        return true
+      }
+      if (kind !== "session") return false
+      return true
+    }
     let changed = true
     while (changed) {
       changed = false
@@ -726,19 +761,7 @@ export function useDesktopGridActions({
       const isSingleTab = dock.isSingleTab
 
       if (isSingleTab && tabId && fromPanelId) {
-        const destPanelId = `panel-${index}-term`
-        const remainingInSource = transferTerminalTab(fromPanelId, tabId, destPanelId)
-        if (fromPanelId === "bottom-terminal" && remainingInSource === 0) {
-          setShowTerminal(false)
-        }
-      } else if (
-        rawId.includes("terminal") ||
-        targetKind === "terminal" ||
-        targetSessionId?.startsWith("terminal")
-      ) {
-        if (!fromPanelId || fromPanelId === "bottom-terminal" || fromIndex === null) {
-          setShowTerminal(false)
-        }
+        transferTerminalTab(fromPanelId, tabId, `panel-${index}-term`)
       }
 
       if (dir === "center") {
@@ -950,7 +973,7 @@ export function useDesktopGridActions({
         setActivePanel(index)
       }
     },
-    [tabStacks, setTabStacks, setDesktopLayout, setActivePanel, setShowTerminal, desktopLayoutRef]
+    [tabStacks, setTabStacks, setDesktopLayout, setActivePanel, desktopLayoutRef]
   )
 
   const handleOpenFile = useCallback(
