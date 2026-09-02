@@ -7,14 +7,15 @@ import { FileTypeIcon } from "./FileTypeIcon"
 import { ChevronIcon } from "../Icons"
 
 export const FileDiffs = memo(function FileDiffs({
-  diffs, onOpenADEDiff
+  diffs, onOpenADEDiff, defaultOpen
 }: {
   diffs: FileDiff[]
   onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
+  defaultOpen?: boolean
 }) {
   const t = useT()
-  const [open, setOpen] = useState(false)
-  const [openFile, setOpenFile] = useState<Record<string, boolean>>({})
+  const [open, setOpen] = useState(!!defaultOpen)
+  const [openFile, setOpenFile] = useState<Record<string, boolean>>(() => defaultOpen ? Object.fromEntries(diffs.map((_, i) => [String(i), true])) : {})
   if (!diffs || diffs.length === 0) return null
   const total = sumDiffStat(diffs)
 

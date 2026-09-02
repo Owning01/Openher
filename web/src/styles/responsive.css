@@ -149,27 +149,32 @@
    El centrado se activa solo cuando existe espacio real a ambos lados. */
 @media (min-width: 781px) {
   .desktop-cell { container-type: inline-size; }
-  .desktop-cell .messages-wrap,
-  .desktop-cell .composer {
-    max-width: none !important;
+
+  /* En split: ocupa el 100% del ancho del panel */
+  .desktop-cell[data-split="true"] .messages-wrap,
+  .desktop-cell[data-split="true"] .composer {
+    max-width: 100% !important;
     margin-inline: 0 !important;
     padding-inline: clamp(12px, 3cqw, 24px) !important;
   }
-  .desktop-cell .message {
-    max-width: none !important;
+  .desktop-cell[data-split="true"] .message {
+    max-width: 100% !important;
     margin-inline: 0 !important;
   }
-  @container (min-width: 900px) {
-    .desktop-cell .messages-wrap,
-    .desktop-cell .composer {
-      max-width: var(--chat-max-width, 720px) !important;
-      margin-inline: auto !important;
-      padding-inline: 24px !important;
-    }
-    .desktop-cell .message {
-      max-width: var(--chat-max-width, 720px) !important;
-      margin-inline: auto !important;
-    }
+
+  /* En no-split: centrado al 50% (~880px en FHD/2K/4K), mantiene tamaño en px al achicar */
+  .desktop-cell:not([data-split="true"]) .messages-wrap,
+  .desktop-cell:not([data-split="true"]) .composer,
+  .desktop-maximized .messages-wrap,
+  .desktop-maximized .composer {
+    max-width: min(var(--chat-desktop-fixed-width, 880px), calc(100% - 32px)) !important;
+    margin-inline: auto !important;
+    padding-inline: 16px !important;
+  }
+  .desktop-cell:not([data-split="true"]) .message,
+  .desktop-maximized .message {
+    max-width: 100% !important;
+    margin-inline: 0 !important;
   }
 }
 
