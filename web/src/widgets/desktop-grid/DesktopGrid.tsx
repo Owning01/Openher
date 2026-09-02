@@ -339,6 +339,8 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
       })
     }, 0)
   }
+
+  const isSplit = desktopLayout.cols > 1 || desktopLayout.rows > 1
   const cells = Array.from({ length: totalPanels }).map((_, i) => {
     const col = i % desktopLayout.cols
     const row = Math.floor(i / desktopLayout.cols)
@@ -361,7 +363,13 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
     const effectiveFilePath = kind === "editor" ? (editorPath ?? fileEditorPath) : fileEditorPath
 
     return (
-      <div key={panelId} style={placement} className="desktop-cell" onClick={() => setActivePanel(i)}>
+      <div
+        key={panelId}
+        style={placement}
+        className="desktop-cell"
+        data-split={isSplit ? "true" : "false"}
+        onClick={() => setActivePanel(i)}
+      >
         <DesktopPanelRenderer
           index={i}
           panelId={panelId}
@@ -454,7 +462,7 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
   return (
     <div className="desktop-layout-area">
       {maximizedSession && maximizedIndex !== null ? (
-        <div className="desktop-maximized">
+        <div className="desktop-maximized" data-split="false">
           <SessionChatPanel
             session={maximizedSession}
             config={config!}
@@ -505,6 +513,8 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
           className="desktop-grid"
           ref={gridRef}
           data-cols={desktopLayout.cols}
+          data-rows={desktopLayout.rows}
+          data-split={isSplit ? "true" : "false"}
           style={{
             position: "relative",
             gridTemplateColumns: gridCols

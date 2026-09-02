@@ -33,14 +33,18 @@ export function computeRenderedMessages(
   for (const message of all) {
     if (seenIds.has(message.info.id)) continue
     seenIds.add(message.info.id)
+    // El server puede poner diffs tanto en el user (summary del turno) como directamente en el assistant (v2)
+    const ownDiffs = message.info.summary?.diffs
     if (message.info.role === "user") {
-      pendingDiffs = message.info.summary?.diffs
+      pendingDiffs = ownDiffs
       lastAssistantId = null
       lastUserID = message.info.id
     } else {
-      if (pendingDiffs && pendingDiffs.length > 0) {
+      // Prioriza diffs propios del assistant si existen, sino usa los pending del user previo (compat v1)
+      const diffsToAttach = (ownDiffs && ownDiffs.length > 0) ? ownDiffs : pendingDiffs
+      if (diffsToAttach && diffsToAttach.length > 0) {
         if (lastAssistantId) diffForMessage.delete(lastAssistantId)
-        diffForMessage.set(message.info.id, pendingDiffs)
+        diffForMessage.set(message.info.id, diffsToAttach)
         lastAssistantId = message.info.id
       }
       if (lastUserID && message.info.mode && !turnModeForUser.has(lastUserID)) {

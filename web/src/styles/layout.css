@@ -405,36 +405,75 @@
     background-color: var(--chat-bg-color, #000);
   }
 
-  /* El chat (mensajes + composer) ocupa el max-width solo en pantallas anchas
-     y cuando no está en modo split estrecho. En móvil/tablet y splits siempre ocupa 100%. */
-  @media (min-width: 900px) {
-    .app-desktop-content:not(:has(.desktop-grid[data-cols="2"], .desktop-grid[data-cols="3"], .desktop-grid[data-cols="4"])) .messages-wrap,
-    .app-desktop-content:not(:has(.desktop-grid[data-cols="2"], .desktop-grid[data-cols="3"], .desktop-grid[data-cols="4"])) .composer {
-      max-width: var(--chat-max-width, 100%);
-      margin-inline: auto;
-      width: 100%;
-    }
+  /* Desktop Chat Layout:
+     - Pantalla completa / No-split: ocupa el 50% central (ancho fijo ~880px),
+       dejando 25% a la izquierda y 25% a la derecha.
+       Al achicar la ventana, conserva el tamaño en píxeles (no en %), adaptándose
+       suavemente solo si la ventana es menor a 880px.
+     - Split: ocupa el 100% del panel dividido. */
+  :root {
+    --chat-desktop-fixed-width: 880px;
   }
 
-  .desktop-cell .messages-wrap,
-  .desktop-cell .composer {
-    max-width: var(--chat-max-width, 720px) !important;
+  /* Single-pane / No split / Maximizado */
+  .desktop-cell:not([data-split="true"]) .messages-wrap,
+  .desktop-cell:not([data-split="true"]) .composer,
+  .desktop-cell:not([data-split="true"]) .todo-panel,
+  .desktop-cell:not([data-split="true"]) .message-search-bar,
+  .desktop-maximized .messages-wrap,
+  .desktop-maximized .composer,
+  .desktop-maximized .todo-panel,
+  .desktop-maximized .message-search-bar {
+    max-width: min(var(--chat-desktop-fixed-width, 880px), calc(100% - 32px)) !important;
     margin-inline: auto !important;
     width: 100% !important;
-    padding-inline: 24px;
-    box-sizing: border-box;
+    box-sizing: border-box !important;
   }
-  .desktop-cell .message,
+
+  .desktop-cell:not([data-split="true"]) .message,
+  .desktop-maximized .message {
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Split: cuando el chat está dividido (2+ paneles/columnas), ocupa el 100% del panel */
+  .desktop-cell[data-split="true"] .messages-wrap,
+  .desktop-cell[data-split="true"] .composer,
+  .desktop-cell[data-split="true"] .todo-panel,
+  .desktop-cell[data-split="true"] .message-search-bar,
+  .desktop-grid[data-split="true"] .desktop-cell .messages-wrap,
+  .desktop-grid[data-split="true"] .desktop-cell .composer,
+  .desktop-grid[data-cols="2"] .desktop-cell .messages-wrap,
+  .desktop-grid[data-cols="2"] .desktop-cell .composer,
+  .desktop-grid[data-cols="3"] .desktop-cell .messages-wrap,
+  .desktop-grid[data-cols="3"] .desktop-cell .composer,
+  .desktop-grid[data-cols="4"] .desktop-cell .messages-wrap,
+  .desktop-grid[data-cols="4"] .desktop-cell .composer {
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+    width: 100% !important;
+    padding-inline: 16px !important;
+    box-sizing: border-box !important;
+  }
+
+  .desktop-cell[data-split="true"] .message,
+  .desktop-grid[data-split="true"] .desktop-cell .message,
+  .desktop-grid[data-cols="2"] .desktop-cell .message,
+  .desktop-grid[data-cols="3"] .desktop-cell .message,
+  .desktop-grid[data-cols="4"] .desktop-cell .message {
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Móvil: siempre 100% */
   .app-mobile-content .messages-wrap,
   .app-mobile-content .composer,
   .app-mobile-content .message {
     max-width: 100% !important;
     margin-inline: 0 !important;
     width: 100% !important;
-  }
-
-  .app-desktop-content .message {
-    max-width: 100%;
   }
 
   .app-desktop-placeholder {

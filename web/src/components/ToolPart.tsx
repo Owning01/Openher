@@ -5,7 +5,7 @@ import { api } from "../api"
 import { QuestionPrompt } from "./QuestionPrompt"
 import { CollapsibleSection } from "./CollapsibleSection"
 import { GridSpinner } from "./GridSpinner"
-import { DiffView, parseDiffStat, synthesizeWritePatch } from "./DiffView"
+import { DiffView, parseDiffStat, synthesizeWritePatch, synthesizeEditPatch } from "./DiffView"
 import { useT } from "../i18n-context"
 import { CodeIcon, FileIcon, SearchIcon, GlobeIcon, CloseIcon, ToolIcon } from "../Icons"
 import { Markdown } from "./Markdown"
@@ -423,9 +423,10 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
 }) {
   const t = useT()
   const text = part.text?.trim()
-  const [expanded, setExpanded] = useState(false)
-
   const toolName = useMemo(() => part.tool ?? detectToolName(text ?? ""), [part.tool, text])
+  const isFileToolInitial = toolName ? FILE_TOOLS.has(toolName) : false
+  // VS Code: diffs de archivo se muestran expandidos por defecto, resto colapsado
+  const [expanded, setExpanded] = useState(isFileToolInitial)
   const meta = toolName ? toolMeta[toolName] : null
   const filePath = useMemo(() => extractFilePath(text ?? ""), [text])
   const displayFilePath = useMemo(() => filePath ? toRelativePath(filePath, directory) : null, [filePath, directory])
@@ -465,22 +466,41 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     return null
   }, [isShellTool, part.state?.input])
 
-  // ---- Diff por tool de archivo (write/edit/apply_patch) ----
+  // ---- Diff por tool de archivo (write/edit/apply_patch) — estilo VS Code ----
   const metadata = part.state?.metadata
   const isFileTool = toolName ? FILE_TOOLS.has(toolName) : false
   const fileDiff = useMemo(() => {
     if (!isFileTool || !toolName) return null
-    const input = part.state?.input as { content?: string; filePath?: string } | string | null | undefined
+    const input = part.state?.input as unknown as Record<string, unknown> | string | null | undefined
+    const inputObj = typeof input === "object" && input !== null ? input as Record<string, unknown> : null
     if (toolName === "edit") {
       const fd = metadata?.filediff as FileDiff | undefined
       if (fd?.patch) return { add: fd.additions ?? parseDiffStat(fd.patch).add, del: fd.deletions ?? parseDiffStat(fd.patch).del, patch: fd.patch }
       const diff = metadata?.diff as string | undefined
       if (diff) { const st = parseDiffStat(diff); return { add: st.add, del: st.del, patch: diff } }
+      // Fallback: sintetizar desde oldString/newString del input (cuando el server no manda patch)
+      const oldStr = (inputObj?.oldString ?? inputObj?.old_string ?? inputObj?.oldText ?? inputObj?.old_text ?? inputObj?.old_content) as string | undefined
+      const newStr = (inputObj?.newString ?? inputObj?.new_string ?? inputObj?.newText ?? inputObj?.new_text ?? inputObj?.new_string ?? inputObj?.content) as string | undefined
+      if (typeof oldStr === "string" || typeof newStr === "string") {
+        const o = String(oldStr ?? "")
+        const n = String(newStr ?? "")
+        if (o || n) {
+          const patch = synthesizeEditPatch(o, n, (inputObj?.filePath ?? inputObj?.file ?? inputObj?.path ?? "file") as string)
+          const st = parseDiffStat(patch)
+          return { add: st.add, del: st.del, patch }
+        }
+      }
+      // Otro fallback: input contiene patch directo
+      const directPatch = (inputObj?.patch ?? inputObj?.edits ?? inputObj?.diff) as string | undefined
+      if (typeof directPatch === "string" && directPatch.includes("@@")) {
+        const st = parseDiffStat(directPatch)
+        return { add: st.add, del: st.del, patch: directPatch }
+      }
       return null
     }
     if (toolName === "apply_patch" || toolName === "patch") {
       const files = metadata?.files as Array<{ additions?: number; deletions?: number }> | undefined
-      const diff = metadata?.diff as string | undefined
+      const diff = (metadata?.diff ?? inputObj?.patch ?? inputObj?.diff) as string | undefined
       let add = 0
       let del = 0
       if (Array.isArray(files)) {
@@ -488,9 +508,15 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
       } else if (diff) {
         const st = parseDiffStat(diff); add = st.add; del = st.del
       }
+      if (diff && diff.includes("@@")) return { add: add || parseDiffStat(diff).add, del: del || parseDiffStat(diff).del, patch: diff }
+      // Si no hay patch pero hay filePath + content, sintetizar como write
+      const patchContent = (inputObj?.content ?? inputObj?.patch) as string | undefined
+      if (typeof patchContent === "string" && patchContent.length > 0) {
+        return { add: patchContent.split("\n").length, del: 0, patch: synthesizeWritePatch(patchContent) }
+      }
       return add || del ? { add, del, patch: diff } : null
     }
-    const content = typeof input === "string" ? input : input?.content
+    const content = typeof input === "string" ? input : (inputObj?.content as string | undefined)
     if (typeof content === "string" && content.length > 0) {
       return { add: content.split("\n").length, del: 0, patch: synthesizeWritePatch(content) }
     }
