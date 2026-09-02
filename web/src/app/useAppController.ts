@@ -859,6 +859,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     maximizedPanel,
     switchTab,
     closePanel,
+    removeTab,
     splitPanel,
     toggleMaximize,
     setMaximizedPanel,

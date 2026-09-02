@@ -1,26 +1,38 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { EXTERNAL_PROJECTS } from "../features/external-plugins/config"
+import { EXTERNAL_PROJECTS, BUILTIN_PLUGINS } from "../features/external-plugins/config"
+import { PaintIcon, PlayIcon, FileIcon, CodeIcon, LayersIcon, CloseIcon } from "../Icons"
 
 type Props = {
   open: boolean
   onClose: () => void
   onOpenProject: (name: string) => void
+  onOpenPlugin?: (key: string) => void
 }
 
-export function PluginsModal({ open, onClose, onOpenProject }: Props) {
+function iconFor(kind?: string, size = 16) {
+  switch (kind) {
+    case "paint": return <PaintIcon size={size} />
+    case "play": return <PlayIcon size={size} />
+    case "camera": return <FileIcon size={size} />
+    case "code": return <CodeIcon size={size} />
+    case "layers": return <LayersIcon size={size} />
+    default: return <LayersIcon size={size} />
+  }
+}
+
+export function PluginsModal({ open, onClose, onOpenProject, onOpenPlugin }: Props) {
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
   const modalRef = useRef<HTMLDivElement | null>(null)
 
-  // centrar al abrir
   useEffect(() => {
     if (open) {
       const vw = window.innerWidth
       const vh = window.innerHeight
-      const w = 420
-      const h = 420
+      const w = 440
+      const h = 520
       setPos({ x: Math.round((vw - w) / 2), y: Math.round((vh - h) / 2) })
     }
   }, [open])
@@ -44,7 +56,7 @@ export function PluginsModal({ open, onClose, onOpenProject }: Props) {
       if (!dragRef.current) return
       const dx = e.clientX - dragRef.current.startX
       const dy = e.clientY - dragRef.current.startY
-      const nx = Math.max(8, Math.min(window.innerWidth - 436, dragRef.current.origX + dx))
+      const nx = Math.max(8, Math.min(window.innerWidth - 456, dragRef.current.origX + dx))
       const ny = Math.max(8, Math.min(window.innerHeight - 80, dragRef.current.origY + dy))
       setPos({ x: nx, y: ny })
     }
@@ -58,6 +70,14 @@ export function PluginsModal({ open, onClose, onOpenProject }: Props) {
   }, [dragging])
 
   if (!open) return null
+
+  const handleOpenBuiltin = (key: string) => {
+    if (onOpenPlugin) onOpenPlugin(key)
+    else {
+      onOpenProject(key)
+    }
+    onClose()
+  }
 
   const content = (
     <div
@@ -75,15 +95,16 @@ export function PluginsModal({ open, onClose, onOpenProject }: Props) {
           position: "fixed",
           left: pos.x,
           top: pos.y,
-          width: 420,
+          width: 440,
           maxWidth: "calc(100vw - 16px)",
           background: "var(--surface)",
           border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg, 12px)",
+          borderRadius: "var(--radius-lg, 6px)",
           boxShadow: "var(--shadow-md, 0 8px 30px rgba(0,0,0,0.18))",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          maxHeight: "min(78vh, 620px)",
         }}
       >
         <div
@@ -97,52 +118,95 @@ export function PluginsModal({ open, onClose, onOpenProject }: Props) {
             background: "var(--surface-subtle, var(--surface))",
             cursor: dragging ? "grabbing" : "grab",
             userSelect: "none",
+            flexShrink: 0,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, background: "var(--primary-soft)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", fontSize: 14 }}>🧩</span>
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: "var(--primary-soft)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)" }}>
+              <LayersIcon size={14} />
+            </span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)", lineHeight: 1 }}>Plugins</div>
-              <div style={{ fontSize: 11, color: "var(--muted)" }}>Proyectos externos on-demand</div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>Herramientas y proyectos externos</div>
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Cerrar" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+          <button type="button" onClick={onClose} aria-label="Cerrar" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon size={12} /></button>
         </div>
 
-        <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8, maxHeight: 360, overflowY: "auto" }}>
-          {EXTERNAL_PROJECTS.map((p) => (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => { onOpenProject(p.name); onClose() }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 12px",
-                borderRadius: "var(--radius-md, 10px)",
-                border: "1px solid var(--border)",
-                background: "var(--surface)",
-                cursor: "pointer",
-                textAlign: "left",
-                transition: "background 0.15s, border-color 0.15s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-subtle)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--primary-soft)" }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)" }}
-            >
-              <span style={{ width: 36, height: 36, borderRadius: 10, background: "var(--primary-soft)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{p.icon}</span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontWeight: 600, fontSize: 13, color: "var(--text)", lineHeight: 1.2 }}>{p.title}</span>
-                <span style={{ display: "block", fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.description}</span>
-                <span style={{ display: "block", fontSize: 10, color: "var(--muted)", opacity: 0.8 }}>{p.dir}</span>
-              </span>
-              <span style={{ fontSize: 11, color: "var(--primary)", fontWeight: 600, flexShrink: 0 }}>Abrir →</span>
-            </button>
-          ))}
+        <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", flex: 1, minHeight: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".06em", padding: "0 2px" }}>Herramientas</div>
+            {BUILTIN_PLUGINS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => handleOpenBuiltin(p.key)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 12px",
+                  borderRadius: "var(--radius-md, 6px)",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "background 0.15s, border-color 0.15s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-subtle)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--primary-border)" }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)" }}
+              >
+                <span style={{ width: 36, height: 36, borderRadius: 10, background: "var(--primary-soft)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", flexShrink: 0 }}>
+                  {iconFor(p.iconKind, 16)}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontWeight: 600, fontSize: 13, color: "var(--text)", lineHeight: 1.2 }}>{p.title}</span>
+                  <span style={{ display: "block", fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.description}</span>
+                  <span style={{ display: "inline-flex", marginTop: 4, fontSize: 10, color: "var(--primary)", background: "var(--primary-soft)", border: "1px solid var(--primary-border)", padding: "1px 6px", borderRadius: 999 }}>Integrado</span>
+                </span>
+                <span style={{ fontSize: 11, color: "var(--primary)", fontWeight: 600, flexShrink: 0 }}>Abrir</span>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".06em", padding: "0 2px" }}>Proyectos externos</div>
+            {EXTERNAL_PROJECTS.map((p) => (
+              <button
+                key={p.name}
+                type="button"
+                onClick={() => { onOpenProject(p.name); onClose() }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 12px",
+                  borderRadius: "var(--radius-md, 6px)",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "background 0.15s, border-color 0.15s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-subtle)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--primary-soft)" }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)" }}
+              >
+                <span style={{ width: 36, height: 36, borderRadius: 10, background: "var(--surface-subtle)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted-strong)", flexShrink: 0 }}>
+                  {iconFor((p as any).iconKind, 16)}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontWeight: 600, fontSize: 13, color: "var(--text)", lineHeight: 1.2 }}>{p.title}</span>
+                  <span style={{ display: "block", fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.description}</span>
+                  <span style={{ display: "block", fontSize: 10, color: "var(--muted)", opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.dir}</span>
+                </span>
+                <span style={{ fontSize: 11, color: "var(--primary)", fontWeight: 600, flexShrink: 0 }}>Abrir</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border)", background: "var(--surface-subtle)", fontSize: 11, color: "var(--muted)", lineHeight: 1.4 }}>
-          Se inicia automáticamente al abrir y se detiene al cerrar la pestaña.
+        <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border)", background: "var(--surface-subtle)", fontSize: 11, color: "var(--muted)", lineHeight: 1.4, flexShrink: 0 }}>
+          Los externos se inician on-demand y se detienen al cerrar la pestaña. El Playground es nativo e instantaneo.
         </div>
       </div>
     </div>

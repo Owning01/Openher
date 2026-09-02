@@ -34,7 +34,7 @@ impl FsWatcher {
     }
 
     pub fn ensure_init(self: &Arc<Self>) {
-        let mut guard = self.watcher.lock().unwrap();
+        let mut guard = self.watcher.lock().unwrap_or_else(|e| e.into_inner());
         if guard.is_some() { return; }
         let tx = self.tx.clone();
         let watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
@@ -60,9 +60,9 @@ impl FsWatcher {
 
     pub fn watch_dir(self: &Arc<Self>, dir: &Path) {
         self.ensure_init();
-        let mut watched = self.watched.lock().unwrap();
+        let mut watched = self.watched.lock().unwrap_or_else(|e| e.into_inner());
         if watched.contains_key(dir) { return; }
-        let mut watcher = self.watcher.lock().unwrap();
+        let mut watcher = self.watcher.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(w) = watcher.as_mut() {
             // No seguir enlaces, no recursivo por defecto para no saturar; caller puede elegir RecursiveMode
             let mode = RecursiveMode::NonRecursive;
@@ -78,10 +78,10 @@ impl FsWatcher {
     }
 
     pub fn unwatch_dir(self: &Arc<Self>, dir: &Path) {
-        if let Some(w) = self.watcher.lock().unwrap().as_mut() {
+        if let Some(w) = self.watcher.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
             let _ = w.unwatch(dir);
         }
-        self.watched.lock().unwrap().remove(dir);
+        self.watched.lock().unwrap_or_else(|e| e.into_inner()).remove(dir);
     }
 
     /// Poll no bloqueante para integrar en SSE loop si se desea

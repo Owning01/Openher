@@ -3,10 +3,7 @@ import type { ShellPanelKind } from "../../../shell"
 import type { DesktopLayout } from "../../../types"
 import { parseDockPayload } from "../../../utils/drag"
 import { killTerminalPty, transferTerminalTab } from "../../../utils/terminalStore"
-
-export function genPanelId(): string {
-  return `panel-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-}
+import { genPanelId } from "../../../hooks/useDesktopLayoutState"
 
 export type UseDesktopGridActionsParams = {
   isDesktop: boolean
@@ -1160,6 +1157,8 @@ export function useDesktopGridActions({
     [isDesktop, activePanel, setFileEditorPath, setDesktopLayout]
   )
 
+  const detachTab = useCallback((_panel: number, _tab: number) => {}, [])
+
   return {
     openInPanel,
     switchTab,
@@ -1167,6 +1166,7 @@ export function useDesktopGridActions({
     moveTab,
     transferTab,
     addTerminalToPanel,
+    detachTab,
     splitPanel,
     addPanel,
     closePanel,

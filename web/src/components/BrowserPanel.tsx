@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
-import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon, FolderIcon, GlobeIcon, SearchIcon, FileIcon, PaintIcon, KeyboardIcon } from "../Icons"
+import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon, FolderIcon, GlobeIcon, SearchIcon, FileIcon, PaintIcon, KeyboardIcon, MaximizeIcon, ChevronIcon, CheckIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
 import { BrowserVisualOverlay, type BrowserPickedElement } from "./BrowserVisualOverlay"
@@ -201,10 +201,14 @@ export const BrowserPanel = memo(function BrowserPanel({
   onAnnotationStyleBefore,
   inspectTool = "picker",
   onToggleInspectTool,
+  hideTabBar = false,
+  onUrlChange,
 }: {
   initialUrl?: string
   isActive?: boolean
   onClose?: () => void
+  hideTabBar?: boolean
+  onUrlChange?: (url: string) => void
   visualSelection?: VisualSelection | null
   inspectMode?: boolean
   onVisualPick?: (el: BrowserPickedElement) => void
@@ -219,6 +223,17 @@ export const BrowserPanel = memo(function BrowserPanel({
   onToggleInspectTool?: (tool: InspectTool) => void
 }) {
   const [tabs, setTabs] = useState<BrowserTabItem[]>(() => {
+    if (hideTabBar) {
+      return [
+        {
+          id: "tab-1",
+          url: initialUrl,
+          title: formatDisplayTitle(initialUrl),
+          history: [initialUrl],
+          historyIdx: 0,
+        },
+      ]
+    }
     try {
       const raw = localStorage.getItem(BROWSER_TABS_KEY)
       if (raw) {
@@ -239,6 +254,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     ]
   })
   const [activeTabId, setActiveTabId] = useState<string>(() => {
+    if (hideTabBar) return "tab-1"
     try {
       const v = localStorage.getItem(BROWSER_ACTIVE_KEY)
       if (v) return v
@@ -246,6 +262,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     return "tab-1"
   })
   const [inputUrl, setInputUrl] = useState(() => {
+    if (hideTabBar) return initialUrl
     try {
       const raw = localStorage.getItem(BROWSER_TABS_KEY)
       const aid = localStorage.getItem(BROWSER_ACTIVE_KEY)
@@ -302,14 +319,17 @@ export const BrowserPanel = memo(function BrowserPanel({
   const omniboxRef = useRef<HTMLInputElement | null>(null)
   const findInputRef = useRef<HTMLInputElement | null>(null)
   const nativeReady = useRef(false)
+  const prevInitialUrlRef = useRef(initialUrl)
 
-  // Persistir tabs/sesión como Chrome (sobrevive a cerrar pestaña/panel/app)
+  // Persistir tabs/sesión como Chrome (solo con tabbar interno visible)
   useEffect(() => {
+    if (hideTabBar) return
     try { localStorage.setItem(BROWSER_TABS_KEY, JSON.stringify(tabs.slice(0, 20))) } catch {}
-  }, [tabs])
+  }, [tabs, hideTabBar])
   useEffect(() => {
+    if (hideTabBar) return
     try { localStorage.setItem(BROWSER_ACTIVE_KEY, activeTabId) } catch {}
-  }, [activeTabId])
+  }, [activeTabId, hideTabBar])
 
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   useOutsideClick(dropdownRef, () => setShowTuneDropdown(false), showTuneDropdown)
@@ -325,8 +345,23 @@ export const BrowserPanel = memo(function BrowserPanel({
     if (activeTab) {
       setInputUrl(activeTab.url)
       setHasError(false)
+      if (activeTab.url) {
+        onUrlChange?.(activeTab.url)
+      }
     }
-  }, [activeTabId, activeTab])
+  }, [activeTabId, activeTab, onUrlChange])
+
+  // hideTabBar: navegador es un único viewport controlado por el TabBar externo.
+  // Sincronizar solo cuando cambia initialUrl por switch de pestaña externa, no tras navegación interna (navigateTab).
+  useEffect(() => {
+    if (!hideTabBar) return
+    if (!initialUrl) return
+    if (prevInitialUrlRef.current === initialUrl) return
+    prevInitialUrlRef.current = initialUrl
+    setTabs([{ id: "tab-1", url: initialUrl, title: formatDisplayTitle(initialUrl), history: [initialUrl], historyIdx: 0 }])
+    setActiveTabId("tab-1")
+    setInputUrl(initialUrl)
+  }, [initialUrl, hideTabBar])
 
   useEffect(() => { try { localStorage.setItem("opencode.browser.minimal", minimal ? "1" : "0") } catch {} }, [minimal])
 
@@ -709,9 +744,10 @@ export const BrowserPanel = memo(function BrowserPanel({
     }
   }, [navigateTab, inspectMode, onToggleInspectTool])
 
-  const handleAddTab = () => {
+  const handleAddTab = useCallback((eOrUrl?: string | React.MouseEvent) => {
+    const url = typeof eOrUrl === 'string' ? eOrUrl : undefined
     const newId = `tab-${Date.now().toString(36)}`
-    const defaultUrl = homeUrl
+    const defaultUrl = url || homeUrl
     const newTab: BrowserTabItem = {
       id: newId,
       url: defaultUrl,
@@ -721,7 +757,9 @@ export const BrowserPanel = memo(function BrowserPanel({
     }
     setTabs((prev) => [...prev, newTab])
     setActiveTabId(newId)
-  }
+  }, [homeUrl])
+
+
 
   const handleCloseTab = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
@@ -895,9 +933,11 @@ export const BrowserPanel = memo(function BrowserPanel({
         requestAnimationFrame(() => findInputRef.current?.focus()); return
       }
       if (modifier && key === "t") {
+        if (hideTabBar) return
         e.preventDefault(); e.stopPropagation(); handleAddTab(); return
       }
       if (modifier && key === "w") {
+        if (hideTabBar) return
         e.preventDefault(); e.stopPropagation()
         if (activeTab) handleCloseTab(e as unknown as React.MouseEvent, activeTab.id)
         return
@@ -935,10 +975,10 @@ export const BrowserPanel = memo(function BrowserPanel({
     >
       {/* Minimal toggle floating */}
       {minimal && (
-        <button type="button" onClick={() => setMinimal(false)} title="Mostrar barra (F11)" aria-label="Mostrar barra" style={{ position: "absolute", top: 6, right: 8, zIndex: 5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "var(--muted)", cursor: "pointer" }}>⛶ Mostrar</button>
+        <button type="button" onClick={() => setMinimal(false)} title="Mostrar barra (F11)" aria-label="Mostrar barra" style={{ position: "absolute", top: 6, right: 8, zIndex: 5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "var(--muted)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}><MaximizeIcon size={12} /> Mostrar</button>
       )}
-      {/* 1. Chrome-like Tab Bar on Top (Preserves tabs styling) */}
-      {!minimal && (
+      {/* 1. Chrome-like Tab Bar on Top (pestañas nativas del navegador) */}
+      {!minimal && !hideTabBar && (
       <div className="browser-tabbar">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId
@@ -965,7 +1005,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                 title="Cerrar pestaña"
                 aria-label="Cerrar pestaña"
               >
-                ×
+                <CloseIcon size={10} />
               </button>
             </div>
           )
@@ -995,7 +1035,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             title="Atrás"
             aria-label="Atrás"
           >
-            ←
+            <span style={{ transform: "rotate(90deg)", display: "inline-flex" }}><ChevronIcon size={14} /></span>
           </button>
           <button
             type="button"
@@ -1005,7 +1045,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             title="Adelante"
             aria-label="Adelante"
           >
-            →
+            <span style={{ transform: "rotate(-90deg)", display: "inline-flex" }}><ChevronIcon size={14} /></span>
           </button>
           <button
             type="button"
@@ -1017,7 +1057,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             <RefreshIcon size={14} />
           </button>
           <button type="button" className="browser-nav-btn" onClick={handleHome} title="Inicio (Google)" aria-label="Inicio">
-            <span style={{ fontSize: 14 }}>⌂</span>
+            <GlobeIcon size={14} />
           </button>
           <button
             type="button"
@@ -1061,8 +1101,8 @@ export const BrowserPanel = memo(function BrowserPanel({
             </svg>
           </button>
 
-          <span className={isSecure ? "browser-addr-lock" : "browser-addr-warn"} title={isSecure ? "Conexión segura (HTTPS)" : "No seguro (HTTP)"} style={{ display: "inline-flex", flexShrink: 0 }}>
-            {isSecure ? "🔒" : "⚠"}
+          <span className={isSecure ? "browser-addr-lock" : "browser-addr-warn"} title={isSecure ? "Conexión segura (HTTPS)" : "No seguro (HTTP)"} style={{ display: "inline-flex", flexShrink: 0, color: isSecure ? "var(--success)" : "var(--warning)" }}>
+            {isSecure ? <CheckIcon size={12} /> : <CloseIcon size={12} />}
           </span>
           <div style={{ position: "relative", flex: 1, minWidth: 0, display: "flex", alignItems: "center" }}>
             <input
@@ -1076,7 +1116,7 @@ export const BrowserPanel = memo(function BrowserPanel({
               placeholder="Buscá en Google o escribí una URL"
             />
             {inputUrl && (
-              <button type="button" onClick={() => setInputUrl("")} title="Borrar" aria-label="Borrar" style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: "0 4px" }}>×</button>
+              <button type="button" onClick={() => setInputUrl("")} title="Borrar" aria-label="Borrar" style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: "0 4px", display: "inline-flex" }}><CloseIcon size={10} /></button>
             )}
             {(showHistory || suggestions.length > 0) && (
               <div ref={histRef} className="browser-suggest-dropdown">
@@ -1190,7 +1230,7 @@ export const BrowserPanel = memo(function BrowserPanel({
 
           <div className="browser-omnibox-actions">
             <button type="button" className={`browser-tune-btn${isBookmarked ? " browser-star-on" : ""}`} onClick={toggleBookmark} title={isBookmarked ? "Quitar favorito" : "Agregar a favoritos"} aria-label="Favorito">
-              <span style={{ fontSize: 14 }}>{isBookmarked ? "★" : "☆"}</span>
+              <span style={{ fontSize: 14 }}>{isBookmarked ? "*" : "☆"}</span>
             </button>
             <button type="button" className="browser-tune-btn browser-utility-secondary" onClick={handleCopyUrl} title="Copiar URL" aria-label="Copiar URL">
               <span style={{ fontSize: 12 }}>⧉</span>
@@ -1239,7 +1279,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                 ×
               </button>
             )}
-            <button type="button" className="browser-tune-btn browser-utility-secondary" onClick={() => setMinimal((v) => !v)} title={minimal ? "Mostrar barra" : "Modo minimalista (F11)"} aria-label="Minimal">⛶</button>
+            <button type="button" className="browser-tune-btn browser-utility-secondary" onClick={() => setMinimal((v) => !v)} title={minimal ? "Mostrar barra" : "Modo minimalista (F11)"} aria-label="Minimal">Expand</button>
             <button
               type="button"
               className="browser-tune-btn browser-utility-secondary"

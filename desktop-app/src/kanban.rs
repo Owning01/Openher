@@ -55,7 +55,14 @@ impl KanbanStore {
     fn save(&self) {
         let _ = std::fs::create_dir_all(crate::state::data_dir());
         if let Ok(d) = self.data.read() {
-            let _ = std::fs::write(path(), serde_json::to_string_pretty(&*d).unwrap_or_default());
+            let p = path();
+            let tmp = p.with_extension("json.tmp");
+            let data = serde_json::to_string_pretty(&*d).unwrap_or_default();
+            if std::fs::write(&tmp, &data).is_ok() {
+                let _ = std::fs::rename(&tmp, &p);
+            } else {
+                let _ = std::fs::write(&p, &data);
+            }
         }
     }
 

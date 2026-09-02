@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["desktop-app", "opencode-stats"]
+members = ["desktop-app", "skill-project/opencode-stats"]
 
 [workspace.package]
 version = "0.1.0"

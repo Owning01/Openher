@@ -274,27 +274,27 @@ fn find_element_once(name: &str) -> Option<(i32,i32,i32,i32)> {
         use std::sync::Mutex;
         static FOUND: Mutex<Option<(i32,i32,i32,i32)>> = Mutex::new(None);
         static TARGET: Mutex<String> = Mutex::new(String::new());
-        *TARGET.lock().unwrap() = name.to_lowercase();
+        *TARGET.lock().unwrap_or_else(|e| e.into_inner()) = name.to_lowercase();
         unsafe extern "system" fn enum_proc(hwnd: HWND, _: LPARAM) -> BOOL {
             if IsWindowVisible(hwnd)==0 { return 1; }
             let mut buf = [0u16; 512];
             let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
             if len > 0 {
                 let s = String::from_utf16_lossy(&buf[..len as usize]).to_lowercase();
-                let target = TARGET.lock().unwrap().clone();
+                let target = TARGET.lock().unwrap_or_else(|e| e.into_inner()).clone();
                 if s.contains(&target) {
                     let mut r = RECT{left:0,top:0,right:0,bottom:0};
                     if GetWindowRect(hwnd, &mut r) != 0 {
-                        *FOUND.lock().unwrap() = Some((r.left, r.top, r.right - r.left, r.bottom - r.top));
+                        *FOUND.lock().unwrap_or_else(|e| e.into_inner()) = Some((r.left, r.top, r.right - r.left, r.bottom - r.top));
                         return 0;
                     }
                 }
             }
             1
         }
-        *FOUND.lock().unwrap() = None;
+        *FOUND.lock().unwrap_or_else(|e| e.into_inner()) = None;
         EnumWindows(Some(enum_proc), 0);
-        *FOUND.lock().unwrap()
+        *FOUND.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 #[cfg(not(windows))]
@@ -308,24 +308,24 @@ pub fn list_windows(filter: Option<String>) -> Vec<(String,i32,i32,i32,i32)> {
         use std::sync::Mutex;
         static OUT: Mutex<Vec<(String,i32,i32,i32,i32)>> = Mutex::new(Vec::new());
         static FILT: Mutex<Option<String>> = Mutex::new(None);
-        *FILT.lock().unwrap() = filter.map(|s| s.to_lowercase());
-        *OUT.lock().unwrap() = Vec::new();
+        *FILT.lock().unwrap_or_else(|e| e.into_inner()) = filter.map(|s| s.to_lowercase());
+        *OUT.lock().unwrap_or_else(|e| e.into_inner()) = Vec::new();
         unsafe extern "system" fn enum2(hwnd: HWND, _: LPARAM) -> BOOL {
             if IsWindowVisible(hwnd)==0 { return 1; }
             let mut buf=[0u16;512];
             let len=GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
             if len>0 {
                 let s=String::from_utf16_lossy(&buf[..len as usize]);
-                if let Some(ref f)=*FILT.lock().unwrap(){ if !s.to_lowercase().contains(f) { return 1; } }
+                if let Some(ref f)=*FILT.lock().unwrap_or_else(|e| e.into_inner()){ if !s.to_lowercase().contains(f) { return 1; } }
                 let mut r=RECT{left:0,top:0,right:0,bottom:0};
                 if GetWindowRect(hwnd,&mut r)!=0 {
-                    OUT.lock().unwrap().push((s, r.left, r.top, r.right - r.left, r.bottom - r.top));
+                    OUT.lock().unwrap_or_else(|e| e.into_inner()).push((s, r.left, r.top, r.right - r.left, r.bottom - r.top));
                 }
             }
             1
         }
         EnumWindows(Some(enum2),0);
-        OUT.lock().unwrap().clone()
+        OUT.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 }
 #[cfg(not(windows))]

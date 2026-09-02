@@ -208,36 +208,12 @@ export function useHostActions({
   const handleOpenBrowser = useCallback(
     (url: string, targetPanel?: number) => {
       if (isDesktop) {
-        if (typeof targetPanel === "number") {
-          openBrowserAsTab(url, targetPanel)
-          return
-        }
-        const allBrowserTabs: Array<{ panelIdx: number; tabId: string }> = []
-        tabStacks?.forEach((stack, pIdx) => {
-          stack.forEach((id) => {
-            if (id.startsWith("browser:")) allBrowserTabs.push({ panelIdx: pIdx, tabId: id })
-          })
-        })
-        if (allBrowserTabs.length > 0) {
-          const first = allBrowserTabs[0]!
-          setDesktopLayout((prev: any) => ({
-            ...prev,
-            browserTabUrls: { ...(prev.browserTabUrls ?? {}), [first.tabId]: url },
-          }))
-          setDesktopLayout((prev: any) => {
-            const sessions = [...prev.sessions]
-            sessions[first.panelIdx] = first.tabId
-            return { ...prev, sessions }
-          })
-          setActivePanel(first.panelIdx)
-          return
-        }
-        openBrowserAsTab(url)
+        openBrowserAsTab(url, targetPanel)
       } else {
         window.open(url, "_blank")
       }
     },
-    [isDesktop, tabStacks, openBrowserAsTab, setActivePanel, setDesktopLayout]
+    [isDesktop, openBrowserAsTab]
   )
 
   return {

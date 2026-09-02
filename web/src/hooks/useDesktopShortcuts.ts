@@ -12,6 +12,7 @@ export interface UseDesktopShortcutsOptions {
   maximizedPanel: number | null
   switchTab: (panel: number, index: number) => void
   closePanel: (panel: number) => void
+  removeTab?: (panel: number, index: number) => void
   splitPanel: (panel: number, direction: "right" | "bottom") => void
   toggleMaximize: (panel: number) => void
   setMaximizedPanel: (panel: number | null) => void
@@ -33,6 +34,7 @@ export function useDesktopShortcuts({
   maximizedPanel,
   switchTab,
   closePanel,
+  removeTab,
   splitPanel,
   toggleMaximize,
   setMaximizedPanel,
@@ -82,14 +84,49 @@ export function useDesktopShortcuts({
 
       const isEditableTarget = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement)?.isContentEditable
 
-      // 2. Close split (permitido incluso en inputs para salir rapido)
+      // 2. Cerrar pestaña activa (Ctrl+W) — solo la visible, no todo el split.
+      // Antes llamaba closePanel(activePanel) y borraba todas las pestañas del panel.
+      // Guard Zero Data Loss: si el foco está en un input/textarea/contentEditable
+      // con texto, no cerrar — evita perder el borrador del Composer por reflejo.
       const closeSc = shortcuts.find((s: ShortcutItem) => s.id === "close_split" && s.enabled)
       if (closeSc && matchesShortcut(e, closeSc.keys)) {
+        if (isEditableTarget) {
+          const el = e.target as HTMLInputElement | HTMLTextAreaElement | HTMLElement
+          const val = (el as HTMLInputElement).value ?? (el as HTMLElement).innerText ?? ""
+          // Si hay texto en el input, no cerrar; si está vacío, permitir cerrar pestaña
+          if (typeof val === "string" && val.trim().length > 0) return
+          // Para contentEditable vacío también bloquear si tiene foco activo del composer
+          const ae = document.activeElement as HTMLElement | null
+          if (ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT" || ae.isContentEditable)) {
+            // Si el composer tiene contenido (localStorage), bloquear igual — chequeo defensivo
+            try {
+              const composerKeys = ["opencode.remote.composer", `composer-${desktopLayout.sessions[activePanel] ?? ""}`]
+              for (const k of composerKeys) {
+                const v = localStorage.getItem(k)
+                if (v && v.trim().length > 0) return
+              }
+            } catch {}
+          }
+        }
         e.preventDefault()
         e.stopPropagation()
         if (maximizedPanel !== null) { setMaximizedPanel(null); return }
-        if (desktopLayout.cols > 1 || desktopLayout.rows > 1 || desktopLayout.sessions.some((s: string | null) => s !== null)) {
-          closePanel(activePanel)
+        const stack = tabStacks?.[activePanel]
+        const sid = desktopLayout.sessions[activePanel]
+        if (stack && stack.length > 0) {
+          const idx = sid ? stack.indexOf(sid) : -1
+          const targetIdx = idx >= 0 ? idx : stack.length - 1
+          if (removeTab) {
+            removeTab(activePanel, targetIdx)
+          } else {
+            // fallback si no hay removeTab inyectado
+            closePanel(activePanel)
+          }
+        } else {
+          // Panel sin tabs (explorer/editor vacío, quickchat, etc.) → cierra el split
+          if (desktopLayout.cols > 1 || desktopLayout.rows > 1 || desktopLayout.sessions.some((s: string | null) => s !== null)) {
+            closePanel(activePanel)
+          }
         }
         return
       }
@@ -185,6 +222,7 @@ export function useDesktopShortcuts({
     maximizedPanel,
     switchTab,
     closePanel,
+    removeTab,
     splitPanel,
     toggleMaximize,
     setMaximizedPanel,

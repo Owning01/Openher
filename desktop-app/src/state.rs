@@ -2,7 +2,137 @@
 //! autostart, ayuda JSON).
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::{Arc, RwLock};
+
+pub static WINDOW_HWND: AtomicIsize = AtomicIsize::new(0);
+
+#[derive(Clone, Copy, Debug)]
+pub enum WindowAction {
+    Drag,
+    Minimize,
+    MaximizeToggle,
+    Close,
+}
+
+static WINDOW_ACTION_FN: std::sync::OnceLock<Arc<dyn Fn(WindowAction) + Send + Sync>> =
+    std::sync::OnceLock::new();
+
+pub fn set_window_action_handler(f: Arc<dyn Fn(WindowAction) + Send + Sync>) {
+    let _ = WINDOW_ACTION_FN.set(f);
+}
+
+pub fn request_window_action(a: WindowAction) -> bool {
+    if let Some(f) = WINDOW_ACTION_FN.get() {
+        f(a);
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(windows)]
+pub fn window_is_maximized() -> bool {
+    let h = WINDOW_HWND.load(Ordering::Relaxed);
+    if h == 0 {
+        return false;
+    }
+    unsafe { windows_sys::Win32::UI::WindowsAndMessaging::IsZoomed(h as *mut core::ffi::c_void) != 0 }
+}
+
+#[cfg(windows)]
+pub fn window_minimize() {
+    if request_window_action(WindowAction::Minimize) {
+        return;
+    }
+    let h = WINDOW_HWND.load(Ordering::Relaxed);
+    if h == 0 {
+        return;
+    }
+    unsafe {
+        windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
+            h as *mut core::ffi::c_void,
+            6, // SW_MINIMIZE
+        );
+    }
+}
+
+#[cfg(windows)]
+pub fn window_maximize_toggle() {
+    if request_window_action(WindowAction::MaximizeToggle) {
+        return;
+    }
+    let h = WINDOW_HWND.load(Ordering::Relaxed);
+    if h == 0 {
+        return;
+    }
+    unsafe {
+        let is_max = windows_sys::Win32::UI::WindowsAndMessaging::IsZoomed(h as *mut core::ffi::c_void) != 0;
+        if is_max {
+            windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
+                h as *mut core::ffi::c_void,
+                9, // SW_RESTORE
+            );
+        } else {
+            windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
+                h as *mut core::ffi::c_void,
+                3, // SW_MAXIMIZE
+            );
+        }
+    }
+}
+
+#[cfg(windows)]
+pub fn window_close() {
+    if request_window_action(WindowAction::Close) {
+        return;
+    }
+    let h = WINDOW_HWND.load(Ordering::Relaxed);
+    if h == 0 {
+        return;
+    }
+    unsafe {
+        windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(
+            h as *mut core::ffi::c_void,
+            0x0010, // WM_CLOSE
+            0,
+            0,
+        );
+    }
+}
+
+#[cfg(windows)]
+pub fn window_drag() {
+    if request_window_action(WindowAction::Drag) {
+        return;
+    }
+    let h = WINDOW_HWND.load(Ordering::Relaxed);
+    if h == 0 {
+        return;
+    }
+    unsafe {
+        windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture();
+        windows_sys::Win32::UI::WindowsAndMessaging::SendMessageW(
+            h as *mut core::ffi::c_void,
+            0x00A1, // WM_NCLBUTTONDOWN
+            2,      // HTCAPTION
+            0,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+pub fn window_is_maximized() -> bool {
+    false
+}
+#[cfg(not(windows))]
+pub fn window_minimize() {}
+#[cfg(not(windows))]
+pub fn window_maximize_toggle() {}
+#[cfg(not(windows))]
+pub fn window_close() {}
+#[cfg(not(windows))]
+pub fn window_drag() {}
 
 use serde::{Deserialize, Serialize};
 
@@ -195,7 +325,14 @@ pub fn load_config() -> ShellConfig {
 
 pub fn save_config(cfg: &ShellConfig) {
     let _ = std::fs::create_dir_all(data_dir());
-    let _ = std::fs::write(config_path(), serde_json::to_string_pretty(cfg).unwrap_or_default());
+    let path = config_path();
+    let tmp = path.with_extension("json.tmp");
+    let data = serde_json::to_string_pretty(cfg).unwrap_or_default();
+    if std::fs::write(&tmp, &data).is_ok() {
+        let _ = std::fs::rename(&tmp, &path);
+    } else {
+        let _ = std::fs::write(&path, &data);
+    }
 }
 
 pub fn load_persisted() -> PersistedState {
@@ -209,7 +346,14 @@ pub fn load_persisted() -> PersistedState {
 
 pub fn save_persisted(s: &PersistedState) {
     let _ = std::fs::create_dir_all(data_dir());
-    let _ = std::fs::write(state_path(), serde_json::to_string_pretty(s).unwrap_or_default());
+    let path = state_path();
+    let tmp = path.with_extension("json.tmp");
+    let data = serde_json::to_string_pretty(s).unwrap_or_default();
+    if std::fs::write(&tmp, &data).is_ok() {
+        let _ = std::fs::rename(&tmp, &path);
+    } else {
+        let _ = std::fs::write(&path, &data);
+    }
 }
 
 /// Geometría de la ventana (posición + tamaño en lógico) persistida entre
@@ -231,7 +375,14 @@ pub fn load_window_geometry() -> Option<WindowGeometry> {
 
 pub fn save_window_geometry(g: &WindowGeometry) {
     let _ = std::fs::create_dir_all(data_dir());
-    let _ = std::fs::write(geometry_path(), serde_json::to_string_pretty(g).unwrap_or_default());
+    let path = geometry_path();
+    let tmp = path.with_extension("json.tmp");
+    let data = serde_json::to_string_pretty(g).unwrap_or_default();
+    if std::fs::write(&tmp, &data).is_ok() {
+        let _ = std::fs::rename(&tmp, &path);
+    } else {
+        let _ = std::fs::write(&path, &data);
+    }
 }
 
 /// Raíz de docs de opencode: config -> env -> checkout local del repo.

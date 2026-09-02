@@ -289,6 +289,17 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+.pcf-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.pcf-back-btn {
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
 .pcf-tree-container {
   flex: 1;
   min-height: 0;

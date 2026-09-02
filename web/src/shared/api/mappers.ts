@@ -128,6 +128,11 @@ export type V2Message = {
   tokens?: import("../../types").TokenUsage
   cost?: number
   text?: string
+  summary?: string
+  recent?: string
+  status?: string
+  reason?: string
+  description?: string
   content?: Array<{
     id?: string
     type?: string
@@ -154,13 +159,32 @@ export function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
     state: c.state as MessageEnvelope["parts"][number]["state"],
     time: c.time ? { start: c.time.created, end: c.time.completed } : undefined,
   }))
-  // v2 user messages store text at top-level `text` (no `content` array) — e.g. {type:"user", text:"hola"}
-  // El mapper previo creaba parts vacío y el mensaje se filtraba en rendered.ts (sin texto).
+  // v2 compaction/system/shell no usan `content` — exponen `summary`/`text`/`recent`/`output` a nivel raíz.
+  // Sin esto el mensaje quedaba con parts vacío y se filtraba en rendered.ts → chat vacío tras compact.
   if (parts.length === 0) {
-    const rawAny = raw as unknown as { text?: unknown; contentText?: unknown }
-    const topText = typeof rawAny.text === "string" ? rawAny.text : typeof rawAny.contentText === "string" ? rawAny.contentText : ""
-    if (topText) {
-      parts = [{ id: `${raw.id}_part_0`, sessionID: raw.sessionID, type: "text", text: topText } as unknown as MessageEnvelope["parts"][number]]
+    const rawAny = raw as unknown as { text?: unknown; summary?: unknown; recent?: unknown; description?: unknown; output?: unknown; contentText?: unknown; command?: unknown }
+    if (raw.type === "compaction") {
+      const compText = (typeof rawAny.summary === "string" && rawAny.summary) ? rawAny.summary
+        : (typeof rawAny.text === "string" && rawAny.text) ? rawAny.text
+        : (typeof rawAny.recent === "string" && rawAny.recent) ? rawAny.recent
+        : (typeof rawAny.description === "string" && rawAny.description) ? rawAny.description : ""
+      if (compText) {
+        parts = [{ id: `${raw.id}_part_0`, sessionID: raw.sessionID, type: "compaction", text: compText } as unknown as MessageEnvelope["parts"][number]]
+      } else {
+        // Compaction sin summary (failed) → placeholder para que el mensaje no desaparezca y el spinner se apague
+        parts = [{ id: `${raw.id}_part_0`, sessionID: raw.sessionID, type: "compaction", text: raw.status === "failed" ? `Compaction failed${(raw as any).error ? `: ${(raw as any).error}` : ""}` : "Compacted" } as unknown as MessageEnvelope["parts"][number]]
+      }
+    } else if (raw.type === "system" || raw.type === "synthetic" || raw.type === "skill") {
+      const t = (typeof rawAny.text === "string" && rawAny.text) ? rawAny.text : (typeof rawAny.description === "string" && rawAny.description) ? rawAny.description : ""
+      if (t) parts = [{ id: `${raw.id}_part_0`, sessionID: raw.sessionID, type: "text", text: t } as unknown as MessageEnvelope["parts"][number]]
+    } else if (raw.type === "shell") {
+      const t = (typeof rawAny.output === "string" && rawAny.output) ? rawAny.output : (typeof rawAny.command === "string" && rawAny.command) ? rawAny.command : (typeof rawAny.text === "string" && rawAny.text) ? rawAny.text : ""
+      if (t) parts = [{ id: `${raw.id}_part_0`, sessionID: raw.sessionID, type: "text", text: t } as unknown as MessageEnvelope["parts"][number]]
+    } else {
+      const topText = typeof rawAny.text === "string" ? rawAny.text : typeof rawAny.contentText === "string" ? rawAny.contentText : ""
+      if (topText) {
+        parts = [{ id: `${raw.id}_part_0`, sessionID: raw.sessionID, type: "text", text: topText } as unknown as MessageEnvelope["parts"][number]]
+      }
     }
   }
   return {

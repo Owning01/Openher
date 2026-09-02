@@ -65,6 +65,7 @@ export function usePolling(
 
     function schedule() {
       if (!mounted) return
+      if (timerRef.current) clearInterval(timerRef.current)
       const delay = streamActive ? intervalMs : (failCountRef.current > 0 ? computeDelay() : intervalMs)
       timerRef.current = setInterval(tick, delay)
     }

@@ -1,0 +1,249 @@
+/* styles/titlebar.css — Antigravity DESIGN.md compliant titlebar with Chrome-style tabs & native Windows controls */
+
+.titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 38px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 0 0 10px;
+  background: var(--bg, #09090b);
+  border-bottom: 1px solid var(--border, #222226);
+  z-index: 99999;
+  user-select: none;
+  -webkit-user-select: none;
+  box-sizing: border-box;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: var(--primary, #6366f1);
+  -webkit-app-region: drag;
+  app-region: drag;
+  margin-right: 6px;
+}
+
+.titlebar-brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.titlebar-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  height: 100%;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  gap: 4px;
+  padding-top: 4px;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  scrollbar-width: none;
+}
+
+.titlebar-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.titlebar-tab {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  height: 33px;
+  max-width: 220px;
+  min-width: 90px;
+  padding: 0 10px;
+  border-radius: var(--radius-md, 6px) var(--radius-md, 6px) 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted, #a1a1aa);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  position: relative;
+  user-select: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  box-sizing: border-box;
+}
+
+.titlebar-tab:hover {
+  background: var(--surface-hover, #18181c);
+  color: var(--text, #f4f4f5);
+}
+
+.titlebar-tab.is-active {
+  background: var(--surface, #121215);
+  color: var(--text, #f4f4f5);
+  border-color: var(--border, #222226);
+  border-bottom-color: var(--surface, #121215);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.titlebar-tab-icon {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.titlebar-tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.titlebar-tab-busy-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary, #6366f1);
+  flex-shrink: 0;
+  animation: pulse-busy 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse-busy {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.titlebar-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: none !important;
+  background: transparent !important;
+  color: var(--muted, #a1a1aa);
+  cursor: pointer;
+  margin-left: 2px;
+  opacity: 0.6;
+  transition: all 0.12s;
+  padding: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.titlebar-tab:hover .titlebar-tab-close {
+  opacity: 0.85;
+}
+
+.titlebar-tab-close:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  opacity: 1;
+}
+
+.titlebar-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: none !important;
+  background: transparent !important;
+  color: var(--muted, #a1a1aa);
+  cursor: pointer;
+  margin-bottom: 2px;
+  margin-left: 2px;
+  transition: all 0.12s ease;
+  padding: 0;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.titlebar-add-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+/* ===== Controles estándar de Windows (Sin borde ni background por defecto) ===== */
+.win-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 100%;
+  flex-shrink: 0;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 38px;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  color: var(--muted, #a1a1aa) !important;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  outline: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.win-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.win-btn:active {
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+.win-btn-close:hover {
+  background: #e81123 !important;
+  color: #ffffff !important;
+}
+
+.win-btn-close:active {
+  background: #bf0f1d !important;
+  color: #ffffff !important;
+}
+
+/* Espacio en el contenedor principal para la barra fija superior */
+html[data-frameless="true"] body,
+html[data-desktop="true"] body {
+  padding-top: 38px;
+  box-sizing: border-box;
+}
+
+html[data-frameless="true"] .app-shell,
+html[data-desktop="true"] .app-shell {
+  height: calc(100dvh - 38px);
+}
+
+.app-shell.has-titlebar {
+  padding-top: 0;
+}

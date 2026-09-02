@@ -375,10 +375,8 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    /* El ancho del texto se controla con --chat-max-width (Settings → Chat →
-       Ancho del texto): el padding del contenedor es fijo. */
-    padding: var(--space-3);
-    gap: var(--space-3);
+    padding: 0;
+    gap: 0;
   }
 
   .app-desktop-content > .panel {

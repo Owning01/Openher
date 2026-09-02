@@ -9,7 +9,7 @@ import { createCustomProvider } from "../providers/custom"
 import type { QuickChatProviderId } from "../providers/types"
 import type { ModelOption, ProviderInfo } from "../types"
 import { Markdown } from "./Markdown"
-import { BrainIcon, SettingsIcon, TrashIcon } from "../Icons"
+import { BrainIcon, SettingsIcon, TrashIcon, CloseIcon } from "../Icons"
 import { useDialog } from "./DialogProvider"
 import "../styles/quickchat.css"
 
@@ -351,7 +351,7 @@ export function QuickChatPanel({
             <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
                Configuración de Chat Rápido
             </span>
-            <button className="btn-icon compact" onClick={() => setShowConfig(false)}></button>
+            <button className="btn-icon compact" onClick={() => setShowConfig(false)}><CloseIcon size={12} /></button>
           </div>
 
           {/* Selector de Proveedor y Modelo dentro de la ruedita */}
