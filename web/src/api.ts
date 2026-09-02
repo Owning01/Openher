@@ -369,16 +369,17 @@ export const api = {
     const safeLimit = Math.min(limit, 200)
     try {
       const client = await getOpencodeClient(config)
-      // prefer session.context; fallback to message.list
+      // Probar múltiples variantes del client — el nombre exacto varía entre betas v2
       let res: unknown
-      try {
-        res = await (client as any).session.context({ sessionID })
-      } catch {}
-      if (!res) {
-        try {
-          res = await (client as any).message.list({ sessionID, limit: safeLimit })
-        } catch {}
+      const tryCall = async (fn: unknown, args: unknown) => {
+        if (typeof fn !== "function") return undefined
+        try { return await (fn as any)(args) } catch { return undefined }
       }
+      res = await tryCall((client as any).session?.context, { sessionID })
+      if (!res) res = await tryCall((client as any).session?.messages, { sessionID, limit: safeLimit })
+      if (!res) res = await tryCall((client as any).session?.getMessages, { sessionID, limit: safeLimit })
+      if (!res) res = await tryCall((client as any).message?.list, { sessionID, limit: safeLimit })
+      if (!res) res = await tryCall((client as any).message?.listMessages, { sessionID, limit: safeLimit })
       const rawList: unknown = Array.isArray(res) ? res : (res as any)?.data ?? res
       if (Array.isArray(rawList)) {
         const mapped = (rawList as any[]).map((m: any) => {
@@ -402,7 +403,17 @@ export const api = {
             } as MessageEnvelope
           }
         }) as MessageEnvelope[]
-        if (mapped) {
+        if (mapped && mapped.length > 0) {
+          return mapped.map((mm) => ({
+            ...mm,
+            info: { ...mm.info, sessionID: mm.info?.sessionID || sessionID },
+            parts: (mm.parts ?? []).map((p) => ({ ...p, sessionID: (p as any).sessionID ?? mm.info?.sessionID ?? sessionID })),
+          }))
+        }
+        // Si el client devolvió array vacío, no retornar — dejar que el fallback HTTP lo intente (puede tener datos con otro dialecto)
+        if (Array.isArray(rawList) && rawList.length === 0) {
+          // continuar a HTTP fallback
+        } else if (mapped) {
           return mapped.map((mm) => ({
             ...mm,
             info: { ...mm.info, sessionID: mm.info?.sessionID || sessionID },
@@ -411,9 +422,23 @@ export const api = {
         }
       }
     } catch {}
-    const raw = await request<MessageEnvelope[] | V2Message[]>(config, withDirectory(`/session/${sessionID}/message?limit=${safeLimit}`, directory), {
-      readTimeout: 12_000,
-    })
+    // HTTP fallback: probar v1 path primero, luego v2 alternativo si 404
+    let raw: MessageEnvelope[] | V2Message[] | null = null
+    try {
+      raw = await request<MessageEnvelope[] | V2Message[]>(config, withDirectory(`/session/${sessionID}/message?limit=${safeLimit}`, directory), {
+        readTimeout: 12_000,
+      })
+    } catch (e) {
+      const msg = String((e as Error).message || "")
+      if (/404|not found/i.test(msg)) {
+        try {
+          raw = await request<MessageEnvelope[] | V2Message[]>(config, withLocationDirectory(`/session/${sessionID}/message?limit=${safeLimit}`, directory), {
+            readTimeout: 12_000,
+          })
+        } catch {}
+      }
+      if (!raw) throw e
+    }
     const list = resolveApiVersion(config) === "v2" ? (raw as V2Message[]).map(toMessageEnvelopeV1) : (raw as MessageEnvelope[])
     return (list ?? []).map((m) => ({
       ...m,

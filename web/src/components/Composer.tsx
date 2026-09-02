@@ -1,11 +1,12 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
-import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon, BrainIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
-import type { AgentOption, CommandInfo, PromptSnippet, ServerConfig } from "../types"
+import type { AgentOption, CommandInfo, PromptSnippet, ServerConfig, ModelOption } from "../types"
 import { ImageEditor } from "./ImageEditor"
 import { PluginSlot } from "../plugins"
+import { ModelSelectorModal } from "./ModelSelectorModal"
 
 type ImageAttachment = { id: string; base64: string; mime: string; name: string }
 
@@ -105,6 +106,14 @@ type ComposerProps = {
   onThemeCommand?: () => void
   snippets?: PromptSnippet[]
   charLimit?: number
+  activeModelOption?: ModelOption | null
+  activeModelVariants?: ModelOption[]
+  selectedVariant?: string | null
+  onChangeVariant?: (variant: string | null, sessionID?: string) => void
+  modelOptions?: ModelOption[]
+  onChangeModel?: (key: string, variant?: string | null, sessionID?: string) => void
+  variantGroups?: { recentModels: ModelOption[]; groups: Map<string, any> }
+  sessionID?: string
 }
 
 let imgId = 0
@@ -119,7 +128,35 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "connect", description: "Connect providers (API keys, OpenAI-compatible)", source: "command" },
 ]
 
-export const Composer = memo(function Composer({ value, commands, onChange, onSend, onShellSend, onAbort, disabled, isWorking, isSending = false, activeAgentID, primaryAgentOptions, allAgentOptions, onChangeAgent, contextLabel, config, directory, onThemeCommand, snippets = [], charLimit = 0 }: ComposerProps) {
+export const Composer = memo(function Composer({
+  value,
+  commands,
+  onChange,
+  onSend,
+  onShellSend,
+  onAbort,
+  disabled,
+  isWorking,
+  isSending = false,
+  activeAgentID,
+  primaryAgentOptions,
+  allAgentOptions,
+  onChangeAgent,
+  contextLabel,
+  config,
+  directory,
+  onThemeCommand,
+  snippets = [],
+  charLimit = 0,
+  activeModelOption,
+  activeModelVariants,
+  selectedVariant,
+  onChangeVariant,
+  modelOptions,
+  onChangeModel,
+  variantGroups,
+  sessionID,
+}: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const [showAtMenu, setShowAtMenu] = useState(false)
@@ -127,6 +164,9 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const [tslEnabled, setTslEnabled] = useState(false)
   const [atIndex, setAtIndex] = useState(0)
   const [showSnippetMenu, setShowSnippetMenu] = useState(false)
+  const [showModelMenu, setShowModelMenu] = useState(false)
+  const modelMenuRef = useRef<HTMLDivElement | null>(null)
+  const modelToggleRef = useRef<HTMLButtonElement | null>(null)
   const snippetMenuRef = useRef<HTMLDivElement | null>(null)
   const snippetToggleRef = useRef<HTMLButtonElement | null>(null)
   const [editingImage, setEditingImage] = useState<ImageAttachment | null>(null)
@@ -326,11 +366,12 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   const isShellMode = localValue.startsWith("!")
 
   const insertSnippet = useCallback((s: PromptSnippet) => {
-    const prefix = localValue && !localValue.endsWith("\n") ? `${localValue}\n` : localValue
+    const cur = localValueRef.current ?? ""
+    const prefix = cur && !cur.endsWith("\n") ? `${cur}\n` : cur
     handleChange(prefix + s.text)
     setShowSnippetMenu(false)
     if (composerRef.current) composerRef.current.querySelector("textarea")?.focus()
-  }, [localValue, handleChange])
+  }, [handleChange])
 
   const pushHistory = useCallback((text: string) => {
     const h = promptHistoryRef.current
@@ -341,14 +382,15 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [])
 
   const selectMention = useCallback((item: MentionItem) => {
-    const cleaned = localValue.replace(/(?:^|\s)@\w*$/, `@${item.name} `)
+    const cur = localValueRef.current ?? ""
+    const cleaned = cur.replace(/(?:^|\s)@\w*$/, `@${item.name} `)
     handleChange(cleaned)
     setShowAtMenu(false)
     if (item.source === "agent" && composerRef.current) {
       onChangeAgent(item.id)
     }
     if (composerRef.current) composerRef.current.querySelector("textarea")?.focus()
-  }, [localValue, handleChange, onChangeAgent])
+  }, [handleChange, onChangeAgent])
 
   const selectSlashCommand = useCallback((cmd: CommandInfo) => {
     handleChange(`/${cmd.name} `)
@@ -424,7 +466,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     } else if (!supported) {
       showMicNotice(t('voice.unavailable'))
     } else {
-      prefixRef.current = localValue
+      prefixRef.current = localValueRef.current ?? ""
       start((text) => handleChange(prefixRef.current + (prefixRef.current && text ? " " : "") + text))
         .catch((err: unknown) => {
           stop()
@@ -434,7 +476,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
             : (err as Error)?.message ?? t('voice.unavailable'))
         })
     }
-  }, [isListening, stop, supported, start, handleChange, localValue, showMicNotice, t])
+  }, [isListening, stop, supported, start, handleChange, showMicNotice, t])
 
   useEffect(() => {
     return () => {
@@ -466,13 +508,21 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
   }, [])
 
   const handleSendWithImages = useCallback(async () => {
-    if (disabled) return
-    const domText = textareaRef.current?.value ?? ""
-    const textToSend = domText.length >= (localValueRef.current?.length ?? 0)
-      ? domText
-      : (localValueRef.current || localValue)
+    if (disabled || isSending) return
+    if (isWorking) {
+      showMicNotice(t('composer.busy') || "Espera a que termine la respuesta anterior")
+      return
+    }
+    // Fuente de verdad: localValueRef (actualizada sincrónicamente en handleChange).
+    // El fallback al DOM causaba duplicados: cuando el DOM aún reflejaba el
+    // valor anterior (controlled component con render pendiente), la comparación
+    // por longitud elegía el texto viejo si tenía igual o mayor longitud.
+    const textToSend = localValueRef.current ?? ""
     if (!textToSend.trim() && images.length === 0) return
-    if (charLimit > 0 && textToSend.length > charLimit) return
+    if (charLimit > 0 && textToSend.length > charLimit) {
+      showMicNotice(t('composer.limitExceeded') || `Límite ${charLimit} caracteres excedido (${textToSend.length}/${charLimit})`)
+      return
+    }
     const opts = tslEnabled ? { translate: true } : undefined
     const imgs = images.length > 0 ? images : undefined
 
@@ -493,7 +543,7 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       if (textareaRef.current) textareaRef.current.value = textToSend
       pushNow(textToSend)
     }
-  }, [onSend, images, resizeTextarea, disabled, localValue, tslEnabled, pushNow])
+  }, [onSend, images, resizeTextarea, disabled, isSending, isWorking, charLimit, tslEnabled, pushNow, showMicNotice, t])
 
   const isCommandValid = useMemo(() => {
     if (!localValue.startsWith("/")) return false
@@ -522,13 +572,14 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (handleSlashKeys(e)) return
+    const cur = localValueRef.current
 
     if (e.key === "ArrowUp" && !showSlashMenu && !showAtMenu && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
       const h = promptHistoryRef.current
       if (h.length === 0) return
       const idx = historyIndexRef.current
-      if (idx === -1 && !localValue) { e.preventDefault(); historyIndexRef.current = 0; handleChange(h[0]) }
-      else if (idx === -1 && localValue) { e.preventDefault(); setHistoryDraft(localValue); historyIndexRef.current = 0; handleChange(h[0]) }
+      if (idx === -1 && !cur) { e.preventDefault(); historyIndexRef.current = 0; handleChange(h[0]) }
+      else if (idx === -1 && cur) { e.preventDefault(); setHistoryDraft(cur); historyIndexRef.current = 0; handleChange(h[0]) }
       else if (idx + 1 < h.length) { e.preventDefault(); historyIndexRef.current = idx + 1; handleChange(h[idx + 1]) }
       return
     }
@@ -541,21 +592,22 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       return
     }
 
-    if (isShellMode) {
+    const curIsShell = cur.startsWith("!")
+    if (curIsShell) {
       if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu) {
         if (isMobileInput) return
         e.preventDefault()
-        const cmd = localValue.slice(1).trim()
-        if (cmd && onShellSend) { pushHistory(localValue); historyIndexRef.current = -1; setHistoryDraft(null); onShellSend(cmd) }
+        const cmd = cur.slice(1).trim()
+        if (cmd && onShellSend) { pushHistory(cur); historyIndexRef.current = -1; setHistoryDraft(null); onShellSend(cmd) }
       }
       return
     }
 
-    if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu && localValue.trim().startsWith("/theme")) {
+    if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu && cur.trim().startsWith("/theme")) {
       if (isMobileInput) return
       e.preventDefault()
       handleChange("")
-      pushHistory(localValue)
+      pushHistory(cur)
       historyIndexRef.current = -1; setHistoryDraft(null)
       onThemeCommand?.()
       return
@@ -564,11 +616,11 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     if (e.key === "Enter" && !e.shiftKey && !showSlashMenu && !showAtMenu) {
       if (isMobileInput || isSending) return
       e.preventDefault()
-      if (localValue.trim()) pushHistory(localValue)
+      if (cur.trim()) pushHistory(cur)
       historyIndexRef.current = -1; setHistoryDraft(null)
       handleSendWithImages()
     }
-  }, [localValue, showSlashMenu, showAtMenu, isShellMode, onShellSend, pushHistory, handleChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput, isSending])
+  }, [showSlashMenu, showAtMenu, onShellSend, pushHistory, handleChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput, isSending])
 
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const dragDepthRef = useRef(0)
@@ -613,10 +665,11 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
     // 2. Elemento arrastrado desde el panel Explorador interno o pestañas
     const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
     if (path) {
-      const sep = localValue ? (localValue.endsWith(" ") ? "" : " ") : ""
-      handleChange(localValue + sep + path)
+      const cur = localValueRef.current ?? ""
+      const sep = cur ? (cur.endsWith(" ") ? "" : " ") : ""
+      handleChange(cur + sep + path)
     }
-  }, [localValue, handleChange, addImage])
+  }, [handleChange, addImage])
 
   return (
     <div className={`composer${isCommandValid ? " composer-command-mode" : ""}${isShellMode ? " composer-shell-mode" : ""}`} ref={composerRef}>
@@ -789,6 +842,57 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
+          {activeModelOption && (
+            <div className="composer-model-wrap" ref={modelMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+              <button
+                ref={modelToggleRef}
+                type="button"
+                className="composer-model-pill"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowModelMenu((v) => !v)
+                }}
+                aria-expanded={showModelMenu}
+                aria-haspopup="true"
+                title={`${activeModelOption.modelName ?? t('detail.modelLoading')}${activeModelOption.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}
+              >
+                <BrainIcon size={13} className="composer-model-icon" />
+                <span className="composer-model-name">
+                  {activeModelOption.modelName ?? t('detail.modelLoading')}
+                  {activeModelOption.variant ? <span className="composer-model-variant"> · {activeModelOption.variant}</span> : ""}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.6 }}>
+                  <path d="M2.5 3.5L5 6L7.5 3.5" />
+                </svg>
+              </button>
+              {showModelMenu && (
+                <ModelSelectorModal
+                  isOpen={showModelMenu}
+                  onClose={() => {
+                    setShowModelMenu(false)
+                    modelToggleRef.current?.focus()
+                  }}
+                  activeModelOption={activeModelOption}
+                  activeModelVariants={activeModelVariants ?? []}
+                  selectedVariant={selectedVariant ?? null}
+                  onChangeVariant={(v) => onChangeVariant?.(v, sessionID)}
+                  modelOptions={modelOptions}
+                  onChangeModel={(key, variant) => {
+                    onChangeModel?.(key, variant, sessionID)
+                  }}
+                  variantGroups={variantGroups as any}
+                />
+              )}
+            </div>
+          )}
+          {primaryVisibleAgents.length > 1 && (
+            <button onClick={handleToggleAgent} disabled={disabled}
+              className="agent-toggle"
+              title={`Agente activo: ${primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID} (click para cambiar)`}
+              style={{ color: `var(--agent-${agentColorIdx})`, border: "none", outline: "none", background: "transparent", padding: "0 4px" } as React.CSSProperties}>
+              <span>{primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
+            </button>
+          )}
           {snippets.length > 0 && (
             <button onClick={() => setShowSnippetMenu((v) => !v)} disabled={disabled}
               ref={snippetToggleRef}
@@ -813,14 +917,6 @@ export const Composer = memo(function Composer({ value, commands, onChange, onSe
           >
             TSL
           </button>
-          {primaryVisibleAgents.length > 1 && (
-            <button onClick={handleToggleAgent} disabled={disabled}
-              className="agent-toggle"
-              title={`Agente activo: ${primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID} (click para cambiar)`}
-              style={{ color: `var(--agent-${agentColorIdx})`, border: "none", outline: "none", background: "transparent", padding: "0 4px" } as React.CSSProperties}>
-              <span>{primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
-            </button>
-          )}
           <PluginSlot id="composer.actions" />
           {contextLabel && <span className="context-usage-label">{contextLabel}</span>}
         </div>

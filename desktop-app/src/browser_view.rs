@@ -31,7 +31,7 @@ pub const WEBVIEW_BROWSER_ARGS: &str =
      --no-first-run --no-default-browser-check --disable-component-update \
      --disable-hang-monitor \
      --disable-ipc-flooding-protection --disable-popup-blocking \
-     --disable-prompt-on-repost";
+     --disable-prompt-on-repost --enable-features=msWebView2EnableDraggableRegions,PartitionedCookies";
 
 /// Comando enviado desde el thread HTTP al main thread para crear/manipular
 /// el sub-WebView.
@@ -74,11 +74,13 @@ pub struct SubWebViewInner {
     pub webview: Option<WebView>,
     pub url: String,
     pub visible: bool,
+    pub shortcut_events: Arc<std::sync::Mutex<Vec<String>>>,
 }
 
 /// Manager que despacha comandos al main thread vía canal.
 pub struct SubWebViewManager {
     pub tx: Sender<BrowserCommand>,
+    shortcut_events: Arc<std::sync::Mutex<Vec<String>>>,
     /// Despierta el event loop de winit tras encolar un comando: sin esto,
     /// con ControlFlow::Wait y app idle, rx.recv() del main thread no corre
     /// y el request HTTP queda colgado hasta que llegue cualquier evento del OS.
@@ -90,7 +92,17 @@ impl SubWebViewManager {
     /// HTTP thread si el main thread está saturado procesando comandos).
     pub fn new() -> (Self, Receiver<BrowserCommand>) {
         let (tx, rx) = bounded(32);
-        (Self { tx, waker: std::sync::Mutex::new(None) }, rx)
+        let shortcut_events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        (Self { tx, shortcut_events, waker: std::sync::Mutex::new(None) }, rx)
+    }
+
+    pub fn shortcut_events(&self) -> Arc<std::sync::Mutex<Vec<String>>> {
+        Arc::clone(&self.shortcut_events)
+    }
+
+    pub fn drain_shortcuts(&self) -> Vec<String> {
+        let mut events = self.shortcut_events.lock().unwrap_or_else(|e| e.into_inner());
+        std::mem::take(&mut *events)
     }
 
     pub fn set_waker(&self, f: Arc<dyn Fn() + Send + Sync>) {
@@ -262,6 +274,16 @@ fn cmd_open(
         )
         // Permitir reproducción automática (YouTube, música, etc.) sin gesto del usuario.
         .with_autoplay(true)
+        .with_initialization_script(BROWSER_SHORTCUT_SCRIPT)
+        .with_ipc_handler({
+            let events = Arc::clone(&inner.shortcut_events);
+            move |request| {
+                let mut queue = events.lock().unwrap_or_else(|e| e.into_inner());
+                if queue.len() < 64 {
+                    queue.push(request.body().clone());
+                }
+            }
+        })
         // DEBE ser idéntico al del WebView principal (ver WEBVIEW_BROWSER_ARGS):
         // comparten WebContext y un mismatch cuelga la creación del controller.
         .with_additional_browser_args(WEBVIEW_BROWSER_ARGS)
@@ -274,8 +296,48 @@ fn cmd_open(
     inner.webview = Some(wv);
     inner.url = url.to_string();
     inner.visible = true;
+    #[cfg(windows)]
+    {
+        let hwnd = crate::state::WINDOW_HWND.load(std::sync::atomic::Ordering::Relaxed);
+        if hwnd != 0 {
+            unsafe { crate::patch_child_windows(hwnd); }
+            let hwnd2 = hwnd;
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(350));
+                unsafe { crate::patch_child_windows(hwnd2); }
+            });
+        }
+    }
     Ok(())
 }
+
+const BROWSER_SHORTCUT_SCRIPT: &str = r#"
+(function () {
+  if (window.__openherBrowserShortcuts) return;
+  window.__openherBrowserShortcuts = true;
+  document.addEventListener('keydown', function (e) {
+    var key = String(e.key || '').toLowerCase();
+    var mod = !!(e.ctrlKey || e.metaKey);
+    var action = null;
+    if (e.key === 'F5' || (mod && key === 'r')) action = 'reload';
+    else if (mod && key === 'l') action = 'focus-url';
+    else if (mod && key === 'f') action = 'find';
+    else if (mod && key === 't') action = 'new-tab';
+    else if (mod && key === 'w') action = 'close-tab';
+    else if (mod && key === 'd') action = 'bookmark';
+    else if (mod && key === '0') action = 'zoom-reset';
+    else if (mod && (key === '+' || key === '=')) action = 'zoom-in';
+    else if (mod && (key === '-' || key === '_')) action = 'zoom-out';
+    else if (e.altKey && e.key === 'ArrowLeft') action = 'back';
+    else if (e.altKey && e.key === 'ArrowRight') action = 'forward';
+    else if (mod && e.shiftKey && key === 'b') action = 'toggle-chrome';
+    if (!action || !window.chrome || !window.chrome.webview) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.chrome.webview.postMessage(JSON.stringify({ type: 'browser-shortcut', action: action }));
+  }, true);
+})();
+"#;
 
 fn cmd_bounds(inner: &mut SubWebViewInner, bounds: Rect) -> Result<(), String> {
     if let Some(wv) = &inner.webview {

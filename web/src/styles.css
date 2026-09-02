@@ -23,6 +23,7 @@
 @import "./styles/composer.css";
 @import "./styles/modals.css";
 @import "./styles/desktop.css";
+@import "./styles/titlebar.css";
 @import "./styles/shell.css";
 @import "./styles/browser.css";
 @import "./styles/pc-files.css";

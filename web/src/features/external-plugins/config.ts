@@ -3,6 +3,7 @@ export type ExternalProject = {
   title: string
   description: string
   icon: string
+  iconKind?: "paint" | "play" | "camera" | "code" | "layers"
   port: number | null
   url: string
   dir: string
@@ -14,7 +15,8 @@ export const EXTERNAL_PROJECTS: ExternalProject[] = [
     name: "opendesign",
     title: "Open Design",
     description: "OpenDesign — nexu-io/open-design",
-    icon: "◈",
+    icon: "OD",
+    iconKind: "paint",
     port: 3000,
     url: "http://127.0.0.1:3000",
     dir: "G:\\Proyectos\\open-design",
@@ -23,7 +25,8 @@ export const EXTERNAL_PROJECTS: ExternalProject[] = [
     name: "vioeditor",
     title: "VioEditor",
     description: "Editor de video — Vite + Tauri",
-    icon: "🎬",
+    icon: "V",
+    iconKind: "play",
     port: 1420,
     url: "http://127.0.0.1:1420",
     dir: "G:\\Proyectos\\17-vioeditor\\aplicacion",
@@ -32,9 +35,28 @@ export const EXTERNAL_PROJECTS: ExternalProject[] = [
     name: "screenshots",
     title: "Screenshots",
     description: "App Store Screenshots — Next.js",
-    icon: "📸",
+    icon: "S",
+    iconKind: "camera",
     port: 3002,
     url: "http://127.0.0.1:3002",
     dir: "G:\\Proyectos\\0 screenshots",
+  },
+]
+
+export type BuiltinPlugin = {
+  key: string
+  title: string
+  description: string
+  iconKind: "code" | "paint" | "play" | "camera" | "layers"
+  group: "herramientas" | "externos"
+}
+
+export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
+  {
+    key: "openher:css-playground",
+    title: "CSS Visual Playground",
+    description: "Playground visual 8-Progavio — flex/absolute, exporta CSS",
+    iconKind: "code",
+    group: "herramientas",
   },
 ]

@@ -23,6 +23,7 @@ import {
   SplitIcon,
   EyeIcon,
   PencilIcon,
+  ArrowLeftIcon,
 } from "../../Icons"
 import { shell, type FsEntry, type CodeSearchResult } from "../../shell"
 import { useT } from "../../i18n-context"
@@ -57,6 +58,19 @@ function blobToBase64(blob: Blob): Promise<string> {
     reader.onerror = reject
     reader.readAsDataURL(blob)
   })
+}
+
+function getParentPath(p: string | null): string | null {
+  if (!p) return null
+  const trimmed = p.replace(/[\\/]+$/, "")
+  if (!trimmed) return null
+  if (/^[a-zA-Z]:$/.test(trimmed)) return null
+  const lastSlash = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"))
+  if (lastSlash < 0) return null
+  const parent = trimmed.slice(0, lastSlash)
+  if (!parent) return trimmed.startsWith("/") ? "/" : null
+  if (/^[a-zA-Z]:$/.test(parent)) return `${parent}\\`
+  return parent || null
 }
 
 export const PCFilesPanel = memo(function PCFilesPanel({
@@ -536,6 +550,9 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     return parts[parts.length - 1] || cleaned
   }, [cwd])
 
+  const parentPath = useMemo(() => getParentPath(cwd), [cwd])
+  const canGoBack = !!parentPath && !!cwd
+
   const qLower = query.trim().toLowerCase()
   const filteredDirs = qLower ? dirs.filter((d) => d.name.toLowerCase().includes(qLower)) : dirs
   const filteredFiles = qLower ? files.filter((f) => f.name.toLowerCase().includes(qLower)) : files
@@ -547,6 +564,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     const parts = cleaned.split(/[/\\]/)
     return parts[parts.length - 1] || cleaned
   }, [secondPane.cwd])
+  const secondParentPath = useMemo(() => getParentPath(secondPane.cwd), [secondPane.cwd])
+  const secondCanGoBack = !!secondParentPath && !!secondPane.cwd
   const secondFilteredDirs = qLower
     ? secondPane.dirs.filter((d) => d.name.toLowerCase().includes(qLower))
     : secondPane.dirs
@@ -735,8 +754,18 @@ export const PCFilesPanel = memo(function PCFilesPanel({
             style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}
             onClick={() => setActivePane("first")}
           >
-          {/* 2. Sección del proyecto / Workspace: ⌄ nombre-proyecto + 4 botones */}
+          {/* 2. Sección del proyecto / Workspace: ← volver + ⌄ nombre-proyecto + 5 botones */}
           <div className="pcf-workspace-header">
+            <button
+              type="button"
+              className="pcf-action-btn pcf-back-btn"
+              title={canGoBack ? `Volver a ${parentPath}` : "No hay carpeta anterior"}
+              aria-label="Volver a la carpeta anterior"
+              disabled={!canGoBack}
+              onClick={() => parentPath && load(parentPath)}
+            >
+              <ArrowLeftIcon size={14} />
+            </button>
             <div
               className="pcf-workspace-title"
               onClick={() => setRootExpanded((v) => !v)}
@@ -964,6 +993,16 @@ export const PCFilesPanel = memo(function PCFilesPanel({
               onClick={() => setActivePane("second")}
             >
               <div className="pcf-workspace-header">
+                <button
+                  type="button"
+                  className="pcf-action-btn pcf-back-btn"
+                  title={secondCanGoBack ? `Volver a ${secondParentPath}` : "No hay carpeta anterior"}
+                  aria-label="Volver a la carpeta anterior"
+                  disabled={!secondCanGoBack}
+                  onClick={() => secondParentPath && secondPane.load(secondParentPath)}
+                >
+                  <ArrowLeftIcon size={14} />
+                </button>
                 <div
                   className="pcf-workspace-title"
                   onClick={() => secondPane.cwd && secondPane.load(secondPane.cwd)}

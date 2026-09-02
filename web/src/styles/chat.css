@@ -524,33 +524,33 @@
 
 .scroll-to-bottom {
   position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 20px;
+  right: 28px;
   z-index: var(--z-dropdown);
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  border: 1px solid var(--primary);
-  background: var(--surface);
-  color: var(--primary);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #18181c;
+  color: #a1a1aa;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.2s, transform 0.2s, box-shadow 0.2s;
+  transition: opacity 0.2s, transform 0.2s, background 0.2s, color 0.2s;
 }
 
 .scroll-to-bottom:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  transform: translateX(-50%) scale(1.12);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  background: #27272a;
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.6);
 }
 
 .scroll-to-bottom:active {
-  transform: translateX(-50%) scale(0.95);
+  transform: scale(0.95);
 }
 
 
@@ -1423,100 +1423,235 @@
 .tool-parts {
   display: var(--chat-tool-vis, flex);
   flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.5rem;
+  gap: 2px;
+  margin: 4px 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  align-items: flex-start;
 }
 
-
-/* ===== Tool Parts / Tool Calls ===== */
+/* ===== Tool Parts / Tool Calls (Antigravity ADE Minimal Rows) ===== */
 .tool-part {
   border: none;
-  border-radius: 0;
+  border-radius: 4px;
   overflow: hidden;
+  background: transparent;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .tool-part-toggle {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 6px;
   width: 100%;
-  padding: 0.3rem 0.5rem;
+  max-width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0 4px;
   border: none;
-  min-height: 0;
+  border-radius: 4px;
   background: transparent;
-  color: var(--muted);
-  font-size: 0.8rem;
+  color: #9ca3af;
+  font-size: 13px;
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s;
+  justify-content: flex-start;
+  transition: background 0.12s ease;
+  user-select: none;
+  overflow: hidden;
 }
 
 .tool-part-toggle:hover {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tool-part-verb {
+  flex: 0 0 auto;
+  color: #9ca3af;
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.tool-file-atom {
+  color: #38bdf8;
+  font-weight: bold;
+  font-size: 13px;
+  margin: 0 2px;
+  flex: 0 0 auto;
+}
+
+.tool-file-brackets {
+  color: #38bdf8;
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 13px;
+  margin: 0 2px;
+  flex: 0 0 auto;
+}
+
+.tool-file-default {
+  color: #9ca3af;
+  margin: 0 2px;
+  flex: 0 0 auto;
+}
+
+.tool-part-target {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.tool-target-text {
+  color: #f4f4f5;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tool-target-line {
+  color: #71717a;
+  font-size: 12px;
+  margin-left: 4px;
+  font-family: monospace;
+  flex: 0 0 auto;
+}
+
+.tool-target-meta {
+  color: #71717a;
+  font-size: 12px;
+  margin-left: 6px;
+  flex: 0 0 auto;
+}
+
+.tool-diff-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  font-size: 12px;
+  font-family: monospace;
+  flex: 0 0 auto;
+}
+
+.tool-diff-add {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.tool-diff-del {
+  color: #ef4444;
+  font-weight: 600;
 }
 
 .tool-part-icon {
   flex: 0 0 auto;
-  font-size: 0.875rem;
-  opacity: 0.7;
-}
-
-.tool-part-label {
-  flex: 1 1 auto;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  opacity: 0.8;
-  display: flex;
-  align-items: baseline;
-  gap: 0.25rem;
-  overflow: hidden;
-}
-
-.tool-part-arg {
-  font-weight: 400;
-  opacity: 0.6;
-  font-size: 0.875rem;
-  text-transform: none;
-  letter-spacing: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 180px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .tool-part-chevron {
   flex: 0 0 auto;
-  font-size: 0.85rem;
-  opacity: 0.6;
+  font-size: 11px;
+  color: #71717a;
+  margin-left: 6px;
 }
 
 .tool-part-body {
-  border-top: none;
+  margin: 4px 0 8px 0;
+  padding: 8px 12px;
+  background: #09090b;
+  border: 1px solid #222226;
+  border-radius: 6px;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .tool-part-pre {
   margin: 0;
-  padding: 0.5rem;
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  line-height: 1.4;
+  padding: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  color: #f4f4f5;
   white-space: pre-wrap;
   word-break: break-word;
-  background: transparent;
-  color: var(--code-text);
-  overflow-x: auto;
-  max-height: 300px;
+  max-height: 350px;
   overflow-y: auto;
 }
 
-.tool-result .tool-part-toggle {
-  color: var(--success);
+/* ===== Thinking Block (Ultra-Minimalist Text Button) ===== */
+.thinking-block {
+  margin: 4px 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
-.tool-call .tool-part-toggle {
-  color: var(--primary);
+.thinking-minimal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 2px;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  user-select: none;
+}
+
+.thinking-minimal-btn:hover {
+  background: transparent !important;
+  color: #f4f4f5;
+}
+
+.thinking-minimal-text {
+  font-size: 13px;
+}
+
+.thinking-minimal-chevron {
+  font-size: 11px;
+  color: #71717a;
+  margin-left: 2px;
+}
+
+.thinking-content {
+  margin-top: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid #3f3f46;
+  border-radius: 0 4px 4px 0;
+}
+
+.thinking-text {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #888888;
+  white-space: pre-wrap;
+  margin: 0;
 }
 
 /* ===== Diff badges + view (cambios de archivo) ===== */

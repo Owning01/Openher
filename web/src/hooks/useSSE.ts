@@ -109,10 +109,18 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
         const eventID = typeof event.id === "string" ? event.id : ""
         if (eventID) {
           if (seenEventIDsRef.current.has(eventID)) return
-          seenEventIDsRef.current.set(eventID, Date.now())
-          // El stream no ofrece replay por cursor; aun así, algunos proxies
-          // repiten los últimos frames al reconectar. Mantener una ventana
-          // acotada evita duplicar deltas sin crecer con la sesión.
+          const now = Date.now()
+          seenEventIDsRef.current.set(eventID, now)
+          // TTL 5min + cap 2000: evita leak en sesiones largas (8h, 50k eventos)
+          // Purga entries expirados antes de cap por tamaño
+          if (seenEventIDsRef.current.size > 1000) {
+            const cutoff = now - 5 * 60 * 1000
+            for (const [id, ts] of seenEventIDsRef.current) {
+              if (ts < cutoff) seenEventIDsRef.current.delete(id)
+              else break // Map mantiene inserción ordenada — el resto es más reciente
+              if (seenEventIDsRef.current.size <= 1500) break
+            }
+          }
           if (seenEventIDsRef.current.size > 2000) {
             const oldest = seenEventIDsRef.current.keys().next().value
             if (oldest !== undefined) seenEventIDsRef.current.delete(oldest)
@@ -143,7 +151,11 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
             // NOTA: SOLO las tarjetas 'task'/'subagent' pertenecen al padre. Las tools internas (read, bash, etc.)
             // pertenecen a la sesión hija y NO deben inyectarse en el chat del padre.
             const isSubagentTaskPart = event.type === "message.part.updated" &&
-              !!partObj && (partObj.tool === "task" || partObj.tool === "subagent" || !!(partObj.state as Record<string, unknown>)?.input)
+              !!partObj && (
+                partObj.tool === "task" || partObj.tool === "subagent" ||
+                !!((partObj.state as Record<string, unknown>)?.input as Record<string, unknown>)?.subagent_type ||
+                !!((partObj.state as Record<string, unknown>)?.metadata as Record<string, unknown>)?.subagent
+              )
             if (!isSubagentTaskPart) {
               const evtSession = (props.sessionID ?? nested?.sessionID ?? partObj?.sessionID) as string | undefined
               if (typeof evtSession === "string" && evtSession !== visible) return
@@ -235,7 +247,7 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
       }
     }
     return () => { mountedRef.current = false }
-  }, [Boolean(config), config?.host, config?.port, config?.username, config?.password, clearHeartbeat, connect, directory, versionTick])
+  }, [Boolean(config), config?.host, config?.port, config?.username, config?.password, clearHeartbeat, connect, directory, sessionID, versionTick])
 
   const reconnect = useCallback(() => {
     reconnectAttemptRef.current = 0

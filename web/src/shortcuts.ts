@@ -29,8 +29,8 @@ export const DEFAULT_SHORTCUTS: ShortcutItem[] = [
   {
     id: "close_split",
     keys: "Ctrl + W",
-    label: "Cerrar panel / split activo",
-    category: "splits",
+    label: "Cerrar pestaña activa",
+    category: "tabs",
     enabled: true,
     isDefault: true,
   },

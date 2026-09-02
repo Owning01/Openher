@@ -272,46 +272,6 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           </header>
         )}
 
-        {message.text && (
-          <div className="message-content">
-            {!message.info.time.completed && message.text.length > 800 ? (
-              <pre className="md-plain-stream">{message.text}</pre>
-            ) : (
-              <Markdown text={message.text} highlight={highlight} />
-            )}
-          </div>
-        )}
-
-        {message.info.error && (
-          <div className="message-error" role="alert">
-            <strong>{message.info.error.name || "Server error"}</strong>
-            {message.info.error.message && <span>{message.info.error.message}</span>}
-          </div>
-        )}
-
-        <TranslationOriginal messageId={message.info.id} />
-
-        {message.parts.filter((p) => !!getPartImageData(p)).map((p) => {
-          const src = getPartImageData(p)
-          if (!src) return null
-          return (
-            <div key={p.id} className="message-image-wrap">
-              <img src={src} alt="" className="message-image" loading="lazy"
-                onClick={() => setLightboxSrc(src)} />
-            </div>
-          )
-        })}
-
-        {showConfirm && (
-          <div className="undo-confirm">
-            <span className="undo-confirm-text">{t('detail.revertToHere')}?</span>
-            <div className="undo-confirm-actions">
-              <button type="button" className="undo-confirm-yes" onClick={handleConfirmUndo}>{t('session.undo')}</button>
-              <button type="button" className="undo-confirm-no" onClick={handleCancelUndo}>{t('session.cancel')}</button>
-            </div>
-          </div>
-        )}
-
         {(() => {
           const hasThinking = !!message.thinkingParts && message.thinkingParts.length > 0
           const hasTools = message.toolParts.length > 0
@@ -414,6 +374,46 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           )
         })()
         }
+
+        {message.text && (
+          <div className="message-content">
+            {!message.info.time.completed && message.text.length > 800 ? (
+              <pre className="md-plain-stream">{message.text}</pre>
+            ) : (
+              <Markdown text={message.text} highlight={highlight} />
+            )}
+          </div>
+        )}
+
+        {message.info.error && (
+          <div className="message-error" role="alert">
+            <strong>{message.info.error.name || "Server error"}</strong>
+            {message.info.error.message && <span>{message.info.error.message}</span>}
+          </div>
+        )}
+
+        <TranslationOriginal messageId={message.info.id} />
+
+        {message.parts.filter((p) => !!getPartImageData(p)).map((p) => {
+          const src = getPartImageData(p)
+          if (!src) return null
+          return (
+            <div key={p.id} className="message-image-wrap">
+              <img src={src} alt="" className="message-image" loading="lazy"
+                onClick={() => setLightboxSrc(src)} />
+            </div>
+          )
+        })}
+
+        {showConfirm && (
+          <div className="undo-confirm">
+            <span className="undo-confirm-text">{t('detail.revertToHere')}?</span>
+            <div className="undo-confirm-actions">
+              <button type="button" className="undo-confirm-yes" onClick={handleConfirmUndo}>{t('session.undo')}</button>
+              <button type="button" className="undo-confirm-no" onClick={handleCancelUndo}>{t('session.cancel')}</button>
+            </div>
+          </div>
+        )}
 
         {isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || duration || tokensPerSecond || message.info.finish === "aborted") && (
           <div className="message-footer">

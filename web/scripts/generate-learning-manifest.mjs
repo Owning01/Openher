@@ -39,6 +39,7 @@ const CATEGORY_META = {
   "06-Operaciones": { title: "Operaciones", level: 4, description: "Operación como equipo: purple team, infraestructura, reportes." },
   "07-Agentes-IA": { title: "Agentes IA", level: 2, description: "Hacking y defensa con agentes IA — sin escribir código, agentes especializados." },
   "08-Papers": { title: "Papers", level: 2, description: "Papers fundacionales y actuales de IA, agentes, harness, memoria y evaluación — lo esencial destilado." },
+  "09-Harnesses-JIT": { title: "Harnesses JIT", level: 3, description: "Harnesses Just-In-Time, WikiSkill y síntesis de arnés — de AOT a Model-as-a-Harness (SOTA 2026)." },
   "99-Prompt-Injection": { title: "Prompt Injection", level: 4, description: "Técnicas de manipulación de LLMs — estudio defensivo." },
 }
 
@@ -61,6 +62,8 @@ const PAPERS_META = {
   "04-Memoria": "Memoria & Context",
   "05-Evaluacion": "Evaluación & Benchmarks",
   "06-Skills": "Skills & JIT",
+  "07-Seguridad": "Seguridad & MCP",
+  "08-Observabilidad": "Observabilidad & OTel",
 }
 
 /** Extrae título del primer heading # del markdown */
@@ -182,7 +185,7 @@ for (const { abs, src } of filesWithSource) {
 for (const [, arr] of grouped) arr.sort((a, b) => a.originalPath.localeCompare(b.originalPath))
 
 // Orden global de categorías
-const order = ["00-Fundamentos", "01-Herramientas", "02-Web-y-Apps", "03-Sistemas", "04-Post-Explotacion", "05-Especializacion", "06-Operaciones", "07-Agentes-IA", "08-Papers", "99-Prompt-Injection"]
+const order = ["00-Fundamentos", "01-Herramientas", "02-Web-y-Apps", "03-Sistemas", "04-Post-Explotacion", "05-Especializacion", "06-Operaciones", "07-Agentes-IA", "08-Papers", "09-Harnesses-JIT", "99-Prompt-Injection"]
 const categories = order.filter((c) => grouped.has(c)).map((c) => ({
   id: c,
   ...CATEGORY_META[c],

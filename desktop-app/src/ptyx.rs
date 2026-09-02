@@ -167,14 +167,7 @@ impl PtyRegistry {
     pub fn write(&self, id: &str, data: &[u8]) -> Result<(), String> {
         let map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get(id).ok_or("pty no existe")?;
-        // try_lock con timeout corto para no bloquear 4848 si el writer está ocupado
-        let mut w = match s.writer.try_lock() {
-            Ok(g) => g,
-            Err(_) => {
-                std::thread::sleep(Duration::from_millis(15));
-                s.writer.lock().unwrap_or_else(|e| e.into_inner())
-            }
-        };
+        let mut w = s.writer.lock().unwrap_or_else(|e| e.into_inner());
         match w.as_mut() {
             Some(w) => w.write_all(data).map_err(|e| e.to_string()),
             None => Err("pty cerrado".into()),
@@ -184,13 +177,7 @@ impl PtyRegistry {
     pub fn resize_px(&self, id: &str, cols: u16, rows: u16, pixel_width: u16, pixel_height: u16) -> Result<(), String> {
         let map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get(id).ok_or("pty no existe")?;
-        let m = match s.master.try_lock() {
-            Ok(g) => g,
-            Err(_) => {
-                std::thread::sleep(Duration::from_millis(10));
-                s.master.lock().unwrap_or_else(|e| e.into_inner())
-            }
-        };
+        let m = s.master.lock().unwrap_or_else(|e| e.into_inner());
         match m.as_ref() {
             Some(m) => m
                 .resize(PtySize {

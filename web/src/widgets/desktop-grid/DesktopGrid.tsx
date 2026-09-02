@@ -416,6 +416,7 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
           onNavigateSettings={onNavigateSettings}
           onToggleInspectTool={onToggleInspectTool}
           onBrowserVisualPick={onBrowserVisualPick}
+          onSetDesktopLayout={onSetDesktopLayout}
         />
       </div>
     )

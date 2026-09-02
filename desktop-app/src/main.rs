@@ -35,7 +35,7 @@ use std::time::Duration;
 
 use state::AppState;
 use tiny_http::Server;
-use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
+use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows, WebViewExtWindows};
 
 fn split_cmd(cmd: &str) -> Vec<String> {
     let mut res = Vec::new();
@@ -156,6 +156,213 @@ enum AppEvent {
     /// para que about_to_wait bombee la cola (sin esto, con ControlFlow::Wait
     /// y app idle, el request quedaba colgado hasta un evento del OS).
     BrowserWork,
+    WindowAction(crate::state::WindowAction),
+}
+
+#[cfg(windows)]
+static ORIG_WNDPROC: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
+#[cfg(windows)]
+static CHILD_WNDPROCS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<isize, isize>>> =
+    std::sync::OnceLock::new();
+
+#[cfg(windows)]
+fn child_map() -> &'static std::sync::Mutex<std::collections::HashMap<isize, isize>> {
+    CHILD_WNDPROCS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn child_frameless_wndproc(
+    hwnd: *mut core::ffi::c_void,
+    msg: u32,
+    wparam: usize,
+    lparam: isize,
+) -> isize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CallWindowProcW, DefWindowProcW, GetAncestor, GetWindowRect, IsZoomed, WM_NCHITTEST,
+    };
+    const GA_ROOT: u32 = 2;
+    const WM_NCHITTEST_VAL: u32 = WM_NCHITTEST;
+    const WM_NCCALCSIZE: u32 = 0x0083;
+    const HTTRANSPARENT: isize = -1;
+    if msg == WM_NCCALCSIZE && wparam == 1 {
+        return 0;
+    }
+    if msg == WM_NCHITTEST_VAL {
+        let root = GetAncestor(hwnd, GA_ROOT);
+        if !root.is_null() && IsZoomed(root) == 0 {
+            let x = (lparam & 0xFFFF) as i16 as i32;
+            let y = ((lparam >> 16) & 0xFFFF) as i16 as i32;
+            let mut rect = std::mem::zeroed::<windows_sys::Win32::Foundation::RECT>();
+            if GetWindowRect(root, &mut rect) != 0 {
+                let border: i32 = 10;
+                let left = rect.left;
+                let right = rect.right;
+                let top = rect.top;
+                let bottom = rect.bottom;
+                // Si el cursor está en el borde del frame del top-level, devolver
+                // HTTRANSPARENT para que el hit test caiga en el padre y sea él
+                // quien inicie el resize (resizing un child no mueve la ventana).
+                let on_border = y < top + border
+                    || y >= bottom - border
+                    || x < left + border
+                    || x >= right - border;
+                if on_border {
+                    return HTTRANSPARENT;
+                }
+            }
+        }
+    }
+    let orig = child_map()
+        .lock()
+        .ok()
+        .and_then(|m| m.get(&(hwnd as isize)).copied())
+        .unwrap_or(0);
+    if orig != 0 {
+        return CallWindowProcW(
+            Some(std::mem::transmute::<isize, unsafe extern "system" fn(*mut core::ffi::c_void, u32, usize, isize) -> isize>(orig)),
+            hwnd,
+            msg,
+            wparam,
+            lparam,
+        );
+    }
+    return DefWindowProcW(hwnd, msg, wparam, lparam);
+}
+
+#[cfg(windows)]
+pub(crate) unsafe fn patch_child_windows(parent_hwnd: isize) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{EnumChildWindows, GetWindowLongPtrW, SetWindowLongPtrW, GWLP_WNDPROC};
+    unsafe extern "system" fn enum_cb(child: *mut core::ffi::c_void, _lparam: isize) -> i32 {
+        // Evitar re-parchear
+        let already = child_map()
+            .lock()
+            .ok()
+            .map(|m| m.contains_key(&(child as isize)))
+            .unwrap_or(false);
+        if !already {
+            let orig = GetWindowLongPtrW(child, GWLP_WNDPROC);
+            if orig != 0 {
+                if let Ok(mut m) = child_map().lock() {
+                    m.insert(child as isize, orig);
+                }
+                SetWindowLongPtrW(child, GWLP_WNDPROC, child_frameless_wndproc as *const () as isize);
+            }
+        }
+        // Recursivo: parchear hijos de este child también
+        EnumChildWindows(child, Some(enum_cb), 0);
+        1
+    }
+    EnumChildWindows(parent_hwnd as *mut core::ffi::c_void, Some(enum_cb), 0);
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn frameless_wndproc(
+    hwnd: *mut core::ffi::c_void,
+    msg: u32,
+    wparam: usize,
+    lparam: isize,
+) -> isize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CallWindowProcW, DefWindowProcW, GetWindowRect, IsZoomed, HTBOTTOM, HTBOTTOMLEFT,
+        HTBOTTOMRIGHT, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, WM_NCHITTEST,
+    };
+    const WM_NCHITTEST_VAL: u32 = WM_NCHITTEST;
+    const WM_NCCALCSIZE: u32 = 0x0083;
+    if msg == WM_NCCALCSIZE && wparam == 1 {
+        return 0;
+    }
+    if msg == WM_NCHITTEST_VAL {
+        let is_max = IsZoomed(hwnd) != 0;
+        if !is_max {
+            let x = (lparam & 0xFFFF) as i16 as i32;
+            let y = ((lparam >> 16) & 0xFFFF) as i16 as i32;
+            let mut rect = std::mem::zeroed::<windows_sys::Win32::Foundation::RECT>();
+            if GetWindowRect(hwnd, &mut rect) != 0 {
+                let border: i32 = 10;
+                let titlebar_h: i32 = 38;
+                let left = rect.left;
+                let right = rect.right;
+                let top = rect.top;
+                let bottom = rect.bottom;
+                // Orden: esquinas primero para que el cursor diagonal tenga prioridad
+                if y < top + border {
+                    if x < left + border {
+                        return HTTOPLEFT as isize;
+                    } else if x >= right - border {
+                        return HTTOPRIGHT as isize;
+                    } else {
+                        return HTTOP as isize;
+                    }
+                } else if y >= bottom - border {
+                    if x < left + border {
+                        return HTBOTTOMLEFT as isize;
+                    } else if x >= right - border {
+                        return HTBOTTOMRIGHT as isize;
+                    } else {
+                        return HTBOTTOM as isize;
+                    }
+                } else if x < left + border {
+                    return HTLEFT as isize;
+                } else if x >= right - border {
+                    return HTRIGHT as isize;
+                } else if y < top + titlebar_h && x < right - 120 {
+                    // TitleBar de 38px: drag nativo sin JS, excluye semáforo derecha (120px)
+                    use windows_sys::Win32::UI::WindowsAndMessaging::HTCAPTION;
+                    return HTCAPTION as isize;
+                }
+            }
+        }
+    }
+    let orig = ORIG_WNDPROC.load(std::sync::atomic::Ordering::Relaxed);
+    if orig != 0 {
+        return CallWindowProcW(
+            Some(std::mem::transmute::<isize, unsafe extern "system" fn(*mut core::ffi::c_void, u32, usize, isize) -> isize>(orig)),
+            hwnd,
+            msg,
+            wparam,
+            lparam,
+        );
+    }
+    return DefWindowProcW(hwnd, msg, wparam, lparam);
+}
+
+#[cfg(windows)]
+unsafe fn patch_frameless_resizable(hwnd: *mut core::ffi::c_void) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_STYLE, GWLP_WNDPROC,
+        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_MAXIMIZEBOX,
+        WS_MINIMIZEBOX, WS_THICKFRAME,
+    };
+    let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    let new_style = style | (WS_THICKFRAME as isize) | (WS_MAXIMIZEBOX as isize) | (WS_MINIMIZEBOX as isize);
+    if new_style != style {
+        SetWindowLongPtrW(hwnd, GWL_STYLE, new_style);
+    }
+    let _orig = GetWindowLongPtrW(hwnd, GWLP_WNDPROC);
+    if _orig != 0 && ORIG_WNDPROC.load(std::sync::atomic::Ordering::Relaxed) == 0 {
+        ORIG_WNDPROC.store(_orig, std::sync::atomic::Ordering::Relaxed);
+        SetWindowLongPtrW(hwnd, GWLP_WNDPROC, frameless_wndproc as *const () as usize as isize);
+    }
+    SetWindowPos(
+        hwnd,
+        std::ptr::null_mut(),
+        0,
+        0,
+        0,
+        0,
+        SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+    );
+    // Sombra DWM: extender frame -1 mantiene drop shadow en frameless
+    {
+        use windows_sys::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
+        use windows_sys::Win32::UI::Controls::MARGINS;
+        let margins = MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 };
+        let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
+    }
+    // Parchear hijos existentes (por si ya hay WebView) para que el resize
+    // desde bordes/esquinas funcione aunque el WebView tape el cliente.
+    patch_child_windows(hwnd as isize);
 }
 
 /// ¿Está instalado el runtime de WebView2 (Evergreen)? En Windows 10 no
@@ -278,6 +485,9 @@ impl ApplicationHandler<AppEvent> for App {
         if let Ok(rgba) = load_window_icon() {
             attributes.window_icon = Some(rgba);
         }
+        // Frameless: sin barra nativa de Windows, pestañas arriba tipo navegador + semáforo
+        attributes.decorations = false;
+        attributes.transparent = false;
         // Si inicia minimizado (--autostart o config), crear ventana oculta para no flashear
         if self.start_minimized {
             attributes.visible = false;
@@ -286,6 +496,19 @@ impl ApplicationHandler<AppEvent> for App {
             event_loop.exit();
             return;
         };
+        // Guardar HWND para controles /shell/window/* (min/max/close/drag) + patch resize
+        #[cfg(windows)]
+        {
+            use std::sync::atomic::Ordering;
+            use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            if let Ok(handle) = window.window_handle() {
+                if let RawWindowHandle::Win32(h) = handle.as_raw() {
+                    let hwnd = h.hwnd.get() as isize;
+                    crate::state::WINDOW_HWND.store(hwnd, Ordering::Relaxed);
+                    unsafe { patch_frameless_resizable(hwnd as *mut core::ffi::c_void); }
+                }
+            }
+        }
         // WebView2 user-data redirigido a data/webview (portable, sin C:).
         let data = state::data_dir();
         let _ = std::fs::create_dir_all(data.join("webview"));
@@ -294,7 +517,7 @@ impl ApplicationHandler<AppEvent> for App {
         let builder = WebViewBuilder::with_web_context(ctx)
             .with_url(&self.url)
             .with_devtools(true)
-            .with_initialization_script("window.__OPENCODE_DESKTOP__ = true;")
+            .with_initialization_script("window.__OPENCODE_DESKTOP__ = true; document.documentElement.setAttribute('data-frameless','true');")
             // GPU + autoplay. DEBE ser idéntico al del sub-WebView del browser
             // (browser_view::WEBVIEW_BROWSER_ARGS): comparten WebContext y un
             // mismatch de argumentos cuelga la creación del WebView hijo.
@@ -314,6 +537,24 @@ impl ApplicationHandler<AppEvent> for App {
                 }
                 self.webview = Some(wv);
                 self.window = Some(window);
+                #[cfg(windows)]
+                {
+                    let hwnd = crate::state::WINDOW_HWND.load(std::sync::atomic::Ordering::Relaxed);
+                    if hwnd != 0 {
+                        unsafe { patch_child_windows(hwnd); }
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_millis(400));
+                            unsafe { patch_child_windows(hwnd); }
+                            std::thread::sleep(std::time::Duration::from_millis(800));
+                            unsafe { patch_child_windows(hwnd); }
+                            // Re-parcheo periódico: WebView2 recrea child windows al navegar/recargar
+                            for _ in 0..60 {
+                                std::thread::sleep(std::time::Duration::from_millis(2000));
+                                unsafe { patch_child_windows(hwnd); }
+                            }
+                        });
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("opencode-desktop: webview error: {e}");
@@ -343,6 +584,13 @@ impl ApplicationHandler<AppEvent> for App {
                         position: LogicalPosition::new(0, 0).into(),
                         size: LogicalSize::new(size.width, size.height).into(),
                     });
+                }
+                #[cfg(windows)]
+                {
+                    let hwnd = crate::state::WINDOW_HWND.load(std::sync::atomic::Ordering::Relaxed);
+                    if hwnd != 0 {
+                        unsafe { patch_child_windows(hwnd); }
+                    }
                 }
                 self.save_geometry();
                 // Minimizar (—) → ocultar a bandeja, no a barra de tareas
@@ -382,10 +630,12 @@ impl ApplicationHandler<AppEvent> for App {
                         wv.open_devtools();
                     }
                 }
-                // FIX: Esc cierra el SubWebView aunque tape el toolbar (no se podía cerrar)
+                // FIX: Esc solo oculta (Low ~3MB) para no perder cookies/Google session; close() solo vía panel X
                 if is_esc && self.browser_inner.visible {
-                    self.browser_inner.webview = None;
-                    self.browser_inner.url.clear();
+                    if let Some(wv) = &self.browser_inner.webview {
+                        let _ = wv.set_visible(false);
+                        let _ = wv.set_memory_usage_level(wry::MemoryUsageLevel::Low);
+                    }
                     self.browser_inner.visible = false;
                 }
             }
@@ -421,6 +671,35 @@ impl ApplicationHandler<AppEvent> for App {
                     window.set_minimized(false);
                     window.set_visible(true);
                     window.focus_window();
+                }
+            }
+            AppEvent::WindowAction(action) => {
+                if let Some(window) = &self.window {
+                    match action {
+                        crate::state::WindowAction::Drag => {
+                            let _ = window.drag_window();
+                        }
+                        crate::state::WindowAction::Minimize => {
+                            window.set_minimized(true);
+                        }
+                        crate::state::WindowAction::MaximizeToggle => {
+                            let is_max = window.is_maximized();
+                            window.set_maximized(!is_max);
+                        }
+                        crate::state::WindowAction::Close => {
+                            self.save_geometry();
+                            if let Some(state) = &self.app_state {
+                                kill_all_external(state);
+                            }
+                            self.webview = None;
+                            self.browser_inner.webview = None;
+                            self.web_context = None;
+                            std::thread::sleep(std::time::Duration::from_millis(400));
+                            event_loop.exit();
+                        }
+                    }
+                } else {
+                    eprintln!("opencode-desktop: window action before window created: {:?}", action);
                 }
             }
         }
@@ -604,6 +883,7 @@ fn main() {
 
     let (browser_mgr, browser_rx) = browser_view::SubWebViewManager::new();
     let browser_tx = browser_mgr.tx.clone();
+    let browser_shortcut_events = browser_mgr.shortcut_events();
     let dist = web_dist_dir();
     let app_state = Arc::new(AppState {
         config: std::sync::RwLock::new(config.clone()),
@@ -790,6 +1070,14 @@ fn main() {
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
 
+    // Window controls: proxy para /shell/window/* desde HTTP thread → UI thread (drag_window/set_maximized)
+    {
+        let win_proxy = proxy.clone();
+        crate::state::set_window_action_handler(std::sync::Arc::new(move |action| {
+            let _ = win_proxy.send_event(AppEvent::WindowAction(action));
+        }));
+    }
+
     // Waker: los comandos browser que lleguen por HTTP despiertan el loop
     // (antes, con app idle en Wait, el request colgaba hasta un evento del OS).
     {
@@ -815,6 +1103,7 @@ fn main() {
             webview: None,
             url: String::new(),
             visible: false,
+            shortcut_events: browser_shortcut_events,
         },
         last_geom_save: std::time::Instant::now(),
         modifiers: winit::keyboard::ModifiersState::empty(),

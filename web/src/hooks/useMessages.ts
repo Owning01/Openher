@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
 import { api } from "../api"
-import { resolveApiVersion } from "../shared/api/version"
 import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "../utils/parseCommand"
 import { computeRenderedMessages } from "../utils/rendered"
 import { isImagePart, countImageParts } from "../utils"
@@ -47,6 +46,7 @@ function extractText(msg: MessageEnvelope): string {
 function stripNonEssential(msg: MessageEnvelope, dataMode?: DataMode): MessageEnvelope {
   if (dataMode === "full" || dataMode === "saver") return msg
   const keep = (p: MessageEnvelope["parts"][number]) =>
+    p.type === "compaction" || p.type === "reasoning" || p.type === "thinking" ||
     !toolPartTypes.has(p.type) || (typeof p.tool === "string" && (fileToolNames.has(p.tool) || shellToolNames.has(p.tool)))
   const filtered = msg.parts.filter(keep)
   return filtered.length === msg.parts.length ? msg : { ...msg, parts: filtered }
@@ -62,6 +62,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // Antes era boolean global → al cambiar de sesión la otra aparecía como
   // "Compacting" aunque no lo estuviera. Ahora se rastrea por sessionID.
   const [compactingIds, setCompactingIds] = useState<Set<string>>(() => new Set())
+  const compactingIdsRef = useRef(compactingIds)
+  useEffect(() => { compactingIdsRef.current = compactingIds }, [compactingIds])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const compacting = useMemo(() => currentSessionId ? compactingIds.has(currentSessionId) : false, [compactingIds, currentSessionId])
   const setCompacting = useCallback((value: boolean, sessionID?: string) => {
@@ -91,6 +93,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   const completionShouldPlayRef = useRef(false)
   const isSendingRef = useRef(false)
   const [isSending, setIsSending] = useState(false)
+  const awaitingAssistantReplyRefInner = useRef(false)
+  useEffect(() => { awaitingAssistantReplyRefInner.current = awaitingAssistantReply }, [awaitingAssistantReply])
   // Sesión que el estado `messages` representa. Guard contra races: los deltas
   // de otra sesión (que el SSE puede entregar durante una transición de sesión)
   // se rechazan si no coinciden con la sesión cargada.
@@ -276,6 +280,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // Defensivo: un item null/corrupto del server no debe tumbar el render
     // (msg.map(m => m.info.id) con m undefined = TypeError).
     const safe = msg.filter((m): m is MessageEnvelope => !!m && !!m.info?.id)
+    // Si el fetch ya trajo el mensaje de compaction, podemos apagar el spinner aunque el SSE aún no haya llegado
+    // Detectar por part type compaction O por role compaction (v2 nativo) para no depender del mapper
+    const hasCompaction = safe.some((m) => m.parts.some((p) => p.type === "compaction") || (m.info as unknown as { role?: string }).role === "compaction" || (m as unknown as { type?: string }).type === "compaction")
+      || raw.some((r: unknown) => (r as { type?: string })?.type === "compaction" || (r as { info?: { role?: string } })?.info?.role === "compaction")
+    if (hasCompaction) {
+      setCompacting(false, sessionID)
+    }
 
     setMessages((prev) => {
       // Merge por id SOLO de la sesión cargada: el historial local de la sesión
@@ -309,6 +320,32 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           if (updated.info.time.completed !== m.info.time.completed || updated.info.role !== m.info.role) changed = true
         } else if (raw.length >= limit) {
           // Solo conservar mensajes no devueltos si la lista del server fue truncada por límite de paginación
+          seen.add(m.info.id)
+          merged.push(m)
+        } else if (compactingIdsRef.current.has(sessionID)) {
+          // Durante compact el fetch intermedio puede llegar vacío/viejo antes de que el server genere el compaction → no borrar historial
+          seen.add(m.info.id)
+          merged.push(m)
+        } else if (awaitingAssistantReplyRefInner.current) {
+          // Durante streaming el server aún no persistió el mensaje en curso → no borrar lo streamed
+          seen.add(m.info.id)
+          merged.push(m)
+        } else if (raw.length === 0 && safe.length === 0) {
+          // Fetch vacío transitorio (server aún no generó, red) → nunca vaciar chat
+          seen.add(m.info.id)
+          merged.push(m)
+        } else if (Date.now() - (m.info.time.created ?? 0) < 30000) {
+          // Ventana de gracia 30s para mensajes recientes aún no persistidos (cubre lag post-streaming/post-compact).
+          // Antes solo cubría !completed con 120s → un mensaje recién completado desaparecía si el fetch corría antes de persistir.
+          seen.add(m.info.id)
+          merged.push(m)
+        } else if (!m.info.time.completed && Date.now() - (m.info.time.created ?? 0) < 120000) {
+          // Mensaje en progreso reciente (streaming largo) aún no persistido
+          seen.add(m.info.id)
+          merged.push(m)
+        } else if (!hasCompaction && prev.length > 20 && safe.length > 0 && safe.length < prev.length * 0.3) {
+          // Safe pequeña sin compaction y prev grande (30% umbral) → probable fetch truncado/race, no borrar todo el historial
+          // Sin esto, un fetch race que devuelve solo el último mensaje borraría 50 mensajes y parecería "desaparecen".
           seen.add(m.info.id)
           merged.push(m)
         } else {
@@ -517,16 +554,30 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     onRefreshSessions: () => Promise<void>,
     _onLoadSelected: () => Promise<void>,
   ) => {
+    setCompacting(true, sessionID)
+    setAwaitingAssistantReply(true)
     try {
       const ok = await api.summarize(config, sessionID, providerID, modelID, directory, false)
       if (!ok) { setRuntimeError("Compact returned false from server"); return }
-      await new Promise((r) => setTimeout(r, 500))
-      await loadSelected(sessionID, directory)
+      // Poll hasta que el compaction llegue (SSE puede tardar 3-15s). Mantener
+      // `compacting` vivo evita que la UI borre el historial prematuramente
+      // (loadSelected con `raw.length < limit` descarta si no estamos en compact).
+      for (let i = 0; i < 15; i++) {
+        await new Promise((r) => setTimeout(r, 1000))
+        await loadSelected(sessionID, directory).catch(() => {})
+        // Si el SSE `compaction.ended` ya limpió el Set, salir temprano — evita 15s de spinner colgado
+        if (!compactingIdsRef.current.has(sessionID)) break
+      }
       await onRefreshSessions()
     } catch (err) {
       setRuntimeError(formatServerError(err))
+    } finally {
+      // Fallback: si el SSE no limpió, limpiamos tras el poll. El handler de
+      // `compaction.ended` también limpia, así que es idempotente.
+      setCompacting(false, sessionID)
+      setAwaitingAssistantReply(false)
     }
-  }, [config, loadSelected])
+  }, [config, loadSelected, setCompacting, setAwaitingAssistantReply])
 
   const applyDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace = false, partType = "text") => {
     // Guard contra races: nunca aplicar deltas de una sesión distinta a la cargada.
@@ -682,11 +733,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   ) => {
     const text = (textOverride ?? composer).trim()
     if ((!text || !selectedSession) && (!images || images.length === 0)) return false
-    // v2 no soporta imágenes (server las descarta y el optimistic quedaría huérfano/duplicado)
-    if (images && images.length > 0 && resolveApiVersion(config) === "v2") {
-      onSetRuntimeError("This server (v2) doesn't support images — switch to v1 or remove attachments")
-      return false
-    }
     try {
 
     const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
@@ -725,12 +771,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           ok = true
         } catch (err) {
           // Send fallido (red o server): remover el optimistic de inmediato,
-          // restaurar el texto y mostrar el error. El Composer conserva las
-          // imágenes porque recibe `false` como retorno.
+          // restaurar el texto original (no el traducido) y mostrar el error.
+          // El Composer conserva las imágenes porque recibe `false` como retorno.
           completionShouldPlayRef.current = false
           setAwaitingAssistantReply(false)
           removeOptimistic(optimisticMessage.info.id)
-          setComposer((current) => current || text)
+          const restoreText = translatedFrom || text
+          setComposer((current) => current || restoreText)
           onSetRuntimeError(formatServerError(err))
         }
       } finally {
@@ -778,15 +825,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (parsed?.type === "compact") {
       setComposer("")
       if (activeModel) {
-        setCompacting(true, selectedSession.id)
-        setAwaitingAssistantReply(true)
         completionShouldPlayRef.current = true
-        try {
-          await compactSession(selectedSession.id, selectedSession.directory, activeModel.providerID, activeModel.modelID, onRefreshSessions, onLoadSelected)
-        } finally {
-          setCompacting(false, selectedSession.id)
-          setAwaitingAssistantReply(false)
-        }
+        await compactSession(selectedSession.id, selectedSession.directory, activeModel.providerID, activeModel.modelID, onRefreshSessions, onLoadSelected)
       } else {
         onSetRuntimeError("Select a model first to use /compact")
       }

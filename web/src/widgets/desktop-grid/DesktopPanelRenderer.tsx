@@ -80,6 +80,7 @@ export type DesktopPanelRendererProps = {
   onNavigateSettings: () => void
   onToggleInspectTool: (tool: "picker" | "pod") => void
   onBrowserVisualPick: (url: string, el: any) => void
+  onSetDesktopLayout?: React.Dispatch<React.SetStateAction<any>>
 }
 
 export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: DesktopPanelRendererProps) {
@@ -151,6 +152,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       )
     }
 
+    const isSinglePanel = (props.desktopLayout?.cols ?? 1) * (props.desktopLayout?.rows ?? 1) === 1
     // Terminal tab
     if (sid.startsWith("terminal")) {
       const ptyId = sid.replace(/^terminal[:\-]/, "")
@@ -162,7 +164,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       }
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <TabBar
+          {!isSinglePanel && <TabBar
             tabs={stack}
             activeIndex={Math.max(0, stack.indexOf(sid))}
             sessions={tSessions}
@@ -181,7 +183,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
             onCloseAll={onCloseAll}
-          />
+          />}
           <div style={{ flex: 1, minHeight: 0 }}>
             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
               <SingleTerminal tabId={ptyId} cwd={session?.directory} />
@@ -230,7 +232,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       const isScrollableVirtual = sid === "__pcFiles__" || sid === "__kanban__" || sid === "__stats__"
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <TabBar
+          {!isSinglePanel && <TabBar
             tabs={stack}
             activeIndex={Math.max(0, stack.indexOf(sid))}
             sessions={allWithVirtual}
@@ -249,7 +251,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
             onCloseAll={onCloseAll}
-          />
+          />}
           <div style={{ flex: 1, minHeight: 0, overflow: isScrollableVirtual ? "hidden" : "auto", display: isScrollableVirtual ? "flex" : undefined, flexDirection: isScrollableVirtual ? "column" as const : undefined }}>
             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>{vComp}</Suspense>
           </div>
@@ -257,7 +259,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       )
     }
 
-    // Browser tab
+    // Browser tab — sin pestañas internas (única barra TitleBar/TabBar externa)
     if (sid.startsWith("browser:")) {
       const url = browserTabUrls[sid] || "https://www.google.com"
       const bSessions = [...sessions] as any[]
@@ -274,14 +276,14 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       }
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <TabBar
+          {!isSinglePanel && <TabBar
             tabs={stack}
             activeIndex={Math.max(0, stack.indexOf(sid))}
             sessions={bSessions}
             busySessionIds={busySessions}
             onSwitch={onSwitchTab}
             onClose={onRemoveTab}
-            onAdd={onAddTerminal}
+            onAdd={() => onOpenBrowser("https://www.google.com", i)}
             onMoveTab={onMoveTab}
             onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
             panelIndex={i}
@@ -293,13 +295,15 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
             onCloseAll={onCloseAll}
-          />
+          />}
           <div style={{ flex: 1, minHeight: 0 }}>
             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
               <BrowserPanel
                 initialUrl={url}
                 isActive={active}
+                hideTabBar
                 onClose={() => onRemoveTab(stack.indexOf(sid))}
+                onUrlChange={(newUrl: string) => props.onSetDesktopLayout?.((prev: any) => ({ ...prev, browserTabUrls: { ...(prev.browserTabUrls ?? {}), [sid]: newUrl } }))}
                 visualSelection={vs.selection}
                 inspectMode={vs.inspectMode}
                 onVisualPick={(el: any) => onBrowserVisualPick(url, el)}
@@ -342,7 +346,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
         if (allProjs.length > 0) {
           return (
             <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-              <TabBar
+              {!isSinglePanel && <TabBar
                 tabs={stack}
                 activeIndex={Math.max(0, stack.indexOf(sid))}
                 sessions={pSessions}
@@ -360,7 +364,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
                 onCloseRight={onCloseRight}
                 onCloseLeft={onCloseLeft}
                 onCloseAll={onCloseAll}
-              />
+              />}
               <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
                 {allProjs.map((proj) => {
                   const isActive = `plugin:external:${proj.name}` === sid
@@ -388,7 +392,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       }
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <TabBar
+          {!isSinglePanel && <TabBar
             tabs={stack}
             activeIndex={Math.max(0, stack.indexOf(sid))}
             sessions={pSessions}
@@ -406,7 +410,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onCloseRight={onCloseRight}
             onCloseLeft={onCloseLeft}
             onCloseAll={onCloseAll}
-          />
+          />}
           <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 12 }}>
             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
               {(() => {
@@ -463,7 +467,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
         onOpenFile={onOpenFile}
         onOpenConnect={onOpenConnect}
         onOpenBrowser={onOpenBrowser}
-        tabStack={stack}
+        tabStack={isSinglePanel ? [] : stack}
         allSessions={sessions}
         busySessionIds={busySessions}
         onTabSwitch={(_, idx) => onSwitchTab(idx)}

@@ -7,7 +7,7 @@ import { CollapsibleSection } from "./CollapsibleSection"
 import { GridSpinner } from "./GridSpinner"
 import { DiffView, parseDiffStat, synthesizeWritePatch } from "./DiffView"
 import { useT } from "../i18n-context"
-import { CheckIcon, CloseIcon, CodeIcon, FileIcon, GlobeIcon, SearchIcon, TerminalIcon, ToolIcon } from "../Icons"
+import { CodeIcon, FileIcon, SearchIcon, GlobeIcon, CloseIcon, ToolIcon } from "../Icons"
 import { Markdown } from "./Markdown"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { computeRenderedMessages } from "../utils/rendered"
@@ -43,15 +43,41 @@ const toolLabels: Record<string, string> = {
 }
 
 function toolSvgIcon(toolName: string | null): ReactNode {
-  const size = 14
+  const size = 13
   switch (toolName) {
-    case "write": case "edit": case "apply_patch": return <CodeIcon size={size} />
-    case "read": return <FileIcon size={size} />
-    case "bash": case "execute": return <TerminalIcon size={size} />
-    case "grep": case "glob": return <SearchIcon size={size} />
-    case "websearch": case "webfetch": return <GlobeIcon size={size} />
-    default: return <CodeIcon size={size} />
+    case "bash":
+    case "execute":
+    case "shell":
+    case "terminal":
+      return <span className="tool-icon-shell">&lt;&gt;</span>
+    case "read":
+    case "readFile":
+      return <FileIcon size={size} />
+    case "write":
+    case "edit":
+    case "apply_patch":
+    case "patch":
+      return <CodeIcon size={size} />
+    case "grep":
+    case "glob":
+    case "search":
+      return <SearchIcon size={size} />
+    case "websearch":
+    case "webfetch":
+      return <GlobeIcon size={size} />
+    default:
+      return <CodeIcon size={size} />
   }
+}
+
+function getAntigravityFileIcon(path: string): ReactNode {
+  if (/\.(tsx|jsx|ts|js)$/i.test(path)) {
+    return <span className="tool-file-atom">⚛</span>
+  }
+  if (/\.(rs|go|py|c|cpp|h|hpp|cs|java|php|rb|css|json|yaml|yml|html|toml|scss|md|sql)$/i.test(path)) {
+    return <span className="tool-file-brackets">{"{}"}</span>
+  }
+  return <FileIcon size={12} className="tool-file-default" />
 }
 
 function extractParam(text: string, name: string): string {
@@ -108,9 +134,15 @@ function previewLines(text: string, maxLines = 5): string {
 }
 
 function shortToolLabel(tool: string): string {
+  if (tool === "bash" || tool === "execute" || tool === "shell" || tool === "terminal") return "SHELL"
+  if (tool === "read" || tool === "readFile") return "READ"
+  if (tool === "write" || tool === "writeFile") return "WRITE"
+  if (tool === "edit" || tool === "apply_patch" || tool === "patch") return "EDIT"
+  if (tool === "grep" || tool === "glob" || tool === "search") return "SEARCH"
+  if (tool === "websearch" || tool === "webfetch" || tool === "browse") return "BROWSER"
   const m = tool.match(/mcp__([^_]+)__(.+)/)
-  if (m) return `mcp · ${m[1]} · ${m[2]}`
-  return tool
+  if (m) return `${m[1].toUpperCase()} · ${m[2]}`
+  return tool.toUpperCase()
 }
 
 function formatInput(input: unknown, baseDir?: string): string {
@@ -382,7 +414,7 @@ export function DiffStatBadge({ add, del }: { add: number; del: number }) {
   )
 }
 
-export const ToolPart = memo(function ToolPart({ part, config, directory, onViewSubagents, compact }: {
+export const ToolPart = memo(function ToolPart({ part, config, directory, onViewSubagents, compact: _compact }: {
   part: ToolPartData
   config?: ServerConfig
   directory?: string
@@ -478,12 +510,6 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     return raw ? toRelativePath(raw, directory) : null
   }, [isFileTool, metadata, part.state?.title, part.state?.input, filePath, directory])
 
-  const fileActionLabel = useMemo(() => {
-    if (!isFileTool || !toolName) return null
-    const verb = toolName === "edit" ? t('toolpart.edited') : toolName === "write" ? t('toolpart.wrote') : t('toolpart.patched')
-    return diffPath ? `${verb} ${diffPath}` : verb
-  }, [isFileTool, toolName, diffPath, t])
-
   if (!text && !toolName && !inputText) return null
 
   // ---- Task (subagent) tool ----
@@ -535,117 +561,144 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   const statusIcon = isWorking
     ? <GridSpinner label={label} size={14} />
     : isError ? <span className="tool-status-icon tool-error-mark"><CloseIcon size={12} /></span>
-    : isDone ? <span className="tool-status-icon tool-ok-mark"><CheckIcon size={12} /></span>
     : null
 
-  const title = toolName ? shortToolLabel(toolName) : label
+  const antigravityInfo = useMemo(() => {
+    const norm = (toolName || "").toLowerCase()
+    const inputObj = (typeof part.state?.input === "object" && part.state?.input !== null)
+      ? (part.state.input as Record<string, any>)
+      : null
+
+    // 1. Shell commands (run_command, bash, execute, shell, terminal)
+    if (isShellTool || norm.includes("command") || norm.includes("bash") || norm.includes("shell") || norm.includes("execute")) {
+      const cmd = bashCommand || inputObj?.CommandLine || inputObj?.command || inputText
+      let displayCmd = typeof cmd === "string" ? cmd.replace(/[\r\n]+/g, " ").trim() : "command"
+      if (displayCmd.length > 95) {
+        displayCmd = displayCmd.slice(0, 92) + "..."
+      }
+      return {
+        verb: "Ran",
+        icon: null,
+        target: <span className="tool-target-text" title={typeof cmd === "string" ? cmd : undefined}>{displayCmd}</span>,
+        badge: null,
+      }
+    }
+
+    // 2. File edit/write (replace_file_content, write_to_file, edit, write, patch, apply_patch)
+    if (norm.includes("replace") || norm.includes("write") || norm.includes("edit") || norm.includes("patch")) {
+      const rawPath = inputObj?.TargetFile || inputObj?.filePath || inputObj?.file || inputObj?.path || diffPath || "file"
+      const fileName = typeof rawPath === "string" ? rawPath.split(/[/\\]/).pop() || rawPath : "file"
+      const add = fileDiff?.add
+      const del = fileDiff?.del
+      const badge = (add != null || del != null) ? (
+        <span className="tool-diff-badge">
+          {add != null && add > 0 && <span className="tool-diff-add">+{add}</span>}
+          {del != null && del > 0 && <span className="tool-diff-del">-{del}</span>}
+        </span>
+      ) : null
+
+      return {
+        verb: "Edited",
+        icon: getAntigravityFileIcon(fileName),
+        target: <span className="tool-target-text">{fileName}</span>,
+        badge,
+      }
+    }
+
+    // 3. File read/view (view_file, read, readFile)
+    if (norm.includes("view") || norm.includes("read")) {
+      const rawPath = inputObj?.AbsolutePath || inputObj?.filePath || inputObj?.file || inputObj?.path || diffPath || "file"
+      const fileName = typeof rawPath === "string" ? rawPath.split(/[/\\]/).pop() || rawPath : "file"
+      const start = inputObj?.StartLine
+      const end = inputObj?.EndLine
+      const lineTag = (start != null && end != null) ? `#L${start}-${end}` : (start != null ? `#L${start}` : "")
+
+      return {
+        verb: "Analyzed",
+        icon: getAntigravityFileIcon(fileName),
+        target: (
+          <>
+            <span className="tool-target-text">{fileName}</span>
+            {lineTag && <span className="tool-target-line">{lineTag}</span>}
+          </>
+        ),
+        badge: null,
+      }
+    }
+
+    // 4. Search / Grep (grep_search, search_web, search)
+    if (norm.includes("search") || norm.includes("grep")) {
+      const query = inputObj?.Query || inputObj?.query || inputObj?.pattern || inputText
+      let resultCountTag: string | null = null
+      if (typeof outputText === "string") {
+        const match = outputText.match(/Found (\d+) matches|(\d+) results/i)
+        if (match) resultCountTag = `${match[1] || match[2]} results`
+      }
+      return {
+        verb: "Searched",
+        icon: null,
+        target: (
+          <>
+            <span className="tool-target-text">{typeof query === "string" ? query : JSON.stringify(query)}</span>
+            {resultCountTag && <span className="tool-target-meta">{resultCountTag}</span>}
+          </>
+        ),
+        badge: null,
+      }
+    }
+
+    // 5. Explore / Find / List (find_by_name, list_dir)
+    if (norm.includes("find") || norm.includes("list") || norm.includes("dir")) {
+      let fileCountTag = "files"
+      if (typeof outputText === "string") {
+        const match = outputText.match(/Found (\d+) results|(\d+) matches/i)
+        if (match) fileCountTag = `${match[1]} files`
+      }
+      return {
+        verb: "Explored",
+        icon: null,
+        target: <span className="tool-target-text">{fileCountTag}</span>,
+        badge: null,
+      }
+    }
+
+    // Fallback
+    return {
+      verb: toolName ? shortToolLabel(toolName) : "Tool",
+      icon: null,
+      target: <span className="tool-target-text">{subtitle || inputText || ""}</span>,
+      badge: null,
+    }
+  }, [toolName, isShellTool, bashCommand, inputText, outputText, diffPath, fileDiff, subtitle, part.state?.input])
+
   const body = (isDone && outputText) ? outputText : inputText
 
-  // Modo compacto: file tools siguen mostrando archivo + diff stat y son expandibles
-  if (compact) {
-    if (isFileTool && fileDiff) {
-      return (
-        <div className={`tool-part tool-${toolName}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
-          <button type="button" className="tool-part-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-            <span className="tool-part-icon">{headerIcon}</span>
-            <span className="tool-part-label">{fileActionLabel}</span>
-            <DiffStatBadge add={fileDiff.add} del={fileDiff.del} />
-            {statusIcon}
-            <span className="tool-part-chevron">{expanded ? "▾" : "▸"}</span>
-          </button>
-          {expanded && fileDiff.patch ? (
-            <div className="tool-part-body">
-              <DiffView patch={fileDiff.patch} />
-            </div>
-          ) : null}
-        </div>
-      )
-    }
-    // No truncar comando bash en compacto — mostrar completo y dejar expandir
-    if (isShellTool) {
-      return (
-        <div className={`tool-part tool-${toolName ?? "unknown"}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
-          <button type="button" className="tool-part-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-            <span className="tool-part-icon">{headerIcon}</span>
-            <span className="tool-part-label">{title}{bashCommand ? <span className="tool-part-arg"> · {bashCommand}</span> : null}</span>
-            {statusIcon}
-            <span className="tool-part-chevron">{expanded ? "▾" : "▸"}</span>
-          </button>
-          {expanded && body ? (
-            <div className="tool-part-body">
-              <pre className="tool-part-pre">{previewLines(body, 60)}</pre>
-            </div>
-          ) : null}
-        </div>
-      )
-    }
-    return (
-      <div className={`tool-part tool-part-minimal tool-${toolName ?? "unknown"}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
-        <div className="tool-part-toggle" style={{ cursor: "default" }}>
-          <span className="tool-part-icon">{headerIcon}</span>
-          <span className="tool-part-label">
-            {title}
-            {subtitle && !bashCommand ? <span className="tool-part-arg"> · {subtitle}</span> : null}
-            {bashCommand ? <span className="tool-part-arg"> · {bashCommand}</span> : null}
-          </span>
-          {statusIcon}
-        </div>
-      </div>
-    )
-  }
-
-  if (part.type === "tool" || part.tool) {
-    if (isFileTool && fileDiff) {
-      const showBody = !compact
-      return (
-        <div className={`tool-part tool-${toolName}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
-          <button
-            type="button"
-            className="tool-part-toggle"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={showBody ? expanded : undefined}
-            disabled={!showBody}
-          >
-            <span className="tool-part-icon">{headerIcon}</span>
-            <span className="tool-part-label">
-              {fileActionLabel}
-            </span>
-            <DiffStatBadge add={fileDiff.add} del={fileDiff.del} />
-            {statusIcon}
-            {showBody && <span className="tool-part-chevron">{expanded ? "▾" : "▸"}</span>}
-          </button>
-          {showBody && expanded && fileDiff.patch ? (
-            <div className="tool-part-body">
-              <DiffView patch={fileDiff.patch} />
-            </div>
-          ) : null}
-        </div>
-      )
-    }
-    return (
-      <div className={`tool-part tool-${toolName ?? "unknown"}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
-        <button
-          type="button"
-          className="tool-part-toggle"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-        >
-          <span className="tool-part-icon">{headerIcon}</span>
-          <span className="tool-part-label">
-            {title}
-            {subtitle ? <span className="tool-part-arg"> · {subtitle}</span> : null}
-          </span>
-          {statusIcon}
-          <span className="tool-part-chevron">{expanded ? "▾" : "▸"}</span>
-        </button>
-        {expanded && body ? (
-          <div className="tool-part-body">
+  return (
+    <div className={`tool-part tool-${toolName ?? "unknown"}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
+      <button
+        type="button"
+        className="tool-part-toggle"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <span className="tool-part-verb">{antigravityInfo.verb}</span>
+        {antigravityInfo.icon && <span className="tool-part-icon">{antigravityInfo.icon}</span>}
+        <span className="tool-part-target">{antigravityInfo.target}</span>
+        {antigravityInfo.badge}
+        {statusIcon}
+        <span className="tool-part-chevron">{expanded ? "▾" : ">"}</span>
+      </button>
+      {expanded && (fileDiff?.patch || body) ? (
+        <div className="tool-part-body">
+          {fileDiff?.patch ? (
+            <DiffView patch={fileDiff.patch} />
+          ) : (
             <pre className="tool-part-pre">{previewLines(body, 60)}</pre>
-          </div>
-        ) : null}
-      </div>
-    )
-  }
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
 
   if (part.type === "tool_use" && meta) {
     return (

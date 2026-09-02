@@ -13,6 +13,7 @@ import { PluginSlot } from "../../plugins"
 import { useT } from "../../i18n-context"
 import { QuickChatPanel } from "../../components/QuickChatPanel"
 import { SettingsPanel } from "../../components/SettingsPanel"
+import { TitleBar } from "../titlebar/TitleBar"
 
 export type DesktopLayoutViewProps = {
   shellRef: React.RefObject<HTMLDivElement | null>
@@ -300,15 +301,28 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
   } = props
 
   return (
-    <div
-      className="app-shell"
-      data-desktop="true"
-      data-navbar="header"
-      ref={shellRef}
-      data-sidebarpos={sidebarPrefs.position}
-      data-sbhide={sidebarPrefs.hidden.length > 0 ? sidebarPrefs.hidden.join(" ") : undefined}
-      style={shellGridStyle}
-    >
+    <>
+      <TitleBar
+        tabStacks={tabStacks}
+        activePanel={activePanel}
+        activeSessionId={desktopLayout.sessions[activePanel]}
+        sessions={sessions}
+        busySessions={busySessions}
+        browserTabUrls={desktopLayout.browserTabUrls}
+        onSwitchTab={onSwitchTab}
+        onRemoveTab={onRemoveTab}
+        onAddTerminal={onAddTerminal}
+        onOpenBrowser={openBrowserAsTab}
+      />
+      <div
+        className="app-shell has-titlebar"
+        data-desktop="true"
+        data-navbar="header"
+        ref={shellRef}
+        data-sidebarpos={sidebarPrefs.position}
+        data-sbhide={sidebarPrefs.hidden.length > 0 ? sidebarPrefs.hidden.join(" ") : undefined}
+        style={shellGridStyle}
+      >
       <ActivityBar
         activity={activity}
         setActivity={setActivity}
@@ -556,5 +570,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         />
       )}
     </div>
+  </>
   )
 })

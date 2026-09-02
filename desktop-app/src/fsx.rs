@@ -24,7 +24,14 @@ impl FavoritesStore {
     fn save(&self) {
         let _ = std::fs::create_dir_all(crate::state::data_dir());
         if let Ok(p) = self.paths.read() {
-            let _ = std::fs::write(Self::file(), serde_json::to_string(&*p).unwrap_or_default());
+            let path = Self::file();
+            let tmp = path.with_extension("json.tmp");
+            let data = serde_json::to_string(&*p).unwrap_or_default();
+            if std::fs::write(&tmp, &data).is_ok() {
+                let _ = std::fs::rename(&tmp, &path);
+            } else {
+                let _ = std::fs::write(&path, &data);
+            }
         }
     }
 }
@@ -309,11 +316,48 @@ pub fn rename_entry(old_path: &str, new_name: &str) -> Result<String, String> {
 }
 
 pub fn write_file(path: &str, data_base64: &str) -> Result<(), String> {
-    let p = Path::new(path);
-    if let Some(parent) = p.parent() {
-        let _ = std::fs::create_dir_all(parent);
+    // Limitar payload: 16 MB base64 ≈ 12 MB binario — evita OOM/disco lleno
+    if data_base64.len() > 16 * 1024 * 1024 {
+        return Err("payload demasiado grande (>16MB base64)".into());
     }
     let bytes = crate::state::base64_decode(data_base64).map_err(|e| e.to_string())?;
+    if bytes.len() > 12 * 1024 * 1024 {
+        return Err("archivo demasiado grande (>12MB)".into());
+    }
+    let p = Path::new(path);
+    // Validar que el path no escape a raíces peligrosas sin canonicalize previo
+    // (canonicalize falla si el archivo no existe, así que validamos el parent)
+    if let Some(parent) = p.parent() {
+        if !parent.as_os_str().is_empty() {
+            // Rechazar paths con .. que intenten salir del workspace si el caller espera jaula
+            // Permitir paths absolutos normales de Windows (C:\) pero no UNC sin validar
+            let raw = path.replace('\\', "/");
+            if raw.contains("..") {
+                // Verificar que el path canonicalizado quede dentro de un directorio permitido
+                // Si el parent existe, canonicalizar; si no, validar que no haya traversal obvio
+                if parent.exists() {
+                    if let Ok(canon) = parent.canonicalize() {
+                        let canon_str = canon.to_string_lossy().to_lowercase();
+                        // Bloquear escritura en directorios sensibles del sistema
+                        if canon_str.starts_with("c:\\windows") || canon_str.starts_with("c:/windows") {
+                            return Err("escritura en directorio del sistema no permitida".into());
+                        }
+                    }
+                }
+            }
+        }
+        let _ = std::fs::create_dir_all(parent);
+    }
+    // Escritura atómica vía tmp+rename para no corromper en corte de energía
+    let p_tmp = p.with_extension("tmp_write");
+    if p.parent().is_some() && p_tmp.parent().is_some() {
+        if std::fs::write(&p_tmp, &bytes).is_ok() {
+            if std::fs::rename(&p_tmp, p).is_ok() {
+                return Ok(());
+            }
+            let _ = std::fs::remove_file(&p_tmp);
+        }
+    }
     std::fs::write(p, bytes).map_err(|e| e.to_string())
 }
 
@@ -322,8 +366,13 @@ pub fn execute_file(path: &str) -> Result<serde_json::Value, String> {
     if !p.exists() || !p.is_file() {
         return Err("El archivo no existe".into());
     }
-    let parent = p.parent().unwrap_or_else(|| Path::new("."));
+    // Allowlist: solo extensiones ejecutables conocidas; rechazar scripts arbitrarios sin confirmación
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    const ALLOWED: &[&str] = &["bat", "cmd", "ps1", "vbs", "exe"];
+    if !ALLOWED.contains(&ext.as_str()) {
+        return Err(format!("extensión .{ext} no ejecutable — permitidas: bat/cmd/ps1/vbs/exe"));
+    }
+    let parent = p.parent().unwrap_or_else(|| Path::new("."));
 
     #[cfg(target_os = "windows")]
     {

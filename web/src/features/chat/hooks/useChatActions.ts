@@ -6,6 +6,7 @@ import { api } from "../../../api"
 import type { SessionView, ServerConfig, ConnectionState, ModelOption } from "../../../types"
 import { formatSelectionForPrompt } from "../../../hooks/useVisualSelection"
 import { keepMessagesThrough } from "../domain/message-order"
+import { isSessionActive } from "../../../utils"
 
 export type UseChatActionsParams = {
   selectedSession: SessionView | null
@@ -167,6 +168,10 @@ export function useChatActions(params: UseChatActionsParams) {
       text?: string
     ) => {
       if (!selectedSession) return
+      if (awaitingAssistantReply || isSessionActive(selectedSession)) {
+        setRuntimeError("Espera a que termine la respuesta anterior")
+        return false
+      }
       const composerText = text ?? composerRef.current
       if (connectionState === "offline") {
         const queuedText = vs.hasSelection && vs.promptContext
@@ -183,6 +188,11 @@ export function useChatActions(params: UseChatActionsParams) {
           options,
         })
         setComposer("")
+        // Limpiar selección visual incluso en offline para evitar contexto stale
+        if (vs.hasSelection) {
+          vs.clear()
+          vs.clearAnnotations()
+        }
         setRuntimeError("Prompt queued - will send when connection is restored")
         return
       }
@@ -209,9 +219,18 @@ export function useChatActions(params: UseChatActionsParams) {
       recordPrompt(textToSend)
       stopGenerationRef.current = false
       const revertMsgId = localRevertID ?? selectedSession?.revert?.messageID
+      let prevMessagesSnapshot: any[] | null = null
       if (revertMsgId) {
+        // Snapshot para rollback si el envío falla
+        // Nota: necesitamos capturar el array actual de mensajes; como setMessages es async,
+        // guardamos referencia al snapshot previo via closure de renderedMessages no es suficiente.
+        // El rollback se hará via loadSelected si falla, pero mantenemos snapshot para UI inmediata.
+        prevMessagesSnapshot = null // se restaurará via loadSelected en caso de fallo
         const sid = selectedSession.id
-        setMessages((prev) => keepMessagesThrough(prev, sid, revertMsgId))
+        setMessages((prev: any[]) => {
+          prevMessagesSnapshot = prev
+          return keepMessagesThrough(prev, sid, revertMsgId)
+        })
       }
       setLocalRevertID(null)
       setSessions((prev) =>
@@ -231,7 +250,17 @@ export function useChatActions(params: UseChatActionsParams) {
         setLocalRevertID,
         originalText ?? undefined
       )
-      if (hadVisualSelection && result !== false) {
+      if (result === false) {
+        // Rollback de pruning y restaurar composer original si hubo traducción
+        if (prevMessagesSnapshot) setMessages(prevMessagesSnapshot)
+        else if (revertMsgId) {
+          // Fallback: recargar desde servidor para restaurar vista previa al revert
+          loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
+        }
+        if (originalText) setComposer(originalText)
+      }
+      // Limpiar selección visual siempre para evitar contexto stale duplicado en reintentos
+      if (hadVisualSelection) {
         vs.clear()
         vs.clearAnnotations()
       }
@@ -522,22 +551,15 @@ export function useChatActions(params: UseChatActionsParams) {
 
   const handleCompact = useCallback(async () => {
     if (!selectedSession || !activeModel) return
-    setCompacting(true, selectedSession.id)
-    setAwaitingAssistantReply(true)
     completionShouldPlayRef.current = true
-    try {
-      await compactSession(
-        selectedSession.id,
-        selectedSession.directory,
-        activeModel.providerID,
-        activeModel.modelID,
-        refreshSessions,
-        () => loadSelected(selectedSession.id, selectedSession.directory)
-      )
-    } finally {
-      setCompacting(false, selectedSession.id)
-      setAwaitingAssistantReply(false)
-    }
+    await compactSession(
+      selectedSession.id,
+      selectedSession.directory,
+      activeModel.providerID,
+      activeModel.modelID,
+      refreshSessions,
+      () => loadSelected(selectedSession.id, selectedSession.directory)
+    )
   }, [
     selectedSession,
     activeModel,

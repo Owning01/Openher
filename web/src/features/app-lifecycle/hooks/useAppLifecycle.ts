@@ -83,6 +83,7 @@ export function useAppLifecycle({
   t,
 }: UseAppLifecycleParams) {
   const lastMsgFetchUpdatedRef = useRef<Record<string, number>>({})
+  const lastFetchAtRef = useRef<Record<string, number>>({})
   const replayingQueueRef = useRef(false)
   const isStreaming = streamState === "streaming" && dataMode === "full" && flags.streamingFull
   const isStreamingActive = isStreaming && Boolean(selectedSession)
@@ -111,32 +112,53 @@ export function useAppLifecycle({
   const pollControl = usePolling(
     async () => {
       const sseLive = streamState === "streaming"
-      if (dataMode === "full" && !sseLive) {
-        await refreshSessions(true)
-      } else if (dataMode !== "full") {
+      const isActive = selectedSession ? isSessionActive(selectedSession) : false
+      const active = Boolean(isActive || awaitingAssistantReply)
+      // Refresh de sesiones: antes solo cuando !sseLive; ahora también periódico aunque SSE vivo
+      // para detectar nuevos mensajes de otros clientes y updated que alimenta el skip.
+      if (dataMode === "full") {
+        if (!sseLive) await refreshSessions(true)
+        else {
+          const lastAtForRefresh = lastFetchAtRef.current[selectedSession?.id ?? ""] ?? 0
+          if (Date.now() - lastAtForRefresh > 20000) await refreshSessions(true).catch(() => {})
+        }
+      } else {
         await refreshSessions(false)
       }
       if (connectionStateRef.current === "offline") {
         throw new Error("offline")
       }
       if (!selectedSession) return
-      // Con SSE saludable los deltas y el evento idle son la fuente en vivo.
-      // El polling queda como reconciliación cuando el stream está caído o en
-      // modos donde el stream no se usa.
-      if (!sseLive && (dataMode === "full" || dataMode === "saver" || isSessionActive(selectedSession))) {
-        const prevUpdated = lastMsgFetchUpdatedRef.current[selectedSession.id]
-        const skip =
-          dataMode !== "full" &&
-          sseLive &&
-          prevUpdated !== undefined &&
-          selectedSession.updated <= prevUpdated
+      // Reconciliación: pull de mensajes incluso con SSE vivo.
+      // El skip anterior (`updated <= prevUpdated`) dejaba el chat congelado en idle+streaming
+      // porque `updated` no cambiaba y `sseLive` era true → nunca hacía fetch aunque el server
+      // tuviera mensajes nuevos que el SSE perdió (reconnect sin replay, directory miss).
+      // Ahora se fuerza por tiempo: idle+streaming refresca cada ~15s.
+      const now = Date.now()
+      const lastAt = lastFetchAtRef.current[selectedSession.id] ?? 0
+      const timeSince = now - lastAt
+      const threshold = dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : active ? 3000 : 15000
+      const prevUpdated = lastMsgFetchUpdatedRef.current[selectedSession.id]
+      const updatedChanged = prevUpdated === undefined || selectedSession.updated > prevUpdated
+      const shouldPull = dataMode === "full" || dataMode === "saver" || active || updatedChanged || timeSince >= threshold
+      if (shouldPull) {
+        const skip = !active && sseLive && !updatedChanged && timeSince < threshold
         if (!skip) {
           await loadSelected(selectedSession.id, selectedSession.directory)
           lastMsgFetchUpdatedRef.current[selectedSession.id] = selectedSession.updated
+          lastFetchAtRef.current[selectedSession.id] = now
         }
       }
-      if (selectedSession && !isSessionActive(selectedSession) && awaitingAssistantReply) {
-        setAwaitingAssistantReply(false)
+      // No apagar awaiting solo porque la sesión no está busy localmente:
+      // el server puede estar aún procesando y el status local va atrasado.
+      // Dejar que SSE `session.idle` / `session.status idle` lo apague, o
+      // verificar con el server si realmente está idle.
+      if (selectedSession && !isSessionActive(selectedSession) && awaitingAssistantReply && !sseLive) {
+        const st = await api.listStatuses(config, selectedSession.directory).catch(() => undefined)
+        const real = st?.[selectedSession.id]
+        if (real && real.type !== "busy" && real.type !== "retry") {
+          setAwaitingAssistantReply(false)
+        }
       }
       if (selectedSession && isSessionActive(selectedSession) && !awaitingAssistantReply) {
         const st = await api.listStatuses(config, selectedSession.directory).catch(() => undefined)
@@ -280,7 +302,10 @@ export function useAppLifecycle({
           await ackQueuedAction(a.id)
         } catch (error) {
           await markQueuedActionFailed(a, error)
-          break
+          // No bloquear cola detrás de un fallo: continuar con siguientes
+          // acciones (posiblemente de otras sesiones) y dejar el fallido
+          // marcado con lastError para reintento manual/próximo ciclo.
+          continue
         }
       }
     }).finally(() => {

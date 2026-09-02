@@ -55,7 +55,7 @@ export const SessionList = memo(function SessionList({
   sessions, selectedID, refreshingSessions, creatingSession,
   renamingSessionID, renameValue,
   connectionState, query,
-  activeSessions, recentSessions, favorites,
+  activeSessions: _activeSessions, recentSessions, favorites,
   dataMode,
   onSelectProject, onQueryChange, onRefresh, onNewSession,
   onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel, onDelete,
@@ -63,6 +63,7 @@ export const SessionList = memo(function SessionList({
   onDismissRecent, onNewSessionHere, onOpenExplorer, onDragStartSession, onDeleteMany, onArchiveMany
 }: SessionListProps) {
   const t = useT()
+  void _activeSessions
   const { confirm } = useDialog()
   const containerRef = useRef<HTMLDivElement>(null)
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
@@ -80,8 +81,8 @@ export const SessionList = memo(function SessionList({
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
 
   const recentFiltered = useMemo(
-    () => recentSessions.filter((s) => !activeSessions.some((a) => a.id === s.id)),
-    [recentSessions, activeSessions]
+    () => recentSessions,
+    [recentSessions]
   )
 
   const favoriteSessions = useMemo(
@@ -90,24 +91,22 @@ export const SessionList = memo(function SessionList({
   )
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
-    // Normaliza el estado guardado: exactamente un panel abierto (recientes
-    // por defecto), el resto cerrado. Ignora estados viejos/corruptos.
     try {
       const raw = JSON.parse(localStorage.getItem("opencode.collapsedSections") || "{}") as Record<string, boolean>
-      const all = { favorites: true, active: true, recent: true, ...raw }
+      const all = { favorites: true, recent: true, ...raw } as Record<string, boolean>
+      if ("active" in all) delete (all as any).active
       const openCount = Object.values(all).filter((v) => !v).length
-      if (openCount === 0) return { favorites: true, active: true, recent: false }
-      if (openCount > 1) return { favorites: true, active: true, recent: false }
+      if (openCount === 0) return { favorites: true, recent: false }
+      if (openCount > 1) return { favorites: true, recent: false }
       return all
     } catch {
-      return { favorites: true, active: true, recent: false }
+      return { favorites: true, recent: false }
     }
   })
 
   const toggleSection = useCallback((key: string) => {
     setCollapsedSections((prev) => {
-      // Accordion: toggle del tocado; el resto siempre queda cerrado.
-      const next: Record<string, boolean> = { favorites: true, active: true, recent: true }
+      const next: Record<string, boolean> = { favorites: true, recent: true }
       next[key] = !prev[key]
       try {
         localStorage.setItem("opencode.collapsedSections", JSON.stringify(next))
@@ -496,7 +495,7 @@ export const SessionList = memo(function SessionList({
       {notices}
       {selectionBar}
 
-      {!selectedProjectDir && !query.trim() && (favorites.size > 0 || activeSessions.length > 0 || recentSessions.length > 0) && (
+      {!selectedProjectDir && !query.trim() && (favorites.size > 0 || recentSessions.length > 0) && (
         <div className="quick-access">
           <div className="quick-access-tabs" role="tablist" aria-label="Acceso rápido">
             {favorites.size > 0 && sessions.some((s) => favorites.has(s.id)) && (
@@ -504,15 +503,6 @@ export const SessionList = memo(function SessionList({
                 onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites}
                 aria-controls="quick-favorites" role="tab" title={t('favorites.label')}>
                 <span className="quick-access-tab-label">{t('favorites.label')}</span>
-                <ChevronIcon size={10} className="quick-access-chevron" />
-              </button>
-            )}
-            {activeSessions.length > 0 && (
-              <button type="button" className={`quick-access-tab${!collapsedSections.active ? " open" : ""}`}
-                onClick={() => toggleSection("active")} aria-expanded={!collapsedSections.active}
-                aria-controls="quick-active" role="tab" title={t('sessions.activeLabel')}>
-                <span className="quick-access-tab-label">{t('sessions.activeLabel')}</span>
-                <span className="quick-access-count">{activeSessions.length}</span>
                 <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}
@@ -529,17 +519,6 @@ export const SessionList = memo(function SessionList({
             <div className="quick-access-list" id="quick-favorites" role="tabpanel">
               {favoriteSessions.map((session) => (
                 <QuickAccessCard key={session.id} session={session} isFavorite
-                  onOpen={onOpen} onToggleFavorite={onToggleFavorite}
-                  onDragStartSession={onDragStartSession}
-                  onContextMenu={handleSessionContextMenu} />
-              ))}
-            </div>
-          )}
-          {!collapsedSections.active && (
-            <div className="quick-access-list" id="quick-active" role="tabpanel">
-              {activeSessions.map((session) => (
-                <QuickAccessCard key={session.id} session={session}
-                  isFavorite={favorites.has(session.id)}
                   onOpen={onOpen} onToggleFavorite={onToggleFavorite}
                   onDragStartSession={onDragStartSession}
                   onContextMenu={handleSessionContextMenu} />

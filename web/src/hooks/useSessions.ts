@@ -130,10 +130,24 @@ export function useSessions(
         api.listProjects(config).catch(() => []),
       ])
 
+      const MAX_KNOWN_DIRS = 80
       const knownDirs = new Set<string>(knownDirsHistoryRef.current)
-      for (const s of items) if (s.directory) knownDirs.add(s.directory)
-      for (const p of projects) if (p.directory) knownDirs.add(p.directory)
-      for (const d of knownDirs) knownDirsHistoryRef.current.add(d)
+      for (const s of items) if (s.directory) {
+        if (knownDirs.size >= MAX_KNOWN_DIRS) break
+        knownDirs.add(s.directory)
+      }
+      for (const p of projects) if (p.directory) {
+        if (knownDirs.size >= MAX_KNOWN_DIRS) break
+        knownDirs.add(p.directory)
+      }
+      // Persistir con cap LRU: si excede, eliminar los más antiguos
+      for (const d of knownDirs) {
+        if (knownDirsHistoryRef.current.size >= MAX_KNOWN_DIRS) {
+          const oldest = knownDirsHistoryRef.current.values().next().value
+          if (oldest !== undefined) knownDirsHistoryRef.current.delete(oldest)
+        }
+        knownDirsHistoryRef.current.add(d)
+      }
 
       const directories = [...knownDirs].filter(Boolean)
       const chunk = <T>(arr: T[], size: number) => {

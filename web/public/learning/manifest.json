@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-01T04:01:07.146Z",
-  "totalLessons": 114,
+  "generatedAt": "2026-09-02T16:29:28.006Z",
+  "totalLessons": 165,
   "categories": [
     {
       "id": "00-Fundamentos",
@@ -920,7 +920,7 @@
       "title": "Papers",
       "level": 2,
       "description": "Papers fundacionales y actuales de IA, agentes, harness, memoria y evaluación — lo esencial destilado.",
-      "count": 29,
+      "count": 65,
       "items": [
         {
           "id": "08-Papers__01-Reasoning__01-attention-is-all-you-need-2017",
@@ -932,7 +932,7 @@
           "title": "Attention Is All You Need — El Transformer (Vaswani et al., 2017)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 4145
+          "bytes": 10705
         },
         {
           "id": "08-Papers__01-Reasoning__02-chain-of-thought-2022",
@@ -944,7 +944,7 @@
           "title": "Chain-of-Thought — Razonar paso a paso (Wei et al., 2022)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2798
+          "bytes": 10150
         },
         {
           "id": "08-Papers__01-Reasoning__03-self-consistency-2022",
@@ -956,7 +956,7 @@
           "title": "Self-Consistency — Votar entre múltiples razonamientos (Wang et al., 2022)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1993
+          "bytes": 10016
         },
         {
           "id": "08-Papers__01-Reasoning__04-react-2022",
@@ -968,7 +968,7 @@
           "title": "ReAct — Razonar y Actuar intercalados (Yao et al., 2022)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2802
+          "bytes": 11230
         },
         {
           "id": "08-Papers__01-Reasoning__05-tree-of-thoughts-2023",
@@ -980,7 +980,7 @@
           "title": "Tree of Thoughts — Buscar sobre pensamientos (Yao et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2298
+          "bytes": 11563
         },
         {
           "id": "08-Papers__01-Reasoning__06-reflexion-2023",
@@ -989,10 +989,130 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Reasoning & Planning",
-          "title": "Reflexion — Aprendizaje verbal sin pesos (Shinn et al., 2023)",
+          "title": "Reflexion — Aprendizaje verbal sin tocar pesos (Shinn et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1953
+          "bytes": 11400
+        },
+        {
+          "id": "08-Papers__01-Reasoning__07-deepseek-r1-2025",
+          "file": "docs/08-Papers__01-Reasoning__07-deepseek-r1-2025.md",
+          "originalPath": "08-Papers/01-Reasoning/07-deepseek-r1-2025.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "DeepSeek-R1 — Razonar con RL puro, sin SFT (DeepSeek-AI, 2025)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 12263
+        },
+        {
+          "id": "08-Papers__01-Reasoning__08-quiet-star-2024",
+          "file": "docs/08-Papers__01-Reasoning__08-quiet-star-2024.md",
+          "originalPath": "08-Papers/01-Reasoning/08-quiet-star-2024.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "Quiet-STaR — Pensar antes de cada token (Zelikman et al., 2024)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11836
+        },
+        {
+          "id": "08-Papers__01-Reasoning__09-llm-p-2023",
+          "file": "docs/08-Papers__01-Reasoning__09-llm-p-2023.md",
+          "originalPath": "08-Papers/01-Reasoning/09-llm-p-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "LLM+P — Planificación óptima con PDDL y solver clásico (Liu et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 12473
+        },
+        {
+          "id": "08-Papers__01-Reasoning__10-pal-2023",
+          "file": "docs/08-Papers__01-Reasoning__10-pal-2023.md",
+          "originalPath": "08-Papers/01-Reasoning/10-pal-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "PAL — Program-Aided Language Models (Gao et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11989
+        },
+        {
+          "id": "08-Papers__01-Reasoning__11-rewoo-2023",
+          "file": "docs/08-Papers__01-Reasoning__11-rewoo-2023.md",
+          "originalPath": "08-Papers/01-Reasoning/11-rewoo-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "ReWOO — Razonar sin observar, ejecutar en batch (Xu et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 12513
+        },
+        {
+          "id": "08-Papers__01-Reasoning__12-flashattention-2023",
+          "file": "docs/08-Papers__01-Reasoning__12-flashattention-2023.md",
+          "originalPath": "08-Papers/01-Reasoning/12-flashattention-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "FlashAttention-2 — Atención 2-4× más rápida sin perder calidad (Dao, 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11446
+        },
+        {
+          "id": "08-Papers__01-Reasoning__13-mamba-2023",
+          "file": "docs/08-Papers__01-Reasoning__13-mamba-2023.md",
+          "originalPath": "08-Papers/01-Reasoning/13-mamba-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "Mamba — State Space Model lineal sin atención (Gu & Dao, 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11908
+        },
+        {
+          "id": "08-Papers__01-Reasoning__14-speculative-decoding-2023",
+          "file": "docs/08-Papers__01-Reasoning__14-speculative-decoding-2023.md",
+          "originalPath": "08-Papers/01-Reasoning/14-speculative-decoding-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "Speculative Decoding — Acelerar inferencia 2-3× sin perder calidad (Leviathan et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11892
+        },
+        {
+          "id": "08-Papers__01-Reasoning__15-orca-2023",
+          "file": "docs/08-Papers__01-Reasoning__15-orca-2023.md",
+          "originalPath": "08-Papers/01-Reasoning/15-orca-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "Orca — Imitación progresiva de GPT-4 con explanation traces (Mukherjee et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11910
+        },
+        {
+          "id": "08-Papers__01-Reasoning__16-self-refine-2023",
+          "file": "docs/08-Papers__01-Reasoning__16-self-refine-2023.md",
+          "originalPath": "08-Papers/01-Reasoning/16-self-refine-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Reasoning & Planning",
+          "title": "Self-Refine — Iterar con feedback propio sin tools externas (Madaan et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 12380
         },
         {
           "id": "08-Papers__02-Harness__01-toolformer-2023",
@@ -1001,10 +1121,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Harness & Tool Use",
-          "title": "Toolformer — El modelo aprende a usar tools solo (Schick et al., 2023)",
+          "title": "Toolformer — El modelo se enseña solo a usar herramientas (Schick et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2715
+          "bytes": 9367
         },
         {
           "id": "08-Papers__02-Harness__02-gorilla-bfcl-2023",
@@ -1013,10 +1133,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Harness & Tool Use",
-          "title": "Gorilla y BFCL — Evaluar tool use de verdad (Berkeley, 2023-25)",
+          "title": "Gorilla y BFCL — Evaluar tool use de verdad, no a ojo (Patil et al., Berkeley 2023-25)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2600
+          "bytes": 9963
         },
         {
           "id": "08-Papers__02-Harness__03-toollm-2023",
@@ -1025,10 +1145,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Harness & Tool Use",
-          "title": "ToolLLM — Dominar 16k APIs reales (Qin et al., 2023)",
+          "title": "ToolLLM — Dominar 16.000 APIs reales con DFS y ToolBench (Qin et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2076
+          "bytes": 9925
         },
         {
           "id": "08-Papers__02-Harness__04-swe-agent-aci-2024",
@@ -1037,10 +1157,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Harness & Tool Use",
-          "title": "SWE-agent: El ACI importa más que el modelo (Yang et al., 2024)",
+          "title": "SWE-agent — El ACI importa más que el modelo (Yang et al., 2024)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2592
+          "bytes": 10926
         },
         {
           "id": "08-Papers__02-Harness__05-mcp-2024",
@@ -1049,10 +1169,70 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Harness & Tool Use",
-          "title": "Model Context Protocol — El LSP de los tools (Anthropic, 2024-25)",
+          "title": "MCP — El LSP de las herramientas (Anthropic 2024, Hou et al. 2025)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2592
+          "bytes": 11756
+        },
+        {
+          "id": "08-Papers__02-Harness__06-dspy-2023",
+          "file": "docs/08-Papers__02-Harness__06-dspy-2023.md",
+          "originalPath": "08-Papers/02-Harness/06-dspy-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Harness & Tool Use",
+          "title": "DSPy — Compilar prompts en programas que se auto-mejoran (Khattab et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11159
+        },
+        {
+          "id": "08-Papers__02-Harness__07-hugginggpt-2023",
+          "file": "docs/08-Papers__02-Harness__07-hugginggpt-2023.md",
+          "originalPath": "08-Papers/02-Harness/07-hugginggpt-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Harness & Tool Use",
+          "title": "HuggingGPT — El LLM como controlador de modelos (Shen et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11548
+        },
+        {
+          "id": "08-Papers__02-Harness__08-taskweaver-2023",
+          "file": "docs/08-Papers__02-Harness__08-taskweaver-2023.md",
+          "originalPath": "08-Papers/02-Harness/08-taskweaver-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Harness & Tool Use",
+          "title": "TaskWeaver — Agente code-first para tareas de datos (Qiao et al., Microsoft 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11060
+        },
+        {
+          "id": "08-Papers__02-Harness__09-vllm-pagedattention-2023",
+          "file": "docs/08-Papers__02-Harness__09-vllm-pagedattention-2023.md",
+          "originalPath": "08-Papers/02-Harness/09-vllm-pagedattention-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Harness & Tool Use",
+          "title": "vLLM PagedAttention — Servir LLMs con 24× throughput (Kwon et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11599
+        },
+        {
+          "id": "08-Papers__02-Harness__10-ada-planner-2023",
+          "file": "docs/08-Papers__02-Harness__10-ada-planner-2023.md",
+          "originalPath": "08-Papers/02-Harness/10-ada-planner-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Harness & Tool Use",
+          "title": "AdaPlanner — Planificación adaptativa con feedback del entorno (Sun et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11336
         },
         {
           "id": "08-Papers__03-Agentes__01-building-effective-agents-2024",
@@ -1064,7 +1244,7 @@
           "title": "Building Effective Agents — Patrones que sí funcionan (Anthropic, 2024)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2746
+          "bytes": 11192
         },
         {
           "id": "08-Papers__03-Agentes__02-voyager-2023",
@@ -1076,7 +1256,7 @@
           "title": "Voyager — Skill library que crece sola (Wang et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2264
+          "bytes": 10542
         },
         {
           "id": "08-Papers__03-Agentes__03-generative-agents-2023",
@@ -1088,7 +1268,7 @@
           "title": "Generative Agents — Memoria, reflexión y comportamiento emergente (Park et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2221
+          "bytes": 11489
         },
         {
           "id": "08-Papers__03-Agentes__04-autogen-2023",
@@ -1097,10 +1277,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Agentes & Orquestación",
-          "title": "AutoGen — Conversación multi-agente (Wu et al., 2023)",
+          "title": "AutoGen — Conversación multi-agente como API (Wu et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1956
+          "bytes": 11503
         },
         {
           "id": "08-Papers__03-Agentes__05-metagpt-2023",
@@ -1112,7 +1292,7 @@
           "title": "MetaGPT — SOPs en vez de chat libre (Hong et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1890
+          "bytes": 11419
         },
         {
           "id": "08-Papers__03-Agentes__06-openhands-2024",
@@ -1124,7 +1304,7 @@
           "title": "OpenHands (OpenDevin) — Plataforma para agentes generalistas (Wang et al., 2024)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1950
+          "bytes": 11223
         },
         {
           "id": "08-Papers__03-Agentes__07-aide-2025",
@@ -1136,7 +1316,55 @@
           "title": "AIDE — Búsqueda en árbol de soluciones (Jiang et al., 2025)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1664
+          "bytes": 10756
+        },
+        {
+          "id": "08-Papers__03-Agentes__08-starcoder2-2024",
+          "file": "docs/08-Papers__03-Agentes__08-starcoder2-2024.md",
+          "originalPath": "08-Papers/03-Agentes/08-starcoder2-2024.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Agentes & Orquestación",
+          "title": "StarCoder2 — Código abierto permissivo a escala (Lozhkov et al., 2024)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 10603
+        },
+        {
+          "id": "08-Papers__03-Agentes__09-alphacode-2022",
+          "file": "docs/08-Papers__03-Agentes__09-alphacode-2022.md",
+          "originalPath": "08-Papers/03-Agentes/09-alphacode-2022.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Agentes & Orquestación",
+          "title": "AlphaCode — Sampling masivo + filter + cluster (Li et al., 2022)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11160
+        },
+        {
+          "id": "08-Papers__03-Agentes__10-codet5-2021",
+          "file": "docs/08-Papers__03-Agentes__10-codet5-2021.md",
+          "originalPath": "08-Papers/03-Agentes/10-codet5-2021.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Agentes & Orquestación",
+          "title": "CodeT5 — Encoder-decoder para código (Wang et al., 2021)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11563
+        },
+        {
+          "id": "08-Papers__03-Agentes__11-crewai-2024",
+          "file": "docs/08-Papers__03-Agentes__11-crewai-2024.md",
+          "originalPath": "08-Papers/03-Agentes/11-crewai-2024.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Agentes & Orquestación",
+          "title": "CrewAI — Orquestación multi-agente por roles (Moura, 2024)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 10450
         },
         {
           "id": "08-Papers__04-Memoria__01-rag-2020",
@@ -1145,10 +1373,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Memoria & Context",
-          "title": "RAG — Retrieval-Augmented Generation (Lewis et al., 2020)",
+          "title": "RAG — Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (Lewis et al., 2020)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1900
+          "bytes": 10434
         },
         {
           "id": "08-Papers__04-Memoria__02-memgpt-2023",
@@ -1157,10 +1385,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Memoria & Context",
-          "title": "MemGPT — LLMs como Sistema Operativo (Packer et al., 2023)",
+          "title": "MemGPT — Towards LLMs as Operating Systems (Packer et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2093
+          "bytes": 11330
         },
         {
           "id": "08-Papers__04-Memoria__03-lost-in-middle-2023",
@@ -1169,10 +1397,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Memoria & Context",
-          "title": "Lost in the Middle — Dónde pones la info importa (Liu et al., 2023)",
+          "title": "Lost in the Middle — How Language Models Use Long Contexts (Liu et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1927
+          "bytes": 10507
         },
         {
           "id": "08-Papers__04-Memoria__04-context-engineering-2025",
@@ -1181,10 +1409,70 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Memoria & Context",
-          "title": "Effective Context Engineering — Compaction, isolation, pruning (Anthropic, 2025)",
+          "title": "Effective Context Engineering — Compaction, Isolation, Pruning & Whitelisting (Anthropic, 2025)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2073
+          "bytes": 12591
+        },
+        {
+          "id": "08-Papers__04-Memoria__05-hipporag-2024",
+          "file": "docs/08-Papers__04-Memoria__05-hipporag-2024.md",
+          "originalPath": "08-Papers/04-Memoria/05-hipporag-2024.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Memoria & Context",
+          "title": "HippoRAG — Neurobiologically Inspired Long-Term Memory for LLMs (Gutiérrez et al., 2024-25)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 12209
+        },
+        {
+          "id": "08-Papers__04-Memoria__06-retro-2021",
+          "file": "docs/08-Papers__04-Memoria__06-retro-2021.md",
+          "originalPath": "08-Papers/04-Memoria/06-retro-2021.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Memoria & Context",
+          "title": "RETRO — Retrieval-Enhanced Transformer (Borgeaud et al., 2021)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11245
+        },
+        {
+          "id": "08-Papers__04-Memoria__07-graphrag-2024",
+          "file": "docs/08-Papers__04-Memoria__07-graphrag-2024.md",
+          "originalPath": "08-Papers/04-Memoria/07-graphrag-2024.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Memoria & Context",
+          "title": "GraphRAG — From Local to Global: A Graph RAG Approach to Query-Focused Summarization (Edge et al., 2024)",
+          "depth": "intro",
+          "minutes": 11,
+          "bytes": 13141
+        },
+        {
+          "id": "08-Papers__04-Memoria__08-raft-2024",
+          "file": "docs/08-Papers__04-Memoria__08-raft-2024.md",
+          "originalPath": "08-Papers/04-Memoria/08-raft-2024.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Memoria & Context",
+          "title": "RAFT — Retrieval Augmented Fine-Tuning (Zhang et al., 2024)",
+          "depth": "intro",
+          "minutes": 12,
+          "bytes": 13249
+        },
+        {
+          "id": "08-Papers__04-Memoria__09-mem0-2024",
+          "file": "docs/08-Papers__04-Memoria__09-mem0-2024.md",
+          "originalPath": "08-Papers/04-Memoria/09-mem0-2024.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Memoria & Context",
+          "title": "Mem0 — Building Production-Ready AI Agents with Scalable Long-Term Memory (Chhikara et al., 2024)",
+          "depth": "intro",
+          "minutes": 11,
+          "bytes": 13262
         },
         {
           "id": "08-Papers__05-Evaluacion__01-swe-bench-2023",
@@ -1193,10 +1481,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Evaluación & Benchmarks",
-          "title": "SWE-bench — ¿Pueden los LLMs resolver issues reales? (Jimenez et al., 2023)",
+          "title": "SWE-bench — ¿Pueden los LLMs resolver issues reales de GitHub? (Jimenez et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2180
+          "bytes": 10306
         },
         {
           "id": "08-Papers__05-Evaluacion__02-gaia-2023",
@@ -1205,10 +1493,46 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Evaluación & Benchmarks",
-          "title": "GAIA — Preguntas simples para humanos, difíciles para IA (Mialon et al., 2023)",
+          "title": "GAIA — Preguntas simples para humanos, imposibles para IA sin herramientas (Mialon et al., 2023)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1856
+          "bytes": 10147
+        },
+        {
+          "id": "08-Papers__05-Evaluacion__03-livecodebench-2024",
+          "file": "docs/08-Papers__05-Evaluacion__03-livecodebench-2024.md",
+          "originalPath": "08-Papers/05-Evaluacion/03-livecodebench-2024.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Evaluación & Benchmarks",
+          "title": "LiveCodeBench — Evaluación sin contaminación, continua y holística (Jain et al., 2024)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 10875
+        },
+        {
+          "id": "08-Papers__05-Evaluacion__04-humaneval-2021",
+          "file": "docs/08-Papers__05-Evaluacion__04-humaneval-2021.md",
+          "originalPath": "08-Papers/05-Evaluacion/04-humaneval-2021.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Evaluación & Benchmarks",
+          "title": "HumanEval — 164 problemas Python hand-written que fundaron el eval de código (Chen et al., 2021)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11407
+        },
+        {
+          "id": "08-Papers__05-Evaluacion__05-mbpp-2021",
+          "file": "docs/08-Papers__05-Evaluacion__05-mbpp-2021.md",
+          "originalPath": "08-Papers/05-Evaluacion/05-mbpp-2021.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Evaluación & Benchmarks",
+          "title": "MBPP — 974 problemas Python básicos para filtro rápido (Austin et al., 2021)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11041
         },
         {
           "id": "08-Papers__06-Skills__01-agent-skills-2025",
@@ -1220,7 +1544,7 @@
           "title": "Agent Skills — Paquetes portables de capacidades (Anthropic, 2025)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 2000
+          "bytes": 11132
         },
         {
           "id": "08-Papers__06-Skills__02-jit-agent-2025",
@@ -1232,7 +1556,7 @@
           "title": "JIT-Agent — Generar el harness justo a tiempo (Li et al., 2025)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1934
+          "bytes": 10456
         },
         {
           "id": "08-Papers__06-Skills__03-phi3-2024",
@@ -1241,10 +1565,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Skills & JIT",
-          "title": "Phi-3 — Small model muy capaz (Abdin et al., 2024)",
+          "title": "Phi-3 — Small Language Model muy capaz, local en tu máquina (Abdin et al., 2024)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1838
+          "bytes": 11472
         },
         {
           "id": "08-Papers__06-Skills__04-constitutional-ai-2022",
@@ -1253,10 +1577,10 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Skills & JIT",
-          "title": "Constitutional AI — Harmlessness sin labels humanas (Bai et al., 2022)",
+          "title": "Constitutional AI — Harmlessness sin labels humanas, con AI feedback (Bai et al., 2022)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1684
+          "bytes": 12344
         },
         {
           "id": "08-Papers__06-Skills__05-code-as-harness-2025",
@@ -1265,10 +1589,283 @@
           "category": "08-Papers",
           "categoryTitle": "Papers",
           "subCategory": "Skills & JIT",
-          "title": "Code as Harness — El código es el medio (Survey 2025)",
+          "title": "Code as Harness — El código es el medio, no solo el output (Survey 2025)",
           "depth": "intro",
           "minutes": 10,
-          "bytes": 1762
+          "bytes": 10878
+        },
+        {
+          "id": "08-Papers__06-Skills__06-lora-2021",
+          "file": "docs/08-Papers__06-Skills__06-lora-2021.md",
+          "originalPath": "08-Papers/06-Skills/06-lora-2021.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Skills & JIT",
+          "title": "LoRA — Low-Rank Adaptation, fine-tune barato sin tocar el modelo base (Hu et al., 2021)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 9999
+        },
+        {
+          "id": "08-Papers__06-Skills__07-qlora-2023",
+          "file": "docs/08-Papers__06-Skills__07-qlora-2023.md",
+          "originalPath": "08-Papers/06-Skills/07-qlora-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Skills & JIT",
+          "title": "QLoRA — Fine-tune 65B en una sola GPU de 48GB (Dettmers et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 9624
+        },
+        {
+          "id": "08-Papers__06-Skills__08-instructgpt-2022",
+          "file": "docs/08-Papers__06-Skills__08-instructgpt-2022.md",
+          "originalPath": "08-Papers/06-Skills/08-instructgpt-2022.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Skills & JIT",
+          "title": "InstructGPT — RLHF para que el modelo siga instrucciones (Ouyang et al., 2022)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 10804
+        },
+        {
+          "id": "08-Papers__06-Skills__09-dpo-2023",
+          "file": "docs/08-Papers__06-Skills__09-dpo-2023.md",
+          "originalPath": "08-Papers/06-Skills/09-dpo-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Skills & JIT",
+          "title": "DPO — Direct Preference Optimization, RLHF sin RL (Rafailov et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 10074
+        },
+        {
+          "id": "08-Papers__06-Skills__10-self-instruct-2022",
+          "file": "docs/08-Papers__06-Skills__10-self-instruct-2022.md",
+          "originalPath": "08-Papers/06-Skills/10-self-instruct-2022.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Skills & JIT",
+          "title": "Self-Instruct — 52k instrucciones sintéticas sin humanos (Wang et al., 2022)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11028
+        },
+        {
+          "id": "08-Papers__06-Skills__11-llama2-2023",
+          "file": "docs/08-Papers__06-Skills__11-llama2-2023.md",
+          "originalPath": "08-Papers/06-Skills/11-llama2-2023.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Skills & JIT",
+          "title": "Llama 2 — Open foundation 7-70B que democratizó los LLMs (Touvron et al., 2023)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 11492
+        },
+        {
+          "id": "08-Papers__07-Seguridad__01-mcptox-2025",
+          "file": "docs/08-Papers__07-Seguridad__01-mcptox-2025.md",
+          "originalPath": "08-Papers/07-Seguridad/01-mcptox-2025.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Seguridad & MCP",
+          "title": "MCPTox — Tool poisoning en servidores MCP reales (2025)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 12655
+        },
+        {
+          "id": "08-Papers__08-Observabilidad__01-otel-readiness-2026",
+          "file": "docs/08-Papers__08-Observabilidad__01-otel-readiness-2026.md",
+          "originalPath": "08-Papers/08-Observabilidad/01-otel-readiness-2026.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Observabilidad & OTel",
+          "title": "LLM Readiness + OTel GenAI — Observabilidad del harness (2026)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 12362
+        },
+        {
+          "id": "08-Papers__08-Observabilidad__02-langsmith-2024",
+          "file": "docs/08-Papers__08-Observabilidad__02-langsmith-2024.md",
+          "originalPath": "08-Papers/08-Observabilidad/02-langsmith-2024.md",
+          "category": "08-Papers",
+          "categoryTitle": "Papers",
+          "subCategory": "Observabilidad & OTel",
+          "title": "LangSmith + OTel GenAI — Trazar el harness sin perder la cabeza (LangChain 2024)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 12228
+        }
+      ]
+    },
+    {
+      "id": "09-Harnesses-JIT",
+      "title": "Harnesses JIT",
+      "level": 3,
+      "description": "Harnesses Just-In-Time, WikiSkill y síntesis de arnés — de AOT a Model-as-a-Harness (SOTA 2026).",
+      "count": 13,
+      "items": [
+        {
+          "id": "09-Harnesses-JIT__00-INDEX-h4rn3ss-g91d3",
+          "file": "docs/09-Harnesses-JIT__00-INDEX-h4rn3ss-g91d3.md",
+          "originalPath": "09-Harnesses-JIT/00-INDEX-h4rn3ss-g91d3.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "🧭 Guía Maestra y Centralizador del Conocimiento: Harneses de IA, Agentes, JIT-Harness y WikiSkill",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 14622
+        },
+        {
+          "id": "09-Harnesses-JIT__01-H1-h4rn3ss-f0nd4m3nt0s",
+          "file": "docs/09-Harnesses-JIT__01-H1-h4rn3ss-f0nd4m3nt0s.md",
+          "originalPath": "09-Harnesses-JIT/01-H1-h4rn3ss-f0nd4m3nt0s.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "01. ¿Qué es un AI Harness? Anatomía y Capas de Ejecución",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 7036
+        },
+        {
+          "id": "09-Harnesses-JIT__02-H2-t4x0n0m14-3tcl0vg-f0rm4l",
+          "file": "docs/09-Harnesses-JIT__02-H2-t4x0n0m14-3tcl0vg-f0rm4l.md",
+          "originalPath": "09-Harnesses-JIT/02-H2-t4x0n0m14-3tcl0vg-f0rm4l.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "02. Taxonomías del Harness: ETCLOVG, Formal H=(E,T,C,S,L,V) y Madurez de Gerl",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 6935
+        },
+        {
+          "id": "09-Harnesses-JIT__03-H3-c1cl0-v1d4-c0mp4ct4c10n",
+          "file": "docs/09-Harnesses-JIT__03-H3-c1cl0-v1d4-c0mp4ct4c10n.md",
+          "originalPath": "09-Harnesses-JIT/03-H3-c1cl0-v1d4-c0mp4ct4c10n.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "03. Ciclo de Vida, Estado y Compactación de Contexto",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 6011
+        },
+        {
+          "id": "09-Harnesses-JIT__04-A1-4n4t0m14-c0gn1t1v4",
+          "file": "docs/09-Harnesses-JIT__04-A1-4n4t0m14-c0gn1t1v4.md",
+          "originalPath": "09-Harnesses-JIT/04-A1-4n4t0m14-c0gn1t1v4.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "01. Anatomía del Agente Cognitivo: Las 7 Funciones ($C_1 - C_7$)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 4891
+        },
+        {
+          "id": "09-Harnesses-JIT__05-A2-t1p0s-4g3nt3s-m9lt14g3nt3s",
+          "file": "docs/09-Harnesses-JIT__05-A2-t1p0s-4g3nt3s-m9lt14g3nt3s.md",
+          "originalPath": "09-Harnesses-JIT/05-A2-t1p0s-4g3nt3s-m9lt14g3nt3s.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "02. Tipología y Métodos de Razonamiento en Agentes Individuales",
+          "depth": "intro",
+          "minutes": 15,
+          "bytes": 19776
+        },
+        {
+          "id": "09-Harnesses-JIT__06-A3-p4tr0n3s-4ndr3w-ng",
+          "file": "docs/09-Harnesses-JIT__06-A3-p4tr0n3s-4ndr3w-ng.md",
+          "originalPath": "09-Harnesses-JIT/06-A3-p4tr0n3s-4ndr3w-ng.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "01. Los Cuatro Patrones de Diseño Agéntico de Andrew Ng",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 5069
+        },
+        {
+          "id": "09-Harnesses-JIT__07-S1-c0nv3rs10n-sk1lls",
+          "file": "docs/09-Harnesses-JIT__07-S1-c0nv3rs10n-sk1lls.md",
+          "originalPath": "09-Harnesses-JIT/07-S1-c0nv3rs10n-sk1lls.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "01. Conversión de Libros en Skills: `book-to-skill` (virgiliojr94)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 8355
+        },
+        {
+          "id": "09-Harnesses-JIT__08-O1-4n4l1s1s-0p3nc0d3-c0mp4r4t1v4",
+          "file": "docs/09-Harnesses-JIT__08-O1-4n4l1s1s-0p3nc0d3-c0mp4r4t1v4.md",
+          "originalPath": "09-Harnesses-JIT/08-O1-4n4l1s1s-0p3nc0d3-c0mp4r4t1v4.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "01. Anatomía del Harness de OpenCode Beta v2",
+          "depth": "intro",
+          "minutes": 11,
+          "bytes": 14191
+        },
+        {
+          "id": "09-Harnesses-JIT__09-J1-j1t-h4rn3ss-p4r4d1gm4",
+          "file": "docs/09-Harnesses-JIT__09-J1-j1t-h4rn3ss-p4r4d1gm4.md",
+          "originalPath": "09-Harnesses-JIT/09-J1-j1t-h4rn3ss-p4r4d1gm4.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "01. El Paradigma Just-In-Time (JIT) Harness y Model-as-a-Harness",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 14593
+        },
+        {
+          "id": "09-Harnesses-JIT__10-W1-w1k1sk1ll-m3m0r14",
+          "file": "docs/09-Harnesses-JIT__10-W1-w1k1sk1ll-m3m0r14.md",
+          "originalPath": "09-Harnesses-JIT/10-W1-w1k1sk1ll-m3m0r14.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "01. Análisis Detallado del Paper WikiSkill (arXiv:2608.27454v1)",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 5504
+        },
+        {
+          "id": "09-Harnesses-JIT__11-P1-pr0p93st4-j1t-0p3nc0d3",
+          "file": "docs/09-Harnesses-JIT__11-P1-pr0p93st4-j1t-0p3nc0d3.md",
+          "originalPath": "09-Harnesses-JIT/11-P1-pr0p93st4-j1t-0p3nc0d3.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "01. Diseño de Arquitectura: JIT-Harness Engine + WikiSkill para OpenCode Beta v2",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 14059
+        },
+        {
+          "id": "09-Harnesses-JIT__12-R1-l4b-g10s4r10-ch34t",
+          "file": "docs/09-Harnesses-JIT__12-R1-l4b-g10s4r10-ch34t.md",
+          "originalPath": "09-Harnesses-JIT/12-R1-l4b-g10s4r10-ch34t.md",
+          "category": "09-Harnesses-JIT",
+          "categoryTitle": "Harnesses JIT",
+          "subCategory": null,
+          "title": "01. Laboratorio Práctico: Comandos Copy-Paste para Experimentar",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 14200
         }
       ]
     },
@@ -1277,7 +1874,7 @@
       "title": "Prompt Injection",
       "level": 4,
       "description": "Técnicas de manipulación de LLMs — estudio defensivo.",
-      "count": 14,
+      "count": 16,
       "items": [
         {
           "id": "99-Prompt-Injection__01-academico-irb",
@@ -1422,6 +2019,30 @@
           "depth": "intro",
           "minutes": 12,
           "bytes": 14476
+        },
+        {
+          "id": "99-Prompt-Injection__13-syst3m-pr0mpt-3xtr4ct10n",
+          "file": "docs/99-Prompt-Injection__13-syst3m-pr0mpt-3xtr4ct10n.md",
+          "originalPath": "99-Prompt-Injection/13-syst3m-pr0mpt-3xtr4ct10n.md",
+          "category": "99-Prompt-Injection",
+          "categoryTitle": "Prompt Injection",
+          "subCategory": null,
+          "title": "🛡️ System Prompt Extraction — Guía Defensiva de Fuga de Instrucciones Iniciales",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 12867
+        },
+        {
+          "id": "99-Prompt-Injection__14-pr0mpt-4t4c4nt3-c0mpl3t0",
+          "file": "docs/99-Prompt-Injection__14-pr0mpt-4t4c4nt3-c0mpl3t0.md",
+          "originalPath": "99-Prompt-Injection/14-pr0mpt-4t4c4nt3-c0mpl3t0.md",
+          "category": "99-Prompt-Injection",
+          "categoryTitle": "Prompt Injection",
+          "subCategory": null,
+          "title": "Prompt Atacante Completo — Template Maestro Unificado",
+          "depth": "intro",
+          "minutes": 10,
+          "bytes": 9717
         },
         {
           "id": "99-Prompt-Injection__99-guia-unificada",

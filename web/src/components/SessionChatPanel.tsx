@@ -160,8 +160,17 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string) => {
     if (!config) return
     if (!session) return
+    if (msgs.isSending) {
+      msgs.setRuntimeError("Ya hay un envío en curso — espera un momento")
+      return false
+    }
+    if (msgs.awaitingAssistantReply || isSessionActive(session)) {
+      msgs.setRuntimeError("Espera a que termine la respuesta anterior")
+      return false
+    }
     const rawComposer = (typeof text === "string" ? text : composerRef.current).trim() ? (typeof text === "string" ? text : composerRef.current) : ""
-    const currentComposer = visualPromptContext ? formatSelectionForPrompt(rawComposer, visualPromptContext) : rawComposer
+    const hasVisual = Boolean(visualPromptContext)
+    const currentComposer = hasVisual ? formatSelectionForPrompt(rawComposer, visualPromptContext!) : rawComposer
     if (!currentComposer.trim() && (!images || images.length === 0)) return
     if (connectionState === "offline") {
       onQueueAction({
@@ -177,6 +186,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       msgs.setComposer("")
       composerRef.current = ""
       msgs.setRuntimeError("Prompt queued - will send when connection is restored")
+      if (hasVisual) onClearVisualSelection?.()
       return
     }
     let sendText = currentComposer
@@ -199,7 +209,10 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     onRecordPrompt(currentComposer)
     stopGenerationRef.current = false
     const revertMsgId = localRevertID ?? session?.revert?.messageID
+    let prevMessagesSnapshot: typeof msgs.messages | null = null
     if (revertMsgId) {
+      // Snapshot para rollback si el envío falla
+      prevMessagesSnapshot = msgs.messages
       msgs.setMessages((prev) => keepMessagesThrough(prev, session.id, revertMsgId))
     }
     setLocalRevertID(null)
@@ -207,10 +220,18 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       refresh,
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
       onSetCommands, msgs.setRuntimeError, images,
-      sendText !== currentComposer ? sendText : (visualPromptContext && rawComposer !== currentComposer ? currentComposer : undefined), undefined, originalText ?? undefined)
+      sendText !== currentComposer ? sendText : (hasVisual && rawComposer !== currentComposer ? currentComposer : undefined), undefined, originalText ?? undefined)
     if (res === "connect") onOpenConnect?.()
-    // Auto-limpiar selección scropeada tras envío exitoso
-    if (res !== false && visualPromptContext) onClearVisualSelection?.()
+    if (res === false) {
+      // Rollback de pruning y restaurar composer original si hubo traducción
+      if (prevMessagesSnapshot) msgs.setMessages(prevMessagesSnapshot)
+      if (originalText) {
+        msgs.setComposer(originalText)
+        composerRef.current = originalText
+      }
+    }
+    // Limpiar selección visual siempre para evitar contexto stale duplicado en reintentos
+    if (hasVisual) onClearVisualSelection?.()
     return typeof res === "boolean" ? res : true
   }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID, onOpenConnect, visualPromptContext, onClearVisualSelection])
 
@@ -276,14 +297,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   }, [msgs, session, refresh])
 
   const handleCompact = useCallback(async () => {
-    msgs.setCompacting(true, session.id)
-    msgs.setAwaitingAssistantReply(true)
-    try {
-      await msgs.compactSession(session.id, session.directory, panelModelOption?.providerID ?? "", panelModelOption?.modelID ?? "", refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined))
-    } finally {
-      msgs.setCompacting(false, session.id)
-      msgs.setAwaitingAssistantReply(false)
-    }
+    await msgs.compactSession(session.id, session.directory, panelModelOption?.providerID ?? "", panelModelOption?.modelID ?? "", refresh, () => msgs.loadSelected(session.id, session.directory).then(() => undefined))
   }, [msgs, session, panelModelOption, refresh])
 
   const isWorking = useMemo(() => {
@@ -296,14 +310,15 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     if (!isWorking && stopGenerationRef.current) stopGenerationRef.current = false
   }, [isWorking])
 
-  // Polling para desktop: cuando SSE está deshabilitado (saver/ultra/miser) no hay updates en vivo.
-  // Sin esto, el assistant no aparece hasta re-entrar a la sesión.
+  // Polling desktop: reconciliación periódica incluso con SSE vivo (reconnect perdido sin replay).
+  // Antes hacía `if(isStreamingActive) return` → con SSE vivo nunca hacía fetch y el pull
+  // quedaba congelado hasta re-entrar (que fuerza loadSelected). Ahora poll siempre;
+  // el merge de useMessages protege el mensaje en curso (awaiting) contra borrado.
   const isStreamingActive = streamState === "streaming"
   const pollInterval = isWorking ? 3000 : dataMode === "full" ? 5000 : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
   usePolling(async () => {
-    if (!isWorking || isStreamingActive) return
     await msgs.loadSelected(session.id, session.directory).catch(() => undefined)
-  }, pollInterval, [session.id, session.directory, dataMode, isWorking, isStreamingActive], isStreamingActive)
+  }, pollInterval, [session.id, session.directory, dataMode, isWorking, isStreamingActive], false)
 
   const chatProps: ChatViewProps = useMemo(() => ({
     ...baseProps,

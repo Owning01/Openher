@@ -5,7 +5,6 @@ import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
 import { PromptPresetSheet } from "./PromptPresetSheet"
-import { ModelSelectorModal } from "./ModelSelectorModal"
 export { ThinkingLevels } from "./ThinkingLevels"
 import { InlineRename } from "./InlineRename"
 import { SubagentFooter } from "./SubagentFooter"
@@ -157,21 +156,6 @@ export const ChatView = memo(function ChatView({
   const [showSearch, setShowSearch] = useState(false)
   const [searchPos, setSearchPos] = useState(0)
   const [showOverflow, setShowOverflow] = useState(false)
-  const [showModelMenu, setShowModelMenu] = useState(false)
-  const modelMenuRef = useRef<HTMLDivElement | null>(null)
-  const modelToggleRef = useRef<HTMLButtonElement | null>(null)
-  // Modal centrado: solo se cierra con X o ESC (no con click outside).
-  useEffect(() => {
-    if (!showModelMenu) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setShowModelMenu(false)
-        modelToggleRef.current?.focus()
-      }
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [showModelMenu])
   const [showSkills, setShowSkills] = useState(false)
   const [showPrompts, setShowPrompts] = useState(false)
   const [showChatCustomizer, setShowChatCustomizer] = useState(false)
@@ -367,44 +351,7 @@ export const ChatView = memo(function ChatView({
         {selectedSession && (
           <div className="detail-header-actions">
             {pendingCount > 0 && <span className="pending-badge" title={t('session.pendingCount', { count: pendingCount })}>{pendingCount}</span>}
-            {displayModelOption && (
-              <div className="header-model-wrap" ref={modelMenuRef} style={{ position: "relative", flexShrink: 0 }}>
-                <button
-                  ref={modelToggleRef}
-                  type="button"
-                  className="header-model-toggle"
-                  onClick={(e) => { e.stopPropagation(); setShowModelMenu((v) => !v) }}
-                  aria-expanded={showModelMenu}
-                  aria-haspopup="true"
-                  aria-controls="header-model-menu"
-                  title={`${displayModelOption.modelName ?? t('detail.modelLoading')}${displayModelOption.variant ? ` · ${t('detail.modelVariant', { variant: displayModelOption.variant })}` : ""}`}>
-                  <span className="header-model-name">
-                    {displayModelOption.modelName ?? t('detail.modelLoading')}
-                    {displayModelOption.variant ? <span className="header-model-variant"> · {displayModelOption.variant}</span> : ""}
-                  </span>
-                </button>
-                {showModelMenu && (
-                  <ModelSelectorModal
-                    isOpen={showModelMenu}
-                    onClose={() => {
-                      setShowModelMenu(false)
-                      modelToggleRef.current?.focus()
-                    }}
-                    activeModelOption={displayModelOption}
-                    activeModelVariants={activeModelVariants}
-                    selectedVariant={selectedVariant}
-                    onChangeVariant={(v) => onChangeVariant(v, selectedSession?.id)}
-                    modelOptions={modelOptions}
-                    onChangeModel={(key, variant) => {
-                      if (onChangeModel) onChangeModel(key, variant, selectedSession?.id)
-                    }}
-                    variantGroups={variantGroups as any}
-                  />
-                )}
-                {/* Fallback hidden hook to maintain backward-compatibility test contract for changeModel */}
-                <span style={{ display: "none" }} aria-hidden="true">{t('detail.changeModel')}</span>
-              </div>
-            )}
+            <span style={{ display: "none" }} aria-hidden="true">{t('detail.changeModel')}</span>
             {devServer.hasDevServer && (
               <button
                 type="button"
@@ -741,6 +688,14 @@ export const ChatView = memo(function ChatView({
           onThemeCommand={onThemeCommand}
           snippets={snippets ?? []}
           charLimit={charLimit ?? 0}
+          activeModelOption={displayModelOption}
+          activeModelVariants={activeModelVariants}
+          selectedVariant={selectedVariant}
+          onChangeVariant={onChangeVariant}
+          modelOptions={modelOptions}
+          onChangeModel={onChangeModel}
+          variantGroups={variantGroups as any}
+          sessionID={selectedSession?.id}
         />
       )}
 

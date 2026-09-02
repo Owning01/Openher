@@ -106,24 +106,28 @@ export function useShell(config: ServerConfig | null, initialDirectory?: string)
 
     setRunning(true)
 
-    // Construir comando envuelto según la shell seleccionada
+    // Construir comando envuelto según la shell seleccionada — escapa effectiveDir para evitar inyección
+    // pwsh '...' escapa con '' ; bash/cmd usan shellEscape simple ; si falla el escape, se envía el comando crudo y el server hace cd por separado
+    const shellEscapePwsh = (s: string) => s.replace(/'/g, "''")
+    const shellEscapeBash = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
+    const shellEscapeCmd = (s: string) => s.replace(/"/g, `""`)
     let commandToSend = trimmed
     if (effectiveDir) {
       switch (shell) {
         case "pwsh":
-          commandToSend = `pwsh -NoProfile -Command "& { Set-Location -LiteralPath '${effectiveDir}'; ${trimmed} }"`
+          commandToSend = `pwsh -NoProfile -Command "& { Set-Location -LiteralPath '${shellEscapePwsh(effectiveDir)}'; ${trimmed} }"`
           break
         case "powershell":
-          commandToSend = `powershell -NoProfile -Command "& { Set-Location -LiteralPath '${effectiveDir}'; ${trimmed} }"`
+          commandToSend = `powershell -NoProfile -Command "& { Set-Location -LiteralPath '${shellEscapePwsh(effectiveDir)}'; ${trimmed} }"`
           break
         case "cmd":
-          commandToSend = `cmd.exe /c "cd /d "${effectiveDir}" && ${trimmed}"`
+          commandToSend = `cmd.exe /c "cd /d "${shellEscapeCmd(effectiveDir)}" && ${trimmed}"`
           break
         case "bash":
-          commandToSend = `bash -c "cd '${effectiveDir}' && ${trimmed}"`
+          commandToSend = `bash -c "cd ${shellEscapeBash(effectiveDir)} && ${trimmed}"`
           break
         case "wsl":
-          commandToSend = `wsl -e bash -c "cd '${effectiveDir}' && ${trimmed}"`
+          commandToSend = `wsl -e bash -c "cd ${shellEscapeBash(effectiveDir)} && ${trimmed}"`
           break
         default:
           commandToSend = trimmed
