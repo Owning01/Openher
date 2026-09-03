@@ -1,6 +1,6 @@
-// Highlight compartido (DRY): un solo punto de highlight para ToolPart,
-// visor del explorer y cualquier vista de solo-lectura. Reusa lowlight +
-// langFromFilename + hastToHtml, igual que LiteEditor/FileEditor, con los
+// Highlight compartido (DRY): un solo punto de highlight para ToolPart y
+// visor del explorer en solo-lectura. Reusa lowlight +
+// langFromFilename + hastToHtml, igual que LiteEditor, con los
 // mismos topes (archivos grandes van en plano).
 import { memo, useMemo } from "react"
 import { lowlight, langFromFilename } from "../utils/highlight"

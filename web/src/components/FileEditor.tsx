@@ -1,12 +1,11 @@
-import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { api } from "../api"
 import { shell } from "../shell"
 import { ModalHeader } from "./ModalHeader"
 import { CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { basename } from "../utils"
-import { sanitizeHtml, sanitizeClassName } from "../utils/sanitize"
-import { lowlight, langFromFilename } from "../utils/highlight"
+import { LiteEditor } from "./LiteEditor"
 import type { ServerConfig } from "../types"
 
 type Props = {
@@ -16,28 +15,21 @@ type Props = {
   onClose: () => void
 }
 
-function serializeHast(nodes: unknown[]): string {
-  let out = ""
-  for (const n of nodes as Array<{ type: string; tagName?: string; properties?: Record<string, string[]>; children?: unknown[]; value?: string }>) {
-    if (n.type === "text") {
-      out += (n.value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    } else if (n.type === "element" && n.tagName) {
-      const cls = sanitizeClassName(n.properties?.className?.join(" ") ?? "")
-      out += `<${n.tagName}${cls ? ` class="${cls}"` : ""}>${serializeHast(n.children ?? [])}</${n.tagName}>`
-    }
-  }
-  return sanitizeHtml(out)
-}
-
+// Modal de edición: carga/guardado/autoguardado + cromo. El editor en sí es
+// LiteEditor (highlight con debounce, Tab/Shift-Tab, multi-cursor,
+// autocompletado, find, diff sin guardar): sin lógica de edición duplicada.
 export const FileEditor = memo(function FileEditor({ config, path, directory, onClose }: Props) {
   const t = useT()
   const [content, setContent] = useState("")
+  const [saved, setSaved] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const autoSaveTimerRef = useRef<number | null>(null)
+  const contentRef = useRef(content)
+  contentRef.current = content
 
   useEffect(() => {
     let cancelled = false
@@ -52,6 +44,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
           const r = await shell.fs.read(path)
           if (!cancelled) {
             setContent(r.content)
+            setSaved(r.content)
             setLoading(false)
             return
           }
@@ -69,6 +62,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
           return
         }
         setContent(result.content)
+        setSaved(result.content)
         setLoading(false)
       } catch (err) {
         if (cancelled) return
@@ -77,6 +71,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
           const r = await shell.fs.read(path)
           if (!cancelled) {
             setContent(r.content)
+            setSaved(r.content)
             setLoading(false)
             return
           }
@@ -103,6 +98,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
         await api.writeFile(config, path, textToSave, directory)
       }
       setDirty(false)
+      setSaved(textToSave)
       setLastSaved(new Date())
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al guardar archivo"
@@ -116,6 +112,15 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
       setSaving(false)
     }
   }, [config, path, directory, saving])
+
+  // Guardado inmediato (Ctrl+S del editor): vacía el debounce y guarda ya.
+  const flushSave = useCallback(() => {
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = null
+    }
+    void saveFile(contentRef.current)
+  }, [saveFile])
 
   // Autoguardado con debounce de 1000ms
   useEffect(() => {
@@ -146,18 +151,10 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [content, dirty, saveFile])
 
-  const highlighted = useMemo(() => {
-    if (!content) return ""
-    const lang = langFromFilename(path)
-    try {
-      const root = lowlight.highlight(lang, content) as unknown as { children: Array<{ type: string; tagName?: string; properties?: Record<string, string[]>; children?: unknown[]; value?: string }> }
-      return serializeHast(root.children)
-    } catch {
-      return content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    }
-  }, [content, path])
-
-  const lineCount = useMemo(() => content.split("\n").length, [content])
+  const handleChange = useCallback((v: string) => {
+    setContent(v)
+    setDirty(true)
+  }, [])
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -179,29 +176,13 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
           ) : error ? (
             <p className="error-text">{error}</p>
           ) : (
-            <div className="code-editor-wrap">
-              <div className="code-editor-lines" aria-hidden="true">
-                {Array.from({ length: lineCount }, (_, i) => (
-                  <span key={i + 1}>{i + 1}</span>
-                ))}
-              </div>
-              <div className="code-editor-scroll">
-                <pre className="code-editor-highlight" aria-hidden="true">
-                  <code dangerouslySetInnerHTML={{ __html: highlighted }} />
-                </pre>
-                <textarea
-                  className="code-editor-textarea"
-                  value={content}
-                  onChange={(e) => {
-                    setContent(e.target.value)
-                    setDirty(true)
-                  }}
-                  spellCheck={false}
-                  autoFocus
-                  wrap="off"
-                />
-              </div>
-            </div>
+            <LiteEditor
+              path={path}
+              value={content}
+              onChange={handleChange}
+              onSave={flushSave}
+              savedValue={saved}
+            />
           )}
         </div>
       </div>

@@ -311,8 +311,18 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extraCursors, bracket, value, fontSize, wrap, tabSize])
 
-  // Diccionario local para autocompletar (topeado)
-  const words = useMemo(() => (value.length > 200_000 ? [] : collectWords(value)), [value])
+  // Diccionario local para autocompletar: bajo demanda al abrir el popup
+  // (nunca por tecla) y cacheado mientras el texto no cambie. El useMemo
+  // anterior escaneaba el archivo completo en cada pulsación.
+  const wordsCache = useRef<{ text: string; words: string[] } | null>(null)
+  const getWords = useCallback(() => {
+    const t = valueRef.current
+    const c = wordsCache.current
+    if (c && c.text === t) return c.words
+    const w = t.length > 200_000 ? [] : collectWords(t)
+    wordsCache.current = { text: t, words: w }
+    return w
+  }, [])
 
   // Diff diferido: solo se calcula con el panel abierto (LCS caro por tecla no)
   const diff = useMemo(
@@ -535,7 +545,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   const openComplete = useCallback(
     (auto: boolean) => {
       const ta = taRef.current
-      if (!ta || words.length === 0) return
+      if (!ta) return
       const t = valueRef.current
       const caret = ta.selectionStart ?? 0
       const { word, start } = wordBeforeCaret(t, caret)
@@ -543,11 +553,13 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
         setComplete(null)
         return
       }
+      const dict = getWords()
+      if (dict.length === 0) return
       if (!word) {
-        if (!auto) setComplete({ items: words.slice(0, 8), start: caret, active: 0 })
+        if (!auto) setComplete({ items: dict.slice(0, 8), start: caret, active: 0 })
         return
       }
-      const items = words.filter((w) => w.startsWith(word) && w !== word).slice(0, 8)
+      const items = dict.filter((w) => w.startsWith(word) && w !== word).slice(0, 8)
       if (items.length === 0) {
         setComplete(null)
         return
@@ -556,7 +568,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       const m = measureOffset(caret)
       setCompletePos(m ? { top: m.top + m.height + 2, left: m.left } : null)
     },
-    [words, measureOffset]
+    [getWords, measureOffset]
   )
 
   const acceptComplete = useCallback(
@@ -905,7 +917,16 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       }
       if (e.key === "Tab") {
         e.preventDefault()
-        doIndent(e.shiftKey)
+        const a = ta.selectionStart ?? 0
+        const b = ta.selectionEnd ?? 0
+        if (a === b && !e.shiftKey) {
+          // Monaco: Tab colapsado inserta el indent en el caret, también en
+          // línea vacía (indentSelection no tocaba líneas vacías → parecía roto).
+          const t = valueRef.current
+          applyEdit(t.slice(0, a) + tab + t.slice(a), a + tab.length, a + tab.length)
+        } else {
+          doIndent(e.shiftKey)
+        }
         return
       }
       if (e.key === "Enter") {
