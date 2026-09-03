@@ -346,6 +346,68 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
+/* ===== GrayCheck: checkbox circular gris (sin azul) =====
+   Apagado: gris translúcido tenue. Encendido: degradado grisáceo con
+   tilde blanca. Tamaño por font-size (15px → círculo 24px). */
+.graycheck input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.graycheck {
+  display: block;
+  position: relative;
+  flex: 0 0 auto;
+  cursor: pointer;
+  font-size: 15px;
+  user-select: none;
+}
+
+.graycheck-mark {
+  position: relative;
+  top: 0;
+  left: 0;
+  height: 1.6em;
+  width: 1.6em;
+  border-radius: 50%;
+  background: #9aa0ab38;
+  opacity: 0.45;
+  transition: all 0.2s ease;
+}
+
+.graycheck input:checked ~ .graycheck-mark {
+  background: linear-gradient(144deg, #7d838d, #565b64 50%, #a7adb8);
+  opacity: 0.9;
+}
+
+.graycheck-mark:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+.graycheck input:checked ~ .graycheck-mark:after {
+  display: block;
+}
+
+.graycheck .graycheck-mark:after {
+  left: 0.61em;
+  top: 0.43em;
+  width: 0.25em;
+  height: 0.5em;
+  border: solid #fff;
+  border-width: 0 0.15em 0.15em 0;
+  transform: rotate(45deg);
+}
+
+.graycheck input:focus-visible ~ .graycheck-mark {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .switch-input {
   width: 100px;
   padding: 0.35rem 0.5rem;

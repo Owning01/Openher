@@ -1,6 +1,7 @@
 import { memo } from "react"
 import { useT } from "../i18n-context"
 import type { ChatSettings } from "../types"
+import { GrayCheck } from "./GrayCheck"
 
 type Props = {
   settings: ChatSettings
@@ -141,9 +142,11 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
             <span className="switch-label">
               <strong>{t(labelKey)}</strong>
             </span>
-            <input type="checkbox" className="switch-checkbox"
+            <GrayCheck
+              label={t(labelKey)}
               checked={settings[key]}
-              onChange={() => onSettingChange(key, !settings[key])} />
+              onChange={(next) => onSettingChange(key, next)}
+            />
           </label>
         ))}
       </div>
