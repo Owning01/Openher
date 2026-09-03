@@ -125,14 +125,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
   const composerRef = useRef(composer)
   composerRef.current = composer
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const current = composerRef.current
-      if (current) localStorage.setItem(storageKey, current)
-      else localStorage.removeItem(storageKey)
-    }, 2000)
-    return () => clearInterval(timer)
-  }, [storageKey])
+  // NOTA: sin intervalo de persistencia. El Composer persiste su draft por
+  // tecla en su key por sesión (composerDraft.ts): un intervalo con la key
+  // vieja pisaría el draft de otra sesión al cambiar de chat.
 
   const loadSelectedRequestRef = useRef(0)
   const awaitingAssistantBaselineRef = useRef("")
@@ -455,14 +450,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       for (const m of current) {
         if (m.info.sessionID !== sessionID || confirmedIDs.has(m.info.id)) continue
         const t = extractText(m).trim()
-        if (t) {
+        const optImgCount = m.parts.filter((p) => isImagePart(p)).length
+        if (t && optImgCount === 0) {
           const cnt = confirmedTextCounts.get(t) ?? 0
           if (cnt > 0) {
             confirmedTextCounts.set(t, cnt - 1)
             removeIDs.add(m.info.id)
           }
         } else {
-          const optImgCount = m.parts.filter((p) => isImagePart(p)).length
+          // Con imágenes (solo-imagen o texto+imagen): confirmar por conteo.
+          // Borrar por texto acá perdería la imagen cuando el echo del server
+          // trae el texto pero aún no (o nunca) los parts de imagen.
           const inner = confirmedImageCountMap.get(m.info.sessionID)
           const icnt = inner?.get(optImgCount) ?? 0
           if (icnt > 0) {
@@ -477,7 +475,12 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (safe.length > 0) {
       const last = safe[safe.length - 1]
       if (last.info.role === "assistant" && (last.info.time.completed || last.info.finish)) {
-        setAwaitingAssistantReply(false)
+        // Solo apagar si hay algo NUEVO desde que se empezó a esperar: si la
+        // firma no cambió, el completed es viejo (poll entre turnos) y el
+        // agente puede seguir trabajando → no robar el botón stop.
+        if (lastSigRef.current.assistantSignature !== awaitingAssistantBaselineRef.current) {
+          setAwaitingAssistantReply(false)
+        }
       }
     }
   }, [config, dataMode])
@@ -598,6 +601,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     try {
       setComposer("")
       setAwaitingAssistantReply(true)
+      awaitingAssistantBaselineRef.current = lastSigRef.current.assistantSignature
       await api.sendShell(config, sessionID, text, directory)
     } catch (err) {
       setAwaitingAssistantReply(false)
@@ -615,6 +619,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   ) => {
     setCompacting(true, sessionID)
     setAwaitingAssistantReply(true)
+    awaitingAssistantBaselineRef.current = lastSigRef.current.assistantSignature
     try {
       const ok = await api.summarize(config, sessionID, providerID, modelID, directory, false)
       if (!ok) { setRuntimeError("Compact returned false from server"); return }

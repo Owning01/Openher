@@ -172,6 +172,10 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       if (sessionID && sessionID !== deps.sessionID) return
+      // `retried` sigue trabajando: nunca apaga (antes dejaba al agente sin
+      // botón stop hasta el próximo envío). El fin real lo marcan
+      // session.error/idle o message.updated completed.
+      if (type === "session.next.retried") return
       deps.setAwaitingAssistantReply(false)
       return
     }

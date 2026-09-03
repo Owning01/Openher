@@ -38,15 +38,20 @@ function toolRunningLabel(state?: { input?: unknown; tool?: string }): string {
 
 /** Extract base64 image data from a message part (handles both type:image and type:file). */
 function getPartImageData(p: { type: string; data?: string; url?: string; mimeType?: string; mime?: string }): string | null {
-  if (p.type === "image" && p.data) return p.data
+  const url = p.url ?? ""
+  // Solo renderizable en el browser: data: o http(s). Paths locales del
+  // server (C:\…, /tmp/…) no cargan en el webview y se ignoran.
+  const renderableUrl = url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://") ? url : ""
+  if (p.type === "image") {
+    if (p.data) return p.data
+    if (renderableUrl) return renderableUrl
+    return null
+  }
   if (p.type === "file") {
     const mime = p.mime || p.mimeType || ""
     if (!isImagePart({ type: p.type, mimeType: mime })) return null
     if (p.data) return p.data
-    if (p.url) {
-      if (p.url.startsWith("data:")) return p.url
-      return null
-    }
+    if (renderableUrl) return renderableUrl
   }
   return null
 }

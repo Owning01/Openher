@@ -139,6 +139,9 @@ export type V2Message = {
     text?: string
     data?: string
     mimeType?: string
+    mime?: string
+    url?: string
+    filename?: string
     name?: string
     state?: unknown
     time?: { created?: number; completed?: number }
@@ -153,7 +156,12 @@ export function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
     type: c.type ?? "text",
     text: c.text,
     data: c.data,
-    mimeType: c.mimeType,
+    mimeType: c.mimeType ?? c.mime,
+    // Adjuntos (imágenes): sin url/mime/filename el mensaje confirmado
+    // pierde la imagen y el chat la deja de mostrar tras el optimistic.
+    url: (c as { url?: string }).url,
+    mime: c.mime,
+    filename: (c as { filename?: string }).filename ?? c.name,
     callID: c.id,
     tool: c.name,
     state: c.state as MessageEnvelope["parts"][number]["state"],

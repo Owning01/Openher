@@ -526,6 +526,31 @@ describe("toMessageEnvelopeV1", () => {
     expect(out.parts).toEqual([])
   })
 
+  it("preserva url/mime/filename en parts de archivo (imágenes)", () => {
+    const raw: V2Message = {
+      id: "m2",
+      sessionID: "sess-1",
+      content: [
+        {
+          id: "f1",
+          type: "file",
+          mime: "image/png",
+          filename: "clipboard.png",
+          url: "data:image/png;base64,AAA",
+        },
+      ],
+    }
+    const out = toMessageEnvelopeV1(raw)
+    expect(out.parts).toHaveLength(1)
+    expect(out.parts[0]).toMatchObject({
+      type: "file",
+      mimeType: "image/png",
+      mime: "image/png",
+      filename: "clipboard.png",
+      url: "data:image/png;base64,AAA",
+    })
+  })
+
   it("retorna parts vacío cuando content es undefined explícito", () => {
     const out = toMessageEnvelopeV1({ id: "m1", content: undefined })
     expect(out.parts).toEqual([])
