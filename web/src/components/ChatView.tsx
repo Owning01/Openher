@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon, EyeIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -142,6 +142,7 @@ export const ChatView = memo(function ChatView({
   onSheetOpen: _onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, sessions, onOpenSession, onOpenSettings, onOpenSessionStats, onShellSend, onThemeCommand,
   onOpenRemoteDesktop, onOpenBrowser,
+  onToggleReadingMode,
   flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
   pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
@@ -488,6 +489,10 @@ export const ChatView = memo(function ChatView({
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSkills(true) }}>
                     <LayersIcon size={14} />
                     {t('session.skills')}
+                  </button>
+                  <button className="overflow-item" onClick={() => { setShowOverflow(false); onToggleReadingMode() }}>
+                    <EyeIcon size={14} />
+                    {readingMode ? t('detail.readingModeOff') : t('detail.readingModeOn')}
                   </button>
                   {onOpenTerminal && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenTerminal() }}>
