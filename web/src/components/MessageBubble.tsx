@@ -10,6 +10,7 @@ import { FileDiffs } from "./FileDiffs"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { CollapsibleSection } from "./CollapsibleSection"
 import { Markdown } from "./Markdown"
+import { MarkdownWithEmbeds } from "./AgentEmbed"
 import { ImageLightbox } from "./ImageLightbox"
 import { ToolIcon, LoadingIcon } from "../Icons"
 
@@ -116,7 +117,7 @@ const TranslationOriginal = memo(function TranslationOriginal({ messageId }: { m
   )
 })
 
-export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, onContextMenu, showTodoButton: _showTodoButton, onToggleTodos: _onToggleTodos, todosOpen: _todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
+export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, onContextMenu, showTodoButton: _showTodoButton, onToggleTodos: _onToggleTodos, todosOpen: _todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", onRegenerate, onOpenADEDiff, outbox }: {
   message: RenderedMessage
   queued?: boolean
   revert?: SessionView["revert"]
@@ -401,17 +402,16 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             </button>
             {compactionOpen && (
               <div className="message-content compaction-body">
-                <Markdown text={message.text} highlight={highlight} />
+                <MarkdownWithEmbeds text={message.text} highlight={highlight} />
               </div>
             )}
-            <div className="compaction-checkpoint" />
           </div>
         ) : message.text && (
           <div className="message-content">
             {!message.info.time.completed && message.text.length > 800 ? (
               <pre className="md-plain-stream">{message.text}</pre>
             ) : (
-              <Markdown text={message.text} highlight={highlight} />
+              <MarkdownWithEmbeds text={message.text} highlight={highlight} />
             )}
           </div>
         )}
