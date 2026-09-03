@@ -9,6 +9,7 @@ import { Capacitor } from "@capacitor/core"
 import "@xterm/xterm/css/xterm.css"
 import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
+import { normFsPath, affectedParentDirs } from "../utils/fsChanges"
 import { VisualSelectOverlay } from "./VisualSelectOverlay"
 import { LiteEditor } from "./LiteEditor"
 import { toBase64Chunked } from "../utils/editorOps"
@@ -1139,19 +1140,35 @@ function ExplorerTreeFolder({
     }
     setExpanded(true)
     if (subDirs.length === 0 && subFiles.length === 0) {
-      setLoading(true)
-      try {
-        const r = await shell.fs.list(entry.path)
-        setSubDirs(r.dirs || [])
-        setSubFiles(r.files || [])
-      } catch {
-        setSubDirs([])
-        setSubFiles([])
-      } finally {
-        setLoading(false)
-      }
+      await reload()
     }
   }
+
+  const reload = async () => {
+    setLoading(true)
+    try {
+      const r = await shell.fs.list(entry.path)
+      setSubDirs(r.dirs || [])
+      setSubFiles(r.files || [])
+    } catch {
+      setSubDirs([])
+      setSubFiles([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Auto-refresh: recarga si /changes reporta create/remove dentro de esta carpeta
+  useEffect(() => {
+    if (!expanded) return
+    const onFs = (e: Event) => {
+      const parents = (e as CustomEvent<string[]>).detail ?? []
+      if (parents.includes(normFsPath(entry.path))) void reload()
+    }
+    window.addEventListener("explorer:fs-changed", onFs)
+    return () => window.removeEventListener("explorer:fs-changed", onFs)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, entry.path])
 
   return (
     <div className="shell-tree-folder-group">
@@ -1340,12 +1357,14 @@ export const ExplorerPanel = memo(function ExplorerPanel({
     window.setTimeout(() => setActionNotice((m) => (m === msg ? null : m)), 2500)
   }
 
-  const load = useCallback(async (path: string) => {
+  const load = useCallback(async (path: string, silent = false) => {
     if (!path) return
     setCwd(path)
-    setPreview(null)
-    pushExplorerRecent(path)
-    refreshExplorerRecent()
+    if (!silent) {
+      setPreview(null)
+      pushExplorerRecent(path)
+      refreshExplorerRecent()
+    }
     try {
       const r = await shell.fs.list(path)
       setDirs(r.dirs || [])
@@ -1381,6 +1400,61 @@ export const ExplorerPanel = memo(function ExplorerPanel({
       }).catch(() => {})
     }
   }, [showDrives, drives.length])
+
+  // Auto-refresh del explorador: poll a /shell/fs/changes cada 2.5s (solo con
+  // la pestaña visible) + al volver el foco. Recarga silenciosa si el cambio
+  // cae en el cwd; avisa al árbol para subcarpetas expandidas.
+  const cwdRef = useRef(cwd)
+  cwdRef.current = cwd
+  const loadRef = useRef(load)
+  loadRef.current = load
+  useEffect(() => {
+    const seqRef = { current: 0 }
+    const inflightRef = { current: false }
+    let stopped = false
+    let timer = 0
+    const poll = async () => {
+      if (stopped) return
+      if (document.visibilityState === "visible" && !inflightRef.current) {
+        inflightRef.current = true
+        try {
+          const r = await shell.fs.changes(seqRef.current)
+          seqRef.current = r.seq ?? seqRef.current
+          const parents = affectedParentDirs(r.events ?? [])
+          if (parents.length > 0) {
+            const cur = cwdRef.current
+            if (cur && parents.includes(normFsPath(cur))) {
+              await loadRef.current(cur, true)
+            }
+            window.dispatchEvent(new CustomEvent("explorer:fs-changed", { detail: parents }))
+          }
+        } catch {
+          /* server viejo sin /changes: el explorador sigue manual */
+        } finally {
+          inflightRef.current = false
+        }
+      }
+      if (!stopped) timer = window.setTimeout(poll, 2500)
+    }
+    // Baseline sin aplicar eventos (evita tormenta inicial del ring del server)
+    shell.fs.changes(0).then((r) => { seqRef.current = r.seq ?? 0 }).catch(() => {}).finally(() => {
+      if (!stopped) timer = window.setTimeout(poll, 2500)
+    })
+    const wake = () => {
+      if (stopped || document.visibilityState !== "visible") return
+      window.clearTimeout(timer)
+      void poll()
+    }
+    const onFocus = () => { if (!stopped) { window.clearTimeout(timer); void poll() } }
+    document.addEventListener("visibilitychange", wake)
+    window.addEventListener("focus", onFocus)
+    return () => {
+      stopped = true
+      window.clearTimeout(timer)
+      document.removeEventListener("visibilitychange", wake)
+      window.removeEventListener("focus", onFocus)
+    }
+  }, [])
 
   // Cerrar menú contextual al hacer clic fuera
   useEffect(() => {

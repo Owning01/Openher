@@ -31,7 +31,25 @@ pub fn handle(
         (Method::Get, "/drives") => json_ok(&serde_json::json!({ "drives": fsx::drives() })),
         (Method::Get, "/list") => {
             let p = q("path").replace("%2F", "/");
+            // Watch on-demand: el dir listado queda vigilado para /changes
+            // (dedupeado por el mapa interno; no recursivo salvo project root)
+            let pb = Path::new(&p).to_path_buf();
+            if pb.is_dir() {
+                crate::fswatch::global().watch_dir(&pb);
+            }
             j!(fsx::list_dir(&p))
+        }
+        (Method::Get, "/changes") => {
+            let since = q("since").parse::<u64>().unwrap_or(0);
+            let (seq, events) = crate::fswatch::global().changes_since(since);
+            json_ok(&serde_json::json!({
+                "seq": seq,
+                "events": events.iter().map(|(s, e)| serde_json::json!({
+                    "seq": s,
+                    "path": e.path.to_string_lossy(),
+                    "kind": e.kind,
+                })).collect::<Vec<_>>(),
+            }))
         }
         (Method::Get, "/search") => {
             let p = q("path").replace("%2F", "/");

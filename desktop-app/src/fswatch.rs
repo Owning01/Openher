@@ -2,12 +2,15 @@
 //! Un solo watcher global, registra directorios de `AppState.projects` y `fsx` explorador.
 //! Push a frontend vía `SSE`/`ws` (aquí solo log + invalidación de cache).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use notify::{Watcher, RecursiveMode, Event, EventKind};
+
+/// Tope del ring de eventos recientes (suficiente para clientes con poll 2.5s)
+const RECENT_CAP: usize = 300;
 
 pub struct FsWatcher {
     watcher: Mutex<Option<notify::RecommendedWatcher>>,
@@ -15,6 +18,8 @@ pub struct FsWatcher {
     tx: crossbeam_channel::Sender<FsEvent>,
     #[allow(dead_code)] // se conserva para no cerrar el canal (sin receivers, tx.send falla)
     rx: crossbeam_channel::Receiver<FsEvent>,
+    seq: Mutex<u64>,
+    recent: Mutex<VecDeque<(u64, FsEvent)>>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,7 +37,40 @@ impl FsWatcher {
             watched: Mutex::new(HashMap::new()),
             tx,
             rx,
+            seq: Mutex::new(0),
+            recent: Mutex::new(VecDeque::with_capacity(RECENT_CAP)),
         })
+    }
+
+    /// Registra un evento con secuencia monotónica en el ring (llamado con
+    /// el watcher ya inicializado; el callback de notify lo invoca vía tx).
+    fn push_event(&self, ev: FsEvent) {
+        let mut seq = self.seq.lock().unwrap_or_else(|e| e.into_inner());
+        *seq += 1;
+        let s = *seq;
+        drop(seq);
+        let mut recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
+        if recent.len() >= RECENT_CAP {
+            recent.pop_front();
+        }
+        recent.push_back((s, ev));
+    }
+
+    /// Drena el canal al ring y devuelve `(seq_actual, eventos con seq > since)`.
+    /// Si `since` quedó atrás del ring (reinicio o cliente lento), devuelve
+    /// todo el ring para forzar un refresh.
+    pub fn changes_since(&self, since: u64) -> (u64, Vec<(u64, FsEvent)>) {
+        while let Ok(ev) = self.rx.try_recv() {
+            self.push_event(ev);
+        }
+        let recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
+        let cur = self.seq.lock().map(|s| *s).unwrap_or(0);
+        let out: Vec<(u64, FsEvent)> = recent
+            .iter()
+            .filter(|(s, _)| *s > since)
+            .map(|(s, e)| (*s, e.clone()))
+            .collect();
+        (cur, out)
     }
 
     pub fn ensure_init(self: &Arc<Self>) {
@@ -97,6 +135,27 @@ impl FsWatcher {
     #[allow(dead_code)]
     pub fn recv_timeout(&self, dur: Duration) -> Option<FsEvent> {
         self.rx.recv_timeout(dur).ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn changes_since_filtra_por_seq_y_orden() {
+        let w = FsWatcher::new();
+        w.push_event(FsEvent { path: PathBuf::from(r"C:\a\1.txt"), kind: "create".into() });
+        w.push_event(FsEvent { path: PathBuf::from(r"C:\a\2.txt"), kind: "remove".into() });
+        let (cur, all) = w.changes_since(0);
+        assert_eq!(cur, 2);
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].0, 1);
+        let (_, tail) = w.changes_since(1);
+        assert_eq!(tail.len(), 1);
+        assert_eq!(tail[0].1.path, PathBuf::from(r"C:\a\2.txt"));
+        let (_, none) = w.changes_since(cur);
+        assert!(none.is_empty());
     }
 }
 

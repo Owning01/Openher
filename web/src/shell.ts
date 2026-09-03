@@ -258,6 +258,7 @@ export const shell = {
   fs: {
     drives: () => get<{ drives: string[] }>("/shell/fs/drives"),
     list: (path: string) => get<{ path: string; dirs: FsEntry[]; files: FsEntry[] }>(`/shell/fs/list?path=${encodeURIComponent(path)}`),
+    changes: (since: number) => get<{ seq: number; events: Array<{ seq: number; path: string; kind: string }> }>(`/shell/fs/changes?since=${since}`),
     searchCode: (path: string, query: string, limit = 100) =>
       get<CodeSearchResult>(`/shell/fs/search?path=${encodeURIComponent(path)}&q=${encodeURIComponent(query)}&limit=${limit}`),
     read: (path: string) => get<{ path: string; content: string; truncated: boolean; size: number; ext: string }>(`/shell/fs/read?path=${encodeURIComponent(path)}`),
