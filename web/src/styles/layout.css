@@ -356,7 +356,16 @@
     letter-spacing: -0.02em;
     opacity: 0.6;
     user-select: none;
-    line-height: 1;
+    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Segunda línea: RSS nativo de los WebView2 propios (renderer + browser + GPU). */
+  .activity-ram-wv {
+    font-size: 0.75rem;
+    opacity: 0.8;
   }
 
   /* Paneles shell dentro del sidebar: llenan la altura del body */

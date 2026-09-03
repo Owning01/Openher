@@ -12,6 +12,7 @@ import {
 } from "../../Icons"
 import { useT } from "../../i18n-context"
 import type { DesktopLayout, ViewType } from "../../types"
+import type { MemoryInfo } from "../../hooks/useMemoryUsage"
 import { EXTERNAL_PROJECTS } from "../../features/external-plugins/config"
 
 export type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm" | "pcFiles" | "reports"
@@ -37,7 +38,7 @@ export interface ActivityBarProps {
   setShowPluginsModal: (v: boolean) => void
   pluginTabs: PluginTabItem[]
   openPluginAsTab: (key: string) => void
-  memInfo: { jsHeapUsed: number; jsHeapTotal: number } | null
+  memInfo: MemoryInfo | null
   formatBytes: (bytes: number) => string
   handleOpenLearning: () => void
   view: ViewType
@@ -256,9 +257,23 @@ export const ActivityBar = memo(function ActivityBar({
         {memInfo && (
           <div
             className="activity-ram-chip"
-            title={`JS Heap: ${formatBytes(memInfo.jsHeapUsed)} / ${formatBytes(memInfo.jsHeapTotal)}`}
+            title={
+              memInfo.webviewRss
+                ? `JS Heap: ${formatBytes(memInfo.jsHeapUsed)} / ${formatBytes(memInfo.jsHeapTotal)} · WebView: ${formatBytes(memInfo.webviewRss)}${memInfo.appRss ? ` · App: ${formatBytes(memInfo.appRss)}` : ""}`
+                : `JS Heap: ${formatBytes(memInfo.jsHeapUsed)} / ${formatBytes(memInfo.jsHeapTotal)}`
+            }
+            aria-label={
+              memInfo.webviewRss
+                ? `RAM JS ${formatBytes(memInfo.jsHeapUsed)}, WebView ${formatBytes(memInfo.webviewRss)}`
+                : `RAM JS ${formatBytes(memInfo.jsHeapUsed)}`
+            }
           >
-            {formatBytes(memInfo.jsHeapUsed)}
+            <span className="activity-ram-js">{formatBytes(memInfo.jsHeapUsed)}</span>
+            {memInfo.webviewRss ? (
+              <span className="activity-ram-wv" title={`WebView: ${formatBytes(memInfo.webviewRss)}`}>
+                {formatBytes(memInfo.webviewRss)}
+              </span>
+            ) : null}
           </div>
         )}
         <button

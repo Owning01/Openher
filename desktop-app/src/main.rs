@@ -19,6 +19,7 @@ mod gitx;
 mod http_server;
 mod infrastructure;
 mod kanban;
+mod memx;
 mod plugins;
 mod ptyx;
 mod srvman;
