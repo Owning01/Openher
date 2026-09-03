@@ -1155,7 +1155,7 @@
 }
 
 
-/* ===== Slash Command Menu ===== */
+/* ===== Slash Command Menu (misma letra y monocromo que el chat) ===== */
 .slash-menu {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -1171,6 +1171,7 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(16px);
   padding: 4px 0;
+  font-family: var(--chat-font-family, var(--font-family));
 }
 
 .slash-menu-item {
@@ -1196,7 +1197,7 @@
 .slash-menu-name {
   font-weight: 700;
   font-size: 0.85rem;
-  color: var(--primary, #3b7dd8);
+  color: var(--text);
   flex-shrink: 0;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -1217,8 +1218,9 @@
   font-size: 0.875rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--accent, #ff9f1c);
-  background: rgba(255, 159, 28, 0.14);
+  color: var(--muted-strong);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
   padding: 2px 6px;
   border-radius: 4px;
   margin-left: auto;
@@ -1229,7 +1231,7 @@
 
 
 .at-menu .slash-menu-item .slash-menu-name {
-  color: var(--accent);
+  color: var(--text);
 }
 
 .at-menu .slash-menu-source {
@@ -1239,10 +1241,11 @@
   font-weight: 600;
   text-transform: uppercase;
 }
-.at-menu .slash-menu-source.source-agent { background: var(--accent-soft); color: var(--accent); }
-.at-menu .slash-menu-source.source-file { background: var(--info); color: #fff; }
-.at-menu .slash-menu-source.source-mcp { background: var(--warning-soft); color: var(--warning); }
-.at-menu .slash-menu-source.source-git { background: var(--success-soft); color: var(--success); }
+.at-menu .slash-menu-source.source-agent { background: var(--surface-subtle); color: var(--text); border: 1px solid var(--border-strong); }
+.at-menu .slash-menu-source.source-file { background: var(--text); color: var(--bg); border: 1px solid var(--text); }
+.at-menu .slash-menu-source.source-mcp { background: var(--surface-subtle); color: var(--muted-strong); border: 1px solid var(--border); }
+.at-menu .slash-menu-source.source-git { background: var(--surface-subtle); color: var(--muted-strong); border: 1px solid var(--border); }
+.at-menu .slash-menu-source.source-skill { background: var(--text); color: var(--bg); border: 1px solid var(--text); }
 
 .at-menu .slash-menu-desc {
   color: var(--muted);

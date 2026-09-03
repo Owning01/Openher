@@ -93,7 +93,7 @@
 .ss-model {
   font-size: 0.875rem;
   color: var(--muted);
-  font-family: monospace;
+  font-family: var(--font-family);
 }
 
 /* Stats overlay en la sesión */
@@ -689,8 +689,8 @@
 }
 
 .shell-kanban-card-actions button.danger:hover {
-  background: var(--destructive-soft, rgba(220,38,38,0.1));
-  color: var(--destructive);
+  background: var(--surface-strong);
+  color: var(--text);
 }
 
 .shell-kanban-card-notes {
@@ -1005,7 +1005,7 @@
 
 .shell-docs-content li { margin-left: 18px; }
 
-.shell-docs-content a { color: var(--accent, #fab283); }
+.shell-docs-content a { color: var(--text); }
 
 .shell-docs-content code {
   font-family: var(--font-mono);
@@ -1117,7 +1117,7 @@
 .shell-updates-commits code {
   font-family: var(--font-mono);
   font-size: 0.875rem;
-  color: var(--accent, #fab283);
+  color: var(--text);
 }
 
 .shell-x-lines {
@@ -1235,7 +1235,7 @@
 .terminal-body-wrapper { touch-action: none; }
 
 /* Browser: omnibox chrome */
-.browser-omnibox-input { caret-color: var(--primary, #58a6ff); }
+.browser-omnibox-input { caret-color: var(--text); }
 .browser-suggest-dropdown {
   position: absolute; left: 0; right: 0; top: calc(100% + 6px);
   background: var(--surface, #161b22); border: 1px solid var(--border, #30363d); border-radius: 10px;
@@ -1246,9 +1246,9 @@
   padding: 8px 10px; background: transparent; border: none; color: var(--text, #e6edf3);
   cursor: pointer; font-size: 13px;
 }
-.browser-suggest-item:hover, .browser-suggest-item.active { background: rgba(88,166,255,0.12); }
-.browser-addr-lock { color: #2ea043; }
-.browser-addr-warn { color: #d29922; }
+.browser-suggest-item:hover, .browser-suggest-item.active { background: var(--surface-strong); }
+.browser-addr-lock { color: var(--text); }
+.browser-addr-warn { color: var(--muted); }
 .browser-zoom-group { display: inline-flex; align-items: center; gap: 2px; }
 .browser-bookmarks-bar {
   display: flex; align-items: center; gap: 4px; padding: 4px 10px; min-height: 28px;
@@ -1258,7 +1258,7 @@
 .browser-bookmark:hover { background: rgba(255,255,255,0.10); }
 .browser-findbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--surface-2, #161b22); border-bottom: 1px solid var(--border); }
 .browser-findbar input { flex: 1; min-width: 0; background: var(--surface, #0d1117); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 8px; font-size: 13px; }
-.browser-star-on { color: #e3b341 !important; }
+.browser-star-on { color: var(--text) !important; }
 
 /* ===== Docked / Floating Terminal View ===== */
 .terminal-dock-resizer {
@@ -1270,7 +1270,7 @@
 }
 
 .terminal-dock-resizer:hover {
-  background: var(--primary, #58a6ff);
+  background: var(--border-strong);
 }
 
 .terminal-action-btn {
@@ -1305,7 +1305,7 @@
 
 /* Drop target al arrastrar un archivo/carpeta sobre una carpeta (move). */
 .shell-row.shell-dir.is-drop-target {
-  outline: 1px dashed var(--primary, #58a6ff);
+  outline: 1px dashed var(--text);
   outline-offset: -1px;
   background: var(--hover-bg);
   border-radius: var(--radius-sm);

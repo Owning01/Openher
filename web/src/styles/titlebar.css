@@ -223,13 +223,13 @@
 }
 
 .win-btn-close:hover {
-  background: #e81123 !important;
-  color: #ffffff !important;
+  background: var(--surface-strong) !important;
+  color: var(--text) !important;
 }
 
 .win-btn-close:active {
-  background: #bf0f1d !important;
-  color: #ffffff !important;
+  background: var(--border-strong) !important;
+  color: var(--text) !important;
 }
 
 /* Espacio en el contenedor principal para la barra fija superior */

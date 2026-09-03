@@ -106,8 +106,8 @@ export const ShellPanelCell = memo(function ShellPanelCell({
             position: "absolute",
             zIndex: 100,
             pointerEvents: "none",
-            background: "rgba(88, 166, 255, 0.25)",
-            border: "2px dashed #58a6ff",
+            background: "rgba(244, 244, 245, 0.18)",
+            border: "2px dashed #a1a1aa",
             borderRadius: "var(--radius-md)",
             transition: "all 0.1s ease",
             ...(dropZone === "left"

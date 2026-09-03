@@ -566,7 +566,7 @@
     bottom: 0;
     left: 1px;
     right: 1px;
-    background: var(--border-subtle);
+    background: var(--border-strong);
     transition: background 0.12s;
   }
 
@@ -577,13 +577,13 @@
     right: 0;
     top: 1px;
     bottom: 1px;
-    background: var(--border-subtle);
+    background: var(--border-strong);
     transition: background 0.12s;
   }
 
   .desktop-resize-col:hover::after,
   .desktop-resize-row:hover::after {
-    background: var(--primary);
+    background: var(--text);
   }
 
   .desktop-cell-placeholder .desktop-cell-close {
@@ -625,7 +625,7 @@
   .session-panel-title {
     font-size: 13px;
     font-weight: 700;
-    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+    font-family: var(--font-family);
     color: var(--muted-strong);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -666,7 +666,7 @@
     padding: 6px 10px;
     border-radius: var(--radius-sm);
     font-size: 13px;
-    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+    font-family: var(--font-family);
     color: var(--muted-strong);
     cursor: pointer;
     white-space: nowrap;
@@ -817,7 +817,7 @@
   }
 
   .desktop-sidebar-title {
-    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+    font-family: var(--font-family);
     font-size: 11px;
     font-weight: 600;
     color: var(--muted, #71717a);

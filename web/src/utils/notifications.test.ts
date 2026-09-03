@@ -104,7 +104,7 @@ describe("sendNotification", () => {
     await vi.waitFor(() => expect(mockSchedule).toHaveBeenCalled())
     const arg = mockSchedule.mock.calls[0][0]
     expect(arg.notifications[0].smallIcon).toBe("myIcon")
-    expect(arg.notifications[0].iconColor).toBe("#4f46e5")
+    expect(arg.notifications[0].iconColor).toBe("#a1a1aa")
   })
 
   it("native: no incluye icon si no se pasa", async () => {

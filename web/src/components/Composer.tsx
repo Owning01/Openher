@@ -84,7 +84,7 @@ function saveHistory(h: string[]) {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)) } catch { }
 }
 
-type MentionItem = { id: string; name: string; description?: string; source: "agent" | "file" | "mcp" }
+type MentionItem = { id: string; name: string; description?: string; source: "agent" | "file" | "mcp" | "skill" }
 
 type ComposerProps = {
   value: string
@@ -272,11 +272,25 @@ export const Composer = memo(function Composer({
 
   const [mentionItems, setMentionItems] = useState<MentionItem[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)
+  // Fallback: si el padre aún no entregó agentes (carga perezosa del server),
+  // el @ los pide directo para que agentes/subagentes siempre aparezcan.
+  const [fallbackAgents, setFallbackAgents] = useState<MentionItem[]>([])
+  useEffect(() => {
+    if (!showAtMenu || visibleAgents.length > 0 || !config) return
+    let cancelled = false
+    api.listAgents(config, directory).then((list) => {
+      if (cancelled) return
+      setFallbackAgents(list.filter((a) => !a.hidden).map((a) => ({
+        id: a.id, name: a.name, description: a.description, source: "agent" as const,
+      })))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [showAtMenu, visibleAgents.length, config, directory])
 
   useEffect(() => {
     if (!showAtMenu) { setMentionItems([]); return }
 
-    const agentItems: MentionItem[] = visibleAgents.map((a) => ({
+    const agentItems: MentionItem[] = (visibleAgents.length > 0 ? visibleAgents : fallbackAgents).map((a) => ({
       id: a.id, name: a.name, description: a.description, source: "agent" as const,
     }))
 
@@ -298,9 +312,15 @@ export const Composer = memo(function Composer({
           .map((r) => ({ id: r.id, name: r.name, description: r.description, source: "mcp" as const }))
       ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
 
-      Promise.all([fileFetch, mcpFetch]).then(([files, mcps]) => {
+      // Como el TUI: @ también invoca skills del server (/skill).
+      const skillFetch = config ? api.listSkills(config).then((skills) =>
+        skills.filter((s) => !atQuery || s.name.toLowerCase().includes(q) || (s.description?.toLowerCase() ?? "").includes(q))
+          .map((s) => ({ id: s.id, name: s.name, description: s.description, source: "skill" as const }))
+      ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
+
+      Promise.all([fileFetch, mcpFetch, skillFetch]).then(([files, mcps, skills]) => {
         if (cancelled) return
-        setMentionItems([...filteredAgents, ...files, ...mcps])
+        setMentionItems([...filteredAgents, ...skills, ...files, ...mcps])
         setMentionLoading(false)
       })
     }, 150)
@@ -309,7 +329,7 @@ export const Composer = memo(function Composer({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [showAtMenu, atQuery, config, directory, visibleAgents])
+  }, [showAtMenu, atQuery, config, directory, visibleAgents, fallbackAgents])
 
   useEffect(() => {
     setAtIndex(0)
@@ -386,11 +406,10 @@ export const Composer = memo(function Composer({
     const cleaned = cur.replace(/(?:^|\s)@\w*$/, `@${item.name} `)
     handleChange(cleaned)
     setShowAtMenu(false)
-    if (item.source === "agent" && composerRef.current) {
-      onChangeAgent(item.id)
-    }
+    // Como el TUI: @agente/@skill delega vía el texto que viaja al server.
+    // No se cambia el agente de la sesión (eso es el pill del header).
     if (composerRef.current) composerRef.current.querySelector("textarea")?.focus()
-  }, [handleChange, onChangeAgent])
+  }, [handleChange])
 
   const selectSlashCommand = useCallback((cmd: CommandInfo) => {
     handleChange(`/${cmd.name} `)

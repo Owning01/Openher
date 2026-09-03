@@ -17,6 +17,9 @@ export type TitleBarProps = {
   sessions?: Array<{ id: string; title?: string; directory?: string }>
   busySessions?: Set<string>
   browserTabUrls?: Record<string, string>
+  /** true si el grid está en split (cols*rows>1): cada panel pinta su propio
+      TabBar y el TitleBar no debe duplicar los tabs de sesión. */
+  isSplit?: boolean
   onSwitchTab?: (panelIdx: number, tabIdx: number) => void
   onRemoveTab?: (panelIdx: number, tabIdx: number) => void
   onAddTerminal?: (panelIdx: number) => void
@@ -84,6 +87,7 @@ export const TitleBar = memo(function TitleBar({
   sessions,
   busySessions,
   browserTabUrls,
+  isSplit = false,
   onSwitchTab,
   onRemoveTab,
   onAddTerminal,
@@ -171,7 +175,10 @@ export const TitleBar = memo(function TitleBar({
 
   const currentStack = tabStacks?.[activePanel] || tabStacks?.[0] || []
   const activeTab = activeSessionId ?? currentStack[0]
-  const isSinglePanel = (tabStacks?.length ?? 1) <= 1
+  // Fuente única de verdad: el grid en split pinta su TabBar por panel
+  // (DesktopPanelRenderer). Si el TitleBar también pintara, el mismo stack de
+  // sesiones se vería dos veces apilado.
+  const isSinglePanel = !isSplit && (tabStacks?.length ?? 1) <= 1
 
   return (
     <div
