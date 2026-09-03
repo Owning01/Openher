@@ -46,9 +46,10 @@ describe("MarkdownWithEmbeds", () => {
   })
   it("Ampliar cambia la altura", async () => {
     render(<MarkdownWithEmbeds text={'<agent-embed src="file:///C:/w.html"></agent-embed>'} />)
-    const frame = (await screen.findByTitle("Vista generada")) as HTMLIFrameElement
-    expect(frame.className).not.toContain("tall")
+    await screen.findByTitle("Vista generada")
+    const box = document.querySelector(".agent-embed")
+    expect(box?.className).not.toContain("tall")
     fireEvent.click(screen.getByText("Ampliar"))
-    expect(frame.className).toContain("tall")
+    expect(box?.className).toContain("tall")
   })
 })
