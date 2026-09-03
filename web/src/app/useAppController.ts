@@ -658,6 +658,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     applyDelta,
     applyPart,
     setAwaitingAssistantReply,
+    setCompacting,
     setRuntimeError,
     awaitingRef: () => awaitingAssistantReply,
     onSettled: (sid, dir) => {

@@ -503,6 +503,27 @@ export const Composer = memo(function Composer({
     }
   }, [])
 
+  // Dictado vs límite: si el texto dictado supera N, se detiene el mic pero
+  // el texto SE CONSERVA (antes maxLength lo truncaba en silencio). El envío
+  // sigue bloqueado hasta editar por debajo del límite. Aviso una sola vez
+  // por episodio para no spamear mientras el usuario edita.
+  const overNotifiedRef = useRef(false)
+  useEffect(() => {
+    if (!isListening) {
+      overNotifiedRef.current = false
+      return
+    }
+    if (charLimit > 0 && localValue.length > charLimit && !overNotifiedRef.current) {
+      overNotifiedRef.current = true
+      try {
+        stop()
+      } catch {
+        /* ignore */
+      }
+      showMicNotice(t('composer.limitExceeded') || `Límite ${charLimit} caracteres excedido — dictado detenido, el texto se conserva`)
+    }
+  }, [isListening, localValue, charLimit, stop, showMicNotice, t])
+
   const addImage = useCallback((base64: string, mime: string, name: string) => {
     setImages((prev) => [...prev, { id: `img-${++imgId}`, base64, mime, name }])
   }, [])
@@ -817,7 +838,10 @@ export const Composer = memo(function Composer({
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          maxLength={charLimit > 0 ? charLimit : undefined}
+          // Sin maxLength mientras se dicta: el browser truncaría en silencio
+          // el texto del mic al superar N y parecería que "se borra el audio".
+          // El límite solo bloquea el envío (541) y el texto se conserva.
+          maxLength={charLimit > 0 && !isListening ? charLimit : undefined}
         />
         {isDraggingOver && (
           <div className="composer-drop-overlay" aria-hidden="true">

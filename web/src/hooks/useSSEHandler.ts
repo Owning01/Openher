@@ -17,6 +17,8 @@ type SSEHandlerDeps = {
   setRuntimeError: (e: string | null) => void
   awaitingRef: () => boolean
   onSettled: (sessionID: string, directory: string) => void
+  /** Limpia el bubble "Compacting" al llegar `compaction.ended` (corta el poll de 15s). Opcional por compat con callers viejos. */
+  setCompacting?: (v: boolean, sessionID?: string) => void
 }
 
 // Maneja los eventos SSE de una sesión. Compartido entre la vista mobile
@@ -156,6 +158,9 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
           const text = (d.text ?? p.text) as string | undefined
           if (text) enqueueDelta(sessionID, messageID, messageID, text, true, "compaction")
         } else {
+          // Limpia el Set por sesión: el poll de compactSession sale temprano
+          // en vez de colgar 15s de spinner. Idempotente con su finally.
+          deps.setCompacting?.(false, sessionID)
           deps.loadSelected(sessionID, deps.directory ?? "")
         }
       }

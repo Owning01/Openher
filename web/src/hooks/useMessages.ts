@@ -623,6 +623,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       // (loadSelected con `raw.length < limit` descarta si no estamos en compact).
       for (let i = 0; i < 15; i++) {
         await new Promise((r) => setTimeout(r, 1000))
+        // El usuario cambió de chat: NO secuestrar la vista con loadSelected(A).
+        // Sin esto el poll pisaba currentSessionId/mensajes de B y B mostraba
+        // el bubble "Compacting" de A. Al volver a A, su loadSelected normal
+        // traerá el compaction.
+        if (loadedSessionIDRef.current !== sessionID) break
         await loadSelected(sessionID, directory).catch(() => {})
         // Si el SSE `compaction.ended` ya limpió el Set, salir temprano — evita 15s de spinner colgado
         if (!compactingIdsRef.current.has(sessionID)) break
@@ -634,7 +639,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       // Fallback: si el SSE no limpió, limpiamos tras el poll. El handler de
       // `compaction.ended` también limpia, así que es idempotente.
       setCompacting(false, sessionID)
-      setAwaitingAssistantReply(false)
+      // No pisar el awaiting de otro chat: si el usuario ya está en B, B es
+      // dueño del flag (p. ej. B empezó a enviar mientras A compactaba).
+      if (loadedSessionIDRef.current === sessionID) setAwaitingAssistantReply(false)
     }
   }, [config, loadSelected, setCompacting, setAwaitingAssistantReply])
 
