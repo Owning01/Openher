@@ -3,7 +3,7 @@ import { ChatView } from "./ChatView"
 import { ErrorModal } from "./ErrorModal"
 // Lazy: rompe el borde estático con shellPanels (que arrastra @xterm) para que
 // el bundle inicial móvil no descargue terminal/kanban/browser del desktop.
-import { SessionStatsPanel } from "./shellPanels"
+import { SessionStatsPanel, isAbsoluteFsPath } from "./shellPanels"
 import { useMessages } from "../hooks/useMessages"
 import { useSSE } from "../hooks/useSSE"
 import { useSSEHandler } from "../hooks/useSSEHandler"
@@ -463,7 +463,15 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           const f = e.dataTransfer.files[0]
           const filePath = (f as any).path || f.name
           if (filePath) {
-            onOpenFile?.(filePath, panelIndex, zone)
+            // En el webview el File del SO no trae path real (solo el nombre):
+            // abrir el editor con un nombre pelado crea tabs basura que 404ean
+            // en /shell/fs/read en cada carga. Solo abrir si es absoluta; si
+            // no, la ruta cae al composer como texto (igual que payload file).
+            if (isAbsoluteFsPath(filePath)) {
+              onOpenFile?.(filePath, panelIndex, zone)
+            } else {
+              window.dispatchEvent(new CustomEvent("plugin:insert-text", { detail: filePath }))
+            }
             return
           }
         }
