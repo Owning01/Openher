@@ -100,6 +100,8 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     busySessions,
     browserTabUrls,
     fileEditorPath,
+    editorTabs,
+    editorActive,
     quickChatKeys,
     modelOptions,
     providerList,
@@ -483,11 +485,56 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
   }
 
   if (kind === "editor") {
+    // Controlado por panelEditorTabStacks del layout: si FileEditorPanel
+    // corriera no-controlado, sus tabs internos se desincronizarían del estado
+    // persistido (abrir/cerrar archivo no se refleja y viceversa).
+    const ctrlTabs = editorTabs ?? (fileEditorPath ? [fileEditorPath] : [])
+    const activeIdx = editorActive != null && editorActive >= 0 && editorActive < ctrlTabs.length ? editorActive : 0
+    const ctrlActive = ctrlTabs[activeIdx] ?? fileEditorPath ?? ctrlTabs[0]
+    const selectEditorTab = (p: string) => {
+      props.onSetDesktopLayout?.((prev: any) => ({
+        ...prev,
+        panelEditorActive: { ...prev.panelEditorActive, [i]: Math.max(0, ctrlTabs.indexOf(p)) },
+        panelEditorPaths: { ...prev.panelEditorPaths, [i]: p },
+      }))
+    }
+    const closeEditorTab = (p: string) => {
+      const closedIdx = ctrlTabs.indexOf(p)
+      const next = ctrlTabs.filter((t) => t !== p)
+      if (next.length === 0) {
+        // Sin archivos: cerrar el panel (colapsa el split como closePanel)
+        props.onSetDesktopLayout?.((prev: any) => {
+          const paths = { ...prev.panelEditorPaths } as Record<number, string>
+          const stacks = { ...prev.panelEditorTabStacks } as Record<number, string[]>
+          const act = { ...prev.panelEditorActive } as Record<number, number>
+          delete paths[i]
+          delete stacks[i]
+          delete act[i]
+          return { ...prev, panelEditorPaths: paths, panelEditorTabStacks: stacks, panelEditorActive: act }
+        })
+        onClose()
+        return
+      }
+      const nextIdx = Math.min(Math.max(0, closedIdx - 1), next.length - 1)
+      props.onSetDesktopLayout?.((prev: any) => ({
+        ...prev,
+        panelEditorTabStacks: { ...prev.panelEditorTabStacks, [i]: next },
+        panelEditorActive: { ...prev.panelEditorActive, [i]: nextIdx },
+        panelEditorPaths: { ...prev.panelEditorPaths, [i]: next[nextIdx] },
+      }))
+    }
     return (
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
-            <FileEditorPanel path={fileEditorPath || ""} onClose={onClose} />
+            <FileEditorPanel
+              path={fileEditorPath || ""}
+              tabs={ctrlTabs}
+              activePath={ctrlActive}
+              onTabSelect={selectEditorTab}
+              onTabClose={closeEditorTab}
+              onClose={onClose}
+            />
           </Suspense>
         </div>
       </div>

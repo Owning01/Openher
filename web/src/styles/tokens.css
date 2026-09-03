@@ -16,25 +16,25 @@
   --foreground: var(--text);
   --muted: #71717a;
   --muted-strong: #52525b;
-  --primary: #5e6ad2;
-  --primary-strong: #4f46e5;
+  --primary: #18181b;
+  --primary-strong: #09090b;
   --on-primary: #ffffff;
-  --primary-soft: rgba(94, 106, 210, 0.08);
-  --accent: #5e6ad2;
-  --accent-soft: rgba(94, 106, 210, 0.08);
-  --success: #16a34a;
-  --success-soft: rgba(22, 163, 74, 0.08);
-  --danger: #e11d48;
-  --danger-soft: rgba(225, 29, 72, 0.08);
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.1);
+  --primary-soft: rgba(24, 24, 27, 0.07);
+  --accent: #18181b;
+  --accent-soft: rgba(24, 24, 27, 0.07);
+  --success: #52525b;
+  --success-soft: rgba(82, 82, 91, 0.12);
+  --danger: #52525b;
+  --danger-soft: rgba(82, 82, 91, 0.12);
+  --warning: #71717a;
+  --warning-soft: rgba(113, 113, 122, 0.12);
   --nav-bg: rgba(255, 255, 255, 0.8);
   --bottom-nav-bg: rgba(255, 255, 255, 0.85);
-  --primary-border: rgba(94, 106, 210, 0.18);
-  --danger-border: rgba(225, 29, 72, 0.18);
-  --focus-ring: rgba(94, 106, 210, 0.14);
-  --secondary: #5e6ad2;
-  --info: #0ea5e9;
+  --primary-border: rgba(24, 24, 27, 0.2);
+  --danger-border: rgba(24, 24, 27, 0.2);
+  --focus-ring: rgba(24, 24, 27, 0.16);
+  --secondary: #18181b;
+  --info: #52525b;
   --agent-0: var(--secondary);
   --agent-1: var(--accent);
   --agent-2: var(--success);
@@ -42,7 +42,7 @@
   --agent-4: var(--primary);
   --agent-5: var(--danger);
   --agent-6: var(--info);
-  --thinking-header: #f59e0b;
+  --thinking-header: #52525b;
   --code-bg: #f4f4f5;
   --code-text: #18181b;
   --code-keyword: #5e6ad2;
@@ -95,26 +95,26 @@
   --foreground: var(--text);
   --muted: #a1a1aa;
   --muted-strong: #d4d4d8;
-  --primary: #6366f1;
-  --primary-strong: #818cf8;
-  --on-primary: #ffffff;
-  --primary-soft: rgba(99, 102, 241, 0.12);
-  --accent: #6366f1;
-  --accent-soft: rgba(99, 102, 241, 0.12);
-  --success: #4ade80;
-  --success-soft: rgba(74, 222, 128, 0.1);
-  --danger: #fb7185;
-  --danger-soft: rgba(251, 113, 133, 0.1);
-  --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.1);
+  --primary: #f4f4f5;
+  --primary-strong: #ffffff;
+  --on-primary: #09090b;
+  --primary-soft: rgba(244, 244, 245, 0.1);
+  --accent: #f4f4f5;
+  --accent-soft: rgba(244, 244, 245, 0.1);
+  --success: #a1a1aa;
+  --success-soft: rgba(161, 161, 170, 0.12);
+  --danger: #d4d4d8;
+  --danger-soft: rgba(212, 212, 216, 0.12);
+  --warning: #a1a1aa;
+  --warning-soft: rgba(161, 161, 170, 0.12);
   --nav-bg: rgba(9, 9, 11, 0.85);
   --bottom-nav-bg: rgba(9, 9, 11, 0.9);
-  --primary-border: rgba(99, 102, 241, 0.25);
-  --danger-border: rgba(251, 113, 133, 0.2);
-  --focus-ring: rgba(99, 102, 241, 0.25);
-  --secondary: #6366f1;
-  --info: #38bdf8;
-  --thinking-header: #fbbf24;
+  --primary-border: rgba(244, 244, 245, 0.22);
+  --danger-border: rgba(244, 244, 245, 0.22);
+  --focus-ring: rgba(244, 244, 245, 0.22);
+  --secondary: #f4f4f5;
+  --info: #a1a1aa;
+  --thinking-header: #a1a1aa;
   --code-bg: #0e0e11;
   --code-text: #f4f4f5;
   --code-keyword: #818cf8;
@@ -129,6 +129,36 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.7);
+}
+
+/* El chrome de la app es monocromo (negro/blanco/gris). El único color
+   semántico vive en el contenido renderizado del chat: diffs (+/-), errores
+   de tools y markdown. Se restaura por scope con especificidad mayor que
+   :root para ganarle a la base gris. --code-* / --md-* no se tocan. */
+:root .message-content,
+:root .tool-part,
+:root .diff-view,
+:root .file-diffs,
+:root .inline-diff {
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.08);
+  --danger: #e11d48;
+  --danger-soft: rgba(225, 29, 72, 0.08);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.1);
+}
+
+:root[data-theme="dark"] .message-content,
+:root[data-theme="dark"] .tool-part,
+:root[data-theme="dark"] .diff-view,
+:root[data-theme="dark"] .file-diffs,
+:root[data-theme="dark"] .inline-diff {
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.1);
+  --danger: #fb7185;
+  --danger-soft: rgba(251, 113, 133, 0.1);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.1);
 }
 
 * {

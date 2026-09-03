@@ -1051,21 +1051,21 @@
   border-radius: 4px;
 }
 .provider-badge.connected {
-  color: #4ade80;
-  background: rgba(74, 222, 128, 0.1);
-  border: 1px solid rgba(74, 222, 128, 0.2);
+  color: var(--text);
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
 }
 .provider-actions {
   flex-shrink: 0;
 }
 .ag-btn-danger {
-  color: #fb7185 !important;
-  border-color: rgba(251, 113, 133, 0.25) !important;
-  background: rgba(251, 113, 133, 0.08) !important;
+  color: var(--text) !important;
+  border-color: var(--border-strong) !important;
+  background: transparent !important;
 }
 .ag-btn-danger:hover {
-  background: rgba(251, 113, 133, 0.15) !important;
-  border-color: rgba(251, 113, 133, 0.4) !important;
+  background: var(--surface-strong) !important;
+  border-color: var(--text) !important;
 }
 .connect-sheet-header {
   display: flex;
@@ -1145,35 +1145,27 @@
 .favorite-item-arrows { display: flex; flex-direction: column; gap: 2px; }
 .favorite-item-arrows button { font-size: 0.875rem; padding: 0.1rem 0.3rem; line-height: 1; }
 
-/* ===== Theme creator rainbow button ===== */
+/* ===== Theme creator button (monocromo como el resto del chrome) ===== */
 .theme-creator-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   padding: 0.55rem 0.75rem;
-  border: none;
+  border: 1px solid var(--text);
   border-radius: var(--radius-md);
-  background: linear-gradient(90deg, #f97316, #eab308, #22c55e, #06b6d4, #6366f1, #a855f7, #ef4444, #f97316);
-  background-size: 300% 100%;
-  color: #ffffff;
+  background: var(--text);
+  color: var(--bg);
   font-family: inherit;
   font-size: 0.85rem;
   font-weight: 700;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  animation: theme-rainbow-shift 8s linear infinite;
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
 .theme-creator-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
-}
-
-@keyframes theme-rainbow-shift {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 300% 50%; }
 }
 
 /* ===== Settings model picker ===== */

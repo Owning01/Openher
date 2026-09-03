@@ -23,7 +23,7 @@ function createNativeNotify(): NativeNotify {
               id: Math.floor(Date.now() / 1000) % 2147483647,
               title,
               body: body ?? "",
-              ...(icon ? { smallIcon: icon, iconColor: "#4f46e5" } : {}),
+              ...(icon ? { smallIcon: icon, iconColor: "#a1a1aa" } : {}),
             },
           ],
         })

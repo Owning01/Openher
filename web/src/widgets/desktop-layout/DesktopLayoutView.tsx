@@ -309,6 +309,7 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         sessions={sessions}
         busySessions={busySessions}
         browserTabUrls={desktopLayout.browserTabUrls}
+        isSplit={desktopLayout.cols * desktopLayout.rows > 1}
         onSwitchTab={onSwitchTab}
         onRemoveTab={onRemoveTab}
         onAddTerminal={onAddTerminal}
