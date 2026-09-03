@@ -10,6 +10,7 @@ import "@xterm/xterm/css/xterm.css"
 import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
 import { normFsPath, affectedParentDirs } from "../utils/fsChanges"
+import { calcMenuPosForAnchor } from "../utils/menuPos"
 import { VisualSelectOverlay } from "./VisualSelectOverlay"
 import { LiteEditor } from "./LiteEditor"
 import { toBase64Chunked } from "../utils/editorOps"
@@ -1305,19 +1306,8 @@ export const ExplorerPanel = memo(function ExplorerPanel({
       if (next) {
         const r = projectAnchorRef.current?.getBoundingClientRect()
         if (r) {
-          const M = 8
-          const vw = window.innerWidth
-          const vh = window.innerHeight
-          const W = Math.min(420, vw - M * 2)
-          const estH = Math.min(360, Math.round(vh * 0.6))
-          // espacio disponible abajo vs arriba para elegir dirección (flip)
-          const below = vh - r.bottom - M
-          const left = Math.max(M, Math.min(r.right - W, vw - W - M))
-          if (below >= Math.min(estH, 220) || below >= r.top - M) {
-            setProjectMenuPos({ left, top: r.bottom + 6 })
-          } else {
-            setProjectMenuPos({ left, bottom: vh - r.top + 6 })
-          }
+          // Menú estimado 420px de ancho (DRY con calcMenuPos: mismo clamp+flip)
+          setProjectMenuPos(calcMenuPosForAnchor(r, 420, Math.min(360, Math.round(window.innerHeight * 0.6))))
         }
       }
       return next

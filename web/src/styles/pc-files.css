@@ -10,6 +10,8 @@
 .pcf-root {
   flex: 1;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -66,7 +68,19 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* Dropdown menu (Proyectos recientes) */
+/* Dropdown en portal (fixed): se posiciona por JS clampped al viewport para
+   no cortarse con sidebar angosto. Sin right:0 ni absolute del inline. */
+.pcf-dropdown.pcf-dropdown--portal {
+  position: fixed;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  width: 280px;
+  max-width: min(420px, calc(100vw - 16px));
+  max-height: min(420px, 70vh);
+  overflow-y: auto;
+  z-index: 100000;
+}
 .pcf-dropdown {
   position: absolute;
   right: 0;
@@ -313,6 +327,8 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 2px 0 12px 0;
 }
 
@@ -778,6 +794,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 4px 0;
   background: #0a0a0f;
 }
@@ -851,6 +869,73 @@
 .pcf-action-btn.active {
   background: var(--primary, #3b82f6);
   color: #ffffff;
+}
+
+/* ===== Abrir con (OpenWithDialog) ===== */
+.openwith-title {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.openwith-file {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
+}
+.openwith-sep {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.openwith-default {
+  width: 100%;
+}
+.openwith-recent-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.openwith-recent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.openwith-recent-name {
+  font-weight: 600;
+}
+.openwith-recent-path {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.openwith-custom-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.openwith-input {
+  flex: 1;
+  min-width: 0;
+}
+.openwith-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
 }
 
 .pcf-drop-target {

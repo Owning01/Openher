@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
@@ -20,6 +20,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   MoreHorizontalIcon,
+  ShareIcon,
   SplitIcon,
   EyeIcon,
   PencilIcon,
@@ -28,8 +29,9 @@ import {
 import { shell, type FsEntry, type CodeSearchResult } from "../../shell"
 import { useT } from "../../i18n-context"
 import { useDialog } from "../../components/DialogProvider"
-import { useOutsideClick } from "../../hooks/useOutsideClick"
+import { calcMenuPos, calcMenuPosForAnchor, type MenuPos } from "../../utils/menuPos"
 import { FileRow } from "./FileRow"
+import { OpenWithDialog } from "./OpenWithDialog"
 import { TreeFolder } from "./TreeFolder"
 import { CodeSearchResults } from "./CodeSearchResults"
 import { HlCodeHtml, highlightToHtml } from "../../components/HighlightedCode"
@@ -143,8 +145,66 @@ export const PCFilesPanel = memo(function PCFilesPanel({
 
   const [showProjectMenu, setShowProjectMenu] = useState(false)
   const projectMenuRef = useRef<HTMLDivElement | null>(null)
+  const projectMenuElRef = useRef<HTMLDivElement | null>(null)
+  const [projectMenuPos, setProjectMenuPos] = useState<MenuPos | null>(null)
   const [explorerRecent, setExplorerRecent] = useState<string[]>(() => loadExplorerRecent())
-  useOutsideClick(projectMenuRef, () => setShowProjectMenu(false), showProjectMenu)
+
+  // El dropdown vive en un portal (fixed): se cierra con click fuera del
+  // anchor Y del menú, Escape, resize o scroll externo (el interno no cierra).
+  useEffect(() => {
+    if (!showProjectMenu) return
+    const onPointerDown = (e: PointerEvent): void => {
+      const t = e.target as Node
+      if (projectMenuElRef.current?.contains(t)) return
+      if (projectMenuRef.current?.contains(t)) return
+      setShowProjectMenu(false)
+    }
+    const onKey = (e: KeyboardEvent): void => { if (e.key === "Escape") setShowProjectMenu(false) }
+    const onResize = (): void => setShowProjectMenu(false)
+    const onScroll = (e: Event): void => {
+      if (projectMenuElRef.current?.contains(e.target as Node)) return
+      setShowProjectMenu(false)
+    }
+    document.addEventListener("pointerdown", onPointerDown, true)
+    document.addEventListener("keydown", onKey)
+    window.addEventListener("resize", onResize)
+    window.addEventListener("scroll", onScroll, true)
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true)
+      document.removeEventListener("keydown", onKey)
+      window.removeEventListener("resize", onResize)
+      window.removeEventListener("scroll", onScroll, true)
+    }
+  }, [showProjectMenu])
+
+  // Abrir/cerrar calculando posición fixed clampped al viewport: con sidebar
+  // angosto el menú "se mueve" en vez de cortarse (antes era absolute 260px
+  // dentro del header y el overflow del sidebar lo recortaba).
+  const toggleProjectMenu = useCallback(() => {
+    setShowProjectMenu((v) => {
+      const next = !v
+      if (next) {
+        const r = projectMenuRef.current?.getBoundingClientRect()
+        if (r) {
+          setProjectMenuPos(calcMenuPosForAnchor(r, 280, Math.min(420, Math.round(window.innerHeight * 0.7))))
+        }
+      }
+      return next
+    })
+  }, [])
+
+  // Re-clamp con el tamaño real una vez montado (el max-width 90vw puede achicarlo)
+  useLayoutEffect(() => {
+    if (!showProjectMenu) return
+    const el = projectMenuElRef.current
+    const anchor = projectMenuRef.current?.getBoundingClientRect()
+    if (!el || !anchor) return
+    const real = calcMenuPos(anchor, el.offsetWidth || 280, el.offsetHeight || 300, {
+      w: window.innerWidth,
+      h: window.innerHeight,
+    })
+    setProjectMenuPos((prev) => (prev && prev.left === real.left ? prev : real))
+  }, [showProjectMenu, explorerRecent.length])
 
   const searchRef = useRef<HTMLInputElement | null>(null)
   const [creatingType, setCreatingType] = useState<"file" | "folder" | null>(null)
@@ -160,6 +220,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const [copiedItem, setCopiedItem] = useState<FsEntry | null>(null)
   const [execConfirm, setExecConfirm] = useState<{ path: string; name: string } | null>(null)
+  const [openWithFile, setOpenWithFile] = useState<FsEntry | null>(null)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const [renamingValue, setRenamingValue] = useState("")
   const [renamingPane, setRenamingPane] = useState<"first" | "second" | null>(null)
@@ -542,18 +603,14 @@ export const PCFilesPanel = memo(function PCFilesPanel({
         showNotice(`Vista previa: ${entry.name}`)
         return
       }
-      // Fallback inline (móvil / sin grid): lee como texto y muestra visor; binarios → descarga
+      // Fallback inline (móvil / sin grid): lee como texto vía GET /shell/fs/read
+      // (misma base remota + auth que el listado, sin descargar) y muestra visor; binarios → descarga
       try {
         const res: any = await shell.fs.read(entry.path)
-        const text: string = res?.content ?? res?.data ?? res?.text ?? ""
+        const text: string = res?.content ?? res?.data ?? res?.text ?? (typeof res === "string" ? res : "")
         if (typeof text === "string" && text) {
           setCodeViewer({ path: entry.path, line: 1, content: text.slice(0, 30000) })
-          showNotice(`Abierto: ${entry.name}`)
-          return
-        }
-        if (typeof res === "string" && res) {
-          setCodeViewer({ path: entry.path, line: 1, content: String(res).slice(0, 30000) })
-          showNotice(`Abierto: ${entry.name}`)
+          showNotice(res?.truncated ? `Abierto (primeros 64KB): ${entry.name}` : `Abierto: ${entry.name}`)
           return
         }
       } catch {}
@@ -619,7 +676,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       {/* 1. Header principal VS Code: Explorer + ... */}
       <div className="pcf-header pcf-header--vscode">
         <span className="pcf-title">Explorer</span>
-        <div className="pcf-header-actions" ref={projectMenuRef} style={{ position: "relative" }}>
+        <div className="pcf-header-actions" ref={projectMenuRef}>
           <button
             type="button"
             className="pcf-hbtn"
@@ -634,7 +691,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
             className="pcf-hbtn"
             title="Más acciones de explorador"
             aria-label="Más acciones de explorador"
-            onClick={() => setShowProjectMenu((v) => !v)}
+            aria-expanded={showProjectMenu}
+            onClick={toggleProjectMenu}
           >
             <MoreHorizontalIcon size={14} />
           </button>
@@ -650,8 +708,15 @@ export const PCFilesPanel = memo(function PCFilesPanel({
             </button>
           )}
 
-          {showProjectMenu && (
-            <div className="pcf-dropdown">
+          {showProjectMenu && projectMenuPos && createPortal(
+            <div
+              ref={projectMenuElRef}
+              className="pcf-dropdown pcf-dropdown--portal"
+              style={{
+                left: projectMenuPos.left,
+                ...(projectMenuPos.top !== undefined ? { top: projectMenuPos.top } : { bottom: projectMenuPos.bottom }),
+              }}
+            >
               <div className="pcf-dropdown-title">Proyectos recientes</div>
               {explorerRecent.length === 0 ? (
                 <div className="pcf-dropdown-empty">Sin proyectos recientes</div>
@@ -706,7 +771,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   <span>{showDrives ? "Ocultar discos" : "Mostrar discos"}</span>
                 </span>
               </button>
-            </div>
+            </div>,
+            document.body
           )}
         </div>
       </div>
@@ -792,7 +858,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       ) : (
         <div className="pcf-tree-container" style={showSecondPane ? { display: "flex", gap: 8, alignItems: "stretch" } : undefined}>
           <div
-            style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}
+            style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}
             onClick={() => setActivePane("first")}
           >
           {/* 2. Sección del proyecto / Workspace: ← volver + ⌄ nombre-proyecto + 5 botones */}
@@ -968,6 +1034,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         downloading={downloading}
                         onDownload={handleDownload}
                         onOpenFile={handleOpenFile}
+                        onOpenWith={setOpenWithFile}
                         favorites={favorites}
                         onFav={fav}
                         showNotice={showNotice}
@@ -996,6 +1063,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         downloading={downloading}
                         onDownload={handleDownload}
                         onOpenFile={handleOpenFile}
+                        onOpenWith={setOpenWithFile}
                         isFav={favorites.includes(f.path)}
                         onToggleFav={fav}
                         showNotice={showNotice}
@@ -1026,6 +1094,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
               style={{
                 flex: 1,
                 minWidth: 0,
+                minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
                 borderLeft: "1px solid var(--border)",
@@ -1097,6 +1166,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                           downloading={downloading}
                           onDownload={handleDownload}
                           onOpenFile={handleOpenFile}
+                          onOpenWith={setOpenWithFile}
                           favorites={favorites}
                           onFav={fav}
                           showNotice={showNotice}
@@ -1123,6 +1193,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                           downloading={downloading}
                           onDownload={handleDownload}
                           onOpenFile={handleOpenFile}
+                          onOpenWith={setOpenWithFile}
                           isFav={favorites.includes(f.path)}
                           onToggleFav={fav}
                           showNotice={showNotice}
@@ -1242,6 +1313,40 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   </span>{" "}
                   {contextMenu.isDir ? "Abrir carpeta" : "Abrir"}
                 </button>
+                {!contextMenu.isDir && (
+                  <>
+                    <button
+                      type="button"
+                      className="overflow-item"
+                      onClick={() => {
+                        const target = contextMenu.entry!
+                        setContextMenu(null)
+                        shell.fs
+                          .openDefault(target.path)
+                          .then(() => showNotice(`Abierto con programa predeterminado: ${target.name}`))
+                          .catch(() => showNotice("No se pudo abrir"))
+                      }}
+                    >
+                      <span>
+                        <ShareIcon size={14} />
+                      </span>{" "}
+                      Abrir con programa predeterminado
+                    </button>
+                    <button
+                      type="button"
+                      className="overflow-item"
+                      onClick={() => {
+                        setOpenWithFile(contextMenu.entry)
+                        setContextMenu(null)
+                      }}
+                    >
+                      <span>
+                        <ShareIcon size={14} />
+                      </span>{" "}
+                      Abrir con…
+                    </button>
+                  </>
+                )}
                 {!contextMenu.isDir && isHtmlFile(contextMenu.entry.name) && (
                   <button
                     type="button"
@@ -1486,6 +1591,14 @@ export const PCFilesPanel = memo(function PCFilesPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {openWithFile && (
+        <OpenWithDialog
+          file={openWithFile}
+          onClose={() => setOpenWithFile(null)}
+          showNotice={showNotice}
+        />
       )}
     </div>
   )
