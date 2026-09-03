@@ -12,7 +12,6 @@ import { useOfflineCache } from "../hooks/useOfflineCache"
 import { api } from "../api"
 import { isSessionActive } from "../utils"
 import { parseDragPayload } from "../utils/drag"
-import { TabBar } from "./TabBar"
 import { usePolling } from "../hooks/usePolling"
 import type { ChatViewProps } from "./ChatView"
 import type { ServerConfig, DataMode, SessionView, CommandInfo } from "../types"
@@ -65,7 +64,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
   onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels,
   onOpenFile, onOpenConnect, onOpenBrowser,
-  tabStack, allSessions, busySessionIds, onTabSwitch, onTabClose, onTabAdd, onTabMove, onDropTerminal,
+  busySessionIds,
   visualSelection, visualPromptContext, onClearVisualSelection, onFocusVisualFile
 }: Props) {
   const msgs = useMessages(config, dataMode, `composer-${session.id}`)
@@ -520,21 +519,9 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           }}
         />
       )}
-      {(tabStack && tabStack.length > 0) ? (
-        <TabBar
-          tabs={tabStack}
-          activeIndex={Math.max(0, tabStack.indexOf(session.id) >= 0 ? tabStack.indexOf(session.id) : tabStack.findIndex((id) => id.startsWith("terminal")) >= 0 ? tabStack.findIndex((id) => id.startsWith("terminal")) : 0)}
-          sessions={allSessions ?? []}
-          busySessionIds={busySessionIds}
-          onSwitch={(i) => onTabSwitch?.(panelIndex, i)}
-          onClose={(i) => onTabClose?.(panelIndex, i)}
-          onAdd={() => onTabAdd?.(panelIndex)}
-          onMoveTab={(from, to) => onTabMove?.(panelIndex, from, to)}
-          panelIndex={panelIndex}
-          onDropTerminal={onDropTerminal}
-          onDropTerminalTab={(raw) => onSplitSession(panelIndex, "center", raw)}
-        />
-      ) : null}
+      {/* Sin TabBar interno: las pestañas (sesiones + terminales) viven en la
+          franja superior del panel (DesktopPanelRenderer/DesktopGrid). Un
+          segundo div.tab-bar aquí duplicaba el header al abrir archivos. */}
       {showStats && (
         <div className="session-stats-overlay" onClick={() => setShowStats(false)}>
           <div onClick={(e) => e.stopPropagation()}>

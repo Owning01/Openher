@@ -2,6 +2,7 @@ import React, { memo, useEffect, useRef, useState } from "react"
 import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../../types"
 import type { ChatViewProps } from "../../components/ChatView"
 import { SessionChatPanel } from "../../components/SessionChatPanel"
+import { TabBar } from "../../components/TabBar"
 import { DesktopPanelRenderer } from "./DesktopPanelRenderer"
 import { calcDropZone, isOverTabBar, compactLayout, type DropZone } from "./model"
 
@@ -420,7 +421,34 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
   return (
     <div className="desktop-layout-area">
       {maximizedSession && maximizedIndex !== null ? (
-        <div className="desktop-maximized" data-split="false">
+        <div className="desktop-maximized" data-split="false" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          {(() => {
+            const stack = tabStacks?.[maximizedIndex]?.length
+              ? tabStacks[maximizedIndex]
+              : maximizedSession
+              ? [maximizedSession.id]
+              : []
+            const allWithSpecial = [...sessions] as any[]
+            for (const tid of stack) {
+              if (tid.startsWith("terminal") && !allWithSpecial.find((s) => s.id === tid)) {
+                allWithSpecial.push({ id: tid, title: `Terminal ${tid.slice(9, 13)}`, directory: "" })
+              }
+            }
+            return (
+              <TabBar
+                tabs={stack}
+                activeIndex={Math.max(0, stack.indexOf(maximizedSession.id))}
+                sessions={allWithSpecial}
+                busySessionIds={busySessions}
+                onSwitch={(idx) => onSwitchTab(maximizedIndex, idx)}
+                onClose={(idx) => onRemoveTab(maximizedIndex, idx)}
+                onAdd={() => onAddTerminal(maximizedIndex)}
+                onMoveTab={(from, to) => onMoveTab(maximizedIndex, from, to)}
+                panelIndex={maximizedIndex}
+              />
+            )
+          })()}
+          <div style={{ flex: 1, minHeight: 0 }}>
           <SessionChatPanel
             session={maximizedSession}
             config={config!}
@@ -465,6 +493,7 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
             onClearVisualSelection={vs.clear}
             onFocusVisualFile={onOpenFile}
           />
+          </div>
         </div>
       ) : (
         <div

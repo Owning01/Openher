@@ -445,42 +445,80 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       )
     }
 
+    // Header único del panel: el TabBar vive en la franja superior (igual que
+    // terminal/browser/virtual). SessionChatPanel ya NO renderiza su propio
+    // div.tab-bar interno (duplicaba el header al abrir archivos).
+    const isSingle = (props.desktopLayout?.cols ?? 1) * (props.desktopLayout?.rows ?? 1) === 1
+    const allWithSpecial = [...sessions] as any[]
+    for (const tid of stack) {
+      if (tid.startsWith("terminal") && !allWithSpecial.find((s) => s.id === tid)) {
+        allWithSpecial.push({ id: tid, title: `Terminal ${tid.slice(9, 13)}`, directory: "" })
+      }
+      if (tid.startsWith("browser:") && !allWithSpecial.find((s) => s.id === tid)) {
+        const u = browserTabUrls[tid] || ""
+        try {
+          allWithSpecial.push({ id: tid, title: new URL(u).hostname, directory: "" })
+        } catch {
+          allWithSpecial.push({ id: tid, title: u.slice(0, 20) || "Navegador", directory: "" })
+        }
+      }
+    }
     return (
-      <SessionChatPanel
-        session={session}
-        config={config!}
-        dataMode={dataMode}
-        baseProps={baseChatProps}
-        active={active}
-        connectionState={connectionState}
-        panelIndex={i}
-        onActivate={onActivate}
-        onClose={onClose}
-        onSplitSession={onDockSession}
-        onSettled={onSettleSession}
-        onRefreshSessions={onRefreshSessions}
-        onSetCommands={onSetCommands}
-        onRecordPrompt={onRecordPrompt}
-        onQueueAction={onQueueAction}
-        onShellExecute={onShellExecute}
-        onChangeAgentGlobal={onChangeAgent}
-        onOpenInThisPanel={onOpenInThisPanel}
-        onSwapPanels={onSwapPanels}
-        onOpenFile={onOpenFile}
-        onOpenConnect={onOpenConnect}
-        onOpenBrowser={onOpenBrowser}
-        tabStack={isSinglePanel ? [] : stack}
-        allSessions={sessions}
-        busySessionIds={busySessions}
-        onTabSwitch={(_, idx) => onSwitchTab(idx)}
-        onTabClose={(_, idx) => onRemoveTab(idx)}
-        onTabAdd={onAddTerminal}
-        onTabMove={onMoveTab}
-        visualSelection={vs.selection}
-        visualPromptContext={vs.promptContext}
-        onClearVisualSelection={vs.clear}
-        onFocusVisualFile={onOpenFile}
-      />
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        {!isSingle && (
+          <TabBar
+            tabs={stack}
+            activeIndex={Math.max(0, stack.indexOf(sid ?? ""))}
+            sessions={allWithSpecial}
+            busySessionIds={busySessions}
+            onSwitch={onSwitchTab}
+            onClose={onRemoveTab}
+            onAdd={onAddTerminal}
+            onMoveTab={onMoveTab}
+            onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
+            panelIndex={i}
+            onDropTerminal={onAddTerminal}
+            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
+            onDropUrl={(url) => onOpenBrowser(url, i)}
+            onDetach={onDetachTab}
+            onCloseOthers={onCloseOthers}
+            onCloseRight={onCloseRight}
+            onCloseLeft={onCloseLeft}
+            onCloseAll={onCloseAll}
+          />
+        )}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <SessionChatPanel
+            session={session}
+            config={config!}
+            dataMode={dataMode}
+            baseProps={baseChatProps}
+            active={active}
+            connectionState={connectionState}
+            panelIndex={i}
+            onActivate={onActivate}
+            onClose={onClose}
+            onSplitSession={onDockSession}
+            onSettled={onSettleSession}
+            onRefreshSessions={onRefreshSessions}
+            onSetCommands={onSetCommands}
+            onRecordPrompt={onRecordPrompt}
+            onQueueAction={onQueueAction}
+            onShellExecute={onShellExecute}
+            onChangeAgentGlobal={onChangeAgent}
+            onOpenInThisPanel={onOpenInThisPanel}
+            onSwapPanels={onSwapPanels}
+            onOpenFile={onOpenFile}
+            onOpenConnect={onOpenConnect}
+            onOpenBrowser={onOpenBrowser}
+            busySessionIds={busySessions}
+            visualSelection={vs.selection}
+            visualPromptContext={vs.promptContext}
+            onClearVisualSelection={vs.clear}
+            onFocusVisualFile={onOpenFile}
+          />
+        </div>
+      </div>
     )
   }
 
