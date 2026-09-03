@@ -72,6 +72,30 @@ describe("LiteEditor", () => {
     expect(textarea().value).toBe("hola")
   })
 
+  it("Tab colapsado inserta indent en línea vacía", () => {
+    render(<Harness initial={"a\n\nb"} />)
+    const ta = textarea()
+    ta.setSelectionRange(2, 2)
+    fireEvent.keyDown(ta, { key: "Tab" })
+    expect(ta.value).toBe("a\n  \nb")
+  })
+
+  it("Tab colapsado inserta indent a mitad de línea", () => {
+    render(<Harness initial={"ab"} />)
+    const ta = textarea()
+    ta.setSelectionRange(1, 1)
+    fireEvent.keyDown(ta, { key: "Tab" })
+    expect(ta.value).toBe("a  b")
+  })
+
+  it("Shift+Tab colapsado quita indent de la línea", () => {
+    render(<Harness initial={"  ab"} />)
+    const ta = textarea()
+    ta.setSelectionRange(4, 4)
+    fireEvent.keyDown(ta, { key: "Tab", shiftKey: true })
+    expect(ta.value).toBe("ab")
+  })
+
   it("Ctrl+/ comenta con el prefijo del lenguaje", () => {
     render(<Harness initial="const a = 1" />)
     const ta = textarea()
