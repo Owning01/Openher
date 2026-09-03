@@ -329,6 +329,7 @@ pub fn save_config(cfg: &ShellConfig) {
     let tmp = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(cfg).unwrap_or_default();
     if std::fs::write(&tmp, &data).is_ok() {
+        if let Ok(f) = std::fs::File::open(&tmp) { let _ = f.sync_all(); }
         let _ = std::fs::rename(&tmp, &path);
     } else {
         let _ = std::fs::write(&path, &data);
@@ -350,6 +351,7 @@ pub fn save_persisted(s: &PersistedState) {
     let tmp = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(s).unwrap_or_default();
     if std::fs::write(&tmp, &data).is_ok() {
+        if let Ok(f) = std::fs::File::open(&tmp) { let _ = f.sync_all(); }
         let _ = std::fs::rename(&tmp, &path);
     } else {
         let _ = std::fs::write(&path, &data);
@@ -379,6 +381,7 @@ pub fn save_window_geometry(g: &WindowGeometry) {
     let tmp = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(g).unwrap_or_default();
     if std::fs::write(&tmp, &data).is_ok() {
+        if let Ok(f) = std::fs::File::open(&tmp) { let _ = f.sync_all(); }
         let _ = std::fs::rename(&tmp, &path);
     } else {
         let _ = std::fs::write(&path, &data);

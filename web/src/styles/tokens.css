@@ -55,7 +55,7 @@
   --modal-backdrop: rgba(0, 0, 0, 0.32);
   --sheet-backdrop: rgba(0, 0, 0, 0.28);
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+  --font-mono: var(--font-family);
   --safe-top-boundary: max(8px, calc(8px + env(safe-area-inset-top, 0px)));
   --safe-bottom-boundary: max(8px, calc(8px + env(safe-area-inset-bottom, 0px)));
   --space-1: 0.25rem;
@@ -165,6 +165,14 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+/* Unificación solicitada: misma fuente en todo el chat y en general — mono hereda de sans */
+:root { --font-mono: var(--font-family); }
+code, pre, kbd, samp, .diff-view, .diff-view > div, .tool-part-pre, .inline-diff, .inline-diff-pre,
+.inline-diff-line, .file-editor-textarea, .terminal-output, .terminal-input, .tool-file-brackets,
+.tool-target-line, .tool-diff-badge {
+  font-family: var(--font-family) !important;
 }
 
 

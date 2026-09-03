@@ -1,10 +1,9 @@
-// @ts-nocheck
 import React, { memo, useEffect, useRef, useState } from "react"
 import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../../types"
 import type { ChatViewProps } from "../../components/ChatView"
 import { SessionChatPanel } from "../../components/SessionChatPanel"
 import { DesktopPanelRenderer } from "./DesktopPanelRenderer"
-import { calcDropZone, isOverTabBar, type DropZone } from "./model"
+import { calcDropZone, isOverTabBar, compactLayout, type DropZone } from "./model"
 
 export type DesktopGridProps = {
   desktopLayout: import("../../types").DesktopLayout
@@ -134,14 +133,12 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
       if (desktopLayout.sessions[i]) return false
       if ((tabStacks[i]?.length ?? 0) > 0) return false
       const kind = desktopLayout.panelKinds[i]
-      // editor: tiene tabs en panelEditorTabStacks, no en tabStacks
       if (kind === "editor") {
         const edt = (desktopLayout as any).panelEditorTabStacks?.[i] as string[] | undefined
         if (edt && edt.length > 0) return false
         if ((desktopLayout as any).panelEditorPaths?.[i]) return false
         return true
       }
-      // panel dedicado (explorer, terminal, stats, etc.) no se considera vacío aunque sessions null
       if (kind !== "session") return false
       return true
     }
@@ -157,49 +154,9 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
     if (!needsCompact) return
     const t = setTimeout(() => {
       onSetDesktopLayout((prev: any) => {
-        let { cols, rows, sessions, panelKinds, panelIds, colSizes, rowSizes } = prev
-        const stacks: string[][] = tabStacks
-        const isEmptyPrev = (i: number) => {
-          if (sessions[i]) return false
-          if ((stacks[i]?.length ?? 0) > 0) return false
-          const kind = panelKinds[i]
-          if (kind === "editor") {
-            const edt = (prev as any).panelEditorTabStacks?.[i] as string[] | undefined
-            if (edt && edt.length > 0) return false
-            if ((prev as any).panelEditorPaths?.[i]) return false
-            return true
-          }
-          if (kind !== "session") return false
-          return true
-        }
-        let changed = true
-        while (changed) {
-          changed = false
-          for (let r = 0; r < rows; r++) {
-            if (sessions.slice(r * cols, r * cols + cols).every((_, i) => isEmptyPrev(r * cols + i)) && rows > 1) {
-              sessions = sessions.filter((_, i) => Math.floor(i / cols) !== r)
-              panelKinds = panelKinds.filter((_, i) => Math.floor(i / cols) !== r)
-              panelIds = panelIds.filter((_, i) => Math.floor(i / cols) !== r)
-              rows -= 1; rowSizes = (rowSizes as any[]).filter((_, i) => i !== r); changed = true; break
-            }
-          }
-          if (changed) continue
-          const emptyCols: number[] = []
-          for (let c = 0; c < cols; c++) if (Array.from({ length: rows }, (_, r) => r * cols + c).every(isEmptyPrev)) emptyCols.push(c)
-          if (emptyCols.length > 0 && cols > emptyCols.length) {
-            const rem = new Set(emptyCols)
-            sessions = sessions.filter((_, i) => !rem.has(i % cols))
-            panelKinds = panelKinds.filter((_, i) => !rem.has(i % cols))
-            panelIds = panelIds.filter((_, i) => !rem.has(i % cols))
-            cols -= emptyCols.length
-            colSizes = (colSizes as any[]).filter((_, i) => !rem.has(i))
-            changed = true
-          }
-          if (cols === 1) colSizes = [null]
-          if (rows === 1) rowSizes = [null]
-        }
-        if (cols === prev.cols && rows === prev.rows) return prev
-        return { ...prev, cols, rows, sessions, panelKinds, panelIds, colSizes, rowSizes }
+        const next = compactLayout(prev as any, tabStacks)
+        if (next.cols === prev.cols && next.rows === prev.rows) return prev
+        return { ...prev, ...next }
       })
     }, 0)
     return () => clearTimeout(t)
@@ -261,12 +218,14 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
       window.removeEventListener("pointercancel", onUp)
+      window.removeEventListener("blur", onUp as any)
       onSetDesktopLayout((prev: any) => ({ ...prev, colSizes: sizes }))
     }
 
     window.addEventListener("pointermove", onMove)
     window.addEventListener("pointerup", onUp)
     window.addEventListener("pointercancel", onUp)
+    window.addEventListener("blur", onUp as any, { once: true } as any)
   }
 
   const startRowResize = (rowIndex: number) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -305,40 +264,39 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
       window.removeEventListener("pointercancel", onUp)
+      window.removeEventListener("blur", onUp as any)
       onSetDesktopLayout((prev: any) => ({ ...prev, rowSizes: sizes }))
     }
 
     window.addEventListener("pointermove", onMove)
     window.addEventListener("pointerup", onUp)
     window.addEventListener("pointercancel", onUp)
+    window.addEventListener("blur", onUp as any, { once: true } as any)
   }
 
-  // Defensa: si el estado persistido quedó corrupto (sessions/panelKinds/panelIds desfasados), normalizar
   const totalPanels = desktopLayout.cols * desktopLayout.rows
-  // Si hay desfase, el grid se vería recortado (hueco negro). Auto-reparar sin perder tabs visibles.
-  if (
-    desktopLayout.sessions.length !== totalPanels ||
-    desktopLayout.panelKinds.length !== totalPanels ||
-    desktopLayout.panelIds.length !== totalPanels
-  ) {
-    // Corrección diferida para no mutar durante render
-    setTimeout(() => {
-      onSetDesktopLayout((prev: any) => {
-        const total = prev.cols * prev.rows
-        if (prev.sessions.length === total && prev.panelKinds.length === total && prev.panelIds.length === total) return prev
-        const sessions = [...prev.sessions]
-        const kinds = [...prev.panelKinds]
-        const ids = [...prev.panelIds]
-        while (sessions.length < total) sessions.push(null)
-        while (sessions.length > total) sessions.pop()
-        while (kinds.length < total) kinds.push("session")
-        while (kinds.length > total) kinds.pop()
-        while (ids.length < total) ids.push(`panel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
-        while (ids.length > total) ids.pop()
-        return { ...prev, sessions, panelKinds: kinds, panelIds: ids }
-      })
-    }, 0)
-  }
+  // Defensa: si el estado persistido quedó corrupto — normalizar en efecto, no durante render
+  useEffect(() => {
+    if (
+      desktopLayout.sessions.length === totalPanels &&
+      desktopLayout.panelKinds.length === totalPanels &&
+      desktopLayout.panelIds.length === totalPanels
+    ) return
+    onSetDesktopLayout((prev: any) => {
+      const total = prev.cols * prev.rows
+      if (prev.sessions.length === total && prev.panelKinds.length === total && prev.panelIds.length === total) return prev
+      const sessions = [...prev.sessions]
+      const kinds = [...prev.panelKinds]
+      const ids = [...prev.panelIds]
+      while (sessions.length < total) sessions.push(null)
+      while (sessions.length > total) sessions.pop()
+      while (kinds.length < total) kinds.push("session")
+      while (kinds.length > total) kinds.pop()
+      while (ids.length < total) ids.push(`panel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
+      while (ids.length > total) ids.pop()
+      return { ...prev, sessions, panelKinds: kinds, panelIds: ids }
+    })
+  }, [desktopLayout.sessions.length, desktopLayout.panelKinds.length, desktopLayout.panelIds.length, totalPanels, onSetDesktopLayout])
 
   const isSplit = desktopLayout.cols > 1 || desktopLayout.rows > 1
   const cells = Array.from({ length: totalPanels }).map((_, i) => {
@@ -678,7 +636,7 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
                 style.top = top + height / 2
                 style.height = height / 2
               }
-              return <div style={style} />
+              return <div style={style} role="region" aria-label="Soltar aquí" aria-live="polite" />
             })()}
           {colHandles}
           {rowHandles}

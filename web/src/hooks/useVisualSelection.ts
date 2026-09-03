@@ -1,4 +1,4 @@
-import { useCallback, useState, useMemo } from "react"
+import { useCallback, useState, useMemo, useEffect } from "react"
 
 export type VisualSelection = {
   id: string
@@ -143,11 +143,36 @@ function buildAnnotationsPrompt(annotations: VisualAnnotation[]): string {
   return `${header}\n\n${zones}\n\n${footer}`
 }
 
+const VISUAL_ANNOTATIONS_KEY = "opencode.visual.annotations"
 export function useVisualSelection() {
   const [selection, setSelection] = useState<VisualSelection | null>(null)
-  const [annotations, setAnnotations] = useState<VisualAnnotation[]>([])
+  const [annotations, setAnnotations] = useState<VisualAnnotation[]>(() => {
+    try {
+      const raw = localStorage.getItem(VISUAL_ANNOTATIONS_KEY)
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) return arr.filter((x: any) => x && typeof x.id === "string").slice(0, 9)
+      }
+    } catch {}
+    return []
+  })
   const [inspectMode, setInspectMode] = useState(false)
   const [inspectTool, setInspectTool] = useState<"picker" | "pod">("picker")
+
+  useEffect(() => {
+    try { localStorage.setItem(VISUAL_ANNOTATIONS_KEY, JSON.stringify(annotations.slice(0, 9))) } catch (e) { console.warn("[Visual] persist annotations failed", e) }
+  }, [annotations])
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (annotations.length > 0) {
+        e.preventDefault()
+        e.returnValue = ""
+      }
+    }
+    if (annotations.length > 0) window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [annotations.length])
 
   const select = useCallback((sel: Omit<VisualSelection, "id" | "timestamp">) => {
     setSelection({

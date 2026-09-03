@@ -424,9 +424,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   const t = useT()
   const text = part.text?.trim()
   const toolName = useMemo(() => part.tool ?? detectToolName(text ?? ""), [part.tool, text])
-  const isFileToolInitial = toolName ? FILE_TOOLS.has(toolName) : false
-  // VS Code: diffs de archivo se muestran expandidos por defecto, resto colapsado
-  const [expanded, setExpanded] = useState(isFileToolInitial)
+  const [expanded, setExpanded] = useState(false)
   const meta = toolName ? toolMeta[toolName] : null
   const filePath = useMemo(() => extractFilePath(text ?? ""), [text])
   const displayFilePath = useMemo(() => filePath ? toRelativePath(filePath, directory) : null, [filePath, directory])

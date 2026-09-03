@@ -149,6 +149,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     loadSelected,
     send,
     abortSession,
+    messages,
     setMessages,
     undoMessage,
     redoMessage,
@@ -323,7 +324,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
   const { snippets: promptSnippets, addSnippet, removeSnippet } = usePromptSnippets()
 
   const stopGenerationRef = useRef(false)
-  const { getCachedMessages, getCachedSessions } = useOfflineCache(flags)
+  const { getCachedMessages, getCachedSessions, cacheMessages } = useOfflineCache(flags)
 
   const loadSessionRef = useRef(0)
 
@@ -428,6 +429,17 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     desktopDiffWidth,
     setDesktopDiffWidth,
   } = useDesktopLayoutState(isDesktop, selectedSession?.id ?? null)
+
+  // Sincroniza caché offline tras cada reconciliación — evita que mensajes borrados vía revert
+  // queden en IndexedDB y se reinyecten en el próximo preload (causaba reenvío del borrado).
+  useEffect(() => {
+    if (!flags.offlineCache) return
+    if (!selectedSession?.id) return
+    if (messages.length === 0) return
+    const filtered = messages.filter((m: any) => m.info.sessionID === selectedSession.id)
+    if (filtered.length === 0) return
+    cacheMessages(selectedSession.id, filtered).catch(() => {})
+  }, [messages, selectedSession?.id, flags.offlineCache, cacheMessages])
 
   // auto_opencode2 now handled via terminal tab pty injection (see SingleTerminal); no bottom dock
 

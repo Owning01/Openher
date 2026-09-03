@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useState } from "react"
+import React, { memo, useCallback, useEffect, useState, useRef } from "react"
 import { useIsDesktop } from "../../hooks/useIsDesktop"
 import {
   ChatIcon,
@@ -92,16 +92,24 @@ export const TitleBar = memo(function TitleBar({
   const isDesktop = useIsDesktop()
   const [isMax, setIsMax] = useState(false)
 
+  const ctrlRef = useRef<AbortController | null>(null)
   const post = useCallback((path: string) => {
-    fetch(path, { method: "POST" }).catch(() => {})
+    fetch(path, { method: "POST" }).catch((e) => console.warn(`[TitleBar] POST ${path} failed`, e))
   }, [])
 
   const refresh = useCallback(async () => {
+    ctrlRef.current?.abort()
+    const c = new AbortController()
+    ctrlRef.current = c
     try {
-      const r = await fetch("/shell/window/state", { cache: "no-store" })
+      const r = await fetch("/shell/window/state", { cache: "no-store", signal: c.signal })
+      if (c.signal.aborted) return
       const j = await r.json()
       setIsMax(!!j.maximized)
-    } catch {}
+    } catch (e: any) {
+      if (e?.name === "AbortError") return
+      console.warn("[TitleBar] refresh state failed", e)
+    }
   }, [])
 
   useEffect(() => {
@@ -115,6 +123,7 @@ export const TitleBar = memo(function TitleBar({
     return () => {
       window.clearInterval(id)
       window.removeEventListener("resize", onResize)
+      ctrlRef.current?.abort()
     }
   }, [refresh, isDesktop, isMax])
 
@@ -146,11 +155,14 @@ export const TitleBar = memo(function TitleBar({
         e.preventDefault()
         e.stopPropagation()
       }
+      const prev = isMax
       post("/shell/window/maximize")
       setIsMax((v) => !v)
-      setTimeout(refresh, 250)
+      setTimeout(() => {
+        refresh().catch(() => setIsMax(prev))
+      }, 250)
     },
-    [post, refresh]
+    [post, refresh, isMax]
   )
 
   if (!isDesktop) {

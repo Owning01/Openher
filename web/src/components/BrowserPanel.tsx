@@ -103,7 +103,14 @@ function loadBookmarks(): BrowserBookmark[] {
   } catch { return [] }
 }
 function saveBookmarks(items: BrowserBookmark[]) {
-  try { localStorage.setItem(BROWSER_BOOKMARKS_KEY, JSON.stringify(items.slice(0, 100))) } catch {}
+  try { localStorage.setItem(BROWSER_BOOKMARKS_KEY, JSON.stringify(items.slice(0, 100))) } catch (e: any) {
+    if (e?.name === "QuotaExceededError" || e?.code === 22) {
+      try { localStorage.setItem(BROWSER_BOOKMARKS_KEY, JSON.stringify(items.slice(0, 20))) } catch {}
+      console.warn("[Browser] bookmarks quota exceeded, trimmed to 20")
+    } else {
+      console.warn("[Browser] saveBookmarks failed", e)
+    }
+  }
 }
 function loadHistory(): string[] {
   try {
@@ -420,32 +427,40 @@ export const BrowserPanel = memo(function BrowserPanel({
     return () => { window.removeEventListener("keydown", onKey); el?.removeEventListener("wheel", onWheel as any); document.removeEventListener("fullscreenchange", onFsChange) }
   }, [zoomLevel, onToggleInspect, onToggleInspectTool, inspectTool])
 
-  // Watchdog de carga: asegura que el spinner desaparezca tras timeout
+  // Watchdog de carga: espera a sub-WebView history.back() real (3-5s) antes de ocultar spinner
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1200)
+    setLoading(true)
+    const t = setTimeout(() => setLoading(false), 4000)
     return () => clearTimeout(t)
   }, [currentSrc, reloadKey])
 
-  // Sugerencias Chrome-like: debounced fetch a suggestqueries.google.com via proxy same-origin (evita CORS)
+  // Sugerencias Chrome-like: debounced fetch con AbortSignal para evitar out-of-order
+  const suggestCtrlRef = useRef<AbortController | null>(null)
   useEffect(() => {
     const q = inputUrl.trim()
     if (!q || isProbablyUrl(q) || q.length < 2 || q.startsWith("http")) {
+      suggestCtrlRef.current?.abort()
       setSuggestions([])
       setSuggestIdx(-1)
       return
     }
     const t = setTimeout(async () => {
+      suggestCtrlRef.current?.abort()
+      const c = new AbortController()
+      suggestCtrlRef.current = c
       try {
         const suggestUrl = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(q)}`
         const proxyUrl = `/shell/proxy?url=${encodeURIComponent(suggestUrl)}`
-        const res = await fetch(proxyUrl, { headers: { Accept: "application/json" } })
+        const res = await fetch(proxyUrl, { headers: { Accept: "application/json" }, signal: c.signal })
+        if (c.signal.aborted) return
         if (!res.ok) return
         const data = await res.json()
+        if (c.signal.aborted) return
         const list: string[] = Array.isArray(data) && Array.isArray(data[1]) ? data[1].slice(0, 6) : []
         setSuggestions(list.filter((s) => typeof s === "string" && s.trim()))
         setSuggestIdx(-1)
-      } catch {
-        setSuggestions([])
+      } catch (e: any) {
+        if (e?.name !== "AbortError") setSuggestions([])
       }
     }, 180)
     return () => clearTimeout(t)
@@ -470,33 +485,36 @@ export const BrowserPanel = memo(function BrowserPanel({
     return u
   }
 
-  // --- Native Sub-WebView (desktop only) ---
+  // --- Native Sub-WebView (desktop only) — singleton guard + HiDPI + observabilidad
   useEffect(() => {
     if (!IS_DESKTOP || !viewportRef.current) return
+    if (!isActive) {
+      shell.browser.setVisibility(false).catch((e) => console.warn("[Browser] setVisibility false (inactive mount) failed", e))
+      return
+    }
     const el = viewportRef.current
+    el.setAttribute("data-browser-mounted", "true")
 
-    // getBoundingClientRect() da coordenadas viewport-relative (equivalentes
-    // a position:fixed del sub-WebView2). contentRect.x/y son relativos al
-    // elemento y quedan desfasados si el panel se mueve (resize ventana/split).
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1
     const syncBounds = () => {
       const rect = el.getBoundingClientRect()
       shell.browser.setBounds({
-        x: rect.left,
-        y: rect.top,
-        w: rect.width,
-        h: rect.height,
-      }).catch(() => {})
+        x: Math.round(rect.left * dpr),
+        y: Math.round(rect.top * dpr),
+        w: Math.round(rect.width * dpr),
+        h: Math.round(rect.height * dpr),
+      }).catch((e) => console.warn("[Browser] setBounds failed", e))
     }
 
-    // Open native sub-WebView with initial URL at the viewport bounds
+    // Open native sub-WebView with initial URL at the viewport bounds (HiDPI)
     const rect = el.getBoundingClientRect()
-    const bounds = { x: rect.left, y: rect.top, w: rect.width, h: rect.height }
+    const bounds = { x: Math.round(rect.left * dpr), y: Math.round(rect.top * dpr), w: Math.round(rect.width * dpr), h: Math.round(rect.height * dpr) }
     shell.browser.open(currentSrc, bounds).then(() => {
       nativeReady.current = true
       setBrowserFailed(false)
-    }).catch(() => {
-      // Fallback a iframe vía proxy si el sub-WebView no pudo crearse
-      // (mismatch de args, WebView2 no disponible, etc.)
+      requestAnimationFrame(syncBounds)
+    }).catch((e) => {
+      console.warn("[Browser] open failed url=" + currentSrc, e)
       nativeReady.current = false
       setBrowserFailed(true)
       setHasError(false)
@@ -511,7 +529,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       const visible = entries.some((e) => e.isIntersecting && e.intersectionRatio > 0.01)
       if (visible !== ioVisibility) {
         ioVisibility = visible
-        shell.browser.setVisibility(visible).catch(() => {})
+        shell.browser.setVisibility(visible).catch((e) => console.warn("[Browser] setVisibility IO failed", e))
       }
     }, { threshold: [0, 0.01, 0.5] })
     io.observe(el)
@@ -534,13 +552,18 @@ export const BrowserPanel = memo(function BrowserPanel({
     // no está activa (ahorra RAM ~3 MB con MemoryUsageLevel::Low)
     const handleVis = () => {
       if (document.visibilityState === "hidden") {
-        shell.browser.setVisibility(false).catch(() => {})
-      } else {
-        shell.browser.setVisibility(true).catch(() => {})
+        shell.browser.setVisibility(false).catch((e) => console.warn("[Browser] visibility hidden failed", e))
+      } else if (isActive) {
+        shell.browser.setVisibility(true).catch((e) => console.warn("[Browser] visibility visible failed", e))
         requestAnimationFrame(syncBounds)
       }
     }
     document.addEventListener("visibilitychange", handleVis)
+    const handleOffline = () => setBrowserFailed(true)
+    window.addEventListener("offline", handleOffline)
+    // DPR cambia en drag entre monitores
+    const onDprChange = () => syncBounds()
+    try { window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener("change", onDprChange) } catch {}
 
     return () => {
       io.disconnect()
@@ -548,21 +571,25 @@ export const BrowserPanel = memo(function BrowserPanel({
       window.removeEventListener("resize", syncBounds)
       window.removeEventListener("scroll", syncBounds, true)
       document.removeEventListener("visibilitychange", handleVis)
+      window.removeEventListener("offline", handleOffline)
       if (debounceTimer) clearTimeout(debounceTimer)
+      el.removeAttribute("data-browser-mounted")
       // Mantener WebView vivo para que cookies/sesión Google persistan entre tabs
       // Solo ocultar (MemoryUsageLevel::Low ~3MB), no destruir. close() solo en onClose explícito.
-      shell.browser.setVisibility(false).catch(() => {})
+      // Con singleton, ocultar aquí puede apagar el panel activo si hay otro BrowserPanel; el próximo isActive=true lo re-mostrará
+      shell.browser.setVisibility(false).catch((e) => console.warn("[Browser] visibility false on unmount failed", e))
       nativeReady.current = false
     }
-  }, []) // Solo oculta, no destruye sesión
+  }, [isActive]) // singleton + isActive guard
 
-  // Navigate native WebView when URL changes
+  // Navigate native WebView when URL changes (solo si activo y ready)
   useEffect(() => {
-    if (!IS_DESKTOP || !nativeReady.current || browserFailed) return
-    shell.browser.navigate(currentSrc).catch(() => {
+    if (!IS_DESKTOP || !nativeReady.current || browserFailed || !isActive) return
+    shell.browser.navigate(currentSrc).catch((e) => {
+      console.warn("[Browser] navigate failed url=" + currentSrc, e)
       setBrowserFailed(true)
     })
-  }, [currentSrc, browserFailed])
+  }, [currentSrc, browserFailed, isActive])
 
   // Modo selección en desktop: el overlay se INYECTA dentro del sub-WebView
   // nativo vía eval (sin recargar ni ocultar la página — cero pérdida de estado).

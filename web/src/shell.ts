@@ -4,7 +4,7 @@
 
 export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser" | "doc" | "design" | "quickchat"
 
-export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser", "doc", "design", "quickchat"]
+export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["session", "editor", "terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser", "doc", "design", "quickchat", "session-stats", "config"]
 
 export type FsEntry = { name: string; path: string; is_dir: boolean; size: number | null; modified: number | null }
 

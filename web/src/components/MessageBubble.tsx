@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useMemo, useRef, useEffect } from "react"
-import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon } from "../Icons"
+import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon } from "../Icons"
 import { formatTime, isImagePart } from "../utils"
 import { getTranslationOriginal } from "../hooks/useMessages"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
@@ -116,7 +116,7 @@ const TranslationOriginal = memo(function TranslationOriginal({ messageId }: { m
   )
 })
 
-export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, onContextMenu, showTodoButton, onToggleTodos, todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
+export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, onContextMenu, showTodoButton: _showTodoButton, onToggleTodos: _onToggleTodos, todosOpen: _todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", onRegenerate, onOpenADEDiff }: {
   message: RenderedMessage
   queued?: boolean
   revert?: SessionView["revert"]
@@ -152,7 +152,13 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const isReverted = isRevertedProp ?? (revert ? messageIdGt(message.info.id, revert.messageID) : false)
   const isRevertPoint = revert && message.info.id === revert.messageID
 
-  const isAssistant = message.info.role === "assistant"
+  // Mensaje de compactación: el server lo emite con role "compaction" (v2
+  // nativo). Para estilos/layout se trata como assistant + modificador
+  // "compaction": sin esto caía en `.message.compaction` sin CSS y el resumen
+  // se veía como tarjeta plana sin estilo.
+  const isCompaction = message.hasCompaction || (message.info as unknown as { role?: string }).role === "compaction"
+  const isAssistant = message.info.role === "assistant" || isCompaction
+  const [compactionOpen, setCompactionOpen] = useState(true)
 
   const duration = useMemo(
     () => calcDuration(message, prevUserTs),
@@ -219,7 +225,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
         </div>
       )}
       <article
-        className={`message ${message.info.role} fade-in${isReverted ? " revert-hidden" : ""}${showConfirm ? " confirming-undo" : ""}`}
+        className={`message ${isCompaction ? "assistant compaction" : message.info.role} fade-in${isReverted ? " revert-hidden" : ""}${showConfirm ? " confirming-undo" : ""}`}
         data-message-id={message.info.id}
         data-mode={message.turnMode || undefined}
         onContextMenu={handleContextMenu}
@@ -276,6 +282,9 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           const hasThinking = !!message.thinkingParts && message.thinkingParts.length > 0
           const hasTools = message.toolParts.length > 0
           const hasDiffs = !!message.summaryDiffs && message.summaryDiffs.length > 0
+          // Compact puro (solo resumen, sin thinking/tools/diffs): no ocupa el
+          // activity-box; el resumen vive en su propia tarjeta estilada abajo.
+          if (isCompaction && !hasThinking && !hasTools && !hasDiffs) return null
           const hasActivity = hasThinking || hasTools || hasDiffs || message.hasCompaction
           if (!hasActivity) return null
 
@@ -375,7 +384,27 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
         })()
         }
 
-        {message.text && (
+        {isCompaction && message.text ? (
+          <div className="compaction-card">
+            <button
+              type="button"
+              className="compaction-toggle"
+              onClick={() => setCompactionOpen((v) => !v)}
+              aria-expanded={compactionOpen}
+            >
+              <CompressIcon size={14} />
+              <span className="compaction-title">{t('detail.activityCompaction') || "Resumen de contexto"}</span>
+              <span className="compaction-chevron" aria-hidden="true">{compactionOpen ? "▾" : "▸"}</span>
+              <small className="compaction-hint">{formatTime(message.info.time.created)}</small>
+            </button>
+            {compactionOpen && (
+              <div className="message-content compaction-body">
+                <Markdown text={message.text} highlight={highlight} />
+              </div>
+            )}
+            <div className="compaction-checkpoint" />
+          </div>
+        ) : message.text && (
           <div className="message-content">
             {!message.info.time.completed && message.text.length > 800 ? (
               <pre className="md-plain-stream">{message.text}</pre>
@@ -455,21 +484,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           </div>
         )}
 
-        {showTodoButton && onToggleTodos && (
-          <div className="msg-tasks-row">
-            <button
-              className={`btn-icon msg-tasks-btn${todosOpen ? " active" : ""}`}
-              onClick={(e) => { e.stopPropagation(); onToggleTodos() }}
-              aria-pressed={!!todosOpen}
-              title="Tareas del agente">
-              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <path d="M2 3h8M2 6h8M2 9h5" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {!minimalistMode && message.hasCompaction && <div className="compaction-checkpoint" />}
+        {!minimalistMode && message.hasCompaction && !isCompaction && <div className="compaction-checkpoint" />}
       </article>
 
       {lightboxSrc && (

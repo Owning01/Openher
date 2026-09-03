@@ -163,9 +163,10 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
         req.onerror = () => resolve(null)
       })
 
-      // Merge por id: la caché NUNCA se encoge — solo agrega/actualiza con lo nuevo.
-      // mergeCachedMessages hace union por part (conserva cached no presentes en
-      // el snapshot) y ordena DESC (nuevos primero) para el slice de retención.
+      // Merge por id: la caché se actualiza con lo nuevo y elimina lo borrado en el server.
+      // Antes NUNCA se encogía — conservaba mensajes revertidos/borrados y al recargar
+      // `preloadMessages` los reinyectaba, provocando que al borrar y mandar uno nuevo
+      // se reenviara el borrado cacheado.
       let merged = messages
       let prevHashes: Record<string, string> | undefined
       if (existing?.messages?.length) {
@@ -174,7 +175,32 @@ export function useOfflineCache(flags: { offlineCache: boolean }) {
         // el hash (length + prefijo) coincide — así los parts streamed nuevos se
         // encriptan SOLOS (O(deltas)) en vez de re-encriptar todo el historial.
         try {
-          merged = mergeCachedMessages(existing.messages, messages)
+          const incomingIds = new Set(messages.map((m) => m.info.id))
+          const union = mergeCachedMessages(existing.messages, messages)
+          // Snapshot post-compact: es intencionalmente más chico (server podó
+          // contexto). No es autoritativo para borrados — la UI conserva el
+          // historial previo para lectura, así que la caché tampoco debe podar.
+          const incomingHasCompaction = messages.some((m) =>
+            (m.info as unknown as { role?: string })?.role === "compaction" ||
+            (m.parts ?? []).some((p) => p.type === "compaction"))
+          // Si el fetch es autoritativo (no paginado, no durante streaming/compact), los
+          // mensajes cacheados que no están en el snapshot y son viejos (>30s) fueron
+          // borrados vía revert en el server → eliminarlos también de la caché.
+          // Ventana 30s preserva mensajes recién streamados aún no persistidos.
+          // Se excluye compact: su snapshot aditivo no implica borrado.
+          const limit = 200 // coincide con loadSelected limit para “full”
+          const isAuthoritative = messages.length < limit && !incomingHasCompaction
+          if (isAuthoritative) {
+            const now = Date.now()
+            merged = union.filter((m) => {
+              if (incomingIds.has(m.info.id)) return true
+              const age = now - (m.info.time.created || 0)
+              if (age < 30000) return true // gracia 30s para lag de persistencia
+              return false
+            })
+          } else {
+            merged = union
+          }
           prevHashes = existing.hashes
         } catch {
           // si el merge falla, conservamos solo lo nuevo
