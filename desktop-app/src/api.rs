@@ -99,6 +99,13 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         return;
     }
 
+    // RAM nativa: proceso app + WebViews propios (msedgewebview2 hijas).
+    // La usa el chip de RAM del ActivityBar junto al JS heap.
+    if path == "/shell/mem" {
+        let _ = req.respond(json_ok(&crate::memx::snapshot()));
+        return;
+    }
+
     // ============================== Window controls (extraído)
     if path.starts_with("/shell/window") {
         if let Some(resp) = crate::infrastructure::http::window_router::handle(&mut req, state.clone(), &path, method.clone(), &q) {
