@@ -144,6 +144,10 @@ pub struct ShellConfig {
     pub server: ServerConfigFile,
     pub port: u16,
     pub start_minimized: bool,
+    /// Minimizar (—) oculta a la bandeja. Apagado = minimize normal a la
+    /// barra de tareas. Default apagado.
+    #[serde(default)]
+    pub minimize_to_tray: bool,
     /// Shell para terminales (cmd.exe, powershell.exe, etc.).
     pub shell: String,
     /// Comando para arrancar el server opencode (bat/exe). Vacío = no arranca.
@@ -202,6 +206,7 @@ impl Default for ShellConfig {
             server: ServerConfigFile::default(),
             port: DEFAULT_PORT,
             start_minimized: false,
+            minimize_to_tray: false,
             shell: crate::ptyx::default_shell(),
             start_command: String::new(),
             server_ports: vec![4096, 4097],

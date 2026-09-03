@@ -103,6 +103,9 @@ fn merge_config(cfg: &mut crate::state::ShellConfig, patch: &serde_json::Value) 
     if let Some(s) = patch.get("start_minimized").and_then(|v| v.as_bool()) {
         cfg.start_minimized = s;
     }
+    if let Some(s) = patch.get("minimize_to_tray").and_then(|v| v.as_bool()) {
+        cfg.minimize_to_tray = s;
+    }
     if let Some(s) = patch.get("start_command").and_then(|v| v.as_str()) {
         cfg.start_command = s.to_string();
     }
