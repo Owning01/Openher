@@ -23,6 +23,8 @@ import {
   wordBeforeCaret,
   applyEdits,
   diffLines,
+  reindentPasted,
+  collectSymbols,
 } from "./editorOps"
 
 describe("escapeHtml/hastToHtml", () => {
@@ -234,5 +236,47 @@ describe("diffLines", () => {
   it("gigante → tooLarge", () => {
     const big = Array.from({ length: 21000 }, (_, i) => `l${i}`).join("\n")
     expect(diffLines(big, big + "\nx").tooLarge).toBe(true)
+  })
+})
+
+describe("reindentPasted", () => {
+  it("una línea no se toca", () => {
+    expect(reindentPasted("    ", "abc")).toBe("abc")
+  })
+  it("aplica el indent destino a las líneas 2..n", () => {
+    expect(reindentPasted("    ", "a\nb\nc")).toBe("a\n    b\n    c")
+  })
+  it("quita el indent común antes de aplicar el destino", () => {
+    expect(reindentPasted("", "  a\n    b")).toBe("  a\nb")
+  })
+  it("respeta líneas vacías intermedias", () => {
+    expect(reindentPasted("  ", "a\n\n  b")).toBe("a\n\n  b")
+  })
+})
+
+describe("collectSymbols", () => {
+  it("ts: function, class, interface y arrow", () => {
+    const src = "export function foo() {}\nclass Bar {}\ninterface Baz {}\nconst q = (x) => x\nconst n = 1\n"
+    expect(collectSymbols(src, "typescript")).toEqual([
+      { name: "foo", kind: "function", line: 1 },
+      { name: "Bar", kind: "class", line: 2 },
+      { name: "Baz", kind: "type", line: 3 },
+      { name: "q", kind: "function", line: 4 },
+    ])
+  })
+  it("python y markdown", () => {
+    expect(collectSymbols("def f():\n  pass\nclass C:\n  x = 1\n", "python")).toEqual([
+      { name: "f", kind: "function", line: 1 },
+      { name: "C", kind: "class", line: 3 },
+    ])
+    expect(collectSymbols("# T\n## S\n", "markdown")).toEqual([
+      { name: "T", kind: "section", line: 1 },
+      { name: "S", kind: "section", line: 2 },
+    ])
+  })
+  it("desconocido usa fallback y respeta tope", () => {
+    expect(collectSymbols("function g() {}", "css")).toEqual([{ name: "g", kind: "symbol", line: 1 }])
+    const many = Array.from({ length: 10 }, (_, i) => `function f${i}() {}`).join("\n")
+    expect(collectSymbols(many, "typescript", 3)).toHaveLength(3)
   })
 })

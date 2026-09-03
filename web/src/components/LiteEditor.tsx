@@ -25,9 +25,12 @@ import {
   trimTrailingWhitespace,
   applyEdits,
   collectWords,
+  collectSymbols,
   diffLines,
   findMatchingBracket,
   wordBeforeCaret,
+  reindentPasted,
+  type DocSymbol,
   type HastNode,
   type TextEdit,
 } from "../utils/editorOps"
@@ -79,8 +82,12 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   const [paletteFilter, setPaletteFilter] = useState("")
   const [gotoOpen, setGotoOpen] = useState(false)
   const [gotoValue, setGotoValue] = useState("")
+  const [symOpen, setSymOpen] = useState(false)
+  const [symFilter, setSymFilter] = useState("")
+  const [symActive, setSymActive] = useState(0)
   const [hlHtml, setHlHtml] = useState("")
   const [caretOffset, setCaretOffset] = useState(0)
+  const [caretLine, setCaretLine] = useState(1)
   const [extraCursors, setExtraCursors] = useState<number[]>([])
   const [bracket, setBracket] = useState<{ open: number; close: number } | null>(null)
   const [marks, setMarks] = useState<Array<{ top: number; left: number; height: number; kind: "caret" | "bracket" }>>([])
@@ -149,7 +156,10 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   const highlightable = value.length <= HL_MAX_CHARS && lineCount <= HL_MAX_LINES
   const plainMode = !highlightable
 
-  // Highlight diferido: no bloquea el tipeo; archivos grandes van en plano
+  // Highlight diferido: no bloquea el tipeo; archivos grandes van en plano.
+  // Archivos medianos/grandes esperan más tras la última tecla (el highlight
+  // completo es el costo dominante y no vale la pena correrlo a cada pausa).
+  const hlDelay = value.length > 50_000 ? 400 : 130
   useEffect(() => {
     if (!highlightable) {
       setHlHtml("")
@@ -167,9 +177,9 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       } catch {
         setHlHtml("")
       }
-    }, 130)
+    }, hlDelay)
     return () => window.clearTimeout(id)
-  }, [value, path, highlightable])
+  }, [value, path, highlightable, hlDelay])
 
   const codeHtml = useMemo(() => {
     const body = hlHtml || escapeHtml(value)
@@ -202,24 +212,79 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       if (!ta) return
       const off = ta.selectionStart ?? 0
       setCaretOffset(off)
-      if (!onCursor) return
       const { line, col } = getLineCol(valueRef.current, off)
+      setCaretLine(line)
+      if (!onCursor) return
       onCursor({ line, col })
     })
   }, [onCursor])
 
-  // Aplica una edición y restaura selección/caret tras el onChange controlado
-  const applyEdit = useCallback(
+  // ---- historial deshacer/rehacer ----
+  // El textarea es controlado (value nuevo por render): el stack nativo del
+  // navegador no sobrevive, así que van snapshots propios {texto, caret} con
+  // tope. pushHistory guarda el estado PREVIO antes de cada edición.
+  type HistSnap = { text: string; sel: [number, number] }
+  const undoRef = useRef<HistSnap[]>([])
+  const redoRef = useRef<HistSnap[]>([])
+  const lastNativePushRef = useRef(0)
+  // Archivo distinto → el historial ajeno no sirve
+  useEffect(() => {
+    undoRef.current = []
+    redoRef.current = []
+    wordsCache.current = null
+  }, [path])
+
+  const pushHistory = useCallback((prevText: string, a: number, b: number) => {
+    const u = undoRef.current
+    const top = u[u.length - 1]
+    if (top && top.text === prevText) {
+      top.sel = [a, b]
+      return
+    }
+    u.push({ text: prevText, sel: [a, b] })
+    if (u.length > 50) u.splice(0, u.length - 50)
+    redoRef.current = []
+  }, [])
+
+  // Aplica una edición y restaura selección/caret tras el onChange controlado.
+  // Cruda (sin historial): la usan deshacer/rehacer, que ya gestionan stacks.
+  const applyEditRaw = useCallback(
     (next: string, selStart: number, selEnd: number) => {
       onChange(next)
       setExtraCursors([]) // edición de un solo cursor invalida los extras
       later(() => {
         setSel(selStart, selEnd)
         taRef.current?.focus()
+        reportCursor()
       })
     },
-    [onChange, later, setSel]
+    [onChange, later, setSel, reportCursor]
   )
+  const applyEdit = useCallback(
+    (next: string, selStart: number, selEnd: number) => {
+      const ta = taRef.current
+      pushHistory(valueRef.current, ta?.selectionStart ?? 0, ta?.selectionEnd ?? 0)
+      applyEditRaw(next, selStart, selEnd)
+    },
+    [applyEditRaw, pushHistory]
+  )
+
+  const undo = useCallback(() => {
+    const s = undoRef.current.pop()
+    if (!s) return
+    const ta = taRef.current
+    redoRef.current.push({ text: valueRef.current, sel: [ta?.selectionStart ?? 0, ta?.selectionEnd ?? 0] })
+    applyEditRaw(s.text, s.sel[0], s.sel[1])
+  }, [applyEditRaw])
+
+  const redo = useCallback(() => {
+    const s = redoRef.current.pop()
+    if (!s) return
+    const ta = taRef.current
+    undoRef.current.push({ text: valueRef.current, sel: [ta?.selectionStart ?? 0, ta?.selectionEnd ?? 0] })
+    if (undoRef.current.length > 50) undoRef.current.splice(0, undoRef.current.length - 50)
+    applyEditRaw(s.text, s.sel[0], s.sel[1])
+  }, [applyEditRaw])
 
   const focusTa = useCallback(() => {
     taRef.current?.focus()
@@ -389,6 +454,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
         newPos[i] = Math.min(next.length, Math.max(0, e.start) + shift + e.insert.length)
         shift += e.insert.length - (e.end - e.start)
       }
+      pushHistory(t, a, b)
       onChange(next)
       const primaryPos = newPos[0] >= 0 ? newPos[0] : a
       const rest = newPos
@@ -401,7 +467,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       })
       return true
     },
-    [onChange, later, setSel]
+    [onChange, later, setSel, pushHistory]
   )
 
   const typeAtCursors = useCallback(
@@ -693,6 +759,30 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     jumpToOffset(off)
   }, [gotoValue, jumpToOffset])
 
+  // ---- ir a símbolo (Ctrl+Shift+O) ----
+  // Índice barato por regex según lenguaje; solo se calcula con el diálogo
+  // abierto (nunca por tecla).
+  const symbols = useMemo<DocSymbol[]>(
+    () => (symOpen ? collectSymbols(valueRef.current, langFromFilename(path)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [symOpen, value, path]
+  )
+  const filteredSymbols = useMemo(() => {
+    const q = symFilter.trim().toLowerCase()
+    const list = q ? symbols.filter((s) => s.name.toLowerCase().includes(q) || s.kind.includes(q)) : symbols
+    return list.slice(0, 100)
+  }, [symbols, symFilter])
+  useEffect(() => {
+    setSymActive(0)
+  }, [symFilter, symOpen])
+  const jumpToSymbol = useCallback(
+    (s: DocSymbol) => {
+      setSymOpen(false)
+      jumpToOffset(offsetFromLineCol(valueRef.current, s.line, 1))
+    },
+    [jumpToOffset]
+  )
+
   // ---- paleta de comandos (automatización) ----
   const commands = useMemo(
     () => [
@@ -700,6 +790,9 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       { id: "find", label: "Buscar en archivo", hint: "Ctrl+F", run: () => { setFindOpen(true); setReplaceOpen(false) } },
       { id: "replace", label: "Buscar y reemplazar", hint: "Ctrl+H", run: () => { setFindOpen(true); setReplaceOpen(true) } },
       { id: "goto", label: "Ir a línea…", hint: "Ctrl+G", run: () => setGotoOpen(true) },
+      { id: "symbol", label: "Ir a símbolo…", hint: "Ctrl+Shift+O", run: () => { setSymFilter(""); setSymOpen(true) } },
+      { id: "undo", label: "Deshacer", hint: "Ctrl+Z", run: undo },
+      { id: "redo", label: "Rehacer", hint: "Ctrl+Shift+Z", run: redo },
       { id: "wrap", label: wrap ? "Desactivar ajuste de línea" : "Activar ajuste de línea", hint: "", run: () => { setWrap((v) => { setPref(WRAP_KEY, v ? "off" : "on"); return !v }) } },
       { id: "font+", label: "Aumentar tamaño de letra", hint: "Ctrl++", run: () => setFontSize((f) => { const n = Math.min(24, f + 1); setPref(FONT_KEY, String(n)); return n }) },
       { id: "font-", label: "Reducir tamaño de letra", hint: "Ctrl+-", run: () => setFontSize((f) => { const n = Math.max(10, f - 1); setPref(FONT_KEY, String(n)); return n }) },
@@ -718,7 +811,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       { id: "upper", label: "Selección a MAYÚSCULAS", hint: "", run: () => doCase(true) },
       { id: "lower", label: "Selección a minúsculas", hint: "", run: () => doCase(false) },
     ],
-    [onSave, wrap, tabSize, savedValue, diffOpen, doComment, doDuplicate, selectNextOccurrence, addCursorAtColumn, openComplete, doDeleteLine, doMove, doTrim, doCase, setPref]
+    [onSave, wrap, tabSize, savedValue, diffOpen, doComment, doDuplicate, selectNextOccurrence, addCursorAtColumn, openComplete, doDeleteLine, doMove, doTrim, doCase, setPref, undo, redo]
   )
   const filteredCommands = useMemo(() => {
     const q = paletteFilter.trim().toLowerCase()
@@ -729,6 +822,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   const closeOverlays = useCallback(() => {
     setPaletteOpen(false)
     setGotoOpen(false)
+    setSymOpen(false)
     setFindOpen(false)
     setComplete(null)
     setDiffOpen(false)
@@ -743,17 +837,48 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     reportCursor()
   }, [clearExtraCursors, reportCursor])
 
+  const handleNativeChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      // Edición nativa (tecleo, Supr, menú, IME): colapsa multi-cursor por seguridad
+      clearExtraCursors()
+      // Agrupa la ráfaga de tipeo en un solo paso de historial: un Ctrl+Z
+      // deshace la ráfaga entera, no letra por letra.
+      const now = Date.now()
+      if (now - lastNativePushRef.current > 800) {
+        const ta = taRef.current
+        pushHistory(valueRef.current, ta?.selectionStart ?? 0, ta?.selectionEnd ?? 0)
+        lastNativePushRef.current = now
+      }
+      onChange(e.target.value)
+    },
+    [clearExtraCursors, onChange, pushHistory]
+  )
+
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      if (cursorsRef.current.length === 0) return
-      e.preventDefault()
       const text = e.clipboardData?.getData("text") ?? ""
-      if (!text) return
-      applyMulti((pos, isPrimary, a, b) =>
-        isPrimary && b > a ? { start: a, end: b, insert: text } : { start: pos, end: pos, insert: text }
-      )
+      if (cursorsRef.current.length > 0) {
+        if (!text) return
+        e.preventDefault()
+        applyMulti((pos, isPrimary, a, b) =>
+          isPrimary && b > a ? { start: a, end: b, insert: text } : { start: pos, end: pos, insert: text }
+        )
+        return
+      }
+      // Pegado multilínea con un solo cursor: reindenta al nivel destino
+      // (estilo Monaco). Una línea sigue la vía nativa (rápida).
+      if (!text || !text.includes("\n")) return
+      e.preventDefault()
+      const ta = e.currentTarget
+      const t = valueRef.current
+      const a = ta.selectionStart ?? 0
+      const b = ta.selectionEnd ?? 0
+      const { start, end } = lineRangeOf(t, a)
+      const lineIndent = t.slice(start, end).match(/^[ \t]*/)?.[0] ?? ""
+      const fixed = reindentPasted(lineIndent, text)
+      applyEdit(t.slice(0, a) + fixed + t.slice(b), a + fixed.length, a + fixed.length)
     },
-    [applyMulti]
+    [applyMulti, applyEdit]
   )
 
   // ---- teclado ----
@@ -890,6 +1015,23 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
         doComment()
         return
       }
+      if (mod && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
+        // El stack nativo no sobrevive al textarea controlado: historial propio
+        e.preventDefault()
+        undo()
+        return
+      }
+      if ((mod && e.shiftKey && (e.key === "z" || e.key === "Z")) || (mod && (e.key === "y" || e.key === "Y"))) {
+        e.preventDefault()
+        redo()
+        return
+      }
+      if (mod && e.shiftKey && (e.key === "O" || e.key === "o")) {
+        e.preventDefault()
+        setSymFilter("")
+        setSymOpen(true)
+        return
+      }
       if (mod && e.shiftKey && (e.key === "K" || e.key === "k")) {
         e.preventDefault()
         doDeleteLine()
@@ -964,7 +1106,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
         }
       }
     },
-    [closeOverlays, onSave, doComment, doDuplicate, doDeleteLine, doMove, doIndent, tab, applyEdit, reportCursor, setPref]
+    [closeOverlays, onSave, doComment, doDuplicate, doDeleteLine, doMove, doIndent, tab, applyEdit, reportCursor, setPref, undo, redo]
   )
 
   const metrics = useMemo(
@@ -1030,11 +1172,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
               }}
               wrap={wrap ? "soft" : "off"}
               value={value}
-              onChange={(e) => {
-                // Edición nativa (IME, menú): colapsa multi-cursor por seguridad
-                clearExtraCursors()
-                onChange(e.target.value)
-              }}
+              onChange={handleNativeChange}
               onKeyDown={handleKeyDown}
               onMouseDown={handleMouseDown}
               onPaste={handlePaste}
@@ -1046,6 +1184,12 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
               autoCorrect="off"
             />
             <div className="liteed-marks" aria-hidden="true">
+              {!wrap && (
+                <div
+                  className="liteed-curline"
+                  style={{ top: (caretLine - 1) * fontSize * 1.55, height: fontSize * 1.55 }}
+                />
+              )}
               {marks.map((m, i) => (
                 <span
                   key={i}
@@ -1181,6 +1325,40 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
               <span className="liteed-count">de {lineCount}</span>
               <button type="button" className="liteed-btn" onClick={doGoto} title="Ir">Ir</button>
               <button type="button" className="liteed-btn" onClick={closeOverlays} title="Cerrar (Esc)">×</button>
+            </div>
+          )}
+          {symOpen && (
+            <div className="liteed-palette" role="dialog" aria-label="Ir a símbolo">
+              <input
+                autoFocus
+                className="liteed-find-input"
+                placeholder="Escribe un símbolo…"
+                value={symFilter}
+                onChange={(e) => setSymFilter(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && filteredSymbols[symActive]) {
+                    jumpToSymbol(filteredSymbols[symActive])
+                  } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault()
+                    const d = e.key === "ArrowDown" ? 1 : -1
+                    setSymActive((a) => (a + d + Math.max(1, filteredSymbols.length)) % Math.max(1, filteredSymbols.length))
+                  } else if (e.key === "Escape") { e.stopPropagation(); closeOverlays() }
+                }}
+              />
+              <div className="liteed-palette-list">
+                {filteredSymbols.map((s, i) => (
+                  <button
+                    key={`${s.line}-${s.name}`}
+                    type="button"
+                    className={`liteed-palette-item${i === symActive ? " active" : ""}`}
+                    onClick={() => jumpToSymbol(s)}
+                  >
+                    <span>{s.name}</span>
+                    <span className="liteed-hint">{s.kind} · {s.line}</span>
+                  </button>
+                ))}
+                {filteredSymbols.length === 0 && <div className="liteed-empty">Sin símbolos</div>}
+              </div>
             </div>
           )}
           {paletteOpen && (

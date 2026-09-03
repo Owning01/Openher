@@ -96,6 +96,56 @@ describe("LiteEditor", () => {
     expect(ta.value).toBe("ab")
   })
 
+  it("Ctrl+Z deshace la ráfaga de tipeo entera", () => {
+    render(<Harness initial="x" />)
+    const ta = textarea()
+    fireEvent.change(ta, { target: { value: "xa" } })
+    fireEvent.change(ta, { target: { value: "xab" } })
+    fireEvent.keyDown(ta, { key: "z", ctrlKey: true })
+    expect(ta.value).toBe("x")
+  })
+
+  it("Ctrl+Z deshace un Tab; Ctrl+Shift+Z lo rehace", () => {
+    render(<Harness initial={"a\n\nb"} />)
+    const ta = textarea()
+    ta.setSelectionRange(2, 2)
+    fireEvent.keyDown(ta, { key: "Tab" })
+    expect(ta.value).toBe("a\n  \nb")
+    fireEvent.keyDown(ta, { key: "z", ctrlKey: true })
+    expect(ta.value).toBe("a\n\nb")
+    fireEvent.keyDown(ta, { key: "Z", ctrlKey: true, shiftKey: true })
+    expect(ta.value).toBe("a\n  \nb")
+  })
+
+  it("resalta la línea actual", () => {
+    render(<Harness initial={"a\nb"} />)
+    const cur = document.querySelector(".liteed-curline") as HTMLElement
+    expect(cur).not.toBeNull()
+    expect(cur.style.top).toBe("0px")
+  })
+
+  it("Ctrl+Shift+O abre símbolos y Enter salta", () => {
+    render(<Harness initial={"function foo() {}\nfunction bar() {}"} path="t.ts" />)
+    const ta = textarea()
+    fireEvent.keyDown(ta, { key: "O", ctrlKey: true, shiftKey: true })
+    expect(screen.getByRole("dialog", { name: "Ir a símbolo" })).toBeInTheDocument()
+    expect(screen.getByText("foo")).toBeInTheDocument()
+    fireEvent.change(screen.getByPlaceholderText("Escribe un símbolo…"), { target: { value: "ba" } })
+    expect(screen.queryByText("foo")).toBeNull()
+    fireEvent.keyDown(screen.getByPlaceholderText("Escribe un símbolo…"), { key: "Enter" })
+    expect(screen.queryByRole("dialog", { name: "Ir a símbolo" })).toBeNull()
+    // Salta a la línea 2 ("function foo() {}" = 17 + \n)
+    expect(ta.selectionStart).toBe(18)
+  })
+
+  it("pegar multilínea reindenta al nivel destino", () => {
+    render(<Harness initial={"  x"} />)
+    const ta = textarea()
+    ta.setSelectionRange(3, 3)
+    fireEvent.paste(ta, { clipboardData: { getData: () => "p1\np2" } })
+    expect(ta.value).toBe("  xp1\n  p2")
+  })
+
   it("Ctrl+/ comenta con el prefijo del lenguaje", () => {
     render(<Harness initial="const a = 1" />)
     const ta = textarea()

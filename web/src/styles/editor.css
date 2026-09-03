@@ -173,7 +173,7 @@
   border-radius: 6px;
   cursor: pointer;
 }
-.liteed-palette-item:hover { background: var(--surface-hover); }
+.liteed-palette-item:hover, .liteed-palette-item.active { background: var(--surface-hover); }
 .liteed-hint { font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
 .liteed-empty { padding: 10px; font-size: 0.75rem; color: var(--muted); text-align: center; }
 
@@ -203,6 +203,14 @@
   position: relative;
   pointer-events: none;
   z-index: 2;
+}
+/* Línea actual estilo Monaco (se oculta en wrap: el mapeo 1:1 se rompe) */
+.liteed-curline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  pointer-events: none;
 }
 .liteed-mark { position: absolute; width: 2px; }
 .liteed-mark-caret { background: var(--primary); opacity: 0.9; }

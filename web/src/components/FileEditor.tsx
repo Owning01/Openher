@@ -6,6 +6,7 @@ import { CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { basename } from "../utils"
 import { LiteEditor } from "./LiteEditor"
+import { langFromFilename } from "../utils/highlight"
 import type { ServerConfig } from "../types"
 
 type Props = {
@@ -22,6 +23,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
   const t = useT()
   const [content, setContent] = useState("")
   const [saved, setSaved] = useState("")
+  const [cursor, setCursor] = useState({ line: 1, col: 1 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -181,10 +183,17 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
               value={content}
               onChange={handleChange}
               onSave={flushSave}
+              onCursor={setCursor}
               savedValue={saved}
             />
           )}
         </div>
+        {!loading && !error && (
+          <div className="file-editor-status" aria-hidden="true">
+            <span>Ln {cursor.line}, Col {cursor.col}</span>
+            <span>{langFromFilename(path)}</span>
+          </div>
+        )}
       </div>
     </div>
   )

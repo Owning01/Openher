@@ -509,3 +509,76 @@ export function diffLines(
   }
   return { hunks, tooLarge: false }
 }
+
+// Reindentado al pegar (estilo Monaco): quita el indent común del bloque
+// pegado y aplica el indent de la línea destino a las líneas 2..n. La
+// primera línea hereda la posición del caret. Puro y testeable.
+export function reindentPasted(destIndent: string, pasted: string): string {
+  const lines = pasted.split("\n")
+  if (lines.length < 2) return pasted
+  const indOf = (l: string) => l.match(/^[ \t]*/)?.[0] ?? ""
+  const nonEmpty = lines.slice(1).filter((l) => l.trim() !== "")
+  if (nonEmpty.length === 0) return pasted
+  let min = indOf(nonEmpty[0])
+  for (const l of nonEmpty) {
+    const ind = indOf(l)
+    if (ind.length < min.length) min = ind
+  }
+  return [
+    lines[0],
+    ...lines.slice(1).map((l) => {
+      if (l.trim() === "") return l
+      const stripped = l.startsWith(min) ? l.slice(min.length) : l.replace(/^[ \t]*/, "")
+      return destIndent + stripped
+    }),
+  ].join("\n")
+}
+
+export type DocSymbol = { name: string; kind: string; line: number }
+
+type SymbolRule = { langs: string[]; kind: string; re: RegExp; name: number }
+
+// Índice de símbolos por lenguaje para "Ir a símbolo" (Ctrl+Shift+O).
+// Regex ancladas por línea (baratas); topeadas para archivos grandes.
+const SYMBOL_RULES: SymbolRule[] = [
+  { langs: ["typescript", "javascript"], kind: "function", re: /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/, name: 1 },
+  { langs: ["typescript", "javascript"], kind: "class", re: /^\s*(?:export\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/, name: 1 },
+  { langs: ["typescript", "javascript"], kind: "type", re: /^\s*(?:export\s+)?(?:interface|type|enum)\s+([A-Za-z_$][\w$]*)/, name: 1 },
+  { langs: ["typescript", "javascript"], kind: "function", re: /^\s*(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/, name: 1 },
+  { langs: ["python"], kind: "function", re: /^\s*def\s+([A-Za-z_]\w*)/, name: 1 },
+  { langs: ["python"], kind: "class", re: /^\s*class\s+([A-Za-z_]\w*)/, name: 1 },
+  { langs: ["rust"], kind: "function", re: /^\s*(?:pub(?:\([^)]*\))?\s+)?fn\s+([A-Za-z_]\w*)/, name: 1 },
+  { langs: ["rust"], kind: "type", re: /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait)\s+([A-Za-z_]\w*)/, name: 1 },
+  { langs: ["go"], kind: "function", re: /^\s*func\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)/, name: 1 },
+  { langs: ["go"], kind: "type", re: /^\s*type\s+([A-Za-z_]\w*)/, name: 1 },
+  { langs: ["markdown"], kind: "section", re: /^#{1,6}\s+(.+)/, name: 1 },
+  { langs: ["*"], kind: "symbol", re: /^\s*(?:function|class|def)\s+([A-Za-z_][\w$]*)/, name: 1 },
+]
+
+export function collectSymbols(text: string, lang: string, cap = 500): DocSymbol[] {
+  if (text.length > 200_000) return []
+  let rules = SYMBOL_RULES.filter((r) => r.langs.includes(lang))
+  if (rules.length === 0) rules = SYMBOL_RULES.filter((r) => r.langs.includes("*"))
+  if (rules.length === 0) return []
+  const out: DocSymbol[] = []
+  let line = 1
+  let start = 0
+  while (start <= text.length && out.length < cap) {
+    let end = text.indexOf("\n", start)
+    if (end === -1) end = text.length
+    const slice = text.slice(start, end)
+    for (const r of rules) {
+      const m = r.re.exec(slice)
+      if (m) {
+        const name = (m[r.name] ?? "").trim().slice(0, 120)
+        if (name) {
+          out.push({ name, kind: r.kind, line })
+          break
+        }
+      }
+    }
+    line++
+    start = end + 1
+  }
+  return out
+}
