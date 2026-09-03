@@ -34,11 +34,13 @@ type MessageListProps = {
   thinkingDefault?: "auto" | "expanded" | "collapsed"
   onRegenerate?: () => void
   onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
+  // Cola visible: acciones por id de mensaje pendiente (eliminar/editar/enviar).
+  outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
 }
 
 export const MessageList = memo(function MessageList({
   messages, pendingIndex, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen,   highlight, scrollToMessageID, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen,   highlight, scrollToMessageID, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff, outboxActions
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -183,6 +185,7 @@ export const MessageList = memo(function MessageList({
                   <MessageBubble
                     message={message}
                     queued={pendingIndex !== undefined && actualIndex > pendingIndex}
+                    outbox={outboxActions?.[message.info.id]}
                     revert={revert}
                     isReverted={revertIndex >= 0 && actualIndex >= revertIndex}
                     onRevertToMessage={onRevertToMessage}

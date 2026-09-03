@@ -2483,6 +2483,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
   const [cardTitle, setCardTitle] = useState("")
   const [cardNotes, setCardNotes] = useState("")
   const [cardColor, setCardColor] = useState(KANBAN_COLORS[0])
+  const [kbError, setKbError] = useState<string | null>(null)
 
   const load = useCallback(() => {
     shell.kanban.all().then(({ boards }) => {
@@ -2518,12 +2519,20 @@ export const KanbanPanel = memo(function KanbanPanel() {
     setCardTitle("")
     setCardNotes("")
     setCardColor(KANBAN_COLORS[Math.floor(Math.random() * KANBAN_COLORS.length)])
+    setKbError(null)
     setShowAddCard({ column })
   }
 
   const submitAddCard = async () => {
     if (!board || !showAddCard || !cardTitle.trim()) return
-    await shell.kanban.addCard(board.id, showAddCard.column, cardTitle.trim(), cardNotes.trim(), cardColor)
+    setKbError(null)
+    try {
+      await shell.kanban.addCard(board.id, showAddCard.column, cardTitle.trim(), cardNotes.trim(), cardColor)
+    } catch (e) {
+      // Sin esto el modal se cerraba igual y la tarjeta "desaparecía".
+      setKbError(e instanceof Error ? e.message : "No se pudo guardar la tarjeta")
+      return
+    }
     setShowAddCard(null)
     load()
   }
@@ -2533,11 +2542,20 @@ export const KanbanPanel = memo(function KanbanPanel() {
     setCardTitle(card.title)
     setCardNotes(card.notes)
     setCardColor(card.color)
+    setKbError(null)
   }
 
   const submitEditCard = async () => {
     if (!editingCard || !cardTitle.trim()) return
-    await shell.kanban.updateCard(editingCard.id, { title: cardTitle.trim(), notes: cardNotes.trim(), color: cardColor })
+    setKbError(null)
+    try {
+      // La columna también se persiste: antes se cambiaba en el select pero
+      // nunca se enviaba y al recargar la tarjeta "volvía" a su columna.
+      await shell.kanban.updateCard(editingCard.id, { title: cardTitle.trim(), notes: cardNotes.trim(), color: cardColor, column: editingCard.column })
+    } catch (e) {
+      setKbError(e instanceof Error ? e.message : "No se pudo guardar la tarjeta")
+      return
+    }
     setEditingCard(null)
     load()
   }
@@ -2696,6 +2714,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
             <div className="shell-kanban-modal-body">
               <label>Título<input value={cardTitle} onChange={(e) => setCardTitle(e.target.value)} placeholder="Ej: Implementar login" autoFocus /></label>
               <label>Notas<textarea value={cardNotes} onChange={(e) => setCardNotes(e.target.value)} placeholder="Detalles, checklist, enlaces..." rows={3} /></label>
+              {kbError && <div role="alert" style={{ color: "var(--danger)", fontSize: "0.78rem" }}>{kbError}</div>}
               <label>Color<div className="shell-kanban-color-pick">{KANBAN_COLORS.map((col) => <button key={col} className={`shell-kanban-color-dot${cardColor === col ? " active" : ""}`} style={{ background: col, color: col }} onClick={() => setCardColor(col)} aria-label={col} />)}</div></label>
             </div>
             <div className="shell-kanban-modal-foot"><button className="btn-secondary" onClick={() => setShowAddCard(null)}>Cancelar</button><button className="btn-primary" onClick={submitAddCard} disabled={!cardTitle.trim()}>Crear tarjeta</button></div>
@@ -2711,6 +2730,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
             <div className="shell-kanban-modal-body">
               <label>Título<input value={cardTitle} onChange={(e) => setCardTitle(e.target.value)} autoFocus /></label>
               <label>Notas<textarea value={cardNotes} onChange={(e) => setCardNotes(e.target.value)} rows={4} /></label>
+              {kbError && <div role="alert" style={{ color: "var(--danger)", fontSize: "0.78rem" }}>{kbError}</div>}
               <label>Columna<select value={editingCard.column} onChange={(e) => setEditingCard({ ...editingCard, column: e.target.value })}>{board.columns.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}</select></label>
               <label>Color<div className="shell-kanban-color-pick">{KANBAN_COLORS.map((col) => <button key={col} className={`shell-kanban-color-dot${cardColor === col ? " active" : ""}`} style={{ background: col, color: col }} onClick={() => setCardColor(col)} />)}</div></label>
             </div>

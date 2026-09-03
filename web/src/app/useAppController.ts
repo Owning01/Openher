@@ -144,6 +144,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     renderedMessages,
     messageScrollSignature,
     completionShouldPlayRef,
+    outbox,
+    enqueueOutbox,
+    removeOutbox,
     clearSession,
     preloadMessages,
     loadSelected,
@@ -782,6 +785,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handleUndo,
     handleRedo,
     handleCompact,
+    outboxActions,
   } = useChatActions({
     selectedSession,
     config,
@@ -811,6 +815,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     renderedMessages,
     awaitingAssistantReply,
     setAwaitingAssistantReply,
+    outbox,
+    enqueueOutbox,
+    removeOutbox,
     completionShouldPlayRef,
     abortSession,
     settleSession,
@@ -818,6 +825,22 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     redoMessage,
     compactSession,
     setCompacting,
+  })
+
+  // Auto-flush de la cola visible (móvil/detalle): al quedar libre, sale el
+  // pendiente más antiguo de la sesión seleccionada.
+  const outboxFlushingRef = useRef(false)
+  useEffect(() => {
+    if (!selectedSession || isSending || awaitingAssistantReply) return
+    if (outboxFlushingRef.current) return
+    const next = outbox.find((o) => o.sessionID === selectedSession.id)
+    if (!next) return
+    outboxFlushingRef.current = true
+    void (handleSend(next.images, undefined, next.text) as Promise<unknown>).then((res) => {
+      if (res !== false) removeOutbox(next.id)
+    }).catch(() => {}).finally(() => {
+      outboxFlushingRef.current = false
+    })
   })
 
   const [maximizedPanel, setMaximizedPanel] = useState<number | null>(null)
@@ -1050,6 +1073,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setChatSetting,
     resetChatSettings,
     vs,
+    outboxActions,
   })
 
   const activeSessionSid = isDesktop

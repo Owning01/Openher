@@ -1712,6 +1712,28 @@
   color: var(--danger, #f87171);
 }
 
+/* Archivo analizado/editado: mismos tokens del editor (modals/editor). */
+.tool-part-pre code.hljs {
+  font: inherit;
+  background: transparent;
+  color: inherit;
+  white-space: inherit;
+}
+
+.tool-part-pre .hljs-keyword { color: var(--code-keyword); }
+.tool-part-pre .hljs-string { color: var(--code-string); }
+.tool-part-pre .hljs-comment,
+.tool-part-pre .hljs-quote { color: var(--code-comment); font-style: italic; }
+.tool-part-pre .hljs-function,
+.tool-part-pre .hljs-title { color: var(--code-function); }
+.tool-part-pre .hljs-number,
+.tool-part-pre .hljs-literal { color: var(--code-number); }
+.tool-part-pre .hljs-built_in,
+.tool-part-pre .hljs-type { color: var(--code-builtin); }
+.tool-part-pre .hljs-attr,
+.tool-part-pre .hljs-attribute,
+.tool-part-pre .hljs-variable { color: var(--code-attr); }
+
 /* ===== Thinking Block (Ultra-Minimalist Text Button) ===== */
 .thinking-block {
   margin: 4px 0;
@@ -2524,6 +2546,26 @@
   border-color: var(--primary);
   color: var(--primary);
   background: var(--primary-soft);
+}
+
+/* ===== Cola visible (mensaje pendiente sin enviar) ===== */
+.outbox-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.outbox-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.78rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-height: 0;
 }
 
 

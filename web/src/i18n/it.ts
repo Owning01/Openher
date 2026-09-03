@@ -214,6 +214,7 @@ export default {
   'detail.queuedEmpty': 'Nessun prompt in coda',
   'detail.queuedSend': 'Invia ora',
   'detail.queuedRemove': 'Rimuovi',
+  'detail.queuedEdit': 'Modifica',
   'detail.queuedBadge': 'in coda',
   'detail.git.stage': 'Stage',
   'detail.git.unstage': 'Unstage',

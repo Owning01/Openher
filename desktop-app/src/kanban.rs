@@ -53,15 +53,22 @@ impl KanbanStore {
     }
 
     fn save(&self) {
-        let _ = std::fs::create_dir_all(crate::state::data_dir());
+        if let Err(e) = std::fs::create_dir_all(crate::state::data_dir()) {
+            // Antes fallaba en silencio y las tarjetas solo vivían en memoria:
+            // al cerrar la app "desaparecían". Ahora queda en el log.
+            eprintln!("[kanban] no se pudo crear data_dir: {e}");
+            return;
+        }
         if let Ok(d) = self.data.read() {
             let p = path();
             let tmp = p.with_extension("json.tmp");
             let data = serde_json::to_string_pretty(&*d).unwrap_or_default();
             if std::fs::write(&tmp, &data).is_ok() {
-                let _ = std::fs::rename(&tmp, &p);
-            } else {
-                let _ = std::fs::write(&p, &data);
+                if let Err(e) = std::fs::rename(&tmp, &p) {
+                    eprintln!("[kanban] no se pudo persistir {}: {e}", p.display());
+                }
+            } else if let Err(e) = std::fs::write(&p, &data) {
+                eprintln!("[kanban] no se pudo persistir {}: {e}", p.display());
             }
         }
     }

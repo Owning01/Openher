@@ -1,4 +1,4 @@
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -37,6 +37,10 @@ export type UseChatActionsParams = {
   renderedMessages: any[]
   awaitingAssistantReply: boolean
   setAwaitingAssistantReply: (b: boolean) => void
+  // Cola visible: el dueño es useMessages; aquí solo se encola/acciona.
+  outbox: Array<{ id: string; sessionID: string; text: string; images?: Array<{ base64: string; mime: string; name?: string }>; createdAt: number }>
+  enqueueOutbox: (sessionID: string, text: string, images?: Array<{ base64: string; mime: string; name?: string }>) => unknown
+  removeOutbox: (id: string) => void
   completionShouldPlayRef: React.MutableRefObject<boolean>
   abortSession: (sid: string, dir: string) => Promise<void>
   settleSession: (sid: string, dir: string) => Promise<void>
@@ -76,6 +80,9 @@ export function useChatActions(params: UseChatActionsParams) {
     renderedMessages,
     awaitingAssistantReply,
     setAwaitingAssistantReply,
+    outbox,
+    enqueueOutbox,
+    removeOutbox,
     completionShouldPlayRef,
     abortSession,
     settleSession,
@@ -165,12 +172,25 @@ export function useChatActions(params: UseChatActionsParams) {
     async (
       images?: Array<{ base64: string; mime: string }>,
       options?: { translate?: boolean },
-      text?: string
+      text?: string,
+      force?: boolean
     ) => {
       if (!selectedSession) return
       if (awaitingAssistantReply || isSessionActive(selectedSession)) {
-        setRuntimeError("Espera a que termine la respuesta anterior")
-        return false
+        if (!force) {
+          // Ocupado: a la cola visible en vez de rechazar.
+          const composerText = text ?? composerRef.current
+          if (!composerText.trim() && (!images || images.length === 0)) return false
+          recordPrompt(composerText)
+          enqueueOutbox(selectedSession.id, composerText, images)
+          setComposer("")
+          composerRef.current = ""
+          if (vs.hasSelection) {
+            vs.clear()
+            vs.clearAnnotations()
+          }
+          return true
+        }
       }
       const composerText = text ?? composerRef.current
       if (connectionState === "offline") {
@@ -303,6 +323,7 @@ export function useChatActions(params: UseChatActionsParams) {
       vs.promptContext,
       vs.clear,
       recordPrompt,
+      enqueueOutbox,
       stopGenerationRef,
       setLocalRevertID,
       setCommands,
@@ -576,12 +597,36 @@ export function useChatActions(params: UseChatActionsParams) {
     completionShouldPlayRef,
   ])
 
+  // Acciones de la cola visible por id de mensaje pendiente.
+  const outboxActions = useMemo(() => {
+    const map: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }> = {}
+    for (const o of outbox ?? []) {
+      if (!selectedSession || o.sessionID !== selectedSession.id) continue
+      map[o.id] = {
+        onDelete: () => removeOutbox(o.id),
+        onEdit: () => {
+          setComposer(o.text)
+          composerRef.current = o.text
+          removeOutbox(o.id)
+        },
+        onSendNow: () => {
+          removeOutbox(o.id)
+          void handleSend(o.images, undefined, o.text, true).then((res) => {
+            if (res === false) enqueueOutbox(o.sessionID, o.text, o.images)
+          })
+        },
+      }
+    }
+    return map
+  }, [outbox, selectedSession, removeOutbox, setComposer, composerRef, handleSend, enqueueOutbox])
+
   return {
     buildMarkdown,
     handleExportChat,
     handleExportMarkdown,
     handleSnapshot,
     handleSend,
+    outboxActions,
     handleRegenerate,
     handleInsertPrompt,
     handleSendPrompt,

@@ -165,21 +165,27 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const panelModelVariants = panelModelAI?.activeModelVariants ?? baseProps.activeModelVariants
   const panelVariant = panelModelAI ? panelModelAI.selectedVariant : baseProps.selectedVariant
 
-  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string) => {
+  const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string, force?: boolean) => {
     if (!config) return
     if (!session) return
     if (msgs.isSending) {
       msgs.setRuntimeError("Ya hay un envío en curso — espera un momento")
       return false
     }
-    if (msgs.awaitingAssistantReply || isSessionActive(session)) {
-      msgs.setRuntimeError("Espera a que termine la respuesta anterior")
-      return false
-    }
     const rawComposer = (typeof text === "string" ? text : composerRef.current).trim() ? (typeof text === "string" ? text : composerRef.current) : ""
     const hasVisual = Boolean(visualPromptContext)
     const currentComposer = hasVisual ? formatSelectionForPrompt(rawComposer, visualPromptContext!) : rawComposer
     if (!currentComposer.trim() && (!images || images.length === 0)) return
+    if (!force && (msgs.awaitingAssistantReply || isSessionActive(session))) {
+      // Ocupado: a la cola visible en vez de rechazar. Aparece en el chat
+      // como pendiente con eliminar / editar / enviar-ahora.
+      onRecordPrompt(currentComposer)
+      msgs.enqueueOutbox(session.id, currentComposer, images)
+      msgs.setComposer("")
+      composerRef.current = ""
+      if (hasVisual) onClearVisualSelection?.()
+      return true
+    }
     if (connectionState === "offline") {
       onQueueAction({
         type: "prompt",
@@ -317,6 +323,44 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     return false
   }, [msgs.awaitingAssistantReply, session])
 
+  // Acciones de la cola visible por id de mensaje pendiente.
+  const outboxActions = useMemo(() => {
+    const map: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }> = {}
+    for (const o of msgs.outbox) {
+      if (o.sessionID !== session.id) continue
+      map[o.id] = {
+        onDelete: () => msgs.removeOutbox(o.id),
+        onEdit: () => {
+          msgs.setComposer(o.text)
+          composerRef.current = o.text
+          msgs.removeOutbox(o.id)
+        },
+        onSendNow: () => {
+          msgs.removeOutbox(o.id)
+          void handleSend(o.images, undefined, o.text, true).then((res) => {
+            // Si no pudo salir (otro envío en curso), vuelve a la cola.
+            if (res === false) msgs.enqueueOutbox(o.sessionID, o.text, o.images)
+          })
+        },
+      }
+    }
+    return map
+  }, [msgs.outbox, msgs.removeOutbox, msgs.setComposer, msgs.enqueueOutbox, session.id, handleSend])
+
+  // Auto-flush: al quedar libre, sale el pendiente más antiguo.
+  const flushingRef = useRef(false)
+  useEffect(() => {
+    if (isWorking || flushingRef.current) return
+    const next = msgs.outbox.find((o) => o.sessionID === session.id)
+    if (!next) return
+    flushingRef.current = true
+    void handleSend(next.images, undefined, next.text).then((res) => {
+      if (res !== false) msgs.removeOutbox(next.id)
+    }).catch(() => {}).finally(() => {
+      flushingRef.current = false
+    })
+  })
+
   useEffect(() => {
     if (!isWorking && stopGenerationRef.current) stopGenerationRef.current = false
   }, [isWorking])
@@ -374,6 +418,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     onBackToSessions: () => undefined,
     onOpenSession: (id, dir) => onOpenInThisPanel(id, dir),
     onOpenBrowser,
+    outboxActions,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     baseProps, session, localRevertID, msgs, streamState, pendingQuestions,
@@ -381,7 +426,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     handleRedo, handleCompact, handleRevertToMessage, handleEditMessage,
     handleQuestionReply, handleQuestionReject, handleDismissQuestion,
     handlePermissionApprove, handlePermissionReject, handleDismissPermission, onShellExecute,
-    onChangeAgentGlobal, onOpenInThisPanel, onOpenBrowser,
+    onChangeAgentGlobal, onOpenInThisPanel, onOpenBrowser, outboxActions,
   ])
 
   const [dropZone, setDropZone] = useState<"left" | "right" | "top" | "bottom" | "center" | null>(null)
@@ -440,7 +485,14 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           } else if (payload.kind === "tab") {
             // Ignorar tab suelto
           } else if (payload.kind === "file") {
-            onOpenFile?.(payload.path, panelIndex, zone)
+            // Drop to agent: la ruta aparece en el chat (mismo canal que el
+            // drop directo sobre el composer). El Composer lo agrega a su
+            // valor local sin pisar lo ya tipeado.
+            window.dispatchEvent(new CustomEvent("plugin:insert-text", { detail: payload.path }))
+          } else if (payload.kind === "unknown" && raw) {
+            // Texto plano sin forma de payload (p. ej. desde el explorador
+            // externo): también va al agente en vez de perderse.
+            window.dispatchEvent(new CustomEvent("plugin:insert-text", { detail: raw }))
           }
         }
       }}

@@ -32,6 +32,7 @@ import { useOutsideClick } from "../../hooks/useOutsideClick"
 import { FileRow } from "./FileRow"
 import { TreeFolder } from "./TreeFolder"
 import { CodeSearchResults } from "./CodeSearchResults"
+import { HlCodeHtml, highlightToHtml } from "../../components/HighlightedCode"
 import { useGitStatus } from "./useGitStatus"
 import { HtmlPreview } from "./HtmlPreview"
 import { usePaneState } from "./usePaneState"
@@ -72,6 +73,46 @@ function getParentPath(p: string | null): string | null {
   if (/^[a-zA-Z]:$/.test(parent)) return `${parent}\\`
   return parent || null
 }
+
+// Líneas de código con los colores del editor: un solo highlight del archivo
+// completo (mismo HighlightedCode del chat, sin duplicar lógica) repartido
+// por línea para conservar número de línea y scroll al target. Mismo DOM.
+const PcfCodeLines = memo(function PcfCodeLines({ path, content, target }: { path: string; content: string; target: number }) {
+  const lines = useMemo(() => content.split("\n"), [content])
+  const hlLines = useMemo(() => {
+    const parts = highlightToHtml(path, content).split("\n")
+    return parts.length === lines.length ? parts : null
+  }, [path, content, lines])
+  if (!hlLines) {
+    return (
+      <pre className="pcf-code-content">
+        {lines.map((line, idx) => {
+          const n = idx + 1
+          return (
+            <div key={n} data-line={n} className={`pcf-code-line ${n === target ? "is-target" : ""}`}>
+              <span className="pcf-code-line-num">{n}</span>
+              <span className="pcf-code-line-text">{line || " "}</span>
+            </div>
+          )
+        })}
+      </pre>
+    )
+  }
+  return (
+    <pre className="pcf-code-content">
+      {lines.map((line, idx) => {
+        const n = idx + 1
+        const hl = hlLines[idx] || ""
+        return (
+          <div key={n} data-line={n} className={`pcf-code-line ${n === target ? "is-target" : ""}`}>
+            <span className="pcf-code-line-num">{n}</span>
+            <span className="pcf-code-line-text">{hl ? <HlCodeHtml html={hl} /> : (line || " ")}</span>
+          </div>
+        )
+      })}
+    </pre>
+  )
+})
 
 export const PCFilesPanel = memo(function PCFilesPanel({
   onCollapseSidebar,
@@ -1138,18 +1179,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
               }
             }}
           >
-            <pre className="pcf-code-content">
-              {codeViewer.content.split("\n").map((line, idx) => {
-                const n = idx + 1
-                const isTarget = n === codeViewer.line
-                return (
-                  <div key={n} data-line={n} className={`pcf-code-line ${isTarget ? "is-target" : ""}`}>
-                    <span className="pcf-code-line-num">{n}</span>
-                    <span className="pcf-code-line-text">{line || " "}</span>
-                  </div>
-                )
-              })}
-            </pre>
+            <PcfCodeLines path={codeViewer.path} content={codeViewer.content} target={codeViewer.line} />
           </div>
         </div>
       )}

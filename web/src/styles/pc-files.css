@@ -826,6 +826,28 @@
   text-overflow: ellipsis;
 }
 
+/* Visor del explorer: mismos tokens del editor (ver chat.css .tool-part-pre). */
+.pcf-code-line-text code.hljs {
+  font: inherit;
+  background: transparent;
+  color: inherit;
+  white-space: inherit;
+}
+
+.pcf-code-line-text .hljs-keyword { color: var(--code-keyword); }
+.pcf-code-line-text .hljs-string { color: var(--code-string); }
+.pcf-code-line-text .hljs-comment,
+.pcf-code-line-text .hljs-quote { color: var(--code-comment); font-style: italic; }
+.pcf-code-line-text .hljs-function,
+.pcf-code-line-text .hljs-title { color: var(--code-function); }
+.pcf-code-line-text .hljs-number,
+.pcf-code-line-text .hljs-literal { color: var(--code-number); }
+.pcf-code-line-text .hljs-built_in,
+.pcf-code-line-text .hljs-type { color: var(--code-builtin); }
+.pcf-code-line-text .hljs-attr,
+.pcf-code-line-text .hljs-attribute,
+.pcf-code-line-text .hljs-variable { color: var(--code-attr); }
+
 .pcf-action-btn.active {
   background: var(--primary, #3b82f6);
   color: #ffffff;

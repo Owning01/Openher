@@ -9,6 +9,7 @@ import { DiffView, parseDiffStat, synthesizeWritePatch, synthesizeEditPatch } fr
 import { useT } from "../i18n-context"
 import { CodeIcon, FileIcon, SearchIcon, GlobeIcon, CloseIcon, ToolIcon } from "../Icons"
 import { Markdown } from "./Markdown"
+import { HighlightedCode } from "./HighlightedCode"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { computeRenderedMessages } from "../utils/rendered"
 
@@ -794,8 +795,13 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
         <div className="tool-part-body">
           {fileDiff?.patch ? (
             <DiffView patch={fileDiff.patch} />
+          ) : isError && errorText ? (
+            <pre className="tool-part-pre tool-part-error-text">{previewLines(body, 60)}</pre>
+          ) : diffPath ? (
+            // Archivo analizado/editado: mismos colores del editor, mismo <pre>.
+            <pre className="tool-part-pre"><HighlightedCode path={diffPath} code={previewLines(body, 60)} /></pre>
           ) : (
-            <pre className={`tool-part-pre${isError && errorText ? " tool-part-error-text" : ""}`}>{previewLines(body, 60)}</pre>
+            <pre className="tool-part-pre">{previewLines(body, 60)}</pre>
           )}
         </div>
       ) : null}
