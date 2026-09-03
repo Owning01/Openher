@@ -1,10 +1,12 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
+import { createPortal } from "react-dom"
 import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon, BrainIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
 import type { AgentOption, CommandInfo, PromptSnippet, ServerConfig, ModelOption } from "../types"
 import { ImageEditor } from "./ImageEditor"
+import { readComposerDraft, writeComposerDraft } from "../utils/composerDraft"
 import { PluginSlot } from "../plugins"
 import { ModelSelectorModal } from "./ModelSelectorModal"
 
@@ -188,7 +190,8 @@ export const Composer = memo(function Composer({
   // borrados). Push al padre solo con debounce largo (higiene/persistencia),
   // en send/clear, y en cambios externos (share, snippet, historial).
   // Local value: fuente de verdad absoluta mientras se tipea.
-  const [localValue, setLocalValue] = useState(value)
+  // Init desde el draft por sesión (más fresco que el value del padre).
+  const [localValue, setLocalValue] = useState(() => readComposerDraft(sessionID) || value)
   const localValueRef = useRef(value)
   localValueRef.current = localValue
   const lastSyncedRef = useRef(value)   // último value visto del padre
@@ -203,18 +206,28 @@ export const Composer = memo(function Composer({
     onChangeRef.current(v)
   }, [])
 
-  // Persistencia directa sin re-render del padre (debounce 0): el draft se guarda
-  // en localStorage en cada tecla sin pasar por App → solo Composer re-renderiza.
+  // Persistencia por tecla en la key POR SESIÓN (sin re-render del padre).
+  // Antes era una key global: al cambiar de chat el texto de A se veía en B.
   useEffect(() => {
-    try {
-      if (localValue) localStorage.setItem("opencode.remote.composer", localValue)
-      else localStorage.removeItem("opencode.remote.composer")
-    } catch {}
-  }, [localValue])
+    writeComposerDraft(sessionID, localValue)
+  }, [localValue, sessionID])
 
   // Sync SOLO de cambios externos del padre (reset a "", inserción en composer vacío, etc.).
   // NUNCA sobreescribe texto local con versiones intermedias o más cortas del padre.
+  // Cambio de chat (sessionID distinto): el draft es por sesión, se adopta sin guards.
+  const prevSessionIDRef = useRef(sessionID)
   useEffect(() => {
+    if (sessionID !== prevSessionIDRef.current) {
+      prevSessionIDRef.current = sessionID
+      const draft = readComposerDraft(sessionID)
+      setLocalValue(draft)
+      localValueRef.current = draft
+      lastSyncedRef.current = draft
+      lastPushedRef.current = draft
+      if (textareaRef.current) textareaRef.current.value = draft
+      onChangeRef.current(draft)
+      return
+    }
     if (value === lastSyncedRef.current) return
     lastSyncedRef.current = value
     if (value === localValueRef.current || value === lastPushedRef.current) return
@@ -231,7 +244,7 @@ export const Composer = memo(function Composer({
     if (textareaRef.current) {
       textareaRef.current.value = value
     }
-  }, [value])
+  }, [value, sessionID])
 
   const handleChange = useCallback((newValue: string) => {
     setLocalValue(newValue)
@@ -973,7 +986,10 @@ export const Composer = memo(function Composer({
           )}
         </div>
       </div>
-      {editingImage && (
+      {/* Portal a body: dentro de .composer el backdrop-filter crea un
+          containing block que atrapa el fixed y el modal quedaba pegado
+          abajo oculto en vez de centrado en viewport. */}
+      {editingImage && createPortal(
         <ImageEditor
           src={editingImage.base64}
           mime={editingImage.mime}
@@ -981,7 +997,8 @@ export const Composer = memo(function Composer({
             setImages((prev) => prev.map((img) => img.id === editingImage.id ? { ...img, base64 } : img))
             setEditingImage(null)
           }}
-          onClose={() => setEditingImage(null)} />
+          onClose={() => setEditingImage(null)} />,
+        document.body
       )}
     </div>
   )
