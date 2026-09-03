@@ -23,7 +23,13 @@ import {
   pairCloser,
   toggleLineComment,
   trimTrailingWhitespace,
+  applyEdits,
+  collectWords,
+  diffLines,
+  findMatchingBracket,
+  wordBeforeCaret,
   type HastNode,
+  type TextEdit,
 } from "../utils/editorOps"
 
 const HL_MAX_CHARS = 200_000
@@ -42,6 +48,8 @@ type Props = {
   onSave: () => void
   onCursor?: (c: EditorCursor) => void
   vsPath?: string
+  /** Contenido guardado: habilita el diff de "cambios sin guardar" */
+  savedValue?: string
 }
 
 function readPref(key: string, fallback: string): string {
@@ -52,7 +60,7 @@ function readPref(key: string, fallback: string): string {
   }
 }
 
-export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSave, onCursor, vsPath }: Props) {
+export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSave, onCursor, vsPath, savedValue }: Props) {
   const [fontSize, setFontSize] = useState(() => {
     const n = parseInt(readPref(FONT_KEY, "13"), 10)
     return Number.isFinite(n) ? Math.min(24, Math.max(10, n)) : 13
@@ -72,13 +80,23 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   const [gotoOpen, setGotoOpen] = useState(false)
   const [gotoValue, setGotoValue] = useState("")
   const [hlHtml, setHlHtml] = useState("")
+  const [caretOffset, setCaretOffset] = useState(0)
+  const [extraCursors, setExtraCursors] = useState<number[]>([])
+  const [bracket, setBracket] = useState<{ open: number; close: number } | null>(null)
+  const [marks, setMarks] = useState<Array<{ top: number; left: number; height: number; kind: "caret" | "bracket" }>>([])
+  const [complete, setComplete] = useState<{ items: string[]; start: number } | null>(null)
+  const [completePos, setCompletePos] = useState<{ top: number; left: number } | null>(null)
+  const [diffOpen, setDiffOpen] = useState(false)
 
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const mirrorRef = useRef<HTMLDivElement | null>(null)
   const gutterInnerRef = useRef<HTMLDivElement | null>(null)
   const cursorRaf = useRef(0)
   const valueRef = useRef(value)
   valueRef.current = value
+  const cursorsRef = useRef<number[]>([])
+  cursorsRef.current = extraCursors
 
   const tab = tabSize === 4 ? "    " : "  "
 
@@ -146,8 +164,11 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     cursorRaf.current = requestAnimationFrame(() => {
       cursorRaf.current = 0
       const ta = taRef.current
-      if (!ta || !onCursor) return
-      const { line, col } = getLineCol(valueRef.current, ta.selectionStart ?? 0)
+      if (!ta) return
+      const off = ta.selectionStart ?? 0
+      setCaretOffset(off)
+      if (!onCursor) return
+      const { line, col } = getLineCol(valueRef.current, off)
       onCursor({ line, col })
     })
   }, [onCursor])
@@ -156,6 +177,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   const applyEdit = useCallback(
     (next: string, selStart: number, selEnd: number) => {
       onChange(next)
+      setExtraCursors([]) // edición de un solo cursor invalida los extras
       requestAnimationFrame(() => {
         const ta = taRef.current
         if (!ta) return
@@ -203,6 +225,296 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     [fontSize, reportCursor]
   )
 
+  // Mide coordenadas de un offset con un mirror oculto de igual métrica.
+  // Devuelve coords relativas al origen del contenido (sirven dentro del stack).
+  const measureOffset = useCallback(
+    (off: number): { top: number; left: number; height: number } | null => {
+      const mirror = mirrorRef.current
+      if (!mirror) return null
+      try {
+        const t = valueRef.current
+        const safe = Math.max(0, Math.min(off, t.length))
+        mirror.textContent = t.slice(0, safe)
+        const dot = document.createElement("span")
+        dot.textContent = "​"
+        mirror.appendChild(dot)
+        const top = dot.offsetTop
+        const left = dot.offsetLeft
+        const height = dot.offsetHeight || Math.round(fontSize * 1.55)
+        mirror.textContent = ""
+        return { top, left, height }
+      } catch {
+        return null
+      }
+    },
+    [fontSize]
+  )
+
+  // Bracket pareja del caret (debounce para no escanear por tecla)
+  useEffect(() => {
+    if (value.length > 200_000) {
+      setBracket(null)
+      return
+    }
+    const id = window.setTimeout(() => {
+      try {
+        setBracket(findMatchingBracket(valueRef.current, caretOffset))
+      } catch {
+        setBracket(null)
+      }
+    }, 90)
+    return () => window.clearTimeout(id)
+  }, [caretOffset, value])
+
+  // Recalcula carets extra + cajas de bracket tras cada render relevante
+  useEffect(() => {
+    const out: Array<{ top: number; left: number; height: number; kind: "caret" | "bracket" }> = []
+    for (const c of extraCursors) {
+      const m = measureOffset(c)
+      if (m) out.push({ ...m, kind: "caret" })
+    }
+    if (bracket) {
+      for (const o of [bracket.open, bracket.close]) {
+        const m = measureOffset(o)
+        if (m) out.push({ top: m.top, left: m.left, height: m.height, kind: "bracket" })
+      }
+    }
+    setMarks(out)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraCursors, bracket, value, fontSize, wrap, tabSize])
+
+  // Diccionario local para autocompletar (topeado)
+  const words = useMemo(() => (value.length > 200_000 ? [] : collectWords(value)), [value])
+
+  const diff = useMemo(
+    () => (savedValue === undefined || savedValue === value ? null : diffLines(savedValue, value)),
+    [savedValue, value]
+  )
+
+  const matchIndex = useMemo(() => {
+    if (!query) return 0
+    const total = countOccurrences(value, query, matchCase, 5000)
+    if (total === 0) return 0
+    const n = countOccurrences(value.slice(0, caretOffset), query, matchCase, 5000)
+    return Math.min(n + 1, total)
+  }, [value, query, matchCase, caretOffset])
+
+  // ---- multi-cursor ----
+  const clearExtraCursors = useCallback(() => {
+    if (cursorsRef.current.length > 0) setExtraCursors([])
+  }, [])
+
+  // Aplica la misma edición en primario + extras; devuelve nuevas posiciones
+  const applyMulti = useCallback(
+    (build: (pos: number, isPrimary: boolean, a: number, b: number) => TextEdit | null) => {
+      const ta = taRef.current
+      if (!ta) return false
+      const t = valueRef.current
+      const a = ta.selectionStart ?? 0
+      const b = ta.selectionEnd ?? 0
+      const points = [a, ...cursorsRef.current]
+      const edits: TextEdit[] = []
+      const order: number[] = []
+      points.forEach((p, i) => {
+        const e = build(p, i === 0, a, b)
+        if (e) {
+          edits.push(e)
+          order.push(i)
+        }
+      })
+      if (edits.length === 0) return false
+      const next = applyEdits(t, edits)
+      // Nuevas posiciones en orden ascendente con shift acumulado
+      const asc = edits
+        .map((e, k) => ({ e, k }))
+        .sort((x, y) => x.e.start - y.e.start)
+      let shift = 0
+      const newPos = new Array<number>(points.length).fill(0)
+      for (const { e, k } of asc) {
+        const np = e.start + shift + e.insert.length
+        newPos[order[k]] = np
+        shift += e.insert.length - (e.end - e.start)
+      }
+      onChange(next)
+      const primaryPos = newPos[0]
+      const rest = newPos.slice(1).filter((p, i, arr) => p !== primaryPos && arr.indexOf(p) === i)
+      setExtraCursors(rest)
+      requestAnimationFrame(() => {
+        const el = taRef.current
+        if (!el) return
+        try {
+          el.setSelectionRange(primaryPos, primaryPos)
+        } catch {
+          /* ignore */
+        }
+        el.focus()
+      })
+      return true
+    },
+    [onChange]
+  )
+
+  const typeAtCursors = useCallback(
+    (ch: string) => {
+      applyMulti((pos, isPrimary, a, b) =>
+        isPrimary && b > a ? { start: a, end: b, insert: ch } : { start: pos, end: pos, insert: ch }
+      )
+    },
+    [applyMulti]
+  )
+
+  const backspaceAtCursors = useCallback(() => {
+    applyMulti((pos, isPrimary, a, b) => {
+      if (isPrimary && b > a) return { start: a, end: b, insert: "" }
+      if (pos <= 0) return null
+      return { start: pos - 1, end: pos, insert: "" }
+    })
+  }, [applyMulti])
+
+  const deleteAtCursors = useCallback(() => {
+    const t = valueRef.current
+    applyMulti((pos, isPrimary, a, b) => {
+      if (isPrimary && b > a) return { start: a, end: b, insert: "" }
+      if (pos >= t.length) return null
+      return { start: pos, end: pos + 1, insert: "" }
+    })
+  }, [applyMulti])
+
+  const enterAtCursors = useCallback(() => {
+    const t = valueRef.current
+    applyMulti((pos) => {
+      const { start } = lineRangeOf(t, pos)
+      const ins = autoIndentForEnter(t.slice(start, pos), tab)
+      return { start: pos, end: pos, insert: ins }
+    })
+  }, [applyMulti, tab])
+
+  // Ctrl+D: siguiente ocurrencia de la selección/palabra como cursor extra
+  const selectNextOccurrence = useCallback(() => {
+    const ta = taRef.current
+    if (!ta) return
+    const t = valueRef.current
+    const a = ta.selectionStart ?? 0
+    const b = ta.selectionEnd ?? 0
+    let word = b > a ? t.slice(a, b) : ""
+    let from = b
+    if (!word) {
+      const { start, end } = lineRangeOf(t, a)
+      const line = t.slice(start, end)
+      const rel = a - start
+      const m = line.match(/[\w$\u00C0-\u024F]+/g)
+      let hit: string | null = null
+      if (m) {
+        let off = 0
+        for (const w of m) {
+          const idx = line.indexOf(w, off)
+          off = idx + w.length
+          if (rel >= idx && rel <= idx + w.length) {
+            hit = w
+            break
+          }
+        }
+      }
+      if (!hit) return
+      word = hit
+      try {
+        ta.setSelectionRange(start + line.indexOf(word), start + line.indexOf(word) + word.length)
+      } catch {
+        /* ignore */
+      }
+      reportCursor()
+      return
+    }
+    const idx = t.indexOf(word, from)
+    if (idx === -1) return
+    setExtraCursors((prev) => (prev.includes(idx) || idx === a ? prev : [...prev, idx].slice(-20)))
+    jumpToOffset(idx, word.length)
+  }, [jumpToOffset, reportCursor])
+
+  const addCursorAtColumn = useCallback(
+    (dir: -1 | 1) => {
+      const ta = taRef.current
+      if (!ta) return
+      const t = valueRef.current
+      const a = ta.selectionStart ?? 0
+      const { line, col } = getLineCol(t, a)
+      const target = line + dir
+      if (target < 1) return
+      const off = offsetFromLineCol(t, target, col)
+      setExtraCursors((prev) => (prev.includes(off) ? prev : [...prev, off].slice(-20)))
+    },
+    []
+  )
+
+  // Ctrl+Click: añade cursor sin mover el primario
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLTextAreaElement>) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      e.preventDefault()
+      try {
+        const fn = (document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }).caretRangeFromPoint
+        const range = typeof fn === "function" ? fn.call(document, e.clientX, e.clientY) : null
+        const ta = taRef.current
+        let off = -1
+        if (range && ta && range.startContainer === ta.firstChild) {
+          off = range.startOffset
+        } else if (range && ta && (range.startContainer as Node) === (ta as unknown as Node)) {
+          off = range.startOffset
+        }
+        if (off < 0) {
+          const m = measureOffset(caretOffset)
+          void m
+          return
+        }
+        const safe = Math.max(0, Math.min(off, valueRef.current.length))
+        setExtraCursors((prev) => (prev.includes(safe) ? prev : [...prev, safe].slice(-20)))
+      } catch {
+        /* ignore */
+      }
+    },
+    [caretOffset, measureOffset]
+  )
+
+  // ---- autocompletado ----
+  const openComplete = useCallback(
+    (auto: boolean) => {
+      const ta = taRef.current
+      if (!ta || words.length === 0) return
+      const t = valueRef.current
+      const caret = ta.selectionStart ?? 0
+      const { word, start } = wordBeforeCaret(t, caret)
+      if (auto && word.length < 3) {
+        setComplete(null)
+        return
+      }
+      if (!word) {
+        if (!auto) setComplete({ items: words.slice(0, 8), start: caret })
+        return
+      }
+      const items = words.filter((w) => w.startsWith(word) && w !== word).slice(0, 8)
+      if (items.length === 0) {
+        setComplete(null)
+        return
+      }
+      setComplete({ items, start })
+      const m = measureOffset(caret)
+      setCompletePos(m ? { top: m.top + m.height + 2, left: m.left } : null)
+    },
+    [words, measureOffset]
+  )
+
+  const acceptComplete = useCallback(
+    (word: string) => {
+      const ta = taRef.current
+      if (!ta || !complete) return
+      const t = valueRef.current
+      const caret = ta.selectionStart ?? 0
+      const pos = complete.start + word.length
+      setComplete(null)
+      applyEdit(t.slice(0, complete.start) + word + t.slice(caret), pos, pos)
+    },
+    [complete, applyEdit]
+  )
   // ---- operaciones sobre la selección actual ----
   const withSelection = useCallback(
     (fn: (text: string, a: number, b: number) => { text: string; selStart: number; selEnd: number } | null) => {
@@ -321,7 +633,12 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       { id: "font-", label: "Reducir tamaño de letra", hint: "Ctrl+-", run: () => setFontSize((f) => { const n = Math.max(10, f - 1); setPref(FONT_KEY, String(n)); return n }) },
       { id: "tab", label: tabSize === 2 ? "Usar indent de 4 espacios" : "Usar indent de 2 espacios", hint: "", run: () => setTabSize((t) => { const n = t === 2 ? 4 : 2; setPref(TAB_KEY, String(n)); return n }) },
       { id: "comment", label: "Comentar / descomentar líneas", hint: "Ctrl+/", run: doComment },
-      { id: "dup", label: "Duplicar línea o selección", hint: "Ctrl+D", run: doDuplicate },
+      { id: "dup", label: "Duplicar línea o selección", hint: "Ctrl+Shift+D", run: doDuplicate },
+      { id: "occur", label: "Añadir siguiente ocurrencia (multi-cursor)", hint: "Ctrl+D", run: selectNextOccurrence },
+      { id: "curup", label: "Añadir cursor en línea superior", hint: "Ctrl+Alt+↑", run: () => addCursorAtColumn(-1) },
+      { id: "curdn", label: "Añadir cursor en línea inferior", hint: "Ctrl+Alt+↓", run: () => addCursorAtColumn(1) },
+      { id: "complete", label: "Autocompletar palabra", hint: "Ctrl+Espacio", run: () => openComplete(false) },
+      { id: "diff", label: savedValue === undefined ? "Ver cambios sin guardar (no disponible)" : diffOpen ? "Cerrar diff de cambios" : "Ver cambios sin guardar", hint: "", run: () => setDiffOpen((v) => !v) },
       { id: "delline", label: "Eliminar línea", hint: "Ctrl+Shift+K", run: doDeleteLine },
       { id: "moveup", label: "Mover línea hacia arriba", hint: "Alt+↑", run: () => doMove(-1) },
       { id: "movedn", label: "Mover línea hacia abajo", hint: "Alt+↓", run: () => doMove(1) },
@@ -329,7 +646,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       { id: "upper", label: "Selección a MAYÚSCULAS", hint: "", run: () => doCase(true) },
       { id: "lower", label: "Selección a minúsculas", hint: "", run: () => doCase(false) },
     ],
-    [onSave, wrap, tabSize, doComment, doDuplicate, doDeleteLine, doMove, doTrim, doCase, setPref]
+    [onSave, wrap, tabSize, savedValue, diffOpen, doComment, doDuplicate, selectNextOccurrence, addCursorAtColumn, openComplete, doDeleteLine, doMove, doTrim, doCase, setPref]
   )
   const filteredCommands = useMemo(() => {
     const q = paletteFilter.trim().toLowerCase()
@@ -341,8 +658,29 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     setPaletteOpen(false)
     setGotoOpen(false)
     setFindOpen(false)
+    setComplete(null)
+    setDiffOpen(false)
     focusTa()
   }, [focusTa])
+
+  // Navegación nativa (click, flechas): colapsa multi-cursor
+  const handleSelect = useCallback(() => {
+    clearExtraCursors()
+    reportCursor()
+  }, [clearExtraCursors, reportCursor])
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      if (cursorsRef.current.length === 0) return
+      e.preventDefault()
+      const text = e.clipboardData?.getData("text") ?? ""
+      if (!text) return
+      applyMulti((pos, isPrimary, a, b) =>
+        isPrimary && b > a ? { start: a, end: b, insert: text } : { start: pos, end: pos, insert: text }
+      )
+    },
+    [applyMulti]
+  )
 
   // ---- teclado ----
   const handleKeyDown = useCallback(
@@ -351,6 +689,14 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       const mod = e.ctrlKey || e.metaKey
       if (e.key === "Escape") {
         e.preventDefault()
+        if (complete) {
+          setComplete(null)
+          return
+        }
+        if (cursorsRef.current.length > 0) {
+          setExtraCursors([])
+          return
+        }
         closeOverlays()
         return
       }
@@ -365,6 +711,67 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
         setPaletteFilter("")
         setPaletteOpen(true)
         return
+      }
+      if (mod && e.key === " ") {
+        e.preventDefault()
+        openComplete(false)
+        return
+      }
+      if (mod && (e.key === "d" || e.key === "D") && !e.shiftKey) {
+        // Monaco-like: siguiente ocurrencia como cursor extra
+        e.preventDefault()
+        selectNextOccurrence()
+        return
+      }
+      if (mod && e.shiftKey && (e.key === "D" || e.key === "d")) {
+        e.preventDefault()
+        doDuplicate()
+        return
+      }
+      if (mod && e.altKey && e.key === "ArrowUp") {
+        e.preventDefault()
+        addCursorAtColumn(-1)
+        return
+      }
+      if (mod && e.altKey && e.key === "ArrowDown") {
+        e.preventDefault()
+        addCursorAtColumn(1)
+        return
+      }
+      // Edición multi-cursor: va antes de la lógica de un solo cursor
+      if (complete && (e.key === "Enter" || e.key === "Tab")) {
+        e.preventDefault()
+        if (complete.items[0]) acceptComplete(complete.items[0])
+        else setComplete(null)
+        return
+      }
+      if (cursorsRef.current.length > 0) {
+        if (!mod && !e.altKey && e.key.length === 1) {
+          e.preventDefault()
+          typeAtCursors(e.key)
+          if (/[\w$]/.test(e.key)) window.setTimeout(() => openComplete(true), 0)
+          return
+        }
+        if (!mod && !e.altKey && e.key === "Backspace") {
+          e.preventDefault()
+          backspaceAtCursors()
+          return
+        }
+        if (!mod && !e.altKey && e.key === "Delete") {
+          e.preventDefault()
+          deleteAtCursors()
+          return
+        }
+        if (!mod && !e.altKey && e.key === "Enter") {
+          e.preventDefault()
+          enterAtCursors()
+          return
+        }
+        if (!mod && !e.altKey && e.key === "Tab") {
+          e.preventDefault()
+          applyMulti((pos) => ({ start: pos, end: pos, insert: tab }))
+          return
+        }
       }
       if (mod && (e.key === "s" || e.key === "S")) {
         e.preventDefault()
@@ -392,11 +799,6 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       if (mod && e.key === "/") {
         e.preventDefault()
         doComment()
-        return
-      }
-      if (mod && (e.key === "d" || e.key === "D")) {
-        e.preventDefault()
-        doDuplicate()
         return
       }
       if (mod && e.shiftKey && (e.key === "K" || e.key === "k")) {
@@ -488,6 +890,9 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
         <button type="button" className="liteed-btn" onClick={() => setFontSize((f) => { const n = Math.max(10, f - 1); setPref(FONT_KEY, String(n)); return n })} title="Reducir letra">A-</button>
         <button type="button" className="liteed-btn" onClick={() => setFontSize((f) => { const n = Math.min(24, f + 1); setPref(FONT_KEY, String(n)); return n })} title="Aumentar letra">A+</button>
         <button type="button" className="liteed-btn" onClick={() => setTabSize((t) => { const n = t === 2 ? 4 : 2; setPref(TAB_KEY, String(n)); return n })} title="Tamaño de indentación">Tab:{tabSize}</button>
+        {savedValue !== undefined && (
+          <button type="button" className={`liteed-btn${diffOpen ? " active" : ""}`} onClick={() => setDiffOpen((v) => !v)} title="Cambios sin guardar">Diff</button>
+        )}
         {plainMode && <span className="liteed-plain" title="Archivo grande: resaltado desactivado para mantener la respuesta">plano</span>}
       </div>
       <div className="liteed-body">
@@ -509,7 +914,8 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
                 padding: metrics.padding,
                 whiteSpace: metrics.whiteSpace,
                 overflowWrap: wrap ? "anywhere" : "normal",
-              }}
+                "--indch": `${tabSize}ch`,
+              } as React.CSSProperties}
             ><code dangerouslySetInnerHTML={{ __html: codeHtml }} /></pre>
             <textarea
               ref={taRef}
@@ -525,16 +931,68 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
               }}
               wrap={wrap ? "soft" : "off"}
               value={value}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={(e) => {
+                // Edición nativa (IME, menú): colapsa multi-cursor por seguridad
+                clearExtraCursors()
+                onChange(e.target.value)
+              }}
               onKeyDown={handleKeyDown}
-              onSelect={reportCursor}
+              onMouseDown={handleMouseDown}
+              onPaste={handlePaste}
+              onSelect={handleSelect}
               onKeyUp={reportCursor}
               onClick={reportCursor}
               spellCheck={false}
               autoCapitalize="off"
               autoCorrect="off"
             />
+            <div className="liteed-marks" aria-hidden="true">
+              {marks.map((m, i) => (
+                <span
+                  key={i}
+                  className={`liteed-mark liteed-mark-${m.kind}`}
+                  style={{ top: m.top, left: m.left, height: m.height }}
+                />
+              ))}
+              {complete && completePos && (
+                <div
+                  className="liteed-complete"
+                  style={{ top: completePos.top, left: completePos.left }}
+                  role="listbox"
+                  aria-label="Autocompletado"
+                >
+                  {complete.items.map((w) => (
+                    <button
+                      key={w}
+                      type="button"
+                      className="liteed-complete-item"
+                      role="option"
+                      aria-selected={false}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        acceptComplete(w)
+                      }}
+                    >
+                      {w}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+          <div
+            ref={mirrorRef}
+            aria-hidden="true"
+            className={`liteed-mirror${wrap ? " is-wrap" : ""}`}
+            style={{
+              fontFamily: metrics.fontFamily,
+              fontSize: metrics.fontSize,
+              lineHeight: metrics.lineHeight,
+              tabSize: metrics.tabSize,
+              padding: metrics.padding,
+              whiteSpace: metrics.whiteSpace,
+            }}
+          />
         </div>
         {findOpen && (
             <div className="liteed-find" role="search">
@@ -549,7 +1007,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
                   else if (e.key === "Escape") { e.stopPropagation(); closeOverlays() }
                 }}
               />
-              <span className="liteed-count" title="Coincidencias">{query ? matchCount : "—"}</span>
+              <span className="liteed-count" title="Coincidencia actual / total">{query ? (matchCount > 0 ? `${matchIndex}/${matchCount}` : "0") : "—"}</span>
               <button type="button" className="liteed-btn" onClick={() => findJump(false)} title="Anterior (Shift+Enter)">↑</button>
               <button type="button" className="liteed-btn" onClick={() => findJump(true)} title="Siguiente (Enter)">↓</button>
               <button type="button" className={`liteed-btn${matchCase ? " active" : ""}`} onClick={() => setMatchCase((v) => !v)} title="Distinguir mayúsculas">Aa</button>
@@ -573,6 +1031,31 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
                   <button type="button" className="liteed-btn" onClick={doReplaceAll} title="Reemplazar todas">Todo</button>
                 </div>
               )}
+            </div>
+          )}
+          {diffOpen && savedValue !== undefined && (
+            <div className="liteed-diff" role="dialog" aria-label="Cambios sin guardar">
+              <div className="liteed-diff-head">
+                <span>Cambios sin guardar</span>
+                <button type="button" className="liteed-btn" onClick={() => setDiffOpen(false)} title="Cerrar (Esc)">×</button>
+              </div>
+              <div className="liteed-diff-body">
+                {!diff || diff.tooLarge ? (
+                  <div className="liteed-empty">{diff?.tooLarge ? "Archivo muy grande para el diff" : "Sin cambios"}</div>
+                ) : (
+                  diff.hunks.map((h, i) => (
+                    <div key={i} className="liteed-hunk">
+                      <div className="liteed-hunk-head">@@ {h.oldStart} → {h.newStart} @@</div>
+                      {h.lines.map((l, j) => (
+                        <div key={j} className={`liteed-dline liteed-dline-${l.t === "+" ? "add" : l.t === "-" ? "del" : "ctx"}`}>
+                          <span className="liteed-dsign">{l.t}</span>
+                          <span className="liteed-dtext">{l.text.length > 300 ? `${l.text.slice(0, 300)}…` : l.text || " "}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
           {gotoOpen && (

@@ -2075,7 +2075,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       // no-op: tabs viene de props, React ya re-renderiza
     }
   }, [isControlled, controlledTabs])
-  const [filesState, setFilesState] = useState<Record<string, { content: string; dirty: boolean; loading: boolean; error: string | null }>>({})
+  const [filesState, setFilesState] = useState<Record<string, { content: string; savedContent: string; dirty: boolean; loading: boolean; error: string | null }>>({})
   const [saving, setSaving] = useState(false)
   const [cursor, setCursor] = useState({ line: 1, col: 1 })
   useEffect(() => {
@@ -2106,7 +2106,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       if (prev[activeTab] && (prev[activeTab].content || prev[activeTab].error)) return prev
       return {
         ...prev,
-        [activeTab]: { content: "", dirty: false, loading: true, error: null },
+        [activeTab]: { content: "", savedContent: "", dirty: false, loading: true, error: null },
       }
     })
 
@@ -2114,13 +2114,13 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       if (cancelled) return
       setFilesState((prev) => ({
         ...prev,
-        [activeTab]: { content: r.content, dirty: false, loading: false, error: null },
+        [activeTab]: { content: r.content, savedContent: r.content, dirty: false, loading: false, error: null },
       }))
     }).catch((err) => {
       if (cancelled) return
       setFilesState((prev) => ({
         ...prev,
-        [activeTab]: { content: "", dirty: false, loading: false, error: err instanceof Error ? err.message : "Error al abrir archivo" },
+        [activeTab]: { content: "", savedContent: "", dirty: false, loading: false, error: err instanceof Error ? err.message : "Error al abrir archivo" },
       }))
     })
 
@@ -2142,7 +2142,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       await shell.fs.write(activeTab, b64)
       setFilesState((prev) => ({
         ...prev,
-        [activeTab]: { ...prev[activeTab], dirty: false },
+        [activeTab]: { ...prev[activeTab], dirty: false, savedContent: current.content },
       }))
     } catch {
       setFilesState((prev) => ({
@@ -2157,7 +2157,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   const handleContentChange = useCallback((val: string) => {
     setFilesState((prev) => ({
       ...prev,
-      [activeTab]: { ...(prev[activeTab] || { loading: false, error: null }), content: val, dirty: true },
+      [activeTab]: { ...(prev[activeTab] || { loading: false, error: null, savedContent: "" }), content: val, dirty: true },
     }))
   }, [activeTab])
 
@@ -2314,6 +2314,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
               <LiteEditor
                 path={activeTab}
                 value={activeFile?.content ?? ""}
+                savedValue={activeFile && !activeFile.loading && !activeFile.error ? activeFile.savedContent : undefined}
                 onChange={handleContentChange}
                 onSave={() => void handleSave()}
                 onCursor={setCursor}
@@ -2328,6 +2329,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
           <LiteEditor
             path={activeTab}
             value={activeFile?.content ?? ""}
+            savedValue={activeFile && !activeFile.loading && !activeFile.error ? activeFile.savedContent : undefined}
             onChange={handleContentChange}
             onSave={() => void handleSave()}
             onCursor={setCursor}

@@ -18,6 +18,11 @@ import {
   toBase64Chunked,
   countOccurrences,
   findNext,
+  findMatchingBracket,
+  collectWords,
+  wordBeforeCaret,
+  applyEdits,
+  diffLines,
 } from "./editorOps"
 
 describe("escapeHtml/hastToHtml", () => {
@@ -158,5 +163,63 @@ describe("search helpers", () => {
   it("findNext envuelve al inicio", () => {
     expect(findNext("ab ab", "ab", 3, true)).toBe(3)
     expect(findNext("ab ab", "ab", 4, true)).toBe(0)
+  })
+})
+
+describe("findMatchingBracket", () => {
+  it("encuentra pareja hacia adelante y atrás", () => {
+    expect(findMatchingBracket("a(b)c", 2)).toEqual({ open: 1, close: 3 })
+    expect(findMatchingBracket("a(b)c", 4)).toEqual({ open: 1, close: 3 })
+  })
+  it("anida por profundidad", () => {
+    expect(findMatchingBracket("(a(b))", 1)).toEqual({ open: 0, close: 5 })
+    expect(findMatchingBracket("(a(b))", 3)).toEqual({ open: 2, close: 4 })
+  })
+  it("null si no hay bracket o no cierra", () => {
+    expect(findMatchingBracket("abc", 1)).toBeNull()
+    expect(findMatchingBracket("(abc", 1)).toBeNull()
+  })
+})
+
+describe("collectWords/wordBeforeCaret", () => {
+  it("ordena por frecuencia y filtra cortas", () => {
+    expect(collectWords("foo bar foo x ab foo bar", 2)).toEqual(["foo", "bar", "ab"])
+  })
+  it("prefijo antes del caret", () => {
+    expect(wordBeforeCaret("const myVar1", 12)).toEqual({ word: "myVar1", start: 6 })
+    expect(wordBeforeCaret("a+b", 3)).toEqual({ word: "b", start: 2 })
+  })
+})
+
+describe("applyEdits", () => {
+  it("aplica multi-cursor sin corromper offsets", () => {
+    expect(applyEdits("aaa", [{ start: 0, end: 0, insert: "X" }, { start: 2, end: 2, insert: "Y" }])).toBe("XaaYa")
+    expect(applyEdits("abcdef", [{ start: 1, end: 3, insert: "" }])).toBe("adef")
+  })
+  it("solapadas: gana la de mayor offset, la otra se descarta", () => {
+    expect(applyEdits("abcdef", [{ start: 1, end: 4, insert: "1" }, { start: 2, end: 3, insert: "2" }])).toBe("ab2def")
+  })
+})
+
+describe("diffLines", () => {
+  it("iguales → sin hunks", () => {
+    expect(diffLines("a\nb", "a\nb")).toEqual({ hunks: [], tooLarge: false })
+  })
+  it("cambio simple con contexto del recorte", () => {
+    const { hunks, tooLarge } = diffLines("l1\nl2\nl3\nl4\nl5", "l1\nl2\nX\nl4\nl5")
+    expect(tooLarge).toBe(false)
+    expect(hunks).toHaveLength(1)
+    expect(hunks[0].lines.filter((l) => l.t !== " ").map((l) => l.t + l.text)).toEqual(["-l3", "+X"])
+    expect(hunks[0].oldStart).toBe(1)
+    expect(hunks[0].lines.map((l) => l.t + l.text)).toEqual([" l1", " l2", "-l3", "+X", " l4", " l5"])
+  })
+  it("cambios lejanos → dos hunks", () => {
+    const oldT = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"].join("\n")
+    const newT = ["A", "b", "c", "d", "e", "f", "g", "h", "i", "j", "K"].join("\n")
+    expect(diffLines(oldT, newT).hunks).toHaveLength(2)
+  })
+  it("gigante → tooLarge", () => {
+    const big = Array.from({ length: 21000 }, (_, i) => `l${i}`).join("\n")
+    expect(diffLines(big, big + "\nx").tooLarge).toBe(true)
   })
 })
