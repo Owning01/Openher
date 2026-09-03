@@ -1043,6 +1043,18 @@
   border-radius: 10px;
   overflow: hidden;
   background: var(--surface);
+  /* Redimensionable por arrastre (esquina inferior derecha): el resize nativo
+     exige overflow no-visible; el iframe rellena lo que sobre de la barra. */
+  resize: both;
+  min-width: 240px;
+  min-height: 220px;
+  max-width: 100%;
+  height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+.agent-embed.tall {
+  height: 660px;
 }
 .agent-embed-bar {
   display: flex;
@@ -1063,12 +1075,10 @@
 .agent-embed-frame {
   display: block;
   width: 100%;
-  height: 380px;
+  flex: 1;
+  min-height: 0;
   border: 0;
   background: #fff;
-}
-.agent-embed-frame.tall {
-  height: 620px;
 }
 .agent-embed-loading,
 .agent-embed-error {

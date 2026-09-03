@@ -42,7 +42,7 @@ export const AgentEmbed = memo(function AgentEmbed({ src }: { src: string }) {
   }, [src])
 
   return (
-    <div className="agent-embed" data-embed-src={src}>
+    <div className={`agent-embed${tall ? " tall" : ""}`} data-embed-src={src} title="Arrastrá la esquina inferior derecha para redimensionar">
       <div className="agent-embed-bar">
         <span className="agent-embed-label" title={src}>Vista generada</span>
         <span className="agent-embed-actions">
@@ -56,9 +56,9 @@ export const AgentEmbed = memo(function AgentEmbed({ src }: { src: string }) {
       ) : html === null ? (
         <div className="agent-embed-loading">Cargando vista…</div>
       ) : src.startsWith("http") ? (
-        <iframe className={`agent-embed-frame${tall ? " tall" : ""}`} src={src} sandbox="allow-scripts" title="Vista generada" loading="lazy" />
+        <iframe className="agent-embed-frame" src={src} sandbox="allow-scripts" title="Vista generada" loading="lazy" />
       ) : (
-        <iframe className={`agent-embed-frame${tall ? " tall" : ""}`} srcDoc={html} sandbox="allow-scripts" title="Vista generada" loading="lazy" />
+        <iframe className="agent-embed-frame" srcDoc={html} sandbox="allow-scripts" title="Vista generada" loading="lazy" />
       )}
     </div>
   )
