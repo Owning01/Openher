@@ -18,6 +18,8 @@ export default {
   'composer.dropToAdd': 'Drop to add to Agent',
   'composer.send': 'Invia',
   'composer.stop': 'Ferma',
+  'composer.busy': 'Attendi la fine della risposta precedente',
+  'composer.limitExceeded': 'Limite caratteri superato',
   'menu.title': 'Menu',
   'menu.settingsDescription': 'Configura connessione server',
   'menu.sessionsDescription': 'Gestisci le sessioni',

@@ -72,8 +72,8 @@
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
   --z-sticky: 20;
-  --z-modal-backdrop: 40;
-  --z-modal: 50;
+  --z-modal-backdrop: 140;
+  --z-modal: 150;
   --z-dropdown: 100;
   --z-lightbox: 1000;
 }

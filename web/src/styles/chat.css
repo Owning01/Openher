@@ -488,6 +488,15 @@
   contain: layout style paint;
 }
 
+/* El streaming largo usaba <pre> sin white-space: en móvil generaba scroll-X
+   de la página durante la generación. */
+.md-plain-stream {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+}
+
 /* La separación entre mensajes la controla --chat-message-gap (ChatCustomizer)
    vía el margin-bottom de .message — el gap del flex no debe sumarse. El
    último mensaje no cuelga margin. */
@@ -1466,6 +1475,46 @@
     font-weight: 600;
     color: var(--text);
   }
+
+  /* En 360px 3×118px + gaps desborda: el dashboard pasa a 1 columna. */
+  .project-dashboard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .context-chip {
+    min-width: 0;
+  }
+
+  /* El footer (modo + modelo largo + tiempos) no cabe en 360px en una fila:
+     envuelve y el modelo elipsa en vez de recortar el dropdown. */
+  .message-footer {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+
+  .msg-footer-model,
+  .msg-footer-mode {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* El botón flotante ignoraba el safe-area y tapaba el composer. */
+  .scroll-to-bottom {
+    bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    right: calc(var(--space-3) + env(safe-area-inset-right, 0px));
+  }
+
+  .msg-more-dropdown,
+  .overflow-dropdown {
+    max-width: calc(100vw - 16px);
+  }
+
+  .msg-more-dropdown .overflow-item,
+  .overflow-dropdown .overflow-item {
+    min-height: 44px;
+  }
 }
 
 .message code {
@@ -1654,9 +1703,17 @@
   line-height: 1.45;
   color: #f4f4f5;
   white-space: pre-wrap;
+  /* Las rutas Windows no parten por "\": anywhere evita el desborde y el
+     ZWSP inyectado en ToolPart deja partir tras cada separador en vez de
+     a mitad de palabra. */
+  overflow-wrap: anywhere;
   word-break: break-word;
   max-height: 350px;
   overflow-y: auto;
+}
+
+.tool-part-error-text {
+  color: var(--danger, #f87171);
 }
 
 /* ===== Thinking Block (Ultra-Minimalist Text Button) ===== */
@@ -3115,5 +3172,117 @@ mark {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+/* ===== Question prompts (inline tool + overlay) ===== */
+.question-inline {
+  width: 100%;
+  min-width: 0;
+  margin: 4px 0;
+}
+.question-card {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  min-width: 0;
+}
+.question-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+.question-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+.question-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.question-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.question-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.question-option {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.question-option:hover {
+  border-color: var(--primary);
+}
+.question-option.active,
+.question-option.picked {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.question-opt-desc {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.question-opt-check {
+  margin-left: auto;
+  color: var(--primary);
+}
+.question-custom-input {
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-size: 0.82rem;
+}
+.question-custom-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+.question-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.question-overlay .question-card-body {
+  overflow-y: auto;
+}
+.tool-question.answered {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #9ca3af;
+  font-size: 13px;
+  padding: 0 4px;
+  height: 24px;
 }
 

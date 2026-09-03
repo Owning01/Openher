@@ -151,9 +151,9 @@ export function useAppLifecycle({
       }
       // No apagar awaiting solo porque la sesión no está busy localmente:
       // el server puede estar aún procesando y el status local va atrasado.
-      // Dejar que SSE `session.idle` / `session.status idle` lo apague, o
-      // verificar con el server si realmente está idle.
-      if (selectedSession && !isSessionActive(selectedSession) && awaitingAssistantReply && !sseLive) {
+      // Verificar con el server si realmente está idle — también con SSE vivo,
+      // porque el evento idle puede perderse (reconnect sin replay, API v2).
+      if (selectedSession && !isSessionActive(selectedSession) && awaitingAssistantReply) {
         const st = await api.listStatuses(config, selectedSession.directory).catch(() => undefined)
         const real = st?.[selectedSession.id]
         if (real && real.type !== "busy" && real.type !== "retry") {

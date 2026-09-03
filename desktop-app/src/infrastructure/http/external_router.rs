@@ -372,7 +372,24 @@ pub fn handle(
     }
 
     if action == "start" && method == Method::Post {
-        // si ya running, retornar ok — verificar zombie (try_wait) y probe del puerto
+        // Anti-doble-spawn: si otro /start del mismo plugin está en curso (<20s),
+        // no spawnear otro tools-dev (StrictMode / prewarm / doble instancia).
+        {
+            let mut starting = mgr.starting.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(at) = starting.get(&name) {
+                if at.elapsed() < Duration::from_secs(20) {
+                    let url = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned()
+                        .unwrap_or_else(|| def.url.map(|s| s.to_string()).unwrap_or_default());
+                    return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "starting": true, "url": url })));
+                } else {
+                    starting.remove(&name);
+                }
+            }
+            starting.insert(name.clone(), std::time::Instant::now());
+        }
+        // si ya running, retornar ok — verificar zombie (try_wait); el puerto
+        // puede tardar ~9s en abrir (opendesign cold), así que solo se evicta
+        // como zombie si lleva >25s vivo sin responder (gracia de boot).
         let already_running: Option<String> = {
             let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(child) = procs.get_mut(&name) {
@@ -387,15 +404,18 @@ pub fn handle(
             } else { None }
         };
         if let Some(url) = already_running {
-            // verificar que el puerto realmente responda; si no, tratar como zombie y continuar al spawn
             let is_vite_embed = (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
             let need_probe = !is_vite_embed && def.port.is_some();
-            if need_probe && !probe(&def) {
-                // zombie: el child sigue vivo pero el puerto no responde → limpiar y seguir
+            let boot_elapsed = mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).get(&name).map(|t| t.elapsed());
+            // Sin timestamp (prewarm viejo) → tratar como reciente, no evictar.
+            let in_grace = boot_elapsed.map(|e| e < Duration::from_secs(25)).unwrap_or(true);
+            if need_probe && !in_grace && !probe(&def) {
+                // zombie real: vivo >25s pero puerto caído → limpiar y seguir al spawn
                 let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
                 procs.remove(&name);
-                // no retornar, caer al spawn
+                // cae al spawn (mantiene marcador starting)
             } else {
+                mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                 let stored = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned().unwrap_or(url.clone());
                 return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "url": stored })));
             }
@@ -404,6 +424,7 @@ pub fn handle(
         {
             let is_vite_embed = (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
             if !is_vite_embed && def.port.is_some() && probe(&def) {
+                mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                 let url = def.url.map(|s| s.to_string()).unwrap_or_default();
                 return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "url": url, "external": true })));
             }
@@ -415,10 +436,12 @@ pub fn handle(
                 for (other_name, other_def) in defs_map.iter() {
                     if *other_name == name.as_str() || *other_name == "" { continue; }
                     if other_def.port == Some(port) {
+                        mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                         return Some(json_err(409, &format!("puerto {} ya configurado para '{}', '{}' no puede usar el mismo puerto", port, other_name, name)));
                     }
                 }
                 if probe(&def) {
+                    mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                     let owner = defs_map
                         .iter()
                         .find(|(n, d)| *n != &name.as_str() && d.port == Some(port))
@@ -437,12 +460,14 @@ pub fn handle(
                     let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner());
                     urls.insert(name.clone(), url.clone());
                 }
+                mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                 eprintln!("external: {} embed static → {} (sin spawn)", name, url);
                 return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "url": url, "embed": true })));
             }
         }
         let dir = PathBuf::from(def.dir);
         if !dir.exists() {
+            mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
             return Some(json_err(404, &format!("directorio no existe: {}", def.dir)));
         }
         let cmd_str = effective_cmd(&def);
@@ -470,7 +495,7 @@ pub fn handle(
             }
             match c.spawn() {
                 Ok(ch) => ch,
-                Err(e) => return Some(json_err(500, &e.to_string())),
+                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(json_err(500, &e.to_string())); }
             }
         } else if cmd_str.trim_start().starts_with("G:\\Dev\\nodejs") {
             // Direct node (screenshots/opendesign) - evita pnpm y conhost, oculta ventana
@@ -495,7 +520,7 @@ pub fn handle(
             }
             match c.spawn() {
                 Ok(ch) => ch,
-                Err(e) => return Some(json_err(500, &e.to_string())),
+                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(json_err(500, &e.to_string())); }
             }
         } else {
             // pnpm directo oculto sin cmd visible: evita conhost S/N y WindowsTerminal. Usa binario Rust directo.
@@ -530,7 +555,7 @@ pub fn handle(
             }
             match c.spawn() {
                 Ok(ch) => ch,
-                Err(e) => return Some(json_err(500, &e.to_string())),
+                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(json_err(500, &e.to_string())); }
             }
         };
         let pid = child.id();
@@ -549,6 +574,8 @@ pub fn handle(
                         let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner());
                         urls.insert(name.clone(), url.clone());
                     }
+                    mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
+                    mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
                     eprintln!("external: {} start con daemon already running pero web ok → pid {}", name, pid);
                     return Some(json_ok(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "daemon_already": true })));
                 }
@@ -556,6 +583,7 @@ pub fn handle(
             let code = status.code().unwrap_or(-1);
             let log_tail = std::fs::read_to_string(crate::state::data_dir().join(format!("external-{}.log", name))).unwrap_or_default();
             let tail = log_tail.chars().rev().take(800).collect::<String>().chars().rev().collect::<String>();
+            mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
             return Some(json_err(500, &format!("proceso salió inmediato (code {code}): {tail} | cmd: {cmd_str}")));
         }
         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
@@ -568,6 +596,8 @@ pub fn handle(
             let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner());
             urls.insert(name.clone(), url.clone());
         }
+        mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
+        mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
         // cleanup thread: espera y remueve al salir
         let mgr_clone = mgr.clone();
         let name_clone = name.clone();
@@ -708,6 +738,7 @@ pub fn handle(
                 if probe_ok || probe(&def) {
                     let url = def.url.map(|s| s.to_string()).unwrap_or_default();
                     { let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()); urls.insert(name.clone(), url.clone()); }
+                    mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
                     return Some(json_ok(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "restarted": true, "daemon_already": true })));
                 }
             }
@@ -719,6 +750,7 @@ pub fn handle(
         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
         { let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner()); procs.insert(name.clone(), child); }
         { let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()); urls.insert(name.clone(), url.clone()); }
+        mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
         let mgr_clone = mgr.clone();
         let name_clone = name.clone();
         std::thread::spawn(move || {
@@ -753,15 +785,19 @@ pub fn handle(
                 .and_then(|mut c| c.wait());
             let _ = child.kill();
             let _ = child.wait();
-            // También matar por puerto si es open-design (daemon huérfano)
+            // También matar huérfanos del daemon open-design por CommandLine
+            // (NO taskkill /IM node.exe: mataría también screenshots y otros Node).
             if name == "opendesign" {
-                let _ = std::process::Command::new("taskkill")
-                    .args(["/F", "/IM", "node.exe"])
+                let _ = std::process::Command::new("powershell")
+                    .args(["-NoProfile", "-Command", "Get-CimInstance Win32_Process -Filter \"Name='node.exe' OR Name='node_hidden.exe'\" | Where-Object { $_.CommandLine -like \"*open-design*\" -or $_.CommandLine -like \"*tools-dev*\" } | ForEach-Object { taskkill /F /PID $_.ProcessId }"])
                     .creation_flags(CREATE_NO_WINDOW)
+                    .stdin(std::process::Stdio::null())
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .spawn();
             }
+            mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
+            mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
             return Some(json_ok(&serde_json::json!({ "ok": true, "stopped": true })));
         } else {
             return Some(json_ok(&serde_json::json!({ "ok": true, "stopped": false, "msg": "no hay proceso gestionado" })));

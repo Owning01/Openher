@@ -4,6 +4,29 @@ import { ContextMenu } from "../../components/ContextMenu"
 
 type Props = { name: string; title: string; url: string; isWidget?: boolean }
 
+// Dedupe de POST /start entre instancias simultáneas (__design__ legacy +
+// plugin:external:*) y remontajes StrictMode: un solo spawn por plugin.
+// El backend además tiene guard `starting` 20s + gracia de boot 25s.
+const startInflight = new Map<string, Promise<any>>()
+const startIssuedAt = new Map<string, number>()
+function dedupedStart(name: string) {
+ const cur = startInflight.get(name)
+ if (cur) return cur
+ try {
+  const at = startIssuedAt.get(name)
+  if (at && Date.now() - at < 20000) {
+   // pedido reciente (remount/2ª instancia): no re-POSTear, solo esperar ready
+   return Promise.resolve({ ok: true, already: true } as any)
+  }
+ } catch {}
+ startIssuedAt.set(name, Date.now())
+ const p: Promise<any> = (shell.external.start(name) as Promise<any>).finally(() => {
+  if (startInflight.get(name) === p) startInflight.delete(name)
+ })
+ startInflight.set(name, p)
+ return p
+}
+
 export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: Props) {
  const [url, setUrl] = useState(defaultUrl)
  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
@@ -78,11 +101,11 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
   try {
   // widget_notas no tiene url, solo lanza proceso
   if (isWidget) {
-   await shell.external.start(name)
+   await dedupedStart(name)
    if (!cancelled) setStatus("ready")
    return
   }
-  const res: any = await shell.external.start(name)
+  const res: any = await dedupedStart(name)
   const target = res?.url || defaultUrl
   if (!cancelled) setUrl(target)
   // si ya estaba corriendo, ready inmediato
@@ -177,6 +200,8 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
 
  const doHardReloadRef = useRef(doHardReload)
  useEffect(() => { doHardReloadRef.current = doHardReload }, [doHardReload])
+ const urlRef = useRef(url)
+ useEffect(() => { urlRef.current = url }, [url])
 
  const doRestart = useCallback(async () => {
  setCtxMenu(null)
@@ -300,7 +325,7 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
     await Promise.all(ks.map((k) => caches.delete(k)))
     }
    } catch {}
-   const cur = url || defaultUrl
+   const cur = urlRef.current || defaultUrl
    const base = (cur.split("?")[0] ?? cur).split("#")[0] ?? cur
    const bust = `${base}${base.includes("?") ? "&" : "?"}__cb=${Date.now()}`
    try { await fetch(bust, { cache: "no-store" }) } catch {}
@@ -317,7 +342,7 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
  }
  timer = setTimeout(tick, 2600)
  return () => { cancelled = true; clearTimeout(timer) }
- }, [name, status, isWidget, autoReload, restarting, url, defaultUrl])
+ }, [name, status, isWidget, autoReload, restarting, defaultUrl])
 
  const handleContextMenu = useCallback((e: React.MouseEvent) => {
  e.preventDefault()

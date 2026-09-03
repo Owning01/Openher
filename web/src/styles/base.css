@@ -207,6 +207,17 @@ p {
   transition: opacity 0.15s;
 }
 
+/* iOS hace auto-zoom si un input enfocado tiene font-size <16px: rompe los
+   fixed (bottom-nav, composer). En táctil se fuerza 16px solo en controles
+   de formulario. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 .password-toggle:hover {
   opacity: 1;
   color: var(--foreground);
