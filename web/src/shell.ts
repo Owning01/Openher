@@ -78,6 +78,7 @@ export type ShellConfig = {
   server: { host: string; port: number; username: string; password: string; use_ssl: boolean }
   port: number
   start_minimized: boolean
+  minimize_to_tray: boolean
   start_command: string
   server_ports: number[]
   docs_root: string

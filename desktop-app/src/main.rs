@@ -105,6 +105,9 @@ struct App {
     last_geom_save: std::time::Instant,
     modifiers: winit::keyboard::ModifiersState,
     start_minimized: bool,
+    /// Minimizar a bandeja (ver ShellConfig::minimize_to_tray). Se lee al
+    /// arrancar; si cambia en configuración rige tras reiniciar.
+    minimize_to_tray: bool,
     app_state: Option<Arc<AppState>>,
 }
 
@@ -613,10 +616,13 @@ impl ApplicationHandler<AppEvent> for App {
                     }
                 }
                 self.save_geometry();
-                // Minimizar (—) → ocultar a bandeja, no a barra de tareas
-                if let Some(window) = &self.window {
-                    if window.is_minimized().unwrap_or(false) {
-                        window.set_visible(false);
+                // Minimizar (—) → a bandeja SOLO si está activado en
+                // configuración; si no, minimize normal a la barra de tareas.
+                if self.minimize_to_tray {
+                    if let Some(window) = &self.window {
+                        if window.is_minimized().unwrap_or(false) {
+                            window.set_visible(false);
+                        }
                     }
                 }
             }
@@ -1128,6 +1134,7 @@ fn main() {
         last_geom_save: std::time::Instant::now(),
         modifiers: winit::keyboard::ModifiersState::empty(),
         start_minimized,
+        minimize_to_tray: config.minimize_to_tray,
         app_state: Some(app_state.clone()),
     };
     event_loop.run_app(&mut app).unwrap();

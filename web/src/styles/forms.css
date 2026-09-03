@@ -237,6 +237,107 @@ input[type="range"]::-moz-range-thumb {
   transform: translateX(12px);
 }
 
+/* ===== LedSwitch: on/off con LED (rojo = off, verde = on) =====
+   Adaptado del diseño 210x50 a fila de settings (84x30): misma pista
+   oscura, pastilla deslizante con agarre y punto LED con glow. */
+.led-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 84px;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 2px;
+  background: #0d0d0d;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 1px 1px rgba(0, 0, 0, 0.5),
+    0 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+.led-switch input[type="checkbox"] {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.led-switch input[type="checkbox"] + label {
+  position: relative;
+  display: block;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: #1b1c1c;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  transition: left 0.5s ease-in-out;
+}
+.led-switch input[type="checkbox"] + label:before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 7px;
+  background: #fff;
+  border-radius: 50%;
+  vertical-align: middle;
+  box-shadow:
+    0 0 5px 2px rgba(165, 15, 15, 0.9),
+    0 0 3px 1px rgba(165, 15, 15, 0.9);
+  transition: box-shadow 0.5s ease-in-out;
+}
+.led-switch input[type="checkbox"] + label:after {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 100%;
+  vertical-align: middle;
+}
+.led-switch input[type="checkbox"] + label i {
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 14px;
+  margin-top: -7px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: #0d0d0d;
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.3);
+}
+.led-switch input[type="checkbox"] + label i:before,
+.led-switch input[type="checkbox"] + label i:after {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  background: #0d0d0d;
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.3);
+}
+.led-switch input[type="checkbox"] + label i:before {
+  left: -4px;
+}
+.led-switch input[type="checkbox"] + label i:after {
+  left: 4px;
+}
+.led-switch input[type="checkbox"]:checked + label {
+  left: 50%;
+}
+.led-switch input[type="checkbox"]:checked + label:before {
+  box-shadow:
+    0 0 5px 2px rgba(15, 165, 70, 0.9),
+    0 0 3px 1px rgba(15, 165, 70, 0.9);
+}
+.led-switch input[type="checkbox"]:focus-visible + label {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .switch-checkbox {
   flex: 0 0 auto;
   width: 16px;

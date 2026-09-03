@@ -12,6 +12,7 @@ import { DataUsageModal } from "./DataUsageModal"
 import { ThinkingLevels } from "./ThinkingLevels"
 import { PairModal } from "./PairModal"
 import { PluginSlot } from "../plugins"
+import { LedSwitch } from "./LedSwitch"
 import { ExportCacheButton } from "./ExportCacheButton"
 import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type DesktopConfig } from "../desktop"
 import { fetchGoUsage, loadGoAccounts, saveGoAccounts, type GoUsage } from "../goUsage"
@@ -119,11 +120,15 @@ export const SettingsPanel = memo(function SettingsPanel({
  const { enabled: autoOpencode2, setEnabled: setAutoOpencode2 } = useAutoOpencode2()
  const [autostartEnabled, setAutostartEnabled] = useState(false)
  const [startMinimized, setStartMinimized] = useState(false)
+ const [minimizeToTray, setMinimizeToTray] = useState(false)
  useEffect(() => {
   if (!isDesktop) return
   import("../shell").then(({ shell }) => {
    shell.autostart.get().then((r) => setAutostartEnabled(!!r.enabled)).catch(() => {})
-   shell.config.get().then((c) => setStartMinimized(!!(c as any).start_minimized)).catch(() => {})
+   shell.config.get().then((c) => {
+    setStartMinimized(!!(c as any).start_minimized)
+    setMinimizeToTray(!!(c as any).minimize_to_tray)
+   }).catch(() => {})
   })
  }, [isDesktop])
  const { prefs: sidebarPrefs, setPosition: setSidebarPosition, toggleItem: toggleSidebarItem } = useSidebarPrefs()
@@ -784,6 +789,25 @@ export const SettingsPanel = memo(function SettingsPanel({
          >
           <span className="switch-thumb" />
          </button>
+        </div>
+       </div>
+       <div className="setting-item-row">
+        <div className="setting-item-info">
+         <span className="setting-item-title">Minimizar a la bandeja</span>
+         <p className="setting-item-desc">Apagado: minimizar va a la barra de tareas. Encendido: se oculta a los iconos chiquitos. Rige tras reiniciar.</p>
+        </div>
+        <div className="setting-item-control">
+         <LedSwitch
+          label="Minimizar a la bandeja"
+          checked={minimizeToTray}
+          onChange={async (next) => {
+           try {
+            const { shell } = await import("../shell")
+            await shell.config.patch({ minimize_to_tray: next } as any)
+            setMinimizeToTray(next)
+           } catch {}
+          }}
+         />
         </div>
        </div>
       </>
