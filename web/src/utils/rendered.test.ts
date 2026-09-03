@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { computeRenderedMessages, type RenderedCache } from "./rendered"
+import { toMessageEnvelopeV1 } from "../shared/api/mappers"
 import type { MessageEnvelope, FileDiff } from "../types"
 
 // Helpers
@@ -58,6 +59,29 @@ describe("computeRenderedMessages", () => {
     expect(out).toHaveLength(1)
     expect(out[0]!.text).toBe("hello \n\n world")
     expect(out[0]!.hasCompaction).toBe(false)
+  })
+
+  it("pipeline v2: textos sobreviven junto a tools e imagen (repro sesión solo-actividad)", () => {
+    // La captura mostraba solo filas de actividad: verificar que el pipeline
+    // no se come los textos cuando hay tools e imágenes mezclados.
+    const rawUser = {
+      id: "mu", sessionID: "s", type: "user", time: { created: 1 },
+      content: [{ id: "p1", type: "text", text: "hola" }],
+    }
+    const rawAsst = {
+      id: "ma", sessionID: "s", type: "assistant", time: { created: 2 },
+      content: [
+        { id: "p2", type: "text", text: "listo" },
+        { id: "p3", type: "tool", name: "edit", state: { status: "completed", input: { filePath: "a.ts" } } },
+        { id: "p4", type: "file", mime: "image/png", filename: "c.png", url: "data:image/png;base64,AAA" },
+      ],
+    }
+    const msgs = [rawUser, rawAsst].map((m) => toMessageEnvelopeV1(m as never))
+    const { out } = computeRenderedMessages(msgs, undefined, new Map())
+    expect(out).toHaveLength(2)
+    expect(out[0]!.text).toBe("hola")
+    expect(out[1]!.text).toBe("listo")
+    expect(out[1]!.toolParts).toHaveLength(1)
   })
 
   it("trims text outer ends but preserves inner padding around join", () => {
