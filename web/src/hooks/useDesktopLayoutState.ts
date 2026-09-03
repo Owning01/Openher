@@ -280,10 +280,10 @@ export function useDesktopLayoutState(isDesktop: boolean, fallbackSessionID: str
     else apply()
   }, [])
 
-  // Persistencia con debounce de 300ms
+  // Persistencia con debounce de 300ms + flush en beforeunload/pagehide para Zero Data Loss
   useEffect(() => {
     if (!isDesktop) return
-    const id = setTimeout(() => {
+    const flush = () => {
       try {
         const fullState: DesktopState = {
           ...desktopState,
@@ -295,11 +295,20 @@ export function useDesktopLayoutState(isDesktop: boolean, fallbackSessionID: str
           terminalHeight,
         }
         localStorage.setItem(DESKTOP_STATE_KEY, JSON.stringify(fullState))
-      } catch {
-        /* ignore */
+      } catch (e) {
+        console.warn("[DesktopLayout] flush failed", e)
       }
-    }, 300)
-    return () => clearTimeout(id)
+    }
+    const id = setTimeout(flush, 300)
+    const onBeforeUnload = () => flush()
+    const onPageHide = () => flush()
+    window.addEventListener("beforeunload", onBeforeUnload)
+    window.addEventListener("pagehide", onPageHide)
+    return () => {
+      clearTimeout(id)
+      window.removeEventListener("beforeunload", onBeforeUnload)
+      window.removeEventListener("pagehide", onPageHide)
+    }
   }, [
     desktopState,
     isDesktop,

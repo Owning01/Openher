@@ -77,10 +77,18 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     composerRef.current = value
     msgs.setComposer(value)
   }, [msgs.setComposer])
-  const { getCachedMessages } = useOfflineCache(baseProps.flags)
+  const { getCachedMessages, cacheMessages } = useOfflineCache(baseProps.flags)
   const [localRevertID, setLocalRevertID] = useState<string | null>(null)
   const [stopGenerationRef] = useState(() => ({ current: false }))
   const [showStats, setShowStats] = useState(false)
+
+  // Sincroniza caché offline tras cada reconciliación exitosa — evita que un revert
+  // borrado en el server quede en IndexedDB y se reinyecte vía preload al recargar
+  useEffect(() => {
+    if (!baseProps.flags.offlineCache) return
+    if (msgs.messages.length === 0) return
+    cacheMessages(session.id, msgs.messages).catch(() => {})
+  }, [msgs.messages, session.id, baseProps.flags.offlineCache, cacheMessages])
 
   useEffect(() => {
     let cancelled = false
@@ -220,7 +228,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       refresh,
       () => msgs.loadSelected(session.id, session.directory).then(() => undefined),
       onSetCommands, msgs.setRuntimeError, images,
-      sendText !== currentComposer ? sendText : (hasVisual && rawComposer !== currentComposer ? currentComposer : undefined), undefined, originalText ?? undefined)
+      sendText, undefined, originalText ?? undefined)
     if (res === "connect") onOpenConnect?.()
     if (res === false) {
       // Rollback de pruning y restaurar composer original si hubo traducción

@@ -234,25 +234,45 @@ export function useDesktopGridActions({
 
   const transferTab = useCallback(
     (fromPanel: number, fromIdx: number, toPanel: number, toIdx: number) => {
+      const moved = tabStacks[fromPanel]?.[fromIdx]
+      if (!moved) return
       setTabStacks((prev: string[][]) => {
         const next = prev.map((s: string[]) => [...s])
         while (next.length <= toPanel) next.push([])
         const sourceStack = next[fromPanel]
         if (!sourceStack || fromIdx < 0 || fromIdx >= sourceStack.length) return prev
-        const [moved] = sourceStack.splice(fromIdx, 1)
-        if (!moved) return prev
+        // usar prev para validar moved real vs stale snapshot
+        const movedFromPrev = prev[fromPanel]?.[fromIdx]
+        if (movedFromPrev !== moved) {
+          // stale: buscar moved real en prev
+          const altIdx = prev[fromPanel]?.indexOf(moved) ?? -1
+          if (altIdx === -1) return prev
+          const [altMoved] = prev[fromPanel]!.splice(altIdx, 1) as any
+          if (!altMoved) return prev
+          const destStack = next[toPanel] ?? []
+          destStack.splice(toIdx, 0, altMoved)
+          next[toPanel] = destStack
+          // reconstruir next desde prev correcto
+          const corrected = prev.map((s: string[]) => [...s])
+          while (corrected.length <= toPanel) corrected.push([])
+          corrected[fromPanel]!.splice(altIdx, 1)
+          corrected[toPanel]!.splice(toIdx, 0, altMoved)
+          return corrected
+        }
+        const [m] = sourceStack.splice(fromIdx, 1)
+        if (!m) return prev
         const destStack = next[toPanel] ?? []
-        destStack.splice(toIdx, 0, moved)
+        destStack.splice(toIdx, 0, m)
         next[toPanel] = destStack
         return next
       })
       setDesktopLayout((prev: DesktopLayout) => {
         const sessions = [...prev.sessions]
-        const fromTab = tabStacks[fromPanel]?.[fromIdx]
-        if (fromTab && sessions[fromPanel] === fromTab) {
-          sessions[fromPanel] = tabStacks[fromPanel]?.filter((_, i) => i !== fromIdx)[0] ?? null
+        if (sessions[fromPanel] === moved) {
+          const remaining = (tabStacks[fromPanel] ?? []).filter((_, i) => i !== fromIdx)
+          sessions[fromPanel] = remaining[0] ?? null
         }
-        if (fromTab) sessions[toPanel] = fromTab
+        sessions[toPanel] = moved
         return { ...prev, sessions }
       })
       setActivePanel(toPanel)

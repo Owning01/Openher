@@ -170,6 +170,10 @@ pub fn handle(
             .replacen("://::1:", "://127.0.0.1:", 1)
             .replacen("://[::1]:", "://127.0.0.1:", 1);
     }
+    // SSRF: bloquear loop interno al propio shell (lectura de config.json con password desde página embebida)
+    if target_url.contains("127.0.0.1:4848/shell") || target_url.contains("localhost:4848/shell") || target_url.contains("[::1]:4848/shell") {
+        return Some(json_err(403, "proxy loop forbidden"));
+    }
     let host_key = host_from_url(&target_url);
     // Leer body crudo si hay (para POST/PUT/PATCH que vienen via proxy) — cap 16MB
     let mut fwd_body: Vec<u8> = Vec::new();

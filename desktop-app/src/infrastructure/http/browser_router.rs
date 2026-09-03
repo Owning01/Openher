@@ -107,6 +107,19 @@ pub fn handle(
                 if code.len() > 256 * 1024 {
                     return Some(json_err(413, "code too large"));
                 }
+                // Allowlist: solo scripts de inspección generados por el host; bloquea XSS arbitrario desde markdown
+                let trimmed = code.trim_start();
+                let is_allowed = code.contains("__oc_")
+                    || trimmed.starts_with("history.")
+                    || trimmed.starts_with("window.find")
+                    || trimmed.starts_with("document.")
+                    || code.contains("document.documentElement.style.zoom")
+                    || code.contains("window.chrome.webview.postMessage")
+                    || trimmed.starts_with("(function()");
+                if !is_allowed {
+                    eprintln!("[browser][eval] forbidden code blocked (len={})", code.len());
+                    return Some(json_err(403, "eval forbidden"));
+                }
                 match state.browser.eval(code) {
                     Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
                     Err(e) => json_err(500, &e.to_string()),

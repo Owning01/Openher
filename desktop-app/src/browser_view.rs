@@ -124,12 +124,14 @@ impl SubWebViewManager {
     pub fn send<T>(&self, cmd: BrowserCommand, rx: crossbeam_channel::Receiver<T>) -> Result<T, String> {
         self.tx.send(cmd).map_err(|_| "main thread gone".to_string())?;
         self.wake();
-        match rx.recv_timeout(Duration::from_secs(10)) {
+        match rx.recv_timeout(Duration::from_millis(900)) {
             Ok(v) => Ok(v),
             Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                Err("main thread timeout (event loop no procesó el comando)".to_string())
+                eprintln!("[browser] main thread timeout (900ms) — event loop saturado o WebView no listo");
+                Err("main thread timeout (900ms)".to_string())
             }
             Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                eprintln!("[browser] main thread dropped reply");
                 Err("main thread dropped reply".to_string())
             }
         }
@@ -249,8 +251,9 @@ fn cmd_open(
     url: &str,
     bounds: Rect,
 ) -> Result<(), String> {
-    // Si ya existe solo navegamos
+    // Singleton: si ya existe, reusar (warn si doble-open)
     if let Some(wv) = &inner.webview {
+        eprintln!("[browser] singleton reuse url={} visible={} (pool de 1 WebView)", url, inner.visible);
         let _ = wv.load_url(url);
         let _ = wv.set_bounds(bounds);
         let _ = wv.set_visible(true);

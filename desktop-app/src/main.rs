@@ -183,11 +183,9 @@ unsafe extern "system" fn child_frameless_wndproc(
     };
     const GA_ROOT: u32 = 2;
     const WM_NCHITTEST_VAL: u32 = WM_NCHITTEST;
-    const WM_NCCALCSIZE: u32 = 0x0083;
     const HTTRANSPARENT: isize = -1;
-    if msg == WM_NCCALCSIZE && wparam == 1 {
-        return 0;
-    }
+    // NOTA: no tocar WM_NCCALCSIZE en hijos — devolver 0 rompía el layout del
+    // WebView2 y su hit-test. Solo se intercepta NCHITTEST en el borde.
     if msg == WM_NCHITTEST_VAL {
         let root = GetAncestor(hwnd, GA_ROOT);
         if !root.is_null() && IsZoomed(root) == 0 {
@@ -195,7 +193,7 @@ unsafe extern "system" fn child_frameless_wndproc(
             let y = ((lparam >> 16) & 0xFFFF) as i16 as i32;
             let mut rect = std::mem::zeroed::<windows_sys::Win32::Foundation::RECT>();
             if GetWindowRect(root, &mut rect) != 0 {
-                let border: i32 = 10;
+                let border: i32 = 16;
                 let left = rect.left;
                 let right = rect.right;
                 let top = rect.top;
@@ -269,8 +267,27 @@ unsafe extern "system" fn frameless_wndproc(
     };
     const WM_NCHITTEST_VAL: u32 = WM_NCHITTEST;
     const WM_NCCALCSIZE: u32 = 0x0083;
+    // Solo quitar el non-client cuando está maximizada (evita el borde
+    // automático de 8px que Windows añade al maximizar). En modo ventana se
+    // deja el frame del SO intacto: conserva el grip invisible EXTERIOR de 8px
+    // (funciona aunque el WebView tape el cliente) y nuestro HT* interior de
+    // 16px actúa como segunda zona de agarre. Antes se devolvía 0 siempre y se
+    // perdía el grip exterior → la derecha/esquina sup-der eran casi imposibles.
     if msg == WM_NCCALCSIZE && wparam == 1 {
-        return 0;
+        if IsZoomed(hwnd) != 0 {
+            return 0;
+        }
+        let orig = ORIG_WNDPROC.load(std::sync::atomic::Ordering::Relaxed);
+        if orig != 0 {
+            return CallWindowProcW(
+                Some(std::mem::transmute::<isize, unsafe extern "system" fn(*mut core::ffi::c_void, u32, usize, isize) -> isize>(orig)),
+                hwnd,
+                msg,
+                wparam,
+                lparam,
+            );
+        }
+        return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
     if msg == WM_NCHITTEST_VAL {
         let is_max = IsZoomed(hwnd) != 0;
@@ -279,7 +296,7 @@ unsafe extern "system" fn frameless_wndproc(
             let y = ((lparam >> 16) & 0xFFFF) as i16 as i32;
             let mut rect = std::mem::zeroed::<windows_sys::Win32::Foundation::RECT>();
             if GetWindowRect(hwnd, &mut rect) != 0 {
-                let border: i32 = 10;
+                let border: i32 = 16;
                 let titlebar_h: i32 = 38;
                 let left = rect.left;
                 let right = rect.right;
@@ -547,8 +564,10 @@ impl ApplicationHandler<AppEvent> for App {
                             unsafe { patch_child_windows(hwnd); }
                             std::thread::sleep(std::time::Duration::from_millis(800));
                             unsafe { patch_child_windows(hwnd); }
-                            // Re-parcheo periódico: WebView2 recrea child windows al navegar/recargar
-                            for _ in 0..60 {
+                            // Re-parcheo periódico INFINITO: WebView2 recrea child windows al navegar/recargar
+                            // (antes era 60×2s = solo 2 min; pasado ese tiempo los HWND nuevos quedaban
+                            // sin parche y la derecha/esquinas dejaban de redimensionar).
+                            loop {
                                 std::thread::sleep(std::time::Duration::from_millis(2000));
                                 unsafe { patch_child_windows(hwnd); }
                             }

@@ -184,21 +184,18 @@ export function useHostActions({
       navigate("detail")
       const idx =
         targetPanel ?? Math.min(activePanel, Math.max(0, desktopLayout.sessions.length - 1))
-      const tabId = `browser:${Date.now()}`
-      setDesktopLayout((prev: any) => ({
-        ...prev,
-        browserTabUrls: { ...(prev.browserTabUrls ?? {}), [tabId]: url },
-      }))
+      const tabId = `browser:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+      // Transacción única: evita browserTabUrls huérfano si el segundo setDesktopLayout fallara
+      setDesktopLayout((prev: any) => {
+        const sessions = [...prev.sessions]
+        sessions[idx] = tabId
+        return { ...prev, browserTabUrls: { ...(prev.browserTabUrls ?? {}), [tabId]: url }, sessions }
+      })
       setTabStacks((prev: string[][]) => {
         const next = (prev ?? []).map((s) => [...s])
         while (next.length <= idx) next.push([])
         next[idx]!.push(tabId)
         return next
-      })
-      setDesktopLayout((prev: any) => {
-        const sessions = [...prev.sessions]
-        sessions[idx] = tabId
-        return { ...prev, sessions }
       })
       setActivePanel(idx)
     },

@@ -32,7 +32,20 @@ export function useIsDesktop(): boolean {
     const mq = window.matchMedia("(min-width: 781px)")
     const onChange = (e: MediaQueryListEvent) => { setIsDesktop(e.matches); syncDesktopAttr(e.matches) }
     mq.addEventListener("change", onChange)
-    return () => mq.removeEventListener("change", onChange)
+    const onOffline = () => {
+      // offline: el proxy/browser no resolverá; marcar para que BrowserPanel muestre fallback
+      try { window.dispatchEvent(new CustomEvent("opencode:offline")) } catch {}
+    }
+    const onOnline = () => {
+      try { window.dispatchEvent(new CustomEvent("opencode:online")) } catch {}
+    }
+    window.addEventListener("offline", onOffline)
+    window.addEventListener("online", onOnline)
+    return () => {
+      mq.removeEventListener("change", onChange)
+      window.removeEventListener("offline", onOffline)
+      window.removeEventListener("online", onOnline)
+    }
   }, [])
 
   return isDesktop

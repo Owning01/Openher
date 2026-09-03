@@ -348,6 +348,14 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           // Sin esto, un fetch race que devuelve solo el último mensaje borraría 50 mensajes y parecería "desaparecen".
           seen.add(m.info.id)
           merged.push(m)
+        } else if (hasCompaction) {
+          // Compact es ADITIVO: el server poda contexto pero la UI conserva el
+          // historial previo para lectura (igual que el TUI, que muestra los
+          // mensajes anteriores por encima del divider). Sin esto, tras
+          // compactar el chat quedaba solo con el resumen y "no deja ver
+          // mensajes anteriores" aunque el botón de paginación existiera.
+          seen.add(m.info.id)
+          merged.push(m)
         } else {
           // Si el fetch trajo la lista completa y este mensaje no está, fue revertido/borrado en el server.
           changed = true

@@ -10,13 +10,14 @@
 export type InspectTool = "picker" | "pod"
 
 export function buildOverlayScript(apiBase: string, initialTool: InspectTool = "picker"): string {
-  const api = apiBase.replace(/'/g, "")
+  const apiJson = JSON.stringify(apiBase)
+  const toolJson = JSON.stringify(initialTool === "pod" ? "pod" : "picker")
   return `(function(){
   var W=window;
-  var TOOL='${initialTool === "pod" ? "pod" : "picker"}';
+  var TOOL=${toolJson};
   if(W.__opencode_overlay_active){ if(W.__oc_setTool)W.__oc_setTool(TOOL); return }
   W.__opencode_overlay_active=true;
-  var API='${api}';
+  var API=${apiJson};
   var cur=null;
   var suppressClick=false;
   var style=document.createElement('style');
@@ -253,24 +254,24 @@ export function buildOverlayScript(apiBase: string, initialTool: InspectTool = "
 }
 
 export const badgeScript = (id: string, label: string, bx: number, by: number, selector?: string): string =>
-  `window.__oc_addBadge && window.__oc_addBadge('${id.replace(/'/g, "")}','${label.replace(/'/g, "")}',${Math.round(bx)},${Math.round(by)},${selector ? `'${selector.replace(/[\\']/g, "")}'` : "null"})`
+  `window.__oc_addBadge && window.__oc_addBadge(${JSON.stringify(id)},${JSON.stringify(label)},${Math.round(bx)},${Math.round(by)},${selector ? JSON.stringify(selector) : "null"})`
 
 export const removeBadgeScript = (id: string): string =>
-  `window.__oc_removeBadge && window.__oc_removeBadge('${id.replace(/'/g, "")}')`
+  `window.__oc_removeBadge && window.__oc_removeBadge(${JSON.stringify(id)})`
 
 export const clearBadgesScript = `window.__oc_clearBadges && window.__oc_clearBadges()`
 
 export const applyStyleScript = (id: string, props: Record<string, string | null>): string =>
-  `window.__oc_applyStyle && window.__oc_applyStyle('${id.replace(/'/g, "")}',${JSON.stringify(props)})`
+  `window.__oc_applyStyle && window.__oc_applyStyle(${JSON.stringify(id)},${JSON.stringify(props)})`
 
 export const clearStyleScript = (id: string): string =>
-  `window.__oc_clearStyle && window.__oc_clearStyle('${id.replace(/'/g, "")}')`
+  `window.__oc_clearStyle && window.__oc_clearStyle(${JSON.stringify(id)})`
 
 export const unbindScript = (id: string): string =>
-  `window.__oc_unbind && window.__oc_unbind('${id.replace(/'/g, "")}')`
+  `window.__oc_unbind && window.__oc_unbind(${JSON.stringify(id)})`
 
 export const setToolScript = (tool: InspectTool): string =>
-  `window.__oc_setTool && window.__oc_setTool('${tool === "pod" ? "pod" : "picker"}')`
+  `window.__oc_setTool && window.__oc_setTool(${JSON.stringify(tool === "pod" ? "pod" : "picker")})`
 
 export const cleanupOverlayScript = `(function(){
   var W=window;

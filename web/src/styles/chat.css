@@ -838,6 +838,74 @@
   text-transform: uppercase;
 }
 
+/* Tarjeta de resumen de compactación: el role v2 "compaction" se mapea a
+   `.message.assistant.compaction` (fondo/chat de assistant) y el resumen va
+   en una tarjeta con acento para que el markdown no se vea como texto plano. */
+.message.compaction {
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+.compaction-card {
+  margin-top: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--chat-accent, var(--primary)) 35%, var(--border));
+  border-left: 3px solid var(--chat-accent, var(--primary));
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+
+.compaction-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--chat-accent, var(--primary));
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+
+.compaction-toggle:hover {
+  background: color-mix(in srgb, var(--chat-accent, var(--primary)) 8%, transparent);
+}
+
+.compaction-title {
+  flex: 0 0 auto;
+}
+
+.compaction-chevron {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.compaction-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+.compaction-body {
+  padding: 0 var(--space-3) var(--space-3);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-2);
+}
+
+.compaction-card .compaction-checkpoint {
+  margin: var(--space-2) var(--space-3) var(--space-3);
+}
+
 .message.user {
   align-self: flex-end;
   background: var(--chat-user-bubble-bg, var(--primary-soft));

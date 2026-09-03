@@ -58,7 +58,7 @@ export type DesktopPanelRendererProps = {
   onMoveTab: (from: number, to: number) => void
   onTransferTab: (fromPanel: number, fromIdx: number, toIdx: number) => void
   onAddTerminal: () => void
-  onDetachTab: (tabIdx: number, dir?: "right" | "bottom") => void
+  onDetachTab?: (tabIdx: number, dir?: "right" | "bottom") => void
   onCloseOthers: (keep: number) => void
   onCloseRight: (idx: number) => void
   onCloseLeft: (idx: number) => void
@@ -535,4 +535,4 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       onOpenFile={onOpenFile}
     />
   )
-})
+}, (a, b) => a.sid === b.sid && a.active === b.active && a.tabStack === b.tabStack && a.vs?.inspectMode === b.vs?.inspectMode && a.vs?.inspectTool === b.vs?.inspectTool && a.browserTabUrls === b.browserTabUrls && a.index === b.index && a.panelId === b.panelId)
