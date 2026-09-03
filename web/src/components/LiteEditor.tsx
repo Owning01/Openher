@@ -991,7 +991,6 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
                 padding: metrics.padding,
                 whiteSpace: metrics.whiteSpace,
                 overflowWrap: wrap ? "anywhere" : "normal",
-                "--indch": `${tabSize}ch`,
               } as React.CSSProperties}
             ><code dangerouslySetInnerHTML={{ __html: codeHtml }} /></pre>
             <textarea

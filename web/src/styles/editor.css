@@ -90,17 +90,6 @@
   pointer-events: none;
   background: transparent;
   color: var(--text);
-  /* Guías de indentación baratas: líneas cada --indch (fuente monoespaciada).
-     Aproximación (ocupan todo el alto), sin el layout caro de Monaco. */
-  background-image: repeating-linear-gradient(
-    90deg,
-    transparent 0,
-    transparent calc(var(--indch, 2ch) - 1px),
-    var(--border-subtle) calc(var(--indch, 2ch) - 1px),
-    var(--border-subtle) var(--indch, 2ch)
-  );
-  background-position-x: 12px;
-  background-repeat: repeat;
 }
 .liteed-hl code { font: inherit; background: transparent; }
 .liteed-input {
