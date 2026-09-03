@@ -214,6 +214,7 @@ export default {
   'detail.queuedEmpty': '無佇列提示',
   'detail.queuedSend': '立即發送',
   'detail.queuedRemove': '刪除',
+  'detail.queuedEdit': '編輯',
   'detail.queuedBadge': '佇列中',
   'detail.git.stage': 'Stage',
   'detail.git.unstage': 'Unstage',

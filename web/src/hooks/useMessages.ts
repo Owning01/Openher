@@ -52,9 +52,55 @@ function stripNonEssential(msg: MessageEnvelope, dataMode?: DataMode): MessageEn
   return filtered.length === msg.parts.length ? msg : { ...msg, parts: filtered }
 }
 
+// Cola visible de salida: mensajes enviados mientras el agente está ocupado.
+// Aparecen en el chat como usuario pendiente (sin enviar) con acciones
+// eliminar / editar / enviar-ahora. Por sesión; se filtran al renderizar.
+export type OutboxItem = {
+  id: string
+  sessionID: string
+  text: string
+  images?: Array<{ base64: string; mime: string; name?: string }>
+  createdAt: number
+}
+
+export type OutboxActions = {
+  onDelete: () => void
+  onEdit: () => void
+  onSendNow: () => void
+}
+
+function buildOutboxMessage(item: OutboxItem): MessageEnvelope {
+  const parts: MessageEnvelope["parts"] = item.text
+    ? [{ id: `${item.id}-part`, type: "text", text: item.text }]
+    : []
+  let n = 0
+  for (const img of item.images ?? []) {
+    parts.push({ id: `${item.id}-img-${n++}`, type: "image", data: img.base64, mimeType: img.mime })
+  }
+  return {
+    info: { id: item.id, role: "user", sessionID: item.sessionID, time: { created: item.createdAt } },
+    parts,
+  }
+}
+
 export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKey = COMPOSER_STORAGE_KEY) {
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<MessageEnvelope[]>([])
+  const [outbox, setOutbox] = useState<OutboxItem[]>([])
+  const enqueueOutbox = useCallback((sessionID: string, text: string, images?: OutboxItem["images"]) => {
+    const item: OutboxItem = {
+      id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      sessionID,
+      text,
+      images: images && images.length > 0 ? images : undefined,
+      createdAt: Date.now(),
+    }
+    setOutbox((prev) => [...prev, item])
+    return item
+  }, [])
+  const removeOutbox = useCallback((id: string) => {
+    setOutbox((prev) => (prev.some((o) => o.id === id) ? prev.filter((o) => o.id !== id) : prev))
+  }, [])
   const [composer, setComposer] = useState(() => localStorage.getItem(storageKey) ?? "")
   const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
@@ -168,9 +214,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [])
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
-    // Optimización: si no hay optimistas pendientes, skip el trabajo pesado
+    // Optimización: si no hay optimistas ni outbox pendientes, skip el trabajo pesado
     let merged: MessageEnvelope[]
-    if (optimisticUserMessages.length === 0) {
+    if (optimisticUserMessages.length === 0 && outbox.length === 0) {
       merged = messages
     } else {
       // Fix: no filtrar optimistas por texto contra todo el historial — eso
@@ -180,12 +226,17 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       // Así el mensaje se ve al instante incluso si el texto ya existe.
       const existingIds = new Set(messages.map((m) => m.info.id))
       const pendingOptimistic = optimisticUserMessages.filter((opt) => !existingIds.has(opt.info.id))
-      merged = [...messages, ...pendingOptimistic]
+      // Outbox: solo la sesión cargada (los de otras sesiones esperan su panel).
+      const loaded = loadedSessionIDRef.current ?? messages[0]?.info.sessionID
+      const pendingOutbox = outbox
+        .filter((o) => o.sessionID === loaded && !existingIds.has(o.id))
+        .map(buildOutboxMessage)
+      merged = [...messages, ...pendingOptimistic, ...pendingOutbox]
     }
     const { out, cache } = computeRenderedMessages(merged, dataMode, renderedCacheRef.current)
     renderedCacheRef.current = cache
     return out
-  }, [messages, optimisticUserMessages, dataMode])
+  }, [messages, optimisticUserMessages, outbox, dataMode])
 
   // Firmas baratas: solo cambian cuando la cantidad de mensajes o el último
   // id/longitud cambian. Evita O(n) join por frame.
@@ -888,6 +939,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
   return {
     messages, setMessages, optimisticUserMessages,
+    outbox, enqueueOutbox, removeOutbox,
     composer, setComposer,
     isSending,
     awaitingAssistantReply, setAwaitingAssistantReply,

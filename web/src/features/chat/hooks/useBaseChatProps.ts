@@ -95,6 +95,7 @@ export type UseBaseChatPropsParams = {
   setChatSetting: (key: any, val: any) => void
   resetChatSettings: () => void
   vs: any
+  outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
 }
 
 export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps {
@@ -190,6 +191,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     setChatSetting,
     resetChatSettings,
     vs,
+    outboxActions,
   } = params
 
   return useMemo<ChatViewProps>(
@@ -310,6 +312,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       visualSelection: vs.selection,
       onClearVisualSelection: vs.clear,
       onFocusVisualFile: (path: string) => handleOpenFile(path),
+      outboxActions,
     }),
     [
       selectedSession,
@@ -404,6 +407,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       handleComposerChange,
       setDesktopCfg,
       loadDesktopConfig,
+      outboxActions,
     ]
   )
 }

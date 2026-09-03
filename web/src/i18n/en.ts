@@ -247,6 +247,7 @@ export default {
   'detail.queuedEmpty': 'No queued prompts',
   'detail.queuedSend': 'Send now',
   'detail.queuedRemove': 'Remove',
+  'detail.queuedEdit': 'Edit',
   'detail.queuedBadge': 'queued',
   'detail.git.stage': 'Stage',
   'detail.git.unstage': 'Unstage',

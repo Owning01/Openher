@@ -125,6 +125,8 @@ export type ChatViewProps = {
   visualSelection?: VisualSelection | null
   onClearVisualSelection?: () => void
   onFocusVisualFile?: (path: string) => void
+  // Cola visible: acciones por id de mensaje pendiente (eliminar/editar/enviar).
+  outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
 }
 
 export const ChatView = memo(function ChatView({
@@ -149,7 +151,7 @@ export const ChatView = memo(function ChatView({
   onExportMarkdown, onEditFile,
   snippets, charLimit, compactTools, minimalistMode, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt,
   chatSettings, onChatSettingChange, onResetChatSettings, onOpenADEDiff,
-  visualSelection, onClearVisualSelection, onFocusVisualFile
+  visualSelection, onClearVisualSelection, onFocusVisualFile, outboxActions
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -589,6 +591,7 @@ export const ChatView = memo(function ChatView({
           thinkingDefault={thinkingDefault}
           onRegenerate={onRegenerate}
           onOpenADEDiff={onOpenADEDiff}
+          outboxActions={outboxActions}
         />
       </div>
 

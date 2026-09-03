@@ -247,6 +247,7 @@ export default {
   'detail.queuedEmpty': 'Sin mensajes en cola',
   'detail.queuedSend': 'Enviar ahora',
   'detail.queuedRemove': 'Eliminar',
+  'detail.queuedEdit': 'Editar',
   'detail.queuedBadge': 'en cola',
   'detail.git.stage': 'Stage',
   'detail.git.unstage': 'Unstage',
