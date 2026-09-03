@@ -188,6 +188,26 @@
 .liteed-hint { font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
 .liteed-empty { padding: 10px; font-size: 0.75rem; color: var(--muted); text-align: center; }
 
+/* Banner de error de carga/guardado: no desmonta el editor (el trabajo sigue copiable) */
+.file-editor-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.file-editor-banner-msg {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  textOverflow: ellipsis;
+  whiteSpace: nowrap;
+}
+
 /* Capa de marcas: comparte celda del stack, no altera el tamaño */
 .liteed-marks {
   grid-area: 1 / 1;
@@ -198,7 +218,7 @@
 .liteed-mark { position: absolute; width: 2px; }
 .liteed-mark-caret { background: var(--primary); opacity: 0.9; }
 .liteed-mark-bracket {
-  width: auto;
+  width: 1ch;
   min-width: 7px;
   background: color-mix(in srgb, var(--primary) 22%, transparent);
   border: 1px solid var(--primary);
@@ -248,7 +268,7 @@
   border-radius: 5px;
   cursor: pointer;
 }
-.liteed-complete-item:hover { background: var(--surface-hover); }
+.liteed-complete-item:hover, .liteed-complete-item.active { background: var(--surface-hover); }
 
 /* Diff de cambios sin guardar */
 .liteed-diff {

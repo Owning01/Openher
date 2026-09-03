@@ -1,7 +1,7 @@
 // Paneles de la shell para el grid de escritorio: terminal, explorador,
 // kanban, docs, updates, stats, labs y config. Todos hablan con /shell/*.
 
-import { memo, useCallback, useEffect, useRef, useState, lazy, Suspense } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react"
 import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
@@ -2075,15 +2075,21 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       // no-op: tabs viene de props, React ya re-renderiza
     }
   }, [isControlled, controlledTabs])
-  const [filesState, setFilesState] = useState<Record<string, { content: string; savedContent: string; dirty: boolean; loading: boolean; error: string | null }>>({})
+  const [filesState, setFilesState] = useState<Record<string, { content: string; savedContent: string; dirty: boolean; loading: boolean; error: string | null; loaded: boolean; saveError: string | null }>>({})
   const [saving, setSaving] = useState(false)
   const [cursor, setCursor] = useState({ line: 1, col: 1 })
   useEffect(() => {
     setCursor({ line: 1, col: 1 })
   }, [activeTab])
-  // .md abre en vista previa por defecto; resto de archivos en dividido
-  const [mdViewMode, setMdViewMode] = useState<"edit" | "preview" | "split">(() =>
-    /\.(md|markdown|mdown|mkd)$/i.test(initialPath) ? "preview" : "split"
+  // .md abre en vista previa por defecto; resto de archivos en dividido.
+  // Modos por tab (no global): volver a un .md conserva su modo.
+  const [mdModes, setMdModes] = useState<Record<string, "edit" | "preview" | "split">>({})
+  const mdViewMode =
+    mdModes[activeTab] ?? (/\.(md|markdown|mdown|mkd)$/i.test(activeTab) ? "preview" : "split")
+  const setMdViewMode = useCallback(
+    (mode: "edit" | "preview" | "split") =>
+      setMdModes((prev) => (prev[activeTab] === mode ? prev : { ...prev, [activeTab]: mode })),
+    [activeTab]
   )
 
   const isMarkdown = /\.(md|markdown|mdown|mkd)$/i.test(activeTab)
@@ -2097,16 +2103,20 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   }, [initialPath, isControlled])
 
   // Cargar contenido de la pestaña activa si no fue cargada aún
+  // pendingReload + reloadNonce permiten reintentar tras un error de lectura.
+  const pendingReload = useRef<Set<string>>(new Set())
+  const [reloadNonce, setReloadNonce] = useState(0)
   useEffect(() => {
     if (!activeTab) return
     // Los PDF son binarios: los maneja PdfViewer vía /shell/fs/download, no fs.read
     if (/\.pdf$/i.test(activeTab)) return
     let cancelled = false
     setFilesState((prev) => {
-      if (prev[activeTab] && (prev[activeTab].content || prev[activeTab].error)) return prev
+      if (!pendingReload.current.has(activeTab) && prev[activeTab] && (prev[activeTab].content || prev[activeTab].error)) return prev
+      pendingReload.current.delete(activeTab)
       return {
         ...prev,
-        [activeTab]: { content: "", savedContent: "", dirty: false, loading: true, error: null },
+        [activeTab]: { content: "", savedContent: "", dirty: false, loading: true, error: null, loaded: false, saveError: null },
       }
     })
 
@@ -2114,50 +2124,119 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       if (cancelled) return
       setFilesState((prev) => ({
         ...prev,
-        [activeTab]: { content: r.content, savedContent: r.content, dirty: false, loading: false, error: null },
+        [activeTab]: { content: r.content, savedContent: r.content, dirty: false, loading: false, error: null, loaded: true, saveError: null },
       }))
     }).catch((err) => {
       if (cancelled) return
       setFilesState((prev) => ({
         ...prev,
-        [activeTab]: { content: "", savedContent: "", dirty: false, loading: false, error: err instanceof Error ? err.message : "Error al abrir archivo" },
+        [activeTab]: { content: "", savedContent: "", dirty: false, loading: false, error: err instanceof Error ? err.message : "Error al abrir archivo", loaded: false, saveError: null },
       }))
     })
 
     return () => {
       cancelled = true
     }
-  }, [activeTab])
+  }, [activeTab, reloadNonce])
 
   const activeFile = filesState[activeTab]
   const autoSaveTimerRef = useRef<number | null>(null)
+  const filesStateRef = useRef(filesState)
+  filesStateRef.current = filesState
+  const activeTabRef = useRef(activeTab)
+  activeTabRef.current = activeTab
+  const prevTabRef = useRef(activeTab)
+
+  // Escritura con timeout (15s, el POST no acepta AbortSignal) + 1 reintento
+  const savePath = useCallback(async (tab: string, content: string): Promise<boolean> => {
+    const b64 = toBase64Chunked(content)
+    let lastErr: unknown = null
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await Promise.race([
+          shell.fs.write(tab, b64),
+          new Promise<never>((_, rej) => window.setTimeout(() => rej(new Error("timeout 15s")), 15000)),
+        ])
+        lastErr = null
+        break
+      } catch (err) {
+        lastErr = err
+      }
+    }
+    if (lastErr) {
+      const msg = lastErr instanceof Error ? lastErr.message : "Error al guardar archivo"
+      setFilesState((prev) => {
+        const cur = prev[tab]
+        if (!cur) return prev
+        return { ...prev, [tab]: { ...cur, saveError: msg } }
+      })
+      return false
+    }
+    setFilesState((prev) => {
+      const cur = prev[tab]
+      if (!cur) return prev
+      return { ...prev, [tab]: { ...cur, dirty: cur.content !== content, savedContent: content, saveError: null } }
+    })
+    return true
+  }, [])
 
   const handleSave = useCallback(async () => {
     if (!activeTab || !filesState[activeTab] || saving) return
     const current = filesState[activeTab]
+    if (!current.loaded) {
+      setFilesState((prev) => ({
+        ...prev,
+        [activeTab]: { ...prev[activeTab], saveError: "El archivo no terminó de cargar; reintentá la carga" },
+      }))
+      return
+    }
     setSaving(true)
     try {
-      // Base64 por chunks: evita el pico de RAM de btoa(unescape(encodeURIComponent()))
-      const b64 = toBase64Chunked(current.content)
-      await shell.fs.write(activeTab, b64)
-      setFilesState((prev) => ({
-        ...prev,
-        [activeTab]: { ...prev[activeTab], dirty: false, savedContent: current.content },
-      }))
-    } catch {
-      setFilesState((prev) => ({
-        ...prev,
-        [activeTab]: { ...prev[activeTab], error: "Error al guardar archivo" },
-      }))
+      await savePath(activeTab, current.content)
     } finally {
       setSaving(false)
     }
-  }, [activeTab, filesState, saving])
+  }, [activeTab, filesState, saving, savePath])
+
+  // Flush anti-pérdida al cambiar de tab: el autosave con debounce se
+  // cancelaría en el cleanup y handleSave solo conoce activeTab.
+  useEffect(() => {
+    const prev = prevTabRef.current
+    prevTabRef.current = activeTab
+    if (!prev || prev === activeTab) return
+    const st = filesStateRef.current[prev]
+    if (st && st.dirty && !st.loading && !st.error && st.loaded) {
+      void savePathRef.current(prev, st.content)
+    }
+  }, [activeTab])
+  const savePathRef = useRef(savePath)
+  savePathRef.current = savePath
+
+  // Aviso del navegador si quedan tabs sucias al cerrar/recargar
+  useEffect(() => {
+    const onBefore = (e: BeforeUnloadEvent) => {
+      if (Object.values(filesStateRef.current).some((f) => f.dirty)) e.preventDefault()
+    }
+    window.addEventListener("beforeunload", onBefore)
+    return () => window.removeEventListener("beforeunload", onBefore)
+  }, [])
+
+  const handleRetryLoad = useCallback(() => {
+    if (!activeTab) return
+    pendingReload.current.add(activeTab)
+    setReloadNonce((n) => n + 1)
+  }, [activeTab])
 
   const handleContentChange = useCallback((val: string) => {
     setFilesState((prev) => ({
       ...prev,
-      [activeTab]: { ...(prev[activeTab] || { loading: false, error: null, savedContent: "" }), content: val, dirty: true },
+      [activeTab]: {
+        ...(prev[activeTab] || { loading: false, error: null, savedContent: "", loaded: false, saveError: null }),
+        content: val,
+        // Sucio exacto: deshacer hasta lo guardado limpia el flag (sin writes redundantes)
+        dirty: val !== (prev[activeTab]?.savedContent ?? ""),
+        saveError: null,
+      },
     }))
   }, [activeTab])
 
@@ -2175,8 +2254,18 @@ export const FileEditorPanel = memo(function FileEditorPanel({
     }
   }, [activeFile?.content, activeFile?.dirty, activeFile?.loading, handleSave, saving])
 
-  const handleCloseTab = (tabToClose: string, e: React.MouseEvent) => {
+  // Cierre con flush: si la tab está sucia se guarda antes de cerrar
+  // (mejor que un diálogo: cero pérdida sin fricción).
+  const handleCloseTab = async (tabToClose: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    const st = filesState[tabToClose]
+    if (st && st.dirty && !st.loading && !st.error && st.loaded) {
+      try {
+        await savePath(tabToClose, st.content)
+      } catch {
+        /* best effort: se cierra igual, el contenido queda en disco parcial */
+      }
+    }
     if (isControlled) {
       if (onTabClose) onTabClose(tabToClose)
       return
@@ -2207,8 +2296,14 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   }
 
   const relPath = initialCwd && activeTab.startsWith(initialCwd) ? activeTab.slice(initialCwd.length).replace(/^[/\\]+/, "") : activeTab
-  const lineCount = activeFile?.content ? activeFile.content.split("\n").length : 0
-  const charCount = activeFile?.content ? activeFile.content.length : 0
+  // Conteo sin split (sin duplicar el archivo en RAM por render)
+  const { lineCount, charCount } = useMemo(() => {
+    const c = activeFile?.content ?? ""
+    if (!c) return { lineCount: 0, charCount: 0 }
+    let n = 1
+    for (let i = 0; i < c.length; i++) if (c.charCodeAt(i) === 10) n++
+    return { lineCount: n, charCount: c.length }
+  }, [activeFile?.content])
   const ext = (activeTab.split(".").pop() || "").toLowerCase()
 
   return (
@@ -2287,7 +2382,24 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       )}
 
       {/* Cuerpo del editor de código / Markdown */}
-      <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex" }}>
+      <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex", flexDirection: "column" }}>
+        {(activeFile?.error || activeFile?.saveError) && (
+          <div className="file-editor-banner" role="alert">
+            <span className="file-editor-banner-msg" title={activeFile.error ?? activeFile.saveError ?? ""}>
+              {activeFile.error ?? activeFile.saveError}
+            </span>
+            {activeFile.error ? (
+              <button type="button" className="btn-secondary compact" onClick={handleRetryLoad}>
+                Reintentar carga
+              </button>
+            ) : (
+              <button type="button" className="btn-secondary compact" onClick={() => void handleSave()}>
+                Reintentar guardado
+              </button>
+            )}
+          </div>
+        )}
+        <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex" }}>
         {onVisualSelect && onToggleInspect && (
           <VisualSelectOverlay
             enabled={!!inspectMode}
@@ -2302,8 +2414,6 @@ export const FileEditorPanel = memo(function FileEditorPanel({
           </Suspense>
         ) : activeFile?.loading ? (
           <div style={{ padding: 16, color: "var(--muted)" }}>Cargando archivo...</div>
-        ) : activeFile?.error ? (
-          <div style={{ padding: 16, color: "var(--danger)" }}>{activeFile.error}</div>
         ) : isMarkdown && mdViewMode === "preview" ? (
           <div className="markdown-body message-content" style={{ flex: 1, padding: "16px 24px", overflowY: "auto", background: "var(--surface)" }}>
             <Markdown text={activeFile?.content ?? ""} />
@@ -2336,6 +2446,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
             vsPath={activeTab}
           />
         )}
+        </div>
       </div>
       {/* Status bar inferior — todo mismo color */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 10px", fontSize: "0.72rem", color: "var(--muted)", borderTop: "1px solid var(--border-subtle)", background: "var(--surface)", height: "22px", minHeight: "22px", flexShrink: 0 }}>

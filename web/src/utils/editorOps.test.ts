@@ -179,6 +179,16 @@ describe("findMatchingBracket", () => {
     expect(findMatchingBracket("abc", 1)).toBeNull()
     expect(findMatchingBracket("(abc", 1)).toBeNull()
   })
+  it("rechaza tipos cruzados", () => {
+    expect(findMatchingBracket("([)]", 1)).toBeNull()
+    expect(findMatchingBracket("([)]", 3)).toBeNull()
+  })
+  it("ignora comillas (solo ()[]{})", () => {
+    expect(findMatchingBracket('a"b"c', 2)).toBeNull()
+  })
+  it("ps1 usa #", () => {
+    expect(commentPrefixFor("a.ps1")).toBe("#")
+  })
 })
 
 describe("collectWords/wordBeforeCaret", () => {
@@ -193,11 +203,14 @@ describe("collectWords/wordBeforeCaret", () => {
 
 describe("applyEdits", () => {
   it("aplica multi-cursor sin corromper offsets", () => {
-    expect(applyEdits("aaa", [{ start: 0, end: 0, insert: "X" }, { start: 2, end: 2, insert: "Y" }])).toBe("XaaYa")
-    expect(applyEdits("abcdef", [{ start: 1, end: 3, insert: "" }])).toBe("adef")
+    expect(applyEdits("aaa", [{ start: 0, end: 0, insert: "X" }, { start: 2, end: 2, insert: "Y" }]).text).toBe("XaaYa")
+    expect(applyEdits("abcdef", [{ start: 1, end: 3, insert: "" }]).text).toBe("adef")
   })
   it("solapadas: gana la de mayor offset, la otra se descarta", () => {
-    expect(applyEdits("abcdef", [{ start: 1, end: 4, insert: "1" }, { start: 2, end: 3, insert: "2" }])).toBe("ab2def")
+    const r = applyEdits("abcdef", [{ start: 1, end: 4, insert: "1" }, { start: 2, end: 3, insert: "2" }])
+    expect(r.text).toBe("ab2def")
+    expect(r.applied).toHaveLength(1)
+    expect(r.applied[0]).toMatchObject({ start: 2, end: 3 })
   })
 })
 
