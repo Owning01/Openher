@@ -116,6 +116,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     applyDelta: msgs.applyDelta,
     applyPart: msgs.applyPart,
     setAwaitingAssistantReply: msgs.setAwaitingAssistantReply,
+    setCompacting: msgs.setCompacting,
     setRuntimeError: msgs.setRuntimeError,
     awaitingRef: () => awaitingReplyRef.current,
     onSettled,
