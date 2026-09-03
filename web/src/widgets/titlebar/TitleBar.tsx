@@ -20,6 +20,8 @@ export type TitleBarProps = {
   /** true si el grid está en split (cols*rows>1): cada panel pinta su propio
       TabBar y el TitleBar no debe duplicar los tabs de sesión. */
   isSplit?: boolean
+  onMoveTab?: (panelIdx: number, from: number, to: number) => void
+  onTransferTab?: (fromPanel: number, fromIdx: number, toPanel: number, toIdx: number) => void
   onSwitchTab?: (panelIdx: number, tabIdx: number) => void
   onRemoveTab?: (panelIdx: number, tabIdx: number) => void
   onAddTerminal?: (panelIdx: number) => void
@@ -90,11 +92,16 @@ export const TitleBar = memo(function TitleBar({
   isSplit = false,
   onSwitchTab,
   onRemoveTab,
+  onMoveTab,
+  onTransferTab,
   onAddTerminal,
   onOpenBrowser,
 }: TitleBarProps) {
   const isDesktop = useIsDesktop()
   const [isMax, setIsMax] = useState(false)
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
+  const tabsRef = useRef<HTMLDivElement | null>(null)
 
   const ctrlRef = useRef<AbortController | null>(null)
   const post = useCallback((path: string) => {
@@ -180,6 +187,74 @@ export const TitleBar = memo(function TitleBar({
   // sesiones se vería dos veces apilado.
   const isSinglePanel = !isSplit && (tabStacks?.length ?? 1) <= 1
 
+  // Mismo protocolo DnD que TabBar: los tabs del header superior también se
+  // arrastran (reorden interno + drop en paneles del grid para split).
+  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
+    const id = currentStack[index]
+    e.dataTransfer.setData("application/x-opencode-tab-index", String(index))
+    e.dataTransfer.setData("application/x-opencode-tab-src", `${activePanel}|${index}`)
+    if (id) {
+      const payload = `panel:${activePanel}:${id}`
+      e.dataTransfer.setData("application/x-opencode-path", payload)
+      e.dataTransfer.setData("text/plain", payload)
+    } else {
+      e.dataTransfer.setData("text/plain", `tab:${index}`)
+    }
+    e.dataTransfer.effectAllowed = "move"
+    setDragIdx(index)
+  }, [currentStack, activePanel])
+
+  // Índice de inserción según la posición X del cursor sobre la barra
+  const getIndexFromX = useCallback((clientX: number): number => {
+    const bar = tabsRef.current
+    if (!bar) return currentStack.length
+    const els = Array.from(bar.querySelectorAll<HTMLDivElement>('[role="tab"]'))
+    for (let k = 0; k < els.length; k++) {
+      const r = els[k]!.getBoundingClientRect()
+      if (clientX < r.left + r.width / 2) return k
+    }
+    return els.length
+  }, [currentStack.length])
+
+  const readDragOrigin = useCallback((e: React.DragEvent): { panel: number; index: number } | null => {
+    const idx = parseInt(e.dataTransfer.getData("application/x-opencode-tab-index"), 10)
+    if (isNaN(idx)) return null
+    const srcPanel = parseInt((e.dataTransfer.getData("application/x-opencode-tab-src") || "").split("|")[0] ?? "", 10)
+    return { panel: isNaN(srcPanel) ? activePanel : srcPanel, index: idx }
+  }, [activePanel])
+
+  const clearDrag = useCallback(() => {
+    setDragIdx(null)
+    setDragOverIdx(null)
+  }, [])
+
+  const handleBarDragOver = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("application/x-opencode-tab-index")) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = "move"
+    setDragOverIdx(getIndexFromX(e.clientX))
+  }, [getIndexFromX])
+
+  const handleBarDrop = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("application/x-opencode-tab-index")) return
+    e.preventDefault()
+    e.stopPropagation()
+    const origin = readDragOrigin(e)
+    clearDrag()
+    if (!origin) return
+    const at = getIndexFromX(e.clientX)
+    if (origin.panel === activePanel) {
+      // Reorden dentro del mismo header
+      let to = at
+      if (origin.index < to) to -= 1
+      if (to !== origin.index && to >= 0) onMoveTab?.(activePanel, origin.index, to)
+    } else {
+      // Tab arrastrado desde la barra de otro panel
+      onTransferTab?.(origin.panel, origin.index, activePanel, at)
+    }
+  }, [readDragOrigin, clearDrag, getIndexFromX, activePanel, onMoveTab, onTransferTab])
+
   return (
     <div
       className="titlebar"
@@ -195,7 +270,17 @@ export const TitleBar = memo(function TitleBar({
       </div>
 
       {isSinglePanel && (
-        <div className="titlebar-tabs" role="tablist">
+        <div
+          className="titlebar-tabs"
+          role="tablist"
+          ref={tabsRef}
+          onDragOver={handleBarDragOver}
+          onDrop={handleBarDrop}
+          onDragLeave={(e) => {
+            const rt = e.relatedTarget as Node | null
+            if (!rt || !e.currentTarget.contains(rt)) setDragOverIdx(null)
+          }}
+        >
           {currentStack.map((sid, idx) => {
             const info = getTabInfo(sid, sessions, browserTabUrls)
             const isActive = sid === activeTab || (!activeTab && idx === 0)
@@ -204,9 +289,12 @@ export const TitleBar = memo(function TitleBar({
             return (
               <div
                 key={`${sid}-${idx}`}
-                className={`titlebar-tab ${isActive ? "is-active" : ""}`}
+                className={`titlebar-tab${isActive ? " is-active" : ""}${dragIdx === idx ? " dragging" : ""}${dragOverIdx === idx ? " drag-over" : ""}`}
                 role="tab"
                 aria-selected={isActive}
+                draggable
+                onDragStart={(e) => handleDragStart(e, idx)}
+                onDragEnd={clearDrag}
                 onClick={() => onSwitchTab?.(activePanel, idx)}
                 title={info.title}
               >

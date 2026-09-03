@@ -97,6 +97,16 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
+/* Feedback de drag & drop: el tab arrastrado se atenúa y el punto de
+   inserción se marca con borde lateral (igual que TabBar). */
+.titlebar-tab.dragging {
+  opacity: 0.4;
+}
+
+.titlebar-tab.drag-over {
+  box-shadow: inset 2px 0 0 var(--text);
+}
+
 .titlebar-tab-icon {
   font-size: 13px;
   display: inline-flex;

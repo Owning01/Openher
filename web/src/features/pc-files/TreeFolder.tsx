@@ -13,6 +13,7 @@ export type TreeFolderProps = {
   downloading: string | null
   onDownload: (f: FsEntry) => void
   onOpenFile?: (f: FsEntry) => void
+  onOpenWith?: (f: FsEntry) => void
   favorites: string[]
   onFav: (path: string, add: boolean) => void
   showNotice: (msg: string) => void
@@ -36,6 +37,7 @@ export const TreeFolder = memo(function TreeFolder({
   downloading,
   onDownload,
   onOpenFile,
+  onOpenWith,
   favorites,
   onFav,
   showNotice,
@@ -166,6 +168,7 @@ export const TreeFolder = memo(function TreeFolder({
                 downloading={downloading}
                 onDownload={onDownload}
                 onOpenFile={onOpenFile}
+                onOpenWith={onOpenWith}
                 favorites={favorites}
                 onFav={onFav}
                 showNotice={showNotice}
@@ -190,6 +193,7 @@ export const TreeFolder = memo(function TreeFolder({
                 downloading={downloading}
                 onDownload={onDownload}
                 onOpenFile={onOpenFile}
+                onOpenWith={onOpenWith}
                 isFav={favorites.includes(f.path)}
                 onToggleFav={onFav}
                 showNotice={showNotice}

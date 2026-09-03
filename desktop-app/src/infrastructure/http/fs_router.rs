@@ -206,6 +206,32 @@ pub fn handle(
             }
             Err(e) => json_err(400, &e),
         },
+        (Method::Post, "/open") => match read_body(req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                match fsx::open_default(p) {
+                    Ok(val) => json_ok(&val),
+                    Err(e) => json_err(500, &e),
+                }
+            }
+            Err(e) => json_err(400, &e),
+        },
+        (Method::Post, "/open-with") => match read_body(req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                let app = b["app"].as_str().unwrap_or("");
+                match fsx::open_with(p, app) {
+                    Ok(val) => json_ok(&val),
+                    Err(e) => json_err(500, &e),
+                }
+            }
+            Err(e) => json_err(400, &e),
+        },
+        (Method::Get, "/pick-app") => match fsx::pick_app() {
+            Ok(Some(p)) => json_ok(&serde_json::json!({ "ok": true, "path": p })),
+            Ok(None) => json_ok(&serde_json::json!({ "ok": false, "path": null })),
+            Err(e) => json_err(500, &e),
+        },
         _ => return None,
     };
 

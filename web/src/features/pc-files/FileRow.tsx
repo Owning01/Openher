@@ -1,5 +1,5 @@
 import { memo, useState, useRef } from "react"
-import { MenuDotsIcon, DownloadIcon, StarIcon } from "../../Icons"
+import { MenuDotsIcon, DownloadIcon, StarIcon, EyeIcon, ShareIcon } from "../../Icons"
 import { VSCodeFileIcon } from "../../components/VSCodeFileIcon"
 import type { FsEntry } from "../../shell"
 import { useOutsideClick } from "../../hooks/useOutsideClick"
@@ -11,6 +11,7 @@ export type FileRowProps = {
   downloading: string | null
   onDownload: (f: FsEntry) => void
   onOpenFile?: (f: FsEntry) => void
+  onOpenWith?: (f: FsEntry) => void
   isFav: boolean
   onToggleFav: (path: string, add: boolean) => void
   showNotice: (msg: string) => void
@@ -37,6 +38,7 @@ export const FileRow = memo(function FileRow({
   downloading,
   onDownload,
   onOpenFile,
+  onOpenWith,
   isFav,
   onToggleFav,
   showNotice,
@@ -131,6 +133,32 @@ export const FileRow = memo(function FileRow({
 
         {menuOpen && (
           <div className="pcf-file-menu">
+            {onOpenFile && (
+              <button
+                type="button"
+                className="pcf-file-menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onOpenFile(f)
+                }}
+              >
+                <EyeIcon size={13} />
+                <span>Ver</span>
+              </button>
+            )}
+            {onOpenWith && (
+              <button
+                type="button"
+                className="pcf-file-menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onOpenWith(f)
+                }}
+              >
+                <ShareIcon size={13} />
+                <span>Abrir con…</span>
+              </button>
+            )}
             <button
               type="button"
               className="pcf-file-menu-item"

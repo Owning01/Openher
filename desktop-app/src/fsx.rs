@@ -125,9 +125,24 @@ pub fn resolve(path: &str) -> serde_json::Value {
 /// Abre el Explorador de Windows mostrando el archivo seleccionado (o la
 /// carpeta directamente). Best-effort: si explorer no arranca, no falla.
 pub fn reveal_in_explorer(path: &str) -> serde_json::Value {
-    let p = PathBuf::from(path);
+    let t = path.trim();
+    if t.is_empty() {
+        return serde_json::json!({ "ok": false, "error": "ruta vacía" });
+    }
+    let p = PathBuf::from(t);
+    if !p.exists() {
+        // Antes se lanzaba `explorer /select,<inexistente>` igual y Windows
+        // abría cualquier lado (Quick Access) en silencio: parecía que el
+        // botón "no llevaba a ningún lado". Ahora ok:false y el front avisa.
+        return serde_json::json!({ "ok": false, "error": "no existe", "path": t });
+    }
     let is_dir = p.is_dir();
-    let arg = crate::state::pstring(&p);
+    let mut arg = crate::state::pstring(&p);
+    // Sin backslash final: `explorer.exe "G:\"` rompe el quoteo C-runtime
+    // (\" = comilla escapada) y abre cualquier lado. "G:" abre el drive.
+    while arg.len() > 2 && (arg.ends_with('/') || arg.ends_with('\\')) {
+        arg.pop();
+    }
     // Para archivos: /select,<path> abre la carpeta con el archivo seleccionado.
     let select = if is_dir { String::new() } else { format!("/select,{}", arg) };
     let mut cmd = std::process::Command::new("explorer.exe");
@@ -422,6 +437,88 @@ pub fn pick_folder() -> Result<Option<String>, String> {
     let dialog = rfd::FileDialog::new()
         .set_title("Seleccionar carpeta para nueva sesión");
     let path = dialog.pick_folder();
+    Ok(path.map(|p| p.to_string_lossy().to_string()))
+}
+
+/// Abre un archivo con su programa predeterminado (asociación del SO).
+/// Best-effort: valida existencia; el spawn desacoplado no bloquea el server.
+pub fn open_default(path: &str) -> Result<serde_json::Value, String> {
+    let p = Path::new(path);
+    if !p.exists() {
+        return Err("El archivo no existe".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // `start "" <path>` usa la asociación registrada (verb open).
+        // CREATE_NO_WINDOW evita flashear una consola.
+        let mut cmd = std::process::Command::new("cmd.exe");
+        cmd.args(["/c", "start", "", path]);
+        cmd.creation_flags(0x08000000);
+        if let Some(parent) = p.parent() {
+            cmd.current_dir(parent);
+        }
+        cmd.spawn().map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "ok": true, "path": path }))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut cmd = std::process::Command::new("xdg-open");
+        cmd.arg(path);
+        if let Some(parent) = p.parent() {
+            cmd.current_dir(parent);
+        }
+        cmd.spawn().map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "ok": true, "path": path }))
+    }
+}
+
+/// Abre un archivo con un programa explícito (`app` es la ruta del ejecutable).
+/// Solo Windows valida extensión del programa; el archivo puede ser cualquiera.
+pub fn open_with(path: &str, app: &str) -> Result<serde_json::Value, String> {
+    let p = Path::new(path);
+    if !p.exists() {
+        return Err("El archivo no existe".into());
+    }
+    let a = Path::new(app);
+    if !a.exists() || !a.is_file() {
+        return Err("El programa no existe".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let ext = a.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        const ALLOWED: &[&str] = &["exe", "bat", "cmd", "com", "ps1", "lnk"];
+        if !ALLOWED.contains(&ext.as_str()) {
+            return Err(format!("extensión .{ext} no válida como programa — usa un .exe/.bat/.cmd/.lnk"));
+        }
+        let mut cmd = std::process::Command::new(a);
+        cmd.arg(path);
+        cmd.creation_flags(0x08000000);
+        if let Some(parent) = p.parent() {
+            cmd.current_dir(parent);
+        }
+        cmd.spawn().map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "ok": true, "path": path, "app": app }))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut cmd = std::process::Command::new(a);
+        cmd.arg(path);
+        if let Some(parent) = p.parent() {
+            cmd.current_dir(parent);
+        }
+        cmd.spawn().map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "ok": true, "path": path, "app": app }))
+    }
+}
+
+/// Diálogo nativo para elegir el programa (.exe) con el que abrir un archivo.
+pub fn pick_app() -> Result<Option<String>, String> {
+    let dialog = rfd::FileDialog::new()
+        .set_title("Elegir programa para abrir el archivo")
+        .add_filter("Programas", &["exe", "bat", "cmd", "lnk"]);
+    let path = dialog.pick_file();
     Ok(path.map(|p| p.to_string_lossy().to_string()))
 }
 

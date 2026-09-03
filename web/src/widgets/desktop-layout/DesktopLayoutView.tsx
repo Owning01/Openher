@@ -312,6 +312,8 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         isSplit={desktopLayout.cols * desktopLayout.rows > 1}
         onSwitchTab={onSwitchTab}
         onRemoveTab={onRemoveTab}
+        onMoveTab={onMoveTab}
+        onTransferTab={onTransferTab}
         onAddTerminal={onAddTerminal}
         onOpenBrowser={openBrowserAsTab}
       />

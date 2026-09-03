@@ -1459,7 +1459,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                     setContextMenu(null)
                     shell.fs
                       .reveal(p)
-                      .then(() => showNotice("Abierto en el Explorador"))
+                      .then((r) => showNotice(r.ok ? "Abierto en el Explorador" : "No se pudo abrir"))
                       .catch(() => showNotice("No se pudo abrir"))
                   }}
                 >

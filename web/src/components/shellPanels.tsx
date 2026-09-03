@@ -26,6 +26,14 @@ import { useDialog } from "./DialogProvider"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
 import { sanitizeHtml } from "../utils/sanitize"
+
+/** Ruta absoluta del FS (Windows `C:\…`, UNC o POSIX `/…`). El server solo
+    resuelve absolutas: un nombre pelado ("download.png" de un drop del SO o
+    de un tab persistido viejo) nunca abre y solo genera 404 en /shell/fs/*. */
+export function isAbsoluteFsPath(p: string): boolean {
+  if (p.startsWith("/") || p.startsWith("\\\\")) return true
+  return /^[a-zA-Z]:[\\/]/.test(p)
+}
 const BrowserPanel = lazy(() => import("./BrowserPanel").then((m) => ({ default: m.BrowserPanel })))
 const DocEditorPanel = lazy(() => import("./DocEditorPanel").then((m) => ({ default: m.DocEditorPanel })))
 // Visor PDF bajo demanda: chunk + worker solo se descargan al abrir un .pdf
@@ -2174,6 +2182,18 @@ export const FileEditorPanel = memo(function FileEditorPanel({
     if (!activeTab) return
     // Los PDF son binarios: los maneja PdfViewer vía /shell/fs/download, no fs.read
     if (/\.pdf$/i.test(activeTab)) return
+    // Tab con nombre pelado (drop del SO, estado persistido viejo): el server
+    // no lo resuelve — error local inmediato en vez de un 404 en consola.
+    if (!isAbsoluteFsPath(activeTab)) {
+      setFilesState((prev) => {
+        if (prev[activeTab]?.error) return prev
+        return {
+          ...prev,
+          [activeTab]: { content: "", savedContent: "", dirty: false, loading: false, error: "Ruta no válida — abrí el archivo desde el Explorador", loaded: false, saveError: null },
+        }
+      })
+      return
+    }
     let cancelled = false
     setFilesState((prev) => {
       if (!pendingReload.current.has(activeTab) && prev[activeTab] && (prev[activeTab].content || prev[activeTab].error)) return prev

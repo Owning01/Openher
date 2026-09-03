@@ -13,6 +13,14 @@ export type DevServerInfo = {
 // Global registry of running dev servers keyed by directory
 const runningServers = new Map<string, { ptyId: string; url: string; command: string; cwd: string | null }>()
 
+// Detección cacheada por directorio: el escaneo (read package.json + list)
+// es puro respecto al FS y ChatView lo monta por panel/sesión — sin caché,
+// cada cambio de sesión re-disparaba 1+N lecturas y los 404 de dirs sin
+// package.json spameaban la consola. TTL 5min por si hacen npm init.
+type DevDetection = { cmd: string; sub: string | null } | null
+const detectionCache = new Map<string, { at: number; found: DevDetection }>()
+const DETECTION_TTL_MS = 5 * 60 * 1000
+
 // Subdirectorios típicos de monorepos donde vive el package.json con scripts.dev.
 // La raíz de un monorepo suele NO tener script dev propio (ej: opencode-remote-android/web).
 const SUBDIR_PRIORITY = ["web", "app", "client", "frontend", "ui", "www", "apps/web", "packages/web"]
@@ -71,6 +79,37 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
       setServerUrl(running.url)
     }
 
+    // Cache: un montaje repetido del mismo directorio no re-escanea el FS.
+    const cached = detectionCache.get(directory)
+    if (cached && Date.now() - cached.at < DETECTION_TTL_MS) {
+      if (!running) {
+        if (cached.found) {
+          setHasDevServer(true)
+          setDevCommand(cached.found.cmd)
+          setDevCwd(cached.found.sub)
+        } else {
+          setHasDevServer(false)
+          setDevCommand(null)
+          setDevCwd(null)
+        }
+      }
+      return
+    }
+    // Un servidor en marcha manda sobre la detección del FS.
+    const commit = (found: DevDetection) => {
+      detectionCache.set(directory, { at: Date.now(), found })
+      if (runningServers.get(directory)) return
+      if (found) {
+        setHasDevServer(true)
+        setDevCommand(found.cmd)
+        setDevCwd(found.sub)
+      } else {
+        setHasDevServer(false)
+        setDevCommand(null)
+        setDevCwd(null)
+      }
+    }
+
     // Inspect directory for web dev scripts
     let cancelled = false
     const checkProject = async () => {
@@ -112,9 +151,7 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
             else if (scripts.serve) cmd = pm === "npm run" ? "npm run serve" : `${pm} serve`
 
             if (cmd) {
-              setHasDevServer(true)
-              setDevCommand(cmd)
-              setDevCwd(null)
+              commit({ cmd, sub: null })
               return
             }
           } catch {
@@ -127,15 +164,11 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
           const list = await shell.fs.list(directory)
           const fileNames = (list.files || []).map((f) => f.name.toLowerCase())
           if (fileNames.some((f) => f.startsWith("vite.config") || f === "index.html")) {
-            setHasDevServer(true)
-            setDevCommand("npx vite")
-            setDevCwd(null)
+            commit({ cmd: "npx vite", sub: null })
             return
           }
           if (fileNames.includes("trunk.toml")) {
-            setHasDevServer(true)
-            setDevCommand("trunk serve")
-            setDevCwd(null)
+            commit({ cmd: "trunk serve", sub: null })
             return
           }
         } catch {
@@ -172,9 +205,7 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
           }
           if (cancelled) return
           if (found) {
-            setHasDevServer(true)
-            setDevCommand(found.cmd)
-            setDevCwd(`${base}${sep}${found.sub}`)
+            commit({ cmd: found.cmd, sub: `${base}${sep}${found.sub}` })
             return
           }
         } catch {
@@ -182,15 +213,11 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
         }
 
         if (!running) {
-          setHasDevServer(false)
-          setDevCommand(null)
-          setDevCwd(null)
+          commit(null)
         }
       } catch {
         if (!cancelled && !running) {
-          setHasDevServer(false)
-          setDevCommand(null)
-          setDevCwd(null)
+          commit(null)
         }
       }
     }
