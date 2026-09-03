@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Header, Method, Request, Response, StatusCode};
+use tiny_http::{Header, Method, Request, Response};
 
 use crate::state::{json_err, json_ok, read_body, AppState};
 

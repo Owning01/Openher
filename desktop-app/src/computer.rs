@@ -44,6 +44,7 @@ pub struct ScreenshotResp { pub width: u32, pub height: u32, pub image: String, 
 #[derive(Deserialize, Debug)]
 pub struct BatchReq { pub actions: Vec<BatchAction>, pub screenshot: Option<ScreenshotOpts>, pub delay_ms: Option<u64>, pub verify: Option<VerifyOpts>, }
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)] // timeout_ms/etag: superficie API deserializada (BatchReq.verify), reservados para polling de verify
 pub struct VerifyOpts { pub expect_change: Option<bool>, pub timeout_ms: Option<u64>, pub etag: Option<String>, }
 #[derive(Deserialize, Debug)]
 pub struct BatchAction {
@@ -220,7 +221,7 @@ fn enigo_move(e:&mut Enigo,x:i32,y:i32)->Result<(),String>{
     let tx = (sx + jx).clamp(0, 8000);
     let ty = (sy + jy).clamp(0, 8000);
     // bezier 12 pasos con smoothstep (no linea recta, menos detectable)
-    let (mut cx, mut cy) = e.location().unwrap_or((tx, ty));
+    let (cx, cy) = e.location().unwrap_or((tx, ty));
     let steps = 12;
     for i in 1..=steps {
         let t = i as f32 / steps as f32;
@@ -330,14 +331,6 @@ pub fn list_windows(filter: Option<String>) -> Vec<(String,i32,i32,i32,i32)> {
 }
 #[cfg(not(windows))]
 pub fn list_windows(_filter: Option<String>) -> Vec<(String,i32,i32,i32,i32)> { Vec::new() }
-
-fn draw_cursor_overlay(img: &mut image::RgbaImage) {
-    // Dibuja cruz + circulo rojo en posicion actual del cursor (coordenadas pantalla -> imagen)
-    let (cx, cy) = with_enigo(|e| e.location().map_err(|er|er.to_string())).unwrap_or((0,0));
-    // Necesitamos mapear cx,cy a coords de imagen; por simplicidad solo si captura es fullscreen
-    // Se hace en screenshot_inner2 con offset conocido
-    let _ = (cx, cy, img);
-}
 
 #[cfg(windows)]
 fn detect_best_screen(screens: &[screenshots::Screen]) -> usize {
@@ -494,4 +487,3 @@ pub fn batch(req:&BatchReq)->Result<Option<ScreenshotResp>,String>{
   if let Some(opts)=&req.screenshot{ Ok(Some(screenshot_inner2(opts,None)?)) } else { Ok(None) }
 }
 pub fn screenshot_v2(opts:&ScreenshotOpts, etag:Option<String>)->Result<ScreenshotResp,String>{ screenshot_inner2(opts, etag) }
-pub fn screenshot(width: Option<u32>) -> Result<ScreenshotResp, String> { let opts = ScreenshotOpts { width, format: None, quality: None, x: None, y: None, w: None, h: None, bare: None, cursor: None, screen: None }; screenshot_inner2(&opts, None) }

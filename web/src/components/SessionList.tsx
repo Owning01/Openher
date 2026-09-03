@@ -80,14 +80,27 @@ export const SessionList = memo(function SessionList({
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
 
+  // Subagentes (parentID) fuera de las listas visibles: recientes, favoritos y proyectos
   const recentFiltered = useMemo(
-    () => recentSessions,
+    () => recentSessions.filter((s) => !s.parentID),
     [recentSessions]
   )
 
   const favoriteSessions = useMemo(
-    () => sessions.filter((s) => favorites.has(s.id)),
+    () => sessions.filter((s) => favorites.has(s.id) && !s.parentID),
     [sessions, favorites]
+  )
+
+  const visibleProjects = useMemo(
+    () => projects
+      .map(([dir, list]): [string, SessionView[]] => [dir, list.filter((s) => !s.parentID)])
+      .filter(([, list]) => list.length > 0),
+    [projects]
+  )
+
+  const visibleProjectSessions = useMemo(
+    () => projectSessions.filter((s) => !s.parentID),
+    [projectSessions]
   )
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
@@ -441,7 +454,7 @@ export const SessionList = memo(function SessionList({
       <section ref={containerRef} className="panel sessions fade-in">
         <div className="section-heading project-view-heading">
           <div className="project-heading-info">
-            <div className="project-heading-nav" onContextMenu={(e) => handleProjectContextMenu(e, selectedProjectDir, projectSessions)}>
+            <div className="project-heading-nav" onContextMenu={(e) => handleProjectContextMenu(e, selectedProjectDir, visibleProjectSessions)}>
               <button type="button" className="btn-link project-back-btn" onClick={() => onSelectProject(null)}>
                 ← {t('sessions.title')}
               </button>
@@ -451,7 +464,7 @@ export const SessionList = memo(function SessionList({
               </div>
             </div>
             <p className="subtle project-heading-count">
-              <span>{t('sessions.count', { count: projectSessions.length })}</span>
+              <span>{t('sessions.count', { count: visibleProjectSessions.length })}</span>
             </p>
           </div>
           <div className="section-actions">
@@ -472,7 +485,7 @@ export const SessionList = memo(function SessionList({
         </div>
         {notices}
         {selectionBar}
-        <div className="session-list">{renderSessionCards(projectSessions)}</div>
+        <div className="session-list">{renderSessionCards(visibleProjectSessions)}</div>
         {sessionContextMenuElement}
         {projectContextMenuElement}
       </section>
@@ -495,10 +508,10 @@ export const SessionList = memo(function SessionList({
       {notices}
       {selectionBar}
 
-      {!selectedProjectDir && !query.trim() && (favorites.size > 0 || recentSessions.length > 0) && (
+      {!selectedProjectDir && !query.trim() && (favoriteSessions.length > 0 || recentFiltered.length > 0) && (
         <div className="quick-access">
           <div className="quick-access-tabs" role="tablist" aria-label="Acceso rápido">
-            {favorites.size > 0 && sessions.some((s) => favorites.has(s.id)) && (
+            {favoriteSessions.length > 0 && (
               <button type="button" className={`quick-access-tab${!collapsedSections.favorites ? " open" : ""}`}
                 onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites}
                 aria-controls="quick-favorites" role="tab" title={t('favorites.label')}>
@@ -506,7 +519,7 @@ export const SessionList = memo(function SessionList({
                 <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}
-            {recentSessions.length > 0 && (
+            {recentFiltered.length > 0 && (
               <button type="button" className={`quick-access-tab${!collapsedSections.recent ? " open" : ""}`}
                 onClick={() => toggleSection("recent")} aria-expanded={!collapsedSections.recent}
                 aria-controls="quick-recent" role="tab" title={t('sessions.recentLabel')}>
@@ -553,20 +566,20 @@ export const SessionList = memo(function SessionList({
       )}
 
       <div className="session-list">
-        {projects.length === 0 && ['connecting', 'reconnecting'].includes(connectionState) ? (
+        {visibleProjects.length === 0 && ['connecting', 'reconnecting'].includes(connectionState) ? (
           <div className="empty-state connection-pending">
             <LoadingIcon size={40} className="icon-empty-state" />
             <p>{t('sessions.loadingTitle')}</p>
             <p className="subtle">{t('sessions.loadingHint')}</p>
           </div>
-        ) : projects.length === 0 ? (
+        ) : visibleProjects.length === 0 ? (
           <div className="empty-state">
             <FolderIcon size={48} className="icon-empty-state" />
             <p>{t('sessions.emptyTitle')}</p>
             <p className="subtle">{connectionState === "offline" ? t('sessions.offlineHint') : t('sessions.emptyHint')}</p>
           </div>
         ) : (
-          projects.map(([dir, projectSessionsList]) => {
+          visibleProjects.map(([dir, projectSessionsList]) => {
             const isExpanded = expandedProject === dir
             const { name: projName, parent: projParent } = getProjectDisplay(dir)
             return (

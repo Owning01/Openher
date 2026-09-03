@@ -257,8 +257,11 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     })
     try { await msgs.abortSession(session.id, session.directory) } catch { /* ignore */ }
     msgs.loadSelected(session.id, session.directory).catch(() => undefined)
+    // Refrescar lista de sesiones: sin esto el status "busy" optimista queda
+    // clavado y todo envío posterior se bloquea con composer.busy
+    refresh().catch(() => undefined)
     setTimeout(() => { stopGenerationRef.current = false }, 2000)
-  }, [msgs, session])
+  }, [msgs, session, refresh])
 
   const handleRevertToMessage = useCallback(async (messageID: string) => {
     try {

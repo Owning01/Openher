@@ -535,4 +535,4 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       onOpenFile={onOpenFile}
     />
   )
-}, (a, b) => a.sid === b.sid && a.active === b.active && a.tabStack === b.tabStack && a.vs?.inspectMode === b.vs?.inspectMode && a.vs?.inspectTool === b.vs?.inspectTool && a.browserTabUrls === b.browserTabUrls && a.index === b.index && a.panelId === b.panelId)
+}, (a, b) => a.sid === b.sid && a.active === b.active && a.tabStack === b.tabStack && a.vs?.inspectMode === b.vs?.inspectMode && a.vs?.inspectTool === b.vs?.inspectTool && a.browserTabUrls === b.browserTabUrls && a.index === b.index && a.panelId === b.panelId && a.baseChatProps.activeAgentID === b.baseChatProps.activeAgentID && a.baseChatProps.getModelForSession === b.baseChatProps.getModelForSession)

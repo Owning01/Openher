@@ -18,6 +18,8 @@ export default {
   'composer.dropToAdd': 'Drop to add to Agent',
   'composer.send': '傳送',
   'composer.stop': '停止',
+  'composer.busy': '請等待上一個回覆完成',
+  'composer.limitExceeded': '超出字元限制',
   'menu.title': '選單',
   'menu.settingsDescription': '設定伺服器連線',
   'menu.sessionsDescription': '管理工作階段',

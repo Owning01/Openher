@@ -35,6 +35,8 @@ export default {
   'composer.dropToAdd': 'Drop to add to Agent',
   'composer.send': 'Send',
   'composer.stop': 'Stop',
+  'composer.busy': 'Wait for the previous reply to finish',
+  'composer.limitExceeded': 'Character limit exceeded',
   'menu.title': 'Menu',
   'menu.settingsDescription': 'Configure server connection',
   'menu.sessionsDescription': 'Manage your sessions',

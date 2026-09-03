@@ -104,6 +104,11 @@
     margin: 0;
     border: none;
     box-shadow: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .load-earlier-btn {
+    min-height: 44px;
   }
 
   .bottom-nav {
@@ -232,10 +237,23 @@
   }
 
   /* Botones img/mic del composer: crecen a 44px — el textarea debe dejarles
-     espacio (padding lateral) para no tapar el texto. */
+     espacio (padding lateral) para no tapar el texto. Con mic hay dos
+     botones de 44px a la derecha (send en 3.35rem); sin mic solo uno. */
   .composer-input-wrap textarea {
-    padding-left: 3rem;
-    padding-right: 3rem;
+    padding-left: 3.4rem;
+    padding-right: 3.4rem;
+    font-size: 16px;
+  }
+
+  .composer-input-wrap.has-mic textarea {
+    padding-right: 6.4rem;
+  }
+
+  /* En táctil el send/stop con mic se desplaza lo que ocupa el mic (44px +
+     gaps): sin esto send y mic se solapan ~14px. */
+  .composer-send-btn.with-mic,
+  .composer-stop-btn.with-mic {
+    right: 3.35rem;
   }
 
   .server-profile-row,
@@ -247,6 +265,25 @@
   .quick-access-star,
   .quick-access-dismiss {
     min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Filas principales de navegación: en móvil la card de 28px es intocable. */
+  .session-card,
+  .quick-access-tab,
+  .quick-access-card,
+  .project-card {
+    min-height: 44px;
+  }
+
+  .project-quick-btn,
+  .session-checkbox {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .bottom-sheet .btn-secondary.compact,
+  .session-selection-bar button {
     min-height: 44px;
   }
 

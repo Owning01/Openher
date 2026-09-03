@@ -258,6 +258,11 @@ export function useChatActions(params: UseChatActionsParams) {
           loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
         }
         if (originalText) setComposer(originalText)
+        // Reset del busy optimista: sin esto la sesión queda clavada en busy
+        // y todo envío posterior se bloquea con composer.busy
+        setSessions((prev) =>
+          prev.map((s) => (s.id === selectedSession.id ? { ...s, status: "idle" as const } : s))
+        )
       }
       // Limpiar selección visual siempre para evitar contexto stale duplicado en reintentos
       if (hadVisualSelection) {

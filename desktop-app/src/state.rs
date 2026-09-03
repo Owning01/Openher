@@ -246,9 +246,13 @@ pub struct PersistedState {
 pub struct ExternalManager {
     pub procs: std::sync::Mutex<std::collections::HashMap<String, std::process::Child>>,
     pub urls: std::sync::Mutex<std::collections::HashMap<String, String>>,
+    /// POST /start en curso por plugin (anti-doble-spawn StrictMode/prewarm/click).
+    pub starting: std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
+    /// Instante del último spawn gestionado (gracia de boot: no tratar como zombie).
+    pub spawned_at: std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
 }
 impl ExternalManager {
-    pub fn new() -> Self { Self { procs: std::sync::Mutex::new(std::collections::HashMap::new()), urls: std::sync::Mutex::new(std::collections::HashMap::new()) } }
+    pub fn new() -> Self { Self { procs: std::sync::Mutex::new(std::collections::HashMap::new()), urls: std::sync::Mutex::new(std::collections::HashMap::new()), starting: std::sync::Mutex::new(std::collections::HashMap::new()), spawned_at: std::sync::Mutex::new(std::collections::HashMap::new()) } }
 }
 
 pub struct AppState {

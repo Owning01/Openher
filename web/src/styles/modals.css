@@ -39,7 +39,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-4);
+  padding:
+    max(var(--space-4), env(safe-area-inset-top, 0px))
+    max(var(--space-4), env(safe-area-inset-right, 0px))
+    max(var(--space-4), env(safe-area-inset-bottom, 0px))
+    max(var(--space-4), env(safe-area-inset-left, 0px));
   background: var(--modal-backdrop);
   will-change: opacity;
 }
@@ -47,6 +51,9 @@
 .modal-card {
   z-index: var(--z-modal);
   width: min(100%, 440px);
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--space-8));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -179,6 +186,7 @@
   width: min(100%, 720px);
   max-height: min(82dvh, 720px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-bottom: 0;
   border-radius: 1.25rem 1.25rem 0 0;

@@ -766,6 +766,8 @@ export const Composer = memo(function Composer({
           ref={textareaRef}
           value={localValue}
           placeholder={t('composer.placeholder') || "Ask anything, @ to mention, / for actions"}
+          enterKeyHint="send"
+          rows={1}
           onBlur={() => {
             // Contrato: al perder foco, el padre queda SIEMPRE sincronizado
             // (persistencia de draft, atajos, queue offline).

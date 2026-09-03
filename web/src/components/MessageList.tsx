@@ -168,7 +168,7 @@ export const MessageList = memo(function MessageList({
               <div style={{ textAlign: "center", padding: "8px 0" }}>
                 <button
                   type="button"
-                  className="btn-secondary compact"
+                  className="btn-secondary compact load-earlier-btn"
                   style={{ fontSize: "0.75rem", padding: "4px 14px", borderRadius: "14px" }}
                   onClick={() => setVisibleCount((prev) => prev + INITIAL_PAGE_SIZE)}
                 >

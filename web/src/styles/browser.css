@@ -341,7 +341,7 @@
 .browser-minimal .browser-viewport-container { flex: 1; min-height: 0; height: 100%; }
 .browser-minimal { background: #fff; }
 .browser-fullscreen { position: fixed !important; inset: 0 !important; z-index: 9999; background: #fff; }
-.browser-fullscreen .browser-viewport-container { height: 100vh; }
+.browser-fullscreen .browser-viewport-container { height: 100dvh; }
 
 /* Browser chrome: una sola línea de navegación, con la URL como foco visual. */
 .browser-tabbar {

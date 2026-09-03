@@ -543,7 +543,6 @@ export const ChatView = memo(function ChatView({
               }
             }}
             placeholder={t('sessions.searchPlaceholder')}
-            autoFocus
           />
           {messageQuery && (
             <>

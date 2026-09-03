@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useRef, useState, lazy, Suspense } from "
 import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
+import { Capacitor } from "@capacitor/core"
 import "@xterm/xterm/css/xterm.css"
 import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
@@ -91,6 +92,69 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(el)
+
+    // Links clicables (http/https): xterm no trae detector propio, se registra
+    // uno sin deps extra. provideLinks recibe y en base 1 → getLine(y-1); los
+    // rangos también son 1-based. Une líneas wrapped para URLs largas.
+    const openTerminalLink = (url: string) => {
+      let proto = ""
+      try { proto = new URL(url).protocol } catch { return }
+      if (proto !== "http:" && proto !== "https:") return
+      try {
+        if (Capacitor.isNativePlatform()) window.open(url, "_system")
+        else window.open(url, "_blank", "noopener,noreferrer")
+      } catch { /* ignore */ }
+    }
+    const linkProviderDisposable = term.registerLinkProvider({
+      provideLinks(bufferLineNumber, callback) {
+        try {
+          const buf = term.buffer.active
+          const cols = term.cols || 80
+          let startRow = bufferLineNumber - 1
+          for (let i = 0; i < 5 && startRow > 0; i++) {
+            const l = buf.getLine(startRow)
+            if (!l || !l.isWrapped) break
+            startRow--
+          }
+          const parts: string[] = []
+          let row = startRow
+          for (let i = 0; i < 6; i++) {
+            const l = buf.getLine(row)
+            if (!l) break
+            parts.push(l.translateToString(true))
+            const next = buf.getLine(row + 1)
+            row++
+            if (!next || !next.isWrapped) break
+          }
+          const full = parts.join("")
+          if (full.indexOf("http") === -1) { callback(undefined); return }
+          const links: Array<{
+            range: { start: { x: number; y: number }; end: { x: number; y: number } }
+            text: string
+            activate: (event: MouseEvent, text: string) => void
+          }> = []
+          const re = /https?:\/\/[^\s<>"'`\]]+/g
+          let m: RegExpExecArray | null
+          while ((m = re.exec(full)) !== null) {
+            const url = m[0].replace(/[.,;:!?)\]]+$/, "")
+            if (url.length < 9) continue
+            const s = m.index
+            const e = s + url.length
+            links.push({
+              range: {
+                start: { x: (s % cols) + 1, y: startRow + Math.floor(s / cols) + 1 },
+                end: { x: (e % cols) + 1, y: startRow + Math.floor(e / cols) + 1 },
+              },
+              text: url,
+              activate: (_event, text) => openTerminalLink(text || url),
+            })
+          }
+          callback(links.length ? links : undefined)
+        } catch {
+          callback(undefined)
+        }
+      },
+    })
 
     // Renderer por GPU: WebGL preferido; fallback a DOM (Canvas addon es opcional y no está instalado
     // por compatibilidad con @xterm/xterm@6 — su peer es ^5). DOM + cola optimizada ya rinde para opencode.
@@ -604,6 +668,7 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
       try { dprQuery?.removeEventListener?.("change", onDprChange as any) } catch {}
       ro.disconnect()
       onData.dispose()
+      try { linkProviderDisposable.dispose() } catch { /* ignore */ }
       try {
         ws?.close()
       } catch {

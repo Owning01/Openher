@@ -133,6 +133,45 @@ function previewLines(text: string, maxLines = 5): string {
   return lines.slice(0, maxLines).join("\n") + "\n..."
 }
 
+// Trunca en límite de palabra: evita cortar a mitad ("Unicod...").
+// Si no hay espacio antes del límite, cae al corte duro.
+function truncateAtWord(s: string, max: number): string {
+  if (s.length <= max) return s
+  const cut = s.slice(0, max - 3)
+  const lastSpace = cut.lastIndexOf(" ")
+  if (lastSpace > max * 0.5) return cut.slice(0, lastSpace) + "..."
+  return cut + "..."
+}
+
+// Oportunidades de quiebre en rutas Windows: el navegador no parte por "\",
+// así que una ruta larga se desborda o parte a mitad de palabra ("abso/luto").
+// El zero-width space tras cada separador deja partir ahí sin cambiar el texto
+// visible ni el copiado.
+function withBreakOpportunities(s: string): string {
+  return s.replace(/([\\/])/g, "$1\u200b")
+}
+
+// El error del tool vive en state.error, no en state.output. Sin esto, un tool
+// fallido mostraba el input repetido en vez del motivo del fallo.
+function formatStateError(err: unknown): string {
+  if (err == null) return ""
+  if (typeof err === "string") return err
+  if (err instanceof Error) return err.message || String(err)
+  if (typeof err === "object") {
+    const o = err as Record<string, unknown>
+    const parts: string[] = []
+    if (typeof o.message === "string" && o.message) parts.push(o.message)
+    else if (typeof o.error === "string" && o.error) parts.push(o.error)
+    else if (typeof o.text === "string" && o.text) parts.push(o.text)
+    for (const k of ["code", "name", "exitCode", "exit_code"]) {
+      if (o[k] != null && o[k] !== "" && typeof o[k] !== "object") parts.push(`${k}: ${String(o[k])}`)
+    }
+    if (parts.length) return parts.join("\n")
+    try { return JSON.stringify(err, null, 2) } catch { return String(err) }
+  }
+  return String(err)
+}
+
 function shortToolLabel(tool: string): string {
   if (tool === "bash" || tool === "execute" || tool === "shell" || tool === "terminal") return "SHELL"
   if (tool === "read" || tool === "readFile") return "READ"
@@ -169,8 +208,12 @@ function formatInput(input: unknown, baseDir?: string): string {
       if (v == null || v === false) continue
       if (v === true) { lines.push(k); continue }
       if (typeof v === "string") {
-        const displayV = (k === "filePath" || k === "file" || k === "path" || k === "filepath" || k === "workdir" || k === "directory") && baseDir ? toRelativePath(v, baseDir) : v
-        lines.push(displayV.includes("\n") ? `${k}:\n${displayV}` : `${k}: ${displayV}`); continue }
+        const isPathKey = k === "filePath" || k === "file" || k === "path" || k === "filepath" || k === "workdir" || k === "directory" || k === "AbsolutePath" || k === "TargetFile"
+        const displayV = isPathKey && baseDir ? toRelativePath(v, baseDir) : v
+        // ZWSP tras separadores para que las rutas largas partan por "\" o "/"
+        // en vez de a mitad de palabra dentro del <pre>.
+        const wrappedV = isPathKey ? withBreakOpportunities(displayV) : displayV
+        lines.push(wrappedV.includes("\n") ? `${k}:\n${wrappedV}` : `${k}: ${wrappedV}`); continue }
       if (Array.isArray(v)) {
         const items = v.map((x: unknown) => typeof x === "string" ? x : JSON.stringify(x)).join(", ")
         lines.push(`${k}: ${items}`)
@@ -552,29 +595,61 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
   }
 
   // ---- Question tool (interactive) ----
-  if ((part.type === "tool_use" || toolName === "question") && isQuestionTool(text ?? "")) {
-    const rawQuestions = extractJSONParam(text ?? "", "questions")
-    const answerData = extractJSONParam(text ?? "", "answers")
-    const callID = extractParam(text ?? "", "callID") || text?.match(/callID="([^"]+)"/)?.[1] || part.callID || part.id
-    const questions = Array.isArray(rawQuestions) ? rawQuestions.filter((q: any) => q?.question) : []
+  // El server actual manda el input como objeto (state.input.questions), no
+  // como XML <invoke>/<parameter>. Soportar ambas formas; si no, el part cae
+  // al render genérico y se ve el JSON crudo (bug reportado).
+  {
+    const inputObj = part.state?.input as { questions?: unknown; answers?: unknown } | undefined
+    const inputQuestions = Array.isArray(inputObj?.questions) ? (inputObj.questions as any[]) : null
+    const isQuestionByTool = toolName === "question"
+    const isQuestionByInput = inputQuestions !== null
+    const isQuestionByXml = isQuestionTool(text ?? "")
+    if ((part.type === "tool_use" || part.type === "tool" || isQuestionByTool) && (isQuestionByTool || isQuestionByInput || isQuestionByXml)) {
+      const rawQuestions = inputQuestions ?? extractJSONParam(text ?? "", "questions")
+      const answerData = (inputObj as { answers?: unknown } | undefined)?.answers
+        ?? extractJSONParam(text ?? "", "answers")
+        ?? (part.state?.output != null && typeof part.state.output === "object"
+          ? (part.state.output as Record<string, unknown>).answers ?? null
+          : null)
+      // Respondida = el tool ya completó o trae respuestas no vacías.
+      const hasAnswers = answerData != null && answerData !== false
+        && !(Array.isArray(answerData) && answerData.length === 0)
+      const answered = isDone || hasAnswers
+      const callID = extractParam(text ?? "", "callID") || text?.match(/callID="([^"]+)"/)?.[1] || part.callID || part.id
+      const questions = Array.isArray(rawQuestions) ? rawQuestions.filter((q: any) => q?.question) : []
 
-    if (questions.length > 0 && !answerData) {
-      return (
-        <QuestionPrompt
-          questions={questions.map((q: any) => ({
-            header: q.header || q.question.slice(0, 30),
-            question: q.question,
-            options: Array.isArray(q.options) ? q.options : [],
-            multiple: q.multiple === true,
-            custom: q.custom !== false,
-          }))}
-          requestID={callID}
-          config={config!}
-          directory={directory}
-          sessionID={part.sessionID}
-          onDone={() => {}}
-        />
-      )
+      if (questions.length > 0 && !answered) {
+        return (
+          <QuestionPrompt
+            questions={questions.map((q: any) => ({
+              header: q.header || q.question.slice(0, 30),
+              question: q.question,
+              options: Array.isArray(q.options) ? q.options : [],
+              multiple: q.multiple === true,
+              custom: q.custom !== false,
+            }))}
+            requestID={callID}
+            config={config!}
+            directory={directory}
+            sessionID={part.sessionID}
+            onDone={() => {}}
+          />
+        )
+      }
+      if (questions.length > 0 && answered) {
+        const ansText = Array.isArray(answerData)
+          ? answerData.map((a: unknown) => Array.isArray(a) ? a.join(", ") : String(a)).join(" · ")
+          : typeof answerData === "string" ? answerData : ""
+        return (
+          <div className="tool-part tool-question answered">
+            <span className="tool-part-verb">Asked</span>
+            <span className="tool-part-target">
+              <span className="tool-target-text">{questions[0]?.question ?? "question"}</span>
+              {ansText && <span className="tool-target-meta">{ansText.slice(0, 120)}</span>}
+            </span>
+          </div>
+        )
+      }
     }
   }
 
@@ -597,9 +672,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     if (isShellTool || norm.includes("command") || norm.includes("bash") || norm.includes("shell") || norm.includes("execute")) {
       const cmd = bashCommand || inputObj?.CommandLine || inputObj?.command || inputText
       let displayCmd = typeof cmd === "string" ? cmd.replace(/[\r\n]+/g, " ").trim() : "command"
-      if (displayCmd.length > 95) {
-        displayCmd = displayCmd.slice(0, 92) + "..."
-      }
+      displayCmd = truncateAtWord(displayCmd, 95)
       return {
         verb: "Ran",
         icon: null,
@@ -642,7 +715,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
         icon: getAntigravityFileIcon(fileName),
         target: (
           <>
-            <span className="tool-target-text">{fileName}</span>
+            <span className="tool-target-text" title={typeof rawPath === "string" ? rawPath : undefined}>{fileName}</span>
             {lineTag && <span className="tool-target-line">{lineTag}</span>}
           </>
         ),
@@ -695,7 +768,11 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     }
   }, [toolName, isShellTool, bashCommand, inputText, outputText, diffPath, fileDiff, subtitle, part.state?.input])
 
-  const body = (isDone && outputText) ? outputText : inputText
+  // El error vive en state.error, no en state.output: si el tool falló, el
+  // cuerpo debe mostrar el motivo, no el input repetido.
+  const errorText = useMemo(() => formatStateError(part.state?.error), [part.state?.error])
+
+  const body = errorText || ((isDone && outputText) ? outputText : inputText)
 
   return (
     <div className={`tool-part tool-${toolName ?? "unknown"}${isWorking ? " working" : ""}${isError ? " error" : ""}`}>
@@ -704,6 +781,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
         className="tool-part-toggle"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
+        title={isError && errorText ? errorText.slice(0, 300) : undefined}
       >
         <span className="tool-part-verb">{antigravityInfo.verb}</span>
         {antigravityInfo.icon && <span className="tool-part-icon">{antigravityInfo.icon}</span>}
@@ -717,7 +795,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
           {fileDiff?.patch ? (
             <DiffView patch={fileDiff.patch} />
           ) : (
-            <pre className="tool-part-pre">{previewLines(body, 60)}</pre>
+            <pre className={`tool-part-pre${isError && errorText ? " tool-part-error-text" : ""}`}>{previewLines(body, 60)}</pre>
           )}
         </div>
       ) : null}

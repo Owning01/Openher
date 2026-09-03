@@ -991,13 +991,12 @@ fn main() {
                     Prewarm { name: "opendesign", dir: r"G:\Proyectos\open-design", port: 3000, prod_check: None, dev_cmd: r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\open-design\tools\dev\bin\tools-dev.mjs" start web --web-port 3000 --daemon-port 3456"#, prod_cmd: None },
                     Prewarm { name: "screenshots", dir: r"G:\Proyectos\0 screenshots", port: 3002, prod_check: Some(r".next\BUILD_ID"), dev_cmd: r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" dev -p 3002 -H 127.0.0.1"#, prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" start -p 3002 -H 127.0.0.1"#) },
                     Prewarm { name: "vioeditor", dir: r"G:\Proyectos\17-vioeditor\aplicacion", port: 1420, prod_check: Some(r"dist\index.html"), dev_cmd: "pnpm exec vite --port 1420 --host 127.0.0.1 --strictPort false", prod_cmd: Some("pnpm exec vite preview --port 1420 --host 127.0.0.1 --strictPort") },
-                    Prewarm { name: "informes", dir: r"G:\Proyectos\53plataforma-informes", port: 5174, prod_check: Some(r"dist\index.html"), dev_cmd: "pnpm exec vite --port 5174 --host 127.0.0.1", prod_cmd: Some("pnpm exec vite preview --port 5174 --host 127.0.0.1") },
                 ];
                 for (idx, p) in list.iter().enumerate() {
                     let delay = if idx == 0 { 2500 } else { 2500 + (idx as u64) * 2200 };
                     std::thread::sleep(Duration::from_millis(delay - if idx>0 { 2500 + ((idx as u64)-1)*2200 } else {0}));
                     // Vite embed: si dist/index.html existe, no spawnear Node, usar mmap 0ms
-                    if (p.name == "vioeditor" || p.name == "informes") && PathBuf::from(p.dir).join("dist").join("index.html").exists() {
+                    if p.name == "vioeditor" && PathBuf::from(p.dir).join("dist").join("index.html").exists() {
                         eprintln!("opencode-desktop: prewarm {} embed static (mmap, sin Node) :{}", p.name, p.port);
                         app_state_clone.external.urls.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), format!("http://127.0.0.1:{}/shell/external/{}/embed/", app_state_clone.port, p.name));
                         continue;
@@ -1055,6 +1054,7 @@ fn main() {
                             let pid = child.id();
                             eprintln!("opencode-desktop: prewarm {} pid={pid} :{}", p.name, p.port);
                             app_state_clone.external.procs.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), child);
+                            app_state_clone.external.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), std::time::Instant::now());
                             app_state_clone.external.urls.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), format!("http://127.0.0.1:{}", p.port));
                         }
                         Err(e) => eprintln!("opencode-desktop: prewarm {} fallo {e}", p.name),

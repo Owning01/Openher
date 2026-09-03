@@ -21,6 +21,8 @@ type TranslationKey =
   | 'composer.dropToAdd'
   | 'composer.send'
   | 'composer.stop'
+  | 'composer.busy'
+  | 'composer.limitExceeded'
   | 'settings.serverStats'
   | 'stats.title'
   | 'stats.refresh'

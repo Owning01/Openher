@@ -553,7 +553,7 @@
 }
 
 /* Mobile responsiveness */
-@media (max-width: 768px) {
+@media (max-width: 780px) {
   .pcf-header {
     padding: 12px 14px;
   }

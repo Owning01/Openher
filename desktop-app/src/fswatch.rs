@@ -13,10 +13,12 @@ pub struct FsWatcher {
     watcher: Mutex<Option<notify::RecommendedWatcher>>,
     watched: Mutex<HashMap<PathBuf, bool>>,
     tx: crossbeam_channel::Sender<FsEvent>,
+    #[allow(dead_code)] // se conserva para no cerrar el canal (sin receivers, tx.send falla)
     rx: crossbeam_channel::Receiver<FsEvent>,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // kernel watcher: path/kind se consumen vía polling SSE (try_recv/recv_timeout)
 pub struct FsEvent {
     pub path: PathBuf,
     pub kind: String,
@@ -77,6 +79,7 @@ impl FsWatcher {
         }
     }
 
+    #[allow(dead_code)] // API de limpieza para cuando el proyecto se cierra/elimina
     pub fn unwatch_dir(self: &Arc<Self>, dir: &Path) {
         if let Some(w) = self.watcher.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
             let _ = w.unwatch(dir);
@@ -85,11 +88,13 @@ impl FsWatcher {
     }
 
     /// Poll no bloqueante para integrar en SSE loop si se desea
+    #[allow(dead_code)]
     pub fn try_recv(&self) -> Option<FsEvent> {
         self.rx.try_recv().ok()
     }
 
     /// Bloqueante con timeout para thread dedicado
+    #[allow(dead_code)]
     pub fn recv_timeout(&self, dur: Duration) -> Option<FsEvent> {
         self.rx.recv_timeout(dur).ok()
     }

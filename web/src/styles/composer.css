@@ -176,7 +176,7 @@
 }
 
 .composer-send-btn {
-  right: 2.2rem;
+  right: 0.3rem;
   color: var(--primary);
 }
 
@@ -194,7 +194,7 @@
 }
 
 .composer-stop-btn {
-  right: 2.2rem;
+  right: 0.3rem;
   color: var(--danger);
 }
 

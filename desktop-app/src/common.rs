@@ -53,6 +53,7 @@ pub fn spawn_detached(cmd: &str, cwd: Option<&Path>) -> Result<Child, String> {
 
 /// Spawn visible: abre una consola (CREATE_NEW_CONSOLE) para procesos interactivos como `opencode2`.
 /// Si `auto_minimized` es false, la ventana es visible; si el exe es .bat, usa `cmd /c start`.
+#[allow(dead_code)] // helper intencional para lanzar procesos interactivos con consola visible
 pub fn spawn_visible(cmd: &str, cwd: Option<&Path>) -> Result<Child, String> {
     use std::os::windows::process::CommandExt;
     const VISIBLE: u32 = 0x00000010 | 0x00000200; // CREATE_NEW_CONSOLE | CREATE_NEW_PROCESS_GROUP
