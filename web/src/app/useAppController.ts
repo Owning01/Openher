@@ -408,6 +408,20 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setConnectionMessage
   )
 
+  // Borrar/archivar la sesión abierta no debe dejar un chat huérfano
+  // (mensajes visibles sin composer): se limpia el estado de mensajes.
+  const clearSelectedChat = useCallback(() => {
+    clearSession()
+    clearSidecar()
+    setLocalRevertID(null)
+  }, [clearSession, clearSidecar])
+
+  const handleDeleteSession = useCallback(async (id: string) => {
+    const wasSelected = id === selectedID
+    await deleteSession(id)
+    if (wasSelected) clearSelectedChat()
+  }, [deleteSession, selectedID, clearSelectedChat])
+
   const {
     setDesktopState,
     desktopLayout,
@@ -496,6 +510,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setSessions: (updater) => setSessions(updater as any),
     selectedID,
     setSelectedID,
+    onClearSelected: clearSelectedChat,
     refreshSessions,
     recordSessionCreated,
     navigate,
@@ -1316,7 +1331,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     cancelRename,
     setSessionToDelete,
     sessionToDelete,
-    deleteSession,
+    deleteSession: handleDeleteSession,
     dismissRecent,
     handleCreateSession,
     handleOpenExplorer,

@@ -13,6 +13,8 @@ export type UseHostActionsParams = {
   setSessions: (updater: (prev: SessionView[]) => SessionView[]) => void
   selectedID: string | null
   setSelectedID: (id: string | null) => void
+  /** Limpia mensajes/sidecar de la vista móvil al borrar/archivar la abierta. */
+  onClearSelected?: () => void
   refreshSessions: (force?: boolean) => Promise<any>
   recordSessionCreated: () => void
   navigate: (view: any) => void
@@ -36,6 +38,7 @@ export function useHostActions({
   setSessions,
   selectedID,
   setSelectedID,
+  onClearSelected,
   refreshSessions,
   recordSessionCreated,
   navigate,
@@ -102,10 +105,13 @@ export function useHostActions({
         const s = sessions.find((x) => x.id === id)
         await api.deleteSession(config, id, s?.directory).catch(() => undefined)
       }
-      if (selectedID && ids.includes(selectedID)) setSelectedID(null)
+      if (selectedID && ids.includes(selectedID)) {
+        setSelectedID(null)
+        onClearSelected?.()
+      }
       await refreshSessions(true).catch(() => undefined)
     },
-    [sessions, config, selectedID, refreshSessions, setSelectedID]
+    [sessions, config, selectedID, refreshSessions, setSelectedID, onClearSelected]
   )
 
   const handleArchiveMany = useCallback(
@@ -115,9 +121,13 @@ export function useHostActions({
         const s = sessions.find((x) => x.id === id)
         if (s) await api.sendCommand(config, id, "/archive", "", s.directory).catch(() => undefined)
       }
+      if (selectedID && ids.includes(selectedID)) {
+        setSelectedID(null)
+        onClearSelected?.()
+      }
       await refreshSessions(true).catch(() => undefined)
     },
-    [sessions, config, refreshSessions]
+    [sessions, config, selectedID, setSelectedID, onClearSelected, refreshSessions]
   )
 
   const openSessionInDir = useCallback(
