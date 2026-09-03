@@ -1,0 +1,178 @@
+/* LiteEditor — overlay textarea transparente sobre pre con highlight.
+   Misma métrica en ambas capas: si se toca font/padding/line-height/tab-size,
+   cambiar en .liteed-hl Y .liteed-input a la vez o el caret se desincroniza. */
+.liteed-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  min-height: 26px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.liteed-toolbar::-webkit-scrollbar { display: none; }
+.liteed-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.liteed-btn:hover { color: var(--text); background: var(--surface-hover); }
+.liteed-btn.active { color: var(--primary); border-color: var(--primary-soft); background: var(--primary-ghost); }
+.liteed-plain {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 5px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+.liteed-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  background: var(--surface);
+}
+.liteed-gutter {
+  flex-shrink: 0;
+  width: 44px;
+  overflow: hidden;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  user-select: none;
+  position: relative;
+}
+.liteed-gutter-inner {
+  padding: 10px 6px 10px 0;
+  text-align: right;
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  color: var(--muted);
+  opacity: 0.75;
+  white-space: pre;
+  will-change: transform;
+}
+.liteed-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  position: relative;
+}
+/* Stack grid: pre y textarea comparten celda; el pre (en flujo) define el
+   tamaño, el textarea se estira a la celda. Sin JS de medición. */
+.liteed-stack {
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+}
+.liteed-stack.is-wrap { width: 100%; }
+.liteed-hl, .liteed-input {
+  grid-area: 1 / 1;
+  margin: 0;
+  border: none;
+  outline: none;
+  box-sizing: border-box;
+  min-height: 100%;
+}
+.liteed-hl {
+  pointer-events: none;
+  background: transparent;
+  color: var(--text);
+}
+.liteed-hl code { font: inherit; background: transparent; }
+.liteed-input {
+  resize: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--primary);
+  overflow: hidden;
+}
+.liteed-input::selection {
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
+  color: transparent;
+}
+/* Sin highlight (plano o plaintext): el textarea sigue transparente; el pre
+   pinta el texto base para que siempre haya tinta bajo el caret. */
+.liteed-hl:not(.has-hl) { color: var(--text); }
+/* Tokens lowlight reutilizan la paleta hljs global del chat */
+.liteed-hl .hljs-keyword, .liteed-hl .hljs-selector-tag { color: #c678dd; }
+.liteed-hl .hljs-string, .liteed-hl .hljs-regexp { color: #98c379; }
+.liteed-hl .hljs-number, .liteed-hl .hljs-literal { color: #d19a66; }
+.liteed-hl .hljs-comment, .liteed-hl .hljs-quote { color: var(--muted); font-style: italic; }
+.liteed-hl .hljs-title, .liteed-hl .hljs-title-function_ { color: #61afef; }
+.liteed-hl .hljs-built_in, .liteed-hl .hljs-type { color: #e5c07b; }
+.liteed-hl .hljs-attr, .liteed-hl .hljs-attribute, .liteed-hl .hljs-variable { color: #56b6c2; }
+.liteed-hl .hljs-operator, .liteed-hl .hljs-punctuation { color: var(--text); }
+.liteed-find, .liteed-goto {
+  position: absolute;
+  top: 34px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 5;
+  max-width: min(420px, 90%);
+  flex-wrap: wrap;
+}
+.liteed-find-input {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.78rem;
+  padding: 5px 8px;
+  outline: none;
+  min-width: 140px;
+  flex: 1;
+}
+.liteed-find-input:focus { border-color: var(--primary); }
+.liteed-count { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+.liteed-replace-row { display: flex; align-items: center; gap: 4px; flex-basis: 100%; }
+.liteed-palette {
+  position: absolute;
+  top: 34px;
+  left: 56px;
+  width: min(420px, 90%);
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 5;
+}
+.liteed-palette-list { max-height: 260px; overflow-y: auto; margin-top: 4px; }
+.liteed-palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.78rem;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.liteed-palette-item:hover { background: var(--surface-hover); }
+.liteed-hint { font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
+.liteed-empty { padding: 10px; font-size: 0.75rem; color: var(--muted); text-align: center; }

@@ -10,6 +10,8 @@ import "@xterm/xterm/css/xterm.css"
 import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
 import { VisualSelectOverlay } from "./VisualSelectOverlay"
+import { LiteEditor } from "./LiteEditor"
+import { toBase64Chunked } from "../utils/editorOps"
 import { ContextMenu } from "./ContextMenu"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { useDevServer } from "../hooks/useDevServer"
@@ -2075,6 +2077,10 @@ export const FileEditorPanel = memo(function FileEditorPanel({
   }, [isControlled, controlledTabs])
   const [filesState, setFilesState] = useState<Record<string, { content: string; dirty: boolean; loading: boolean; error: string | null }>>({})
   const [saving, setSaving] = useState(false)
+  const [cursor, setCursor] = useState({ line: 1, col: 1 })
+  useEffect(() => {
+    setCursor({ line: 1, col: 1 })
+  }, [activeTab])
   // .md abre en vista previa por defecto; resto de archivos en dividido
   const [mdViewMode, setMdViewMode] = useState<"edit" | "preview" | "split">(() =>
     /\.(md|markdown|mdown|mkd)$/i.test(initialPath) ? "preview" : "split"
@@ -2131,7 +2137,8 @@ export const FileEditorPanel = memo(function FileEditorPanel({
     const current = filesState[activeTab]
     setSaving(true)
     try {
-      const b64 = btoa(unescape(encodeURIComponent(current.content)))
+      // Base64 por chunks: evita el pico de RAM de btoa(unescape(encodeURIComponent()))
+      const b64 = toBase64Chunked(current.content)
       await shell.fs.write(activeTab, b64)
       setFilesState((prev) => ({
         ...prev,
@@ -2146,6 +2153,13 @@ export const FileEditorPanel = memo(function FileEditorPanel({
       setSaving(false)
     }
   }, [activeTab, filesState, saving])
+
+  const handleContentChange = useCallback((val: string) => {
+    setFilesState((prev) => ({
+      ...prev,
+      [activeTab]: { ...(prev[activeTab] || { loading: false, error: null }), content: val, dirty: true },
+    }))
+  }, [activeTab])
 
   // Autoguardado con debounce de 1000ms al detectar modificaciones
   useEffect(() => {
@@ -2297,39 +2311,13 @@ export const FileEditorPanel = memo(function FileEditorPanel({
         ) : isMarkdown && mdViewMode === "split" ? (
           <div style={{ flex: 1, display: "flex", minHeight: 0, width: "100%" }}>
             <div style={{ flex: 1, minWidth: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
-              <textarea
-                data-vs-path={activeTab}
-                className="file-editor-textarea"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  boxSizing: "border-box",
-                  border: "none",
-                  outline: "none",
-                  resize: "none",
-                  background: "var(--surface)",
-                  color: "var(--text)",
-                  fontFamily: "Consolas, 'Cascadia Mono', monospace",
-                  fontSize: "13px",
-                  lineHeight: 1.5,
-                  padding: "10px",
-                  tabSize: 2,
-                }}
+              <LiteEditor
+                path={activeTab}
                 value={activeFile?.content ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value
-                  setFilesState((prev) => ({
-                    ...prev,
-                    [activeTab]: { ...(prev[activeTab] || { loading: false, error: null }), content: val, dirty: true },
-                  }))
-                }}
-                onKeyDown={(e) => {
-                  if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-                    e.preventDefault()
-                    handleSave()
-                  }
-                }}
-                spellCheck={false}
+                onChange={handleContentChange}
+                onSave={() => void handleSave()}
+                onCursor={setCursor}
+                vsPath={activeTab}
               />
             </div>
             <div className="markdown-body message-content" style={{ flex: 1, minWidth: 0, padding: "16px 20px", overflowY: "auto", background: "var(--surface-subtle)" }}>
@@ -2337,39 +2325,13 @@ export const FileEditorPanel = memo(function FileEditorPanel({
             </div>
           </div>
         ) : (
-          <textarea
-            data-vs-path={activeTab}
-            className="file-editor-textarea"
-            style={{
-              width: "100%",
-              height: "100%",
-              boxSizing: "border-box",
-              border: "none",
-              outline: "none",
-              resize: "none",
-              background: "var(--surface)",
-              color: "var(--text)",
-              fontFamily: "Consolas, 'Cascadia Mono', monospace",
-              fontSize: "13px",
-              lineHeight: 1.5,
-              padding: "10px",
-              tabSize: 2,
-            }}
+          <LiteEditor
+            path={activeTab}
             value={activeFile?.content ?? ""}
-            onChange={(e) => {
-              const val = e.target.value
-              setFilesState((prev) => ({
-                ...prev,
-                [activeTab]: { ...(prev[activeTab] || { loading: false, error: null }), content: val, dirty: true },
-              }))
-            }}
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-                e.preventDefault()
-                handleSave()
-              }
-            }}
-            spellCheck={false}
+            onChange={handleContentChange}
+            onSave={() => void handleSave()}
+            onCursor={setCursor}
+            vsPath={activeTab}
           />
         )}
       </div>
@@ -2379,6 +2341,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
           <span>{saving ? "Guardando..." : activeFile?.dirty ? "● Modificado" : " Guardado"}</span>
           {ext && <span style={{ textTransform: "uppercase" }}>{ext}</span>}
+          <span>Ln {cursor.line}, Col {cursor.col}</span>
           <span>{lineCount} líneas</span>
           <span>{charCount} caracs</span>
           <span>Ctrl+S</span>
