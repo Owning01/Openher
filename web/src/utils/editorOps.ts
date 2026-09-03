@@ -50,9 +50,9 @@ export function hastToHtml(nodes: HastNode[] | undefined): string {
 // comentarios correctos por extensión para el toggle de comentario.
 export function commentPrefixFor(path: string): string {
   const ext = (path.split(".").pop() || "").toLowerCase()
-  if (["py", "pyw", "sh", "bash", "zsh", "yml", "yaml", "toml", "ini", "cfg", "rb", "pl", "r", "dockerfile", "mk", "makefile"].includes(ext)) return "#"
+  if (["py", "pyw", "sh", "bash", "zsh", "yml", "yaml", "toml", "ini", "cfg", "rb", "pl", "r", "ps1", "dockerfile", "mk", "makefile"].includes(ext)) return "#"
   if (["sql", "lua", "adb", "ads"].includes(ext)) return "--"
-  if (["vim", "asm", "s", "ini"].includes(ext)) return ";"
+  if (["vim", "asm", "s"].includes(ext)) return ";"
   return "//"
 }
 
@@ -325,11 +325,11 @@ export function findNext(
 const OPENERS = "([{"
 const CLOSERS = ")]}"
 const MATCH: Record<string, string> = { "(": ")", "[": "]", "{": "}" }
-const RMATCH: Record<string, string> = { ")": "(", "]": "[", "}": "{" }
 
-// Paréntesis pareja del caret (revisa char previo y actual). Escaneo lineal con
-// tope: O(n) acotado, sin parser. Dentro de strings/comentarios puede fallar:
-// tradeoff documentado, igual que el resaltado por regex.
+// Paréntesis pareja del caret (revisa char previo y actual). Escaneo con stack:
+// valida tipos cruzados (([)] no empareja) y corta ante mismatch. Topeado.
+// Limitado a ()[]{} deliberadamente: dentro de strings/comentarios puede
+// fallar (tradeoff documentado, igual que el resaltado por regex).
 export function findMatchingBracket(
   text: string,
   caret: number,
@@ -340,22 +340,30 @@ export function findMatchingBracket(
     if (pos < 0 || pos >= text.length) continue
     const ch = text[pos]
     if (OPENERS.includes(ch)) {
-      const want = MATCH[ch]
-      let depth = 0
+      const stack = [ch]
       const end = Math.min(text.length, pos + maxScan)
-      for (let i = pos; i < end; i++) {
-        if (text[i] === ch) depth++
-        else if (text[i] === want && --depth === 0) return { open: pos, close: i }
+      for (let i = pos + 1; i < end; i++) {
+        const c = text[i]
+        if (OPENERS.includes(c)) stack.push(c)
+        else if (CLOSERS.includes(c)) {
+          if (MATCH[stack[stack.length - 1]] !== c) return null
+          stack.pop()
+          if (stack.length === 0) return { open: pos, close: i }
+        }
       }
       return null
     }
     if (CLOSERS.includes(ch)) {
-      const want = RMATCH[ch]
-      let depth = 0
+      const stack = [ch]
       const start = Math.max(0, pos - maxScan)
-      for (let i = pos; i >= start; i--) {
-        if (text[i] === ch) depth++
-        else if (text[i] === want && --depth === 0) return { open: i, close: pos }
+      for (let i = pos - 1; i >= start; i--) {
+        const c = text[i]
+        if (CLOSERS.includes(c)) stack.push(c)
+        else if (OPENERS.includes(c)) {
+          if (MATCH[c] !== stack[stack.length - 1]) return null
+          stack.pop()
+          if (stack.length === 0) return { open: i, close: pos }
+        }
       }
       return null
     }
@@ -392,18 +400,22 @@ export type TextEdit = { start: number; end: number; insert: string }
 
 // Aplica N ediciones de una vez (multi-cursor): orden descendente para no
 // invalidar offsets. Ediciones solapadas: gana la de mayor offset.
-export function applyEdits(text: string, edits: TextEdit[]): string {
+// Devuelve el texto y las ediciones aplicadas (misma referencia de objeto)
+// para que el caller recalcule carets solo sobre lo que entró.
+export function applyEdits(text: string, edits: TextEdit[]): { text: string; applied: TextEdit[] } {
   const sorted = [...edits].sort((a, b) => b.start - a.start)
   let out = text
   let guard = -1
+  const applied: TextEdit[] = []
   for (const e of sorted) {
     const s = Math.max(0, Math.min(e.start, out.length))
     const en = Math.max(s, Math.min(e.end, out.length))
     if (guard !== -1 && en > guard) continue
     out = out.slice(0, s) + e.insert + out.slice(en)
     guard = s
+    applied.push(e)
   }
-  return out
+  return { text: out, applied }
 }
 
 export type DiffLine = { t: " " | "-" | "+"; text: string }

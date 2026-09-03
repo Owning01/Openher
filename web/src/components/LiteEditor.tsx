@@ -84,7 +84,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   const [extraCursors, setExtraCursors] = useState<number[]>([])
   const [bracket, setBracket] = useState<{ open: number; close: number } | null>(null)
   const [marks, setMarks] = useState<Array<{ top: number; left: number; height: number; kind: "caret" | "bracket" }>>([])
-  const [complete, setComplete] = useState<{ items: string[]; start: number } | null>(null)
+  const [complete, setComplete] = useState<{ items: string[]; start: number; active: number } | null>(null)
   const [completePos, setCompletePos] = useState<{ top: number; left: number } | null>(null)
   const [diffOpen, setDiffOpen] = useState(false)
 
@@ -97,6 +97,38 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   valueRef.current = value
   const cursorsRef = useRef<number[]>([])
   cursorsRef.current = extraCursors
+  // Las selecciones programáticas (jump/apply) no deben colapsar multi-cursor.
+  // setSelectionRange no dispara 'select' en la mayoría de navegadores, pero
+  // Safari/IME sí pueden: el flag lo hace determinista.
+  const suppressSelectRef = useRef(false)
+  const rafIds = useRef<number[]>([])
+  const timeoutIds = useRef<number[]>([])
+  useEffect(
+    () => () => {
+      for (const id of rafIds.current) cancelAnimationFrame(id)
+      for (const id of timeoutIds.current) window.clearTimeout(id)
+      if (cursorRaf.current) cancelAnimationFrame(cursorRaf.current)
+    },
+    []
+  )
+  const later = useCallback((fn: () => void) => {
+    const id = requestAnimationFrame(() => {
+      rafIds.current = rafIds.current.filter((x) => x !== id)
+      fn()
+    })
+    rafIds.current.push(id)
+  }, [])
+  const setSel = useCallback((a: number, b: number) => {
+    const ta = taRef.current
+    if (!ta) return
+    suppressSelectRef.current = true
+    try {
+      ta.setSelectionRange(a, b)
+    } catch {
+      /* ignore */
+    }
+    suppressSelectRef.current = false
+  }, [])
 
   const tab = tabSize === 4 ? "    " : "  "
 
@@ -144,14 +176,17 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     return body + (value.endsWith("\n") ? " " : "\n ")
   }, [hlHtml, value])
 
-  // Gutter: un solo string, sin N nodos. Con wrap se oculta (las líneas
-  // visuales no coinciden con las lógicas; VSCode resuelve con layout caro).
+  // Gutter: un solo string, sin N nodos. Sin trailing \n y con la línea
+  // extra si el archivo no termina en \n: iguala las cajas del <pre>
+  // (codeHtml siempre agrega línea de guarda). Con wrap se oculta.
   const gutterText = useMemo(() => {
-    if (wrap || lineCount > GUTTER_MAX_LINES) return ""
+    if (wrap) return ""
+    const count = lineCount + (value.endsWith("\n") || value.length === 0 ? 0 : 1)
+    if (count > GUTTER_MAX_LINES) return ""
     let s = ""
-    for (let i = 1; i <= lineCount; i++) s += i + "\n"
+    for (let i = 1; i <= count; i++) s += i + (i < count ? "\n" : "")
     return s
-  }, [wrap, lineCount])
+  }, [wrap, lineCount, value])
 
   const syncGutter = useCallback(() => {
     const sc = scrollRef.current
@@ -178,18 +213,12 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     (next: string, selStart: number, selEnd: number) => {
       onChange(next)
       setExtraCursors([]) // edición de un solo cursor invalida los extras
-      requestAnimationFrame(() => {
-        const ta = taRef.current
-        if (!ta) return
-        try {
-          ta.setSelectionRange(selStart, selEnd)
-        } catch {
-          /* ignore */
-        }
-        ta.focus()
+      later(() => {
+        setSel(selStart, selEnd)
+        taRef.current?.focus()
       })
     },
-    [onChange]
+    [onChange, later, setSel]
   )
 
   const focusTa = useCallback(() => {
@@ -198,14 +227,8 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
 
   const jumpToOffset = useCallback(
     (off: number, len = 0) => {
-      const ta = taRef.current
-      if (!ta) return
-      try {
-        ta.setSelectionRange(off, off + len)
-      } catch {
-        /* ignore */
-      }
-      ta.focus()
+      setSel(off, off + len)
+      taRef.current?.focus()
       // Lleva el match al viewport vertical
       try {
         const { line } = getLineCol(valueRef.current, off)
@@ -222,7 +245,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       }
       reportCursor()
     },
-    [fontSize, reportCursor]
+    [fontSize, reportCursor, setSel]
   )
 
   // Mide coordenadas de un offset con un mirror oculto de igual métrica.
@@ -266,8 +289,13 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     return () => window.clearTimeout(id)
   }, [caretOffset, value])
 
-  // Recalcula carets extra + cajas de bracket tras cada render relevante
+  // Recalcula carets extra + cajas de bracket tras cada render relevante.
+  // Sin nada que medir no toca estado (evita un render extra por tecla).
   useEffect(() => {
+    if (extraCursors.length === 0 && !bracket) {
+      setMarks((prev) => (prev.length === 0 ? prev : []))
+      return
+    }
     const out: Array<{ top: number; left: number; height: number; kind: "caret" | "bracket" }> = []
     for (const c of extraCursors) {
       const m = measureOffset(c)
@@ -286,10 +314,30 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   // Diccionario local para autocompletar (topeado)
   const words = useMemo(() => (value.length > 200_000 ? [] : collectWords(value)), [value])
 
+  // Diff diferido: solo se calcula con el panel abierto (LCS caro por tecla no)
   const diff = useMemo(
-    () => (savedValue === undefined || savedValue === value ? null : diffLines(savedValue, value)),
-    [savedValue, value]
+    () =>
+      !diffOpen || savedValue === undefined || savedValue === value
+        ? null
+        : diffLines(savedValue, value),
+    [diffOpen, savedValue, value]
   )
+  const DIFF_RENDER_CAP = 500
+  const diffCapped = useMemo(() => {
+    if (!diff) return null
+    let total = 0
+    for (const h of diff.hunks) total += h.lines.length
+    if (total <= DIFF_RENDER_CAP) return { ...diff, total, capped: false }
+    let shown = 0
+    const hunks = diff.hunks
+      .map((h) => {
+        const take = Math.max(0, DIFF_RENDER_CAP - shown)
+        shown += h.lines.length
+        return { ...h, lines: h.lines.slice(0, take) }
+      })
+      .filter((h) => h.lines.length > 0)
+    return { ...diff, hunks, total, capped: true }
+  }, [diff])
 
   const matchIndex = useMemo(() => {
     if (!query) return 0
@@ -304,7 +352,8 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     if (cursorsRef.current.length > 0) setExtraCursors([])
   }, [])
 
-  // Aplica la misma edición en primario + extras; devuelve nuevas posiciones
+  // Aplica la misma edición en primario + extras. Solo los cursores cuyas
+  // ediciones entran (no solapadas) reciben nueva posición; el resto se pierde.
   const applyMulti = useCallback(
     (build: (pos: number, isPrimary: boolean, a: number, b: number) => TextEdit | null) => {
       const ta = taRef.current
@@ -313,45 +362,36 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       const a = ta.selectionStart ?? 0
       const b = ta.selectionEnd ?? 0
       const points = [a, ...cursorsRef.current]
-      const edits: TextEdit[] = []
-      const order: number[] = []
+      const tagged: Array<{ i: number; e: TextEdit }> = []
       points.forEach((p, i) => {
         const e = build(p, i === 0, a, b)
-        if (e) {
-          edits.push(e)
-          order.push(i)
-        }
+        if (e) tagged.push({ i, e })
       })
-      if (edits.length === 0) return false
-      const next = applyEdits(t, edits)
-      // Nuevas posiciones en orden ascendente con shift acumulado
-      const asc = edits
-        .map((e, k) => ({ e, k }))
+      if (tagged.length === 0) return false
+      const { text: next, applied } = applyEdits(t, tagged.map((x) => x.e))
+      const appliedSet = new Set(applied)
+      const asc = tagged
+        .filter((x) => appliedSet.has(x.e))
         .sort((x, y) => x.e.start - y.e.start)
       let shift = 0
-      const newPos = new Array<number>(points.length).fill(0)
-      for (const { e, k } of asc) {
-        const np = e.start + shift + e.insert.length
-        newPos[order[k]] = np
+      const newPos = new Array<number>(points.length).fill(-1)
+      for (const { i, e } of asc) {
+        newPos[i] = Math.min(next.length, Math.max(0, e.start) + shift + e.insert.length)
         shift += e.insert.length - (e.end - e.start)
       }
       onChange(next)
-      const primaryPos = newPos[0]
-      const rest = newPos.slice(1).filter((p, i, arr) => p !== primaryPos && arr.indexOf(p) === i)
+      const primaryPos = newPos[0] >= 0 ? newPos[0] : a
+      const rest = newPos
+        .slice(1)
+        .filter((p, idx, arr) => p >= 0 && p !== primaryPos && arr.indexOf(p) === idx)
       setExtraCursors(rest)
-      requestAnimationFrame(() => {
-        const el = taRef.current
-        if (!el) return
-        try {
-          el.setSelectionRange(primaryPos, primaryPos)
-        } catch {
-          /* ignore */
-        }
-        el.focus()
+      later(() => {
+        setSel(primaryPos, primaryPos)
+        taRef.current?.focus()
       })
       return true
     },
-    [onChange]
+    [onChange, later, setSel]
   )
 
   const typeAtCursors = useCallback(
@@ -402,26 +442,18 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       const { start, end } = lineRangeOf(t, a)
       const line = t.slice(start, end)
       const rel = a - start
-      const m = line.match(/[\w$\u00C0-\u024F]+/g)
-      let hit: string | null = null
-      if (m) {
-        let off = 0
-        for (const w of m) {
-          const idx = line.indexOf(w, off)
-          off = idx + w.length
-          if (rel >= idx && rel <= idx + w.length) {
-            hit = w
-            break
-          }
+      const re = /[\w$\u00C0-\u024F]+/g
+      let m: RegExpExecArray | null
+      let hit: { word: string; idx: number } | null = null
+      while ((m = re.exec(line)) !== null) {
+        if (rel >= m.index && rel <= m.index + m[0].length) {
+          hit = { word: m[0], idx: m.index }
+          break
         }
       }
       if (!hit) return
-      word = hit
-      try {
-        ta.setSelectionRange(start + line.indexOf(word), start + line.indexOf(word) + word.length)
-      } catch {
-        /* ignore */
-      }
+      word = hit.word
+      setSel(start + hit.idx, start + hit.idx + word.length)
       reportCursor()
       return
     }
@@ -429,7 +461,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     if (idx === -1) return
     setExtraCursors((prev) => (prev.includes(idx) || idx === a ? prev : [...prev, idx].slice(-20)))
     jumpToOffset(idx, word.length)
-  }, [jumpToOffset, reportCursor])
+  }, [jumpToOffset, reportCursor, setSel])
 
   const addCursorAtColumn = useCallback(
     (dir: -1 | 1) => {
@@ -446,33 +478,57 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     []
   )
 
+  // Offset desde coordenadas del puntero con el mirror (búsqueda binaria,
+  // O(log n) layouts, solo en click). El textarea es elemento reemplazado:
+  // caretRangeFromPoint no penetra, por eso el mirror propio cross-browser.
+  const offsetFromPoint = useCallback((clientX: number, clientY: number): number | null => {
+    const mirror = mirrorRef.current
+    const sc = scrollRef.current
+    if (!mirror || !sc) return null
+    const t = valueRef.current
+    if (t.length > 200_000) return null
+    try {
+      const rect = sc.getBoundingClientRect()
+      const x = clientX - rect.left + sc.scrollLeft
+      const y = clientY - rect.top + sc.scrollTop
+      const dot = document.createElement("span")
+      dot.textContent = "​"
+      const pos = (off: number) => {
+        mirror.textContent = t.slice(0, off)
+        mirror.appendChild(dot)
+        return { top: dot.offsetTop, left: dot.offsetLeft }
+      }
+      const INF = { top: Infinity, left: Infinity }
+      let lo = 0
+      let hi = t.length + 1
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        const p = mid <= t.length ? pos(mid) : INF
+        if (p.top < y || (p.top === y && p.left <= x)) lo = mid + 1
+        else hi = mid
+      }
+      mirror.textContent = ""
+      return Math.max(0, Math.min(lo - 1, t.length))
+    } catch {
+      try {
+        if (mirrorRef.current) mirrorRef.current.textContent = ""
+      } catch {
+        /* ignore */
+      }
+      return null
+    }
+  }, [])
+
   // Ctrl+Click: añade cursor sin mover el primario
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLTextAreaElement>) => {
       if (!(e.ctrlKey || e.metaKey)) return
       e.preventDefault()
-      try {
-        const fn = (document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }).caretRangeFromPoint
-        const range = typeof fn === "function" ? fn.call(document, e.clientX, e.clientY) : null
-        const ta = taRef.current
-        let off = -1
-        if (range && ta && range.startContainer === ta.firstChild) {
-          off = range.startOffset
-        } else if (range && ta && (range.startContainer as Node) === (ta as unknown as Node)) {
-          off = range.startOffset
-        }
-        if (off < 0) {
-          const m = measureOffset(caretOffset)
-          void m
-          return
-        }
-        const safe = Math.max(0, Math.min(off, valueRef.current.length))
-        setExtraCursors((prev) => (prev.includes(safe) ? prev : [...prev, safe].slice(-20)))
-      } catch {
-        /* ignore */
-      }
+      const off = offsetFromPoint(e.clientX, e.clientY)
+      if (off === null) return
+      setExtraCursors((prev) => (prev.includes(off) ? prev : [...prev, off].slice(-20)))
     },
-    [caretOffset, measureOffset]
+    [offsetFromPoint]
   )
 
   // ---- autocompletado ----
@@ -488,7 +544,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
         return
       }
       if (!word) {
-        if (!auto) setComplete({ items: words.slice(0, 8), start: caret })
+        if (!auto) setComplete({ items: words.slice(0, 8), start: caret, active: 0 })
         return
       }
       const items = words.filter((w) => w.startsWith(word) && w !== word).slice(0, 8)
@@ -496,7 +552,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
         setComplete(null)
         return
       }
-      setComplete({ items, start })
+      setComplete({ items, start, active: 0 })
       const m = measureOffset(caret)
       setCompletePos(m ? { top: m.top + m.height + 2, left: m.left } : null)
     },
@@ -560,10 +616,13 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   )
 
   // ---- find / replace ----
+  // matchCount con tope: si llega al cap se muestra "5000+"
   const matchCount = useMemo(
     () => (query ? countOccurrences(value, query, matchCase) : 0),
     [value, query, matchCase]
   )
+  const MATCH_CAP = 5000
+  const matchTotal = matchCount >= MATCH_CAP ? `${MATCH_CAP}+` : `${matchCount}`
   const findJump = useCallback(
     (forward: boolean) => {
       const ta = taRef.current
@@ -604,7 +663,8 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     if (matchCase) out = t.split(query).join(replaceWith)
     else {
       const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi")
-      out = t.replace(re, replaceWith)
+      // Reemplazo literal: "$&"/"$'" en el texto no deben expandirse
+      out = t.replace(re, () => replaceWith)
     }
     if (out !== t) {
       const ta = taRef.current
@@ -663,8 +723,10 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
     focusTa()
   }, [focusTa])
 
-  // Navegación nativa (click, flechas): colapsa multi-cursor
+  // Navegación nativa (click, flechas): colapsa multi-cursor.
+  // Las programáticas van con setSel (flag) y no colapsan.
   const handleSelect = useCallback(() => {
+    if (suppressSelectRef.current) return
     clearExtraCursors()
     reportCursor()
   }, [clearExtraCursors, reportCursor])
@@ -685,6 +747,9 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   // ---- teclado ----
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // IME en composición (CJK, Gboard): no interceptar nada, el texto llega
+      // por onChange. Multi-cursor queda limitado a teclado físico (documentado).
+      if ((e.nativeEvent as KeyboardEvent).isComposing) return
       const ta = e.currentTarget
       const mod = e.ctrlKey || e.metaKey
       if (e.key === "Escape") {
@@ -741,15 +806,27 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
       // Edición multi-cursor: va antes de la lógica de un solo cursor
       if (complete && (e.key === "Enter" || e.key === "Tab")) {
         e.preventDefault()
-        if (complete.items[0]) acceptComplete(complete.items[0])
+        const pick = complete.items[complete.active] ?? complete.items[0]
+        if (pick) acceptComplete(pick)
         else setComplete(null)
+        return
+      }
+      if (complete && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        e.preventDefault()
+        const d = e.key === "ArrowDown" ? 1 : -1
+        setComplete((c) =>
+          c ? { ...c, active: (c.active + d + c.items.length) % c.items.length } : c
+        )
         return
       }
       if (cursorsRef.current.length > 0) {
         if (!mod && !e.altKey && e.key.length === 1) {
           e.preventDefault()
           typeAtCursors(e.key)
-          if (/[\w$]/.test(e.key)) window.setTimeout(() => openComplete(true), 0)
+          if (/[\w$]/.test(e.key)) {
+            const id = window.setTimeout(() => openComplete(true), 0)
+            timeoutIds.current.push(id)
+          }
           return
         }
         if (!mod && !e.altKey && e.key === "Backspace") {
@@ -884,14 +961,14 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
   return (
     <div className="liteed" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0 }}>
       <div className="liteed-toolbar" role="toolbar" aria-label="Herramientas del editor">
-        <button type="button" className="liteed-btn" onClick={() => { setPaletteFilter(""); setPaletteOpen((v) => !v) }} title="Paleta de comandos (Ctrl+Shift+P)">Comandos</button>
-        <button type="button" className={`liteed-btn${wrap ? " active" : ""}`} onClick={() => setWrap((v) => { setPref(WRAP_KEY, v ? "off" : "on"); return !v })} title={wrap ? "Ajuste de línea activado" : "Ajuste de línea desactivado"}>Wrap</button>
+        <button type="button" className="liteed-btn" onClick={() => { setPaletteFilter(""); setPaletteOpen((v) => !v) }} title="Paleta de comandos (Ctrl+Shift+P)" aria-expanded={paletteOpen}>Comandos</button>
+        <button type="button" className={`liteed-btn${wrap ? " active" : ""}`} aria-pressed={wrap} onClick={() => setWrap((v) => { setPref(WRAP_KEY, v ? "off" : "on"); return !v })} title={wrap ? "Ajuste de línea activado" : "Ajuste de línea desactivado"}>Wrap</button>
         <button type="button" className="liteed-btn" onClick={() => { setFindOpen((v) => !v); setReplaceOpen(false) }} title="Buscar (Ctrl+F)">Buscar</button>
         <button type="button" className="liteed-btn" onClick={() => setFontSize((f) => { const n = Math.max(10, f - 1); setPref(FONT_KEY, String(n)); return n })} title="Reducir letra">A-</button>
         <button type="button" className="liteed-btn" onClick={() => setFontSize((f) => { const n = Math.min(24, f + 1); setPref(FONT_KEY, String(n)); return n })} title="Aumentar letra">A+</button>
         <button type="button" className="liteed-btn" onClick={() => setTabSize((t) => { const n = t === 2 ? 4 : 2; setPref(TAB_KEY, String(n)); return n })} title="Tamaño de indentación">Tab:{tabSize}</button>
         {savedValue !== undefined && (
-          <button type="button" className={`liteed-btn${diffOpen ? " active" : ""}`} onClick={() => setDiffOpen((v) => !v)} title="Cambios sin guardar">Diff</button>
+          <button type="button" className={`liteed-btn${diffOpen ? " active" : ""}`} aria-pressed={diffOpen} onClick={() => setDiffOpen((v) => !v)} title="Cambios sin guardar">Diff</button>
         )}
         {plainMode && <span className="liteed-plain" title="Archivo grande: resaltado desactivado para mantener la respuesta">plano</span>}
       </div>
@@ -920,6 +997,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
             <textarea
               ref={taRef}
               data-vs-path={vsPath}
+              aria-label={`Editar ${path}`}
               className="liteed-input"
               style={{
                 fontFamily: metrics.fontFamily,
@@ -928,6 +1006,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
                 tabSize: metrics.tabSize,
                 padding: metrics.padding,
                 whiteSpace: metrics.whiteSpace,
+                overflowWrap: wrap ? "anywhere" : "normal",
               }}
               wrap={wrap ? "soft" : "off"}
               value={value}
@@ -960,14 +1039,16 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
                   style={{ top: completePos.top, left: completePos.left }}
                   role="listbox"
                   aria-label="Autocompletado"
+                  aria-activedescendant={`liteed-c-${complete.active}`}
                 >
-                  {complete.items.map((w) => (
+                  {complete.items.map((w, wi) => (
                     <button
                       key={w}
+                      id={`liteed-c-${wi}`}
                       type="button"
-                      className="liteed-complete-item"
+                      className={`liteed-complete-item${wi === complete.active ? " active" : ""}`}
                       role="option"
-                      aria-selected={false}
+                      aria-selected={wi === complete.active}
                       onMouseDown={(e) => {
                         e.preventDefault()
                         acceptComplete(w)
@@ -991,6 +1072,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
               tabSize: metrics.tabSize,
               padding: metrics.padding,
               whiteSpace: metrics.whiteSpace,
+              overflowWrap: wrap ? "anywhere" : "normal",
             }}
           />
         </div>
@@ -1007,7 +1089,7 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
                   else if (e.key === "Escape") { e.stopPropagation(); closeOverlays() }
                 }}
               />
-              <span className="liteed-count" title="Coincidencia actual / total">{query ? (matchCount > 0 ? `${matchIndex}/${matchCount}` : "0") : "—"}</span>
+              <span className="liteed-count" title="Coincidencia actual / total">{query ? (matchCount > 0 ? `${matchIndex}/${matchTotal}` : "0") : "—"}</span>
               <button type="button" className="liteed-btn" onClick={() => findJump(false)} title="Anterior (Shift+Enter)">↑</button>
               <button type="button" className="liteed-btn" onClick={() => findJump(true)} title="Siguiente (Enter)">↓</button>
               <button type="button" className={`liteed-btn${matchCase ? " active" : ""}`} onClick={() => setMatchCase((v) => !v)} title="Distinguir mayúsculas">Aa</button>
@@ -1040,20 +1122,25 @@ export const LiteEditor = memo(function LiteEditor({ path, value, onChange, onSa
                 <button type="button" className="liteed-btn" onClick={() => setDiffOpen(false)} title="Cerrar (Esc)">×</button>
               </div>
               <div className="liteed-diff-body">
-                {!diff || diff.tooLarge ? (
-                  <div className="liteed-empty">{diff?.tooLarge ? "Archivo muy grande para el diff" : "Sin cambios"}</div>
+                {!diffCapped || diffCapped.tooLarge ? (
+                  <div className="liteed-empty">{diffCapped?.tooLarge ? "Archivo muy grande para el diff" : "Sin cambios"}</div>
                 ) : (
-                  diff.hunks.map((h, i) => (
-                    <div key={i} className="liteed-hunk">
-                      <div className="liteed-hunk-head">@@ {h.oldStart} → {h.newStart} @@</div>
-                      {h.lines.map((l, j) => (
-                        <div key={j} className={`liteed-dline liteed-dline-${l.t === "+" ? "add" : l.t === "-" ? "del" : "ctx"}`}>
-                          <span className="liteed-dsign">{l.t}</span>
-                          <span className="liteed-dtext">{l.text.length > 300 ? `${l.text.slice(0, 300)}…` : l.text || " "}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ))
+                  <>
+                    {diffCapped.hunks.map((h, i) => (
+                      <div key={i} className="liteed-hunk">
+                        <div className="liteed-hunk-head">@@ {h.oldStart} → {h.newStart} @@</div>
+                        {h.lines.map((l, j) => (
+                          <div key={j} className={`liteed-dline liteed-dline-${l.t === "+" ? "add" : l.t === "-" ? "del" : "ctx"}`}>
+                            <span className="liteed-dsign">{l.t}</span>
+                            <span className="liteed-dtext">{l.text.length > 300 ? `${l.text.slice(0, 300)}…` : l.text || " "}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    {diffCapped.capped && (
+                      <div className="liteed-empty">…recortado ({diffCapped.total} líneas de diff)</div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
