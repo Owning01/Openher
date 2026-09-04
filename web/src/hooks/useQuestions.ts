@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { api } from "../api"
 import type { Question, PermissionRequest, ServerConfig } from "../types"
 import { QUESTION_POLL_INTERVAL_MS } from "../constants"
@@ -15,7 +15,14 @@ type UseQuestionsOptions = {
 }
 
 export function useQuestions({ config, directory, enabled, enabledQuestions, enabledPermissions, fallbackSessionID, notify, t }: UseQuestionsOptions) {
-  const tFn = t ?? ((key: string) => key)
+  // tFn ESTABLE: antes era `t ?? (inline)` — una arrow nueva por render que
+  // reiniciaba ambos effects cada render → poll inmediato → setState con array
+  // nuevo → re-render → loop infinito (~890 fetch/s a /form|permission/request,
+  // CPU y RAM por las nubes). useMemo lo congela cuando `t` no cambia.
+  const tFn = useMemo(() => t ?? ((key: string) => key), [t])
+  // notify por ref: el texto solo se usa para notificar; no debe reiniciar polls.
+  const notifyRef = useRef(notify)
+  notifyRef.current = notify
   const enabledQ = enabledQuestions ?? enabled
   const enabledP = enabledPermissions ?? enabled
   const [pendingQuestions, setPendingQuestions] = useState<Question[]>([])
@@ -26,14 +33,22 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
 
   useEffect(() => {
     if (!config || !enabledQ) return
+    let alive = true
     const poll = async () => {
       try {
         const qs = await api.listPendingQuestions(config, directory)
+        if (!alive) return
         const fresh = qs.filter((q) =>
           (!fallbackSessionID || !q.sessionID || q.sessionID === fallbackSessionID) &&
           !dismissedQuestions.has(q.id),
         )
-        setPendingQuestions(fresh)
+        // Guard anti-loop: `filter` crea array nuevo siempre; solo setear si
+        // cambió el contenido (mismos ids en orden) para no re-renderizar.
+        setPendingQuestions((prev) => {
+          if (prev.length === fresh.length && prev.every((p, i) => p.id === fresh[i].id)) return prev
+          return fresh
+        })
+        const notify = notifyRef.current
         if (notify) {
           for (const q of fresh) {
             if (notifiedQuestionIDs.current.has(q.id)) continue
@@ -45,18 +60,26 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
     }
     poll()
     const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [config, enabledQ, directory, dismissedQuestions, notify, tFn])
+    return () => { alive = false; clearInterval(id) }
+  }, [config, enabledQ, directory, fallbackSessionID, dismissedQuestions, tFn])
 
   useEffect(() => {
     if (!config || !enabledP) return
+    let alive = true
     const poll = async () => {
       try {
         const perms = await api.listPermissions(config, directory)
+        if (!alive) return
         const pending = perms.find((p) =>
           p.status === "pending" && (!fallbackSessionID || !p.sessionID || p.sessionID === fallbackSessionID),
         )
-        setPermissionRequest(pending ?? null)
+        // Guard anti-loop: mismo requestID → mismo estado, no re-render.
+        setPermissionRequest((prev) => {
+          const next = pending ?? null
+          if ((prev?.requestID ?? null) === (next?.requestID ?? null)) return prev
+          return next
+        })
+        const notify = notifyRef.current
         if (pending && notify && !notifiedPermissionIDs.current.has(pending.requestID)) {
           notifiedPermissionIDs.current.add(pending.requestID)
           notify(tFn('notification.permissionTitle'), pending.permission ?? "")
@@ -65,8 +88,8 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
     }
     poll()
     const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [config, enabledP, directory, notify, tFn])
+    return () => { alive = false; clearInterval(id) }
+  }, [config, enabledP, directory, fallbackSessionID, tFn])
 
   const handleQuestionReply = useCallback(async (requestID: string, answers: string[][]) => {
     if (!config) return
