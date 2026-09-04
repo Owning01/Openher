@@ -120,7 +120,7 @@ Write-Host "APK: $($Apk.FullName) ($([math]::Round($Apk.Length / 1MB, 1)) MB, $(
 
 # --- 5. install + launch ---
 Write-Host "== [5/5] adb install -r en $Serial =="
-& $Adb -s $Serial install -r $Apk.FullName
+& $Adb -s $Serial install -r -t -d $Apk.FullName  # -t: APK debug es testOnly; -d: permite reinstalar sin subir versionCode
 if ($LASTEXITCODE -ne 0) { throw "adb install fallo" }
 
 if (-not $Release) {
