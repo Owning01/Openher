@@ -15,6 +15,7 @@ import { VisualSelectOverlay } from "./VisualSelectOverlay"
 import { CodeMirrorEditor } from "./CodeMirrorEditor"
 import { toBase64Chunked } from "../utils/editorOps"
 import { ContextMenu } from "./ContextMenu"
+import { LedSwitch } from "./LedSwitch"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { useDevServer } from "../hooks/useDevServer"
 
@@ -3100,7 +3101,7 @@ export const LabsPanel = memo(function LabsPanel() {
         <div className="shell-updates-title">Windows</div>
         <label className="shell-labs-row">
           <span>{t('shell.autostart')}</span>
-          <input type="checkbox" checked={autostart} onChange={(e) => shell.autostart.set(e.target.checked).then(() => setAutostart(e.target.checked))} />
+          <LedSwitch label={t('shell.autostart')} checked={autostart} onChange={(next) => { shell.autostart.set(next).then(() => setAutostart(next)) }} />
         </label>
       </div>
     </div>

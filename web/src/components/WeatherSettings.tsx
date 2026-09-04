@@ -2,6 +2,7 @@
 // Solo corre red mientras el usuario escribe (geocoding con debounce +
 // abort); en reposo son 2 strings en localStorage. Cero costo sostenido.
 import { memo, useEffect, useRef, useState } from "react"
+import { LedSwitch } from "./LedSwitch"
 import { useT } from "../i18n-context"
 import { useWeatherPrefs, type WeatherLoc } from "../hooks/useWeatherPrefs"
 
@@ -71,16 +72,11 @@ export const WeatherSettings = memo(function WeatherSettings() {
           <p className="setting-item-desc">{t("weather.desc")}</p>
         </div>
         <div className="setting-item-control">
-          <button
-            type="button"
-            className={`switch-track compact${prefs.enabled ? " active" : ""}`}
-            role="switch"
-            aria-checked={prefs.enabled}
-            aria-label={t("weather.title")}
-            onClick={() => setEnabled(!prefs.enabled)}
-          >
-            <span className="switch-thumb" />
-          </button>
+          <LedSwitch
+            label={t("weather.title")}
+            checked={prefs.enabled}
+            onChange={() => setEnabled(!prefs.enabled)}
+          />
         </div>
       </div>
       {prefs.enabled && (

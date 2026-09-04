@@ -9,6 +9,7 @@ import { createCustomProvider } from "../providers/custom"
 import type { QuickChatProviderId } from "../providers/types"
 import type { ModelOption, ProviderInfo } from "../types"
 import { Markdown } from "./Markdown"
+import { LedSwitch } from "./LedSwitch"
 import { BrainIcon, SettingsIcon, TrashIcon, CloseIcon } from "../Icons"
 import { useDialog } from "./DialogProvider"
 import "../styles/quickchat.css"
@@ -391,7 +392,7 @@ export function QuickChatPanel({
           </div>
 
           <label className="qc-switch" style={{ fontSize: 12, padding: "4px 0" }}>
-            <input type="checkbox" checked={searchEnabled} onChange={e => setSearchEnabled(e.target.checked)} />
+            <LedSwitch label={t("quickchat.search")} checked={searchEnabled} onChange={setSearchEnabled} />
             <span>{t("quickchat.search")}</span>
             <span style={{ opacity: 0.6, fontSize: 12 }}>{searchEnabled ? t("quickchat.searchOn") : t("quickchat.searchOff")}</span>
           </label>

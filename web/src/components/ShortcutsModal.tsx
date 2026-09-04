@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useCallback, useRef } from "react"
 import { ModalHeader } from "./ModalHeader"
+import { LedSwitch } from "./LedSwitch"
 import { useT } from "../i18n-context"
 import { loadShortcutsConfig, saveShortcutsConfig, DEFAULT_SHORTCUTS, type ShortcutItem } from "../shortcuts"
 import { TrashIcon, RefreshIcon, PencilIcon } from "../Icons"
@@ -185,39 +186,12 @@ export const ShortcutsModal = memo(function ShortcutsModal({ onClose, desktop: _
                             <PencilIcon size={13} />
                           </button>
 
-                          {/* Toggle switch */}
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={s.enabled}
-                            onClick={() => handleToggle(s.id)}
-                            title={s.enabled ? "Desactivar atajo" : "Activar atajo"}
-                            style={{
-                              width: "36px",
-                              height: "20px",
-                              borderRadius: "10px",
-                              background: s.enabled ? "var(--primary)" : "var(--border)",
-                              position: "relative",
-                              border: "none",
-                              cursor: "pointer",
-                              transition: "background 0.2s",
-                              padding: 0,
-                            }}
-                          >
-                            <span
-                              style={{
-                                display: "block",
-                                width: "16px",
-                                height: "16px",
-                                borderRadius: "50%",
-                                background: "#fff",
-                                position: "absolute",
-                                top: "2px",
-                                left: s.enabled ? "18px" : "2px",
-                                transition: "left 0.2s",
-                              }}
-                            />
-                          </button>
+                          {/* Toggle switch global */}
+                          <LedSwitch
+                            label={s.label}
+                            checked={s.enabled}
+                            onChange={() => handleToggle(s.id)}
+                          />
 
                           {/* Delete button */}
                           <button
