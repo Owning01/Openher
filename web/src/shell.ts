@@ -441,6 +441,7 @@ export const shell = {
     url: () => get<{ url: string }>("/shell/browser/url"),
     eval: (code: string) => post<{ ok: boolean }>("/shell/browser/eval", { code }),
     drainPicks: () => get<{ picks: any[] }>("/shell/browser/pick"),
+    shortcuts: () => get<{ shortcuts: any[] }>("/shell/browser/shortcuts"),
   },
   config: {
     get: () => get<ShellConfig>("/shell/config"),
