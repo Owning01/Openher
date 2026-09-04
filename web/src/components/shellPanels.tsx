@@ -12,7 +12,7 @@ import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoa
 import { normFsPath, affectedParentDirs } from "../utils/fsChanges"
 import { calcMenuPosForAnchor } from "../utils/menuPos"
 import { VisualSelectOverlay } from "./VisualSelectOverlay"
-import { LiteEditor } from "./LiteEditor"
+import { CodeMirrorEditor } from "./CodeMirrorEditor"
 import { toBase64Chunked } from "../utils/editorOps"
 import { ContextMenu } from "./ContextMenu"
 import type { VisualSelection } from "../hooks/useVisualSelection"
@@ -2505,7 +2505,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
         ) : isMarkdown && mdViewMode === "split" ? (
           <div style={{ flex: 1, display: "flex", minHeight: 0, width: "100%" }}>
             <div style={{ flex: 1, minWidth: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
-              <LiteEditor
+              <CodeMirrorEditor
                 path={activeTab}
                 value={activeFile?.content ?? ""}
                 savedValue={activeFile && !activeFile.loading && !activeFile.error ? activeFile.savedContent : undefined}
@@ -2520,7 +2520,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
             </div>
           </div>
         ) : (
-          <LiteEditor
+          <CodeMirrorEditor
             path={activeTab}
             value={activeFile?.content ?? ""}
             savedValue={activeFile && !activeFile.loading && !activeFile.error ? activeFile.savedContent : undefined}
