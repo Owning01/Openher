@@ -333,16 +333,8 @@ pub fn load_config() -> ShellConfig {
 }
 
 pub fn save_config(cfg: &ShellConfig) {
-    let _ = std::fs::create_dir_all(data_dir());
-    let path = config_path();
-    let tmp = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(cfg).unwrap_or_default();
-    if std::fs::write(&tmp, &data).is_ok() {
-        if let Ok(f) = std::fs::File::open(&tmp) { let _ = f.sync_all(); }
-        let _ = std::fs::rename(&tmp, &path);
-    } else {
-        let _ = std::fs::write(&path, &data);
-    }
+    atomic_write_json(&config_path(), &data, "config");
 }
 
 pub fn load_persisted() -> PersistedState {
@@ -355,16 +347,8 @@ pub fn load_persisted() -> PersistedState {
 }
 
 pub fn save_persisted(s: &PersistedState) {
-    let _ = std::fs::create_dir_all(data_dir());
-    let path = state_path();
-    let tmp = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(s).unwrap_or_default();
-    if std::fs::write(&tmp, &data).is_ok() {
-        if let Ok(f) = std::fs::File::open(&tmp) { let _ = f.sync_all(); }
-        let _ = std::fs::rename(&tmp, &path);
-    } else {
-        let _ = std::fs::write(&path, &data);
-    }
+    atomic_write_json(&state_path(), &data, "state");
 }
 
 /// Geometría de la ventana (posición + tamaño en lógico) persistida entre
@@ -385,16 +369,51 @@ pub fn load_window_geometry() -> Option<WindowGeometry> {
 }
 
 pub fn save_window_geometry(g: &WindowGeometry) {
-    let _ = std::fs::create_dir_all(data_dir());
-    let path = geometry_path();
-    let tmp = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(g).unwrap_or_default();
-    if std::fs::write(&tmp, &data).is_ok() {
-        if let Ok(f) = std::fs::File::open(&tmp) { let _ = f.sync_all(); }
-        let _ = std::fs::rename(&tmp, &path);
-    } else {
-        let _ = std::fs::write(&path, &data);
+    atomic_write_json(&geometry_path(), &data, "geometry");
+}
+
+/// Escritura atómica compartida (mismo esquema durable que kanban.rs):
+/// tmp único por save (pid+secuencia) + fsync + rename con 5 reintentos +
+/// fallback a escritura directa. El tmp fijo anterior colisionaba y el rename
+/// fallido en Windows dejaba el dato solo en memoria.
+pub fn atomic_write_json(path: &std::path::Path, data: &str, tag: &str) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let tmp = path.with_extension(format!("json.{}-{}.tmp", std::process::id(), seq));
+    let legacy_tmp = path.with_extension("json.tmp");
+    if std::fs::write(&tmp, data).is_err() {
+        eprintln!("[{tag}] no se pudo escribir tmp — intento directo en {}", path.display());
+        if let Err(e) = std::fs::write(path, data) {
+            eprintln!("[{tag}] no se pudo persistir {}: {e}", path.display());
+        }
+        return;
+    }
+    if let Ok(f) = std::fs::File::open(&tmp) {
+        let _ = f.sync_all();
+    }
+    let mut renamed = false;
+    for _ in 0..5 {
+        if std::fs::rename(&tmp, path).is_ok() {
+            renamed = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    if !renamed {
+        let _ = std::fs::remove_file(path);
+        if std::fs::rename(&tmp, path).is_err() {
+            eprintln!("[{tag}] rename falló tras reintentos — escritura directa de {}", path.display());
+            if std::fs::write(path, data).is_ok() {
+                let _ = std::fs::remove_file(&tmp);
+            }
+        }
+    }
+    let _ = std::fs::remove_file(&legacy_tmp);
 }
 
 /// Raíz de docs de opencode: config -> env -> checkout local del repo.

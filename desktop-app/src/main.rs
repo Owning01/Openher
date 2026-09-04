@@ -36,7 +36,7 @@ use std::time::Duration;
 
 use state::AppState;
 use tiny_http::Server;
-use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows, WebViewExtWindows};
+use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
 
 fn split_cmd(cmd: &str) -> Vec<String> {
     let mut res = Vec::new();
@@ -637,7 +637,7 @@ impl ApplicationHandler<AppEvent> for App {
                 // Flush cookies/sesión a disco antes de salir: WebView2 escribe Cookies/Storage de forma async.
                 // Droppear los WebViews + dar 250ms asegura que data/webview/Default/Cookies persista.
                 self.webview = None;
-                self.browser_inner.webview = None;
+                self.browser_inner.drop_all_views();
                 self.web_context = None;
                 std::thread::sleep(std::time::Duration::from_millis(400));
                 event_loop.exit();
@@ -657,12 +657,8 @@ impl ApplicationHandler<AppEvent> for App {
                     }
                 }
                 // FIX: Esc solo oculta (Low ~3MB) para no perder cookies/Google session; close() solo vía panel X
-                if is_esc && self.browser_inner.visible {
-                    if let Some(wv) = &self.browser_inner.webview {
-                        let _ = wv.set_visible(false);
-                        let _ = wv.set_memory_usage_level(wry::MemoryUsageLevel::Low);
-                    }
-                    self.browser_inner.visible = false;
+                if is_esc && self.browser_inner.any_visible() {
+                    self.browser_inner.hide_all_views();
                 }
             }
             _ => {}
@@ -682,7 +678,7 @@ impl ApplicationHandler<AppEvent> for App {
                     kill_all_external(state);
                 }
                 self.webview = None;
-                self.browser_inner.webview = None;
+                self.browser_inner.drop_all_views();
                 self.web_context = None;
                 std::thread::sleep(std::time::Duration::from_millis(400));
                 event_loop.exit()
@@ -718,7 +714,7 @@ impl ApplicationHandler<AppEvent> for App {
                                 kill_all_external(state);
                             }
                             self.webview = None;
-                            self.browser_inner.webview = None;
+                            self.browser_inner.drop_all_views();
                             self.web_context = None;
                             std::thread::sleep(std::time::Duration::from_millis(400));
                             event_loop.exit();
@@ -1126,10 +1122,10 @@ fn main() {
         browser_rx: Some(browser_rx),
         _browser_tx: browser_tx,
         browser_inner: browser_view::SubWebViewInner {
-            webview: None,
-            url: String::new(),
-            visible: false,
+            views: std::collections::HashMap::new(),
+            active_view: String::new(),
             shortcut_events: browser_shortcut_events,
+            download_events: app_state.browser.download_events_handle(),
         },
         last_geom_save: std::time::Instant::now(),
         modifiers: winit::keyboard::ModifiersState::empty(),

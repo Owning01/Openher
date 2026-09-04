@@ -38,6 +38,22 @@ async function loadAndApply(name: string, mode: "dark" | "light") {
   } catch {
     // fallback silent
   }
+  // Status bar del sistema (APK/PWA) al tono del tema, sin plugin nativo.
+  try {
+    const bg = getComputedStyle(document.documentElement).getPropertyValue("--surface").trim()
+      || getComputedStyle(document.documentElement).getPropertyValue("--nav-bg").trim()
+    if (bg) {
+      let meta = document.querySelector('meta[name="theme-color"]')
+      if (!meta) {
+        meta = document.createElement("meta")
+        meta.setAttribute("name", "theme-color")
+        document.head.appendChild(meta)
+      }
+      meta.setAttribute("content", bg)
+    }
+  } catch {
+    // cosmetic only
+  }
 }
 
 export function ThemeVariantProvider({ children }: { children: ReactNode }) {

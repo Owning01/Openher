@@ -12,7 +12,7 @@ import {
 } from "./browserOverlayScript"
 import { buildPipScript } from "./browserPipScript"
 import { buildWheelScript } from "./browserWheelScript"
-import { parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, BROWSER_STACK_PREFIX, loadBrowserStack, saveBrowserStack, type PageShortcutAction } from "./browserSync"
+import { parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, BROWSER_STACK_PREFIX, loadBrowserStack, saveBrowserStack, buildFindCountScript, parseFindCount, domainOf, zoomForDomain, withZoomForDomain, BROWSER_ZOOM_MAP_KEY, type PageShortcutAction } from "./browserSync"
 
 const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
 export const BROWSER_HOME = "https://www.google.com"
@@ -315,6 +315,9 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [findOpen, setFindOpen] = useState(false)
   const [findQuery, setFindQuery] = useState("")
   const [findCase, setFindCase] = useState(false)
+  const [findTotal, setFindTotal] = useState<number | null>(null)
+  const [lastDownload, setLastDownload] = useState<{ url: string; path: string | null; ok: boolean } | null>(null)
+  const [profile, setProfile] = useState<{ data_dir: string; webview_dir: string; downloads_dir: string } | null>(null)
   const [bookmarks, setBookmarks] = useState<BrowserBookmark[]>(() => loadBookmarks())
   const [showBookmarks, setShowBookmarks] = useState(() => {
     try { return localStorage.getItem("opencode.browser.showBookmarks") !== "0" } catch { return true }
@@ -354,6 +357,16 @@ export const BrowserPanel = memo(function BrowserPanel({
   const prevInitialUrlRef = useRef(initialUrl)
   const onUrlChangeRef = useRef(onUrlChange)
   onUrlChangeRef.current = onUrlChange
+  // Vista nativa del pool Rust ("" = única legacy): todas las llamadas van
+  // con el bid para que cada pestaña conserve su WebView (sin recargas).
+  const view = persistKey ?? ""
+  const bOpen = (url: string, bounds: { x: number; y: number; w: number; h: number }) =>
+    shell.browser.open(url, bounds, view)
+  const bBounds = (b: { x: number; y: number; w: number; h: number }) => shell.browser.setBounds(b, view)
+  const bVis = (v: boolean) => shell.browser.setVisibility(v, view)
+  const bNav = (url: string, action?: "back" | "forward" | "reload") => shell.browser.navigate(url, action, view)
+  const bEval = (code: string) => shell.browser.eval(code, view)
+  const bUrl = () => shell.browser.url(view)
   // Refs vivas para los polls con [] (puente página→host, sync URL)
   const tabsRef = useRef(tabs)
   tabsRef.current = tabs
@@ -465,8 +478,16 @@ export const BrowserPanel = memo(function BrowserPanel({
         if (next !== zoomLevel) {
           // inline apply to avoid stale closure
           const v = next
-          try { localStorage.setItem("opencode.browser.zoom", String(v)) } catch {}
-          if (IS_DESKTOP) shell.browser.eval(zoomCodeFor(v)).catch(() => {})
+          try {
+            localStorage.setItem("opencode.browser.zoom", String(v))
+            const d = domainOf(tabsRef.current.find((t) => t.id === activeTabIdRef.current)?.url ?? "")
+            if (d) {
+              let map: Record<string, number> = {}
+              try { map = JSON.parse(localStorage.getItem(BROWSER_ZOOM_MAP_KEY) || "null") ?? {} } catch {}
+              localStorage.setItem(BROWSER_ZOOM_MAP_KEY, JSON.stringify(withZoomForDomain(map, d, v)))
+            }
+          } catch {}
+          if (IS_DESKTOP) bEval(zoomCodeFor(v)).catch(() => {})
           else {
             try {
               const doc = iframeRef.current?.contentDocument as any
@@ -547,7 +568,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   useEffect(() => {
     if (!IS_DESKTOP || !viewportRef.current) return
     if (!isActive) {
-      shell.browser.setVisibility(false).catch((e) => console.warn("[Browser] setVisibility false (inactive mount) failed", e))
+      bVis(false).catch((e) => console.warn("[Browser] setVisibility false (inactive mount) failed", e))
       return
     }
     const el = viewportRef.current
@@ -557,7 +578,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     // ya viene en CSS px, NO multiplicar por dpr (antes ×dpr desplazaba y
     // agrandaba el hijo en pantallas 125%/150%: franja blanca + tapa la URL).
     const syncBounds = () => {
-      shell.browser.setBounds(fitBounds(el.getBoundingClientRect()))
+      bBounds(fitBounds(el.getBoundingClientRect()))
         .catch((e) => console.warn("[Browser] setBounds failed", e))
     }
 
@@ -573,14 +594,14 @@ export const BrowserPanel = memo(function BrowserPanel({
       window.setTimeout(() => { if (!cancelled) injectWheel() }, 1500)
       requestAnimationFrame(syncBounds)
     }
-    shell.browser.open(currentSrc, bounds).then(markReady).catch((e) => {
+    bOpen(currentSrc, bounds).then(markReady).catch((e) => {
       console.warn("[Browser] open failed url=" + currentSrc + ", reintentando…", e)
       // La primera creación del controller WebView2 suele tardar >900ms
       // (timeout del canal) aunque termina creándose: reintentar una vez
       // antes de caer al fallback iframe (que Google bloquea por X-Frame).
       setTimeout(() => {
         if (cancelled) return
-        shell.browser.open(currentSrc, bounds).then(markReady).catch((e2) => {
+        bOpen(currentSrc, bounds).then(markReady).catch((e2) => {
           if (cancelled) return
           console.warn("[Browser] open retry failed url=" + currentSrc, e2)
           nativeReady.current = false
@@ -599,7 +620,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       const visible = entries.some((e) => e.isIntersecting && e.intersectionRatio > 0.01)
       if (visible !== ioVisibility) {
         ioVisibility = visible
-        shell.browser.setVisibility(visible).catch((e) => console.warn("[Browser] setVisibility IO failed", e))
+        bVis(visible).catch((e) => console.warn("[Browser] setVisibility IO failed", e))
       }
     }, { threshold: [0, 0.01, 0.5] })
     io.observe(el)
@@ -622,9 +643,9 @@ export const BrowserPanel = memo(function BrowserPanel({
     // no está activa (ahorra RAM ~3 MB con MemoryUsageLevel::Low)
     const handleVis = () => {
       if (document.visibilityState === "hidden") {
-        shell.browser.setVisibility(false).catch((e) => console.warn("[Browser] visibility hidden failed", e))
+        bVis(false).catch((e) => console.warn("[Browser] visibility hidden failed", e))
       } else if (isActive) {
-        shell.browser.setVisibility(true).catch((e) => console.warn("[Browser] visibility visible failed", e))
+        bVis(true).catch((e) => console.warn("[Browser] visibility visible failed", e))
         requestAnimationFrame(syncBounds)
       }
     }
@@ -646,10 +667,10 @@ export const BrowserPanel = memo(function BrowserPanel({
       try { dprQuery?.removeEventListener("change", onDprChange) } catch {}
       if (debounceTimer) clearTimeout(debounceTimer)
       el.removeAttribute("data-browser-mounted")
-      // Mantener WebView vivo para que cookies/sesión Google persistan entre tabs
-      // Solo ocultar (MemoryUsageLevel::Low ~3MB), no destruir. close() solo en onClose explícito.
-      // Con singleton, ocultar aquí puede apagar el panel activo si hay otro BrowserPanel; el próximo isActive=true lo re-mostrará
-      shell.browser.setVisibility(false).catch((e) => console.warn("[Browser] visibility false on unmount failed", e))
+      // Mantener la vista viva para que cookies/sesión persistan entre tabs.
+      // Solo ocultar (MemoryUsageLevel::Low ~3MB), no destruir. close() solo
+      // al podar el bid huérfano. Al mostrar otra vista, Rust estaciona esta.
+      bVis(false).catch((e) => console.warn("[Browser] visibility false on unmount failed", e))
       nativeReady.current = false
     }
   }, [isActive]) // singleton + isActive guard
@@ -657,7 +678,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   // Navigate native WebView when URL changes (solo si activo y ready)
   useEffect(() => {
     if (!IS_DESKTOP || !nativeReady.current || browserFailed || !isActive) return
-    shell.browser.navigate(currentSrc).catch((e) => {
+    bNav(currentSrc).catch((e) => {
       console.warn("[Browser] navigate failed url=" + currentSrc, e)
       setBrowserFailed(true)
     })
@@ -674,7 +695,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     if (!IS_DESKTOP || !nativeReady.current || browserFailed || !isActive) return
     const el = viewportRef.current
     if (!el) return
-    shell.browser.setBounds(fitBounds(el.getBoundingClientRect()))
+    bBounds(fitBounds(el.getBoundingClientRect()))
       .catch((e) => console.warn("[Browser] setBounds device failed", e))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceMode])
@@ -684,7 +705,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   const handlePip = useCallback(() => {
     const code = buildPipScript()
     if (IS_DESKTOP) {
-      shell.browser.eval(code).catch((e) => console.warn("[Browser] PiP inject failed", e))
+      bEval(code).catch((e) => console.warn("[Browser] PiP inject failed", e))
       return
     }
     try {
@@ -716,7 +737,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   const injectWheel = useCallback(() => {
     if (!IS_DESKTOP) return
     try {
-      shell.browser.eval(buildWheelScript(window.location.origin)).catch(() => {})
+      bEval(buildWheelScript(window.location.origin)).catch(() => {})
     } catch {}
   }, [])
 
@@ -760,7 +781,10 @@ export const BrowserPanel = memo(function BrowserPanel({
         if (!Array.isArray(list) || list.length === 0) return
         for (const raw of list) {
           const a = parseShortcutEvent(raw)
-          if (a) dispatchShortcut(a)
+          if (a) { dispatchShortcut(a); continue }
+          // Contador del findbar (buildFindCountScript): no es atajo.
+          const fc = parseFindCount(raw)
+          if (fc !== null) setFindTotal(fc)
         }
       } catch {}
     }, 350)
@@ -785,7 +809,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       if (stopped || document.visibilityState === "hidden" || browserFailed) return
       if (!nativeReady.current) return
       try {
-        const r = await shell.browser.url().catch(() => null)
+        const r = await bUrl().catch(() => null)
         const u = (r as any)?.url
         if (typeof u !== "string") return
         const typing = document.activeElement === omniboxRef.current
@@ -797,6 +821,34 @@ export const BrowserPanel = memo(function BrowserPanel({
     }, 2000)
     return () => { stopped = true; window.clearInterval(id) }
   }, [isActive, browserFailed, commitExternalUrl])
+
+  // Descargas completadas (data/downloads): aviso no bloqueante con la ruta.
+  useEffect(() => {
+    if (!IS_DESKTOP || !isActive) return
+    let stopped = false
+    let hideTimer: ReturnType<typeof setTimeout> | null = null
+    const id = window.setInterval(async () => {
+      if (stopped || document.visibilityState === "hidden") return
+      try {
+        const r = await shell.browser.downloads().catch(() => null)
+        const items = (r as any)?.downloads
+        if (!Array.isArray(items) || items.length === 0) return
+        const last = items[items.length - 1]
+        if (!last || typeof last.url !== "string") return
+        setLastDownload({ url: last.url, path: typeof last.path === "string" ? last.path : null, ok: last.ok !== false })
+        if (hideTimer) clearTimeout(hideTimer)
+        hideTimer = setTimeout(() => { if (!stopped) setLastDownload(null) }, 9000)
+      } catch {}
+    }, 4000)
+    return () => { stopped = true; window.clearInterval(id); if (hideTimer) clearTimeout(hideTimer) }
+  }, [isActive])
+
+  // Perfil portable (qué data/ usa este exe): lazy al abrir configuración.
+  useEffect(() => {
+    if (!IS_DESKTOP || !showTuneDropdown || profile) return
+    shell.profile.get().then(setProfile).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTuneDropdown])
 
   // Offline real (antes se confundía con fallo del WebView) + reintento al volver.
   // reloadRef se asigna abajo, junto a actionsRef (handleReload se define después).
@@ -856,7 +908,7 @@ export const BrowserPanel = memo(function BrowserPanel({
         // idempotente (self-guard) y sobrevive navegaciones/recargas de la página.
         if (inspectRef.current && now - lastInject > 2200) {
           lastInject = now
-          await shell.browser.eval(buildOverlayScript(apiBase, toolRef.current))
+          await bEval(buildOverlayScript(apiBase, toolRef.current))
         }
         const r = await shell.browser.drainPicks()
         for (const p of r?.picks ?? []) {
@@ -894,7 +946,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   // Sincronizar herramienta picker/pod con el bridge inyectado
   useEffect(() => {
     if (!IS_DESKTOP || !inspectMode) return
-    shell.browser.eval(setToolScript(inspectTool)).catch(() => {})
+    bEval(setToolScript(inspectTool)).catch(() => {})
   }, [inspectMode, inspectTool])
 
   const handleStyleChange = useCallback((a: VisualAnnotation, prop: string, value: string) => {
@@ -904,7 +956,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     onAnnotationStyle?.(a.id, next)
     if (IS_DESKTOP) {
       const props: Record<string, string | null> = { [prop]: value === "" ? null : value }
-      shell.browser.eval(applyStyleScript(a.id, props)).catch(() => {})
+      bEval(applyStyleScript(a.id, props)).catch(() => {})
     }
   }, [onAnnotationStyle])
 
@@ -917,11 +969,11 @@ export const BrowserPanel = memo(function BrowserPanel({
     let cancelled = false
     ;(async () => {
       try {
-        await shell.browser.eval(clearBadgesScript)
+        await bEval(clearBadgesScript)
         for (let i = 0; i < annRef.current.length; i++) {
           if (cancelled) return
           const a = annRef.current[i]
-          await shell.browser.eval(badgeScript(a.id, ZONE_ICONS[i] ?? String(i + 1), a.bx ?? a.boundingRect.x, a.by ?? a.boundingRect.y))
+          await bEval(badgeScript(a.id, ZONE_ICONS[i] ?? String(i + 1), a.bx ?? a.boundingRect.x, a.by ?? a.boundingRect.y))
         }
       } catch {}
     })()
@@ -931,7 +983,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   useEffect(() => {
     if (!IS_DESKTOP || !nativeReady.current) return
     if (!inspectMode) {
-      shell.browser.eval(cleanupOverlayScript).catch(() => {})
+      bEval(cleanupOverlayScript).catch(() => {})
     }
   }, [inspectMode])
 
@@ -939,8 +991,8 @@ export const BrowserPanel = memo(function BrowserPanel({
   useEffect(() => {
     if (!IS_DESKTOP) return
     return () => {
-      shell.browser.eval(cleanupOverlayScript).catch(() => {})
-      shell.browser.eval(clearBadgesScript).catch(() => {})
+      bEval(cleanupOverlayScript).catch(() => {})
+      bEval(clearBadgesScript).catch(() => {})
     }
   }, [])
 
@@ -952,8 +1004,8 @@ export const BrowserPanel = memo(function BrowserPanel({
     const ids = annotations.map((a) => a.id)
     for (const gone of prevAnnIds.current) {
       if (!ids.includes(gone)) {
-        shell.browser.eval(removeBadgeScript(gone)).catch(() => {})
-        shell.browser.eval(unbindScript(gone)).catch(() => {})
+        bEval(removeBadgeScript(gone)).catch(() => {})
+        bEval(unbindScript(gone)).catch(() => {})
       }
     }
     prevAnnIds.current = ids
@@ -988,7 +1040,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       })
     )
     if (IS_DESKTOP) {
-      shell.browser.navigate(norm).catch(() => {})
+      bNav(norm).catch(() => {})
     } else {
       setReloadKey((k) => k + 1)
     }
@@ -1066,7 +1118,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     )
     setInputUrl(prevUrl)
     if (IS_DESKTOP) {
-      shell.browser.navigate(prevUrl, "back").catch(() => {})
+      bNav(prevUrl, "back").catch(() => {})
     } else {
       setReloadKey((k) => k + 1)
     }
@@ -1081,7 +1133,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     )
     setInputUrl(nextUrl)
     if (IS_DESKTOP) {
-      shell.browser.navigate(nextUrl, "forward").catch(() => {})
+      bNav(nextUrl, "forward").catch(() => {})
     } else {
       setReloadKey((k) => k + 1)
     }
@@ -1091,14 +1143,14 @@ export const BrowserPanel = memo(function BrowserPanel({
     setLoading(true)
     setHasError(false)
     if (IS_DESKTOP && !browserFailed) {
-      shell.browser.navigate(currentSrc, "reload").catch(() => {
+      bNav(currentSrc, "reload").catch(() => {
         setBrowserFailed(true)
       })
     } else if (IS_DESKTOP && browserFailed) {
       // Reintentar crear el sub-WebView antes de fallback
       const el = viewportRef.current
       if (el) {
-        shell.browser.open(currentSrc, fitBounds(el.getBoundingClientRect())).then(() => {
+        bOpen(currentSrc, fitBounds(el.getBoundingClientRect())).then(() => {
           nativeReady.current = true
           setBrowserFailed(false)
         }).catch(() => {
@@ -1159,15 +1211,33 @@ export const BrowserPanel = memo(function BrowserPanel({
   }
   const applyFind = useCallback((q: string, cs: boolean) => {
     if (!q) return
+    setFindTotal(null)
     const code = cs
       ? `window.find(${JSON.stringify(q)}, false, false, true, false, false, false)`
       : `window.find(${JSON.stringify(q)}, false, false, false, false, false, false)`
-    if (IS_DESKTOP) shell.browser.eval(code).catch(() => {})
-    else {
+    if (IS_DESKTOP) {
+      bEval(code).catch(() => {})
+      // Contador aparte: /eval no retorna valores, vuelve por IPC (find-count).
+      bEval(buildFindCountScript(q, cs)).catch(() => {})
+    } else {
       try {
         const w = iframeRef.current?.contentWindow as any
         if (w?.find) w.find(q, false, false, !cs, false, false, false)
-      } catch {}
+        const doc = iframeRef.current?.contentDocument as any
+        const txt: string = doc?.body?.innerText ?? ""
+        if (txt && q) {
+          const hay = cs ? txt : txt.toLowerCase()
+          const needle = cs ? q : q.toLowerCase()
+          let n = 0
+          let i = -1
+          while ((i = hay.indexOf(needle, i + 1)) >= 0 && n < 9999) n++
+          setFindTotal(n)
+        } else {
+          setFindTotal(0)
+        }
+      } catch {
+        setFindTotal(null)
+      }
     }
   }, [])
   const toggleBookmark = () => {
@@ -1183,11 +1253,21 @@ export const BrowserPanel = memo(function BrowserPanel({
   // (aplica + reporta nivel); si no, CSS directo (también válido por allowlist).
   const zoomCodeFor = (v: number) =>
     `(function(){var v=${JSON.stringify(v)};if(window.__oc_setZoom){window.__oc_setZoom(v)}else{try{document.documentElement.style.zoom=String(v);if(document.body)document.body.style.zoom=String(v)}catch(e){}}})()`
+  const readZoomMap = (): Record<string, number> => {
+    try {
+      const o = JSON.parse(localStorage.getItem(BROWSER_ZOOM_MAP_KEY) || "null")
+      return o && typeof o === "object" ? (o as Record<string, number>) : {}
+    } catch { return {} }
+  }
   const applyZoom = (next: number) => {
     const v = Math.max(0.5, Math.min(2.5, Math.round(next * 10) / 10))
     setZoomLevel(v)
-    try { localStorage.setItem("opencode.browser.zoom", String(v)) } catch {}
-    if (IS_DESKTOP) shell.browser.eval(zoomCodeFor(v)).catch(() => {})
+    // Recordado por dominio (Chrome-like); el global queda como default.
+    try {
+      const d = domainOf(currentSrc)
+      if (d) localStorage.setItem(BROWSER_ZOOM_MAP_KEY, JSON.stringify(withZoomForDomain(readZoomMap(), currentSrc, v)))
+    } catch {}
+    if (IS_DESKTOP) bEval(zoomCodeFor(v)).catch(() => {})
     else {
       try {
         const doc = iframeRef.current?.contentDocument as any
@@ -1198,6 +1278,23 @@ export const BrowserPanel = memo(function BrowserPanel({
       } catch {}
     }
   }
+
+  // Al cambiar de sitio, adoptar su zoom recordado (sin tocar el default).
+  const lastZoomDomain = useRef("")
+  useEffect(() => {
+    const d = domainOf(currentSrc)
+    if (!d || d === lastZoomDomain.current) return
+    lastZoomDomain.current = d
+    const map = readZoomMap()
+    if (map[d] === undefined) return
+    const v = zoomForDomain(map, currentSrc, zoomRef.current)
+    if (v === zoomRef.current) return
+    setZoomLevel(v)
+    if (!IS_DESKTOP) return
+    const t = window.setTimeout(() => { bEval(zoomCodeFor(v)).catch(() => {}) }, 900)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSrc])
 
   // Atajos del navegador: se registran en capture para ganar al listener
   // global de OpenHer y solo viven mientras este BrowserPanel está montado.
@@ -1247,6 +1344,9 @@ export const BrowserPanel = memo(function BrowserPanel({
     window.addEventListener("keydown", onKeyDown, true)
     return () => window.removeEventListener("keydown", onKeyDown, true)
   }, [activeTab, zoomLevel, handleBack, handleForward])
+
+  // Al cambiar de página el contador anterior ya no vale.
+  useEffect(() => { setFindTotal(null) }, [currentSrc])
 
   const targetWidth = DEVICE_WIDTHS[deviceMode]
   deviceWidthRef.current = targetWidth ? parseInt(targetWidth, 10) || null : null
@@ -1423,6 +1523,12 @@ export const BrowserPanel = memo(function BrowserPanel({
                   const q = inputUrl.trim().toLowerCase()
                   const hist = loadHistory()
                   const filtered = q ? hist.filter((u) => u.toLowerCase().includes(q)).slice(0, 6) : hist.slice(0, 6)
+                  const inFiltered = new Set(filtered)
+                  // Favoritos primero (funcionan sin red, a diferencia de Suggest).
+                  const markFiltered = (q
+                    ? bookmarks.filter((b) => b.url.toLowerCase().includes(q) || (b.title ?? "").toLowerCase().includes(q))
+                    : bookmarks
+                  ).filter((b) => !inFiltered.has(b.url)).slice(0, 4)
                   const qTrim = inputUrl.trim()
                   const showSearch = qTrim && !isProbablyUrl(qTrim)
                   return (
@@ -1432,6 +1538,11 @@ export const BrowserPanel = memo(function BrowserPanel({
                           <SearchIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Buscar "{qTrim}" en Google</span>
                         </button>
                       )}
+                      {markFiltered.map((b) => (
+                        <button key={b.url} type="button" className="browser-suggest-item" onClick={() => { setShowHistory(false); setSuggestions([]); navigateTab(b.url) }}>
+                          <span style={{ fontSize: 13, color: "var(--warning)" }}>*</span> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.title || b.url}</span>
+                        </button>
+                      ))}
                       {suggestions.map((s, idx) => (
                         <button key={s} type="button" className={`browser-suggest-item${idx === suggestIdx ? " active" : ""}`} style={idx === suggestIdx ? { background: "var(--primary-soft)", color: "var(--primary)" } : undefined} onClick={() => { setShowHistory(false); setSuggestions([]); setSuggestIdx(-1); navigateTab(`https://www.google.com/search?q=${encodeURIComponent(s)}`) }}>
                           <SearchIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</span>
@@ -1442,7 +1553,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                           <GlobeIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u}</span>
                         </button>
                       ))}
-                      {filtered.length === 0 && suggestions.length === 0 && !showSearch && (
+                      {filtered.length === 0 && markFiltered.length === 0 && suggestions.length === 0 && !showSearch && (
                         <div style={{ padding: "8px 10px", color: "var(--muted)", fontSize: 12 }}>Sin historial. Escribí para buscar en Google.</div>
                       )}
                     </>
@@ -1524,6 +1635,23 @@ export const BrowserPanel = memo(function BrowserPanel({
                   <span><kbd>Ctrl</kbd><kbd>0</kbd><em>Restablecer zoom</em></span>
                 </div>
               </div>
+              {profile && (
+                <div className="browser-tune-section">
+                  <div className="browser-tune-section-title">Perfil de datos (este exe)</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", overflowWrap: "anywhere" }}>
+                    <div title={profile.data_dir}>Datos: {profile.data_dir}</div>
+                    <div title={profile.downloads_dir}>Descargas: {profile.downloads_dir}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="browser-port-btn"
+                    style={{ marginTop: 6 }}
+                    onClick={() => { try { void navigator.clipboard.writeText(profile.downloads_dir) } catch {} }}
+                  >
+                    Copiar ruta de descargas
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1614,7 +1742,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             ref={findInputRef}
             autoFocus
             value={findQuery}
-            onChange={(e) => setFindQuery(e.target.value)}
+            onChange={(e) => { setFindQuery(e.target.value); setFindTotal(null) }}
             onKeyDown={(e) => {
               if (e.key === "Enter") applyFind(findQuery, findCase)
               if (e.key === "Escape") setFindOpen(false)
@@ -1624,6 +1752,11 @@ export const BrowserPanel = memo(function BrowserPanel({
           <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--muted)" }}>
             <LedSwitch label="Aa" checked={findCase} onChange={setFindCase} /> Aa
           </label>
+          {findTotal !== null && (
+            <span style={{ fontSize: 11, color: "var(--muted)", minWidth: 64 }} title="Coincidencias en la página">
+              {findTotal === 0 ? "Sin resultados" : `${findTotal} resultado${findTotal === 1 ? "" : "s"}`}
+            </span>
+          )}
           <button type="button" className="btn-secondary compact" onClick={() => applyFind(findQuery, findCase)}>Buscar</button>
           <button type="button" className="browser-nav-btn" onClick={() => setFindOpen(false)} aria-label="Cerrar">×</button>
         </div>
@@ -1707,6 +1840,16 @@ export const BrowserPanel = memo(function BrowserPanel({
       {/* 4. Web Viewport + drawer de anotaciones */}
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <div className="browser-viewport-container" ref={viewportRef} style={{ position: "relative", flex: 1, minWidth: 0 }}>
+          {/* Aviso de descarga completada (data/downloads) */}
+          {lastDownload && (
+            <div style={{ position: "absolute", right: 10, bottom: 10, zIndex: 6, maxWidth: 340, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "var(--text)", display: "flex", alignItems: "flex-start", gap: 8 }}>
+              <span style={{ color: lastDownload.ok ? "var(--success)" : "var(--danger)", fontWeight: 700 }}>{lastDownload.ok ? "Descargado" : "Falló"}</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={lastDownload.path ?? lastDownload.url}>
+                {(lastDownload.path ?? lastDownload.url).split(/[\\/]/).pop()}
+              </span>
+              <button type="button" onClick={() => setLastDownload(null)} aria-label="Cerrar aviso" style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }}>×</button>
+            </div>
+          )}
           {offline ? (
             <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text)", maxWidth: "460px", margin: "auto" }}>
               <div style={{ marginBottom: "12px", color: "var(--warning)", display: "inline-flex" }}><CloseIcon size={32} /></div>
@@ -1843,8 +1986,8 @@ export const BrowserPanel = memo(function BrowserPanel({
                 <button type="button" onClick={() => {
                   annotations.forEach((a) => onRemoveAnnotation?.(a.id))
                   if (IS_DESKTOP) {
-                    shell.browser.eval(clearBadgesScript).catch(() => {})
-                    annotations.forEach((a) => shell.browser.eval(unbindScript(a.id)).catch(() => {}))
+                    bEval(clearBadgesScript).catch(() => {})
+                    annotations.forEach((a) => bEval(unbindScript(a.id)).catch(() => {}))
                   }
                   onClearVisual?.()
                 }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12 }} title="Quitar todas">Quitar todo</button>
@@ -1894,7 +2037,7 @@ export const BrowserPanel = memo(function BrowserPanel({
                               type="button"
                               onClick={() => {
                                 onAnnotationStyle?.(a.id, {})
-                                if (IS_DESKTOP) shell.browser.eval(applyStyleScript(a.id, {})).catch(() => {})
+                                if (IS_DESKTOP) bEval(applyStyleScript(a.id, {})).catch(() => {})
                               }}
                               style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12, padding: 0 }}
                             >

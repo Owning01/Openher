@@ -168,10 +168,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string, force?: boolean) => {
     if (!config) return
     if (!session) return
-    if (msgs.isSending) {
-      msgs.setRuntimeError("Ya hay un envío en curso — espera un momento")
-      return false
-    }
     const rawComposer = (typeof text === "string" ? text : composerRef.current).trim() ? (typeof text === "string" ? text : composerRef.current) : ""
     const hasVisual = Boolean(visualPromptContext)
     const currentComposer = hasVisual ? formatSelectionForPrompt(rawComposer, visualPromptContext!) : rawComposer
@@ -185,6 +181,10 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       composerRef.current = ""
       if (hasVisual) onClearVisualSelection?.()
       return true
+    }
+    if (msgs.isSending) {
+      msgs.setRuntimeError("Ya hay un envío en curso — espera un momento")
+      return false
     }
     if (connectionState === "offline") {
       onQueueAction({
@@ -263,11 +263,10 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     })
     try { await msgs.abortSession(session.id, session.directory) } catch { /* ignore */ }
     msgs.loadSelected(session.id, session.directory).catch(() => undefined)
-    // Refrescar lista de sesiones: sin esto el status "busy" optimista queda
-    // clavado y todo envío posterior se bloquea con composer.busy
+    onSettled(session.id, session.directory)
     refresh().catch(() => undefined)
     setTimeout(() => { stopGenerationRef.current = false }, 2000)
-  }, [msgs, session, refresh])
+  }, [msgs, session, refresh, onSettled])
 
   const handleRevertToMessage = useCallback(async (messageID: string) => {
     try {

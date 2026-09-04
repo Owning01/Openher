@@ -13,13 +13,14 @@ pub fn handle(
     state: Arc<AppState>,
     path: &str,
     method: Method,
-    _q: &dyn Fn(&str) -> String,
+    q: &dyn Fn(&str) -> String,
 ) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
     let route = path.strip_prefix("/shell/browser")?;
     // /shell/browser/pick tiene GET y POST — diferenciar por método
     let resp = match (method, route) {
         (Method::Post, "/open") => match read_body(req) {
             Ok(v) => {
+                let view = v["view"].as_str().unwrap_or("");
                 let url = v["url"].as_str().unwrap_or("about:blank");
                 let has_bounds = v.get("bounds").is_some() && v["bounds"].is_object();
                 let bx = v["bounds"]["x"].as_f64().unwrap_or(0.0);
@@ -31,10 +32,10 @@ pub fn handle(
                     size: wry::dpi::LogicalSize::new(bw, bh).into(),
                 };
                 let is_default_bounds = !has_bounds && bx == 0.0 && by == 0.0 && bw == 800.0 && bh == 600.0;
-                match state.browser.open(url, bounds) {
+                match state.browser.open(view, url, bounds) {
                     Ok(()) => {
                         if is_default_bounds {
-                            let _ = state.browser.set_visible(false);
+                            let _ = state.browser.set_visible(view, false);
                         }
                         json_ok(&serde_json::json!({ "ok": true, "hidden_default": is_default_bounds }))
                     }
@@ -45,6 +46,7 @@ pub fn handle(
         },
         (Method::Post, "/bounds") => match read_body(req) {
             Ok(v) => {
+                let view = v["view"].as_str().unwrap_or("");
                 let bx = v["x"].as_f64().unwrap_or(0.0);
                 let by = v["y"].as_f64().unwrap_or(0.0);
                 let bw = v["w"].as_f64().unwrap_or(800.0);
@@ -53,7 +55,7 @@ pub fn handle(
                     position: wry::dpi::LogicalPosition::new(bx, by).into(),
                     size: wry::dpi::LogicalSize::new(bw, bh).into(),
                 };
-                match state.browser.set_bounds(bounds) {
+                match state.browser.set_bounds(view, bounds) {
                     Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
                     Err(e) => json_err(500, &e.to_string()),
                 }
@@ -62,8 +64,9 @@ pub fn handle(
         },
         (Method::Post, "/visibility") => match read_body(req) {
             Ok(v) => {
+                let view = v["view"].as_str().unwrap_or("");
                 let visible = v["visible"].as_bool().unwrap_or(true);
-                match state.browser.set_visible(visible) {
+                match state.browser.set_visible(view, visible) {
                     Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
                     Err(e) => json_err(500, &e.to_string()),
                 }
@@ -72,23 +75,34 @@ pub fn handle(
         },
         (Method::Post, "/navigate") => match read_body(req) {
             Ok(v) => {
+                let view = v["view"].as_str().unwrap_or("");
                 let url = v["url"].as_str().unwrap_or("");
                 let action = v["action"].as_str();
-                match state.browser.navigate(url, action) {
+                match state.browser.navigate(view, url, action) {
                     Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
                     Err(e) => json_err(500, &e.to_string()),
                 }
             }
             Err(e) => json_err(400, &e.to_string()),
         },
-        (Method::Post, "/close") => match state.browser.close() {
-            Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-            Err(e) => json_err(500, &e.to_string()),
-        },
-        (Method::Get, "/url") => match state.browser.current_url() {
+        // POST /close drena UNA vista ({"view": bid}) o todas (sin body).
+        // El frontend cierra la vista nativa al podar el bid huérfano.
+        (Method::Post, "/close") => {
+            let view: Option<String> = read_body(req).ok().and_then(|v| v["view"].as_str().map(|s| s.to_string()));
+            match state.browser.close(view.as_deref()) {
+                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+                Err(e) => json_err(500, &e.to_string()),
+            }
+        }
+        (Method::Get, "/url") => match state.browser.current_url(q("view").as_str()) {
             Ok(url) => json_ok(&serde_json::json!({ "url": url })),
             Err(e) => json_err(500, &e.to_string()),
         },
+        // Descargas completadas desde la última lectura (cola, máx 20).
+        (Method::Get, "/downloads") => {
+            let items = state.browser.drain_downloads();
+            json_ok(&serde_json::json!({ "downloads": items }))
+        }
         (Method::Get, "/shortcuts") => {
             let shortcuts: Vec<serde_json::Value> = state
                 .browser
@@ -100,6 +114,7 @@ pub fn handle(
         }
         (Method::Post, "/eval") => match read_body(req) {
             Ok(v) => {
+                let view = v["view"].as_str().unwrap_or("");
                 let code = v["code"].as_str().unwrap_or("");
                 if code.is_empty() {
                     return Some(json_err(400, "missing code"));
@@ -120,7 +135,7 @@ pub fn handle(
                     eprintln!("[browser][eval] forbidden code blocked (len={})", code.len());
                     return Some(json_err(403, "eval forbidden"));
                 }
-                match state.browser.eval(code) {
+                match state.browser.eval(view, code) {
                     Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
                     Err(e) => json_err(500, &e.to_string()),
                 }

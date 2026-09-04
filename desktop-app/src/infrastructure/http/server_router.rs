@@ -42,6 +42,17 @@ pub fn handle(
             Err(e) => json_err(500, &e.to_string()),
         });
     }
+    // Perfil portable: qué data/ usa ESTE exe (cada carpeta de exe tiene el
+    // suyo; alternar dev/release "pierde" sesiones). La UI lo muestra para
+    // que el usuario sepa dónde viven cookies, tabs y descargas.
+    if path == "/shell/profile" && method == Method::Get {
+        let data = crate::state::data_dir();
+        return Some(json_ok(&serde_json::json!({
+            "data_dir": data.to_string_lossy(),
+            "webview_dir": data.join("webview").to_string_lossy(),
+            "downloads_dir": data.join("downloads").to_string_lossy(),
+        })));
+    }
     // No match — permitir prefijo para no confundir con /shell/server* desconocida
     if path.starts_with("/shell/server") {
         return Some(json_err(404, "ruta server desconocida"));

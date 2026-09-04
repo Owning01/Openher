@@ -192,8 +192,8 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         }
     }
 
-    // ============================== Server manager (extraído)
-    if path.starts_with("/shell/server") {
+    // ============================== Server manager (extraído) + perfil portable
+    if path.starts_with("/shell/server") || path == "/shell/profile" {
         if let Some(resp) =
             crate::infrastructure::http::server_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
         {
