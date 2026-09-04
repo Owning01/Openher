@@ -7,11 +7,11 @@
   --surface: #ffffff;
   --surface-subtle: #fafafb;
   --surface-strong: #f4f4f5;
-  --surface-hover: #f4f4f5;
+  --surface-hover: #e9e9ec;
   --surface-soft: #f9f9fb;
   --border: #e4e4e7;
   --border-strong: #d4d4d8;
-  --border-subtle: #f4f4f5;
+  --border-subtle: #e9e9ec;
   --text: #18181b;
   --foreground: var(--text);
   --muted: #71717a;

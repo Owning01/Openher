@@ -561,7 +561,7 @@ export const SettingsPanel = memo(function SettingsPanel({
        </div>
 
        {draftProfile && (
-        <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch", background: "#18181c", border: "1px dashed #38383e" }}>
+        <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch", background: "var(--surface-subtle)", border: "1px dashed var(--border-strong)" }}>
          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span className="setting-item-title">{t('settings.serverAdd')} (Nuevo Perfil)</span>
           <button type="button" className="btn-icon btn-ghost" onClick={discardDraft}>

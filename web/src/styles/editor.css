@@ -106,14 +106,14 @@
 /* Sin highlight (plano o plaintext): el textarea sigue transparente; el pre
    pinta el texto base para que siempre haya tinta bajo el caret. */
 .liteed-hl:not(.has-hl) { color: var(--text); }
-/* Tokens lowlight reutilizan la paleta hljs global del chat */
-.liteed-hl .hljs-keyword, .liteed-hl .hljs-selector-tag { color: #c678dd; }
-.liteed-hl .hljs-string, .liteed-hl .hljs-regexp { color: #98c379; }
-.liteed-hl .hljs-number, .liteed-hl .hljs-literal { color: #d19a66; }
-.liteed-hl .hljs-comment, .liteed-hl .hljs-quote { color: var(--muted); font-style: italic; }
-.liteed-hl .hljs-title, .liteed-hl .hljs-title-function_ { color: #61afef; }
-.liteed-hl .hljs-built_in, .liteed-hl .hljs-type { color: #e5c07b; }
-.liteed-hl .hljs-attr, .liteed-hl .hljs-attribute, .liteed-hl .hljs-variable { color: #56b6c2; }
+/* Tokens lowlight con la paleta --code-* (claro/oscuro por tema) */
+.liteed-hl .hljs-keyword, .liteed-hl .hljs-selector-tag { color: var(--code-keyword); }
+.liteed-hl .hljs-string, .liteed-hl .hljs-regexp { color: var(--code-string); }
+.liteed-hl .hljs-number, .liteed-hl .hljs-literal { color: var(--code-number); }
+.liteed-hl .hljs-comment, .liteed-hl .hljs-quote { color: var(--code-comment); font-style: italic; }
+.liteed-hl .hljs-title, .liteed-hl .hljs-title-function_ { color: var(--code-function); }
+.liteed-hl .hljs-built_in, .liteed-hl .hljs-type { color: var(--code-builtin); }
+.liteed-hl .hljs-attr, .liteed-hl .hljs-attribute, .liteed-hl .hljs-variable { color: var(--code-attr); }
 .liteed-hl .hljs-operator, .liteed-hl .hljs-punctuation { color: var(--text); }
 .liteed-find, .liteed-goto {
   position: absolute;

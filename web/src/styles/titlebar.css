@@ -161,8 +161,8 @@
 }
 
 .titlebar-tab-close:hover {
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: #ffffff !important;
+  background: var(--surface-strong) !important;
+  color: var(--text) !important;
   opacity: 1;
 }
 
@@ -187,8 +187,8 @@
 }
 
 .titlebar-add-btn:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
+  background: var(--surface-hover) !important;
+  color: var(--text) !important;
 }
 
 /* ===== Split: grupos de tabs por panel DENTRO del propio div.titlebar =====
@@ -279,12 +279,12 @@
 }
 
 .win-btn:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
+  background: var(--surface-hover) !important;
+  color: var(--text) !important;
 }
 
 .win-btn:active {
-  background: rgba(255, 255, 255, 0.14) !important;
+  background: var(--surface-strong) !important;
 }
 
 .win-btn-close:hover {

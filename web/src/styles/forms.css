@@ -94,7 +94,7 @@ input[type="range"] {
   appearance: none;
   width: 100%;
   height: 4px;
-  background: #27272a;
+  background: var(--border-strong);
   border-radius: 2px;
   outline: none;
   border: none;
@@ -120,8 +120,8 @@ input[type="range"]::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #6366f1;
-  border: 2px solid #ffffff;
+  background: var(--primary);
+  border: 2px solid var(--bg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   cursor: pointer;
   transition: transform 0.1s ease;
@@ -135,8 +135,8 @@ input[type="range"]::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #6366f1;
-  border: 2px solid #ffffff;
+  background: var(--primary);
+  border: 2px solid var(--bg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   cursor: pointer;
 }
@@ -155,15 +155,15 @@ input[type="range"]::-moz-range-thumb {
   gap: 12px;
   padding: 10px 14px;
   border-radius: 6px;
-  background: #121215;
-  border: 1px solid #222226;
+  background: var(--surface);
+  border: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.12s ease;
 }
 
 .switch-row:hover {
-  background: #3a3a3c;
-  border-color: #27272a;
+  background: var(--surface-hover);
+  border-color: var(--border);
 }
 
 .switch-label {
@@ -177,7 +177,7 @@ input[type="range"]::-moz-range-thumb {
 .switch-label strong {
   font-size: 13px;
   font-weight: 500;
-  color: #f4f4f5;
+  color: var(--text);
 }
 
 .switch-label small {
@@ -192,7 +192,7 @@ input[type="range"]::-moz-range-thumb {
   height: 26px;
   border: none;
   border-radius: 13px;
-  background: #18181c;
+  background: var(--border-strong);
   cursor: pointer;
   padding: 0;
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.25);
@@ -200,8 +200,8 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .switch-track.active {
-  background: #6366f1;
-  border-color: #6366f1;
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .switch-track.compact {
@@ -224,6 +224,7 @@ input[type="range"]::-moz-range-thumb {
 
 .switch-track.active .switch-thumb {
   transform: translateX(16px);
+  background: var(--on-primary);
 }
 
 .switch-track.compact .switch-thumb {
@@ -342,7 +343,7 @@ input[type="range"]::-moz-range-thumb {
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
-  accent-color: #6366f1;
+  accent-color: var(--primary);
   cursor: pointer;
 }
 
@@ -423,10 +424,10 @@ input[type="range"]::-moz-range-thumb {
 .toggle-row {
   display: flex;
   gap: 3px;
-  background: #141417;
+  background: var(--surface-subtle);
   padding: 3px;
   border-radius: 6px;
-  border: 1px solid #222226;
+  border: 1px solid var(--border);
   width: fit-content;
 }
 
@@ -435,7 +436,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 4px;
   border: none;
   background: transparent;
-  color: #8b949e;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -449,14 +450,14 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .toggle-btn:hover {
-  color: #f4f4f5;
+  color: var(--text);
 }
 
 .toggle-btn.active,
 .panel.settings .toggle-btn.active {
-  background: #27272a;
+  background: var(--surface-hover);
   border-color: transparent;
-  color: #ffffff;
+  color: var(--text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   font-weight: 500;
 }
@@ -466,8 +467,8 @@ input[type="range"]::-moz-range-thumb {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  background: #121215;
-  border: 1px solid #222226;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   margin-bottom: 8px;
 }
@@ -475,7 +476,7 @@ input[type="range"]::-moz-range-thumb {
 .setting-row > span {
   font-size: 13px;
   font-weight: 500;
-  color: #f4f4f5;
+  color: var(--text);
 }
 
 
