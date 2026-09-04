@@ -49,6 +49,32 @@
     display: none;
   }
 
+  /* Bottom-nav real (NavBar variant=bottom): las vistas de altura fija
+     reservan su espacio para que la barra flotante no tape el final. */
+  .quickchat-view,
+  .learning-view,
+  .pcf-view {
+    height: calc(100dvh - 56px - 76px - env(safe-area-inset-bottom)) !important;
+  }
+  .sessions-main {
+    height: calc(100% - 76px - env(safe-area-inset-bottom)) !important;
+  }
+  .settings-view {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  /* Teclado abierto (visualViewport): la barra estorba al composer. */
+  body.kb-open .bottom-nav {
+    display: none;
+  }
+  body.kb-open .quickchat-view,
+  body.kb-open .learning-view,
+  body.kb-open .pcf-view {
+    height: calc(100dvh - 56px) !important;
+  }
+  body.kb-open .sessions-main {
+    height: 100% !important;
+  }
+
   /* Explorer en móvil: el visor de código gana altura para leer sin descargar. */
   .pcf-code-viewer {
     max-height: 55dvh;
@@ -218,6 +244,43 @@
   .app-icon {
     width: 32px;
     height: 32px;
+  }
+
+  /* 360px: ningún modal puede superar el viewport (antes 90vw/80vh fijos
+     dejaban bordes fuera y el cierre inalcanzable). */
+  .file-editor,
+  .terminal-modal,
+  .mcp-browser,
+  .skill-browser,
+  .skill-browser-detail,
+  .chat-customizer-modal,
+  .shortcuts-modal,
+  .archived-list,
+  .remote-connect {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+}
+
+/* Landscape bajo (teléfono girado): compactar chrome para dar aire al contenido. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .top-nav {
+    padding-top: 4px;
+    padding-bottom: var(--space-1);
+  }
+  .bottom-nav {
+    bottom: 4px;
+    left: var(--space-2);
+    right: var(--space-2);
+  }
+  .bottom-nav button {
+    min-height: 40px;
+  }
+  .quickchat-view,
+  .learning-view,
+  .pcf-view {
+    height: calc(100dvh - 44px - 52px) !important;
   }
 }
 

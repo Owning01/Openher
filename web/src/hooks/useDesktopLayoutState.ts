@@ -3,6 +3,7 @@ import type { DesktopLayout, ShellPanelKind } from "../types"
 import type { DesktopActivity } from "../widgets/activity-bar/ActivityBar"
 
 import { BROWSER_STACK_PREFIX } from "../components/browserSync"
+import { shell } from "../shell"
 
 export const DESKTOP_STATE_KEY = "opencode.desktop.state.v2"
 
@@ -344,6 +345,7 @@ export function useDesktopLayoutState(isDesktop: boolean, fallbackSessionID: str
   // vistas en producción, todas en google.com). Se auto-repara en el primer
   // run tras actualizar y barre las pilas de historial del mismo modo.
   const browserUrlsRef = (desktopLayout as any)?.browserTabUrls as Record<string, string> | undefined
+  const pruneWarmed = useRef(false)
   useEffect(() => {
     if (!isDesktop) return
     const urls = (desktopLayoutRef.current as any)?.browserTabUrls as Record<string, string> | undefined
@@ -364,13 +366,17 @@ export function useDesktopLayoutState(isDesktop: boolean, fallbackSessionID: str
         ...prev,
         layout: { ...prev.layout, browserTabUrls: pruneBrowserUrls((prev.layout as any)?.browserTabUrls, live) },
       }))
-      // Barrer pilas de historial huérfanas (mismo prefijo + bid).
+      // Barrer pilas de historial huérfanas (mismo prefijo + bid) y liberar
+      // su WebView nativo del pool (si no, queda ocupando ~80 MB). En el
+      // primer run no hay nada nativo que cerrar (pool vacío al arrancar).
       try {
         for (const k of orphans) {
           localStorage.removeItem(BROWSER_STACK_PREFIX + k)
+          if (isDesktop && pruneWarmed.current) shell.browser.close(k).catch(() => {})
         }
       } catch {}
     }
+    pruneWarmed.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDesktop, desktopState.tabStacks, browserUrlsRef])
 

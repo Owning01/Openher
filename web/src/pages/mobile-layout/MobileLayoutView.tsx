@@ -1,4 +1,4 @@
-import React, { Suspense, memo } from "react"
+import React, { Suspense, memo, useEffect, useRef } from "react"
 import type { ViewType, ServerConfig, FeatureFlags, ChatSettings, AgentOption, PromptSnippet, ServerProfile, ProviderInfo } from "../../types"
 import type { LanguageCode } from "../../i18n"
 import { NavBar } from "../../components/NavBar"
@@ -170,13 +170,39 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
     config,
   } = props
 
+  // Teclado en pantalla: sin plugin nativo, visualViewport avisa y la UI
+  // compacta (la barra inferior se oculta para no tapar el composer).
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const onResize = () => {
+      const open = vv.height < window.innerHeight - 120
+      document.body.classList.toggle("kb-open", open)
+    }
+    vv.addEventListener("resize", onResize)
+    return () => vv.removeEventListener("resize", onResize)
+  }, [])
+
+  // Swipe-back en el detalle: borde izquierdo → derecha vuelve atrás.
+  const touchX = useRef<number | null>(null)
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0]
+    touchX.current = t && t.clientX <= 28 ? t.clientX : null
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchX.current === null) return
+    const t = e.changedTouches[0]
+    if (t && t.clientX - touchX.current > 90 && navStackLength > 0) goBack()
+    touchX.current = null
+  }
+
   return (
     <div className="app-shell" data-navbar="header">
       {view !== "detail" && (
         <NavBar variant="top" view={view} onNavigate={onNavigate} onToggleLightMode={onToggleLightMode} />
       )}
 
-      <main className="app-mobile-content">
+      <main className="app-mobile-content" onTouchStart={view === "detail" ? onTouchStart : undefined} onTouchEnd={view === "detail" ? onTouchEnd : undefined}>
         {view === "sessions" && <SessionsPage>{sessionsView}</SessionsPage>}
         {view === "detail" && <DetailPage>{detailView}</DetailPage>}
 
@@ -317,6 +343,9 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
           </div>
         )}
       </main>
+      {view !== "detail" && (
+        <NavBar variant="bottom" view={view} onNavigate={onNavigate} onToggleLightMode={onToggleLightMode} />
+      )}
     </div>
   )
 })

@@ -431,19 +431,26 @@ export const shell = {
     mtime: (name: string) => get<{ ok: boolean; mtime: number; dir: string; port: number | null }>(`/shell/external/${name}/mtime`).catch(() => ({ ok: false, mtime: 0, dir: "", port: null } as any)),
   },
   browser: {
-    open: (url: string, bounds: { x: number; y: number; w: number; h: number }) =>
-      post<{ ok: boolean }>("/shell/browser/open", { url, bounds }),
-    setBounds: (bounds: { x: number; y: number; w: number; h: number }) =>
-      post<{ ok: boolean }>("/shell/browser/bounds", bounds),
-    setVisibility: (visible: boolean) =>
-      post<{ ok: boolean }>("/shell/browser/visibility", { visible }),
-    navigate: (url: string, action?: "back" | "forward" | "reload") =>
-      post<{ ok: boolean }>("/shell/browser/navigate", { url, action }),
-    close: () => post<{ ok: boolean }>("/shell/browser/close"),
-    url: () => get<{ url: string }>("/shell/browser/url"),
-    eval: (code: string) => post<{ ok: boolean }>("/shell/browser/eval", { code }),
+    // `view` = id de pestaña (bid): cada una tiene su WebView nativo del pool
+    // (máx 3, LRU). "" = vista única legacy (panel standalone).
+    open: (url: string, bounds: { x: number; y: number; w: number; h: number }, view = "") =>
+      post<{ ok: boolean }>("/shell/browser/open", { url, bounds, view }),
+    setBounds: (bounds: { x: number; y: number; w: number; h: number }, view = "") =>
+      post<{ ok: boolean }>("/shell/browser/bounds", { ...bounds, view }),
+    setVisibility: (visible: boolean, view = "") =>
+      post<{ ok: boolean }>("/shell/browser/visibility", { visible, view }),
+    navigate: (url: string, action?: "back" | "forward" | "reload", view = "") =>
+      post<{ ok: boolean }>("/shell/browser/navigate", { url, action, view }),
+    close: (view?: string) =>
+      post<{ ok: boolean }>("/shell/browser/close", view ? { view } : {}),
+    url: (view = "") => get<{ url: string }>(`/shell/browser/url?view=${encodeURIComponent(view)}`),
+    eval: (code: string, view = "") => post<{ ok: boolean }>("/shell/browser/eval", { code, view }),
     drainPicks: () => get<{ picks: any[] }>("/shell/browser/pick"),
     shortcuts: () => get<{ shortcuts: any[] }>("/shell/browser/shortcuts"),
+    downloads: () => get<{ downloads: { url: string; path: string | null; ok: boolean }[] }>("/shell/browser/downloads"),
+  },
+  profile: {
+    get: () => get<{ data_dir: string; webview_dir: string; downloads_dir: string }>("/shell/profile"),
   },
   config: {
     get: () => get<ShellConfig>("/shell/config"),

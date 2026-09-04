@@ -22,7 +22,7 @@ const navItems: Array<{ view: ViewType; icon: ReactNode; label: string }> = [
   { view: "settings", icon: <SettingsIcon size={18} />, label: "nav.settings" }
 ]
 
-export const NavBar = memo(function NavBar({ view, onNavigate, onToggleLightMode }: NavBarProps) {
+export const NavBar = memo(function NavBar({ variant = "top", view, onNavigate, onToggleLightMode }: NavBarProps) {
   const t = useT()
   const [isLight, setIsLight] = useState(() => document.documentElement.getAttribute("data-theme") === "light")
 
@@ -33,6 +33,23 @@ export const NavBar = memo(function NavBar({ view, onNavigate, onToggleLightMode
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
     return () => observer.disconnect()
   }, [])
+
+  if (variant === "bottom") {
+    // Barra inferior móvil (llega al pulgar): los 3 destinos que el top
+    // oculta en táctil. El CSS .bottom-nav ya existía pero nada lo montaba.
+    return (
+      <nav className="bottom-nav" role="navigation" aria-label="Navegación principal">
+        {navItems.filter((item) => item.view !== "settings").map((item) => (
+          <button key={item.view} type="button" data-view={item.view} className={view === item.view ? "active" : ""}
+            onClick={() => onNavigate(item.view)}
+            aria-label={t(item.label)}
+            aria-current={view === item.view ? "page" : undefined}>
+            {item.icon}
+          </button>
+        ))}
+      </nav>
+    )
+  }
 
   return (
     <header className="top-nav fade-in">

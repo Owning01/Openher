@@ -676,8 +676,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setRuntimeError,
     awaitingRef: () => awaitingAssistantReply,
     onSettled: (sid, dir) => {
+      setSessions((prev) => prev.map((s) => (s.id === sid ? { ...s, status: "idle" as const } : s)))
       loadSelected(sid, dir)
-      refreshSessions()
+      refreshSessions(true)
     },
   })
 
@@ -723,13 +724,14 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
   const settleSession = useCallback(
     async (sessionID: string, dir: string) => {
       try {
+        setSessions((prev) => prev.map((s) => (s.id === sessionID ? { ...s, status: "idle" as const } : s)))
         await loadSelected(sessionID, dir)
-        await refreshSessions()
+        await refreshSessions(true)
       } catch {
         /* silently fail */
       }
     },
-    [loadSelected, refreshSessions]
+    [loadSelected, refreshSessions, setSessions]
   )
 
   const {

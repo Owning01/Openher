@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest"
 import { buildWheelScript } from "./browserWheelScript"
-import { parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, loadBrowserStack, saveBrowserStack } from "./browserSync"
+import {
+  parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, loadBrowserStack, saveBrowserStack,
+  domainOf, zoomForDomain, withZoomForDomain, buildFindCountScript, parseFindCount,
+} from "./browserSync"
 
 describe("buildWheelScript", () => {
   it("inyectable por /eval y autocontenido", () => {
@@ -79,5 +82,38 @@ describe("browserStack", () => {
     expect(snap!.url).toBe("https://s69.com")
     saveBrowserStack(s, "k", { url: "", history: [], historyIdx: 0 })
     expect(loadBrowserStack(s, "k")).toBeNull()
+  })
+})
+
+describe("zoomPorDominio", () => {
+  it("domainOf normaliza host+puerto", () => {
+    expect(domainOf("https://YouTube.com/watch")).toBe("youtube.com")
+    expect(domainOf("http://localhost:5173/app")).toBe("localhost:5173")
+    expect(domainOf("127.0.0.1:4848")).toBe("127.0.0.1:4848")
+    expect(domainOf("")).toBe("")
+  })
+  it("zoomForDomain cae al fallback sin entrada", () => {
+    expect(zoomForDomain({}, "https://a.com", 1)).toBe(1)
+    expect(zoomForDomain({ "a.com": 1.5 }, "https://a.com/x", 1)).toBe(1.5)
+    expect(zoomForDomain({ "a.com": 9 }, "https://a.com", 1)).toBe(2.5)
+  })
+  it("withZoomForDomain acota y no toca otros sitios", () => {
+    const m = withZoomForDomain({ "a.com": 1.2 }, "https://b.com", 1.35)
+    expect(m).toEqual({ "a.com": 1.2, "b.com": 1.4 })
+  })
+})
+
+describe("findCount", () => {
+  it("script autocontenido con prefijo __oc_ (pasa allowlist de /eval)", () => {
+    const s = buildFindCountScript("hola", false)
+    expect(s).toContain("__oc_")
+    expect(s).toContain("find-count")
+    expect(s).toContain("postMessage")
+  })
+  it("parsea el reporte y rechaza basura", () => {
+    expect(parseFindCount({ type: "find-count", value: 7 })).toBe(7)
+    expect(parseFindCount(JSON.stringify({ type: "find-count", value: 3 }))).toBe(3)
+    expect(parseFindCount({ type: "browser-shortcut", action: "reload" })).toBeNull()
+    expect(parseFindCount("no-json")).toBeNull()
   })
 })

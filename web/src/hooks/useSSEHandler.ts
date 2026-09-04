@@ -222,23 +222,27 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     }
 
     if (type === "session.status") {
-      const sessionID = p.sessionID as string | undefined
-      const rawStatus = p.status as unknown
+      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
+      const rawStatus = (d.status ?? p.status) as unknown
       const statusType = typeof rawStatus === "string"
         ? rawStatus
         : (rawStatus as { type?: string } | undefined)?.type
-      if (sessionID && sessionID === deps.sessionID && statusType === "idle") {
+      const targetSessionID = sessionID ?? deps.sessionID
+      if (targetSessionID && targetSessionID === deps.sessionID && statusType === "idle") {
         deps.setAwaitingAssistantReply(false)
-        deps.onSettled(sessionID, deps.directory ?? "")
+        deps.onSettled(targetSessionID, deps.directory ?? "")
       }
       return
     }
 
     if (type === "session.idle") {
-      const sessionID = p.sessionID as string | undefined
-      if (sessionID && sessionID === deps.sessionID) {
+      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
+      const targetSessionID = sessionID ?? deps.sessionID
+      if (targetSessionID && targetSessionID === deps.sessionID) {
         deps.setAwaitingAssistantReply(false)
-        deps.onSettled(sessionID, deps.directory ?? "")
+        deps.onSettled(targetSessionID, deps.directory ?? "")
       }
       return
     }
@@ -246,9 +250,10 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     if (type === "session.error") {
       // Solo mostrar errores de la sesión visible: un error de otra sesión del
       // mismo directorio no debe aparecer como error de este chat.
-      const sessionID = p.sessionID as string | undefined
+      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       if (sessionID && sessionID !== deps.sessionID) return
-      const msg = (p.message ?? p.text ?? "") as string
+      const msg = (d.message ?? d.text ?? p.message ?? p.text ?? "") as string
       if (msg) deps.setRuntimeError(msg)
       deps.setAwaitingAssistantReply(false)
     }
