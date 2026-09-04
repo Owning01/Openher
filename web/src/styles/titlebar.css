@@ -257,3 +257,27 @@ html[data-desktop="true"] .app-shell {
 .app-shell.has-titlebar {
   padding-top: 0;
 }
+
+/* WeatherChip — pill mínima (icono SVG + grados). Sin fondo sólido para no
+   pelear con titlebar/nav; -webkit-app-region evita que bloquee el drag. */
+.weather-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+.weather-chip:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.weather-temp {
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}

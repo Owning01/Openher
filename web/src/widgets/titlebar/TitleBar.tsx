@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useState, useRef } from "react"
 import { useIsDesktop } from "../../hooks/useIsDesktop"
+import { WeatherChip } from "../../components/WeatherChip"
 import {
   ChatIcon,
   TerminalIcon,
@@ -340,6 +341,7 @@ export const TitleBar = memo(function TitleBar({
         </div>
       )}
 
+      <WeatherChip />
       <div className="win-controls" aria-label="Windows controls">
         <button
           type="button"
