@@ -170,7 +170,7 @@ export const PipIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Picture in picture"><rect x="2" y="4" width="20" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></Svg>)
 export const LogoIcon = ({ className = "", size = 32 }: { className?: string; size?: number }) => {
   return (
-    <img src="./img/apple-touch-icon-180x180.jpg" alt="OpenCode"
+    <img src="./img/openher-mark-180.png" alt="OpenHer"
       width={size} height={size} className={className}
       style={{ objectFit: "contain", display: "inline-block", verticalAlign: "middle" }} />
   )

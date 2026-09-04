@@ -17,7 +17,7 @@ const DEFAULT_FLAGS: NotificationFlags = {
 }
 
 export function notify(title: string, body: string) {
-  sendNotification(title, body, "/img/opencode-logo-dark.jpg")
+  sendNotification(title, body, "/img/openher-mark-180.png")
 }
 
 export function useNotifications() {
