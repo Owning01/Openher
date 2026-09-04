@@ -1002,22 +1002,29 @@ export const TerminalPanel = memo(function TerminalPanel({
           </div>
         ) : (
           <>
-            {/* Viewport de xterm: todas las terminales montadas para no perder procesos */}
+            {/* Viewport de xterm: solo la terminal activa montada (las ocultas
+            desmontan su canvas/WebGL y re-adjuntan el PTY vía poll(ptyId,0) al
+            volver — el proceso sobrevive en el backend). Montar N xterms con
+            scrollback 3000 retenía GB en GPU+JS. */}
             <div className="terminal-viewport-container">
-              {termTabs.map((tab) => (
+              {(() => {
+                const visibleTab = termTabs.find((t) => t.id === activeTabId) ?? termTabs[0]
+                if (!visibleTab) return null
+                return (
                 <div
-                  key={tab.id}
+                  key={visibleTab.id}
                   style={{
                     position: "absolute",
                     inset: 0,
-                    visibility: tab.id === activeTabId ? "visible" : "hidden",
-                    pointerEvents: tab.id === activeTabId ? "auto" : "none",
-                    zIndex: tab.id === activeTabId ? 1 : 0,
+                    visibility: "visible",
+                    pointerEvents: "auto",
+                    zIndex: 1,
                   }}
                 >
-                  <SingleTerminal cwd={cwd} shellName={tab.shell} tabId={tab.id} />
+                  <SingleTerminal cwd={cwd} shellName={visibleTab.shell} tabId={visibleTab.id} />
                 </div>
-              ))}
+                )
+              })()}
             </div>
 
             {/* Columna lateral de terminales activas estilo VS Code */}

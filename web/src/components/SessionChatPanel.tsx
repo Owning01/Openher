@@ -369,8 +369,11 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   // Antes hacía `if(isStreamingActive) return` → con SSE vivo nunca hacía fetch y el pull
   // quedaba congelado hasta re-entrar (que fuerza loadSelected). Ahora poll siempre;
   // el merge de useMessages protege el mensaje en curso (awaiting) contra borrado.
+  // Con streaming activo el poll va lento (15s): recargar 200 msgs cada 3s en pleno
+  // stream saturaba GC/DOM justo mientras se lee.
   const isStreamingActive = streamState === "streaming"
-  const pollInterval = isWorking ? 3000 : dataMode === "full" ? 5000 : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
+  const baseInterval = isWorking ? 3000 : dataMode === "full" ? 5000 : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
+  const pollInterval = isStreamingActive ? Math.max(baseInterval, 15000) : baseInterval
   usePolling(async () => {
     await msgs.loadSelected(session.id, session.directory).catch(() => undefined)
   }, pollInterval, [session.id, session.directory, dataMode, isWorking, isStreamingActive], false)
