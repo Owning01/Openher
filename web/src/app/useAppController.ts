@@ -203,6 +203,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setPickerError,
     browseNewSessionDirectory,
     setShowNewSessionPicker,
+    openNewSessionPicker,
+    persistDirectory,
   } = useFolderPicker(config)
 
   const { view, navigate, goBack, navStackRef } = useAppNavigation({
@@ -572,16 +574,13 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     [openPluginAsTab, navigate]
   )
 
-  const handleOpenNewSession = useCallback(async () => {
-    const s = await createSession("")
-    if (s) {
-      recordSessionCreated()
-      navigate("detail")
-    }
-  }, [createSession, recordSessionCreated, navigate])
+  const handleOpenNewSession = useCallback(() => {
+    void openNewSessionPicker()
+  }, [openNewSessionPicker])
 
   const handleCreateSession = useCallback(
     async (dir?: string) => {
+      if (dir) persistDirectory(dir)
       const s = await createSession(dir)
       setShowNewSessionPicker(false)
       if (s) {
@@ -589,7 +588,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
         navigate("detail")
       }
     },
-    [createSession, recordSessionCreated, navigate, setShowNewSessionPicker]
+    [createSession, recordSessionCreated, navigate, setShowNewSessionPicker, persistDirectory]
   )
 
   const fb = useFileBrowser(config, selectedSession?.directory)
