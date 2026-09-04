@@ -337,7 +337,7 @@
 
 .list-mode-pill:hover {
   color: var(--text, #f4f4f5);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-hover);
 }
 
 .list-mode-pill.active {
@@ -451,12 +451,12 @@
 
 .session-toolbar-row .btn-icon:hover,
 .app-desktop-sidebar .session-toolbar-row .btn-icon:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-hover);
   color: var(--text, #ffffff);
 }
 
 .session-toolbar-row .btn-icon.active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-strong);
   color: var(--text, #f4f4f5);
 }
 
@@ -505,8 +505,8 @@
 
 .session-toolbar-row .btn-new-session:hover {
   background: var(--surface-hover, #3f3f46);
-  border-color: var(--text, #71717a);
-  color: #ffffff;
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 .session-toolbar-row .btn-new-session:disabled {
@@ -527,9 +527,9 @@
   height: 22px;
   padding: 0 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-hover);
   border: 1px solid var(--border-subtle, #1c1c20);
-  color: #a1a1aa;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -599,13 +599,13 @@
 }
 
 .quick-access-tab:hover {
-  color: #f4f4f5;
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  background: var(--surface-hover);
 }
 
 .quick-access-tab.open {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--surface-strong);
+  color: var(--text);
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
@@ -615,14 +615,14 @@
   font-weight: 600;
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-strong);
   color: var(--muted, #a1a1aa);
   flex-shrink: 0;
 }
 
 .quick-access-tab.open .quick-access-count {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .quick-access-chevron {
@@ -642,7 +642,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: #27272a transparent;
+  scrollbar-color: var(--border-strong) transparent;
   padding: 4px 2px 4px 0;
   margin-top: 4px;
   container-type: inline-size;
@@ -653,7 +653,7 @@
 }
 
 .quick-access-list::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--border-strong);
   border-radius: 3px;
 }
 
@@ -670,7 +670,7 @@
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: #e4e4e7;
+  color: var(--text);
   font-size: 12px;
   font-weight: 400;
   cursor: pointer;
@@ -682,8 +682,8 @@
 }
 
 .quick-access-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .quick-access-title {
@@ -701,7 +701,7 @@
 .quick-access-time {
   flex: 0 0 auto;
   font-size: 10.5px;
-  color: #71717a;
+  color: var(--muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -716,7 +716,7 @@
   flex-shrink: 0;
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--muted);
   cursor: pointer;
   padding: 0;
   display: inline-flex;
@@ -738,7 +738,7 @@
   flex-shrink: 0;
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--muted);
   cursor: pointer;
   padding: 2px;
   display: inline-flex;
@@ -820,7 +820,7 @@
 .session-card:hover,
 .session-card:focus-visible {
   border-color: transparent;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-hover);
   box-shadow: none !important;
   transform: none !important;
   outline: none;
@@ -828,11 +828,11 @@
 
 .session-card.active {
   border-left-color: var(--border-strong, #52525b);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-strong);
 }
 
 .session-card.active .session-title {
-  color: #ffffff;
+  color: var(--text);
   font-weight: 500;
 }
 
@@ -865,7 +865,7 @@
 .session-title {
   font-size: 12px;
   font-weight: 400;
-  color: #d4d4d8;
+  color: var(--muted-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -877,7 +877,7 @@
 
 .time-label {
   font-size: 10.5px;
-  color: #71717a;
+  color: var(--muted);
   white-space: nowrap;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
@@ -906,7 +906,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #52525b;
+  color: var(--muted-strong);
   flex: 0 0 auto;
   transition: color 0.1s ease;
 }
@@ -921,14 +921,14 @@
 }
 
 .star-empty {
-  color: #52525b;
+  color: var(--muted-strong);
 }
 
 .session-child-wrap {
   position: relative;
   margin-left: 10px;
   padding-left: 6px;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 1px solid var(--border);
 }
 
 .session-parent-wrap {
@@ -976,13 +976,13 @@
 
 .project-card:hover,
 .project-card:focus-visible {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-hover);
   box-shadow: none;
   outline: none;
 }
 
 .project-card.expanded {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--primary-soft);
 }
 
 .project-card-header {
@@ -1034,7 +1034,7 @@
 .project-name {
   font-size: 12px;
   font-weight: 600;
-  color: #f4f4f5;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1042,7 +1042,7 @@
 
 .project-parent-path {
   font-size: 10px;
-  color: #71717a;
+  color: var(--muted);
   font-family: var(--font-mono, monospace);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1062,8 +1062,8 @@
   font-weight: 500;
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #71717a;
+  background: var(--surface-hover);
+  color: var(--muted);
 }
 
 .project-quick-btn {
@@ -1074,7 +1074,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #a1a1aa;
+  color: var(--muted);
   border-radius: 4px;
   transition: opacity 0.1s ease, color 0.1s ease;
 }
@@ -1084,8 +1084,8 @@
 }
 
 .project-quick-btn:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  background: var(--surface-strong);
 }
 
 .project-sessions-inline {
@@ -1096,7 +1096,7 @@
   margin-left: 10px;
   margin-top: 2px;
   margin-bottom: 4px;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 1px solid var(--border);
 }
 
 /* Project View Heading */
@@ -1247,7 +1247,7 @@
   justify-content: center;
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 0.75rem;
   margin-right: var(--space-1);
 }

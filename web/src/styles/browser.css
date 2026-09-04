@@ -39,7 +39,7 @@
   padding: 0 10px;
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--primary-soft);
   color: var(--muted);
   font-size: 13px;
   font-family: var(--font-family);
@@ -53,7 +53,7 @@
 }
 
 .browser-tab:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--surface-hover);
   color: var(--text);
 }
 
@@ -102,7 +102,7 @@
 
 .browser-tab-close:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--surface-strong);
   color: var(--text);
 }
 
@@ -125,7 +125,7 @@
 }
 
 .browser-tab-new:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-hover);
   color: var(--text);
 }
 
@@ -277,7 +277,7 @@
   font-weight: 500;
   border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border);
-  background: var(--surface-2);
+  background: var(--surface-subtle);
   color: var(--text);
   cursor: pointer;
   text-align: center;
@@ -307,7 +307,7 @@
   font-size: 0.875rem;
   border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border);
-  background: var(--surface-2);
+  background: var(--surface-subtle);
   color: var(--muted);
   cursor: pointer;
   text-align: center;
