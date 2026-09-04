@@ -2,7 +2,26 @@ import { useState, useCallback, useEffect, useRef } from "react"
 import type { DesktopLayout, ShellPanelKind } from "../types"
 import type { DesktopActivity } from "../widgets/activity-bar/ActivityBar"
 
+import { BROWSER_STACK_PREFIX } from "../components/browserSync"
+
 export const DESKTOP_STATE_KEY = "opencode.desktop.state.v2"
+
+// Subconjunto de browserTabUrls referenciado por algún stack/sesión.
+// Puro y testeable: los bids huérfanos (pestaña cerrada) se caen solos.
+export function pruneBrowserUrls(
+  urls: Record<string, string> | undefined,
+  liveIds: Set<string> | Array<string> | undefined
+): Record<string, string> | undefined {
+  if (!urls || typeof urls !== "object") return urls
+  const live = liveIds instanceof Set ? liveIds : new Set(liveIds ?? [])
+  let dirty = false
+  const next: Record<string, string> = {}
+  for (const [k, v] of Object.entries(urls)) {
+    if (live.has(k)) next[k] = v
+    else dirty = true
+  }
+  return dirty ? next : urls
+}
 
 let panelIdCounter = 0
 export function genPanelId(): string {
@@ -319,6 +338,41 @@ export function useDesktopLayoutState(isDesktop: boolean, fallbackSessionID: str
     terminalDocked,
     terminalHeight,
   ])
+
+  // Purga de browserTabUrls huérfanos: al cerrar pestañas/paneles el bid
+  // desaparece del stack pero su URL quedaba para siempre (83 huérfanas
+  // vistas en producción, todas en google.com). Se auto-repara en el primer
+  // run tras actualizar y barre las pilas de historial del mismo modo.
+  const browserUrlsRef = (desktopLayout as any)?.browserTabUrls as Record<string, string> | undefined
+  useEffect(() => {
+    if (!isDesktop) return
+    const urls = (desktopLayoutRef.current as any)?.browserTabUrls as Record<string, string> | undefined
+    if (!urls || typeof urls !== "object") return
+    const live = new Set<string>()
+    for (const s of desktopState.tabStacks ?? []) {
+      for (const id of s ?? []) {
+        if (typeof id === "string" && id.startsWith("browser:")) live.add(id)
+      }
+    }
+    for (const s of desktopLayoutRef.current.sessions ?? []) {
+      if (typeof s === "string" && s.startsWith("browser:")) live.add(s)
+    }
+    const pruned = pruneBrowserUrls(urls, live)
+    if (pruned !== urls) {
+      const orphans = Object.keys(urls).filter((k) => !live.has(k))
+      setDesktopState((prev) => ({
+        ...prev,
+        layout: { ...prev.layout, browserTabUrls: pruneBrowserUrls((prev.layout as any)?.browserTabUrls, live) },
+      }))
+      // Barrer pilas de historial huérfanas (mismo prefijo + bid).
+      try {
+        for (const k of orphans) {
+          localStorage.removeItem(BROWSER_STACK_PREFIX + k)
+        }
+      } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDesktop, desktopState.tabStacks, browserUrlsRef])
 
   return {
     desktopState,

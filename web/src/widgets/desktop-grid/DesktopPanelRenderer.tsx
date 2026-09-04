@@ -201,6 +201,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
                       initialUrl={bUrl}
                       isActive={active && isActiveBid}
                       hideTabBar
+                      persistKey={bid}
                       onClose={() => onRemoveTab(stack.indexOf(bid))}
                       onUrlChange={(newUrl: string) => props.onSetDesktopLayout?.((prev: any) => ({ ...prev, browserTabUrls: { ...(prev.browserTabUrls ?? {}), [bid]: newUrl } }))}
                       visualSelection={vs.selection}
