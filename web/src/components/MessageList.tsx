@@ -49,6 +49,9 @@ export const MessageList = memo(function MessageList({
   // ui-regression anchor: scrollTo({ top: container.scrollHeight — logic lives in useFollowTail
 
   const INITIAL_PAGE_SIZE = 40
+  // Tope de DOM: sesiones enormes (DB de GB) sin virtualización colgaban el
+  // renderer y el scroll. 120 burbujas cubren la lectura; el resto bajo demanda.
+  const MAX_VISIBLE = 120
   const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_SIZE)
 
   useEffect(() => {
@@ -57,7 +60,7 @@ export const MessageList = memo(function MessageList({
 
   useEffect(() => {
     if (scrollToMessageID) {
-      setVisibleCount(messages.length)
+      setVisibleCount((prev) => Math.max(prev, Math.min(messages.length, MAX_VISIBLE)))
     }
   }, [scrollToMessageID, messages.length])
 
@@ -172,7 +175,7 @@ export const MessageList = memo(function MessageList({
                   type="button"
                   className="btn-secondary compact load-earlier-btn"
                   style={{ fontSize: "0.75rem", padding: "4px 14px", borderRadius: "14px" }}
-                  onClick={() => setVisibleCount((prev) => prev + INITIAL_PAGE_SIZE)}
+                  onClick={() => setVisibleCount((prev) => Math.min(prev + INITIAL_PAGE_SIZE, MAX_VISIBLE))}
                 >
                   ↑ Cargar {Math.min(INITIAL_PAGE_SIZE, messages.length - visibleCount)} mensajes anteriores ({messages.length - visibleCount} restantes)
                 </button>

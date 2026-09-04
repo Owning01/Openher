@@ -94,6 +94,19 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
   const { status, error, imageUrl, info, fps, bytes, latency, refreshInfo, retry } =
     useRemoteDesktop(config, params, streamingEnabled)
 
+  // Frames intermedios que nunca llegaron a <img> (llegan más rápido de lo
+  // que decodifica): revocar el anterior al pintar el nuevo. El onLoad
+  // conserva el último decodificado; esto acota a 2 URLs vivas. Sin esto,
+  // a 10-15fps se acumulaban blobs de MB en el heap.
+  const prevImageUrlRef = useRef<string | null>(null)
+  useEffect(() => {
+    const prev = prevImageUrlRef.current
+    prevImageUrlRef.current = imageUrl
+    if (prev && prev !== imageUrl && prev !== loadedFrameUrlRef.current) {
+      URL.revokeObjectURL(prev)
+    }
+  }, [imageUrl])
+
   // ===== Input remoto =====
   const send = useCallback((payload: Parameters<typeof desktopApi.input>[1]) => {
     if (config) desktopApi.input(config, payload).catch(() => undefined)

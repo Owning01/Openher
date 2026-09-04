@@ -600,7 +600,11 @@ export const BrowserPanel = memo(function BrowserPanel({
     }
     document.addEventListener("visibilitychange", handleVis)
     const onDprChange = () => syncBounds()
-    try { window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener("change", onDprChange) } catch {}
+    let dprQuery: MediaQueryList | null = null
+    try {
+      dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+      dprQuery.addEventListener("change", onDprChange)
+    } catch { dprQuery = null }
 
     return () => {
       cancelled = true
@@ -609,6 +613,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       window.removeEventListener("resize", syncBounds)
       window.removeEventListener("scroll", syncBounds, true)
       document.removeEventListener("visibilitychange", handleVis)
+      try { dprQuery?.removeEventListener("change", onDprChange) } catch {}
       if (debounceTimer) clearTimeout(debounceTimer)
       el.removeAttribute("data-browser-mounted")
       // Mantener WebView vivo para que cookies/sesión Google persistan entre tabs

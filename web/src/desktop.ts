@@ -207,7 +207,7 @@ export async function readMJPEGStream(
       const frameBytes = buffer.slice(frameStart, frameStart + len)
       buffer = buffer.slice(frameStart + len)
 
-      onFrame(URL.createObjectURL(new Blob([frameBytes.slice()], { type: "image/jpeg" })), frameBytes.length)
+      onFrame(URL.createObjectURL(new Blob([frameBytes], { type: "image/jpeg" })), frameBytes.length)
 
       // Descartar el "\r\n" y el siguiente "--ocd-frame" para quedar en el header nuevo.
       const nextBoundary = indexOfBytes(buffer, BOUNDARY_BYTES)
