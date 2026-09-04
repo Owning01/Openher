@@ -403,7 +403,16 @@ fn cmd_close(inner: &mut SubWebViewInner) -> Result<(), String> {
 
 fn cmd_current_url(inner: &mut SubWebViewInner) -> Result<String, String> {
     if let Some(wv) = &inner.webview {
-        return wv.url().map_err(|e| e.to_string());
+        let live = wv.url().map_err(|e| e.to_string())?;
+        // Sincronizar el espejo: la página pudo navegar por sí sola (links,
+        // redirects, SPA) sin pasar por open()/navigate(). Sin esto inner.url
+        // queda vieja y el skip de misma-URL de cmd_open/cmd_navigate actúa
+        // sobre datos rancios (muestra página ajena o recarga sin necesidad,
+        // matando logins/flujos en curso).
+        if live != "about:blank" && !live.is_empty() {
+            inner.url = live.clone();
+        }
+        return Ok(live);
     }
     Ok(inner.url.clone())
 }

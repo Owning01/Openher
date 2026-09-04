@@ -11,7 +11,7 @@ import {
 } from "./browserOverlayScript"
 import { buildPipScript } from "./browserPipScript"
 import { buildWheelScript } from "./browserWheelScript"
-import { parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, type PageShortcutAction } from "./browserSync"
+import { parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, BROWSER_STACK_PREFIX, loadBrowserStack, saveBrowserStack, type PageShortcutAction } from "./browserSync"
 
 const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
 export const BROWSER_HOME = "https://www.google.com"
@@ -213,11 +213,15 @@ export const BrowserPanel = memo(function BrowserPanel({
   onToggleInspectTool,
   hideTabBar = false,
   onUrlChange,
+  // Clave estable del tab desktop (bid): con hideTabBar persiste la pila
+  // atrás/adelante en localStorage para que sobreviva reinicios.
+  persistKey,
 }: {
   initialUrl?: string
   isActive?: boolean
   onClose?: () => void
   hideTabBar?: boolean
+  persistKey?: string
   onUrlChange?: (url: string) => void
   visualSelection?: VisualSelection | null
   inspectMode?: boolean
@@ -233,16 +237,27 @@ export const BrowserPanel = memo(function BrowserPanel({
   onToggleInspectTool?: (tool: InspectTool) => void
 }) {
   const [tabs, setTabs] = useState<BrowserTabItem[]>(() => {
+    const single = (url: string, history?: string[], historyIdx?: number): BrowserTabItem[] => [
+      {
+        id: "tab-1",
+        url,
+        title: formatDisplayTitle(url),
+        history: history ?? [url],
+        historyIdx: historyIdx ?? 0,
+      },
+    ]
     if (hideTabBar) {
-      return [
-        {
-          id: "tab-1",
-          url: initialUrl,
-          title: formatDisplayTitle(initialUrl),
-          history: [initialUrl],
-          historyIdx: 0,
-        },
-      ]
+      // Restaurar pila atrás/adelante si coincide con la URL del layout
+      // (padre = fuente autoritativa; la pila solo suma historial).
+      if (persistKey) {
+        try {
+          const snap = loadBrowserStack(localStorage, BROWSER_STACK_PREFIX + persistKey)
+          if (snap && snap.url === initialUrl && snap.history.includes(initialUrl)) {
+            return single(snap.url, snap.history, snap.historyIdx)
+          }
+        } catch {}
+      }
+      return single(initialUrl)
     }
     try {
       const raw = localStorage.getItem(BROWSER_TABS_KEY)
@@ -352,6 +367,20 @@ export const BrowserPanel = memo(function BrowserPanel({
     if (hideTabBar) return
     try { localStorage.setItem(BROWSER_TABS_KEY, JSON.stringify(tabs.slice(0, 20))) } catch {}
   }, [tabs, hideTabBar])
+  // hideTabBar (desktop): la URL actual la guarda el padre (browserTabUrls);
+  // aquí solo la pila atrás/adelante bajo la clave del bid.
+  useEffect(() => {
+    if (!hideTabBar || !persistKey) return
+    try {
+      const t = tabs[0]
+      if (!t) return
+      saveBrowserStack(localStorage, BROWSER_STACK_PREFIX + persistKey, {
+        url: t.url,
+        history: t.history,
+        historyIdx: t.historyIdx,
+      })
+    } catch {}
+  }, [tabs, hideTabBar, persistKey])
   useEffect(() => {
     if (hideTabBar) return
     try { localStorage.setItem(BROWSER_ACTIVE_KEY, activeTabId) } catch {}
