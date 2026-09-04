@@ -15,10 +15,12 @@ import { GitToolbar } from "./GitToolbar"
 import { AutoQuestionPrompt } from "./AutoQuestionPrompt"
 import { PermissionPrompt } from "./PermissionPrompt"
 import { ChatCustomizerModal } from "./ChatCustomizerModal"
+import { ChatTerminalDock } from "./ChatTerminalDock"
 import { SelectionBar } from "./SelectionBar"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 
 import { useOutsideClick } from "../hooks/useOutsideClick"
+import { killTerminalPty } from "../utils/terminalStore"
 import { useDevServer } from "../hooks/useDevServer"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, AgentOption, ModelOption, DataMode, CommandInfo,
@@ -162,6 +164,16 @@ export const ChatView = memo(function ChatView({
   const [showSkills, setShowSkills] = useState(false)
   const [showPrompts, setShowPrompts] = useState(false)
   const [showChatCustomizer, setShowChatCustomizer] = useState(false)
+  const [chatTermOpen, setChatTermOpen] = useState(false)
+  const [chatTermGen, setChatTermGen] = useState(0)
+  // Cambio de sesión: el dock se pliega (el PTY por sesión sobrevive en el store).
+  useEffect(() => { setChatTermOpen(false) }, [selectedSession?.id])
+  const chatTermId = selectedSession ? `chat-term-${selectedSession.id}-g${chatTermGen}` : null
+  const handleKillChatTerm = useCallback(() => {
+    if (chatTermId) killTerminalPty(chatTermId)
+    setChatTermGen((g) => g + 1)
+    setChatTermOpen(false)
+  }, [chatTermId])
   const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
   // Estable: evita que cada render del padre cree un nuevo function ref
@@ -418,6 +430,15 @@ export const ChatView = memo(function ChatView({
                   <PaintIcon size={14} />
                 </button>
               )}
+              {selectedSession && (
+                <button className={`btn-icon compact chat-term-btn${chatTermOpen ? " active" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); setChatTermOpen((v) => !v) }}
+                  title={t('session.terminal')}
+                  aria-label={t('session.terminal')}
+                  aria-pressed={chatTermOpen}>
+                  <TerminalIcon size={14} />
+                </button>
+              )}
               <button className="btn-icon compact"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -652,6 +673,15 @@ export const ChatView = memo(function ChatView({
         <div className={`todo-panel${todosExpanded ? " open" : ""}`}>
           <div className="todo-panel-header">
             <span className="todo-panel-title">{t('todo.title')}</span>
+      {chatTermOpen && chatTermId && selectedSession && !readingMode && (
+        <ChatTerminalDock
+          tabId={chatTermId}
+          cwd={selectedSession.directory}
+          onHide={() => setChatTermOpen(false)}
+          onKill={handleKillChatTerm}
+        />
+      )}
+
             <button className="btn-icon btn-secondary compact" onClick={onTodosToggle} aria-label="Cerrar">
               <CloseIcon size={12} />
             </button>
