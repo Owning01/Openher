@@ -326,7 +326,7 @@
   display: flex;
   justify-content: center;
   align-items: stretch;
-  background: #ffffff;
+  background: var(--bg);
   position: relative;
   overflow: hidden;
 }

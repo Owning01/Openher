@@ -327,6 +327,8 @@ export const BrowserPanel = memo(function BrowserPanel({
   const findInputRef = useRef<HTMLInputElement | null>(null)
   const nativeReady = useRef(false)
   const prevInitialUrlRef = useRef(initialUrl)
+  const onUrlChangeRef = useRef(onUrlChange)
+  onUrlChangeRef.current = onUrlChange
 
   // Persistir tabs/sesión como Chrome (solo con tabbar interno visible)
   useEffect(() => {
@@ -349,14 +351,18 @@ export const BrowserPanel = memo(function BrowserPanel({
   const isBookmarked = bookmarks.some((b) => b.url === currentSrc)
 
   useEffect(() => {
+    // Solo resincronizar al cambiar de pestaña o al commitear una navegación:
+    // onUrlChange es inline en el padre (nueva identidad cada render) y si va
+    // en deps pisa lo que el usuario está escribiendo → URL "inmutable".
     if (activeTab) {
       setInputUrl(activeTab.url)
       setHasError(false)
       if (activeTab.url) {
-        onUrlChange?.(activeTab.url)
+        onUrlChangeRef.current?.(activeTab.url)
       }
     }
-  }, [activeTabId, activeTab, onUrlChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTabId, activeTab?.url])
 
   // hideTabBar: navegador es un único viewport controlado por el TabBar externo.
   // Sincronizar solo cuando cambia initialUrl por switch de pestaña externa, no tras navegación interna (navigateTab).
@@ -495,29 +501,44 @@ export const BrowserPanel = memo(function BrowserPanel({
     const el = viewportRef.current
     el.setAttribute("data-browser-mounted", "true")
 
-    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1
+    // Rust espera píxeles LÓGICOS (LogicalPosition/Size): getBoundingClientRect
+    // ya viene en CSS px, NO multiplicar por dpr (antes ×dpr desplazaba y
+    // agrandaba el hijo en pantallas 125%/150%: franja blanca + tapa la URL).
     const syncBounds = () => {
       const rect = el.getBoundingClientRect()
       shell.browser.setBounds({
-        x: Math.round(rect.left * dpr),
-        y: Math.round(rect.top * dpr),
-        w: Math.round(rect.width * dpr),
-        h: Math.round(rect.height * dpr),
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        w: Math.round(rect.width),
+        h: Math.round(rect.height),
       }).catch((e) => console.warn("[Browser] setBounds failed", e))
     }
 
-    // Open native sub-WebView with initial URL at the viewport bounds (HiDPI)
+    // Open native sub-WebView with initial URL at the viewport bounds
     const rect = el.getBoundingClientRect()
-    const bounds = { x: Math.round(rect.left * dpr), y: Math.round(rect.top * dpr), w: Math.round(rect.width * dpr), h: Math.round(rect.height * dpr) }
-    shell.browser.open(currentSrc, bounds).then(() => {
+    const bounds = { x: Math.round(rect.left), y: Math.round(rect.top), w: Math.round(rect.width), h: Math.round(rect.height) }
+    let cancelled = false
+    const markReady = () => {
+      if (cancelled) return
       nativeReady.current = true
       setBrowserFailed(false)
       requestAnimationFrame(syncBounds)
-    }).catch((e) => {
-      console.warn("[Browser] open failed url=" + currentSrc, e)
-      nativeReady.current = false
-      setBrowserFailed(true)
-      setHasError(false)
+    }
+    shell.browser.open(currentSrc, bounds).then(markReady).catch((e) => {
+      console.warn("[Browser] open failed url=" + currentSrc + ", reintentando…", e)
+      // La primera creación del controller WebView2 suele tardar >900ms
+      // (timeout del canal) aunque termina creándose: reintentar una vez
+      // antes de caer al fallback iframe (que Google bloquea por X-Frame).
+      setTimeout(() => {
+        if (cancelled) return
+        shell.browser.open(currentSrc, bounds).then(markReady).catch((e2) => {
+          if (cancelled) return
+          console.warn("[Browser] open retry failed url=" + currentSrc, e2)
+          nativeReady.current = false
+          setBrowserFailed(true)
+          setHasError(false)
+        })
+      }, 900)
     })
 
     // CRÍTICO: el child HWND de Win32 tiene prioridad de hit-testing sobre el
@@ -566,6 +587,7 @@ export const BrowserPanel = memo(function BrowserPanel({
     try { window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener("change", onDprChange) } catch {}
 
     return () => {
+      cancelled = true
       io.disconnect()
       ro.disconnect()
       window.removeEventListener("resize", syncBounds)
