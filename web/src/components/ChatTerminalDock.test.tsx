@@ -45,4 +45,41 @@ describe("ChatTerminalDock", () => {
     fireEvent.click(screen.getByLabelText("Collapse sidebar"))
     expect(onHide).toHaveBeenCalledTimes(1)
   })
+
+  it("el borde superior redimensiona y persiste el alto", async () => {
+    localStorage.removeItem("opencode.chat.term.height")
+    const onHide = vi.fn()
+    const onKill = vi.fn()
+    const { container } = renderDock(onHide, onKill)
+    await screen.findByTestId("single-term")
+    const handle = container.querySelector(".terminal-dock-resizer")
+    expect(handle).not.toBeNull()
+    // jsdom: offsetHeight 0 → arrastrar 100px arriba da 100, clamp a 140
+    fireEvent.pointerDown(handle!, { clientY: 300 })
+    window.dispatchEvent(new window.MouseEvent("pointermove", { clientY: 200, bubbles: true }))
+    window.dispatchEvent(new window.MouseEvent("pointerup", { bubbles: true }))
+    expect(localStorage.getItem("opencode.chat.term.height")).toBe("140")
+    expect(onHide).not.toHaveBeenCalled()
+    expect(onKill).not.toHaveBeenCalled()
+  })
+
+  it("flotar mantiene el mismo tabId (PTY vivo) y clic fuera re-acopla", async () => {
+    const onHide = vi.fn()
+    const onKill = vi.fn()
+    const { container } = renderDock(onHide, onKill)
+    await screen.findByTestId("single-term")
+    fireEvent.click(screen.getByLabelText("Maximize panel"))
+    // En overlay flotante, misma terminal montada
+    const term = await screen.findByTestId("single-term")
+    expect(term.getAttribute("data-tab")).toBe("chat-term-s1-g0")
+    expect(container.querySelector(".modal-overlay")).not.toBeNull()
+    expect(onHide).not.toHaveBeenCalled()
+    // Clic fuera: vuelve al dock, sin ocultar ni matar
+    const overlay = container.querySelector(".modal-overlay") as HTMLElement
+    fireEvent.click(overlay)
+    await screen.findByTestId("single-term")
+    expect(container.querySelector(".modal-overlay")).toBeNull()
+    expect(onHide).not.toHaveBeenCalled()
+    expect(onKill).not.toHaveBeenCalled()
+  })
 })
