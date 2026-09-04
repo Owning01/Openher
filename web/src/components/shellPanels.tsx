@@ -7,7 +7,7 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import { Capacitor } from "@capacitor/core"
 import "@xterm/xterm/css/xterm.css"
-import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon } from "../Icons"
+import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon, ChatIcon } from "../Icons"
 import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
 import { normFsPath, affectedParentDirs } from "../utils/fsChanges"
 import { calcMenuPosForAnchor } from "../utils/menuPos"
@@ -1496,7 +1496,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
     e.preventDefault()
     e.stopPropagation()
     const menuW = 240
-    const menuH = 460 // altura real máxima (≈12 ítems); 260 cortaba "Copiar/Eliminar"
+    const menuH = 500 // altura real máxima (≈13 ítems con sesión); 260 cortaba "Copiar/Eliminar"
     const x = e.clientX + menuW > window.innerWidth ? Math.max(8, e.clientX - menuW) : e.clientX
     const y = e.clientY + menuH > window.innerHeight ? Math.max(8, window.innerHeight - menuH - 8) : e.clientY
     setContextMenu({ x, y, entry, isDir })
@@ -1956,6 +1956,20 @@ export const ExplorerPanel = memo(function ExplorerPanel({
               >
                 <span><FolderIcon size={14} /></span> {contextMenu.isDir ? "Abrir carpeta" : "Abrir archivo"}
               </button>
+              {contextMenu.isDir && (
+                <button
+                  type="button"
+                  className="overflow-item"
+                  style={{ color: "var(--primary)", fontWeight: 600 }}
+                  onClick={() => {
+                    const p = contextMenu.entry!.path
+                    setContextMenu(null)
+                    onOpenSessionDir(p)
+                  }}
+                >
+                  <span><ChatIcon size={14} /></span> Nueva sesión de chat aquí
+                </button>
+              )}
               <button
                 type="button"
                 className="overflow-item"
@@ -2016,6 +2030,20 @@ export const ExplorerPanel = memo(function ExplorerPanel({
           )}
           {!contextMenu.entry && (
             <>
+              {(cwd || initialCwd) && (
+                <button
+                  type="button"
+                  className="overflow-item"
+                  style={{ color: "var(--primary)", fontWeight: 600 }}
+                  onClick={() => {
+                    const p = cwd || initialCwd || ""
+                    setContextMenu(null)
+                    if (p) onOpenSessionDir(p)
+                  }}
+                >
+                  <span><ChatIcon size={14} /></span> Nueva sesión de chat aquí
+                </button>
+              )}
               <button
                 type="button"
                 className="overflow-item"
