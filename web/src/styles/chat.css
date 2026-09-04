@@ -3393,6 +3393,22 @@ mark {
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: #0d1117;
+  display: flex;
+  flex-direction: column;
+}
+/* Flotante: ventana arrastrable desde el header (igual que TerminalView). */
+.chat-terminal-dock.floating {
+  position: fixed;
+  z-index: 1000;
+  width: min(680px, 92vw);
+  margin: 0;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+.chat-terminal-dock.floating .chat-terminal-dock-head {
+  cursor: grab;
+}
+.chat-terminal-dock.floating .chat-terminal-dock-head:active {
+  cursor: grabbing;
 }
 .chat-terminal-dock-head {
   display: flex;
@@ -3418,7 +3434,7 @@ mark {
   gap: 2px;
 }
 .chat-terminal-dock-body {
-  height: 240px;
+  flex: 1;
   min-height: 0;
 }
 .chat-terminal-dock-loading {
