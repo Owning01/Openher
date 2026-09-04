@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, type ReactNode } from "react"
 import { SettingsIcon, SunIcon, MoonIcon, BrainIcon, FolderIcon, GraduationCapIcon } from "../Icons"
+import { WeatherChip } from "./WeatherChip"
 import { useT } from "../i18n-context"
 import type { ViewType } from "../types"
 
@@ -58,6 +59,7 @@ export const NavBar = memo(function NavBar({ view, onNavigate, onToggleLightMode
             {isLight ? <MoonIcon size={16} /> : <SunIcon size={16} />}
           </button>
         )}
+        <WeatherChip />
       </nav>
     </header>
   )

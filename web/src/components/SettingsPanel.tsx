@@ -13,6 +13,7 @@ import { ThinkingLevels } from "./ThinkingLevels"
 import { PairModal } from "./PairModal"
 import { PluginSlot } from "../plugins"
 import { LedSwitch } from "./LedSwitch"
+import { WeatherSettings } from "./WeatherSettings"
 import { ExportCacheButton } from "./ExportCacheButton"
 import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type DesktopConfig } from "../desktop"
 import { fetchGoUsage, loadGoAccounts, saveGoAccounts, type GoUsage } from "../goUsage"
@@ -676,6 +677,8 @@ export const SettingsPanel = memo(function SettingsPanel({
        </select>
       </div>
      </div>
+
+     <WeatherSettings />
 
      {onOpenThemePicker && (
       <div className="setting-item-row">
