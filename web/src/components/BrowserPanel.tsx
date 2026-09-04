@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
-import { RefreshIcon, MonitorIcon, LoadingIcon, CloseIcon, FolderIcon, GlobeIcon, SearchIcon, FileIcon, PaintIcon, KeyboardIcon, MaximizeIcon, ChevronIcon, CheckIcon } from "../Icons"
+import { RefreshIcon, MonitorIcon, PipIcon, LoadingIcon, CloseIcon, FolderIcon, GlobeIcon, SearchIcon, FileIcon, PaintIcon, KeyboardIcon, MaximizeIcon, ChevronIcon, CheckIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
 import { BrowserVisualOverlay, type BrowserPickedElement } from "./BrowserVisualOverlay"
@@ -9,6 +9,7 @@ import {
   cleanupOverlayScript, applyStyleScript, unbindScript, setToolScript,
   type InspectTool,
 } from "./browserOverlayScript"
+import { buildPipScript } from "./browserPipScript"
 
 const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
 export const BROWSER_HOME = "https://www.google.com"
@@ -329,6 +330,9 @@ export const BrowserPanel = memo(function BrowserPanel({
   const prevInitialUrlRef = useRef(initialUrl)
   const onUrlChangeRef = useRef(onUrlChange)
   onUrlChangeRef.current = onUrlChange
+  // Ancho de columna del modo dispositivo (null = responsive completo).
+  // El hijo nativo también lo respeta: bounds centrados, no solo el iframe.
+  const deviceWidthRef = useRef<number | null>(null)
 
   // Persistir tabs/sesión como Chrome (solo con tabbar interno visible)
   useEffect(() => {
@@ -364,6 +368,12 @@ export const BrowserPanel = memo(function BrowserPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId, activeTab?.url])
 
+  // Encaja bounds lógicos en la columna del modo dispositivo (centrada).
+  const fitBounds = useCallback((r: { left: number; top: number; width: number; height: number }) => {
+    const tw = deviceWidthRef.current
+    const w = tw ? Math.min(Math.round(r.width), tw) : Math.round(r.width)
+    return { x: Math.round(r.left + (r.width - w) / 2), y: Math.round(r.top), w, h: Math.round(r.height) }
+  }, [])
   // hideTabBar: navegador es un único viewport controlado por el TabBar externo.
   // Sincronizar solo cuando cambia initialUrl por switch de pestaña externa, no tras navegación interna (navigateTab).
   useEffect(() => {
@@ -505,18 +515,12 @@ export const BrowserPanel = memo(function BrowserPanel({
     // ya viene en CSS px, NO multiplicar por dpr (antes ×dpr desplazaba y
     // agrandaba el hijo en pantallas 125%/150%: franja blanca + tapa la URL).
     const syncBounds = () => {
-      const rect = el.getBoundingClientRect()
-      shell.browser.setBounds({
-        x: Math.round(rect.left),
-        y: Math.round(rect.top),
-        w: Math.round(rect.width),
-        h: Math.round(rect.height),
-      }).catch((e) => console.warn("[Browser] setBounds failed", e))
+      shell.browser.setBounds(fitBounds(el.getBoundingClientRect()))
+        .catch((e) => console.warn("[Browser] setBounds failed", e))
     }
 
     // Open native sub-WebView with initial URL at the viewport bounds
-    const rect = el.getBoundingClientRect()
-    const bounds = { x: Math.round(rect.left), y: Math.round(rect.top), w: Math.round(rect.width), h: Math.round(rect.height) }
+    const bounds = fitBounds(el.getBoundingClientRect())
     let cancelled = false
     const markReady = () => {
       if (cancelled) return
@@ -612,6 +616,37 @@ export const BrowserPanel = memo(function BrowserPanel({
       setBrowserFailed(true)
     })
   }, [currentSrc, browserFailed, isActive])
+
+  // Modo dispositivo en nativo: recentrar la columna (el iframe lo hace por
+  // CSS; el hijo Win32 necesita bounds nuevos).
+  useEffect(() => {
+    if (!IS_DESKTOP || !nativeReady.current || browserFailed || !isActive) return
+    const el = viewportRef.current
+    if (!el) return
+    shell.browser.setBounds(fitBounds(el.getBoundingClientRect()))
+      .catch((e) => console.warn("[Browser] setBounds device failed", e))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceMode])
+
+  // Picture-in-Picture: clic en video (en vivo) o región (ventana flotante).
+  // El clic ocurre DENTRO de la página, así hay gesto de usuario (requerido).
+  const handlePip = useCallback(() => {
+    const code = buildPipScript()
+    if (IS_DESKTOP) {
+      shell.browser.eval(code).catch((e) => console.warn("[Browser] PiP inject failed", e))
+      return
+    }
+    try {
+      const doc = iframeRef.current?.contentDocument
+      if (!doc || !doc.body) throw new Error("iframe sin documento accesible")
+      const s = doc.createElement("script")
+      s.textContent = code
+      doc.body.appendChild(s)
+      s.remove()
+    } catch (e) {
+      console.warn("[Browser] PiP no disponible en este iframe (cross-origin)", e)
+    }
+  }, [])
 
   // Modo selección en desktop: el overlay se INYECTA dentro del sub-WebView
   // nativo vía eval (sin recargar ni ocultar la página — cero pérdida de estado).
@@ -866,8 +901,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       // Reintentar crear el sub-WebView antes de fallback
       const el = viewportRef.current
       if (el) {
-        const rect = el.getBoundingClientRect()
-        shell.browser.open(currentSrc, { x: rect.left, y: rect.top, w: rect.width, h: rect.height }).then(() => {
+        shell.browser.open(currentSrc, fitBounds(el.getBoundingClientRect())).then(() => {
           nativeReady.current = true
           setBrowserFailed(false)
         }).catch(() => {
@@ -1015,6 +1049,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   }, [activeTab, zoomLevel, handleBack, handleForward])
 
   const targetWidth = DEVICE_WIDTHS[deviceMode]
+  deviceWidthRef.current = targetWidth ? parseInt(targetWidth, 10) || null : null
 
   return (
     <div
@@ -1292,6 +1327,9 @@ export const BrowserPanel = memo(function BrowserPanel({
             </div>
             <button type="button" className={`browser-tune-btn${findOpen ? " active" : ""}`} onClick={() => setFindOpen((v) => !v)} title="Buscar en la página (Ctrl+F)" aria-label="Buscar">
               <SearchIcon size={13} />
+            </button>
+            <button type="button" className="browser-tune-btn" onClick={handlePip} title="Picture-in-Picture: clic en un video (en vivo) o en una región de la página" aria-label="Picture-in-Picture">
+              <PipIcon size={14} />
             </button>
             {onToggleInspect && (
               <button
