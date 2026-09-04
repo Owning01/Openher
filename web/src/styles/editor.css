@@ -308,3 +308,41 @@
 .liteed-dline-del { background: rgba(248, 81, 73, 0.12); }
 .liteed-dline-add .liteed-dsign { color: #3fb950; }
 .liteed-dline-del .liteed-dsign { color: #f85149; }
+
+/* CodeMirrorEditor — la vista llena el contenedor (el padre define el alto). */
+.cm-mount .cm-editor { height: 100%; }
+.cm-mount .cm-scroller { font-family: Consolas, 'Cascadia Mono', monospace; }
+
+/* Panel de búsqueda (Ctrl+F) en tema de la app. */
+.cm-wrap .cm-panel.cm-search {
+  background: var(--surface-raised, var(--surface));
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+}
+.cm-wrap .cm-search .cm-textfield {
+  background: var(--bg, var(--surface));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.78rem;
+}
+.cm-wrap .cm-search .cm-button {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.cm-wrap .cm-search .cm-button:hover { color: var(--text); }
+
+/* MergeView (diff vs guardado) en tema oscuro. */
+.cm-diff .cm-mergeView { background: var(--surface); }
+.cm-diff .cm-changedLine { background: color-mix(in srgb, var(--warning, #d29922) 12%, transparent); }
+.cm-diff .cm-changedText { background: color-mix(in srgb, var(--warning, #d29922) 32%, transparent); }
+.cm-diff .cm-deletedChunk { background: color-mix(in srgb, var(--danger, #f85149) 10%, transparent); }
+.cm-diff .cm-insertedLine { background: color-mix(in srgb, var(--success, #3fb950) 8%, transparent); }
+.cm-diff .cm-deletedLine { background: color-mix(in srgb, var(--danger, #f85149) 10%, transparent); }
+.cm-diff .cm-merge-revert { color: var(--muted); }
+.cm-diff .cm-merge-revert:hover { color: var(--text); }

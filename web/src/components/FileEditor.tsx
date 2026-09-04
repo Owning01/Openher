@@ -5,7 +5,7 @@ import { ModalHeader } from "./ModalHeader"
 import { CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { basename } from "../utils"
-import { LiteEditor } from "./LiteEditor"
+import { CodeMirrorEditor } from "./CodeMirrorEditor"
 import { langFromFilename } from "../utils/highlight"
 import type { ServerConfig } from "../types"
 
@@ -178,7 +178,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
           ) : error ? (
             <p className="error-text">{error}</p>
           ) : (
-            <LiteEditor
+            <CodeMirrorEditor
               path={path}
               value={content}
               onChange={handleChange}

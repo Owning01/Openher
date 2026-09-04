@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
+import { EditorView } from "@codemirror/view"
 import { useState } from "react"
 import { FileEditorPanel } from "./shellPanels"
 
@@ -8,6 +9,33 @@ const files: Record<string, string> = {}
 
 function decodeB64(b64: string): string {
   return new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)))
+}
+
+function editDoc(container: HTMLElement, text: string): void {
+  const content = container.querySelector(".cm-content")
+  expect(content).toBeTruthy()
+  const view = content ? EditorView.findFromDOM(content) : null
+  expect(view).toBeTruthy()
+  act(() => {
+    view!.dispatch({ changes: { from: 0, to: view!.state.doc.length, insert: text } })
+  })
+}
+
+async function docText(container: HTMLElement): Promise<string> {
+  await screen.findByText("b.txt")
+  const content = container.querySelector(".cm-content")
+  return content?.textContent ?? ""
+}
+
+// Espera síncrona canónica: el callback lanza hasta que el doc trae el texto.
+async function waitDoc(container: HTMLElement, text: string): Promise<void> {
+  await waitFor(
+    () => {
+      const content = container.querySelector(".cm-content")
+      expect(content?.textContent ?? "").toContain(text)
+    },
+    { timeout: 3000 }
+  )
 }
 
 function PanelHarness() {
@@ -59,9 +87,9 @@ afterEach(() => {
 
 describe("FileEditorPanel persistencia", () => {
   it("cambiar de tab sucia hace flush inmediato (cero pérdida)", async () => {
-    render(<PanelHarness />)
-    const ta = (await screen.findByLabelText("Editar /a.txt")) as HTMLTextAreaElement
-    fireEvent.change(ta, { target: { value: "hello edited" } })
+    const { container } = render(<PanelHarness />)
+    await waitDoc(container, "hello")
+    editDoc(container, "hello edited")
     // Switch antes de que el autosave (1s) pueda disparar: el write es del flush
     fireEvent.click(screen.getByText("b.txt"))
     await waitFor(() => expect(writes.length).toBe(1))
@@ -70,12 +98,12 @@ describe("FileEditorPanel persistencia", () => {
   })
 
   it("editar y revertir no escribe (dirty exacto)", async () => {
-    render(<PanelHarness />)
-    const ta = (await screen.findByLabelText("Editar /a.txt")) as HTMLTextAreaElement
-    fireEvent.change(ta, { target: { value: "hello!" } })
-    fireEvent.change(ta, { target: { value: "hello" } })
+    const { container } = render(<PanelHarness />)
+    await waitDoc(container, "hello")
+    editDoc(container, "hello!")
+    editDoc(container, "hello")
     fireEvent.click(screen.getByText("b.txt"))
-    await screen.findByLabelText("Editar /b.txt")
+    await waitDoc(container, "world")
     // Supera el debounce de autosave: no debe haber ningún write
     await new Promise((r) => setTimeout(r, 1200))
     expect(writes.length).toBe(0)
