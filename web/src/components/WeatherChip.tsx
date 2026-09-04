@@ -40,61 +40,7 @@ async function fetchCurrent(lat: number, lon: number, signal: AbortSignal): Prom
   return { temp: Math.round(temp as number), code: j.current?.weather_code ?? 0 }
 }
 
-// WMO weather_code → glifo SVG (sin emojis, 14px, hereda color).
-function WeatherGlyph({ code }: { code: number }) {
-  const s = 14
-  if (code >= 95) {
-    // Tormenta
-    return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />
-      </svg>
-    )
-  }
-  if (code === 71 || code === 73 || code === 75 || code === 77 || code === 85 || code === 86) {
-    // Nieve
-    return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-        <line x1="12" y1="2" x2="12" y2="22" /><line x1="3.3" y1="7" x2="20.7" y2="17" /><line x1="3.3" y1="17" x2="20.7" y2="7" />
-      </svg>
-    )
-  }
-  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
-    // Lluvia / llovizna
-    return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M20 15.5a4.5 4.5 0 0 0-1-8.9A6 6 0 0 0 7.2 7.6 4 4 0 0 0 8 15.5h12z" />
-        <line x1="8" y1="18" x2="7" y2="21" /><line x1="12" y1="18" x2="11" y2="21" /><line x1="16" y1="18" x2="15" y2="21" />
-      </svg>
-    )
-  }
-  if (code === 45 || code === 48) {
-    // Niebla
-    return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-        <line x1="4" y1="10" x2="20" y2="10" /><line x1="6" y1="14" x2="18" y2="14" /><line x1="8" y1="18" x2="16" y2="18" />
-      </svg>
-    )
-  }
-  if (code >= 1) {
-    // Nublado
-    return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M17.5 18a4.5 4.5 0 0 0 .9-8.9A6 6 0 0 0 6.6 8.7 4.2 4.2 0 0 0 7 17h10.5z" />
-      </svg>
-    )
-  }
-  // Despejado
-  return (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="4" /><line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" />
-      <line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" />
-      <line x1="4.9" y1="4.9" x2="7" y2="7" /><line x1="17" y1="17" x2="19.1" y2="19.1" />
-      <line x1="4.9" y1="19.1" x2="7" y2="17" /><line x1="17" y1="7" x2="19.1" y2="4.9" />
-    </svg>
-  )
-}
-
+// Ultra minimalista: solo grados, nada más.
 export const WeatherChip = memo(function WeatherChip() {
   const { prefs } = useWeatherPrefs()
   const loc = prefs.loc
@@ -138,8 +84,7 @@ export const WeatherChip = memo(function WeatherChip() {
   if (!prefs.enabled || !loc || !cur) return null
   return (
     <span className="weather-chip" title={loc.name} aria-label={`Clima en ${loc.name}: ${cur.temp} grados`}>
-      <WeatherGlyph code={cur.code} />
-      <span className="weather-temp">{cur.temp}°</span>
+      {cur.temp}°
     </span>
   )
 })

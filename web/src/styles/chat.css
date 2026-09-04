@@ -3382,3 +3382,48 @@ mark {
   height: 24px;
 }
 
+/* Dock de terminal al pie del chat: header fino + viewport xterm reutilizado. */
+.chat-term-btn.active {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+.chat-terminal-dock {
+  margin: 0 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #0d1117;
+}
+.chat-terminal-dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 2px 8px;
+  background: var(--surface-strong);
+  border-bottom: 1px solid var(--border);
+}
+.chat-terminal-dock-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chat-terminal-dock-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.chat-terminal-dock-body {
+  height: 240px;
+  min-height: 0;
+}
+.chat-terminal-dock-loading {
+  padding: 16px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
