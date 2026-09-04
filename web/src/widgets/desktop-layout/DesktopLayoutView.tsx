@@ -316,6 +316,16 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         onTransferTab={onTransferTab}
         onAddTerminal={onAddTerminal}
         onOpenBrowser={openBrowserAsTab}
+        cols={desktopLayout.cols}
+        colSizes={desktopLayout.colSizes}
+        activeSessionIds={desktopLayout.sessions}
+        maximizedPanel={maximizedPanel}
+        setActivePanel={setActivePanel}
+        onCloseOthers={onCloseOthers}
+        onCloseRight={onCloseRight}
+        onCloseLeft={onCloseLeft}
+        onCloseAll={onCloseAll}
+        onDockSession={onDockSession}
       />
       <div
         className="app-shell has-titlebar"
@@ -475,10 +485,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
             onMoveTab={onMoveTab}
             onTransferTab={onTransferTab}
             onAddTerminal={onAddTerminal}
-            onCloseOthers={onCloseOthers}
-            onCloseRight={onCloseRight}
-            onCloseLeft={onCloseLeft}
-            onCloseAll={onCloseAll}
             onClosePanel={onClosePanel}
             onDockSession={onDockSession}
             onSettleSession={onSettleSession}

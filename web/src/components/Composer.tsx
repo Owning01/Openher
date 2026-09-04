@@ -1,10 +1,10 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
 import { createPortal } from "react-dom"
-import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon, BrainIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
-import type { AgentOption, CommandInfo, PromptSnippet, ServerConfig, ModelOption } from "../types"
+import type { AgentOption, CommandInfo, ServerConfig, ModelOption } from "../types"
 import { ImageEditor } from "./ImageEditor"
 import { readComposerDraft, writeComposerDraft } from "../utils/composerDraft"
 import { PluginSlot } from "../plugins"
@@ -106,7 +106,6 @@ type ComposerProps = {
   config?: ServerConfig
   directory?: string
   onThemeCommand?: () => void
-  snippets?: PromptSnippet[]
   charLimit?: number
   activeModelOption?: ModelOption | null
   activeModelVariants?: ModelOption[]
@@ -148,7 +147,6 @@ export const Composer = memo(function Composer({
   config,
   directory,
   onThemeCommand,
-  snippets = [],
   charLimit = 0,
   activeModelOption,
   activeModelVariants,
@@ -165,12 +163,9 @@ export const Composer = memo(function Composer({
   const [atQuery, setAtQuery] = useState("")
   const [tslEnabled, setTslEnabled] = useState(false)
   const [atIndex, setAtIndex] = useState(0)
-  const [showSnippetMenu, setShowSnippetMenu] = useState(false)
   const [showModelMenu, setShowModelMenu] = useState(false)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const modelToggleRef = useRef<HTMLButtonElement | null>(null)
-  const snippetMenuRef = useRef<HTMLDivElement | null>(null)
-  const snippetToggleRef = useRef<HTMLButtonElement | null>(null)
   const [editingImage, setEditingImage] = useState<ImageAttachment | null>(null)
 
   // En móvil (táctil) Enter = nueva línea; en desktop Enter envía.
@@ -320,13 +315,13 @@ export const Composer = memo(function Composer({
         files.map((f) => ({ id: f.path, name: f.path, source: "file" as const, description: f.type }))
       ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
 
-      const mcpFetch = config ? api.listMCPResources(config).then((resources) =>
+      const mcpFetch = config ? api.listMCPResources(config, directory).then((resources) =>
         resources.filter((r) => !atQuery || r.name.toLowerCase().includes(q))
           .map((r) => ({ id: r.id, name: r.name, description: r.description, source: "mcp" as const }))
       ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
 
       // Como el TUI: @ también invoca skills del server (/skill).
-      const skillFetch = config ? api.listSkills(config).then((skills) =>
+      const skillFetch = config ? api.listSkills(config, directory).then((skills) =>
         skills.filter((s) => !atQuery || s.name.toLowerCase().includes(q) || (s.description?.toLowerCase() ?? "").includes(q))
           .map((s) => ({ id: s.id, name: s.name, description: s.description, source: "skill" as const }))
       ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
@@ -397,14 +392,6 @@ export const Composer = memo(function Composer({
   }, [slashFiltered.length])
 
   const isShellMode = localValue.startsWith("!")
-
-  const insertSnippet = useCallback((s: PromptSnippet) => {
-    const cur = localValueRef.current ?? ""
-    const prefix = cur && !cur.endsWith("\n") ? `${cur}\n` : cur
-    handleChange(prefix + s.text)
-    setShowSnippetMenu(false)
-    if (composerRef.current) composerRef.current.querySelector("textarea")?.focus()
-  }, [handleChange])
 
   const pushHistory = useCallback((text: string) => {
     const h = promptHistoryRef.current
@@ -562,10 +549,8 @@ export const Composer = memo(function Composer({
 
   const handleSendWithImages = useCallback(async () => {
     if (disabled || isSending) return
-    if (isWorking) {
-      showMicNotice(t('composer.busy') || "Espera a que termine la respuesta anterior")
-      return
-    }
+    // Sin bloqueo por isWorking: handleSend encola en el outbox visible
+    // cuando la sesión está ocupada, en vez de rechazar el envío.
     // Fuente de verdad: localValueRef (actualizada sincrónicamente en handleChange).
     // El fallback al DOM causaba duplicados: cuando el DOM aún reflejaba el
     // valor anterior (controlled component con render pendiente), la comparación
@@ -596,7 +581,7 @@ export const Composer = memo(function Composer({
       if (textareaRef.current) textareaRef.current.value = textToSend
       pushNow(textToSend)
     }
-  }, [onSend, images, resizeTextarea, disabled, isSending, isWorking, charLimit, tslEnabled, pushNow, showMicNotice, t])
+  }, [onSend, images, resizeTextarea, disabled, isSending, charLimit, tslEnabled, pushNow, showMicNotice, t])
 
   const isCommandValid = useMemo(() => {
     if (!localValue.startsWith("/")) return false
@@ -760,17 +745,6 @@ export const Composer = memo(function Composer({
         </div>
       )}
       {micNotice && <div className="composer-notice" role="alert">{micNotice}</div>}
-      {showSnippetMenu && snippets.length > 0 && (
-        <div className="slash-menu snippet-menu" ref={snippetMenuRef}>
-          {snippets.map((s) => (
-            <div key={s.id} className="slash-menu-item"
-              onPointerDown={(e) => { e.preventDefault(); insertSnippet(s) }}>
-              <span className="slash-menu-name">{s.name}</span>
-              <span className="slash-menu-desc">{s.text.slice(0, 60)}{s.text.length > 60 ? "…" : ""}</span>
-            </div>
-          ))}
-        </div>
-      )}
       {images.length > 0 && (
         <div className="image-strip">
           {images.map((img) => {
@@ -804,7 +778,7 @@ export const Composer = memo(function Composer({
         </div>
       )}
       <div
-        className={`composer-input-wrap${supported ? " has-mic" : ""}${isDraggingOver ? " drag-over" : ""}`}
+        className={`composer-input-wrap${supported ? " has-mic" : ""}${isDraggingOver ? " drag-over" : ""}${isWorking ? " is-working" : ""}`}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -873,7 +847,7 @@ export const Composer = memo(function Composer({
             <MicIcon size={18} />
           </button>
         )}
-        {isWorking ? (
+        {isWorking && (
           <button
             type="button"
             onClick={onAbort}
@@ -884,19 +858,18 @@ export const Composer = memo(function Composer({
           >
             <StopCircleIcon size={18} />
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleSendWithImages}
-            disabled={disabled || isSending || (!localValue.trim() && images.length === 0) || (charLimit > 0 && localValue.length > charLimit)}
-            className={`composer-inline-btn composer-send-btn${supported ? " with-mic" : ""}`}
-            title={t('composer.send')}
-            aria-label={t('composer.send')}
-            tabIndex={-1}
-          >
-            <SendIcon size={18} />
-          </button>
         )}
+        <button
+          type="button"
+          onClick={handleSendWithImages}
+          disabled={disabled || isSending || (!localValue.trim() && images.length === 0) || (charLimit > 0 && localValue.length > charLimit)}
+          className={`composer-inline-btn composer-send-btn${supported ? " with-mic" : ""}`}
+          title={t('composer.send')}
+          aria-label={t('composer.send')}
+          tabIndex={-1}
+        >
+          <SendIcon size={18} />
+        </button>
       </div>
       <div className="composer-bar">
         <div className="composer-bar-left">
@@ -914,14 +887,9 @@ export const Composer = memo(function Composer({
                 aria-haspopup="true"
                 title={`${activeModelOption.modelName ?? t('detail.modelLoading')}${activeModelOption.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}
               >
-                <BrainIcon size={13} className="composer-model-icon" />
                 <span className="composer-model-name">
                   {activeModelOption.modelName ?? t('detail.modelLoading')}
-                  {activeModelOption.variant ? <span className="composer-model-variant"> · {activeModelOption.variant}</span> : ""}
                 </span>
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.6 }}>
-                  <path d="M2.5 3.5L5 6L7.5 3.5" />
-                </svg>
               </button>
               {showModelMenu && (
                 <ModelSelectorModal
@@ -949,19 +917,6 @@ export const Composer = memo(function Composer({
               title={`Agente activo: ${primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID} (click para cambiar)`}
               style={{ color: `var(--agent-${agentColorIdx})`, border: "none", outline: "none", background: "transparent", padding: "0 4px" } as React.CSSProperties}>
               <span>{primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
-            </button>
-          )}
-          {snippets.length > 0 && (
-            <button onClick={() => setShowSnippetMenu((v) => !v)} disabled={disabled}
-              ref={snippetToggleRef}
-              className="composer-snippet-btn"
-              aria-expanded={showSnippetMenu}
-              aria-label={t('composer.snippets')}
-              title={t('composer.snippets')}>
-              <svg width="15" height="15" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <rect x="2" y="2.5" width="8" height="2.2" rx="0.8" />
-                <rect x="2" y="6.5" width="8" height="2.2" rx="0.8" />
-              </svg>
             </button>
           )}
           <button

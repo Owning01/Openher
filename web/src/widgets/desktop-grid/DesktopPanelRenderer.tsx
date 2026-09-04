@@ -1,7 +1,6 @@
 import React, { Suspense, memo } from "react"
 import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../../types"
 import type { ShellPanelKind } from "../../shell"
-import { TabBar } from "../../components/TabBar"
 import { SessionChatPanel } from "../../components/SessionChatPanel"
 import type { ChatViewProps } from "../../components/ChatView"
 import { ShellPanelCell } from "./ShellPanelCell"
@@ -53,16 +52,7 @@ export type DesktopPanelRendererProps = {
   vs: any
   onActivate: () => void
   onClose: () => void
-  onSwitchTab: (tabIdx: number) => void
   onRemoveTab: (tabIdx: number) => void
-  onMoveTab: (from: number, to: number) => void
-  onTransferTab: (fromPanel: number, fromIdx: number, toIdx: number) => void
-  onAddTerminal: () => void
-  onDetachTab?: (tabIdx: number, dir?: "right" | "bottom") => void
-  onCloseOthers: (keep: number) => void
-  onCloseRight: (idx: number) => void
-  onCloseLeft: (idx: number) => void
-  onCloseAll: () => void
   onDockSession: (index: number, dir: "left" | "right" | "top" | "bottom" | "center", specificId?: string) => void
   onSettleSession: (id: string, dir: string) => Promise<void> | void
   onRefreshSessions: () => void
@@ -108,16 +98,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     vs,
     onActivate,
     onClose,
-    onSwitchTab,
     onRemoveTab,
-    onMoveTab,
-    onTransferTab,
-    onAddTerminal,
-    onDetachTab,
-    onCloseOthers,
-    onCloseRight,
-    onCloseLeft,
-    onCloseAll,
     onDockSession,
     onSettleSession,
     onRefreshSessions,
@@ -154,39 +135,12 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       )
     }
 
-    const isSinglePanel = (props.desktopLayout?.cols ?? 1) * (props.desktopLayout?.rows ?? 1) === 1
-    // Terminal tab
+    // Terminal tab (tabs en el propio titlebar)
     if (sid.startsWith("terminal")) {
       const ptyId = sid.replace(/^terminal[:\-]/, "")
-      const tSessions = [...sessions] as any[]
-      for (const tid of stack) {
-        if (tid.startsWith("terminal") && !tSessions.find((s) => s.id === tid)) {
-          tSessions.push({ id: tid, title: `Terminal ${tid.slice(9, 13)}`, directory: "" })
-        }
-      }
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          {!isSinglePanel && <TabBar
-            tabs={stack}
-            activeIndex={Math.max(0, stack.indexOf(sid))}
-            sessions={tSessions}
-            busySessionIds={busySessions}
-            onSwitch={onSwitchTab}
-            onClose={onRemoveTab}
-            onAdd={onAddTerminal}
-            onMoveTab={onMoveTab}
-            onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
-            panelIndex={i}
-            onDropTerminal={onAddTerminal}
-            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
-            onDropUrl={(url) => onOpenBrowser(url, i)}
-            onDetach={onDetachTab}
-            onCloseOthers={onCloseOthers}
-            onCloseRight={onCloseRight}
-            onCloseLeft={onCloseLeft}
-            onCloseAll={onCloseAll}
-          />}
-          <div style={{ flex: 1, minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
               <SingleTerminal tabId={ptyId} cwd={session?.directory} />
             </Suspense>
@@ -198,30 +152,6 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     // Virtual tabs (__kanban__, __stats__, __learning__, __pcFiles__) — legacy __design__/__reports__/__screenshots__ kept for migration
     const isVirtual = sid.startsWith("__")
     if (isVirtual) {
-      const allWithVirtual = [...sessions] as any[]
-      if (stack.includes("__kanban__") && !allWithVirtual.find((s) => s.id === "__kanban__")) {
-        allWithVirtual.push({ id: "__kanban__", title: "Kanban", directory: "" })
-      }
-      if (stack.includes("__stats__") && !allWithVirtual.find((s) => s.id === "__stats__")) {
-        allWithVirtual.push({ id: "__stats__", title: "Estadísticas", directory: "" })
-      }
-      if (stack.includes("__learning__") && !allWithVirtual.find((s) => s.id === "__learning__")) {
-        allWithVirtual.push({ id: "__learning__", title: "Aprendizaje", directory: "" })
-      }
-      if (stack.includes("__pcFiles__") && !allWithVirtual.find((s) => s.id === "__pcFiles__")) {
-        allWithVirtual.push({ id: "__pcFiles__", title: "Archivos PC", directory: "" })
-      }
-      // legacy tabs also pushed for tabBar rendering if stack still contains them
-      if (stack.includes("__reports__") && !allWithVirtual.find((s) => s.id === "__reports__")) {
-        allWithVirtual.push({ id: "__reports__", title: "Aprendizaje", directory: "" })
-      }
-      if (stack.includes("__design__") && !allWithVirtual.find((s) => s.id === "__design__")) {
-        allWithVirtual.push({ id: "__design__", title: "Open Design", directory: "" })
-      }
-      if (stack.includes("__screenshots__") && !allWithVirtual.find((s) => s.id === "__screenshots__")) {
-        allWithVirtual.push({ id: "__screenshots__", title: "Screenshots", directory: "" })
-      }
-
       let vComp: React.ReactNode = null
       if (sid === "__kanban__") vComp = <KanbanPanel />
       else if (sid === "__stats__") vComp = <StatsPanel />
@@ -234,26 +164,6 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       const isScrollableVirtual = sid === "__pcFiles__" || sid === "__kanban__" || sid === "__stats__"
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          {!isSinglePanel && <TabBar
-            tabs={stack}
-            activeIndex={Math.max(0, stack.indexOf(sid))}
-            sessions={allWithVirtual}
-            busySessionIds={busySessions}
-            onSwitch={onSwitchTab}
-            onClose={onRemoveTab}
-            onAdd={onAddTerminal}
-            onMoveTab={onMoveTab}
-            onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
-            panelIndex={i}
-            onDropTerminal={onAddTerminal}
-            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
-            onDropUrl={(url) => onOpenBrowser(url, i)}
-            onDetach={onDetachTab}
-            onCloseOthers={onCloseOthers}
-            onCloseRight={onCloseRight}
-            onCloseLeft={onCloseLeft}
-            onCloseAll={onCloseAll}
-          />}
           <div style={{ flex: 1, minHeight: 0, overflow: isScrollableVirtual ? "hidden" : "auto", display: isScrollableVirtual ? "flex" : undefined, flexDirection: isScrollableVirtual ? "column" as const : undefined }}>
             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>{vComp}</Suspense>
           </div>
@@ -261,65 +171,55 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       )
     }
 
-    // Browser tab — sin pestañas internas (única barra TitleBar/TabBar externa)
+    // Browser tab — sin pestañas internas (única barra: el propio titlebar).
+    // Todos los browser: del stack se mantienen montados (ocultos) para no
+    // recargar al salir y volver — mismo patrón que los iframes externos.
     if (sid.startsWith("browser:")) {
-      const url = browserTabUrls[sid] || "https://www.google.com"
-      const bSessions = [...sessions] as any[]
-      for (const bid of stack) {
-        if (bid.startsWith("browser:") && !bSessions.find((s) => s.id === bid)) {
-          const u = browserTabUrls[bid] || url
-          try {
-            const host = new URL(u).hostname
-            bSessions.push({ id: bid, title: host, directory: "" })
-          } catch {
-            bSessions.push({ id: bid, title: u.slice(0, 20), directory: "" })
-          }
-        }
-      }
+      const browserIds = stack.filter((id) => id.startsWith("browser:"))
+      const bids = browserIds.length > 0 ? browserIds : [sid]
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          {!isSinglePanel && <TabBar
-            tabs={stack}
-            activeIndex={Math.max(0, stack.indexOf(sid))}
-            sessions={bSessions}
-            busySessionIds={busySessions}
-            onSwitch={onSwitchTab}
-            onClose={onRemoveTab}
-            onAdd={() => onOpenBrowser("https://www.google.com", i)}
-            onMoveTab={onMoveTab}
-            onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
-            panelIndex={i}
-            onDropTerminal={onAddTerminal}
-            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
-            onDropUrl={(url) => onOpenBrowser(url, i)}
-            onDetach={onDetachTab}
-            onCloseOthers={onCloseOthers}
-            onCloseRight={onCloseRight}
-            onCloseLeft={onCloseLeft}
-            onCloseAll={onCloseAll}
-          />}
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
-              <BrowserPanel
-                initialUrl={url}
-                isActive={active}
-                hideTabBar
-                onClose={() => onRemoveTab(stack.indexOf(sid))}
-                onUrlChange={(newUrl: string) => props.onSetDesktopLayout?.((prev: any) => ({ ...prev, browserTabUrls: { ...(prev.browserTabUrls ?? {}), [sid]: newUrl } }))}
-                visualSelection={vs.selection}
-                inspectMode={vs.inspectMode}
-                onVisualPick={(el: any) => onBrowserVisualPick(url, el)}
-                onToggleInspect={vs.toggleInspect}
-                onClearVisual={vs.clearAnnotations}
-                annotations={vs.annotations}
-                onAnnotationComment={vs.setAnnotationComment}
-                onRemoveAnnotation={vs.removeAnnotation}
-                onAnnotationStyle={vs.setAnnotationStyle}
-                onAnnotationStyleBefore={vs.setAnnotationStyleBefore}
-                inspectTool={vs.inspectTool}
-                onToggleInspectTool={onToggleInspectTool}
-              />
-            </Suspense>
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
+            {bids.map((bid) => {
+              const isActiveBid = bid === sid
+              const bUrl = browserTabUrls[bid] || "https://www.google.com"
+              return (
+                <div
+                  key={bid}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    visibility: isActiveBid ? "visible" : "hidden",
+                    pointerEvents: isActiveBid ? "auto" : "none",
+                    zIndex: isActiveBid ? 1 : 0,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+                    <BrowserPanel
+                      initialUrl={bUrl}
+                      isActive={active && isActiveBid}
+                      hideTabBar
+                      onClose={() => onRemoveTab(stack.indexOf(bid))}
+                      onUrlChange={(newUrl: string) => props.onSetDesktopLayout?.((prev: any) => ({ ...prev, browserTabUrls: { ...(prev.browserTabUrls ?? {}), [bid]: newUrl } }))}
+                      visualSelection={vs.selection}
+                      inspectMode={vs.inspectMode}
+                      onVisualPick={(el: any) => onBrowserVisualPick(bUrl, el)}
+                      onToggleInspect={vs.toggleInspect}
+                      onClearVisual={vs.clearAnnotations}
+                      annotations={vs.annotations}
+                      onAnnotationComment={vs.setAnnotationComment}
+                      onRemoveAnnotation={vs.removeAnnotation}
+                      onAnnotationStyle={vs.setAnnotationStyle}
+                      onAnnotationStyleBefore={vs.setAnnotationStyleBefore}
+                      inspectTool={vs.inspectTool}
+                      onToggleInspectTool={onToggleInspectTool}
+                    />
+                  </Suspense>
+                </div>
+              )
+            })}
           </div>
         </div>
       )
@@ -328,12 +228,6 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     // Plugin tab
     if (sid.startsWith("plugin:")) {
       const pluginKey = sid.slice(7)
-      const pSessions = [...sessions] as any[]
-      for (const pid of stack) {
-        if (pid.startsWith("plugin:") && !pSessions.find((s) => s.id === pid)) {
-          pSessions.push({ id: pid, title: pid.slice(7).split(":").pop() || pid, directory: "" })
-        }
-      }
       if (pluginKey.startsWith("external:")) {
         // Keep all external iframes mounted (hidden) to avoid reload on tab switch
         const externalPlugins = stack
@@ -348,25 +242,6 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
         if (allProjs.length > 0) {
           return (
             <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-              {!isSinglePanel && <TabBar
-                tabs={stack}
-                activeIndex={Math.max(0, stack.indexOf(sid))}
-                sessions={pSessions}
-                busySessionIds={busySessions}
-                onSwitch={onSwitchTab}
-                onClose={onRemoveTab}
-                onAdd={() => {}}
-                onMoveTab={onMoveTab}
-                onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
-                panelIndex={i}
-                onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
-                onDropUrl={(url) => onOpenBrowser(url, i)}
-                onDetach={onDetachTab}
-            onCloseOthers={onCloseOthers}
-                onCloseRight={onCloseRight}
-                onCloseLeft={onCloseLeft}
-                onCloseAll={onCloseAll}
-              />}
               <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
                 {allProjs.map((proj) => {
                   const isActive = `plugin:external:${proj.name}` === sid
@@ -394,25 +269,6 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       }
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          {!isSinglePanel && <TabBar
-            tabs={stack}
-            activeIndex={Math.max(0, stack.indexOf(sid))}
-            sessions={pSessions}
-            busySessionIds={busySessions}
-            onSwitch={onSwitchTab}
-            onClose={onRemoveTab}
-            onAdd={() => {}}
-            onMoveTab={onMoveTab}
-            onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
-            panelIndex={i}
-            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
-            onDropUrl={(url) => onOpenBrowser(url, i)}
-                onDetach={onDetachTab}
-            onCloseOthers={onCloseOthers}
-            onCloseRight={onCloseRight}
-            onCloseLeft={onCloseLeft}
-            onCloseAll={onCloseAll}
-          />}
           <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 12 }}>
             <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
               {(() => {
@@ -445,49 +301,12 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       )
     }
 
-    // Header único del panel: el TabBar vive en la franja superior (igual que
-    // terminal/browser/virtual). SessionChatPanel ya NO renderiza su propio
-    // div.tab-bar interno (duplicaba el header al abrir archivos).
-    const isSingle = (props.desktopLayout?.cols ?? 1) * (props.desktopLayout?.rows ?? 1) === 1
-    const allWithSpecial = [...sessions] as any[]
-    for (const tid of stack) {
-      if (tid.startsWith("terminal") && !allWithSpecial.find((s) => s.id === tid)) {
-        allWithSpecial.push({ id: tid, title: `Terminal ${tid.slice(9, 13)}`, directory: "" })
-      }
-      if (tid.startsWith("browser:") && !allWithSpecial.find((s) => s.id === tid)) {
-        const u = browserTabUrls[tid] || ""
-        try {
-          allWithSpecial.push({ id: tid, title: new URL(u).hostname, directory: "" })
-        } catch {
-          allWithSpecial.push({ id: tid, title: u.slice(0, 20) || "Navegador", directory: "" })
-        }
-      }
-    }
+    // Tabs en el propio titlebar: el panel solo pinta contenido.
+    // SessionChatPanel ya NO renderiza su propio div.tab-bar interno
+    // (duplicaba el header al abrir archivos).
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        {!isSingle && (
-          <TabBar
-            tabs={stack}
-            activeIndex={Math.max(0, stack.indexOf(sid ?? ""))}
-            sessions={allWithSpecial}
-            busySessionIds={busySessions}
-            onSwitch={onSwitchTab}
-            onClose={onRemoveTab}
-            onAdd={onAddTerminal}
-            onMoveTab={onMoveTab}
-            onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, ti)}
-            panelIndex={i}
-            onDropTerminal={onAddTerminal}
-            onDropTerminalTab={(raw) => onDockSession(i, "center", raw)}
-            onDropUrl={(url) => onOpenBrowser(url, i)}
-            onDetach={onDetachTab}
-            onCloseOthers={onCloseOthers}
-            onCloseRight={onCloseRight}
-            onCloseLeft={onCloseLeft}
-            onCloseAll={onCloseAll}
-          />
-        )}
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <SessionChatPanel
             session={session}
             config={config!}

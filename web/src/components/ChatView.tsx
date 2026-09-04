@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, LayersIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon, EyeIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon, EyeIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -8,7 +8,6 @@ import { PromptPresetSheet } from "./PromptPresetSheet"
 export { ThinkingLevels } from "./ThinkingLevels"
 import { InlineRename } from "./InlineRename"
 import { SubagentFooter } from "./SubagentFooter"
-import { SkillBrowser } from "./SkillBrowser"
 import { ContextMenu } from "./ContextMenu"
 import { DiffViewer } from "./DiffViewer"
 import { GitToolbar } from "./GitToolbar"
@@ -17,6 +16,7 @@ import { PermissionPrompt } from "./PermissionPrompt"
 import { ChatCustomizerModal } from "./ChatCustomizerModal"
 import { ChatTerminalDock } from "./ChatTerminalDock"
 import { SelectionBar } from "./SelectionBar"
+import { ExportMarkdownDialog } from "./ExportMarkdownDialog"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 
 import { useOutsideClick } from "../hooks/useOutsideClick"
@@ -24,7 +24,7 @@ import { killTerminalPty } from "../utils/terminalStore"
 import { useDevServer } from "../hooks/useDevServer"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, AgentOption, ModelOption, DataMode, CommandInfo,
-  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, PromptSnippet, ChatSettings, TokenUsage } from "../types"
+  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, ChatSettings, TokenUsage } from "../types"
 type TodoItem = any
 
 export type ChatViewProps = {
@@ -81,7 +81,8 @@ export type ChatViewProps = {
   readingMode: boolean
   onToggleReadingMode: () => void
   onExportChat: () => void
-  onExportMarkdown?: () => void
+  exportDefaultPath?: string | null
+  onExportMarkdownTo?: (path: string) => Promise<boolean>
   onSnapshot: () => void
   onEditFile?: (file: string) => void
   onOpenFileBrowser?: () => void
@@ -109,9 +110,9 @@ export type ChatViewProps = {
   onOpenTerminal?: () => void
   onOpenMCPBrowser?: () => void
   onOpenRemoteDesktop?: () => void
+  onOpenOpenCodeHub?: () => void
   showTodoButton?: boolean
   compacting?: boolean
-  snippets?: PromptSnippet[]
   charLimit?: number
   compactTools?: boolean
   minimalistMode?: boolean
@@ -143,7 +144,7 @@ export const ChatView = memo(function ChatView({
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen: _onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, sessions, onOpenSession, onOpenSettings, onOpenSessionStats, onShellSend, onThemeCommand,
-  onOpenRemoteDesktop, onOpenBrowser,
+  onOpenRemoteDesktop, onOpenBrowser, onOpenOpenCodeHub,
   onToggleReadingMode,
   flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
   pendingQuestions, permissionRequest,
@@ -151,8 +152,8 @@ export const ChatView = memo(function ChatView({
   onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser,
   todos, todosExpanded, onTodosToggle, showTodoButton,
   compacting, revertID,
-  onExportMarkdown, onEditFile,
-  snippets, charLimit, compactTools, minimalistMode, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt,
+  onExportMarkdownTo, exportDefaultPath, onEditFile,
+  charLimit, compactTools, minimalistMode, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt,
   chatSettings, onChatSettingChange, onResetChatSettings, onOpenADEDiff,
   visualSelection, onClearVisualSelection, onFocusVisualFile, outboxActions
 }: ChatViewProps) {
@@ -161,7 +162,6 @@ export const ChatView = memo(function ChatView({
   const [showSearch, setShowSearch] = useState(false)
   const [searchPos, setSearchPos] = useState(0)
   const [showOverflow, setShowOverflow] = useState(false)
-  const [showSkills, setShowSkills] = useState(false)
   const [showPrompts, setShowPrompts] = useState(false)
   const [showChatCustomizer, setShowChatCustomizer] = useState(false)
   const [chatTermOpen, setChatTermOpen] = useState(false)
@@ -174,6 +174,8 @@ export const ChatView = memo(function ChatView({
     setChatTermGen((g) => g + 1)
     setChatTermOpen(false)
   }, [chatTermId])
+  const [showExport, setShowExport] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
   // Estable: evita que cada render del padre cree un nuevo function ref
@@ -288,25 +290,11 @@ export const ChatView = memo(function ChatView({
   const contextDisplay = useMemo(() => {
     // Buscar tokens del último mensaje con datos o usar los tokens acumulados de la sesión
     let lastMsgTokens: RenderedMessage["tokens"] | TokenUsage | undefined
-    let lastTps = ""
 
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i]
       if (m.tokens && ((m.tokens.input ?? 0) + (m.tokens.output ?? 0) + (m.tokens.reasoning ?? 0) > 0)) {
         if (!lastMsgTokens) lastMsgTokens = m.tokens
-      }
-      if (!lastTps && m.info.role === "assistant" && m.info.time.completed && m.info.time.created) {
-        const start = m.info.time.created
-        const end = m.info.time.completed
-        let out = (m.tokens?.output ?? 0) + (m.tokens?.reasoning ?? 0)
-        if (out <= 0 && m.text) out = Math.round(m.text.length / 4)
-        if (out > 0 && end > start) {
-          const genDurationMs = end - start
-          if (genDurationMs >= 500) {
-            const tps = (out / genDurationMs) * 1000
-            if (tps >= 1 && tps <= 300) lastTps = `${tps.toFixed(1)} tok/s`
-          }
-        }
       }
     }
 
@@ -332,14 +320,13 @@ export const ChatView = memo(function ChatView({
     }
 
     const cost = selectedSession?.cost ?? 0
-    if (total <= 0 && cost <= 0 && !lastTps) return null
+    if (total <= 0 && cost <= 0) return null
 
     const limit = activeModelOption?.contextLimit
     const pct = limit && limit > 0 && total > 0 ? Math.round((total / limit) * 100) : null
     let label = total > 0 ? (formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")) : ""
-    if (lastTps) label = label ? `${label} · ${lastTps}` : `${lastTps}`
     if (cost > 0) label = label ? `${label} · ${formatCost(cost)}` : (label ? `${label} · $0.00` : "")
-    return { total, pct, limit, cost, lastTps, label }
+    return { total, pct, limit, cost, label }
   }, [messages, activeModelOption?.contextLimit, selectedSession?.tokens, selectedSession?.cost])
 
   return (
@@ -497,8 +484,8 @@ export const ChatView = memo(function ChatView({
                   <button className="overflow-item" disabled={isWorking} onClick={() => { setShowOverflow(false); onCompact?.() }}>
                     <CompressIcon size={14} /> {t('session.compact')}
                   </button>
-                  {onExportMarkdown && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onExportMarkdown() }}>
+                  {onExportMarkdownTo && (
+                    <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowExport(true) }}>
                       <ShareIcon size={14} /> {t('session.exportMd')}
                     </button>
                   )}
@@ -507,9 +494,9 @@ export const ChatView = memo(function ChatView({
                       <FolderIcon size={14} /> {t('session.browseFiles')}
                     </button>
                   )}
-                  <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSkills(true) }}>
-                    <LayersIcon size={14} />
-                    {t('session.skills')}
+                  <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenOpenCodeHub?.() }}>
+                    <BrainIcon size={14} />
+                    {t('session.opencodeHub')}
                   </button>
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); onToggleReadingMode() }}>
                     <EyeIcon size={14} />
@@ -673,15 +660,6 @@ export const ChatView = memo(function ChatView({
         <div className={`todo-panel${todosExpanded ? " open" : ""}`}>
           <div className="todo-panel-header">
             <span className="todo-panel-title">{t('todo.title')}</span>
-      {chatTermOpen && chatTermId && selectedSession && !readingMode && (
-        <ChatTerminalDock
-          tabId={chatTermId}
-          cwd={selectedSession.directory}
-          onHide={() => setChatTermOpen(false)}
-          onKill={handleKillChatTerm}
-        />
-      )}
-
             <button className="btn-icon btn-secondary compact" onClick={onTodosToggle} aria-label="Cerrar">
               <CloseIcon size={12} />
             </button>
@@ -704,6 +682,15 @@ export const ChatView = memo(function ChatView({
         </div>
       )}
 
+      {chatTermOpen && chatTermId && selectedSession && !readingMode && (
+        <ChatTerminalDock
+          tabId={chatTermId}
+          cwd={selectedSession.directory}
+          onHide={() => setChatTermOpen(false)}
+          onKill={handleKillChatTerm}
+        />
+      )}
+
       {selectedSession && !readingMode && (
         <Composer
           value={composer}
@@ -723,7 +710,6 @@ export const ChatView = memo(function ChatView({
           config={config}
           directory={selectedSession?.directory}
           onThemeCommand={onThemeCommand}
-          snippets={snippets ?? []}
           charLimit={charLimit ?? 0}
           activeModelOption={displayModelOption}
           activeModelVariants={activeModelVariants}
@@ -736,20 +722,29 @@ export const ChatView = memo(function ChatView({
         />
       )}
 
-      {showSkills && config && createPortal(
-        <SkillBrowser
-          config={config}
-          onClose={() => setShowSkills(false)}
-          onSelect={(name) => onComposerChange(`/skill ${name} `)}
-        />,
-        document.body
-      )}
-
       {showPrompts && createPortal(
         <PromptPresetSheet
           onInsert={(text) => { onInsertPrompt?.(text); setShowPrompts(false) }}
           onSend={(text) => { onSendPrompt?.(text); setShowPrompts(false) }}
           onClose={() => setShowPrompts(false)} />,
+        document.body
+      )}
+
+      {showExport && exportDefaultPath && onExportMarkdownTo && createPortal(
+        <ExportMarkdownDialog
+          defaultPath={exportDefaultPath}
+          busy={exportBusy}
+          onCancel={() => { if (!exportBusy) setShowExport(false) }}
+          onConfirm={(path) => {
+            setExportBusy(true)
+            onExportMarkdownTo(path).then((ok) => {
+              setExportBusy(false)
+              // En fallo el error ya se reportó vía runtimeError: el diálogo
+              // queda abierto para corregir la ruta y reintentar.
+              if (ok) setShowExport(false)
+            }).catch(() => setExportBusy(false))
+          }}
+        />,
         document.body
       )}
 

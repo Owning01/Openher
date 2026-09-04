@@ -13,7 +13,6 @@ import {
 import { useT } from "../../i18n-context"
 import type { DesktopLayout, ViewType } from "../../types"
 import type { MemoryInfo } from "../../hooks/useMemoryUsage"
-import { EXTERNAL_PROJECTS } from "../../features/external-plugins/config"
 
 export type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm" | "pcFiles" | "reports"
 
@@ -183,33 +182,8 @@ export const ActivityBar = memo(function ActivityBar({
           <BranchIcon size={18} />
         </button>
 
-        {/* External plugins: Open Design, VioEditor, Screenshots — replaces former design/reports/screenshots buttons */}
-        {EXTERNAL_PROJECTS.map((p) => {
-          const pluginKey = `external:${p.name}`
-          const tabId = `plugin:${pluginKey}`
-          const isActive = tabStacks?.some((s) => s.includes(tabId)) || desktopLayout.sessions.includes(tabId)
-          return (
-            <button
-              key={p.name}
-              type="button"
-              data-item={`plugin-${p.name}`}
-              className={`activity-btn${isActive ? " active" : ""}${hasExternalActive && !isActive ? "" : ""}`}
-              title={p.title}
-              aria-label={p.title}
-              draggable
-              onDragStart={(e) => {
-                const payload = `plugin:${pluginKey}`
-                e.dataTransfer.setData("application/x-opencode-path", payload)
-                e.dataTransfer.setData("text/plain", payload)
-                e.dataTransfer.effectAllowed = "move"
-              }}
-              onClick={() => openPluginAsTab(pluginKey)}
-            >
-              <span style={{ fontSize: 14, lineHeight: 1 }}>{p.icon}</span>
-            </button>
-          )
-        })}
-
+        {/* Plugins externos (Open Design, VioEditor, Screenshots): solo desde el
+            modal de Plugins (botón globo) — el rail no los duplica. */}
         <button
           type="button"
           data-item="plugins"

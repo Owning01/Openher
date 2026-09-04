@@ -516,6 +516,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     onLoadSelected: () => Promise<void>,
     onPatchSession?: (patch: Partial<{ revert: { messageID: string } | undefined }>) => void,
     onSetRevertID?: (id: string | null) => void,
+    restoreComposer = false,
   ) => {
     if (isUndoingRef.current) return
     isUndoingRef.current = true
@@ -536,7 +537,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
 
       const targetID = targetMessage.info.id
       const text = extractText(targetMessage) || ""
-      if (text) setComposer(text)
+      if (restoreComposer && text) setComposer(text)
 
       // Actualización optimista inmediata
       onSetRevertID?.(targetID)
@@ -885,7 +886,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     }
     if (parsed?.type === "undo") {
       setComposer("")
-      await undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, onRefreshSessions, onLoadSelected, undefined, onSetRevertID)
+      await undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, onRefreshSessions, onLoadSelected, undefined, onSetRevertID, false)
       return
     }
     if (parsed?.type === "redo") {

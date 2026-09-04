@@ -17,7 +17,7 @@ import type { ChatViewProps } from "./ChatView"
 import type { ServerConfig, DataMode, SessionView, CommandInfo } from "../types"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { formatSelectionForPrompt } from "../hooks/useVisualSelection"
-import { keepMessagesThrough } from "../features/chat/domain/message-order"
+import { keepMessagesBefore, keepMessagesThrough } from "../features/chat/domain/message-order"
 
 type Props = {
   session: SessionView
@@ -227,7 +227,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     if (revertMsgId) {
       // Snapshot para rollback si el envío falla
       prevMessagesSnapshot = msgs.messages
-      msgs.setMessages((prev) => keepMessagesThrough(prev, session.id, revertMsgId))
+      msgs.setMessages((prev) => keepMessagesBefore(prev, session.id, revertMsgId))
     }
     setLocalRevertID(null)
     const res = await msgs.send(session, panelModelOption ?? undefined, baseProps.activeAgentID, baseProps.commands,
@@ -448,7 +448,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     <div
       className={`session-panel${active ? " active" : ""}`}
       onClick={onActivate}
-      style={{ position: "relative" }}
+      style={{ position: "relative", height: "100%", minHeight: 0, flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}
       onDragOver={(e) => {
         e.preventDefault()
         const zone = calcDropZone(e)

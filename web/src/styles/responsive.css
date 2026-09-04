@@ -42,6 +42,18 @@
     gap: var(--space-2);
   }
 
+  /* Móvil: solo ruedita de configuración + toggle día/noche. Nada más. */
+  .desktop-nav button[data-view="pcFiles"],
+  .desktop-nav button[data-view="quickchat"],
+  .desktop-nav button[data-view="learning"] {
+    display: none;
+  }
+
+  /* Explorer en móvil: el visor de código gana altura para leer sin descargar. */
+  .pcf-code-viewer {
+    max-height: 55dvh;
+  }
+
   .panel {
     padding: var(--space-3) var(--space-2);
     border-radius: 0;
@@ -250,10 +262,27 @@
   }
 
   /* En táctil el send/stop con mic se desplaza lo que ocupa el mic (44px +
-     gaps): sin esto send y mic se solapan ~14px. */
-  .composer-send-btn.with-mic,
-  .composer-stop-btn.with-mic {
+     gaps): sin esto send y mic se solapan ~14px. Trabajando hay 3 botones
+     a la derecha (mic + send + stop): el stop va un paso más a la izquierda. */
+  .composer-send-btn.with-mic {
     right: 3.35rem;
+  }
+
+  .composer-stop-btn {
+    right: 3.35rem;
+  }
+
+  .composer-stop-btn.with-mic {
+    right: 6.1rem;
+  }
+
+  .composer-input-wrap.is-working textarea {
+    padding-left: 3.4rem;
+    padding-right: 6.2rem;
+  }
+
+  .composer-input-wrap.is-working.has-mic textarea {
+    padding-right: 9rem;
   }
 
   .server-profile-row,

@@ -110,6 +110,16 @@
   padding-right: 3.9rem;
 }
 
+/* Trabajando: stop + send visibles a la derecha (el envío encola en el
+   outbox en vez de bloquearse). Se reserva sitio para el segundo botón. */
+.composer-input-wrap.is-working textarea {
+  padding-right: 4.4rem;
+}
+
+.composer-input-wrap.is-working.has-mic textarea {
+  padding-right: 5.8rem;
+}
+
 /* Focus visible propio: el outline global se descarta acá (textarea del
    composer), se reemplaza por un ring con el focus-ring del tema. */
 .composer-input-wrap textarea:focus {
@@ -194,12 +204,12 @@
 }
 
 .composer-stop-btn {
-  right: 0.3rem;
+  right: 2.2rem;
   color: var(--danger);
 }
 
 .composer-stop-btn.with-mic {
-  right: 2.2rem;
+  right: 4.1rem;
 }
 
 .composer-stop-btn:hover {
@@ -568,10 +578,10 @@
   align-items: center;
   gap: 6px;
   height: 26px;
-  padding: 0 10px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0 4px;
+  border-radius: 0;
+  background: transparent;
+  border: none;
   color: #e4e4e7;
   font-size: 12px;
   font-weight: 500;
@@ -582,19 +592,13 @@
 }
 
 .composer-model-pill:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
 }
 
 .composer-model-pill:active {
-  transform: scale(0.97);
-}
-
-.composer-model-icon {
-  color: #818cf8;
-  display: inline-flex;
-  align-items: center;
+  transform: none;
 }
 
 .composer-model-name {
@@ -602,12 +606,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.composer-model-variant {
-  color: #a1a1aa;
-  font-weight: 400;
-  font-size: 11px;
 }
 
 .agent-toggle {

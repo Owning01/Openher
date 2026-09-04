@@ -216,7 +216,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 
       {showMCPBrowser && config && (
         <Suspense fallback={null}>
-          <MCPBrowser config={config} onClose={onCloseMCPBrowser} />
+          <MCPBrowser config={config} directory={currentActiveSession?.directory ?? activeSessionDir} onClose={onCloseMCPBrowser} />
         </Suspense>
       )}
 

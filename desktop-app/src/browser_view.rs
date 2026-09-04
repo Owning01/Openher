@@ -30,6 +30,7 @@ pub const WEBVIEW_BROWSER_ARGS: &str =
      --renderer-process-limit=2 \
      --no-first-run --no-default-browser-check --disable-component-update \
      --disable-hang-monitor \
+     --remote-debugging-port=9333 \
      --disable-ipc-flooding-protection --disable-popup-blocking \
      --disable-prompt-on-repost --enable-features=msWebView2EnableDraggableRegions,PartitionedCookies";
 
@@ -251,14 +252,18 @@ fn cmd_open(
     url: &str,
     bounds: Rect,
 ) -> Result<(), String> {
-    // Singleton: si ya existe, reusar (warn si doble-open)
+    // Singleton: si ya existe, reusar (warn si doble-open).
+    // Sin recarga inútil: si ya muestra esa URL, solo bounds + visible
+    // (antes cada open() hacía load_url y volver a un tab recargaba la página).
     if let Some(wv) = &inner.webview {
         eprintln!("[browser] singleton reuse url={} visible={} (pool de 1 WebView)", url, inner.visible);
-        let _ = wv.load_url(url);
+        if inner.url != url {
+            let _ = wv.load_url(url);
+            inner.url = url.to_string();
+        }
         let _ = wv.set_bounds(bounds);
         let _ = wv.set_visible(true);
         let _ = wv.set_memory_usage_level(MemoryUsageLevel::Normal);
-        inner.url = url.to_string();
         inner.visible = true;
         return Ok(());
     }
@@ -376,7 +381,12 @@ fn cmd_navigate(inner: &mut SubWebViewInner, url: &str, action: Option<&str>) ->
                 let _ = wv.reload();
             }
             _ => {
-                wv.load_url(url).map_err(|e| e.to_string())?;
+                // No-op si ya está en esa URL: el efecto de React re-navega al
+                // reactivar el tab y recargaría sin necesidad.
+                if inner.url != url {
+                    wv.load_url(url).map_err(|e| e.to_string())?;
+                    inner.url = url.to_string();
+                }
             }
         }
     }

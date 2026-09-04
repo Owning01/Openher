@@ -2,7 +2,6 @@ import React, { memo, useEffect, useRef, useState } from "react"
 import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../../types"
 import type { ChatViewProps } from "../../components/ChatView"
 import { SessionChatPanel } from "../../components/SessionChatPanel"
-import { TabBar } from "../../components/TabBar"
 import { DesktopPanelRenderer } from "./DesktopPanelRenderer"
 import { calcDropZone, isOverTabBar, compactLayout, type DropZone } from "./model"
 
@@ -32,10 +31,6 @@ export type DesktopGridProps = {
   onMoveTab: (panelIdx: number, from: number, to: number) => void
   onTransferTab: (fromPanel: number, fromIdx: number, toPanel: number, toIdx: number) => void
   onAddTerminal: (panelIdx: number) => void
-  onCloseOthers: (panelIdx: number, keep: number) => void
-  onCloseRight: (panelIdx: number, idx: number) => void
-  onCloseLeft: (panelIdx: number, idx: number) => void
-  onCloseAll: (panelIdx: number) => void
   onClosePanel: (panelIdx: number) => void
   onDockSession: (index: number, dir: "left" | "right" | "top" | "bottom" | "center", specificId?: string) => void
   onSettleSession: (id: string, dir: string) => Promise<void> | void
@@ -81,10 +76,6 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
     onMoveTab,
     onTransferTab,
     onAddTerminal,
-    onCloseOthers,
-    onCloseRight,
-    onCloseLeft,
-    onCloseAll,
     onClosePanel,
     onDockSession,
     onSettleSession,
@@ -357,15 +348,7 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
             onClosePanel(i)
             if (maximizedPanel === i) setMaximizedPanel(null)
           }}
-          onSwitchTab={(tabIdx) => onSwitchTab(i, tabIdx)}
           onRemoveTab={(tabIdx) => onRemoveTab(i, tabIdx)}
-          onMoveTab={(from, to) => onMoveTab(i, from, to)}
-          onTransferTab={(fp, fi, ti) => onTransferTab(fp, fi, i, ti)}
-          onAddTerminal={() => onAddTerminal(i)}
-          onCloseOthers={(keep) => onCloseOthers(i, keep)}
-          onCloseRight={(idx) => onCloseRight(i, idx)}
-          onCloseLeft={(idx) => onCloseLeft(i, idx)}
-          onCloseAll={() => onCloseAll(i)}
           onDockSession={onDockSession}
           onSettleSession={onSettleSession}
           onRefreshSessions={onRefreshSessions}
@@ -422,33 +405,7 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
     <div className="desktop-layout-area">
       {maximizedSession && maximizedIndex !== null ? (
         <div className="desktop-maximized" data-split="false" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          {(() => {
-            const stack = tabStacks?.[maximizedIndex]?.length
-              ? tabStacks[maximizedIndex]
-              : maximizedSession
-              ? [maximizedSession.id]
-              : []
-            const allWithSpecial = [...sessions] as any[]
-            for (const tid of stack) {
-              if (tid.startsWith("terminal") && !allWithSpecial.find((s) => s.id === tid)) {
-                allWithSpecial.push({ id: tid, title: `Terminal ${tid.slice(9, 13)}`, directory: "" })
-              }
-            }
-            return (
-              <TabBar
-                tabs={stack}
-                activeIndex={Math.max(0, stack.indexOf(maximizedSession.id))}
-                sessions={allWithSpecial}
-                busySessionIds={busySessions}
-                onSwitch={(idx) => onSwitchTab(maximizedIndex, idx)}
-                onClose={(idx) => onRemoveTab(maximizedIndex, idx)}
-                onAdd={() => onAddTerminal(maximizedIndex)}
-                onMoveTab={(from, to) => onMoveTab(maximizedIndex, from, to)}
-                panelIndex={maximizedIndex}
-              />
-            )
-          })()}
-          <div style={{ flex: 1, minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <SessionChatPanel
             session={maximizedSession}
             config={config!}

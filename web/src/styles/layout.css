@@ -49,12 +49,20 @@
   opacity: 1;
 }
 
-/* ===== Brand / Identity ===== */
+/* ===== Brand / Identity: solo texto + logo, sin pill (resetea base button) ===== */
 .brand-section {
   display: flex;
   align-items: center;
   min-width: 0;
   cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.brand-section:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
 }
 
 .brand-title {
@@ -84,7 +92,7 @@
 
 .brand-name {
   font-size: 1.05rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text);
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -605,8 +613,10 @@
     flex: 1;
     min-height: 0;
     min-width: 0;
+    height: 100%;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     border-radius: 0;
   }
 
@@ -1008,7 +1018,13 @@
   .session-panel .panel.detail {
     border: none;
     border-radius: 0;
-    height: auto;
+    /* height:auto rompía la cadena flex: el chat crecía con el contenido
+       (scrollHeight 7x el panel), el composer quedaba debajo de la celda
+       (oculto por overflow:hidden) y .messages no scrolleaba. Encajar al
+       panel y dejar el scroll interno del chat. */
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .bottom-nav {
