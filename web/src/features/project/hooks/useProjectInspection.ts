@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react"
 import type { SessionView } from "../../../types"
 import { filterByQuery, extractPath, extractName, extractBranch } from "../../../utils"
+import { groupSessionsByDir, dirKey } from "../../../utils/sessionDirs"
 
 export type UseProjectInspectionParams = {
   sessions: SessionView[]
@@ -17,29 +18,34 @@ export function useProjectInspection({
 }: UseProjectInspectionParams) {
   const [selectedProjectDir, setSelectedProjectDir] = useState<string | null>(null)
 
-  // Group sessions by directory for project-based navigation
-  const groupedSessions = useMemo(() => {
-    const map = new Map<string, SessionView[]>()
-    for (const s of sessions) {
-      const dir = s.directory || "/"
-      const list = map.get(dir) || []
-      list.push(s)
-      map.set(dir, list)
-    }
-    return map
-  }, [sessions])
+  // Group sessions by directory for project-based navigation.
+  // Clave normalizada (mayúsculas, / vs \, trailing): el server devuelve el
+  // mismo proyecto con escrituras distintas según el endpoint y sin esto el
+  // grupo se parte o el lookup de selectedProjectDir falla. display conserva
+  // el raw de la primera sesión para mostrar y accionar.
+  const groups = useMemo(() => groupSessionsByDir(sessions), [sessions])
+
+  // Compat: mapa por display raw (misma forma que antes).
+  const groupedSessions = useMemo(() => new Map(groups), [groups])
+
+  // Lookup tolerante: selectedProjectDir puede venir con otra escritura
+  // del mismo dir (deep link, explorer, picker).
+  const groupByKey = useMemo(
+    () => new Map(groups.map(([display, list]) => [dirKey(display), list] as const)),
+    [groups]
+  )
 
   const projects = useMemo(
     () =>
-      [...groupedSessions.entries()].sort(([, aSessions], [, bSessions]) => {
+      [...groups].sort(([, aSessions], [, bSessions]) => {
         const aMax = Math.max(...aSessions.map((s) => s.updated || 0))
         const bMax = Math.max(...bSessions.map((s) => s.updated || 0))
         return bMax - aMax
       }),
-    [groupedSessions]
+    [groups]
   )
 
-  const projectSessions = selectedProjectDir ? groupedSessions.get(selectedProjectDir) ?? [] : []
+  const projectSessions = selectedProjectDir ? (groupByKey.get(dirKey(selectedProjectDir)) ?? []) : []
 
   const filteredProjects = useMemo(() => {
     return filterByQuery(projects, query, ([dir, sessionsList]) => [

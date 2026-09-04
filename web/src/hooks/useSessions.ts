@@ -1,16 +1,21 @@
-import { useState, useCallback, useMemo, type MutableRefObject } from "react"
+import { useState, useCallback, useMemo, useRef, type MutableRefObject } from "react"
 import type { ServerConfig, Session, SessionView, SessionStatus, ModelSelection, ConnectionState } from "../types"
 import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
 import { useLocalStorage } from "./useLocalStorage"
 import { getOpencodeClient } from "../shared/api/opencodeClient"
 import { toSessionV1 } from "../shared/api/mappers"
+import { buildDirPlan, dirKey } from "../utils/sessionDirs"
 
 const FAVORITES_KEY = STORAGE_KEYS.FAVORITES
 
-// Unión persistente de directorios vistos: si /project falla (catch → []) o la
-// lista global rota, los proyectos viejos NO desaparecen de la sidebar.
-const knownDirsHistoryRef: { current: Set<string> } = { current: new Set<string>() }
+// Unión persistente de directorios vistos por servidor: si el global viene
+// parcial (server con scope) o /project falla, los proyectos viejos NO
+// desaparecen. Con ámbito por servidor para no contaminar entre perfiles.
+// Lo fresco (global + UI visible) siempre tiene prioridad sobre el historial.
+const knownDirsHistoryRef: { current: { key: string; dirs: string[] } } = {
+  current: { key: "", dirs: [] },
+}
 
 function toSessionView(session: Session, status?: SessionStatus): SessionView {
   return {
@@ -70,6 +75,9 @@ export function useSessions(
   setConnectionMessage: (msg: string) => void
 ): SessionsActions {
   const [sessions, setSessions] = useState<SessionView[]>([])
+  // Espejo para que refreshSessions consulte los dirs visibles sin entrar en deps
+  const sessionsRef = useRef<SessionView[]>([])
+  sessionsRef.current = sessions
   const [selectedID, setSelectedID] = useState<string | null>(null)
   const [loadingSessionID, setLoadingSessionID] = useState<string | null>(null)
   const [refreshingSessions, setRefreshingSessions] = useState(false)
@@ -104,19 +112,24 @@ export function useSessions(
           // @ts-ignore — client generado, método puede variar según versión beta
           const raw = await (client as any).session?.list?.({ directory: undefined })
           const normalize = (arr: unknown[]): Session[] => {
-            if (arr.length === 0) return [] as Session[]
-            const first = arr[0] as Record<string, unknown>
-            const dir = (first as unknown as { directory?: unknown }).directory
-            const hasEmptyDir = dir === "" || dir == null
-            const isV2 = first && typeof first === "object" && "location" in first && (!("directory" in first) || hasEmptyDir)
-            if (isV2) {
+            // Detección por elemento (no solo arr[0]): arrays mixtos v1/v2
+            // no se mapean mal en bloque.
+            const out: Session[] = []
+            for (const it of arr) {
+              const o = it as Record<string, unknown>
+              const dir = (o as unknown as { directory?: unknown }).directory
+              const isV2 = o && typeof o === "object" && "location" in o && (!("directory" in o) || dir === "" || dir == null)
+              if (!isV2) {
+                out.push(it as Session)
+                continue
+              }
               try {
-                return (arr as unknown as import("../shared/api/mappers").V2Session[]).map(toSessionV1)
+                out.push(toSessionV1(it as unknown as import("../shared/api/mappers").V2Session))
               } catch {
-                return arr as Session[]
+                out.push(it as Session)
               }
             }
-            return arr as Session[]
+            return out
           }
           if (Array.isArray(raw)) return normalize(raw)
           if (raw && Array.isArray((raw as unknown as { data: unknown[] }).data)) return normalize((raw as unknown as { data: unknown[] }).data)
@@ -130,26 +143,28 @@ export function useSessions(
         api.listProjects(config).catch(() => []),
       ])
 
-      const MAX_KNOWN_DIRS = 80
-      const knownDirs = new Set<string>(knownDirsHistoryRef.current)
-      for (const s of items) if (s.directory) {
-        if (knownDirs.size >= MAX_KNOWN_DIRS) break
-        knownDirs.add(s.directory)
+      const MAX_KNOWN_DIRS = 150
+      // Ámbito por servidor: al cambiar de perfil/host el historial ajeno
+      // solo ocuparía slots del cap y ocultaría proyectos locales.
+      const serverKey = `${config.host}:${config.port}:${config.username ?? ""}`
+      if (knownDirsHistoryRef.current.key !== serverKey) {
+        knownDirsHistoryRef.current = { key: serverKey, dirs: [] }
       }
-      for (const p of projects) if (p.directory) {
-        if (knownDirs.size >= MAX_KNOWN_DIRS) break
-        knownDirs.add(p.directory)
-      }
-      // Persistir con cap LRU: si excede, eliminar los más antiguos
-      for (const d of knownDirs) {
-        if (knownDirsHistoryRef.current.size >= MAX_KNOWN_DIRS) {
-          const oldest = knownDirsHistoryRef.current.values().next().value
-          if (oldest !== undefined) knownDirsHistoryRef.current.delete(oldest)
-        }
-        knownDirsHistoryRef.current.add(d)
-      }
+      // Nunca olvidar lo visible: si el global viene parcial, los dirs de la
+      // UI actual alimentan el backfill por-dir.
+      const stateDirs: string[] = []
+      for (const s of sessionsRef.current) if (s.directory) stateDirs.push(s.directory)
+      const { query: backfillDirs, history: nextHistory } = buildDirPlan({
+        itemDirs: items.map((s) => s.directory).filter((d) => Boolean(d)),
+        stateDirs,
+        projectDirs: projects.map((p) => p.directory).filter((d) => Boolean(d)),
+        historyDirs: knownDirsHistoryRef.current.dirs,
+        cap: MAX_KNOWN_DIRS,
+      })
+      knownDirsHistoryRef.current = { key: serverKey, dirs: nextHistory }
+      const coveredKeys = new Set(items.map((s) => dirKey(s.directory)))
 
-      const directories = [...knownDirs].filter(Boolean)
+      const directories = nextHistory
       const chunk = <T>(arr: T[], size: number) => {
         const chunks: T[][] = []
         for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
@@ -159,8 +174,12 @@ export function useSessions(
       const allSessionLists: Session[][] = []
       const allStatusLists: Record<string, SessionStatus>[] = []
       for (const c of dirChunks) {
+        // Sesiones: solo backfill de lo NO cubierto por el global (el resto
+        // ya está en `items`). Statuses: siempre por-dir en full, porque el
+        // global no trae busy y el merge pisaría el estado con "idle".
+        const needSessions = c.filter((d) => !coveredKeys.has(dirKey(d)))
         const [sl, st] = await Promise.all([
-          Promise.all(c.map((d) => api.listSessions(config, d).catch(() => [] as Session[]))),
+          Promise.all(needSessions.map((d) => api.listSessions(config, d).catch(() => [] as Session[]))),
           full ? Promise.all(c.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>)))) : Promise.resolve([]),
         ])
         allSessionLists.push(...sl)
@@ -186,7 +205,7 @@ export function useSessions(
       if (typeof localStorage !== "undefined" && localStorage.getItem("debug.sessions") === "1") {
         const dirCounts = new Map<string, number>()
         for (const s of mapped) if (s.directory) dirCounts.set(s.directory, (dirCounts.get(s.directory) ?? 0) + 1)
-        console.info(`[sessions] raw=${items.length} projects=${projects.length} dirsConsultadas=${directories.length} total=${mapped.length}`, [...dirCounts.entries()].slice(0, 20))
+        console.info(`[sessions] raw=${items.length} projects=${projects.length} dirsCandidatas=${directories.length} backfill=${backfillDirs.length} total=${mapped.length}`, [...dirCounts.entries()].slice(0, 20))
       }
 
       setSessions((current) => {
