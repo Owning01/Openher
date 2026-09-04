@@ -10,6 +10,8 @@ import {
   type InspectTool,
 } from "./browserOverlayScript"
 import { buildPipScript } from "./browserPipScript"
+import { buildWheelScript } from "./browserWheelScript"
+import { parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, type PageShortcutAction } from "./browserSync"
 
 const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
 export const BROWSER_HOME = "https://www.google.com"
@@ -288,6 +290,10 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [showTuneDropdown, setShowTuneDropdown] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && navigator.onLine === false)
+  // Preflight del fallback iframe: distingue "sitio caído" de "cargando"
+  const [probe, setProbe] = useState<{ phase: "idle" | "checking" | "ok" | "fail"; status?: number }>({ phase: "idle" })
+  const [embedEmpty, setEmbedEmpty] = useState(false)
   const [browserFailed, setBrowserFailed] = useState(false)
   const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null)
   const [findOpen, setFindOpen] = useState(false)
@@ -303,6 +309,8 @@ export const BrowserPanel = memo(function BrowserPanel({
       return Number.isFinite(v) && v > 0 ? Math.max(0.5, Math.min(2.5, v)) : 1
     } catch { return 1 }
   })
+  const zoomRef = useRef(zoomLevel)
+  zoomRef.current = zoomLevel
   const [homeUrl] = useState<string>(() => {
     try { return localStorage.getItem("opencode.browser.home") || BROWSER_HOME } catch { return BROWSER_HOME }
   })
@@ -330,6 +338,11 @@ export const BrowserPanel = memo(function BrowserPanel({
   const prevInitialUrlRef = useRef(initialUrl)
   const onUrlChangeRef = useRef(onUrlChange)
   onUrlChangeRef.current = onUrlChange
+  // Refs vivas para los polls con [] (puente página→host, sync URL)
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
+  const activeTabIdRef = useRef(activeTabId)
+  activeTabIdRef.current = activeTabId
   // Ancho de columna del modo dispositivo (null = responsive completo).
   // El hijo nativo también lo respeta: bounds centrados, no solo el iframe.
   const deviceWidthRef = useRef<number | null>(null)
@@ -423,8 +436,7 @@ export const BrowserPanel = memo(function BrowserPanel({
           // inline apply to avoid stale closure
           const v = next
           try { localStorage.setItem("opencode.browser.zoom", String(v)) } catch {}
-          const css = `document.documentElement.style.zoom='${v}'; document.body.style.zoom='${v}';`
-          if (IS_DESKTOP) shell.browser.eval(css).catch(() => {})
+          if (IS_DESKTOP) shell.browser.eval(zoomCodeFor(v)).catch(() => {})
           else {
             try {
               const doc = iframeRef.current?.contentDocument as any
@@ -526,6 +538,9 @@ export const BrowserPanel = memo(function BrowserPanel({
       if (cancelled) return
       nativeReady.current = true
       setBrowserFailed(false)
+      injectWheel()
+      // La página puede no tener documento aún: reintento tardío (self-guard)
+      window.setTimeout(() => { if (!cancelled) injectWheel() }, 1500)
       requestAnimationFrame(syncBounds)
     }
     shell.browser.open(currentSrc, bounds).then(markReady).catch((e) => {
@@ -584,9 +599,6 @@ export const BrowserPanel = memo(function BrowserPanel({
       }
     }
     document.addEventListener("visibilitychange", handleVis)
-    const handleOffline = () => setBrowserFailed(true)
-    window.addEventListener("offline", handleOffline)
-    // DPR cambia en drag entre monitores
     const onDprChange = () => syncBounds()
     try { window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener("change", onDprChange) } catch {}
 
@@ -597,7 +609,6 @@ export const BrowserPanel = memo(function BrowserPanel({
       window.removeEventListener("resize", syncBounds)
       window.removeEventListener("scroll", syncBounds, true)
       document.removeEventListener("visibilitychange", handleVis)
-      window.removeEventListener("offline", handleOffline)
       if (debounceTimer) clearTimeout(debounceTimer)
       el.removeAttribute("data-browser-mounted")
       // Mantener WebView vivo para que cookies/sesión Google persistan entre tabs
@@ -615,6 +626,11 @@ export const BrowserPanel = memo(function BrowserPanel({
       console.warn("[Browser] navigate failed url=" + currentSrc, e)
       setBrowserFailed(true)
     })
+    // La navegación borra los inyectados: reponer forwarder (inmediato + tardío)
+    injectWheel()
+    const t = window.setTimeout(() => { if (nativeReady.current) injectWheel() }, 1200)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSrc, browserFailed, isActive])
 
   // Modo dispositivo en nativo: recentrar la columna (el iframe lo hace por
@@ -648,6 +664,140 @@ export const BrowserPanel = memo(function BrowserPanel({
     }
   }, [])
 
+  // Detecta iframe que cargó vacío (embebido bloqueado del lado del sitio).
+  // cross-origin al leer = navegó a un origen real → se asume cargado.
+  const probeEmbedEmpty = useCallback(() => {
+    window.setTimeout(() => {
+      try {
+        const doc = iframeRef.current?.contentDocument
+        if (!doc || !(doc as any).body) return
+        const txt = (((doc as any).body.innerText as string) || "").trim()
+        if (txt.length < 20 && !doc.title) setEmbedEmpty(true)
+      } catch {}
+    }, 2000)
+  }, [])
+
+  // Inyecta el forwarder Ctrl+rueda (idempotente; la navegación lo borra).
+  const injectWheel = useCallback(() => {
+    if (!IS_DESKTOP) return
+    try {
+      shell.browser.eval(buildWheelScript(window.location.origin)).catch(() => {})
+    } catch {}
+  }, [])
+
+  // ---- puente página→host: atajos del init script + URL real + zoom ----
+  type HostActions = {
+    reload: () => void; focusUrl: () => void; find: () => void
+    newTab: () => void; closeTab: () => void; bookmark: () => void
+    zoomBy: (d: number) => void; zoomReset: () => void
+    back: () => void; forward: () => void; toggleChrome: () => void
+  }
+  const actionsRef = useRef<HostActions | null>(null)
+  const dispatchShortcut = useCallback((a: PageShortcutAction) => {
+    const A = actionsRef.current
+    if (!A) return
+    switch (a) {
+      case "reload": A.reload(); break
+      case "focus-url": A.focusUrl(); break
+      case "find": A.find(); break
+      case "new-tab": A.newTab(); break
+      case "close-tab": A.closeTab(); break
+      case "bookmark": A.bookmark(); break
+      case "zoom-reset": A.zoomReset(); break
+      case "zoom-in": A.zoomBy(0.1); break
+      case "zoom-out": A.zoomBy(-0.1); break
+      case "back": A.back(); break
+      case "forward": A.forward(); break
+      case "toggle-chrome": A.toggleChrome(); break
+    }
+  }, [])
+
+  // Consume la cola IPC del init script (antes nadie la drenaba: los atajos
+  // dentro de la página morían). Poll corto solo con el panel activo.
+  useEffect(() => {
+    if (!IS_DESKTOP || !isActive) return
+    let stopped = false
+    const id = window.setInterval(async () => {
+      if (stopped || document.visibilityState === "hidden") return
+      try {
+        const r = await shell.browser.shortcuts().catch(() => null)
+        const list = (r as any)?.shortcuts
+        if (!Array.isArray(list) || list.length === 0) return
+        for (const raw of list) {
+          const a = parseShortcutEvent(raw)
+          if (a) dispatchShortcut(a)
+        }
+      } catch {}
+    }, 350)
+    return () => { stopped = true; window.clearInterval(id) }
+  }, [isActive, dispatchShortcut])
+
+  // Adopta navegaciones internas (links, redirects, SPA) al tab + omnibox.
+  const commitExternalUrl = useCallback((u: string) => {
+    pushHistory(u)
+    const id = activeTabIdRef.current
+    setTabs((prev) => prev.map((t) => {
+      if (t.id !== id) return t
+      const nextHist = t.history.slice(-49)
+      if (nextHist[nextHist.length - 1] !== u) nextHist.push(u)
+      return { ...t, url: u, title: formatDisplayTitle(u), history: nextHist, historyIdx: nextHist.length - 1 }
+    }))
+  }, [])
+  useEffect(() => {
+    if (!IS_DESKTOP || !isActive) return
+    let stopped = false
+    const id = window.setInterval(async () => {
+      if (stopped || document.visibilityState === "hidden" || browserFailed) return
+      if (!nativeReady.current) return
+      try {
+        const r = await shell.browser.url().catch(() => null)
+        const u = (r as any)?.url
+        if (typeof u !== "string") return
+        const typing = document.activeElement === omniboxRef.current
+        const cur = tabsRef.current.find((t) => t.id === activeTabIdRef.current)?.url ?? ""
+        if (!shouldAdoptExternalUrl(u, cur, typing)) return
+        commitExternalUrl(u)
+        if (!typing) setInputUrl(u)
+      } catch {}
+    }, 2000)
+    return () => { stopped = true; window.clearInterval(id) }
+  }, [isActive, browserFailed, commitExternalUrl])
+
+  // Offline real (antes se confundía con fallo del WebView) + reintento al volver.
+  // reloadRef se asigna abajo, junto a actionsRef (handleReload se define después).
+  const reloadRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    const off = () => setOffline(true)
+    const on = () => { setOffline(false); reloadRef.current() }
+    window.addEventListener("offline", off)
+    window.addEventListener("online", on)
+    return () => { window.removeEventListener("offline", off); window.removeEventListener("online", on) }
+  }, [])
+
+  // Preflight del fallback: distingue HTTP upstream (proxy reenvía el status)
+  // de "cargando". Solo para URLs que van por proxy (localhost va directo) y
+  // orígenes http(s) (en APK el fetch relativo no resuelve).
+  useEffect(() => {
+    setEmbedEmpty(false)
+    const httpOrigin = /^https?:/.test(window.location.protocol)
+    if (offline || (!browserFailed && !hasError) || !httpOrigin) { setProbe({ phase: "idle" }); return }
+    const src = getFrameSrc(currentSrc, false)
+    if (!src.startsWith("/shell/proxy")) { setProbe({ phase: "ok" }); return }
+    let cancelled = false
+    setProbe({ phase: "checking" })
+    ;(async () => {
+      try {
+        const res = await fetch(src)
+        if (cancelled) return
+        try { await res.body?.cancel() } catch {}
+        setProbe(res.ok ? { phase: "ok" } : { phase: "fail", status: res.status })
+      } catch {
+        if (!cancelled) setProbe({ phase: "fail", status: 0 })
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browserFailed, hasError, currentSrc, offline])
   // Modo selección en desktop: el overlay se INYECTA dentro del sub-WebView
   // nativo vía eval (sin recargar ni ocultar la página — cero pérdida de estado).
   // Los picks vuelven por HTTP (/shell/browser/pick) y el host los drena aquí.
@@ -683,6 +833,14 @@ export const BrowserPanel = memo(function BrowserPanel({
             cbRef.current.onAnnotationStyleBefore?.(String(p.id), p.before ?? {})
           } else if (p?.type === "pick") {
             cbRef.current.onVisualPick?.(p as BrowserPickedElement)
+          } else if (p?.type === "zoom-level") {
+            // Ctrl+rueda aplicado en la página: sincronizar label/estado sin
+            // re-evaluar (la página ya aplicó el zoom al instante).
+            const v = parseZoomLevel(p)
+            if (v !== null) {
+              setZoomLevel(v)
+              try { localStorage.setItem("opencode.browser.zoom", String(v)) } catch {}
+            }
           }
         }
       } catch {}
@@ -845,8 +1003,7 @@ export const BrowserPanel = memo(function BrowserPanel({
 
 
 
-  const handleCloseTab = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
+  const closeTabById = (id: string) => {
     if (tabs.length === 1) {
       if (onClose) onClose()
       return
@@ -858,6 +1015,11 @@ export const BrowserPanel = memo(function BrowserPanel({
       const nextActive = nextTabs[Math.max(0, idx - 1)]
       if (nextActive) setActiveTabId(nextActive.id)
     }
+  }
+
+  const handleCloseTab = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    closeTabById(id)
   }
 
   const handleBack = () => {
@@ -982,12 +1144,15 @@ export const BrowserPanel = memo(function BrowserPanel({
       return next
     })
   }
+  // Zoom único: si la página tiene el forwarder (Ctrl+rueda), se usa su setter
+  // (aplica + reporta nivel); si no, CSS directo (también válido por allowlist).
+  const zoomCodeFor = (v: number) =>
+    `(function(){var v=${JSON.stringify(v)};if(window.__oc_setZoom){window.__oc_setZoom(v)}else{try{document.documentElement.style.zoom=String(v);if(document.body)document.body.style.zoom=String(v)}catch(e){}}})()`
   const applyZoom = (next: number) => {
     const v = Math.max(0.5, Math.min(2.5, Math.round(next * 10) / 10))
     setZoomLevel(v)
     try { localStorage.setItem("opencode.browser.zoom", String(v)) } catch {}
-    const css = `document.documentElement.style.zoom='${v}'; document.body.style.zoom='${v}';`
-    if (IS_DESKTOP) shell.browser.eval(css).catch(() => {})
+    if (IS_DESKTOP) shell.browser.eval(zoomCodeFor(v)).catch(() => {})
     else {
       try {
         const doc = iframeRef.current?.contentDocument as any
@@ -1050,6 +1215,21 @@ export const BrowserPanel = memo(function BrowserPanel({
 
   const targetWidth = DEVICE_WIDTHS[deviceMode]
   deviceWidthRef.current = targetWidth ? parseInt(targetWidth, 10) || null : null
+  // Acciones vivas para el puente página→host (el poll usa el ref, no deps)
+  reloadRef.current = handleReload
+  actionsRef.current = {
+    reload: handleReload,
+    focusUrl: () => { omniboxRef.current?.focus(); omniboxRef.current?.select() },
+    find: () => { setFindOpen(true); requestAnimationFrame(() => findInputRef.current?.focus()) },
+    newTab: () => { if (!hideTabBar) handleAddTab() },
+    closeTab: () => { if (!hideTabBar && activeTab) closeTabById(activeTab.id) },
+    bookmark: toggleBookmark,
+    zoomBy: (d) => applyZoom(zoomRef.current + d),
+    zoomReset: () => applyZoom(1),
+    back: handleBack,
+    forward: handleForward,
+    toggleChrome: () => setMinimal((v) => !v),
+  }
 
   return (
     <div
@@ -1492,12 +1672,28 @@ export const BrowserPanel = memo(function BrowserPanel({
       {/* 4. Web Viewport + drawer de anotaciones */}
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <div className="browser-viewport-container" ref={viewportRef} style={{ position: "relative", flex: 1, minWidth: 0 }}>
-          {hasError ? (
+          {offline ? (
+            <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text)", maxWidth: "460px", margin: "auto" }}>
+              <div style={{ marginBottom: "12px", color: "var(--warning)", display: "inline-flex" }}><CloseIcon size={32} /></div>
+              <h3 style={{ margin: "0 0 8px 0", fontSize: "1.1rem" }}>Sin conexión</h3>
+              <p style={{ fontSize: "0.82rem", color: "var(--muted)", marginBottom: "20px" }}>
+                El equipo no tiene internet. Revisá la conexión: la página se recarga sola al volver.
+              </p>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                <button type="button" className="btn-primary compact" onClick={handleReload}>
+                  Reintentar
+                </button>
+              </div>
+            </div>
+          ) : hasError ? (
             <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text)", maxWidth: "460px", margin: "auto" }}>
               <div style={{ marginBottom: "12px", color: "var(--danger)", display: "inline-flex" }}><CloseIcon size={32} /></div>
               <h3 style={{ margin: "0 0 8px 0", fontSize: "1.1rem" }}>No se pudo conectar con la página</h3>
               <p style={{ fontSize: "0.82rem", color: "var(--muted)", marginBottom: "20px" }}>
                 Si es un servidor local, verifica que el dev server esté ejecutándose (botón <strong>▶ Run Web</strong> en el chat). Si es un sitio web externo protegido, ábrelo en el navegador externo.
+                {probe.phase === "fail" && (
+                  <> Detalle: el sitio devolvió <strong>HTTP {probe.status || "?"}</strong>{probe.status === 502 ? " (no respondió a tiempo)" : ""}.</>
+                )}
               </p>
               <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
                 <button type="button" className="btn-primary compact" onClick={handleReload}>
@@ -1510,24 +1706,56 @@ export const BrowserPanel = memo(function BrowserPanel({
             </div>
           ) : IS_DESKTOP ? (
             browserFailed ? (
+              probe.phase === "checking" ? (
+                <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--muted)", maxWidth: "460px", margin: "auto", fontSize: "0.85rem" }}>
+                  <div style={{ marginBottom: "12px", display: "inline-flex" }}><LoadingIcon size={28} className="browser-loading-spinner" /></div>
+                  <p>Verificando la página…</p>
+                </div>
+              ) : probe.phase === "fail" ? (
+                <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text)", maxWidth: "460px", margin: "auto" }}>
+                  <div style={{ marginBottom: "12px", color: "var(--danger)", display: "inline-flex" }}><CloseIcon size={32} /></div>
+                  <h3 style={{ margin: "0 0 8px 0", fontSize: "1.1rem" }}>El sitio no se dejó cargar</h3>
+                  <p style={{ fontSize: "0.82rem", color: "var(--muted)", marginBottom: "20px" }}>
+                    Devolvió <strong>HTTP {probe.status || "?"}</strong>{probe.status === 502 ? " (no respondió a tiempo)" : ""}. Probá en el navegador externo.
+                  </p>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                    <button type="button" className="btn-primary compact" onClick={handleReload}>
+                      Reintentar
+                    </button>
+                    <button type="button" className="btn-secondary compact" onClick={handleOpenExternal}>
+                      Abrir en Chrome / Edge
+                    </button>
+                  </div>
+                </div>
+              ) : (
               /* Fallback: sub-WebView falló → iframe vía proxy (mismo que mobile) */
-              <iframe
-                key={`${reloadKey}-${inspectMode ? "inspect" : "view"}-fallback`}
-                ref={iframeRef}
-                src={getFrameSrc(currentSrc, !!inspectMode)}
-                title="Vista previa web (fallback)"
-                allow="accelerometer; autoplay; clipboard-read; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; microphone; camera"
-                onLoad={() => setLoading(false)}
-                onError={() => {
-                  setLoading(false)
-                  setHasError(true)
-                }}
-                className="browser-iframe-element"
-                style={{
-                  width: targetWidth || "100%",
-                  boxShadow: targetWidth ? "0 4px 24px rgba(0,0,0,0.3)" : "none",
-                }}
-              />
+              <>
+                {embedEmpty && (
+                  <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", zIndex: 6, display: "flex", alignItems: "center", gap: 8, background: "var(--surface-raised, var(--surface))", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px 6px 12px", fontSize: 12, color: "var(--text)", boxShadow: "0 4px 16px rgba(0,0,0,.25)", maxWidth: "92%" }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>La página cargó vacía: puede bloquear el embebido.</span>
+                    <button type="button" className="btn-secondary compact" onClick={handleOpenExternal}>Abrir externa</button>
+                    <button type="button" className="browser-nav-btn" onClick={() => setEmbedEmpty(false)} aria-label="Descartar">×</button>
+                  </div>
+                )}
+                <iframe
+                  key={`${reloadKey}-${inspectMode ? "inspect" : "view"}-fallback`}
+                  ref={iframeRef}
+                  src={getFrameSrc(currentSrc, !!inspectMode)}
+                  title="Vista previa web (fallback)"
+                  allow="accelerometer; autoplay; clipboard-read; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; microphone; camera"
+                  onLoad={() => { setLoading(false); probeEmbedEmpty() }}
+                  onError={() => {
+                    setLoading(false)
+                    setHasError(true)
+                  }}
+                  className="browser-iframe-element"
+                  style={{
+                    width: targetWidth || "100%",
+                    boxShadow: targetWidth ? "0 4px 24px rgba(0,0,0,0.3)" : "none",
+                  }}
+                />
+              </>
+              )
             ) : null
           ) : (
             <>
