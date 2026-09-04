@@ -3438,7 +3438,10 @@ export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID, on
     setLoading(true)
     setError(null)
     try {
-      const r = await shell.stats.proxy(`admin/session/${sessionID}`)
+      // El thread de stats puede no estar levantado (abrir stats sin pasar
+      // por StatsView): start es idempotente, si ya corre no hace nada.
+      await shell.stats.start().catch(() => undefined)
+      const r = await shell.stats.proxy<any>(`admin/session/${sessionID}`)
       if (r && r.error) {
         setError(r.error)
         setDetail(null)

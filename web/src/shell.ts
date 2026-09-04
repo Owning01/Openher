@@ -388,7 +388,9 @@ export const shell = {
   stats: {
     status: () => get<{ running: boolean; port: number; url: string }>("/shell/stats"),
     start: () => post("/shell/stats/start"),
-    proxy: (path: string) => fetch(`/shell/stats/proxy/${path}`).then((r) => r.json()),
+    // Vía get(): resuelve la base (local/remota/Tailscale) + auth + chequeo res.ok.
+    // El fetch relativo anterior fallaba en APK y nunca levantaba el thread de stats.
+    proxy: <T = any>(path: string) => get<T>(`/shell/stats/proxy/${path}`),
   },
   plugins: {
     list: () => get<{ ok?: boolean; plugins: ShellPlugin[] }>("/shell/plugins"),

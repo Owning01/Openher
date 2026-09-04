@@ -5,7 +5,7 @@ import { Share } from "@capacitor/share"
 import { api } from "../../../api"
 import type { SessionView, ServerConfig, ConnectionState, ModelOption } from "../../../types"
 import { formatSelectionForPrompt } from "../../../hooks/useVisualSelection"
-import { keepMessagesThrough } from "../domain/message-order"
+import { keepMessagesBefore, keepMessagesThrough } from "../domain/message-order"
 import { isSessionActive } from "../../../utils"
 
 export type UseChatActionsParams = {
@@ -126,31 +126,53 @@ export function useChatActions(params: UseChatActionsParams) {
       })
   }, [buildMarkdown, setRuntimeError])
 
-  const handleExportMarkdown = useCallback(async () => {
-    const full = buildMarkdown()
-    if (!full) return
-    const filename = `${(selectedSession?.title ?? "chat").replace(/[^\w\-]+/g, "_")}.md`
-    if (Capacitor.isNativePlatform()) {
+  const getExportDefaultPath = useCallback(() => {
+    if (!selectedSession) return null
+    const filename = `${(selectedSession.title ?? "chat").replace(/[^\w\-]+/g, "_")}.md`
+    const dir = selectedSession.directory || ""
+    if (!dir) return filename
+    const sep = dir.includes("\\") ? "\\" : "/"
+    return `${dir.replace(/[\\/]+$/, "")}${sep}${filename}`
+  }, [selectedSession])
+
+  const exportMarkdownTo = useCallback(
+    async (targetPath: string): Promise<boolean> => {
+      const full = buildMarkdown()
+      if (!full) return false
       try {
-        const saved = await Filesystem.writeFile({
-          path: filename,
-          data: full,
-          directory: Directory.Cache,
-        })
-        await Share.share({ title: filename, url: saved.uri })
-        return
-      } catch {}
-    }
-    const blob = new Blob([full], { type: "text/markdown;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 2000)
-  }, [buildMarkdown, selectedSession?.title])
+        if (Capacitor.isNativePlatform()) {
+          const filename = targetPath.split(/[\\/]/).pop() || "chat.md"
+          const saved = await Filesystem.writeFile({
+            path: filename,
+            data: full,
+            directory: Directory.Cache,
+          })
+          await Share.share({ title: filename, url: saved.uri })
+          return true
+        }
+        // En desktop vía shell / save-file o fallback download web
+        const isDesktop = typeof window !== "undefined" && (window as any).__OPENCODE_DESKTOP__
+        if (isDesktop && (window as any).desktopApi?.writeFile) {
+          await (window as any).desktopApi.writeFile(targetPath, full)
+          return true
+        }
+        const blob = new Blob([full], { type: "text/markdown;charset=utf-8" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = targetPath.split(/[\\/]/).pop() || "chat.md"
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 2000)
+        return true
+      } catch (err) {
+        setRuntimeError((err as Error).message)
+        return false
+      }
+    },
+    [buildMarkdown, setRuntimeError]
+  )
 
   const handleSnapshot = useCallback(() => {
     if (!selectedSession) return
@@ -249,7 +271,7 @@ export function useChatActions(params: UseChatActionsParams) {
         const sid = selectedSession.id
         setMessages((prev: any[]) => {
           prevMessagesSnapshot = prev
-          return keepMessagesThrough(prev, sid, revertMsgId)
+          return keepMessagesBefore(prev, sid, revertMsgId)
         })
       }
       setLocalRevertID(null)
@@ -623,7 +645,12 @@ export function useChatActions(params: UseChatActionsParams) {
   return {
     buildMarkdown,
     handleExportChat,
-    handleExportMarkdown,
+    getExportDefaultPath,
+    exportMarkdownTo,
+    handleExportMarkdown: () => {
+      const p = getExportDefaultPath()
+      if (p) void exportMarkdownTo(p)
+    },
     handleSnapshot,
     handleSend,
     outboxActions,

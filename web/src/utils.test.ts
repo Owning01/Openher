@@ -179,16 +179,14 @@ describe("formatCompact", () => {
 // formatCost
 // ---------------------------------------------------------------------------
 describe("formatCost", () => {
-  it("uses 6 decimals for < 0.01", () => {
-    expect(formatCost(0.001)).toBe("$0.001000")
-    expect(formatCost(0.009)).toBe("$0.009000")
-  })
-  it("uses 4 decimals for >= 0.01", () => {
-    expect(formatCost(0.01)).toBe("$0.0100")
-    expect(formatCost(1.5)).toBe("$1.5000")
+  it("uses 2 decimals", () => {
+    expect(formatCost(0.001)).toBe("$0.00")
+    expect(formatCost(0.009)).toBe("$0.01")
+    expect(formatCost(0.01)).toBe("$0.01")
+    expect(formatCost(1.5)).toBe("$1.50")
   })
   it("handles 0", () => {
-    expect(formatCost(0)).toBe("$0.000000")
+    expect(formatCost(0)).toBe("$0.00")
   })
 })
 

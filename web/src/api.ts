@@ -688,22 +688,38 @@ export const api = {
     )
   },
 
-  async listMCPResources(config: ServerConfig) {
-    const path = (await getApiVersion(config)) === "v2" ? "/mcp/resource" : "/experimental/resource"
-    return request<unknown>(config, path).then((raw) => {
-      if (Array.isArray(raw)) return raw as { id: string; name: string; description?: string }[]
+  async listMCPResources(config: ServerConfig, directory?: string) {
+    type MCPItem = { id: string; name: string; description?: string }
+    // McpResource real: {server, name, uri, description?, mimeType?} (sin id).
+    const mapResource = (r: unknown): MCPItem | null => {
+      if (!r || typeof r !== "object") return null
+      const o = r as { uri?: unknown; id?: unknown; name?: unknown; server?: unknown; description?: unknown }
+      const id = o.uri ?? o.id ?? o.name ?? ""
+      const name = o.name ?? o.server ?? o.id ?? ""
+      if (!id && !name) return null
+      return {
+        id: String(id),
+        name: String(name),
+        description: typeof o.description === "string" ? o.description : typeof o.server === "string" ? o.server : undefined,
+      }
+    }
+    const keep = (xs: unknown[]): MCPItem[] =>
+      xs.map(mapResource).filter((x): x is MCPItem => x !== null)
+    if ((await getApiVersion(config)) === "v2") {
+      const raw = await request<unknown>(config, withLocationDirectory("/mcp/resource", directory))
+      if (Array.isArray(raw)) return keep(raw)
       if (raw && typeof raw === "object") {
-        const entries = Object.entries(raw as Record<string, unknown>)
-        const isRecord =
-          entries.length > 0 && entries.every(([, v]) => v !== null && typeof v === "object" && "uri" in (v as object))
-        if (isRecord) {
-          return entries.map(([k, v]) => {
-            const r = v as { name?: string; description?: string; client?: string }
-            return { id: r.client ?? k, name: r.name ?? k, description: r.description }
-          })
-        }
         const wrapped = (raw as { resources?: unknown; data?: unknown }).resources ?? (raw as { data?: unknown }).data
-        if (Array.isArray(wrapped)) return wrapped as { id: string; name: string; description?: string }[]
+        if (Array.isArray(wrapped)) return keep(wrapped)
+      }
+      return []
+    }
+    const path = withDirectory("/experimental/resource", directory)
+    return request<unknown>(config, path).then((raw) => {
+      if (Array.isArray(raw)) return keep(raw)
+      if (raw && typeof raw === "object") {
+        const wrapped = (raw as { resources?: unknown; data?: unknown }).resources ?? (raw as { data?: unknown }).data
+        if (Array.isArray(wrapped)) return keep(wrapped)
         if (Array.isArray((raw as { servers?: unknown }).servers)) {
           return (raw as { servers: Array<{ id?: string; name?: string; description?: string }> }).servers
             .filter((s) => s.id || s.name)
@@ -714,7 +730,10 @@ export const api = {
     })
   },
 
-  listSkills(config: ServerConfig) {
+  async listSkills(config: ServerConfig, directory?: string) {
+    if ((await getApiVersion(config)) === "v2") {
+      return request<{ id: string; name: string; description?: string }[]>(config, withLocationDirectory("/skill", directory))
+    }
     return request<{ id: string; name: string; description?: string }[]>(config, "/skill")
   },
 

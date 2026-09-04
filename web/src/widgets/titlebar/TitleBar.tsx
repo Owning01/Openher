@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useState, useRef } from "react"
 import { useIsDesktop } from "../../hooks/useIsDesktop"
+import { TabBar } from "../../components/TabBar"
 import { WeatherChip } from "../../components/WeatherChip"
 import {
   ChatIcon,
@@ -18,9 +19,22 @@ export type TitleBarProps = {
   sessions?: Array<{ id: string; title?: string; directory?: string }>
   busySessions?: Set<string>
   browserTabUrls?: Record<string, string>
-  /** true si el grid está en split (cols*rows>1): cada panel pinta su propio
-      TabBar y el TitleBar no debe duplicar los tabs de sesión. */
+  /** true si el grid está en split (cols*rows>1): los tabs de cada panel se
+      pintan DENTRO del propio div.titlebar (un grupo por panel con divisor),
+      nunca en sub-barras bajo la barra superior. */
   isSplit?: boolean
+  cols?: number
+  colSizes?: Array<number | null>
+  /** Sesión visible por panel (desktopLayout.sessions) para el tab activo. */
+  activeSessionIds?: Array<string | null>
+  /** Si hay panel maximizado, el titlebar solo muestra sus tabs. */
+  maximizedPanel?: number | null
+  setActivePanel?: (idx: number) => void
+  onCloseOthers?: (panelIdx: number, keep: number) => void
+  onCloseRight?: (panelIdx: number, idx: number) => void
+  onCloseLeft?: (panelIdx: number, idx: number) => void
+  onCloseAll?: (panelIdx: number) => void
+  onDockSession?: (index: number, dir: "left" | "right" | "top" | "bottom" | "center", specificId?: string) => void
   onMoveTab?: (panelIdx: number, from: number, to: number) => void
   onTransferTab?: (fromPanel: number, fromIdx: number, toPanel: number, toIdx: number) => void
   onSwitchTab?: (panelIdx: number, tabIdx: number) => void
@@ -83,6 +97,33 @@ function getTabInfo(
   }
 }
 
+/** Sesiones enriquecidas por panel para el TabBar embebido: los tabs de
+    navegador/terminal no están en `sessions` y necesitan título (igual que
+    hacen los paneles del grid). Los virtuales/plugin los etiqueta TabBar. */
+function buildPanelSessions(
+  stack: string[],
+  sessions?: Array<{ id: string; title?: string; directory?: string }>,
+  browserTabUrls?: Record<string, string>,
+): Array<{ id: string; title?: string; directory: string }> {
+  const list: Array<{ id: string; title?: string; directory: string }> = (sessions ?? []).map((s) => ({
+    id: s.id, title: s.title, directory: s.directory ?? "",
+  }))
+  for (const bid of stack) {
+    if (bid.startsWith("browser:") && !list.find((s) => s.id === bid)) {
+      const u = browserTabUrls?.[bid] || ""
+      try {
+        list.push({ id: bid, title: new URL(u).hostname || "Navegador", directory: "" })
+      } catch {
+        list.push({ id: bid, title: u.slice(0, 20) || "Navegador", directory: "" })
+      }
+    }
+    if (bid.startsWith("terminal") && !list.find((s) => s.id === bid)) {
+      list.push({ id: bid, title: `Terminal ${bid.slice(9, 13)}`, directory: "" })
+    }
+  }
+  return list
+}
+
 export const TitleBar = memo(function TitleBar({
   tabStacks,
   activePanel = 0,
@@ -91,12 +132,22 @@ export const TitleBar = memo(function TitleBar({
   busySessions,
   browserTabUrls,
   isSplit = false,
+  cols = 1,
+  colSizes,
+  activeSessionIds,
+  maximizedPanel = null,
+  setActivePanel,
   onSwitchTab,
   onRemoveTab,
   onMoveTab,
   onTransferTab,
   onAddTerminal,
   onOpenBrowser,
+  onCloseOthers,
+  onCloseRight,
+  onCloseLeft,
+  onCloseAll,
+  onDockSession,
 }: TitleBarProps) {
   const isDesktop = useIsDesktop()
   const [isMax, setIsMax] = useState(false)
@@ -152,7 +203,8 @@ export const TitleBar = memo(function TitleBar({
       if (
         (e.target as HTMLElement).closest(".win-btn") ||
         (e.target as HTMLElement).closest(".titlebar-tab") ||
-        (e.target as HTMLElement).closest(".titlebar-add-btn")
+        (e.target as HTMLElement).closest(".titlebar-add-btn") ||
+        (e.target as HTMLElement).closest(".tab-bar")
       ) {
         return
       }
@@ -183,10 +235,25 @@ export const TitleBar = memo(function TitleBar({
 
   const currentStack = tabStacks?.[activePanel] || tabStacks?.[0] || []
   const activeTab = activeSessionId ?? currentStack[0]
-  // Fuente única de verdad: el grid en split pinta su TabBar por panel
-  // (DesktopPanelRenderer). Si el TitleBar también pintara, el mismo stack de
-  // sesiones se vería dos veces apilado.
+  // Fuente única de verdad: los tabs viven en el propio div.titlebar.
+  // Panel único → tira clásica; split → un grupo por panel con divisor,
+  // con anchos proporcionales a las columnas del grid.
   const isSinglePanel = !isSplit && (tabStacks?.length ?? 1) <= 1
+  const splitPanels = !isSinglePanel
+    ? (maximizedPanel !== null && maximizedPanel !== undefined
+        ? [maximizedPanel]
+        : (tabStacks ?? []).map((_, i) => i))
+    : []
+  const flexFor = useCallback((panelIdx: number): number => {
+    if (cols > 1) return colSizes?.[panelIdx % cols] ?? 1
+    return 1
+  }, [cols, colSizes])
+  const handleAddFor = useCallback((panelIdx: number) => {
+    const sid = activeSessionIds?.[panelIdx] ?? tabStacks?.[panelIdx]?.[0]
+    const isBrowser = !!sid?.startsWith("browser:")
+    if (isBrowser && onOpenBrowser) onOpenBrowser("https://www.google.com", panelIdx)
+    else onAddTerminal?.(panelIdx)
+  }, [activeSessionIds, tabStacks, onOpenBrowser, onAddTerminal])
 
   // Mismo protocolo DnD que TabBar: los tabs del header superior también se
   // arrastran (reorden interno + drop en paneles del grid para split).
@@ -274,8 +341,7 @@ export const TitleBar = memo(function TitleBar({
         <div
           className="titlebar-tabs"
           role="tablist"
-          ref={tabsRef}
-          onDragOver={handleBarDragOver}
+          ref={tabsRef}          onDragOver={handleBarDragOver}
           onDrop={handleBarDrop}
           onDragLeave={(e) => {
             const rt = e.relatedTarget as Node | null
@@ -338,6 +404,46 @@ export const TitleBar = memo(function TitleBar({
               <PlusIcon size={14} />
             </button>
           )}
+        </div>
+      )}
+
+      {!isSinglePanel && (
+        <div className="titlebar-split" role="tablist" aria-label="Panel tabs">
+          {splitPanels.map((pi, gi) => {
+            const stack = tabStacks?.[pi] ?? []
+            const sid = activeSessionIds?.[pi] ?? null
+            return (
+              <React.Fragment key={pi}>
+                {gi > 0 && <div className="titlebar-split-divider" aria-hidden="true" />}
+                <div
+                  className="titlebar-panel-tabs"
+                  data-active={pi === activePanel}
+                  style={{ flexGrow: flexFor(pi), flexBasis: 0 }}
+                  onPointerDown={() => { if (pi !== activePanel) setActivePanel?.(pi) }}
+                >
+                  <TabBar
+                    tabs={stack}
+                    activeIndex={Math.max(0, stack.indexOf(sid ?? ""))}
+                    sessions={buildPanelSessions(stack, sessions, browserTabUrls)}
+                    busySessionIds={busySessions}
+                    onSwitch={(idx) => onSwitchTab?.(pi, idx)}
+                    onClose={(idx) => onRemoveTab?.(pi, idx)}
+                    onAdd={() => handleAddFor(pi)}
+                    onMoveTab={(from, to) => onMoveTab?.(pi, from, to)}
+                    onTransferTab={(fp, fi, ti) => onTransferTab?.(fp, fi, pi, ti)}
+                    panelIndex={pi}
+                    onDropTerminal={() => onAddTerminal?.(pi)}
+                    onDropTerminalTab={(raw) => onDockSession?.(pi, "center", raw)}
+                    onDropUrl={(url) => onOpenBrowser?.(url, pi)}
+                    onCloseOthers={(keep) => onCloseOthers?.(pi, keep)}
+                    onCloseRight={(idx) => onCloseRight?.(pi, idx)}
+                    onCloseLeft={(idx) => onCloseLeft?.(pi, idx)}
+                    onCloseAll={() => onCloseAll?.(pi)}
+                  />
+                </div>
+              </React.Fragment>
+            )
+          })}
         </div>
       )}
 

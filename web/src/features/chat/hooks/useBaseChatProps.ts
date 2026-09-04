@@ -50,7 +50,8 @@ export type UseBaseChatPropsParams = {
   readingMode: boolean
   setReadingMode: React.Dispatch<React.SetStateAction<boolean>>
   handleExportChat: () => void
-  handleExportMarkdown: () => Promise<void>
+  getExportDefaultPath: () => string | null
+  exportMarkdownTo: (path: string) => Promise<boolean>
   handleSnapshot: () => void
   handleOpenFile: (file: string) => void
   navigate: (view: any) => void
@@ -84,11 +85,11 @@ export type UseBaseChatPropsParams = {
   fb: any
   setShowTerminal?: (show: boolean) => void
   setShowMCPBrowser: (show: boolean) => void
+  setShowOpenCodeHub: (show: boolean) => void
   setDesktopCfg: (cfg: any) => void
   loadDesktopConfig: () => any
   setShowRemoteDesktop: (show: boolean) => void
   chatSettings: any
-  promptSnippets: any[]
   handleRegenerate: () => Promise<void>
   handleInsertPrompt: (text: string) => void
   handleSendPrompt: (text: string) => Promise<void>
@@ -146,7 +147,8 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     readingMode,
     setReadingMode,
     handleExportChat,
-    handleExportMarkdown,
+    getExportDefaultPath,
+    exportMarkdownTo,
     handleSnapshot,
     handleOpenFile,
     navigate,
@@ -180,11 +182,11 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     fb,
     setShowTerminal,
     setShowMCPBrowser,
+    setShowOpenCodeHub,
     setDesktopCfg,
     loadDesktopConfig,
     setShowRemoteDesktop,
     chatSettings,
-    promptSnippets,
     handleRegenerate,
     handleInsertPrompt,
     handleSendPrompt,
@@ -246,7 +248,8 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       readingMode,
       onToggleReadingMode: () => setReadingMode((v) => !v),
       onExportChat: handleExportChat,
-      onExportMarkdown: handleExportMarkdown,
+      exportDefaultPath: getExportDefaultPath(),
+      onExportMarkdownTo: exportMarkdownTo,
       onSnapshot: handleSnapshot,
       onEditFile: (file) => handleOpenFile(file),
       onOpenSettings: () => navigate("settings"),
@@ -293,12 +296,12 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       fileBrowserPath: fb.currentPath,
       onOpenTerminal: () => { try { window.dispatchEvent(new CustomEvent("opencode:new-terminal")) } catch {}; setShowTerminal?.(true) },
       onOpenMCPBrowser: () => setShowMCPBrowser(true),
+      onOpenOpenCodeHub: () => setShowOpenCodeHub(true),
       onOpenRemoteDesktop: () => {
         setDesktopCfg(loadDesktopConfig())
         setShowRemoteDesktop(true)
       },
       showTodoButton: chatSettings.showTodoButton,
-      snippets: promptSnippets,
       charLimit: chatSettings.composerCharLimit,
       compactTools: chatSettings.compactTools,
       minimalistMode: chatSettings.minimalistMode,
@@ -354,7 +357,8 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       readingMode,
       setReadingMode,
       handleExportChat,
-      handleExportMarkdown,
+      getExportDefaultPath,
+      exportMarkdownTo,
       handleSnapshot,
       handleOpenFile,
       navigate,
@@ -389,11 +393,11 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       fb,
       setShowTerminal,
       setShowMCPBrowser,
+      setShowOpenCodeHub,
       setShowRemoteDesktop,
       chatSettings,
       setChatSetting,
       resetChatSettings,
-      promptSnippets,
       handleRegenerate,
       handleInsertPrompt,
       handleSendPrompt,

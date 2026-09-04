@@ -6,11 +6,12 @@ import type { ServerConfig } from "../types"
 
 type Props = {
   config: ServerConfig
+  directory?: string
   onClose: () => void
   onSelect?: (name: string) => void
 }
 
-export const MCPBrowser = memo(function MCPBrowser({ config, onClose, onSelect }: Props) {
+export const MCPBrowser = memo(function MCPBrowser({ config, directory, onClose, onSelect }: Props) {
   const t = useT()
   const [resources, setResources] = useState<{ id: string; name: string; description?: string }[]>([])
   const [loading, setLoading] = useState(true)
@@ -20,18 +21,18 @@ export const MCPBrowser = memo(function MCPBrowser({ config, onClose, onSelect }
   useEffect(() => {
     setLoading(true)
     setError(null)
-    api.listMCPResources(config).then((r) => {
+    api.listMCPResources(config, directory).then((r) => {
       setResources(r)
       setLoading(false)
     }).catch((err) => {
       setError((err as Error).message || "Failed to load MCP resources")
       setLoading(false)
     })
-  }, [config])
+  }, [config, directory])
 
   const list = Array.isArray(resources) ? resources : []
   const filtered = query.trim()
-    ? list.filter((r) => r.name.toLowerCase().includes(query.toLowerCase()) || r.id.toLowerCase().includes(query.toLowerCase()))
+    ? list.filter((r) => r.name.toLowerCase().includes(query.toLowerCase()) || (r.id ?? "").toLowerCase().includes(query.toLowerCase()))
     : list
 
   return (

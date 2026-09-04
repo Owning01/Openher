@@ -61,7 +61,7 @@ export function formatCompact(n: number): string {
 }
 
 export function formatCost(c: number): string {
-  return c < 0.01 ? `$${c.toFixed(6)}` : `$${c.toFixed(4)}`
+  return `$${c.toFixed(2)}`
 }
 
 // Backoff exponencial con jitter para reconexiones y polling.

@@ -45,7 +45,7 @@ export const NavBar = memo(function NavBar({ view, onNavigate, onToggleLightMode
       </button>
       <nav className="desktop-nav tab-row" role="navigation" aria-label="Main navigation">
         {navItems.map((item) => (
-          <button key={item.view} className={view === item.view ? "active" : ""}
+          <button key={item.view} data-view={item.view} className={view === item.view ? "active" : ""}
             onClick={() => onNavigate(item.view)}
             aria-label={t(item.label)}
             aria-current={view === item.view ? "page" : undefined}>

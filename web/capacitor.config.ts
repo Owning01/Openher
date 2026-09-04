@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: "always",
-    preferredContentMode: "mobile"
+        preferredContentMode: "mobile"
   }
 }
 
