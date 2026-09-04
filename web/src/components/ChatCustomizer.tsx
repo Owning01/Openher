@@ -1,7 +1,7 @@
 import { memo } from "react"
 import { useT } from "../i18n-context"
 import type { ChatSettings } from "../types"
-import { GrayCheck } from "./GrayCheck"
+import { LedSwitch } from "./LedSwitch"
 
 type Props = {
   settings: ChatSettings
@@ -142,7 +142,7 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
             <span className="switch-label">
               <strong>{t(labelKey)}</strong>
             </span>
-            <GrayCheck
+            <LedSwitch
               label={t(labelKey)}
               checked={settings[key]}
               onChange={(next) => onSettingChange(key, next)}

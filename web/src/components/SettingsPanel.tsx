@@ -752,22 +752,17 @@ export const SettingsPanel = memo(function SettingsPanel({
          <p className="setting-item-desc">Abre OpenHer automáticamente al iniciar sesión (registro HKCU\Run).</p>
         </div>
         <div className="setting-item-control">
-         <button
-          type="button"
-          className={`switch-track compact${autostartEnabled ? " active" : ""}`}
-          role="switch"
-          aria-checked={autostartEnabled}
-          onClick={async () => {
-           const next = !autostartEnabled
+         <LedSwitch
+          label="Iniciar con Windows"
+          checked={autostartEnabled}
+          onChange={async (next) => {
            try {
             const { shell } = await import("../shell")
             await shell.autostart.set(next)
             setAutostartEnabled(next)
            } catch {}
           }}
-         >
-          <span className="switch-thumb" />
-         </button>
+         />
         </div>
        </div>
        <div className="setting-item-row">
@@ -776,22 +771,17 @@ export const SettingsPanel = memo(function SettingsPanel({
          <p className="setting-item-desc">Al arrancar (autostart o manual) queda en la bandeja sin abrir ventana.</p>
         </div>
         <div className="setting-item-control">
-         <button
-          type="button"
-          className={`switch-track compact${startMinimized ? " active" : ""}`}
-          role="switch"
-          aria-checked={startMinimized}
-          onClick={async () => {
-           const next = !startMinimized
+         <LedSwitch
+          label="Iniciar minimizado"
+          checked={startMinimized}
+          onChange={async (next) => {
            try {
             const { shell } = await import("../shell")
             await shell.config.patch({ start_minimized: next } as any)
             setStartMinimized(next)
            } catch {}
           }}
-         >
-          <span className="switch-thumb" />
-         </button>
+         />
         </div>
        </div>
        <div className="setting-item-row">
@@ -821,15 +811,11 @@ export const SettingsPanel = memo(function SettingsPanel({
        <p className="setting-item-desc">Al iniciar la app de escritorio abre la terminal inferior ejecutando <code>opencode2</code> (visible en la app, no consola externa).</p>
       </div>
       <div className="setting-item-control">
-       <button
-        type="button"
-        className={`switch-track compact${autoOpencode2 ? " active" : ""}`}
-        role="switch"
-        aria-checked={autoOpencode2}
-        onClick={() => setAutoOpencode2(!autoOpencode2)}
-       >
-        <span className="switch-thumb" />
-       </button>
+       <LedSwitch
+        label="Abrir opencode2 automáticamente"
+        checked={autoOpencode2}
+        onChange={(next) => setAutoOpencode2(next)}
+       />
       </div>
      </div>
 
@@ -864,15 +850,11 @@ export const SettingsPanel = memo(function SettingsPanel({
          <p className="setting-item-desc">Mostrar botón en la barra lateral.</p>
         </div>
         <div className="setting-item-control">
-         <button
-          type="button"
-          className={`switch-track compact${visible ? " active" : ""}`}
-          role="switch"
-          aria-checked={visible}
-          onClick={() => toggleSidebarItem(id)}
-         >
-          <span className="switch-thumb" />
-         </button>
+         <LedSwitch
+          label={t(`settings.sb_${id}`)}
+          checked={visible}
+          onChange={() => toggleSidebarItem(id)}
+         />
         </div>
        </div>
       )
@@ -886,15 +868,11 @@ export const SettingsPanel = memo(function SettingsPanel({
         <p className="setting-item-desc">{desc}</p>
        </div>
        <div className="setting-item-control">
-        <button
-         type="button"
-         className={`switch-track compact${flags[key] ? " active" : ""}`}
-         role="switch"
-         aria-checked={flags[key]}
-         onClick={() => onToggleFlag(key)}
-        >
-         <span className="switch-thumb" />
-        </button>
+        <LedSwitch
+         label={label}
+         checked={flags[key]}
+         onChange={() => onToggleFlag(key)}
+        />
        </div>
       </div>
      ))}
@@ -1017,15 +995,11 @@ export const SettingsPanel = memo(function SettingsPanel({
            <p className="setting-item-desc">{agent.description || `Agente ${agent.id}`}</p>
           </div>
           <div className="setting-item-control">
-           <button
-            type="button"
-            className={`switch-track compact${!isDisabled ? " active" : ""}`}
-            role="switch"
-            aria-checked={!isDisabled}
-            onClick={() => onToggleAgentEnabled?.(agent.id)}
-           >
-            <span className="switch-thumb" />
-           </button>
+           <LedSwitch
+            label={agent.name || agent.id}
+            checked={!isDisabled}
+            onChange={() => onToggleAgentEnabled?.(agent.id)}
+           />
           </div>
          </div>
         )
@@ -1073,15 +1047,11 @@ export const SettingsPanel = memo(function SettingsPanel({
              <label key={key} className={`blocked-item${blocked ? " blocked" : ""}`} data-label={`${opt.modelName} ${opt.providerName}`}>
               <span className="blocked-item-name">{opt.modelName}</span>
               {opt.variant && <small className="blocked-item-variant">{opt.variant}</small>}
-              <button
-               type="button"
-               className={`switch-track compact${blocked ? "" : " active"}`}
-               onClick={() => blockedModels.toggleBlocked(key)}
-               aria-checked={!blocked}
-               role="switch"
-              >
-               <span className="switch-thumb" />
-              </button>
+              <LedSwitch
+               label={opt.modelName}
+               checked={!blocked}
+               onChange={() => blockedModels.toggleBlocked(key)}
+              />
              </label>
             )
            })}

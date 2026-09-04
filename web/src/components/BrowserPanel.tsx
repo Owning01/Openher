@@ -3,6 +3,7 @@ import { RefreshIcon, MonitorIcon, PipIcon, LoadingIcon, CloseIcon, FolderIcon, 
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
 import { BrowserVisualOverlay, type BrowserPickedElement } from "./BrowserVisualOverlay"
+import { LedSwitch } from "./LedSwitch"
 import type { VisualSelection, VisualAnnotation } from "../hooks/useVisualSelection"
 import {
   buildOverlayScript, badgeScript, removeBadgeScript, clearBadgesScript,
@@ -1621,7 +1622,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             placeholder="Buscar en la página…"
           />
           <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--muted)" }}>
-            <input type="checkbox" checked={findCase} onChange={(e) => setFindCase(e.target.checked)} /> Aa
+            <LedSwitch label="Aa" checked={findCase} onChange={setFindCase} /> Aa
           </label>
           <button type="button" className="btn-secondary compact" onClick={() => applyFind(findQuery, findCase)}>Buscar</button>
           <button type="button" className="browser-nav-btn" onClick={() => setFindOpen(false)} aria-label="Cerrar">×</button>
