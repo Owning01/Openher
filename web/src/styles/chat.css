@@ -1412,8 +1412,10 @@
   font-size: 0.875rem;
   line-height: 1.55;
   tab-size: 2;
-  word-break: break-all;
-  overflow-wrap: break-word;
+  /* Visualización tipo editor (LiteEditor usa white-space:pre + scroll
+     horizontal): el wrap partía el indentado y rompía la lectura del código. */
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .message-content pre code {
@@ -1421,10 +1423,10 @@
   background: transparent;
   padding: 0;
   color: inherit;
-  font-family: var(--font-mono);
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow-wrap: break-word;
+  font-family: Consolas, 'Cascadia Mono', var(--font-mono, monospace);
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .message-content pre code .hljs-keyword,
@@ -1746,11 +1748,12 @@
 .tool-part-pre {
   margin: 0;
   padding: 0;
-  font-family: var(--font-mono, monospace);
+  font-family: Consolas, 'Cascadia Mono', var(--font-mono, monospace);
   font-size: 12px;
   line-height: 1.45;
   color: #f4f4f5;
   white-space: pre-wrap;
+  tab-size: 2;
   /* Las rutas Windows no parten por "\": anywhere evita el desborde y el
      ZWSP inyectado en ToolPart deja partir tras cada separador en vez de
      a mitad de palabra. */
@@ -1758,18 +1761,21 @@
   word-break: break-word;
   max-height: 350px;
   overflow-y: auto;
+  overflow-x: auto;
 }
 
 .tool-part-error-text {
   color: var(--danger, #f87171);
 }
 
-/* Archivo analizado/editado: mismos tokens del editor (modals/editor). */
+/* Archivo analizado/editado: mismos tokens del editor (modals/editor).
+   El código de archivo va en pre (como LiteEditor) para conservar el
+   indentado; el resto del tool-part (shell/output) sigue en wrap. */
 .tool-part-pre code.hljs {
   font: inherit;
   background: transparent;
   color: inherit;
-  white-space: inherit;
+  white-space: pre;
 }
 
 .tool-part-pre .hljs-keyword { color: var(--code-keyword); }
