@@ -56,7 +56,7 @@ export const NavBar = memo(function NavBar({ variant = "top", view, onNavigate, 
       <button className="brand-section" onClick={() => onNavigate("sessions")} type="button"
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate("sessions") } }}>
         <div className="brand-title">
-          <img src="./img/apple-touch-icon-180x180.jpg" alt="OpenHer" className="app-icon" />
+          <img src="./img/openher-mark-180.png" alt="OpenHer" className="app-icon" />
           <span className="brand-name">OpenHer</span>
         </div>
       </button>
