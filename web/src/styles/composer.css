@@ -129,42 +129,69 @@
 }
 
 /* Anillo de envío alrededor de TODA la caja de texto (reemplaza al spinner
-   del chat): arco cónico que recorre el borde, solo-CSS, sin layout shift.
-   Se activa con .is-working (envío real o vista previa del ojo). */
-@property --composer-ring-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
+   del chat): capas cónicas monocromo violeta girando por transform
+   (movimiento garantizado en todos los motores, sin @property). Solo visible
+   con .is-working (envío real o vista previa del ojo). */
+.composer-ring {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
 }
-.composer-input-wrap.is-working {
-  box-shadow: 0 0 14px var(--primary-soft);
+.composer-ring-glow,
+.composer-ring-band {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
 }
-.composer-input-wrap.is-working::after {
+.composer-ring-glow {
+  width: calc(100% + 18px);
+  height: calc(100% + 18px);
+  border-radius: 16px;
+  filter: blur(22px);
+  opacity: 0.5;
+}
+.composer-ring-band {
+  width: calc(100% + 4px);
+  height: calc(100% + 4px);
+  border-radius: 12px;
+  filter: blur(0.5px) brightness(1.3);
+}
+.composer-ring-glow::before,
+.composer-ring-band::before {
   content: "";
   position: absolute;
-  inset: -2px;
-  border-radius: calc(var(--radius-md) + 2px);
-  padding: 2px;
-  background: conic-gradient(
-    from var(--composer-ring-angle),
-    transparent 0%,
-    var(--primary) 12%,
-    transparent 30%
-  );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-  animation: composer-ring-spin 1.4s linear infinite;
+  top: 50%;
+  left: 50%;
+  width: 1200px;
+  height: 1200px;
+  transform: translate(-50%, -50%) rotate(60deg);
+  background-repeat: no-repeat;
+  animation: composer-ring-rotate 3s linear infinite;
 }
-@keyframes composer-ring-spin {
-  to { --composer-ring-angle: 360deg; }
+.composer-ring-glow::before {
+  background-image: conic-gradient(#000, #402fb5 5%, #000 38%, #000 50%, #8f83e8 60%, #000 87%);
+}
+.composer-ring-band::before {
+  background-image: conic-gradient(#14121c, #402fb5 5%, #14121c 14%, #14121c 50%, #8f83e8 60%, #14121c 64%);
+}
+@keyframes composer-ring-rotate {
+  to { transform: translate(-50%, -50%) rotate(420deg); }
+}
+/* El anillo va detrás (z-index 0): el texto y los botones suben un nivel. */
+.composer-input-wrap.is-working textarea {
+  position: relative;
+  z-index: 1;
+}
+.composer-input-wrap.is-working .composer-inline-btn {
+  z-index: 1;
 }
 @media (prefers-reduced-motion: reduce) {
-  .composer-input-wrap.is-working::after {
+  .composer-ring-glow::before,
+  .composer-ring-band::before {
     animation: none;
-    background: var(--primary);
   }
 }
 

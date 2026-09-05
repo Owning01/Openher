@@ -33,6 +33,7 @@ describe("Composer sending ring (preview)", () => {
   it("sin envío no hay anillo pero sí botón de vista previa", () => {
     const { container } = renderComposer(false)
     expect(container.querySelector(".composer-input-wrap.is-working")).toBeNull()
+    expect(container.querySelector(".composer-ring")).toBeNull()
     expect(screen.getByLabelText("Vista previa del anillo de envío")).not.toBeNull()
   })
 
@@ -56,6 +57,8 @@ describe("Composer sending ring (preview)", () => {
     )
     fireEvent.click(screen.getByLabelText("Vista previa del anillo de envío"))
     expect(container.querySelector(".composer-input-wrap.is-working")).not.toBeNull()
+    expect(container.querySelector(".composer-ring-glow")).not.toBeNull()
+    expect(container.querySelector(".composer-ring-band")).not.toBeNull()
     expect(onSend).not.toHaveBeenCalled()
     act(() => {
       vi.advanceTimersByTime(8000)
@@ -66,5 +69,6 @@ describe("Composer sending ring (preview)", () => {
   it("con envío real el anillo va puesto", () => {
     const { container } = renderComposer(true)
     expect(container.querySelector(".composer-input-wrap.is-working")).not.toBeNull()
+    expect(container.querySelector(".composer-ring")).not.toBeNull()
   })
 })
