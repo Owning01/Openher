@@ -7,8 +7,8 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import { Capacitor } from "@capacitor/core"
 import "@xterm/xterm/css/xterm.css"
-import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon, ChatIcon } from "../Icons"
-import { b64decode, fileIcon, KANBAN_COLORS, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
+import { FolderIcon, RefreshIcon, TerminalIcon, PlusIcon, SplitIcon, MoreHorizontalIcon, TrashIcon, ChevronDownIcon, FileIcon, SaveIcon, DiskIcon, LinkIcon, MonitorIcon, PencilIcon, EyeIcon, StarIcon, MaximizeIcon, MinimizeIcon, CloseIcon, ChatIcon, SendIcon } from "../Icons"
+import { b64decode, fileIcon, KANBAN_COLORS, kanbanPromptText, shell, type FsEntry, type KanbanBoard, type KanbanCard, type ShellPanelKind } from "../shell"
 import { normFsPath, affectedParentDirs } from "../utils/fsChanges"
 import { calcMenuPosForAnchor } from "../utils/menuPos"
 import { VisualSelectOverlay } from "./VisualSelectOverlay"
@@ -24,6 +24,10 @@ export { killTerminalPty, transferTerminalTab }
 import { createPortal } from "react-dom"
 import { useT } from "../i18n-context"
 import { useDialog } from "./DialogProvider"
+import { api } from "../api"
+import { STORAGE_KEYS } from "../constants"
+import type { Session } from "../entities/session/model"
+import type { ServerConfig } from "../types"
 import { Markdown } from "./Markdown"
 import { Modal } from "./Modal"
 import { sanitizeHtml } from "../utils/sanitize"
@@ -2604,6 +2608,77 @@ export const KanbanPanel = memo(function KanbanPanel() {
   const [cardNotes, setCardNotes] = useState("")
   const [cardColor, setCardColor] = useState(KANBAN_COLORS[0])
   const [kbError, setKbError] = useState<string | null>(null)
+  // Enviar tarjeta como prompt a una sesión: la tarjeta es el prompt.
+  const [sendCard, setSendCard] = useState<KanbanCard | null>(null)
+  const [sendPrompt, setSendPrompt] = useState("")
+  const [sendSessions, setSendSessions] = useState<Session[] | null>(null)
+  const [sendSearch, setSendSearch] = useState("")
+  const [sendTarget, setSendTarget] = useState<string | null>(null)
+  const [sendBusy, setSendBusy] = useState(false)
+  const [sendDone, setSendDone] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
+
+  const readServerConfig = (): ServerConfig | null => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SERVER)
+      if (!raw) return null
+      const p = JSON.parse(raw)
+      if (!p?.host?.trim()) return null
+      return { host: p.host, port: Number(p.port) || 4096, username: p.username ?? "opencode", password: p.password ?? "", apiVersion: p.apiVersion ?? "auto" }
+    } catch {
+      return null
+    }
+  }
+
+  const openSendCard = (card: KanbanCard) => {
+    setSendCard(card)
+    setSendPrompt(kanbanPromptText(card.title, card.notes))
+    setSendSearch("")
+    setSendTarget(null)
+    setSendBusy(false)
+    setSendDone(null)
+    setSendError(null)
+    setSendSessions(null)
+    const cfg = readServerConfig()
+    if (!cfg) {
+      setSendError(t('shell.needsConfig'))
+      return
+    }
+    api.listGlobalSessions(cfg)
+      .catch(() => api.listSessions(cfg))
+      .then((list) => setSendSessions(Array.isArray(list) ? list : []))
+      .catch((e) => setSendError(e instanceof Error ? e.message : t('shell.sendFailed')))
+  }
+
+  const submitSendCard = async () => {
+    const target = sendSessions?.find((s) => s.id === sendTarget) ?? null
+    if (!target || !sendPrompt.trim() || sendBusy) return
+    const cfg = readServerConfig()
+    if (!cfg) {
+      setSendError(t('shell.needsConfig'))
+      return
+    }
+    setSendBusy(true)
+    setSendError(null)
+    try {
+      await api.sendPrompt(cfg, target.id, sendPrompt.trim(), target.directory)
+      setSendDone(target.title?.trim() || target.id.slice(0, 8))
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : t('shell.sendFailed'))
+    } finally {
+      setSendBusy(false)
+    }
+  }
+
+  const sendFiltered = useMemo(() => {
+    if (!sendSessions) return []
+    const q = sendSearch.trim().toLowerCase()
+    const list = q
+      ? sendSessions.filter((s) => (s.title ?? "").toLowerCase().includes(q) || (s.directory ?? "").toLowerCase().includes(q))
+      : sendSessions
+    return [...list].sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0))
+  }, [sendSessions, sendSearch])
+  const SEND_LIST_CAP = 80
 
   const load = useCallback(() => {
     shell.kanban.all().then(({ boards }) => {
@@ -2776,6 +2851,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
                       <div className="shell-kanban-card-head">
                         <span className="shell-kanban-card-title">{c.title}</span>
                         <span className="shell-kanban-card-actions">
+                          <button onClick={(e) => { e.stopPropagation(); openSendCard(c) }} title={t('shell.sendToSession')} aria-label={t('shell.sendToSession')}><SendIcon size={13} /></button>
                           <button onClick={(e) => { e.stopPropagation(); openEditCard(c) }} title="Editar"></button>
                           <button className="danger" onClick={(e) => { e.stopPropagation(); delCard(c.id) }} title="Eliminar">×</button>
                         </span>
@@ -2855,6 +2931,50 @@ export const KanbanPanel = memo(function KanbanPanel() {
               <label>Color<div className="shell-kanban-color-pick">{KANBAN_COLORS.map((col) => <button key={col} className={`shell-kanban-color-dot${cardColor === col ? " active" : ""}`} style={{ background: col, color: col }} onClick={() => setCardColor(col)} />)}</div></label>
             </div>
             <div className="shell-kanban-modal-foot"><button className="btn-secondary" onClick={() => setEditingCard(null)}>Cancelar</button><button className="btn-primary" onClick={submitEditCard}>Guardar</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal enviar tarjeta como prompt a una sesión */}
+      {sendCard && (
+        <div className="shell-kanban-modal-overlay" onClick={() => { if (!sendBusy) setSendCard(null) }}>
+          <div className="shell-kanban-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="shell-kanban-modal-head"><h3>{t('shell.sendToSession')}</h3><button className="btn-icon" onClick={() => setSendCard(null)}>×</button></div>
+            <div className="shell-kanban-modal-body">
+              {sendDone ? (
+                <div role="status" className="shell-kanban-send-ok">{t('shell.sentTo', { name: sendDone })}</div>
+              ) : (
+                <>
+                  <label>{t('shell.promptToSend')}<textarea value={sendPrompt} onChange={(e) => setSendPrompt(e.target.value)} rows={4} disabled={sendBusy} /></label>
+                  <label>{t('shell.pickSession')}
+                    <input type="search" value={sendSearch} onChange={(e) => setSendSearch(e.target.value)} placeholder={t('shell.searchSessions')} disabled={sendBusy || !sendSessions} />
+                  </label>
+                  {sendError && <div role="alert" style={{ color: "var(--danger)", fontSize: "0.78rem" }}>{sendError}</div>}
+                  {!sendSessions && !sendError && <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>…</div>}
+                  {sendSessions && sendFiltered.length === 0 && <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>{t('shell.noSessionsFound')}</div>}
+                  {sendFiltered.length > 0 && (
+                    <div className="shell-kanban-send-list" role="listbox" aria-label={t('shell.pickSession')}>
+                      {sendFiltered.slice(0, SEND_LIST_CAP).map((s) => (
+                        <button key={s.id} type="button" role="option" aria-selected={sendTarget === s.id}
+                          className={`shell-kanban-send-row${sendTarget === s.id ? " active" : ""}`}
+                          onClick={() => setSendTarget(s.id)} disabled={sendBusy}>
+                          <span className="shell-kanban-send-row-title">{s.title?.trim() || s.id.slice(0, 8)}</span>
+                          <span className="shell-kanban-send-row-dir">{s.directory}</span>
+                        </button>
+                      ))}
+                      {sendFiltered.length > SEND_LIST_CAP && (
+                        <div style={{ color: "var(--muted)", fontSize: "0.75rem", textAlign: "center" }}>{t('shell.moreSessions', { n: String(sendFiltered.length - SEND_LIST_CAP) })}</div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="shell-kanban-modal-foot">
+              {sendDone
+                ? <button className="btn-primary" onClick={() => setSendCard(null)}>OK</button>
+                : (<><button className="btn-secondary" onClick={() => setSendCard(null)} disabled={sendBusy}>Cancelar</button><button className="btn-primary" onClick={submitSendCard} disabled={!sendTarget || !sendPrompt.trim() || sendBusy}>{sendBusy ? "…" : t('shell.send')}</button></>)}
+            </div>
           </div>
         </div>
       )}
