@@ -7,6 +7,7 @@ import type { SessionView, ServerConfig, ConnectionState, ModelOption } from "..
 import { formatSelectionForPrompt } from "../../../hooks/useVisualSelection"
 import { keepMessagesBefore, keepMessagesThrough } from "../domain/message-order"
 import { isSessionActive } from "../../../utils"
+import { openPromptHistory } from "../../../utils/promptHistory"
 
 export type UseChatActionsParams = {
   selectedSession: SessionView | null
@@ -320,6 +321,7 @@ export function useChatActions(params: UseChatActionsParams) {
         setShowThemePicker(true)
       }
       if (result === "connect") setShowConnectSheet(true)
+      if (result === "history" || result === "timeline") openPromptHistory()
       return typeof result === "boolean" ? result : true
     },
     [

@@ -15,6 +15,8 @@ export type ParseCommandResult =
   | { type: "redo" }
   | { type: "compact" }
   | { type: "themes" }
+  | { type: "history" }
+  | { type: "timeline" }
   | { type: "connect"; text: string }
   | { type: "send_raw"; text: string }
   | null
@@ -38,6 +40,8 @@ export function parseCommand(text: string): ParseCommandResult {
   if (localCommand === "redo") return { type: "redo" }
   if (localCommand === "compact") return { type: "compact" }
   if (localCommand === "themes") return { type: "themes" }
+  if (localCommand === "history") return { type: "history" }
+  if (localCommand === "timeline") return { type: "timeline" }
   if (localCommand === "connect") return { type: "connect", text: args }
 
   return { type: "command", command, args }

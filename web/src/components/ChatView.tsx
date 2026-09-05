@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon, EyeIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon, EyeIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -15,6 +15,8 @@ import { AutoQuestionPrompt } from "./AutoQuestionPrompt"
 import { PermissionPrompt } from "./PermissionPrompt"
 import { ChatCustomizerModal } from "./ChatCustomizerModal"
 import { ChatTerminalDock } from "./ChatTerminalDock"
+import { PromptHistoryPanel, usePromptHistoryLayout } from "./PromptHistoryPanel"
+import { PROMPT_HISTORY_OPEN_EVENT, extractUserPrompts } from "../utils/promptHistory"
 import { SelectionBar } from "./SelectionBar"
 import { ExportMarkdownDialog } from "./ExportMarkdownDialog"
 import type { VisualSelection } from "../hooks/useVisualSelection"
@@ -168,6 +170,14 @@ export const ChatView = memo(function ChatView({
   const [chatTermGen, setChatTermGen] = useState(0)
   // Cambio de sesión: el dock se pliega (el PTY por sesión sobrevive en el store).
   useEffect(() => { setChatTermOpen(false) }, [selectedSession?.id])
+  // El historial es por sesión: al cambiar se cierra; /history y /timeline
+  // (más el botón del header) lo abren vía evento (patrón plugin:insert-text).
+  useEffect(() => { setShowHistory(false) }, [selectedSession?.id])
+  useEffect(() => {
+    const open = () => setShowHistory(true)
+    window.addEventListener(PROMPT_HISTORY_OPEN_EVENT, open)
+    return () => window.removeEventListener(PROMPT_HISTORY_OPEN_EVENT, open)
+  }, [])
   const chatTermId = selectedSession ? `chat-term-${selectedSession.id}-g${chatTermGen}` : null
   const handleKillChatTerm = useCallback(() => {
     if (chatTermId) killTerminalPty(chatTermId)
@@ -175,6 +185,8 @@ export const ChatView = memo(function ChatView({
     setChatTermOpen(false)
   }, [chatTermId])
   const [showExport, setShowExport] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const historyLayout = usePromptHistoryLayout()
   const [exportBusy, setExportBusy] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
@@ -238,6 +250,26 @@ export const ChatView = memo(function ChatView({
     }
   }, [])
   const overflowRef = useRef<HTMLDivElement | null>(null)
+  const promptEntries = useMemo(() => extractUserPrompts(messages), [messages])
+  // Salto a un prompt: scroll al mensaje + destello (repetible, no pisa el
+  // buscador: usa el DOM directo en vez del prop scrollToMessageID).
+  const jumpToPrompt = useCallback((id: string) => {
+    const wrap = messagesWrapRef.current
+    if (!wrap) return
+    let sel = `[data-message-id="${id}"]`
+    try {
+      sel = `[data-message-id="${CSS.escape(id)}"]`
+    } catch {
+      /* ids generados: el fallback plano vale */
+    }
+    const el = wrap.querySelector(sel)
+    if (!el) return
+    el.scrollIntoView({ block: "center", behavior: "smooth" })
+    el.classList.remove("msg-flash")
+    void (el as HTMLElement).offsetWidth
+    el.classList.add("msg-flash")
+    window.setTimeout(() => el.classList.remove("msg-flash"), 1800)
+  }, [])
   const handleViewSubagents = useCallback((subagentID?: string) => {
     const parent = selectedSession?.id
     // La sesión del subagente puede ya no estar "active" (terminó): buscar en
@@ -426,6 +458,15 @@ export const ChatView = memo(function ChatView({
                   <TerminalIcon size={14} />
                 </button>
               )}
+              {selectedSession && (
+                <button className={`btn-icon compact chat-history-btn${showHistory ? " active" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); setShowHistory((v) => !v) }}
+                  title={t('session.promptHistory')}
+                  aria-label={t('session.promptHistory')}
+                  aria-pressed={showHistory}>
+                  <HistoryIcon size={14} />
+                </button>
+              )}
               <button className="btn-icon compact"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -575,7 +616,16 @@ export const ChatView = memo(function ChatView({
         </div>
       )}
 
-      <div className="messages-wrap" ref={messagesWrapRef}>
+      <div className="chat-main-row">
+        {showHistory && historyLayout.layout.placement === "left" && (
+          <PromptHistoryPanel
+            prompts={promptEntries}
+            layout={historyLayout}
+            onJump={jumpToPrompt}
+            onClose={() => setShowHistory(false)}
+          />
+        )}
+        <div className="messages-wrap" ref={messagesWrapRef}>
         <MessageList
           messages={messages}
           pendingIndex={pendingIndex}
@@ -606,7 +656,25 @@ export const ChatView = memo(function ChatView({
           onOpenADEDiff={onOpenADEDiff}
           outboxActions={outboxActions}
         />
+        </div>
+        {showHistory && historyLayout.layout.placement === "right" && (
+          <PromptHistoryPanel
+            prompts={promptEntries}
+            layout={historyLayout}
+            onJump={jumpToPrompt}
+            onClose={() => setShowHistory(false)}
+          />
+        )}
       </div>
+
+      {showHistory && historyLayout.layout.placement === "floating" && (
+        <PromptHistoryPanel
+          prompts={promptEntries}
+          layout={historyLayout}
+          onJump={jumpToPrompt}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
 
       {selectedSession?.parentID && (
         <SubagentFooter session={selectedSession} onGoBack={onBackToSessions} />

@@ -104,6 +104,8 @@ export const UndoIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Undo"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></Svg>)
 export const RedoIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Redo"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></Svg>)
+export const HistoryIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="History"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></Svg>)
 export const CompressIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Compact"><path d="M4 9V5h4"/><path d="M20 15v4h-4"/><path d="M12 4v16"/><path d="M8 8l4-4 4 4"/><path d="M16 16l-4 4-4-4"/></Svg>)
 

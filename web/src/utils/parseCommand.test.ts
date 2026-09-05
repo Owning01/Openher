@@ -91,6 +91,13 @@ describe("parseCommand", () => {
     expect(parseCommand("/themes")).toEqual({ type: "themes" })
   })
 
+  it("parses /history and /timeline to panel types", () => {
+    expect(parseCommand("/history")).toEqual({ type: "history" })
+    expect(parseCommand("/timeline")).toEqual({ type: "timeline" })
+    expect(parseCommand("/HISTORY")).toEqual({ type: "history" })
+    expect(parseCommand("/Timeline")).toEqual({ type: "timeline" })
+  })
+
   it("parses /connect with args", () => {
     expect(parseCommand("/connect myprovider")).toEqual({ type: "connect", text: "myprovider" })
   })
