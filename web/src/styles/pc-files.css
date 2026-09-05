@@ -979,6 +979,86 @@
   color: var(--danger);
 }
 
+/* Fila cortada (Ctrl+X pendiente de pegar): atenuada hasta pegar/copiar. */
+.pcf-row.is-cut {
+  opacity: 0.45;
+}
+
+/* Breadcrumbs + historial atrás/adelante bajo el header del panel. */
+.pcf-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  min-height: 24px;
+}
+.pcf-hist-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted, #858585);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pcf-hist-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text, #cccccc);
+}
+.pcf-hist-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.pcf-crumb-trail {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  margin-left: 4px;
+  min-width: 0;
+}
+.pcf-crumb-trail::-webkit-scrollbar {
+  display: none;
+}
+.pcf-crumb-item {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.pcf-crumb-sep {
+  color: var(--muted, #858585);
+  padding: 0 2px;
+  font-size: 12px;
+}
+.pcf-crumb {
+  border: none;
+  background: transparent;
+  color: var(--muted, #858585);
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pcf-crumb:hover {
+  background: var(--surface-hover);
+  color: var(--text, #cccccc);
+}
+.pcf-crumb.active {
+  color: var(--text, #cccccc);
+  font-weight: 600;
+}
+
 .pcf-row.is-renaming {
   background: rgba(99, 102, 241, 0.12) !important;
   outline: 1px solid var(--primary, #6366f1);

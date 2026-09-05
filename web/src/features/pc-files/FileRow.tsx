@@ -28,6 +28,8 @@ export type FileRowProps = {
   selected?: boolean
   onSelect?: (e: React.MouseEvent, entry: FsEntry) => void
   getDragPayload?: (path: string) => string[]
+  // Cortado (Ctrl+X pendiente de pegar): se atenúa hasta pegar/copiar.
+  cut?: boolean
 }
 
 export function formatFileSize(size: number | null): string {
@@ -58,6 +60,7 @@ export const FileRow = memo(function FileRow({
   selected = false,
   onSelect,
   getDragPayload,
+  cut = false,
 }: FileRowProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -67,7 +70,7 @@ export const FileRow = memo(function FileRow({
 
   return (
     <div
-      className={`pcf-row pcf-file ${gitStatus ? `git-${gitStatus.status.toLowerCase()}` : ""} ${isRenaming ? "is-renaming" : ""} ${selected ? "is-selected" : ""}`}
+      className={`pcf-row pcf-file ${gitStatus ? `git-${gitStatus.status.toLowerCase()}` : ""} ${isRenaming ? "is-renaming" : ""} ${selected ? "is-selected" : ""} ${cut ? "is-cut" : ""}`}
       style={{ paddingLeft: `${depth * 14 + 18}px` }}
       title={f.path}
       onClick={(e) => {
