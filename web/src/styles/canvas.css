@@ -189,64 +189,6 @@
 
 .m3e-enter { animation: m3e-enter 0.22s ease-out; }
 
-@keyframes m3e-enter-left {
-  from { opacity: 0; transform: translateX(-24px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes m3e-enter-up {
-  from { opacity: 0; transform: translateY(24px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes m3e-enter-down {
-  from { opacity: 0; transform: translateY(-24px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes m3e-enter-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes m3e-enter-expand {
-  from { opacity: 0; transform: scale(0.92); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.m3e-enter-slide { animation: m3e-enter 0.22s ease-out; }
-.m3e-enter-slideLeft { animation: m3e-enter-left 0.22s ease-out; }
-.m3e-enter-slideUp { animation: m3e-enter-up 0.22s ease-out; }
-.m3e-enter-slideDown { animation: m3e-enter-down 0.22s ease-out; }
-.m3e-enter-fade { animation: m3e-enter-fade 0.18s ease-out; }
-.m3e-enter-expand { animation: m3e-enter-expand 0.22s ease-out; }
-.m3e-enter-none { animation: none; }
-
-@keyframes m3e-slide-bar {
-  0% { left: -40%; width: 40%; }
-  100% { left: 100%; width: 40%; }
-}
-
-.m3e-indeterminate {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  animation: m3e-slide-bar 1.2s ease-in-out infinite;
-}
-
-@keyframes m3e-rotate {
-  to { transform: rotate(360deg); }
-}
-
-.m3e-spin { animation: m3e-rotate 1.4s linear infinite; transform-origin: center; }
-
-@keyframes m3e-morph {
-  0%, 100% { border-radius: 50%; transform: rotate(0deg) scale(1); }
-  25% { border-radius: 24%; transform: rotate(90deg) scale(1.08); }
-  50% { border-radius: 50%; transform: rotate(180deg) scale(1); }
-  75% { border-radius: 8%; transform: rotate(270deg) scale(1.08); }
-}
-
-.m3e-loading { animation: m3e-morph 2.4s ease-in-out infinite; }
-
 @media (prefers-reduced-motion: reduce) {
-  .m3e-enter, .m3e-enter-slide, .m3e-enter-slideLeft, .m3e-enter-slideUp,
-  .m3e-enter-slideDown, .m3e-enter-fade, .m3e-enter-expand,
-  .m3e-indeterminate, .m3e-spin, .m3e-loading { animation: none; }
+  .m3e-enter { animation: none; }
 }

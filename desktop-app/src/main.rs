@@ -503,6 +503,7 @@ impl ApplicationHandler<AppEvent> for App {
             attributes.inner_size = Some(LogicalSize::new(DEFAULT_W, DEFAULT_H).into());
         }
         attributes.min_inner_size = Some(LogicalSize::new(720.0, 480.0).into());
+        attributes.resizable = true;
         if let Ok(rgba) = load_window_icon() {
             attributes.window_icon = Some(rgba);
         }
@@ -700,6 +701,19 @@ impl ApplicationHandler<AppEvent> for App {
                     match action {
                         crate::state::WindowAction::Drag => {
                             let _ = window.drag_window();
+                        }
+                        crate::state::WindowAction::Resize(dir) => {
+                            let winit_dir = match dir {
+                                crate::state::WindowResizeDirection::Top => winit::window::ResizeDirection::North,
+                                crate::state::WindowResizeDirection::Bottom => winit::window::ResizeDirection::South,
+                                crate::state::WindowResizeDirection::Left => winit::window::ResizeDirection::West,
+                                crate::state::WindowResizeDirection::Right => winit::window::ResizeDirection::East,
+                                crate::state::WindowResizeDirection::TopLeft => winit::window::ResizeDirection::NorthWest,
+                                crate::state::WindowResizeDirection::TopRight => winit::window::ResizeDirection::NorthEast,
+                                crate::state::WindowResizeDirection::BottomLeft => winit::window::ResizeDirection::SouthWest,
+                                crate::state::WindowResizeDirection::BottomRight => winit::window::ResizeDirection::SouthEast,
+                            };
+                            let _ = window.drag_resize_window(winit_dir);
                         }
                         crate::state::WindowAction::Minimize => {
                             window.set_minimized(true);

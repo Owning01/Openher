@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
-import { createPortal } from "react-dom"
 import { CloseIcon, CopyIcon, CheckIcon, TrashIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { CHAT_NOTES_MAX, readChatNotes, writeChatNotes } from "../utils/chatNotes"
@@ -50,24 +49,37 @@ export const ChatNotesPanel = memo(function ChatNotesPanel({ sessionID, onClose,
     return () => window.removeEventListener("keydown", onKey)
   }, [onClose])
 
-  // Drag del header (DOM directo a 60fps, commit al soltar).
+  // Drag del header anclado al panel del chat que lo invoca (no al viewport).
+  // Se limita al bounding box del padre (.panel.detail / .session-panel) para
+  // que nunca se escape del chat invocado y su tamaño sea relativo al chat.
   const startDrag = useCallback((e: React.PointerEvent) => {
     const target = e.target as HTMLElement
     if (target.closest("button")) return
     e.preventDefault()
     const el = boxRef.current
     if (!el) return
+    const parent = el.parentElement
+    if (!parent) return
+    const parentRect = parent.getBoundingClientRect()
     const r = el.getBoundingClientRect()
     const offX = e.clientX - r.left
     const offY = e.clientY - r.top
-    el.style.left = `${r.left}px`
-    el.style.top = `${r.top}px`
+    // Pasar de anclaje bottom/right (CSS) a left/top relativo al padre.
+    const relLeft = r.left - parentRect.left
+    const relTop = r.top - parentRect.top
+    el.style.left = `${relLeft}px`
+    el.style.top = `${relTop}px`
     el.style.right = "auto"
     el.style.bottom = "auto"
     document.body.style.userSelect = "none"
     const onMove = (ev: PointerEvent) => {
-      el.style.left = `${Math.max(-r.width + 80, Math.min(ev.clientX - offX, window.innerWidth - 80))}px`
-      el.style.top = `${Math.max(0, Math.min(ev.clientY - offY, window.innerHeight - 40))}px`
+      const nl = ev.clientX - parentRect.left - offX
+      const nt = ev.clientY - parentRect.top - offY
+      const minL = -r.width + 80
+      const maxL = parentRect.width - 80
+      const maxT = parentRect.height - 40
+      el.style.left = `${Math.max(minL, Math.min(nl, maxL))}px`
+      el.style.top = `${Math.max(0, Math.min(nt, maxT))}px`
     }
     const onUp = () => {
       document.body.style.userSelect = ""
@@ -106,7 +118,7 @@ export const ChatNotesPanel = memo(function ChatNotesPanel({ sessionID, onClose,
     onInsert(v)
   }, [onInsert])
 
-  return createPortal(
+  return (
     <section ref={boxRef} role="dialog" aria-label={t("notes.title")} className="chat-notes">
       <header className="chat-notes-head" onPointerDown={startDrag}>
         <span className="chat-notes-title">{t("notes.title")}</span>
@@ -152,7 +164,6 @@ export const ChatNotesPanel = memo(function ChatNotesPanel({ sessionID, onClose,
         </span>
         <span className="chat-notes-count">{t("notes.chars", { count: value.length })}</span>
       </footer>
-    </section>,
-    document.body
+    </section>
   )
 })

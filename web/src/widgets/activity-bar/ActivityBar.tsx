@@ -149,6 +149,12 @@ export const ActivityBar = memo(function ActivityBar({
           }`}
           title={t("shell.kindKanban")}
           aria-label={t("shell.kindKanban")}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData("application/x-opencode-path", "__kanban__")
+            e.dataTransfer.setData("text/plain", "__kanban__")
+            e.dataTransfer.effectAllowed = "move"
+          }}
           onClick={handleOpenKanban}
         >
           <LayersIcon size={18} />

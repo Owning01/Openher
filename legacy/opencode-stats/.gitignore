@@ -1,0 +1,11 @@
+# Rust
+/target
+
+# Backups de operaciones de gestión
+backups/
+
+# Estado local (window_state, overrides de precios)
+data/
+
+# Herramientas de test
+.playwright-mcp/

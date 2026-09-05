@@ -188,6 +188,26 @@ export function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
     } else if (raw.type === "shell") {
       const t = (typeof rawAny.output === "string" && rawAny.output) ? rawAny.output : (typeof rawAny.command === "string" && rawAny.command) ? rawAny.command : (typeof rawAny.text === "string" && rawAny.text) ? rawAny.text : ""
       if (t) parts = [{ id: `${raw.id}_part_0`, sessionID: raw.sessionID, type: "text", text: t } as unknown as MessageEnvelope["parts"][number]]
+    } else if (raw.type === "user") {
+      const uText = typeof rawAny.text === "string" ? rawAny.text : typeof rawAny.contentText === "string" ? rawAny.contentText : ""
+      const fileParts: MessageEnvelope["parts"] = []
+      const files = Array.isArray((raw as any).files) ? (raw as any).files : []
+      files.forEach((f: any, i: number) => {
+        if (!f) return
+        fileParts.push({
+          id: `${raw.id}_file_${i}`,
+          sessionID: raw.sessionID,
+          type: "file",
+          filename: f.name || f.filename,
+          url: f.uri || f.url,
+          mime: f.mime || f.mimeType,
+          mimeType: f.mimeType || f.mime,
+        })
+      })
+      parts = [
+        ...(uText ? [{ id: `${raw.id}_part_0`, sessionID: raw.sessionID, type: "text" as const, text: uText }] : []),
+        ...fileParts,
+      ]
     } else {
       const topText = typeof rawAny.text === "string" ? rawAny.text : typeof rawAny.contentText === "string" ? rawAny.contentText : ""
       if (topText) {

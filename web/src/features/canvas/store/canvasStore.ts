@@ -7,20 +7,15 @@ import type {
   ScreenPreset,
 } from "../model/canvasTypes"
 import {
-  defaultPartHeight,
   isValidDoc,
-  isSquareKind,
   makeDoc,
   makePart,
   makeScreen,
-  normalizeDoc,
   partsOf,
   screenSizeOf,
   SCREEN_MARGIN,
   uid,
 } from "../model/canvasTypes"
-import type { SwipeDir } from "../model/canvasTypes"
-import type { CanvasTheme } from "../model/theme"
 
 const DOCS_KEY = "opencode.canvas.docs.v1"
 const ACTIVE_KEY = "opencode.canvas.active.v1"
@@ -42,7 +37,7 @@ function loadDocs(): CanvasDoc[] {
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isValidDoc).map(normalizeDoc)
+    return parsed.filter(isValidDoc)
   } catch {
     return []
   }
@@ -119,19 +114,12 @@ function updateActiveDoc(fn: (d: CanvasDoc) => CanvasDoc, opts?: { history?: boo
   return next.find((d) => d.id === active.id) ?? null
 }
 
-function partHeight(p: CanvasPart): number {
-  if (p.kind === "box") return p.size ?? 220
-  if (isSquareKind(p.kind)) return p.size ?? defaultPartHeight(p.kind)
-  return defaultPartHeight(p.kind)
-}
-
-function clampPart(p: CanvasPart, sw: number, sh: number): CanvasPart {
-  const w = p.kind === "topAppBar" || p.kind === "bottomNav" ? sw : Math.min(p.w ?? sw, sw)
-  const h = partHeight(p)
+function clampPart(p: CanvasPart, sw: number, sh: number, h: number): CanvasPart {
+  const w = Math.min(p.w ?? sw, sw)
   return {
     ...p,
     w,
-    x: p.kind === "topAppBar" || p.kind === "bottomNav" ? 0 : Math.max(0, Math.min(sw - Math.min(w, sw), Math.round(p.x))),
+    x: Math.max(0, Math.min(sw - Math.min(w, sw), Math.round(p.x))),
     y: Math.max(0, Math.min(sh - h, Math.round(p.y))),
   }
 }
@@ -177,21 +165,6 @@ export const canvasStore = {
   },
   setPlatform(platform: "android" | "web") {
     updateActiveDoc((d) => ({ ...d, platform }))
-  },
-  setTheme(theme: CanvasTheme) {
-    updateActiveDoc((d) => ({ ...d, theme }))
-  },
-  setScreenSwipe(screenId: string, dir: SwipeDir, to: string) {
-    updateActiveDoc((d) => ({
-      ...d,
-      screens: d.screens.map((s) => {
-        if (s.id !== screenId) return s
-        const swipe = { ...(s.swipe ?? {}) }
-        if (to) swipe[dir] = to
-        else delete swipe[dir]
-        return { ...s, swipe }
-      }),
-    }))
   },
 
   addScreen(name: string, preset: ScreenPreset = "phone"): string | null {
@@ -252,11 +225,12 @@ export const canvasStore = {
     const { w: sw, h: sh } = screenSizeOf(screen)
     const list = partsOf(active, screenId)
     const p = makePart(kind, sw, at ?? { x: SCREEN_MARGIN, y: SCREEN_MARGIN + list.length * 8 })
+    const h = kind === "topAppBar" || kind === "bottomNav" ? (kind === "topAppBar" ? 64 : 80) : 56
     const placed = kind === "bottomNav"
       ? { ...p, x: 0, y: sh - 80 }
       : kind === "topAppBar"
         ? { ...p, x: 0, y: 0 }
-        : clampPart(p, sw, sh)
+        : clampPart(p, sw, sh, h)
     updateActiveDoc((d) => ({ ...d, parts: { ...d.parts, [screenId]: [...partsOf(d, screenId), placed] } }))
     setState({ ...state, selection: { screenId, partId: placed.id } })
     return placed.id
@@ -280,7 +254,7 @@ export const canvasStore = {
       parts: {
         ...d.parts,
         [screenId]: partsOf(d, screenId).map((p) =>
-          p.id === partId ? clampPart({ ...p, x, y }, sw, sh) : p,
+          p.id === partId ? clampPart({ ...p, x, y }, sw, sh, 56) : p,
         ),
       },
     })

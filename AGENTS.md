@@ -28,9 +28,9 @@ cargo check; cargo run; cargo build --release
 ## Arquitectura y Directivas
 
 - **Skills de Frontend**:  skills `TASTE` e `Impecable` para diseÃ±o, UX y calidad de frontend, con DESING.md .
- **Evitar DuplicaciÃ³n**: de cÃ³digo; leer skill Ponytail light`.
+ **Evitar Duplicacion**: de codigo; leer skill Ponytail light`.
 - **DRY y Estado**: importante dry y singleton servicios, stores y utilidades compartidas.
-- **IconografÃ­a y Texto**: No emojis; iconografÃ­a SVG si / Lucide formal si .
+- **Iconograia y Texto**: No emojis; iconografia SVG si / Lucide formal si .
 
 ---
 

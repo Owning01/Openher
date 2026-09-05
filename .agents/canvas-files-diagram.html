@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+<style>
+  .node { cursor: pointer; }
+  .node:hover rect.body { stroke: #eb6c36; stroke-width: 1.5; }
+  .node.active rect.body { stroke: #eb6c36; stroke-width: 1.5; }
+</style>
+</head>
+<body class="bg-transparent antialiased p-2" style="color:var(--foreground)">
+<div class="rounded-xl border p-4 shadow-sm" style="background:var(--card);border-color:var(--border)">
+  <p class="eyebrow" style="font-family:ui-monospace,monospace;font-size:8px;letter-spacing:.18em;color:#7a8399">ARCHITECTURE · FILE MAP · CANVAS M3E → OPENHER</p>
+  <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;color:var(--foreground)">Qué archivos creo y cuáles toco</h2>
+  <p style="font-size:12px;color:var(--muted-foreground)">14 nuevos · 5 toques quirúrgicos · 0 borrados. El prompt viaja por ① hasta el Composer; el Doc persiste por ② en Rust.</p>
+
+  <svg viewBox="0 0 760 348" width="100%" role="img" aria-labelledby="dTitle dDesc" style="background:#f5f5f5;border-radius:8px;margin-top:8px">
+    <title id="dTitle">Mapa de archivos de la integración Canvas M3E</title>
+    <desc id="dDesc">Tres zonas: archivos nuevos en web, archivos existentes que se tocan, y persistencia en Rust más Android. Dos flechas numeradas conectan las zonas.</desc>
+    <defs>
+      <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L8,4 L0,8" fill="none" stroke="#4f5d75" stroke-width="1.2"/>
+      </marker>
+      <marker id="arrA" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L8,4 L0,8" fill="none" stroke="#eb6c36" stroke-width="1.4"/>
+      </marker>
+      <marker id="arrL" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L8,4 L0,8" fill="none" stroke="#2e5aa8" stroke-width="1.4"/>
+      </marker>
+    </defs>
+
+    <!-- zones -->
+    <rect x="12" y="34" width="224" height="306" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+    <rect x="268" y="34" width="224" height="306" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+    <rect x="524" y="34" width="224" height="306" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+    <rect x="24" y="38" width="72" height="12" rx="2" fill="#f5f5f5"/>
+    <rect x="280" y="38" width="96" height="12" rx="2" fill="#f5f5f5"/>
+    <rect x="536" y="38" width="104" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="60" y="47" text-anchor="middle" font-size="7" letter-spacing="0.14em" font-family="ui-monospace,monospace" fill="rgba(45,49,66,0.40)">NUEVO · WEB</text>
+    <text x="328" y="47" text-anchor="middle" font-size="7" letter-spacing="0.14em" font-family="ui-monospace,monospace" fill="rgba(45,49,66,0.40)">TOCA · EXISTENTE</text>
+    <text x="588" y="47" text-anchor="middle" font-size="7" letter-spacing="0.14em" font-family="ui-monospace,monospace" fill="rgba(45,49,66,0.40)">NUEVO · RUST + APK</text>
+
+    <!-- arrows (behind nodes) -->
+    <line x1="124" y1="100" x2="124" y2="108" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="124" y1="144" x2="124" y2="152" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="124" y1="196" x2="124" y2="204" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="124" y1="240" x2="124" y2="248" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+    <line x1="380" y1="100" x2="380" y2="108" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="380" y1="144" x2="380" y2="152" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="380" y1="196" x2="380" y2="204" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="380" y1="240" x2="380" y2="248" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="636" y1="104" x2="636" y2="112" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="636" y1="148" x2="636" y2="156" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <line x1="636" y1="192" x2="636" y2="200" stroke="#4f5d75" stroke-width="1" marker-end="url(#arr)"/>
+    <path d="M224,180 H280" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrA)"/>
+    <path d="M480,266 H500 Q508,266 508,258 V182 Q508,174 516,174 H536" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrL)"/>
+
+    <!-- zone 1 nodes -->
+    <g class="node" data-d="model/: port 1:1 de tokens, color, theme, tidy, prompt y project. Puro TS, sin dependencia Next. Se suma i18n con español (el original solo trae JA/EN/ZH).">
+      <rect class="body" x="24" y="64" width="200" height="36" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="34" y="80" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">model/ · port ×6</text>
+      <text x="34" y="93" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">tokens · prompt · +es</text>
+    </g>
+    <g class="node" data-d="store/canvasStore.ts: singleton con hooks. Un Doc por proyecto, guard con debounce 800ms, dirty-flag para no perder nada al desmontar.">
+      <rect class="body" x="24" y="108" width="200" height="36" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="34" y="124" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">canvasStore.ts</text>
+      <text x="34" y="137" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">singleton · hooks</text>
+    </g>
+    <g class="node" data-d="components/CanvasPanel.tsx: ÚNICO punto de entrada, con React.lazy(). Si el tab está oculto se desmonta: RAM idle ~0. Es el nodo focal de todo el plan.">
+      <rect class="body" x="24" y="152" width="200" height="44" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+      <text x="34" y="170" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">CanvasPanel.tsx ★</text>
+      <text x="34" y="185" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">NUEVO · lazy entry</text>
+    </g>
+    <g class="node" data-d="M3Node + 4 subpaneles: PartsPalette, Inspector, Preview tapeable y PromptPanel. Se portan tal cual; solo cambian las fuentes Google por bundle local (offline/APK).">
+      <rect class="body" x="24" y="204" width="200" height="36" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="34" y="220" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">M3Node + 4 paneles</text>
+      <text x="34" y="233" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">palette · preview · prompt</text>
+    </g>
+    <g class="node" data-d="Dependencias: motion (animaciones) y html-to-image (export PNG). Ambas con import() dinámico: no entran al chunk inicial de 1.5MB.">
+      <rect class="body" x="24" y="248" width="200" height="36" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="0.8" stroke-dasharray="4,3"/>
+      <text x="34" y="264" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">motion · html-to-image</text>
+      <text x="34" y="277" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">lazy · fuera del chunk</text>
+    </g>
+
+    <!-- zone 2 nodes -->
+    <g class="node" data-d="useDesktopLayoutState.ts: TOQUE 1. Solo se agrega el tipo 'canvas' al union de paneles + purga de huérfanos como ya hace browser.">
+      <rect class="body" x="280" y="64" width="200" height="36" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="290" y="80" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">useDesktopLayoutState</text>
+      <text x="290" y="93" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">TOCA · +panel canvas</text>
+    </g>
+    <g class="node" data-d="DesktopPanelRenderer.tsx: TOQUE 2. Monta CanvasPanel con React.lazy + Suspense, mismo patrón que BrowserPanel (oculto = desmontado).">
+      <rect class="body" x="280" y="108" width="200" height="36" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="290" y="124" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">DesktopPanelRenderer</text>
+      <text x="290" y="137" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">TOCA · mount lazy</text>
+    </g>
+    <g class="node" data-d="Composer.tsx: TOQUE 3. Recibe el prompt generado como contexto (flecha ①). El loop se cierra: diseño → agente → código.">
+      <rect class="body" x="280" y="152" width="200" height="44" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="290" y="170" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">Composer.tsx ← ①</text>
+      <text x="290" y="185" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">TOCA · recibe prompt</text>
+    </g>
+    <g class="node" data-d="MobileLayoutView.tsx: TOQUE 4. En móvil NO va el editor (como hace el original): solo preview + copiar prompt.">
+      <rect class="body" x="280" y="204" width="200" height="36" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="290" y="220" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">MobileLayoutView</text>
+      <text x="290" y="233" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">TOCA · solo preview</text>
+    </g>
+    <g class="node" data-d="package.json + build: TOQUE 5. Se suman 2 deps y el chunk se parte con code-splitting para no engordar el arranque.">
+      <rect class="body" x="280" y="248" width="200" height="36" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="290" y="264" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">package.json + split</text>
+      <text x="290" y="277" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">TOCA · chunk aparte</text>
+    </g>
+
+    <!-- zone 3 nodes -->
+    <g class="node" data-d="desktop-app/src/canvasx.rs: NUEVO. Endpoints /shell/canvas/save|load con el mismo patrón durable del kanban: tmp único + rename con 5 reintentos.">
+      <rect class="body" x="536" y="68" width="200" height="36" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="546" y="84" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">canvasx.rs</text>
+      <text x="546" y="97" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">NUEVO · /shell/canvas/*</text>
+    </g>
+    <g class="node" data-d="data/canvas/‹proyecto›.json: el Doc persiste en disco, no solo localStorage (límite 5MB). Imágenes capadas a 1024px JPEG.">
+      <rect class="body" x="536" y="112" width="200" height="36" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="546" y="128" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">canvas/‹proy›.json</text>
+      <text x="546" y="141" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">NUEVO · tmp+rename ×5</text>
+    </g>
+    <g class="node" data-d="APK: mismo JSON vía Filesystem de Capacitor. Sin servidor, sin red: todo local como el original.">
+      <rect class="body" x="536" y="156" width="200" height="36" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="546" y="172" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">APK Filesystem</text>
+      <text x="546" y="185" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">EXISTE · cap FS</text>
+    </g>
+    <g class="node" data-d="Impacto: idle ~0 (desmontado), +25/60MB con 5 pantallas, pico +80MB solo al exportar PNG. Medible con dumpsys meminfo.">
+      <rect class="body" x="536" y="200" width="200" height="62" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="546" y="218" font-size="12" font-weight="600" font-family="system-ui,sans-serif" fill="#2d3142">impacto acotado</text>
+      <text x="546" y="232" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">idle ~0 · 5 pantallas</text>
+      <text x="546" y="245" font-size="9" font-family="ui-monospace,monospace" fill="#4f5d75">+25/60MB · PNG +80 pico</text>
+    </g>
+
+    <!-- numbered badges -->
+    <circle cx="252" cy="180" r="7" fill="#f5f5f5" stroke="#eb6c36" stroke-width="1.2"/>
+    <text x="252" y="183" text-anchor="middle" font-size="8" font-weight="600" font-family="system-ui,sans-serif" fill="#eb6c36">1</text>
+    <circle cx="508" cy="224" r="7" fill="#f5f5f5" stroke="#2e5aa8" stroke-width="1.2"/>
+    <text x="508" y="227" text-anchor="middle" font-size="8" font-weight="600" font-family="system-ui,sans-serif" fill="#2e5aa8">2</text>
+
+    <!-- bottom strips -->
+    <text x="24" y="320" font-size="9" font-family="ui-monospace,monospace" fill="#7a8399">f1 model · f2 panel · f3 puente</text>
+    <text x="280" y="320" font-size="9" font-family="ui-monospace,monospace" fill="#7a8399">toques quirúrgicos · nada se borra</text>
+    <text x="536" y="320" font-size="9" font-family="ui-monospace,monospace" fill="#7a8399">local-first · sin backend</text>
+  </svg>
+
+  <div class="flex flex-wrap gap-2 mt-2" style="font-size:10px;color:var(--muted-foreground)">
+    <span class="px-2 py-1 rounded-full border" style="border-color:var(--border)"><b style="color:#eb6c36">①</b> prompt → Composer</span>
+    <span class="px-2 py-1 rounded-full border" style="border-color:var(--border)"><b style="color:#2e5aa8">②</b> save/load durable</span>
+    <span class="px-2 py-1 rounded-full border" style="border-color:var(--border)">★ focal: CanvasPanel</span>
+    <span class="px-2 py-1 rounded-full border" style="border-color:var(--border)">tocá un nodo para ver el detalle</span>
+  </div>
+  <div id="detail" class="mt-2 text-[11px] rounded-lg p-2 border" style="border-color:var(--border);background:var(--background)">Tocá cualquier archivo del diagrama para ver qué haría exactamente ahí.</div>
+</div>
+<script>
+  const d = document.getElementById('detail');
+  document.querySelectorAll('.node').forEach(g => {
+    g.addEventListener('click', () => {
+      document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+      g.classList.add('active');
+      d.textContent = g.dataset.d;
+    });
+  });
+</script>
+</body>
+</html>

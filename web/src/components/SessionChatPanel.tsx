@@ -461,6 +461,9 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       onDragLeave={() => setDropZone(null)}
       onDrop={(e) => {
         e.preventDefault()
+        // El panel gestiona el drop (split/swap/insert) y frena el bubbling:
+        // sin esto el grid lo procesa dos veces (doble split + tab browser basura).
+        e.stopPropagation()
         const zone = calcDropZone(e)
         setDropZone(null)
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
@@ -483,12 +486,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         if (raw) {
           const payload = parseDragPayload(raw)
           if (payload.kind === "panel") {
-            if (payload.idx !== panelIndex) {
-              if (zone === "center") {
-                onSwapPanels(payload.idx, panelIndex)
-              } else {
-                onSplitSession(panelIndex, zone, raw)
-              }
+            if (zone === "center") {
+              if (payload.idx !== panelIndex) onSwapPanels(payload.idx, panelIndex)
+            } else {
+              // Split con un tab del propio panel también vale (saca el tab
+              // a un panel nuevo); handleDockSession reubica el origen.
+              onSplitSession(panelIndex, zone, raw)
             }
           } else if (payload.kind === "session") {
             onSplitSession(panelIndex, zone, payload.id)

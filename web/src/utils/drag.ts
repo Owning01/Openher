@@ -20,6 +20,16 @@ export function parseDragPayload(raw: string): DragPayload {
   if (raw.startsWith("kind:")) {
     return { kind: "kind", value: raw.slice("kind:".length), raw }
   }
+  // Ids de tab arrastrados sin prefijo panel:/session: (rail de plugins,
+  // botones de actividad, virtuals __kanban__/__stats__): son tabs, no texto.
+  if (
+    raw.startsWith("plugin:") ||
+    raw.startsWith("editor:") ||
+    raw.startsWith("browser:") ||
+    (raw.startsWith("__") && raw.endsWith("__"))
+  ) {
+    return { kind: "session", id: raw, raw }
+  }
   if (raw.startsWith("tab:")) {
     return { kind: "tab", raw }
   }

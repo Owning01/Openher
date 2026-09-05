@@ -3,7 +3,7 @@ import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../..
 import type { ChatViewProps } from "../../components/ChatView"
 import { SessionChatPanel } from "../../components/SessionChatPanel"
 import { DesktopPanelRenderer } from "./DesktopPanelRenderer"
-import { extractUrlFromDataTransfer } from "../../utils/urlDrag"
+import { extractUrlFromDataTransfer, isInternalPayload } from "../../utils/urlDrag"
 import { calcDropZone, isOverTabBar, compactLayout, type DropZone } from "./model"
 
 export type DesktopGridProps = {
@@ -537,7 +537,9 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
             }
             const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("application/x-opencode-browser-tab") || ""
             if (!raw) return
-            const isUrl = /^https?:\/\//i.test(raw) || raw.startsWith("browser:") || (/^[a-z0-9.-]+\.[a-z]{2,}/i.test(raw) && !raw.includes("kind:") && !raw.includes("terminal"))
+            // Payload interno nunca es URL (el guard vive en urlDrag, esto es
+            // defensa para file paths con ":" como C:\... que matchean esquema).
+            const isUrl = !isInternalPayload(raw) && (/^https?:\/\//i.test(raw) || raw.startsWith("browser:") || (/^[a-z0-9.-]+\.[a-z]{2,}/i.test(raw) && !raw.includes("kind:") && !raw.includes("terminal")))
             if (isUrl) {
               const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
               if (!target) return
@@ -551,7 +553,9 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
               raw.startsWith("panel:") ||
               raw.startsWith("kind:") ||
               raw.startsWith("terminal") ||
-              raw.includes("terminal-tab:")
+              raw.includes("terminal-tab:") ||
+              // Drags del rail (plugins, kanban) sin tab-index: siguen siendo tabs.
+              (isInternalPayload(raw) && !raw.startsWith("tab:"))
             if ((e.target as HTMLElement).closest(".desktop-shell-cell-wrapper, .desktop-cell-placeholder")) return
             const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
             if (!target) return

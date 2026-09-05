@@ -8,11 +8,24 @@ use std::sync::{Arc, RwLock};
 pub static WINDOW_HWND: AtomicIsize = AtomicIsize::new(0);
 
 #[derive(Clone, Copy, Debug)]
+pub enum WindowResizeDirection {
+    Top,
+    Bottom,
+    Left,
+    Right,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum WindowAction {
     Drag,
     Minimize,
     MaximizeToggle,
     Close,
+    Resize(WindowResizeDirection),
 }
 
 static WINDOW_ACTION_FN: std::sync::OnceLock<Arc<dyn Fn(WindowAction) + Send + Sync>> =
@@ -121,6 +134,39 @@ pub fn window_drag() {
     }
 }
 
+#[cfg(windows)]
+pub fn window_resize(direction: WindowResizeDirection) {
+    if window_is_maximized() {
+        return;
+    }
+    if request_window_action(WindowAction::Resize(direction)) {
+        return;
+    }
+    let h = WINDOW_HWND.load(Ordering::Relaxed);
+    if h == 0 {
+        return;
+    }
+    let ht = match direction {
+        WindowResizeDirection::Left => 10,       // HTLEFT
+        WindowResizeDirection::Right => 11,      // HTRIGHT
+        WindowResizeDirection::Top => 12,        // HTTOP
+        WindowResizeDirection::TopLeft => 13,    // HTTOPLEFT
+        WindowResizeDirection::TopRight => 14,   // HTTOPRIGHT
+        WindowResizeDirection::Bottom => 15,     // HTBOTTOM
+        WindowResizeDirection::BottomLeft => 16, // HTBOTTOMLEFT
+        WindowResizeDirection::BottomRight => 17,// HTBOTTOMRIGHT
+    };
+    unsafe {
+        windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture();
+        windows_sys::Win32::UI::WindowsAndMessaging::SendMessageW(
+            h as *mut core::ffi::c_void,
+            0x00A1, // WM_NCLBUTTONDOWN
+            ht,
+            0,
+        );
+    }
+}
+
 #[cfg(not(windows))]
 pub fn window_is_maximized() -> bool {
     false
@@ -133,6 +179,8 @@ pub fn window_maximize_toggle() {}
 pub fn window_close() {}
 #[cfg(not(windows))]
 pub fn window_drag() {}
+#[cfg(not(windows))]
+pub fn window_resize(_direction: WindowResizeDirection) {}
 
 use serde::{Deserialize, Serialize};
 

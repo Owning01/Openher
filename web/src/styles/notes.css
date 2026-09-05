@@ -1,17 +1,23 @@
 /* styles/notes.css - mini bloc de notas del chat (papel rayado sobrio).
    Solo tokens var(--*): funciona en claro y oscuro sin hex hardcodeado. */
 
+/* Anclado al .panel.detail del chat que lo invoca: tamaño relativo al chat,
+   no al viewport. El padre (.panel.detail) es position:relative. */
+.panel.detail {
+  position: relative;
+}
+
 .chat-notes {
-  position: fixed;
-  right: 16px;
-  bottom: 96px;
-  z-index: var(--z-dropdown);
+  position: absolute;
+  right: 12px;
+  bottom: 72px;
+  z-index: 20;
   display: flex;
   flex-direction: column;
-  width: 300px;
-  max-width: calc(100vw - 32px);
+  width: 360px;
+  max-width: calc(100% - 24px);
   height: 380px;
-  max-height: calc(100dvh - 180px);
+  max-height: calc(100% - 120px);
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -146,7 +152,8 @@
     right: 8px;
     left: 8px;
     width: auto;
-    bottom: 120px;
+    bottom: 72px;
+    max-width: none;
   }
 }
 
