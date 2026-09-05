@@ -1,4 +1,4 @@
-//! OpenCode Desktop — shell portable que embebe la web app de OpenCode Mobile.
+//! OpenCode Desktop - shell portable que embebe la web app de OpenHer.
 //!
 //! F0-F4: ventana wry (WebView2) + server local (tiny_http) que sirve
 //! web/dist y la API /shell/* (explorador, terminales, kanban, updates,

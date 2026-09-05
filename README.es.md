@@ -1,25 +1,8 @@
 <div align="center">
 
-  <img src="https://raw.githubusercontent.com/Owning01/Opencode-Mobile/main/web/public/img/opencode-logo-dark.jpg" width="64" height="64" alt="OpenCode Logo" style="border-radius: 12px;" />
-
-# OpenCode Mobile + Desktop
+# OpenHer
 
 **Cliente Android/iOS + Windows para [OpenCode](https://opencode.ai) — tu asistente de código IA en el celular y el escritorio**
-
-<p align="center">
-  <img src="https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=white" alt="React 19"/>
-  <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
-  <img src="https://img.shields.io/badge/Vite-8.0-646CFF?logo=vite&logoColor=white" alt="Vite"/>
-  <img src="https://img.shields.io/badge/pnpm-12.0-F69220?logo=pnpm&logoColor=white" alt="pnpm 12"/>
-  <img src="https://img.shields.io/badge/Rust-1.98-CE422B?logo=rust&logoColor=white" alt="Rust"/>
-  <img src="https://img.shields.io/badge/Capacitor-8.0-119EFF?logo=capacitor&logoColor=white" alt="Capacitor"/>
-  <img src="https://img.shields.io/badge/Node-24.20-339933?logo=nodedotjs&logoColor=white" alt="Node 24"/>
-  <br/>
-  <img src="https://img.shields.io/badge/SSE%20streaming-%E2%9C%85-6c8cff" alt="SSE"/>
-  <img src="https://img.shields.io/badge/Cache%20offline-%E2%9C%85-6c8cff" alt="Offline"/>
-  <img src="https://img.shields.io/badge/Desktop%20híbrido-mmap%2Bbr%20%7C%20hyper-6c8cff" alt="Desktop"/>
-  <img src="https://img.shields.io/badge/5%20plugins%20externos-%E2%9C%85-6c8cff" alt="Plugins"/>
-</p>
 
 **Español** · [**English**](README.md)
 
@@ -33,16 +16,10 @@
 
 </div>
 
-| Chat en vivo | Sesiones | Conectar servidor |
-| :---: | :---: | :---: |
-| [![Chat en vivo](./marketing/github/thumbs/live-chat.png)](./screenshots/chat+thinking.png) | [![Sesiones](./marketing/github/thumbs/sessions.png)](./screenshots/home-1.png) | [![Conectar servidor](./marketing/github/thumbs/connect-server.png)](./screenshots/settings-1.png) |
-| **Modos de datos** | **Control total** | **Configuración del chat y más** |
-| [![Modos de datos](./marketing/github/thumbs/data-modes.png)](./screenshots/settings-4.png) | [![Control total](./marketing/github/thumbs/full-control.png)](./screenshots/Settings-3.png) | [![Configuración del chat y más](./marketing/github/thumbs/get-it-now.png)](./screenshots/Settingsdentrodelchat.png) |
-
 ```
 ┌──────────────────────────────────────────────┐
 │              📱 TU CELULAR                    │
-│          OpenCode Mobile (la app)            │
+│          OpenHer (la app)                    │
 └──────────────────────┬───────────────────────┘
                        │
                        │  ① Tailscale — VPN privada
@@ -64,9 +41,9 @@
 
 ### 📲 1 — Instalá la app en tu celular
 
-[⬇️ **Descargar OpenCodeMobile.apk**](https://github.com/Owning01/Opencode-Mobile/releases/latest)
+[⬇️ **Descargar OpenHer.apk**](https://github.com/Owning01/Openher/releases/latest)
 
-O construíla vos mismo (ver [desarrollo](#-desarrollo)).
+O construíla vos mismo (ver [desarrollo](#️-desarrollo)).
 
 **iOS** (requiere macOS + Xcode 16+): cloná el repo y abrí `web/ios/App/App.xcworkspace` en Xcode, seleccioná tu team y Build & Run.
 
@@ -76,7 +53,7 @@ O construíla vos mismo (ver [desarrollo](#-desarrollo)).
 
 ### 🖥️ 2 — Instalá Tailscale en tu PC (para acceso remoto)
 
-OpenCode Mobile se conecta a tu servidor OpenCode por HTTP directo. Para **acceso remoto desde cualquier red** (no solo tu WiFi), usá [**Tailscale**](https://tailscale.com) — una VPN mesh privada, gratuita y sin configuración.
+OpenHer se conecta a tu servidor OpenCode por HTTP directo. Para **acceso remoto desde cualquier red** (no solo tu WiFi), usá [**Tailscale**](https://tailscale.com) — una VPN mesh privada, gratuita y sin configuración.
 
 #### Paso A — Instalá Tailscale en la PC (servidor)
 
@@ -114,7 +91,7 @@ npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096
 
 #### Paso D — Conectá la app
 
-En OpenCode Mobile: **Ajustes → Servidor**:
+En OpenHer: **Ajustes → Servidor**:
 
 | Campo | Valor |
 |-------|-------|
@@ -276,8 +253,8 @@ React 19.2 + react-compiler, TS 7.0, Vite 8, Vitest 4, pnpm 12 (binario Rust), C
 
 <div align="center">
 
-**OpenCode Mobile** es un cliente para [**OpenCode**](https://opencode.ai) — el asistente de codificación AI open-source.
+**OpenHer** es un cliente para [**OpenCode**](https://opencode.ai) — el asistente de codificación AI open-source.
 
-Desarrollado por [@Owning01](https://github.com/Owning01) · [Reportar issue](https://github.com/Owning01/Opencode-Mobile/issues) · [Contribuir](https://github.com/Owning01/Opencode-Mobile)
+Desarrollado por [@Owning01](https://github.com/Owning01) · [Reportar issue](https://github.com/Owning01/Openher/issues) · [Contribuir](https://github.com/Owning01/Openher)
 
 </div>

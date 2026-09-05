@@ -125,7 +125,7 @@ function withShellAuth(headers: Record<string, string>, base: string): Record<st
 
 function shellRemoteOverride(): string | null {
   try {
-    const v = localStorage.getItem("opencode.mobile.shellBase")
+    const v = localStorage.getItem("openher.shellBase")
     if (v && v.trim()) return v.trim().replace(/\/+$/, "")
   } catch {}
   return null

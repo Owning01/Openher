@@ -8,7 +8,7 @@ export type NotificationFlags = {
   onError: boolean
 }
 
-const STORAGE_KEY = "opencode.mobile.notificationFlags"
+const STORAGE_KEY = "openher.notificationFlags"
 
 const DEFAULT_FLAGS: NotificationFlags = {
   onCompletion: true,

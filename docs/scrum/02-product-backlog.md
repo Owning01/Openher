@@ -1,4 +1,4 @@
-# Product Backlog — OpenCode Mobile
+# Product Backlog — OpenHer
 
 Ordenado por valor. El PO (sombrero) reordena en el refinement de los miércoles.
 Puntos según `05-metricas.md`. Estado: `todo` / `doing` / `done` / `blocked`.

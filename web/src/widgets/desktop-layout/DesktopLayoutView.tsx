@@ -427,7 +427,7 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
                 const profile = addProfile ? addProfile(name, { config: cfg, kind: "pair" }) : null
                 if (profile) {
                   setActiveServerProfileID?.(profile.id)
-                  localStorage.setItem("opencode.mobile.activeServer", profile.id)
+                  localStorage.setItem("openher.activeServer", profile.id)
                   setDraftConfig(cfg)
                   saveConfig?.(t)
                 }
@@ -436,7 +436,7 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
                 removeProfile?.(id)
                 if (activeServerProfileID === id) {
                   setActiveServerProfileID?.(null)
-                  localStorage.removeItem("opencode.mobile.activeServer")
+                  localStorage.removeItem("openher.activeServer")
                 }
               }}
               onUpdateServerProfile={(id, name, cfg) => updateProfile?.(id, { name, config: cfg })}

@@ -31,7 +31,7 @@ secrets.json
 *.aab
 *.apk
 /OpenHer-debug.apk
-OpenCodeMobile-release.aab
+OpenHer-release.aab
 play/
 fastlane/
 web/android/keystore/

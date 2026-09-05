@@ -1,4 +1,4 @@
-# Scrum Solo — OpenCode Mobile
+# Scrum Solo — OpenHer
 
 Metodología Scrum adaptada a un equipo de **1 persona**, aplicada a este monorepo
 (`web/` React+Capacitor · `desktop-app/` Rust · `opencode-stats/` · `od-web/`).

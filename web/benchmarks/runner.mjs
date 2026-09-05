@@ -67,7 +67,7 @@ function measure(fn) {
 
 export async function runAll(modules) {
   console.log("=".repeat(80))
-  console.log("  OPENCODE MOBILE — BENCHMARK SUITE")
+  console.log("  OPENHER — BENCHMARK SUITE")
   console.log("  Node:", process.version, "| Platform:", process.platform)
   console.log("  Date:", new Date().toISOString())
   console.log("=".repeat(80))
@@ -123,7 +123,7 @@ export async function runAll(modules) {
 }
 
 export function generateMarkdownReport(allResults) {
-  let md = "# OpenCode Mobile — Benchmark Report\n\n"
+  let md = "# OpenHer — Benchmark Report\n\n"
   md += `- **Date:** ${new Date().toISOString()}\n`
   md += `- **Node:** ${process.version}\n`
   md += `- **Platform:** ${process.platform}\n\n`

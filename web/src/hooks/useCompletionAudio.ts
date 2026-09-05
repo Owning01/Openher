@@ -38,7 +38,7 @@ export function useCompletionAudio(
         audio.play().catch(() => undefined)
       }
       if (dataMode !== "miser") {
-        sendNotification("OpenCode Mobile", "Assistant finished responding")
+        sendNotification("OpenHer", "Assistant finished responding")
       }
       onCompleteRef.current?.()
     }

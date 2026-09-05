@@ -620,13 +620,13 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
   } = useServers()
 
   const [activeServerProfileID, setActiveServerProfileID] = useState<string | null>(() =>
-    localStorage.getItem("opencode.mobile.activeServer")
+    localStorage.getItem("openher.activeServer")
   )
 
   const applyServerProfile = useCallback(
     (profile: ServerProfile) => {
       setActiveServerProfileID(profile.id)
-      localStorage.setItem("opencode.mobile.activeServer", profile.id)
+      localStorage.setItem("openher.activeServer", profile.id)
       setDraftConfig(profile.config)
       saveConfig(t)
     },
@@ -968,7 +968,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
   const handleTest = useCallback(() => testConnection(t), [testConnection, t])
 
   const handleOpenGitHub = useCallback(() => {
-    window.open("https://github.com/Owning01/Opencode-Mobile", "_system")
+    window.open("https://github.com/Owning01/Openher", "_system")
   }, [])
 
   const handleNavigate = useCallback(

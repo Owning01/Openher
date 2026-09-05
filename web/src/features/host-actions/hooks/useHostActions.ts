@@ -84,7 +84,7 @@ export function useHostActions({
       .sendShell(
         config,
         selectedSession.id,
-        'shutdown /r /t 10 /c "OpenCode Mobile: reinicio programado" || shutdown -r +1',
+        'shutdown /r /t 10 /c "OpenHer: reinicio programado" || shutdown -r +1',
         selectedSession.directory
       )
       .then(() => {
