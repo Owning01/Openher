@@ -1091,6 +1091,42 @@ export const BrowserPanel = memo(function BrowserPanel({
 
 
 
+  // Drop de URLs sobre la tabbar (Chrome -> app): vive aquí y no inline en
+  // el JSX — el handler de una sola línea rompía el parseo TSX (TS2657 en
+  // cascada). Lógica idéntica a la versión inline original.
+  const handleTabBarDragOver = useCallback((e: React.DragEvent) => {
+    const url = extractUrlFromDataTransfer(e.dataTransfer)
+    if (url || e.dataTransfer.types.includes("application/x-opencode-browser-tab") || e.dataTransfer.types.includes("text/uri-list")) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = "copy"
+    }
+  }, [])
+
+  const handleTabBarDrop = useCallback((e: React.DragEvent) => {
+    const url = extractUrlFromDataTransfer(e.dataTransfer)
+    if (!url) return
+    e.preventDefault()
+    e.stopPropagation()
+    const bar = e.currentTarget as HTMLElement
+    const tabsEls = Array.from(bar.querySelectorAll(".browser-tab"))
+    let at = tabsEls.length
+    for (let k = 0; k < tabsEls.length; k++) {
+      const r = (tabsEls[k] as HTMLElement).getBoundingClientRect()
+      if (e.clientX < r.left + r.width / 2) { at = k; break }
+    }
+    const newId = `tab-${Date.now().toString(36)}`
+    const title = formatDisplayTitle(url)
+    const nt = { id: newId, url, title, history: [url], historyIdx: 0 }
+    setTabs((prev) => {
+      const n = [...prev]
+      n.splice(Math.min(at, n.length), 0, nt as any)
+      return n
+    })
+    setActiveTabId(newId)
+    setInputUrl(url)
+    pushHistory(url)
+  }, [])
+
   const closeTabById = (id: string) => {
     if (tabs.length === 1) {
       if (onClose) onClose()
@@ -1381,7 +1417,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       )}
       {/* 1. Chrome-like Tab Bar on Top (pestañas nativas del navegador) */}
       {!minimal && !hideTabBar && (
-      <div className="browser-tabbar" onDragOver={(e) => { const url = extractUrlFromDataTransfer(e.dataTransfer); if (url || e.dataTransfer.types.includes("application/x-opencode-browser-tab") || e.dataTransfer.types.includes("text/uri-list")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy" } }} onDrop={(e) => { const url = extractUrlFromDataTransfer(e.dataTransfer); if (!url) return; e.preventDefault(); e.stopPropagation(); const bar = e.currentTarget as HTMLElement; const tabsEls = Array.from(bar.querySelectorAll(".browser-tab")); let at = tabsEls.length; for (let k=0;k<tabsEls.length;k++){ const r=(tabsEls[k] as HTMLElement).getBoundingClientRect(); if (e.clientX < r.left + r.width/2){ at=k; break } } const newId = `tab-${Date.now().toString(36)}`; const title = formatDisplayTitle(url); const nt = { id: newId, url, title, history: [url], historyIdx: 0 }; setTabs(prev => { const n=[...prev]; n.splice(Math.min(at, n.length),0,nt as any); return n }); setActiveTabId(newId); setInputUrl(url); pushHistory(url) }}
+      <div className="browser-tabbar" onDragOver={handleTabBarDragOver} onDrop={handleTabBarDrop}>
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId
           return (

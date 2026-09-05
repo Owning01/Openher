@@ -27,3 +27,8 @@
 
 ## 3. CSS / Layout Desktop
 - **Parchar solo la hoja:** cambiar `height:auto` → `height:100%` en el panel final NO sirve si algún wrapper intermedio tiene altura `auto` (`height:100%` contra `auto` = `auto`). Verificar la cadena completa (ver skill `flex-height-chain`): todo intermedio con `display:flex; flex-direction:column; overflow:hidden`, hoja con `flex:1; min-height:0`.
+
+---
+
+## 4. TSX / Build (TypeScript 7 nativo)
+- **Handlers inline gigantes:** un handler arrow de ~1KB en UNA sola línea dentro de un atributo JSX rompe el parseo TSX (cascada TS2657/TS1005 desde la línea siguiente) aunque llaves/parens balancen. Extraer a `useCallback` nombrado junto a los demás handlers (caso real: `BrowserPanel` tabbar `onDrop` de 1036 chars). Regla: JSX multilínea o callbacks nombrados; jamás lógica de >200 chars en una línea de atributo.

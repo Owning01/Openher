@@ -337,8 +337,7 @@ export const TitleBar = memo(function TitleBar({
         e.preventDefault()
         e.stopPropagation()
         clearDrag()
-        const at = getIndexFromX(e.clientX)
-        // nuevo browser tab en el panel activo (indice at ignorado por openBrowserAsTab que appendea, pero mantenemos compat)
+        // nuevo browser tab en el panel activo (openBrowserAsTab appendea; sin índice)
         onOpenBrowser(url, activePanel)
         return
       }
