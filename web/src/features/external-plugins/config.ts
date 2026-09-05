@@ -32,6 +32,16 @@ export const EXTERNAL_PROJECTS: ExternalProject[] = [
     dir: "G:\\Proyectos\\17-vioeditor\\aplicacion",
   },
   {
+    name: "m3e-canvas",
+    title: "M3E Canvas (completo)",
+    description: "Editor Material 3 Expressive original — lnkiai/m3e-canvas",
+    icon: "M3",
+    iconKind: "paint",
+    port: 3005,
+    url: "http://127.0.0.1:3005",
+    dir: "G:\\Proyectos\\m3e-canvas",
+  },
+  {
     name: "screenshots",
     title: "Screenshots",
     description: "App Store Screenshots — Next.js",
