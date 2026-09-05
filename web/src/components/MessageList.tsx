@@ -221,11 +221,6 @@ export const MessageList = memo(function MessageList({
                 </div>
               </article>
             )}
-            {showTypingBubble && !compacting && (
-              <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')}>
-                <GridSpinner label={t('detail.waiting')} size={20} />
-              </article>
-            )}
             <div ref={messagesEndRef} className="messages-end" aria-hidden="true" />
           </>
         )}
