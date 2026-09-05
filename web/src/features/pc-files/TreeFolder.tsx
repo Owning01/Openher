@@ -3,6 +3,7 @@ import { ChevronRightIcon, ChevronDownIcon } from "../../Icons"
 import { VSCodeFileIcon } from "../../components/VSCodeFileIcon"
 import { shell, type FsEntry } from "../../shell"
 import { FileRow } from "./FileRow"
+import { joinDragPaths } from "./multiSelect"
 import type { GitFileStatus } from "./useGitStatus"
 
 export type TreeFolderProps = {
@@ -27,6 +28,11 @@ export type TreeFolderProps = {
   onRenameCommit?: (entry: FsEntry) => void
   onRenameCancel?: () => void
   onStartRename?: (entry: FsEntry) => void
+  // Selección múltiple (ver FileRow): el panel la gestiona, aquí solo se
+  // muestra y se reenvía a los hijos.
+  selectedPaths?: string[]
+  onSelect?: (e: React.MouseEvent, entry: FsEntry) => void
+  getDragPayload?: (path: string) => string[]
 }
 
 export const TreeFolder = memo(function TreeFolder({
@@ -51,6 +57,9 @@ export const TreeFolder = memo(function TreeFolder({
   onRenameCommit,
   onRenameCancel,
   onStartRename,
+  selectedPaths,
+  onSelect,
+  getDragPayload,
 }: TreeFolderProps) {
   const [expanded, setExpanded] = useState(false)
   const [subDirs, setSubDirs] = useState<FsEntry[]>([])
@@ -94,19 +103,28 @@ export const TreeFolder = memo(function TreeFolder({
   return (
     <div className="pcf-folder-group">
       <div
-        className={`pcf-row pcf-dir ${expanded ? "is-expanded" : ""} ${isRenaming ? "is-renaming" : ""}`}
+        className={`pcf-row pcf-dir ${expanded ? "is-expanded" : ""} ${isRenaming ? "is-renaming" : ""} ${selectedPaths?.includes(entry.path) ? "is-selected" : ""}`}
         style={{ paddingLeft: `${depth * 14 + 6}px` }}
-        onClick={() => { if (!isRenaming) toggle() }}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (isRenaming) return
+          onSelect?.(e, entry)
+          // Con Ctrl/Shift solo se selecciona; el click simple expande, como antes.
+          if (e.ctrlKey || e.metaKey || e.shiftKey) return
+          void toggle()
+        }}
         onDoubleClick={() => { if (!isRenaming) onEnterDir(entry.path) }}
         onContextMenu={onContextMenu ? (e) => onContextMenu(e, entry, true) : undefined}
         role="treeitem"
         aria-expanded={expanded}
+        aria-selected={selectedPaths?.includes(entry.path) ?? false}
         tabIndex={0}
         draggable={!isRenaming}
         onDragStart={(e) => {
           if (isRenaming) { e.preventDefault(); return }
-          e.dataTransfer.setData("text/plain", entry.path)
-          e.dataTransfer.setData("application/x-opencode-path", entry.path)
+          const payload = joinDragPaths(getDragPayload ? getDragPayload(entry.path) : [entry.path])
+          e.dataTransfer.setData("text/plain", payload)
+          e.dataTransfer.setData("application/x-opencode-path", payload)
           e.dataTransfer.effectAllowed = "move"
           e.stopPropagation()
         }}
@@ -182,6 +200,9 @@ export const TreeFolder = memo(function TreeFolder({
                 onRenameCommit={onRenameCommit}
                 onRenameCancel={onRenameCancel}
                 onStartRename={onStartRename}
+                selectedPaths={selectedPaths}
+                onSelect={onSelect}
+                getDragPayload={getDragPayload}
               />
             ))}
           {!loading &&
@@ -205,6 +226,9 @@ export const TreeFolder = memo(function TreeFolder({
                 onRenameCommit={onRenameCommit}
                 onRenameCancel={onRenameCancel}
                 onStartRename={onStartRename}
+                selected={selectedPaths?.includes(f.path) ?? false}
+                onSelect={onSelect}
+                getDragPayload={getDragPayload}
               />
             ))}
           {!loading && filteredDirs.length === 0 && filteredFiles.length === 0 && (

@@ -38,6 +38,7 @@ import { HlCodeHtml, highlightToHtml } from "../../components/HighlightedCode"
 import { useGitStatus } from "./useGitStatus"
 import { HtmlPreview } from "./HtmlPreview"
 import { usePaneState } from "./usePaneState"
+import { useRowSelection, parseDragPaths } from "./multiSelect"
 
 const EXPLORER_RECENT_KEY = "opencode.explorer.recentDirs"
 function loadExplorerRecent(): string[] {
@@ -218,12 +219,17 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     isDir: boolean
   } | null>(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
-  const [copiedItem, setCopiedItem] = useState<FsEntry | null>(null)
+  const [copiedPaths, setCopiedPaths] = useState<string[]>([])
   const [execConfirm, setExecConfirm] = useState<{ path: string; name: string } | null>(null)
   const [openWithFile, setOpenWithFile] = useState<FsEntry | null>(null)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const [renamingValue, setRenamingValue] = useState("")
   const [renamingPane, setRenamingPane] = useState<"first" | "second" | null>(null)
+
+  // Selección múltiple estilo Explorador (click / Ctrl+click / Shift+click),
+  // una por panel. El Shift+rango opera sobre la lista visible del panel.
+  const selFirst = useRowSelection()
+  const selSecond = useRowSelection()
 
   const { refreshGit, getFileGitStatus, getFolderGitStatus } = useGitStatus(cwd)
 
@@ -268,17 +274,21 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     (e: React.MouseEvent, entry: FsEntry | null, isDir: boolean) => {
       setContextMenuPane("first")
       setActivePane("first")
+      // Click derecho sobre una fila fuera de la selección: seleccionar solo
+      // esa fila (como en el Explorador); sobre la selección se conserva.
+      if (entry) selFirst.selectOnly(entry.path)
       handleContextMenu(e, entry, isDir)
     },
-    [handleContextMenu],
+    [handleContextMenu, selFirst],
   )
   const handleContextMenuSecond = useCallback(
     (e: React.MouseEvent, entry: FsEntry | null, isDir: boolean) => {
       setContextMenuPane("second")
       setActivePane("second")
+      if (entry) selSecond.selectOnly(entry.path)
       handleContextMenu(e, entry, isDir)
     },
-    [handleContextMenu],
+    [handleContextMenu, selSecond],
   )
   void handleContextMenuSecond
 
@@ -315,36 +325,39 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   }
 
   const handleCopyItem = (entry: FsEntry) => {
-    setCopiedItem(entry)
+    const sel = contextMenuPane === "second" ? selSecond.selected : selFirst.selected
+    const targets = sel.length > 1 && sel.includes(entry.path) ? sel : [entry.path]
+    setCopiedPaths(targets)
     setContextMenu(null)
-    showNotice(`Copiado: ${entry.name}`)
+    showNotice(targets.length > 1 ? `Copiados: ${targets.length} elementos` : `Copiado: ${entry.name}`)
   }
 
   const handlePasteItem = async (destDir: string) => {
-    if (!copiedItem) return
+    if (copiedPaths.length === 0) return
     setContextMenu(null)
     const targetCwd = contextMenuPane === "second" ? secondPane.cwd : cwd
     const targetLoad = contextMenuPane === "second" ? secondPane.load : load
-    try {
-      await shell.fs.copy(copiedItem.path, destDir)
-      showNotice(`Pegado en ${destDir.split(/[/\\]/).pop() || destDir}`)
-      targetLoad(destDir === targetCwd ? destDir : targetCwd || destDir)
-    } catch {
-      showNotice("Error al pegar")
+    let done = 0
+    for (const src of copiedPaths) {
+      try {
+        await shell.fs.copy(src, destDir)
+        done++
+      } catch {}
     }
+    const destName = destDir.split(/[/\\]/).pop() || destDir
+    showNotice(
+      copiedPaths.length > 1
+        ? `Pegados ${done} de ${copiedPaths.length} en ${destName}`
+        : `Pegado en ${destName}`,
+    )
+    targetLoad(destDir === targetCwd ? destDir : targetCwd || destDir)
   }
 
   const handleDeleteItem = async (entry: FsEntry) => {
-    setContextMenu(null)
-    if (!(await confirm({ message: `¿Eliminar definitivamente "${entry.name}"?`, confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" }))) return
-    try {
-      await shell.fs.delete(entry.path)
-      showNotice(`Eliminado: ${entry.name}`)
-      if (contextMenuPane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
-      else if (cwd) load(cwd)
-    } catch {
-      showNotice("Error al eliminar")
-    }
+    const pane = contextMenuPane
+    const sel = pane === "second" ? selSecond.selected : selFirst.selected
+    const targets = sel.length > 1 && sel.includes(entry.path) ? sel : [entry.path]
+    await handleDeletePaths(pane, targets)
   }
 
   const startRenameFirst = useCallback((entry: FsEntry) => {
@@ -536,6 +549,50 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const [activePane, setActivePane] = useState<"first" | "second">("first")
   const [contextMenuPane, setContextMenuPane] = useState<"first" | "second">("first")
 
+  // Al cambiar de carpeta la selección anterior ya no vale.
+  const clearSelFirst = selFirst.clear
+  const clearSelSecond = selSecond.clear
+  useEffect(() => { clearSelFirst() }, [cwd, clearSelFirst])
+  useEffect(() => { clearSelSecond() }, [secondPane.cwd, clearSelSecond])
+
+  // Borrado en lote (menú contextual, tecla Supr o barra de selección).
+  const handleDeletePaths = useCallback(async (
+    pane: "first" | "second",
+    paths: string[],
+  ) => {
+    if (paths.length === 0) return
+    setContextMenu(null)
+    const baseName = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() || p
+    const confirmed = await confirm({
+      message: paths.length > 1
+        ? `¿Eliminar definitivamente ${paths.length} elementos?`
+        : `¿Eliminar definitivamente "${baseName(paths[0]!)}"?`,
+      confirmText: t('common.yes'),
+      cancelText: t('common.cancel'),
+      variant: "danger",
+    })
+    if (!confirmed) return
+    let done = 0
+    for (const p of paths) {
+      try {
+        await shell.fs.delete(p)
+        done++
+      } catch {}
+    }
+    showNotice(
+      paths.length > 1
+        ? (done === paths.length ? `Eliminados: ${done} elementos` : `Eliminados ${done} de ${paths.length} (${paths.length - done} con error)`)
+        : (done === 1 ? `Eliminado: ${baseName(paths[0]!)}` : "Error al eliminar"),
+    )
+    if (pane === "second") {
+      selSecond.clear()
+      if (secondPane.cwd) secondPane.load(secondPane.cwd)
+    } else {
+      selFirst.clear()
+      if (cwd) load(cwd)
+    }
+  }, [confirm, t, showNotice, cwd, load, secondPane, selFirst, selSecond])
+
   const isHtmlFile = (name: string) => /\.html?$/i.test(name)
 
   const commitRename = useCallback(async (entry: FsEntry) => {
@@ -573,20 +630,31 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       e.preventDefault()
       e.stopPropagation()
       setDragOverPath(null)
-      const src = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
-      if (!src || !destDir || src === destDir) return
-      if (destDir.startsWith(src + "\\") || destDir.startsWith(src + "/")) return
+      const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
+      if (!raw || !destDir) return
+      // Drop de selección múltiple: varias rutas unidas con \n (ver multiSelect).
+      const srcs = parseDragPaths(raw).filter((src) => {
+        if (src === destDir) return false
+        if (destDir.startsWith(src + "\\") || destDir.startsWith(src + "/")) return false
+        return true
+      })
+      if (srcs.length === 0) return
+      const destName = destDir.split(/[/\\]/).pop() || destDir
       try {
-        await shell.fs.move(src, destDir)
-        showNotice(`Movido a ${destDir.split(/[/\\]/).pop()}`)
-        if (cwd && (src.startsWith(cwd) || destDir === cwd)) load(cwd)
-        if (showSecondPane && secondPane.cwd && (src.startsWith(secondPane.cwd) || destDir === secondPane.cwd))
+        for (const src of srcs) {
+          await shell.fs.move(src, destDir)
+        }
+        showNotice(srcs.length > 1 ? `Movidos ${srcs.length} elementos a ${destName}` : `Movido a ${destName}`)
+        selFirst.clear()
+        selSecond.clear()
+        if (cwd && (srcs.some((s) => s.startsWith(cwd)) || destDir === cwd)) load(cwd)
+        if (showSecondPane && secondPane.cwd && (srcs.some((s) => s.startsWith(secondPane.cwd!)) || destDir === secondPane.cwd))
           secondPane.load(secondPane.cwd)
       } catch (err) {
         showNotice(`Error al mover: ${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [cwd, showSecondPane, secondPane, load, showNotice],
+    [cwd, showSecondPane, secondPane, load, showNotice, selFirst, selSecond],
   )
 
   // Abrir en editor/visor — click primario NO descarga
@@ -670,6 +738,69 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const secondFilteredFiles = qLower
     ? secondPane.files.filter((f) => f.name.toLowerCase().includes(qLower))
     : secondPane.files
+
+  // Orden visible de cada panel (carpetas + archivos): base del Shift+rango.
+  const orderedFirst = useMemo(
+    () => [...filteredDirs, ...filteredFiles].map((e) => e.path),
+    [filteredDirs, filteredFiles],
+  )
+  const orderedSecond = useMemo(
+    () => [...secondFilteredDirs, ...secondFilteredFiles].map((e) => e.path),
+    [secondFilteredDirs, secondFilteredFiles],
+  )
+  const selFirstPaths = selFirst.selected
+  const selSecondPaths = selSecond.selected
+
+  const handleRowClickFirst = useCallback((e: React.MouseEvent, entry: FsEntry) => {
+    setActivePane("first")
+    selFirst.select(entry.path, orderedFirst, e)
+  }, [selFirst, orderedFirst])
+  const handleRowClickSecond = useCallback((e: React.MouseEvent, entry: FsEntry) => {
+    setActivePane("second")
+    selSecond.select(entry.path, orderedSecond, e)
+  }, [selSecond, orderedSecond])
+
+  const dragPayloadFirst = useCallback((path: string) =>
+    (selFirstPaths.length > 1 && selFirstPaths.includes(path) ? selFirstPaths : [path]),
+    [selFirstPaths])
+  const dragPayloadSecond = useCallback((path: string) =>
+    (selSecondPaths.length > 1 && selSecondPaths.includes(path) ? selSecondPaths : [path]),
+    [selSecondPaths])
+
+  // Teclado estilo Explorador sobre cada árbol: Supr elimina la selección,
+  // Ctrl+A selecciona todo lo visible, Escape la suelta. Los inputs (crear /
+  // renombrar / buscar) quedan excluidos: el evento nace en ellos.
+  const onTreeKeyDown = useCallback((
+    e: React.KeyboardEvent,
+    pane: "first" | "second",
+  ) => {
+    const target = e.target as HTMLElement | null
+    if (target && target.closest("input, textarea, [contenteditable='true']")) return
+    if (renamingPath) return
+    const sel = pane === "second" ? selSecond : selFirst
+    const ordered = pane === "second" ? orderedSecond : orderedFirst
+    if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+      e.preventDefault()
+      sel.selectAll(ordered)
+      return
+    }
+    if (e.key === "Delete") {
+      if (sel.selected.length === 0) return
+      e.preventDefault()
+      void handleDeletePaths(pane, sel.selected)
+      return
+    }
+    if (e.key === "Escape") {
+      sel.clear()
+    }
+  }, [renamingPath, selFirst, selSecond, orderedFirst, orderedSecond, handleDeletePaths])
+
+  // Cantidad en lote del menú contextual: si la fila clicada está dentro de
+  // la selección del panel, Eliminar/Copiar operan sobre toda la selección.
+  const menuSel = contextMenuPane === "second" ? selSecondPaths : selFirstPaths
+  const menuBulkN = contextMenu?.entry && menuSel.length > 1 && menuSel.includes(contextMenu.entry.path)
+    ? menuSel.length
+    : 1
 
   return (
     <div className="pcf-root">
@@ -951,11 +1082,36 @@ export const PCFilesPanel = memo(function PCFilesPanel({
             </div>
           </div>
 
+          {selFirstPaths.length > 1 && (
+            <div className="pcf-selbar" role="status">
+              <span>{selFirstPaths.length} seleccionados</span>
+              <button
+                type="button"
+                className="pcf-selbar-btn pcf-selbar-danger"
+                onClick={() => void handleDeletePaths("first", selFirstPaths)}
+              >
+                Eliminar
+              </button>
+              <button
+                type="button"
+                className="pcf-selbar-btn"
+                onClick={selFirst.clear}
+                aria-label="Limpiar selección"
+                title="Limpiar selección (Esc)"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           {rootExpanded && (
             <div
               className="pcf-tree"
               role="tree"
               aria-label="Archivos"
+              aria-multiselectable="true"
+              onClick={() => selFirst.clear()}
+              onKeyDown={(e) => onTreeKeyDown(e, "first")}
               onContextMenu={(e) => handleContextMenuFirst(e, null, true)}
               onDragOver={handleDragOver}
               onDrop={(e) => cwd && handleFileDrop(e, cwd)}
@@ -1048,6 +1204,9 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         onRenameCommit={commitRename}
                         onRenameCancel={cancelRename}
                         onStartRename={startRenameFirst}
+                        selectedPaths={selFirstPaths}
+                        onSelect={handleRowClickFirst}
+                        getDragPayload={dragPayloadFirst}
                       />
                     </div>
                   ))}
@@ -1075,6 +1234,9 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         onRenameCommit={commitRename}
                         onRenameCancel={cancelRename}
                         onStartRename={startRenameFirst}
+                        selected={selFirstPaths.includes(f.path)}
+                        onSelect={handleRowClickFirst}
+                        getDragPayload={dragPayloadFirst}
                       />
                     ))}
                     {filteredFiles.length === 0 && filteredDirs.length === 0 && !qLower && (
@@ -1144,7 +1306,28 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   </button>
                 </div>
               </div>
-              <div className="pcf-tree" role="tree" aria-label="Archivos (2)" onContextMenu={(e) => handleContextMenuSecond(e, null, true)} onDragOver={handleDragOver} onDrop={(e) => secondPane.cwd && handleFileDrop(e, secondPane.cwd)}>
+              <div className="pcf-tree" role="tree" aria-label="Archivos (2)" aria-multiselectable="true" onClick={() => selSecond.clear()} onKeyDown={(e) => onTreeKeyDown(e, "second")} onContextMenu={(e) => handleContextMenuSecond(e, null, true)} onDragOver={handleDragOver} onDrop={(e) => secondPane.cwd && handleFileDrop(e, secondPane.cwd)}>
+                {selSecondPaths.length > 1 && (
+                  <div className="pcf-selbar" role="status">
+                    <span>{selSecondPaths.length} seleccionados</span>
+                    <button
+                      type="button"
+                      className="pcf-selbar-btn pcf-selbar-danger"
+                      onClick={() => void handleDeletePaths("second", selSecondPaths)}
+                    >
+                      Eliminar
+                    </button>
+                    <button
+                      type="button"
+                      className="pcf-selbar-btn"
+                      onClick={selSecond.clear}
+                      aria-label="Limpiar selección"
+                      title="Limpiar selección (Esc)"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
                 {secondPane.loading && <div className="pcf-loading">Cargando…</div>}
                 {secondPane.error && !secondPane.loading && <div className="pcf-error">{secondPane.error}</div>}
                 {!secondPane.loading && !secondPane.error && (
@@ -1180,6 +1363,9 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                           onRenameCommit={commitRename}
                           onRenameCancel={cancelRename}
                           onStartRename={startRenameSecond}
+                          selectedPaths={selSecondPaths}
+                          onSelect={handleRowClickSecond}
+                          getDragPayload={dragPayloadSecond}
                         />
                       </div>
                     ))}
@@ -1205,6 +1391,9 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                           onRenameCommit={commitRename}
                           onRenameCancel={cancelRename}
                           onStartRename={startRenameSecond}
+                          selected={selSecondPaths.includes(f.path)}
+                          onSelect={handleRowClickSecond}
+                          getDragPayload={dragPayloadSecond}
                         />
                       ))}
                       {secondFilteredFiles.length === 0 && secondFilteredDirs.length === 0 && !qLower && (
@@ -1433,7 +1622,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   <span>
                     <SaveIcon size={14} />
                   </span>{" "}
-                  Copiar {contextMenu.isDir ? "carpeta" : "archivo"}
+                  Copiar {menuBulkN > 1 ? `${menuBulkN} elementos` : (contextMenu.isDir ? "carpeta" : "archivo")}
                 </button>
                 <button
                   type="button"
@@ -1477,7 +1666,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   <span>
                     <TrashIcon size={14} />
                   </span>{" "}
-                  Eliminar
+                  Eliminar{menuBulkN > 1 ? ` (${menuBulkN})` : ""}
                 </button>
               </>
             ) : (
@@ -1504,20 +1693,24 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                 </button>
               </>
             )}
-            {copiedItem && (
+            {copiedPaths.length > 0 && (
               <button
                 type="button"
                 className="overflow-item"
                 onClick={() =>
                   handlePasteItem(
-                    contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : cwd || ""
+                    contextMenu.entry && contextMenu.isDir
+                      ? contextMenu.entry.path
+                      : (contextMenuPane === "second" ? secondPane.cwd : cwd) || ""
                   )
                 }
               >
                 <span>
                   <SaveIcon size={14} />
                 </span>{" "}
-                Pegar "{copiedItem.name}"
+                Pegar {copiedPaths.length > 1
+                  ? `${copiedPaths.length} elementos`
+                  : `"${copiedPaths[0]!.split(/[/\\]/).filter(Boolean).pop()}"`}
               </button>
             )}
           </div>,

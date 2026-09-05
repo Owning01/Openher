@@ -944,6 +944,41 @@
   border-radius: 4px;
 }
 
+/* Selección múltiple estilo Explorador (Ctrl/Shift): fondo primario tenue. */
+.pcf-row.is-selected {
+  background: rgba(99, 102, 241, 0.18);
+}
+.pcf-row.is-selected:hover {
+  background: rgba(99, 102, 241, 0.28);
+}
+
+/* Barra de conteo cuando hay 2+ seleccionados (Eliminar / soltar). */
+.pcf-selbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text, #cccccc);
+  background: var(--surface-strong);
+  border-bottom: 1px solid var(--border);
+}
+.pcf-selbar-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text, #cccccc);
+  border-radius: 4px;
+  font-size: 12px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.pcf-selbar-btn:hover {
+  background: var(--surface-hover);
+}
+.pcf-selbar-danger {
+  color: var(--danger);
+}
+
 .pcf-row.is-renaming {
   background: rgba(99, 102, 241, 0.12) !important;
   outline: 1px solid var(--primary, #6366f1);
