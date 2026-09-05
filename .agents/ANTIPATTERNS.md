@@ -32,3 +32,6 @@
 
 ## 4. TSX / Build (TypeScript 7 nativo)
 - **Handlers inline gigantes:** un handler arrow de ~1KB en UNA sola línea dentro de un atributo JSX rompe el parseo TSX (cascada TS2657/TS1005 desde la línea siguiente) aunque llaves/parens balancen. Extraer a `useCallback` nombrado junto a los demás handlers (caso real: `BrowserPanel` tabbar `onDrop` de 1036 chars). Regla: JSX multilínea o callbacks nombrados; jamás lógica de >200 chars en una línea de atributo.
+
+## 5. Drag-and-Drop desktop
+- **Extractor de URLs vs payloads internos:** `cleanUrl`/`extractUrlFromDataTransfer` (`utils/urlDrag.ts`) se evalúa ANTES que el split en `DesktopGrid.onDrop`. Su fallback "cualquier `esquema:` es URL" tragaba `panel:0:ses_...`, `plugin:...`, `session:...` y todo split abría un tab de navegador basura. Regla: `isInternalPayload()` primero (ver `urlDrag.test.ts`); los paneles (`SessionChatPanel`) hacen `stopPropagation` para no duplicar el split con el grid.

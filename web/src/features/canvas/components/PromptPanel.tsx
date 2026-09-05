@@ -2,7 +2,6 @@ import { useMemo, useState } from "react"
 import type { CanvasDoc } from "../model/canvasTypes"
 import { generatePrompt, type PromptLang } from "../model/prompt"
 import { canvasStore } from "../store/canvasStore"
-import { CheckIcon, CopyIcon, SendIcon } from "../../../Icons"
 
 type Props = {
   doc: CanvasDoc
@@ -64,8 +63,8 @@ export function PromptPanel({ doc }: Props) {
           <option value="web">Web</option>
         </select>
         <span style={{ flex: 1 }} />
-        <button type="button" className="btn-secondary compact" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={copy}>{copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}{copied ? "Copiado" : "Copiar"}</button>
-        <button type="button" className="btn-primary compact" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={send}><SendIcon size={12} />{sent ? "Enviado al chat" : "Enviar al Composer"}</button>
+        <button type="button" className="btn-secondary compact" onClick={copy}>{copied ? "Copiado" : "Copiar"}</button>
+        <button type="button" className="btn-primary compact" onClick={send}>{sent ? "Enviado al chat" : "Enviar al Composer"}</button>
       </div>
       <textarea
         readOnly

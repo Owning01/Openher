@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+<style>
+  .phone { width: 132px; height: 264px; border-radius: 22px; overflow: hidden; position: relative; flex-shrink: 0; }
+  .phone-screen { position:absolute; inset:0; display:flex; flex-direction:column; }
+  .m3btn { border-radius: 999px; font-size: 10px; padding: 6px 10px; font-weight: 600; }
+  .chip { border-radius: 6px; font-size: 9px; padding: 3px 8px; }
+  .tabbtn { font-size: 11px; padding: 4px 10px; border-radius: 8px; font-weight:600; cursor:pointer; border:1px solid transparent; }
+  .tabbtn.active { background: var(--secondary); color: var(--foreground); border-color: var(--border); }
+  .palbtn { font-size: 10px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; background: var(--background); }
+  .palbtn:hover { background: var(--secondary); }
+  .flow-arrow { color: var(--muted-foreground); font-size: 14px; }
+  .ram-bar { height: 6px; border-radius: 999px; background: var(--secondary); overflow:hidden; }
+  .ram-fill { height: 100%; border-radius: 999px; background: #6750A4; transition: width .3s; }
+</style>
+</head>
+<body class="bg-transparent text-[var(--foreground)] antialiased p-2">
+<div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-xl p-4 shadow-sm max-w-full">
+  <div class="flex items-center justify-between mb-1">
+    <h2 class="font-semibold text-[13px]">Canvas M3E en OpenHer — propuesta gráfica</h2>
+    <span class="text-[10px] px-2 py-0.5 rounded-full border border-[var(--border)] text-[var(--muted-foreground)]">lazy · desmontable · ~0 MB idle</span>
+  </div>
+  <p class="text-[var(--muted-foreground)] text-[11px] mb-2">Panel <b>Canvas</b> junto a Chat/Editor/Terminal/Browser. Diseñás pantallas → generás prompt → va directo al Composer.</p>
+
+  <!-- Panel tabs mock -->
+  <div class="flex gap-1 mb-2 text-[10px]">
+    <span class="px-2 py-1 rounded-md text-[var(--muted-foreground)]">Chat</span>
+    <span class="px-2 py-1 rounded-md text-[var(--muted-foreground)]">Editor</span>
+    <span class="px-2 py-1 rounded-md text-[var(--muted-foreground)]">Browser</span>
+    <span class="px-2 py-1 rounded-md font-bold border border-[var(--border)] bg-[var(--secondary)]">Canvas ●</span>
+    <span class="px-2 py-1 rounded-md text-[var(--muted-foreground)]">+ split</span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="flex gap-1 mb-3">
+    <button class="tabbtn active" onclick="showTab('editor',this)">1 · Editor</button>
+    <button class="tabbtn" onclick="showTab('preview',this)">2 · Preview</button>
+    <button class="tabbtn" onclick="showTab('prompt',this)">3 · Prompt → Chat</button>
+  </div>
+
+  <!-- EDITOR -->
+  <div id="tab-editor" class="flex gap-3">
+    <div class="flex flex-col gap-1 w-[118px]">
+      <p class="text-[10px] font-semibold text-[var(--muted-foreground)]">PALETA M3E</p>
+      <button class="palbtn" onclick="addPart('btn')">+ Botón filled</button>
+      <button class="palbtn" onclick="addPart('tonal')">+ Botón tonal</button>
+      <button class="palbtn" onclick="addPart('chip')">+ Chip</button>
+      <button class="palbtn" onclick="addPart('card')">+ Card</button>
+      <button class="palbtn" onclick="addPart('nav')">+ Nav bar</button>
+      <button class="palbtn" onclick="undoPart()">↩ Deshacer</button>
+      <button class="palbtn" onclick="togglePhoneTheme()">◐ Tema claro/oscuro</button>
+    </div>
+    <div class="flex gap-2 items-start">
+      <div class="phone border border-[var(--border)]" id="phoneOuter">
+        <div class="phone-screen" id="phoneScreen">
+          <div id="phoneStatus" style="height:14px;font-size:8px;display:flex;align-items:center;justify-content:center;">9:41 · OpenHer Canvas</div>
+          <div id="phoneBar" style="height:26px;display:flex;align-items:center;gap:6px;padding:0 10px;font-size:10px;font-weight:700;">☰ Recetas <span style="margin-left:auto">⋮</span></div>
+          <div id="phoneBody" style="flex:1;display:flex;flex-direction:column;gap:6px;padding:8px;align-items:center;"></div>
+          <div id="phoneNav" style="height:30px;display:flex;align-items:center;justify-content:space-around;font-size:9px;"></div>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1 w-[118px]">
+        <p class="text-[10px] font-semibold text-[var(--muted-foreground)]">INSPECTOR</p>
+        <div class="text-[10px] border border-[var(--border)] rounded-lg p-2">
+          <div>nodos: <b id="nodeCount">3</b></div>
+          <div>pantallas: <b>2</b> (phone + desktop)</div>
+          <div>tema: <b id="themeName">Purple · Rounded</b></div>
+          <div class="mt-1">RAM est:</div>
+          <div class="ram-bar mt-1"><div class="ram-fill" id="ramFill" style="width:8%"></div></div>
+          <div class="text-[var(--muted-foreground)]" id="ramText">~8 MB sobre base</div>
+        </div>
+        <div class="text-[10px] border border-[var(--border)] rounded-lg p-2 text-[var(--muted-foreground)]">Persistencia durable:<br><b class="text-[var(--foreground)]">data/canvas/&lt;proyecto&gt;.json</b><br>vía /shell/fs · cap Filesystem</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PREVIEW -->
+  <div id="tab-preview" class="hidden items-start gap-2">
+    <div class="phone border border-[var(--border)]">
+      <div class="phone-screen" id="prevA" style="background:#FEF7FF;color:#1D1B20;">
+        <div style="height:26px;display:flex;align-items:center;padding:0 10px;font-size:10px;font-weight:700;">☰ Recetas</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px;padding:10px;align-items:center;">
+          <div style="background:#EADDFF;border-radius:10px;padding:8px;font-size:9px;width:100%;text-align:center;" onclick="tapPreview()">Tallarines — tap para abrir →</div>
+          <div style="background:#E8DEF8;border-radius:999px;padding:6px 12px;font-size:9px;font-weight:700;">+ Nueva receta</div>
+        </div>
+        <div style="height:28px;display:flex;justify-content:space-around;font-size:9px;border-top:1px solid #CAC4D0;">● ○ ○</div>
+      </div>
+    </div>
+    <div class="flex flex-col items-center justify-center gap-1 px-1" style="min-height:200px">
+      <span class="flow-arrow">—tap · slide→</span>
+      <span class="text-[10px] text-[var(--muted-foreground)]" id="tapMsg">tocá la card</span>
+    </div>
+    <div class="phone border border-[var(--border)]">
+      <div class="phone-screen" style="background:#FEF7FF;color:#1D1B20;">
+        <div style="height:26px;display:flex;align-items:center;padding:0 10px;font-size:10px;font-weight:700;">← Detalle</div>
+        <div style="flex:1;padding:10px;font-size:9px;display:flex;flex-direction:column;gap:6px;">
+          <div style="background:#E6E0E9;border-radius:10px;height:56px;display:flex;align-items:center;justify-content:center;">imagen</div>
+          <div style="font-weight:700;font-size:11px;">Tallarines caseros</div>
+          <div style="color:#49454F;">20 min · 4 porciones</div>
+          <div style="background:#6750A4;color:#fff;border-radius:999px;padding:6px;text-align:center;font-weight:700;">Cocinar</div>
+        </div>
+      </div>
+    </div>
+    <div class="text-[10px] text-[var(--muted-foreground)] w-[130px]">Tap-through real con transiciones motion (slide/fade/expand). Swipequake sigue el dedo. Back = reversa.</div>
+  </div>
+
+  <!-- PROMPT -->
+  <div id="tab-prompt" class="hidden gap-2">
+    <div class="flex items-center gap-2 text-[11px]">
+      <span class="font-semibold">Flujo</span>
+      <span class="chip bg-[var(--secondary)]">Canvas</span><span class="flow-arrow">→</span>
+      <span class="chip bg-[var(--secondary)]">Prompt</span><span class="flow-arrow">→</span>
+      <span class="chip" style="background:#6750A4;color:#fff;">Composer</span><span class="flow-arrow">→</span>
+      <span class="chip bg-[var(--secondary)]">Agente</span><span class="flow-arrow">→</span>
+      <span class="chip bg-[var(--secondary)]">APK</span>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mt-2">
+      <div class="text-[10px] border border-[var(--border)] rounded-lg p-2" style="font-family:monospace;white-space:pre-wrap;">Build an Android app with 2 screens: - First: top app bar "Recetas", list of 3 items, tonal FAB "+ Nueva"… - Detail: image 200dp, title 28sp, filled button "Cocinar"… Theme: Purple seed #6750A4, rounded, Roboto.</div>
+      <div class="flex flex-col gap-1">
+        <button class="palbtn" onclick="sendToComposer()">Enviar prompt al Composer ⏎</button>
+        <button class="palbtn" onclick="exportPng()">Exportar PNG (pico +80 MB) ⤓</button>
+        <div class="text-[10px] text-[var(--muted-foreground)]">Destino: <b class="text-[var(--foreground)]">Android</b> / Web · Idioma ES (nuevo, hoy solo JA/EN/ZH)</div>
+        <div id="toast" class="hidden text-[10px] rounded-lg p-2" style="background:#EADDFF;color:#21005D;">Prompt inyectado en Composer ✓ — el agente lo recibe como contexto</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex gap-2 mt-3 text-[10px] text-[var(--muted-foreground)]">
+    <span class="px-2 py-1 rounded-full border border-[var(--border)]">Bundle: import() dinámico, no toca chunk inicial</span>
+    <span class="px-2 py-1 rounded-full border border-[var(--border)]">Móvil: solo preview + prompt</span>
+    <span class="px-2 py-1 rounded-full border border-[var(--border)]">MIT ✓ · React 19.2.8 = misma versión</span>
+  </div>
+</div>
+<script>
+  let dark = false, stack = ['bar','list','fab'];
+  const PURPLE = {bg:'#FEF7FF',fg:'#1D1B20',pri:'#6750A4',ton:'#EADDFF',nav:'#F3EDF7'};
+  const DPURPLE = {bg:'#141218',fg:'#E6E0E9',pri:'#D0BCFF',ton:'#4A4458',nav:'#1D1B20'};
+  function pal(){ return dark ? DPURPLE : PURPLE; }
+  function paint(){
+    const p = pal();
+    document.getElementById('phoneScreen').style.background = p.bg;
+    document.getElementById('phoneScreen').style.color = p.fg;
+    document.getElementById('phoneStatus').style.color = p.fg;
+    document.getElementById('phoneBar').style.color = p.fg;
+    document.getElementById('themeName').textContent = dark ? 'Purple · Dark' : 'Purple · Rounded';
+    render();
+  }
+  function render(){
+    const p = pal();
+    const body = document.getElementById('phoneBody');
+    body.innerHTML = '';
+    let n = 3;
+    stack.forEach(k => {
+      n++;
+      const d = document.createElement('div');
+      if(k==='btn'){ d.className='m3btn'; d.style.background=p.pri; d.style.color='#fff'; d.textContent='Cocinar'; d.style.width='88px'; d.style.textAlign='center'; }
+      if(k==='tonal'){ d.className='m3btn'; d.style.background=p.ton; d.style.color=p.fg; d.textContent='+ Nueva'; d.style.width='88px'; d.style.textAlign='center'; }
+      if(k==='chip'){ d.className='chip'; d.style.background=p.ton; d.style.color=p.fg; d.textContent='20 min · Fácil'; }
+      if(k==='card'){ d.style.cssText='background:'+p.ton+';border-radius:10px;padding:6px;font-size:9px;width:100%;text-align:center;'; d.textContent='Tallarines caseros'; }
+      if(k==='list'){ d.style.cssText='background:'+p.nav+';border-radius:10px;padding:6px;font-size:9px;width:100%;'; d.textContent='• Salsa • Pasta • Postre'; }
+      body.appendChild(d);
+    });
+    const nav = document.getElementById('phoneNav');
+    nav.style.background = p.nav;
+    nav.textContent = stack.includes('nav') ? '⌂  🔍  ♡' : '···';
+    document.getElementById('nodeCount').textContent = n;
+    const mb = Math.round(4 + n * 0.4);
+    document.getElementById('ramText').textContent = '~' + mb + ' MB sobre base';
+    document.getElementById('ramFill').style.width = Math.min(90, 6 + n*2) + '%';
+  }
+  function addPart(k){ stack.push(k); render(); }
+  function undoPart(){ stack.pop(); render(); }
+  function togglePhoneTheme(){ dark = !dark; paint(); }
+  function showTab(id, btn){
+    ['editor','preview','prompt'].forEach(t => {
+      document.getElementById('tab-'+t).classList.add('hidden');
+      document.getElementById('tab-'+t).classList.remove('flex');
+    });
+    const el = document.getElementById('tab-'+id);
+    el.classList.remove('hidden'); el.classList.add(id==='prompt'?'grid':'flex');
+    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  function tapPreview(){ document.getElementById('tapMsg').textContent = 'slide → Detalle ✓ (back = reversa)'; }
+  function sendToComposer(){
+    const t = document.getElementById('toast');
+    t.classList.remove('hidden');
+    setTimeout(()=>t.classList.add('hidden'), 2500);
+  }
+  function exportPng(){ sendToComposer(); }
+  paint();
+</script>
+</body>
+</html>

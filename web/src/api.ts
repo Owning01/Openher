@@ -375,11 +375,14 @@ export const api = {
         if (typeof fn !== "function") return undefined
         try { return await (fn as any)(args) } catch { return undefined }
       }
-      res = await tryCall((client as any).session?.context, { sessionID })
+      // En v2, client.message.list({ sessionID }) consulta /api/session/:id/message (historial persistente real)
+      // NUNCA consultar session.context primero: /context devuelve solo el prompt context activo para inferencia,
+      // que tras un abort o entre turnos omite mensajes de usuario no completados o devuelve solo metadata sin texto.
+      res = await tryCall((client as any).message?.list, { sessionID, limit: safeLimit })
       if (!res) res = await tryCall((client as any).session?.messages, { sessionID, limit: safeLimit })
       if (!res) res = await tryCall((client as any).session?.getMessages, { sessionID, limit: safeLimit })
-      if (!res) res = await tryCall((client as any).message?.list, { sessionID, limit: safeLimit })
       if (!res) res = await tryCall((client as any).message?.listMessages, { sessionID, limit: safeLimit })
+      if (!res) res = await tryCall((client as any).session?.context, { sessionID })
       const rawList: unknown = Array.isArray(res) ? res : (res as any)?.data ?? res
       if (Array.isArray(rawList)) {
         const mapped = (rawList as any[]).map((m: any) => {

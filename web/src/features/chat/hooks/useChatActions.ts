@@ -427,6 +427,7 @@ export function useChatActions(params: UseChatActionsParams) {
         completionShouldPlayRef.current = false
         await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => undefined)
       }
+      stopGenerationRef.current = false
       setAwaitingAssistantReply(false)
       await send(
         selectedSession,
@@ -457,6 +458,7 @@ export function useChatActions(params: UseChatActionsParams) {
       setLocalRevertID,
       completionShouldPlayRef,
       setAwaitingAssistantReply,
+      stopGenerationRef,
     ]
   )
 

@@ -92,7 +92,7 @@ export const TabBar = memo(function TabBar({
    const label = rest.split(":").pop() || rest
    return ` ${label}`
   }
-  if (id === "kanban") return " Kanban"
+  if (id === "kanban" || id === "__kanban__") return " Kanban"
   if (id === "docs") return " Docs"
   if (id === "labs") return " Labs"
   if (id === "__design__") return "◈ Open Design"

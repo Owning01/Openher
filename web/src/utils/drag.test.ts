@@ -66,6 +66,12 @@ describe("parseDragPayload", () => {
     expect(parseDragPayload("hello")).toEqual({ kind: "unknown", raw: "hello" })
   })
 
+  it("parses plugin/virtual/editor/browser ids as session tabs", () => {
+    expect(parseDragPayload("plugin:canvas")).toMatchObject({ kind: "session", id: "plugin:canvas" })
+    expect(parseDragPayload("__kanban__")).toMatchObject({ kind: "session", id: "__kanban__" })
+    expect(parseDragPayload("editor:/x/y.ts")).toMatchObject({ kind: "session", id: "editor:/x/y.ts" })
+  })
+
   it("prioritizes panel prefix over file detection", () => {
     // even if payload contains slashes, panel wins
     expect(parseDragPayload("panel:1:foo/bar")).toMatchObject({ kind: "panel" })

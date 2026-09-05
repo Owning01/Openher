@@ -3,9 +3,35 @@
  * Solo se arrastra la URL (text/uri-list + text/plain), nada de payload interno.
  */
 
+/** Prefijos de payloads internos de DnD (tabs/paneles). Nunca son URLs. */
+const INTERNAL_PREFIXES = [
+  "panel:",
+  "session:",
+  "kind:",
+  "tab:",
+  "terminal-tab:",
+  "terminal:",
+  "terminal-",
+  "plugin:",
+  "editor:",
+  "external:",
+]
+
+/** True si el texto es un payload interno del app (tab/panel/plugin/virtual). */
+export function isInternalPayload(raw: string): boolean {
+  const s = raw.trim()
+  if (!s) return false
+  if (s.startsWith("__")) return true
+  return INTERNAL_PREFIXES.some((p) => s.startsWith(p))
+}
+
 function cleanUrl(raw: string): string | null {
   let s = raw.trim()
   if (!s) return null
+  // Payload interno (panel:0:ses_..., plugin:..., session:...) → nunca URL.
+  // Sin este guard el fallback de esquemas los trata como URLs y los drops
+  // de split abren pestañas de navegador basura en vez de dividir.
+  if (isInternalPayload(s)) return null
   // Chrome puede mandar  "https://example.com\nTitle" o comentarios "#"
   if (s.startsWith("#")) return null
   // Si viene con título en segunda palabra, tomar primer token
