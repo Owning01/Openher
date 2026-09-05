@@ -32,6 +32,8 @@ export type ChatSettings = {
   compactTools: boolean
   minimalistMode: boolean
   completionSound: boolean
+  /** Reduce animaciones: apaga animaciones/transiciones globales (clase `no-motion` en <html>). */
+  reduceMotion: boolean
   composerCharLimit: number
   /** Margen lateral del chat en vista escritorio en px (solo aplica en desktop). */
   desktopGutter: number

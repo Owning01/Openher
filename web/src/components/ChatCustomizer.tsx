@@ -43,6 +43,7 @@ export const ChatCustomizer = memo(function ChatCustomizer({ settings, onSetting
     { key: "compactTools", labelKey: "settings.chatCompactTools" },
     { key: "minimalistMode", labelKey: "settings.chatMinimalistMode" },
     { key: "completionSound", labelKey: "settings.chatCompletionSound" },
+    { key: "reduceMotion", labelKey: "settings.chatReduceMotion" },
   ]
 
   return (

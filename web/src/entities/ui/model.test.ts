@@ -23,14 +23,15 @@ const CHAT_DEFAULTS: ChatSettings = {
   completionSound: true,
   composerCharLimit: 0,
   desktopGutter: 12,
+  reduceMotion: false,
 }
 
 // ---------------------------------------------------------------------------
 // ChatSettings
 // ---------------------------------------------------------------------------
 describe("ChatSettings", () => {
-  it("defaults tiene 20 campos", () => {
-    expect(Object.keys(CHAT_DEFAULTS)).toHaveLength(20)
+  it("defaults tiene 21 campos", () => {
+    expect(Object.keys(CHAT_DEFAULTS)).toHaveLength(21)
   })
 
   it("valida shape completo con defaults", () => {
@@ -87,6 +88,7 @@ describe("ChatSettings", () => {
       "compactTools",
       "minimalistMode",
       "completionSound",
+      "reduceMotion",
     ]
     for (const k of boolKeys) {
       expect(typeof CHAT_DEFAULTS[k], `${k} should be boolean`).toBe("boolean")

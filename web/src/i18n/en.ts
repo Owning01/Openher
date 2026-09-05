@@ -667,6 +667,7 @@ export default {
   'detail.activityTools': 'tools',
   'detail.activityCompaction': 'compaction',
   'settings.chatCompletionSound': 'Completion sound',
+  'settings.chatReduceMotion': 'Reduce motion (disable animations)',
   'settings.chatCharLimit': 'Prompt char limit',
   'settings.chatCharLimitOff': 'Off',
   'settings.snippets': 'Prompt snippets',
