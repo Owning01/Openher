@@ -26,6 +26,9 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined
           if (id.includes("@capacitor")) return "capacitor"
+          // html-to-image: solo se importa via import() al exportar PNG del Canvas.
+          // Fuera del catch-all => chunk async bajo demanda en vez de ~100KB eager en vendor.
+          if (id.includes("html-to-image")) return undefined
           // @xterm y pdf.js: solo los alcanzan chunks async (TerminalView/paneles desktop,
           // visor de PDF). Sacarlos del catch-all evita ~385KB + ~1MB eager.
           if (id.includes("@xterm") || id.includes("pdfjs-dist")) return undefined

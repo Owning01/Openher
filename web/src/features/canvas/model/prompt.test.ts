@@ -41,4 +41,24 @@ describe("generatePrompt", () => {
     const out = generatePrompt(doc, { lang: "es" })
     expect(out).toContain("vuelve a la pantalla anterior")
   })
+
+  it("describe partes nuevas, transicion y tema", () => {
+    const doc = makeDoc("T")
+    const home = doc.screens[0]!
+    doc.theme = { seed: "#0B57D0", dark: true, contrast: "standard", shape: "square" }
+    doc.parts[home.id] = [
+      { ...makePart("checkbox", 412), label: "Ok", checked: true },
+      { ...makePart("slider", 412), value: 70 },
+      { ...makePart("badge", 412), label: "5" },
+      { ...makePart("dialog", 412), label: "Borrar", action: { to: BACK_TARGET, transition: "fade" } },
+      { ...makePart("loadingIndicator", 412) },
+    ]
+    const out = generatePrompt(doc, { lang: "es" })
+    expect(out).toContain("Checkbox")
+    expect(out).toContain("70%")
+    expect(out).toContain("Insignia")
+    expect(out).toContain("fundido")
+    expect(out).toContain("modo oscuro")
+    expect(out).toContain("cuadradas")
+  })
 })
