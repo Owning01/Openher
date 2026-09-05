@@ -1,12 +1,12 @@
-﻿# AGENTS.md â€” OpenHer
+# AGENTS.md — OpenHer
 
 ## Estructura
 
-| Carpeta | DescripciÃ³n |
+| Carpeta | Descripción |
 |---|---|
 | `web/` | **Producto central**: React 19.2 + Vite 8 + TS 5.6 + Capacitor 8 + Tailwind CSS. Frontend compartido para APK Android y Desktop. |
 | `desktop-app/` | **IDE Desktop en Rust** (`wry` + `tiny_http` + `hyper/tokio` + `mmap/brotli` + `fswatch` + `simd-json`, **NO Tauri**): sirve `web/dist` en `:4848`, expone `/shell/*` + WS PTY (`:4849`) + proxy stats (`:8765`). |
-| `opencode-stats/` | **Monitor de estadÃ­sticas en Rust** (ediciÃ³n 2024): solo lectura sobre `opencode.db` (`:8765`). Tiene su propio `AGENTS.md`. |
+| `opencode-stats/` | **Monitor de estadísticas en Rust** (edición 2024): solo lectura sobre `opencode.db` (`:8765`). Tiene su propio `AGENTS.md`. |
 
 ---
 ## Comandos
@@ -27,17 +27,16 @@ cargo check; cargo run; cargo build --release
 
 ## Arquitectura y Directivas
 
-- **Skills de Frontend**:  skills `TASTE` e `Impecable` para diseÃ±o, UX y calidad de frontend, con DESING.md .
- **Evitar Duplicacion**: de codigo; leer skill Ponytail light`.
-- **DRY y Estado**: importante dry y singleton servicios, stores y utilidades compartidas.
-- **Iconograia y Texto**: No emojis; iconografia SVG si / Lucide formal si .
+- **Skills de Frontend**: Usar skill `taste-impecable` (y `frontend-pro`) para dirección estética, UX y calidad artesanal de frontend.
+- **Evitar Duplicación**: De código; aplicar la skill `ponytail` (YAGNI, stdlib sobre dependencias, diffs mínimos).
+- **DRY y Estado**: Importante DRY y singleton en servicios, stores (Zustand) y utilidades compartidas.
+- **Iconografía y Texto**: Cero emojis en la UI; solo iconografía SVG formal (Lucide).
 
 ---
 
 <!-- GLOBAL-AGENTS-SYNC v2 -->
 ## Memoria del proyecto (no duplicar, solo referenciar)
-- **Index-First:** antes de investigar, revisar `.agents/INDEX.md`; si una skill aplica, leer UNICAMENTE su `SKILL.md`.
-- **Anti-Patterns:** revisar `.agents/ANTIPATTERNS.md` (locks/EPERM, sin bash en PowerShell, sin volcar `node_modules`/`.git`/`dist`).
-- **Eficiencia:** cero charla ociosa, lectura selectiva, `fast-find "<termino>"`.
-- **Contribuir:** patron/bug -> `.agents/skills/<nombre>/SKILL.md` (max 25 lineas) + fila en `INDEX.md`; trampa -> regla en `ANTIPATTERNS.md`.
-
+- **Index-First:** Antes de investigar, revisar `.agents/INDEX.md`; si una skill aplica, leer ÚNICAMENTE su `SKILL.md`.
+- **Anti-Patterns:** Revisar `.agents/ANTIPATTERNS.md` (locks/EPERM, sin bash en PowerShell, sin volcar `node_modules`/`.git`/`dist`).
+- **Eficiencia:** Cero charla ociosa, lectura selectiva, `fast-find "<termino>"`.
+- **Contribuir:** Patrón/bug -> `.agents/skills/<nombre>/SKILL.md` (máx 25 líneas) + fila en `INDEX.md`; trampa -> regla en `ANTIPATTERNS.md`.
