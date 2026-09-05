@@ -29,6 +29,11 @@ type MessageListProps = {
   todosOpen?: boolean
   highlight?: string
   scrollToMessageID?: string | null
+  // Salto desde el historial de prompts: id objetivo + nonce (repite clics
+  // sobre el mismo id). MessageList expande visibleCount hasta incluirlo y
+  // hace scroll + destello. Separado de scrollToMessageID (buscador).
+  revealMessageID?: string | null
+  revealNonce?: number
   compactTools?: boolean
   minimalistMode?: boolean
   thinkingDefault?: "auto" | "expanded" | "collapsed"
@@ -40,7 +45,7 @@ type MessageListProps = {
 
 export const MessageList = memo(function MessageList({
   messages, pendingIndex, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen,   highlight, scrollToMessageID, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff, outboxActions
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen,   highlight, scrollToMessageID, revealMessageID, revealNonce, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff, outboxActions
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -49,9 +54,10 @@ export const MessageList = memo(function MessageList({
   // ui-regression anchor: scrollTo({ top: container.scrollHeight — logic lives in useFollowTail
 
   const INITIAL_PAGE_SIZE = 40
-  // Tope de DOM: sesiones enormes (DB de GB) sin virtualización colgaban el
-  // renderer y el scroll. 120 burbujas cubren la lectura; el resto bajo demanda.
-  const MAX_VISIBLE = 120
+  // Ventana inicial: sesiones enormes (DB de GB) sin virtualización colgaban
+  // el renderer. 40 burbujas al inicio; el resto bajo demanda. El tope real es
+  // messages.length (límite del server: 200), así que un salto explícito puede
+  // mostrar más sin que el botón "Cargar anteriores" encoja la ventana.
   const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_SIZE)
 
   useEffect(() => {
@@ -59,10 +65,46 @@ export const MessageList = memo(function MessageList({
   }, [selectedID])
 
   useEffect(() => {
-    if (scrollToMessageID) {
-      setVisibleCount((prev) => Math.max(prev, Math.min(messages.length, MAX_VISIBLE)))
-    }
+    if (!scrollToMessageID) return
+    const idx = messages.findIndex((m) => m.info.id === scrollToMessageID)
+    // Ventana justa hasta el objetivo (cubre >MAX_VISIBLE); si el id ya no
+    // existe (revert/borrado), expandir al tope para no dejarlo oculto.
+    setVisibleCount((prev) => Math.max(prev, idx >= 0 ? messages.length - idx : messages.length))
   }, [scrollToMessageID, messages.length])
+
+  // Salto del historial: expande hasta incluir el objetivo y luego scroll +
+  // destello (repite por nonce aunque el id sea el mismo). El scroll corre en
+  // un efecto separado que reintenta tras renderizar la ventana expandida.
+  const flashedRevealRef = useRef(0)
+  useEffect(() => {
+    if (!revealMessageID) return
+    const idx = messages.findIndex((m) => m.info.id === revealMessageID)
+    if (idx < 0) return
+    const needed = messages.length - idx
+    setVisibleCount((prev) => Math.max(prev, needed))
+  }, [revealMessageID, revealNonce, messages])
+
+  useEffect(() => {
+    if (!revealMessageID || !revealNonce || flashedRevealRef.current === revealNonce) return
+    const wrap = messagesRef.current
+    if (!wrap) return
+    let sel = `[data-message-id="${revealMessageID}"]`
+    try {
+      sel = `[data-message-id="${CSS.escape(revealMessageID)}"]`
+    } catch {
+      /* ids generados: el fallback plano vale */
+    }
+    const el = wrap.querySelector(sel)
+    // Aún no renderizado (ventana recién expandida): el efecto re-corre al
+    // cambiar visibleMessages y lo captura entonces.
+    if (!el) return
+    flashedRevealRef.current = revealNonce
+    el.scrollIntoView({ block: "center", behavior: "smooth" })
+    el.classList.remove("msg-flash")
+    void (el as HTMLElement).offsetWidth
+    el.classList.add("msg-flash")
+    window.setTimeout(() => el.classList.remove("msg-flash"), 1800)
+  })
 
   const visibleMessages = useMemo(() => {
     if (messages.length <= visibleCount) return messages
@@ -133,13 +175,21 @@ export const MessageList = memo(function MessageList({
   }, [selectedID])
 
   // Navegación del buscador: centra el mensaje con la coincidencia actual.
+  // Re-corre al crecer visibleMessages: el objetivo puede entrar al DOM un
+  // render después de expandir la ventana.
   useEffect(() => {
     if (!scrollToMessageID || view !== "detail") return
-    const el = messagesRef.current?.querySelector(`[data-message-id="${scrollToMessageID}"]`)
+    let sel = `[data-message-id="${scrollToMessageID}"]`
+    try {
+      sel = `[data-message-id="${CSS.escape(scrollToMessageID)}"]`
+    } catch {
+      /* ids generados: el fallback plano vale */
+    }
+    const el = messagesRef.current?.querySelector(sel)
     if (el) {
       el.scrollIntoView({ block: "center", behavior: "smooth" })
     }
-  }, [scrollToMessageID, view])
+  }, [scrollToMessageID, view, visibleCount, messages.length])
 
   // Durante streaming, seguir solo si está abajo o muy cerca (80px); no robar lectura arriba.
   useEffect(() => {
@@ -175,7 +225,7 @@ export const MessageList = memo(function MessageList({
                   type="button"
                   className="btn-secondary compact load-earlier-btn"
                   style={{ fontSize: "0.75rem", padding: "4px 14px", borderRadius: "14px" }}
-                  onClick={() => setVisibleCount((prev) => Math.min(prev + INITIAL_PAGE_SIZE, MAX_VISIBLE))}
+                  onClick={() => setVisibleCount((prev) => Math.min(Math.max(prev, INITIAL_PAGE_SIZE) + INITIAL_PAGE_SIZE, messages.length))}
                 >
                   ↑ Cargar {Math.min(INITIAL_PAGE_SIZE, messages.length - visibleCount)} mensajes anteriores ({messages.length - visibleCount} restantes)
                 </button>

@@ -253,24 +253,15 @@ export const ChatView = memo(function ChatView({
   }, [])
   const overflowRef = useRef<HTMLDivElement | null>(null)
   const promptEntries = useMemo(() => extractUserPrompts(messages), [messages])
-  // Salto a un prompt: scroll al mensaje + destello (repetible, no pisa el
-  // buscador: usa el DOM directo en vez del prop scrollToMessageID).
+  // Salto a un prompt: publica el id objetivo (con nonce para repetir clics
+  // sobre el mismo) y MessageList expande la ventana visible hasta incluirlo,
+  // luego hace scroll + destello. Sin esto, los prompts anteriores a la
+  // ventana (40 iniciales / 120 tope) no existían en el DOM y el salto moría
+  // en `if (!el) return`, obligando a pulsar "Cargar anteriores" a mano.
+  // No usa el prop scrollToMessageID para no pisar el buscador.
+  const [jumpTarget, setJumpTarget] = useState<{ id: string; n: number } | null>(null)
   const jumpToPrompt = useCallback((id: string) => {
-    const wrap = messagesWrapRef.current
-    if (!wrap) return
-    let sel = `[data-message-id="${id}"]`
-    try {
-      sel = `[data-message-id="${CSS.escape(id)}"]`
-    } catch {
-      /* ids generados: el fallback plano vale */
-    }
-    const el = wrap.querySelector(sel)
-    if (!el) return
-    el.scrollIntoView({ block: "center", behavior: "smooth" })
-    el.classList.remove("msg-flash")
-    void (el as HTMLElement).offsetWidth
-    el.classList.add("msg-flash")
-    window.setTimeout(() => el.classList.remove("msg-flash"), 1800)
+    setJumpTarget((prev) => ({ id, n: (prev?.n ?? 0) + 1 }))
   }, [])
   const handleViewSubagents = useCallback((subagentID?: string) => {
     const parent = selectedSession?.id
@@ -661,6 +652,8 @@ export const ChatView = memo(function ChatView({
           todosOpen={todosExpanded}
           highlight={deferredQuery.trim() || undefined}
           scrollToMessageID={scrollToMessageID}
+          revealMessageID={jumpTarget?.id ?? null}
+          revealNonce={jumpTarget?.n ?? 0}
           compactTools={compactTools}
           minimalistMode={minimalistMode}
           thinkingDefault={thinkingDefault}
