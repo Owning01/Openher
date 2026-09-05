@@ -5,7 +5,7 @@ import { STORAGE_KEYS } from "../constants"
 import { useLocalStorage } from "./useLocalStorage"
 import { getOpencodeClient } from "../shared/api/opencodeClient"
 import { toSessionV1 } from "../shared/api/mappers"
-import { buildDirPlan, dirKey } from "../utils/sessionDirs"
+import { buildDirPlan, dirKey, keepUncoveredSessions } from "../utils/sessionDirs"
 
 const FAVORITES_KEY = STORAGE_KEYS.FAVORITES
 
@@ -163,6 +163,10 @@ export function useSessions(
       })
       knownDirsHistoryRef.current = { key: serverKey, dirs: nextHistory }
       const coveredKeys = new Set(items.map((s) => dirKey(s.directory)))
+      // Dirs verificados con éxito: el global + cada backfill por-dir que
+      // respondió. Un dir que FALLÓ queda fuera: en el reemplazo full sus
+      // sesiones se conservan (ausencia no prueba borrado).
+      const verifiedKeys = new Set(coveredKeys)
 
       const directories = nextHistory
       const chunk = <T>(arr: T[], size: number) => {
@@ -179,10 +183,20 @@ export function useSessions(
         // global no trae busy y el merge pisaría el estado con "idle".
         const needSessions = c.filter((d) => !coveredKeys.has(dirKey(d)))
         const [sl, st] = await Promise.all([
-          Promise.all(needSessions.map((d) => api.listSessions(config, d).catch(() => [] as Session[]))),
+          Promise.all(needSessions.map(async (d) => {
+            try {
+              const list = await api.listSessions(config, d)
+              verifiedKeys.add(dirKey(d))
+              return list
+            } catch {
+              // Fallo parcial: el dir queda NO verificado y sus sesiones se
+              // conservan en el reemplazo full (ver keepUncoveredSessions).
+              return null
+            }
+          })),
           full ? Promise.all(c.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>)))) : Promise.resolve([]),
         ])
-        allSessionLists.push(...sl)
+        for (const list of sl) if (list) allSessionLists.push(list)
         if (full) allStatusLists.push(...st)
       }
 
@@ -209,9 +223,15 @@ export function useSessions(
       }
 
       setSessions((current) => {
-        // full=true (delete/rename/crear) => reemplazo para que borrados desaparezcan
+        // full=true (delete/rename/crear/refresh manual) => reemplazo, pero
+        // solo suelta sesiones de dirs VERIFICADOS (el server informó sobre
+        // ellos: la ausencia es borrado real). Lo de dirs con fallo parcial
+        // se conserva: antes un backfill caído borraba proyectos enteros de
+        // la UI de forma intermitente.
         if (full) {
-          const result = [...mapped].sort((a, b) => b.updated - a.updated)
+          const mappedIds = new Set(mapped.map((m) => m.id))
+          const kept = keepUncoveredSessions(current, mappedIds, (d) => verifiedKeys.has(dirKey(d)))
+          const result = [...mapped, ...kept].sort((a, b) => b.updated - a.updated)
           const selected = selectedID ? result.find((s) => s.id === selectedID) : null
           if (!selected && selectedID) {
             const keep = current.find((s) => s.id === selectedID)

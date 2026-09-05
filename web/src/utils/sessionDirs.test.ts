@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { dirKey, groupSessionsByDir, buildDirPlan } from "./sessionDirs"
+import { dirKey, groupSessionsByDir, buildDirPlan, keepUncoveredSessions } from "./sessionDirs"
 
 describe("dirKey", () => {
   it("unifica mayúsculas, slashes y trailing", () => {
@@ -86,5 +86,38 @@ describe("buildDirPlan", () => {
       cap: 2,
     })
     expect(history).toEqual(["c:/A", "C:\\b"])
+  })
+})
+
+describe("keepUncoveredSessions", () => {
+  const s = (id: string, directory: string) => ({ id, directory })
+  // isCovered como lo construye useSessions: verifiedKeys.has(dirKey(d)).
+  const covered = (...dirs: string[]) => {
+    const set = new Set(dirs.map(dirKey))
+    return (d: string) => set.has(dirKey(d))
+  }
+
+  it("conserva sesiones de dirs con fallo parcial aunque no vengan en el mapped", () => {
+    const current = [s("a", "C:\\proyA"), s("b", "C:\\proyB")]
+    const kept = keepUncoveredSessions(current, new Set(["a"]), covered("C:\\proyA"))
+    expect(kept.map((x) => x.id)).toEqual(["b"])
+  })
+
+  it("suelta el borrado real: dir verificado y sesión ausente", () => {
+    const current = [s("a", "C:\\proyA"), s("borrada", "C:\\proyA")]
+    const kept = keepUncoveredSessions(current, new Set(["a"]), covered("C:\\proyA"))
+    expect(kept).toEqual([])
+  })
+
+  it("no duplica lo que ya trae el mapped y normaliza escritura del dir", () => {
+    const current = [s("a", "c:/proya/")]
+    const kept = keepUncoveredSessions(current, new Set(["a"]), covered("C:\\ProyA"))
+    expect(kept).toEqual([])
+  })
+
+  it("dir vacío no verificado se conserva (el global no informó sobre él)", () => {
+    const current = [s("x", "")]
+    const kept = keepUncoveredSessions(current, new Set(), covered("C:\\otro"))
+    expect(kept.map((x) => x.id)).toEqual(["x"])
   })
 })
