@@ -1,6 +1,7 @@
 import type { CanvasDoc, CanvasPart, CanvasPartKind, CanvasScreen, CanvasTransition } from "../model/canvasTypes"
 import { BACK_TARGET, defaultPartHeight, isSquareKind, screenSizeOf } from "../model/canvasTypes"
 import { canvasStore } from "../store/canvasStore"
+import { ChevronDownIcon, ChevronRightIcon, CopyIcon, TrashIcon } from "../../../Icons"
 
 type Props = {
   doc: CanvasDoc
@@ -190,10 +191,10 @@ export function Inspector({ doc, screen, part }: Props) {
       </Row>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" className="btn-secondary compact" onClick={() => canvasStore.duplicatePart(screen.id, part.id)}>Duplicar</button>
-        <button type="button" className="btn-secondary compact" onClick={() => canvasStore.reorderPart(screen.id, part.id, "front")}>Al frente</button>
-        <button type="button" className="btn-secondary compact" onClick={() => canvasStore.reorderPart(screen.id, part.id, "back")}>Al fondo</button>
-        <button type="button" className="btn-danger compact" onClick={() => canvasStore.deletePart(screen.id, part.id)}>Borrar</button>
+        <button type="button" className="btn-secondary compact" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => canvasStore.duplicatePart(screen.id, part.id)}><CopyIcon size={12} /> Duplicar</button>
+        <button type="button" className="btn-secondary compact" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => canvasStore.reorderPart(screen.id, part.id, "front")}><ChevronRightIcon size={12} style={{ transform: "rotate(-90deg)" }} /> Al frente</button>
+        <button type="button" className="btn-secondary compact" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => canvasStore.reorderPart(screen.id, part.id, "back")}><ChevronDownIcon size={12} /> Al fondo</button>
+        <button type="button" className="btn-danger compact" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => canvasStore.deletePart(screen.id, part.id)}><TrashIcon size={12} /> Borrar</button>
       </div>
     </div>
   )
