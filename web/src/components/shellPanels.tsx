@@ -2822,7 +2822,7 @@ export const KanbanPanel = memo(function KanbanPanel() {
             <input type="search" placeholder="Buscar tarjetas..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <span style={{ fontSize: "0.72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>{totalCards} tarjetas · {colCount} columnas</span>
-          <button type="button" className={`btn-secondary compact${showNotes ? " active" : ""}`} onClick={() => setShowNotes((v) => !v)} title="Notas del tablero"></button>
+          <button type="button" className={`btn-secondary compact${showNotes ? " active" : ""}`} onClick={() => setShowNotes((v) => !v)} title="Notas del tablero" aria-pressed={showNotes}>Notas</button>
           <button className="btn-icon compact" title={t('shell.deleteBoard')} onClick={async () => { if (board && !(await confirm({ message: t('shell.deleteBoard'), confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" }))) return; shell.kanban.delBoard(board.id).then(load) }} style={{ color: "var(--muted)" }}>×</button>
         </div>
       </div>
@@ -2838,16 +2838,18 @@ export const KanbanPanel = memo(function KanbanPanel() {
                 onDragLeave={() => setDragOverCol(null)}
                 onDrop={() => drop(col.id)}>
                 <div className="shell-kanban-col-head">
-                  <span className="shell-kanban-col-dot" style={{ color: KANBAN_COLORS[colIdx % KANBAN_COLORS.length], background: KANBAN_COLORS[colIdx % KANBAN_COLORS.length] }} />
+                  <span className="shell-kanban-col-dot" style={{ background: KANBAN_COLORS[colIdx % KANBAN_COLORS.length] }} />
                   <span className="shell-kanban-col-title">{col.title}</span>
                   <span className="shell-kanban-col-count">{cards.length}</span>
-                  <button className="shell-kanban-col-menu" title="Más opciones" onClick={() => {}}>⋯</button>
                 </div>
                 <div className="shell-kanban-cards">
                   {cards.map((c) => (
                     <div key={c.id} className={`shell-kanban-card${drag === c.id ? " dragging" : ""}`} style={{ "--card-color": c.color } as React.CSSProperties}
                       draggable onDragStart={() => setDrag(c.id)} onDragEnd={() => { setDrag(null); setDragOverCol(null) }}
-                      onClick={() => openEditCard(c)}>
+                      onClick={() => openEditCard(c)}
+                      tabIndex={0} role="button" aria-label={`${c.title}${c.notes ? ` — ${c.notes}` : ""}`}
+                      title={c.notes ? `${c.title}\n${c.notes}` : c.title}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEditCard(c) } }}>
                       <div className="shell-kanban-card-head">
                         <span className="shell-kanban-card-title">{c.title}</span>
                         <span className="shell-kanban-card-actions">
