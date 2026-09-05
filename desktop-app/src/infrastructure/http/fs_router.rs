@@ -135,6 +135,51 @@ pub fn handle(
             }
             Err(e) => json_err(400, &e),
         },
+        (Method::Post, "/trash") => match read_body(req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                match fsx::trash_entry(p) {
+                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+                    Err(e) => json_err(500, &e),
+                }
+            }
+            Err(e) => json_err(400, &e),
+        },
+        (Method::Post, "/zip") => match read_body(req) {
+            Ok(b) => {
+                let paths: Vec<String> = b["paths"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+                    .unwrap_or_default();
+                let dest = b["dest"].as_str().unwrap_or("");
+                let name = b["name"].as_str().unwrap_or("archivos.zip");
+                match fsx::zip_create(&paths, dest, name) {
+                    Ok(target) => json_ok(&serde_json::json!({ "ok": true, "path": target })),
+                    Err(e) => json_err(500, &e),
+                }
+            }
+            Err(e) => json_err(400, &e),
+        },
+        (Method::Post, "/unzip") => match read_body(req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                match fsx::zip_extract(p) {
+                    Ok(target) => json_ok(&serde_json::json!({ "ok": true, "path": target })),
+                    Err(e) => json_err(500, &e),
+                }
+            }
+            Err(e) => json_err(400, &e),
+        },
+        (Method::Post, "/terminal") => match read_body(req) {
+            Ok(b) => {
+                let p = b["path"].as_str().unwrap_or("");
+                match fsx::open_terminal(p) {
+                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
+                    Err(e) => json_err(500, &e),
+                }
+            }
+            Err(e) => json_err(400, &e),
+        },
         (Method::Post, "/copy") => match read_body(req) {
             Ok(b) => {
                 let src = b["src"].as_str().unwrap_or("");

@@ -273,6 +273,11 @@ export const shell = {
     toggleFavorite: (path: string, add: boolean) => post("/shell/fs/favorites", { path, add }),
     sessionFor: (path: string) => get<{ ok: boolean; directory?: string }>(`/shell/fs/session?path=${encodeURIComponent(path)}`),
     delete: (path: string) => post("/shell/fs/delete", { path }),
+    trash: (path: string) => post("/shell/fs/trash", { path }),
+    zip: (paths: string[], dest: string, name: string) =>
+      post<{ ok: boolean; path: string }>("/shell/fs/zip", { paths, dest, name }),
+    unzip: (path: string) => post<{ ok: boolean; path: string }>("/shell/fs/unzip", { path }),
+    terminal: (path: string) => post("/shell/fs/terminal", { path }),
     move: (src: string, destDir: string) => post<{ ok: boolean; path: string }>("/shell/fs/move", { src, dest: destDir }),
     copy: (src: string, dest: string) => post<{ ok: boolean; path: string }>("/shell/fs/copy", { src, dest }),
     write: (path: string, dataBase64: string) => post("/shell/fs/write", { path, data: dataBase64 }),
