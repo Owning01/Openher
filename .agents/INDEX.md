@@ -1,4 +1,4 @@
-# 📚 WikiSkills Index — Catálogo de Conocimiento Compartido
+# Agents Index — Catálogo de Conocimiento Compartido (proyecto OpenHer)
 
 > **Instrucción para Agentes (Antigravity, OpenCode, Claude Code, Codex, Pi-AI, etc.):**
 > Consulta esta lista antes de resolver tareas en el workspace. Si existe una skill relevante, lee **únicamente** su archivo `SKILL.md`. No cargues todas las skills de golpe para optimizar tokens.

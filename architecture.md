@@ -4,7 +4,7 @@
 > `project-knowledge.md` (ambos eliminados; este archivo los reemplaza).
 > Describe todo el monorepo: qué es cada carpeta, cómo se
 > conectan, decisiones tomadas, estado real del código y flujos críticos.
-> Verificado en disco al **2026-08-23**. Para reglas de contribución ver `AGENTS.md`.
+> Verificado en disco al **2026-09-05**. Para reglas de contribución ver `AGENTS.md`.
 
 ---
 
@@ -37,15 +37,15 @@ de código IA) de forma remota:
 ```
 opencode-remote-android/                         ← raíz, sin package.json raíz
 ├── web/                ← EL PRODUCTO (un frontend para APK/iPA/desktop)
-│   ├── src/            ← ~80 components + 41 hooks + tests (>1100 vitest)
+│   ├── src/            ← ~114 components + 52 hooks + tests (~1350 vitest)
 │   ├── android/ · ios/ ← proyectos nativos Capacitor (appId com.gbro.opencode)
 │   ├── dist/           ← Vite output (dist-stale/ LOCKED en .gitignore)
 │   ├── capacitor.config.ts  ← appId, webDir dist, cleartext, androidScheme http
 │   └── scripts/copy-dist.py ← workaround EPERM de cap copy
 ├── desktop-app/        ← shell Windows portable (opencode-desktop.exe)
-│   └── src/{main,api,ptyx,fsx,gitx,...}.rs
-├── opencode-stats/     ← lee opencode.db read-only → :8765 (crate propio)
-├── (externo) G:/proyectos/open-design ← nexu-io/open-design on-demand (NO vendorizado)
+│   └── src/{main,api,memx,ptyx,fsx,gitx,browser_view,computer,...}.rs + infrastructure/http/ (19 routers)
+├── skill-project/opencode-stats/ ← lee opencode.db read-only → :8765 (crate propio, miembro del workspace Cargo)
+├── (externo) open-design, vioeditor, m3e-canvas, screenshots ← plugins on-demand vía EXTERNAL_PROJECTS (NO vendorizados)
 ├── Cargo.toml          ← workspace root: ["desktop-app","opencode-stats"]
 ├── build-desktop.ps1 / deploy-apk.ps1 / start-opencode-v2.bat / codemagic.yaml
 └── marketing/ · docs/ · scrum/ · .env (gitignored) · dist-desktop/ (build artifact)
@@ -54,14 +54,14 @@ opencode-remote-android/                         ← raíz, sin package.json ra�
 | Carpeta | Qué es | Estado |
 |---|---|---|
 | `web/` | Frontend React 19 + Vite + TS + Capacitor. **El producto central** | Activo |
-| `desktop-app/` | Shell de escritorio Windows en Rust (wry + tiny_http) que embebe `web/dist` | Activo |
-| `opencode-stats/` | Server de estadísticas Rust sobre `opencode.db` read-only | Activo |
-| `open-design` (externo) | `G:/proyectos/open-design` — nexu-io/open-design, pestaña on-demand `◈ Open Design` (`/shell/design/*` + iframe, 0 MB en reposo) | Externo, no vendorizado |
+| `desktop-app/` | Shell de escritorio Windows en Rust (wry + tiny_http + 19 routers en `infrastructure/http/`) que embebe `web/dist` | Activo |
+| `skill-project/opencode-stats/` | Server de estadísticas Rust sobre `opencode.db` read-only (workspace member; NO existe `opencode-stats/` en raíz) | Activo |
+| `open-design` + `vioeditor` + `m3e-canvas` + `screenshots` (externos) | Plugins on-demand (`features/external-plugins/config.ts`: 3000/1420/3005/3002) | Externos, no vendorizados |
 | `%SystemDrive%/` | **Basura**: jerarquía vacía por variable sin expandir en PowerShell | A eliminar |
 
-Workspace Cargo raíz: release con `strip + lto + codegen-units=1`. Sin `package.json`
-raíz: cada proyecto JS gestiona sus deps (`web` pnpm 10.32, Node 24). `open-design` externo
-usa su propio workspace pnpm 10.33 aislado.
+Workspace Cargo raíz: release con `strip + lto + codegen-units=1`, members
+`["desktop-app", "skill-project/opencode-stats"]`. Sin `package.json`
+raíz: cada proyecto JS gestiona sus deps (`web` pnpm 12.0.0, Node 24).
 
 ---
 
@@ -77,8 +77,10 @@ usa su propio workspace pnpm 10.33 aislado.
   excluido del vendor catch-all en `vite.config.ts`). Virtualización:
   @tanstack/react-virtual. QR: jsqr.
 - Sin librería de estado global: estado en hooks + Context (decisión deliberada).
-- Estilos: CSS propio en **17 archivos** `src/styles/` (tokens, base, layout, chat,
-  composer, modals, settings, desktop, shell…), 30+ temas runtime vía CSS variables.
+- Estilos: CSS propio en **25 archivos** `src/styles/` (tokens, base, layout, chat,
+  composer, motion, notes, editor, pc-files, sessions, titlebar, quickchat,
+  learning, scm, canvas, shell, browser…), temas runtime vía CSS variables +
+  modo claro por tokens `var(--*)` (sin hex oscuro hardcodeado en chrome).
 - `index.html`: viewport meta incluye `interactive-widget=resizes-content` (teclado móvil);
   AndroidManifest MainActivity con `windowSoftInputMode="adjustResize"`.
 
@@ -89,15 +91,16 @@ Estructura objetivo (reglas en `AGENTS.md`, flujo unidireccional
 
 ```
 web/src/
-├── app/            # Composition root — PLACEHOLDER (vacío)
-├── pages/          # desktop-workspace, mobile-chat, settings — PLACEHOLDERS (null)
-├── widgets/        # desktop-shell, nav-shell, session-workspace — PLACEHOLDERS (null)
-├── features/       # chat (IMPLEMENTADO hexagonal), edit-file, manage-sessions,
-│                   # quick-chat, run-terminal (scaffolds)
+├── app/            # Composition root real — useAppController (+218L tras compactar desde ~1282)
+├── pages/          # 6 reales: desktop-workspace, mobile-chat, mobile-layout, detail, sessions, settings
+├── widgets/        # 9 reales: activity-bar, desktop-grid, desktop-layout, desktop-shell,
+│                   # message-list, nav-shell, session-workspace, sidebar, titlebar
+├── features/       # 19: chat (hexagonal), session, project, pc-files, canvas, learning,
+│                   # external-plugins, screenshots, shortcuts, host-actions, ... (+ scaffolds)
 ├── entities/       # agent, config, file, message, session, ui — modelos puros + tests
 ├── shared/         # api/{client,version,mappers}, sse/{client,handler}, storage, ui, lib, config
-├── components/     # ~80 componentes UI reales (legado, aún activos)
-├── hooks/          # 41 hooks (legado, aún activos)
+├── components/     # ~114 componentes UI reales (legado, aún activos)
+├── hooks/          # 52 hooks (legado, aún activos)
 └── i18n/           # en, es, it, zh
 ```
 
@@ -110,9 +113,10 @@ web/src/
 | `features/chat` | ✅ hexagonal | domain/application/ports/infrastructure completos |
 | `entities/*` | ✅ 262 tests | modelos puros sin React; `types.ts` hoy es SOLO barrel |
 | `utils/*` | ✅ 254 tests | `utils.ts`, `toolMeta.ts`, `parseCommand.ts`, `resolveTheme.ts` |
-| `app/pages/widgets` | ⏳ null | placeholders vacíos |
-| `App.tsx` | 🔴 God | ~3.600L, ~40 hooks + ~25 componentes wired a mano (deuda reconocida) |
-| Routers Rust | ⏳ scaffolds vacíos | `api.rs` sigue con `if path == "/shell/..."` (prohibido para código nuevo) |
+| `app/pages/widgets` | ✅ poblados | `app/useAppController.ts`, 6 pages, 9 widgets (los scaffolds vacíos ya no existen) |
+| `App.tsx` | ✅ delgado (~401L) | Delega en `useAppController`; el God de ~3.600L quedó compactado |
+| `shellPanels.tsx` | 🔴 monolito pendiente | ~3.485L — roadmap `refactor/ts-compact-1` propone split P1-P5 |
+| Routers Rust | ✅ 19 routers | `infrastructure/http/*_router.rs`; `api.rs` solo despacha por prefijo (prohibido `if` nuevo) |
 
 Conviven dos generaciones: la legacy funcional (`App.tsx` + `components/` + `hooks/`)
 y la nueva estructura FSD parcialmente poblada. Los usecases/adapters de
@@ -175,21 +179,27 @@ opencode serve ──►  /event (v1)  o /api/event (v2)   text/event-stream + A
 
 ### 2.5 Mensajes y persistencia
 
-- **`hooks/useMessages.ts`** (~892L, hook crítico):
-  - Estado: `messages[MessageEnvelope[]]`, `optimisticUserMessages[]`, `composer`,
+- **`hooks/useMessages.ts`** (~921L, hook crítico):
+  - Estado: `messages[MessageEnvelope[]]`, `outbox` por sesión (pendiente con
+    eliminar/editar/enviar-ahora + auto-flush), `composer`,
     `awaitingAssistantReply`, `compactingIds`. `renderedMessages` = merge
-    mensajes+optimistas (por id/texto/imgCount) con cache para memo de bubbles.
+    mensajes+optimistas+outbox (por id/texto/imgCount) con `renderedCacheRef`.
   - `loadSelected(sessionID,dir)` hace **merge incremental por id SIEMPRE** (nunca
-    encoge): requestID guard antes del await; limit 500/100/100 según modo →
+    encoge): requestID guard antes del await; limit 200 (ultra/miser 100) →
+    `api.loadMessages` con `safeLimit = min(limit, 200)` (tope del server) →
     stripNonEssential → merge: mensaje actualizado reemplaza pero conserva
     `extraLocal = parts` no confirmadas por el server; sort por `time.created`.
     Confirma optimistas por id O texto O imgCount.
   - `updateSend()` con guard `isSendingRef`: parseCommand (/help /status /undo /redo
-    /compact /themes /connect con returns tempranos) → buildOptimisticMessage →
+    /compact /themes /connect con returns tempranos) → si agente ocupado, encola en
+    outbox visible en vez de bloquear → buildOptimisticMessage →
     `api.sendPrompt` (v1 `prompt_async` / v2 `prompt {text}`) → poll deadline
     8s(+12s imgs) cada 1.5s hasta que id desaparezca → refreshSessions.
   - `applyDelta/applyPart` batch rAF (60/s) con guard de sesión cargada;
     subagentAnchor Map<partID,{sessionID,messageID}>.
+  - ⚠️ El server pagina por cursor (`message.list` limit/cursor/previous/next)
+    pero el cliente pide UNA página (≤200): sesiones de +200 mensajes muestran
+    solo los últimos 200 — paginación histórica pendiente (fase 2).
 - **Mensaje optimista**: NO se remueve tras el send exitoso — la confirmación la hace
   `loadSelected` por match de texto (removerlo antes causa el bug "aparece tarde").
 - **`useOfflineCache.ts`** — IndexedDB `openher` **DB_VERSION = 3** (NUNCA
@@ -200,12 +210,13 @@ opencode serve ──►  /event (v1)  o /api/event (v2)   text/event-stream + A
 - **Config**: localStorage + archivo externo `opencode-config.json` en Documents vía
   `persistentStorage.ts` (sobrevive reinstalaciones) + password cifrada.
 
-### 2.6 Hooks (41)
+### 2.6 Hooks (52)
 
 | Hook | Rol |
 |---|---|
+| `app/useAppController` | Composition root: sesiones, paneles, modales, `+` abre FolderPicker + persiste última carpeta |
 | `useConfig` | ServerConfig, health, `connectionState idle→connected→offline`, `dataMode`, auto-save 700ms |
-| `useSessions` | CRUD sesiones, favoritos, archivadas, `groupedSessions` Map<dir,View[]> |
+| `useSessions` | CRUD sesiones, favoritos, archivadas, `groupedSessions` por `dirKey` normalizada (`utils/sessionDirs.ts`: unión priorizada global>UI>/project>historial, cap 150) |
 | `useMessages` / `useSSE` / `usePolling` / `useSSEHandler` | Ver §2.4–2.5; handler central de eventos |
 | `useAI` | Agentes/modelos; key GLOBAL > por-directorio; nunca `primary[0]` ciego; variantes |
 | `useSessionSidecar` | Dashboard de sesión: todos, diff, project/VCS/files |
@@ -217,7 +228,8 @@ opencode serve ──►  /event (v1)  o /api/event (v2)   text/event-stream + A
 | `useBackButton` | Back hardware Android (navStack, sheets, dialog exit) |
 | `useDeepLink` | `opencode://connect` |
 | `useServers` | Perfiles de servidores (add/remove/rename/update; preserva id activo) |
-| `useChatSettings` | Font size / spacing / thinking toggles |
+| `useChatSettings` | 21 campos (font/spacing/thinking + `reduceMotion` → clase `html.no-motion`) |
+| `useMemoryUsage` | Heap JS + RSS nativo vía `GET /shell/mem` (chip apilado en ActivityBar; fuera de desktop solo JS) |
 | `useCompletionAudio` / `useNotifications` / `usePushNotifications` | Sonido, browser push, nativas (APK) |
 | `useShareReceiver` | Share-to-OpenCode (guard nativo; en web no-op) |
 | `useBlockedModels` / `useFeatureFlags` (13) / `useTheme` / `useChatSettings` | Preferencias |
@@ -230,21 +242,34 @@ Dependencias clave: `useConfig` alimenta a `useSessions/useMessages/useSessionSi
 useFolderPicker/useFileBrowser`; `useAI` depende de config; `usePolling` captura
 refreshSessions/loadSelected por ref; `useCompletionAudio` captura awaiting+dataMode.
 
-### 2.7 Componentes (~80)
+### 2.7 Componentes (~114)
 
 Grupos funcionales:
 
-- **chat**: `ChatView`, `Composer` (localValue + useTransition + slash menu + mic +
-  imágenes), `MessageList` (auto-scroll, footerInfoMap), `MessageBubble` (lazy),
-  `ToolPart` (compact, DiffStatBadge+DiffView), `ThinkingBlock`, `Markdown`,
-  `QuestionPrompt`/`PermissionPrompt`, `QueuedPrompts`, `PlanBreakdown`.
+- **chat**: `ChatView` (header con `NoteIcon` + `jumpTarget` id+nonce), `Composer`
+  (localValue + useTransition + slash menu + mic + imágenes + **anillo violeta
+  sincronizado** por `--ring-delay` alineado al reloj + drop de archivos que
+  inserta ruta), `MessageList` (ventana `visibleCount` 40 iniciales, tope
+  `messages.length`, `revealMessageID/revealNonce` que expande + scroll +
+  `msg-flash`, buscador con `CSS.escape`), `MessageBubble` (lazy),
+  `ToolPart` (compact, DiffStatBadge+DiffView, highlight compartido),
+  `ThinkingBlock`, `Markdown`, `HighlightedCode` (highlight único: lowlight +
+  langFromFilename + sanitize), `QuestionPrompt`/`PermissionPrompt`,
+  `QueuedPrompts`, `PlanBreakdown`, `PromptHistoryPanel` (clic salta y revela),
+  `ChatNotesPanel` (bloc por sesión, papel rayado, debounce 400ms).
 - **sesiones**: `SessionList/Card/Toolbar`, `QuickAccessCard` (DRY favoritos/activos/
   recientes), `InlineRename`, `FavoritesManager`, `ArchivedList`.
-- **archivos/git**: `FileBrowser`, `FileEditor`, `DiffViewer`/`InlineDiff`,
-  `GitToolbar`, `ImageEditor`, `DocEditorPanel`, `ADEDiffPanel`, `FolderPicker`.
+- **archivos/git**: `PCFilesPanel` (visor por líneas + `PcfCodeLines`), `FileBrowser`,
+  `FileEditor` (modal delega en `LiteEditor`), `LiteEditor` (**editor único**:
+  overlay textarea+pre, undo/redo custom tope 50, línea actual, símbolos
+  `Ctrl+Shift+O`, Tab inserta indent, autocomplete lazy, highlight adaptativo),
+  `DiffViewer`/`InlineDiff`, `GitToolbar`, `ImageEditor`, `DocEditorPanel`,
+  `ADEDiffPanel`, `FolderPicker` (también crea sesión en carpeta elegida).
 - **escritorio**: `RemoteDesktop`, `shellPanels` (todos los paneles), `TabBar`
-  (`__design__ → ◈ Open Design`, drag moveTab), `QuickChatPanel`, `StatsView`,
-  `KanbanPanel`, `SourceControlPanel` (SCM completo: Changes/History, graph lanes,
+  (drag solo-URL + `browserTabUrls`, drop crea tab en índice), `QuickChatPanel`,
+  `StatsView`, `KanbanPanel` (look pro + botón Enviar por tarjeta → modal con
+  prompt editable + buscador de sesiones, `sendPrompt` a la elegida),
+  `SourceControlPanel` (SCM completo: Changes/History, graph lanes,
   staging, commit/push/pull/fetch, diff modal).
 - **infra**: `NavBar`, `BottomSheet`, `Modal*`/`ModalHeader`, `ErrorBoundary`,
   `ContextMenu`, `DropdownMenu`, `EmptyState`, `ConnectionNotices`, `ErrorNotice`.
@@ -281,16 +306,27 @@ por el shell Rust) + `Capacitor.isNativePlatform()` para ramas nativas.
 ```
 
 - `src/shell.ts` — cliente tipado `/shell/*`: `ShellPanelKind`
-  `session|terminal|explorer|kanban|stats|config|browser|doc|quickchat|design|scm`,
-  más clientes git (log/diff/stage/unstage/discard/commit/push/fetch/pull/branches/
-  checkout/showCommitDiff) y `fs.*` (incluye `move` para drag&drop entre carpetas).
-- `components/shellPanels.tsx` — `ShellPanel`, `ExplorerPanel` (drag&move interno vía
+  `session|editor|terminal|explorer|kanban|docs|updates|stats|session-stats|labs|browser|doc|design|quickchat|config`
+  (ver `SHELL_PANEL_KINDS`), más `kanbanPromptText` (prompt prearmado título+notas),
+  clientes git (log/diff/stage/unstage/discard/commit/push/fetch/pull/branches/
+  checkout/showCommitDiff) y `fs.*` (incluye `move` para drag&drop entre carpetas,
+  `read` trunca a 64KB).
+- `components/shellPanels.tsx` (~3.485L, split pendiente) — `ShellPanel`, `ExplorerPanel` (drag&move interno vía
   payload `application/x-opencode-path`; drops OS externos también soportados),
   `StatsPanel` (iframe :8765), `KanbanPanel`, `FileEditorPanel` (tab-bar 24px),
-  `BrowserPanel` (sub-WebView), `DesignPanel` (iframe od-web), `TerminalPanel`
+  `BrowserPanel` (sub-WebView + PiP in-page + forwarder Ctrl+rueda + polls
+  `/shortcuts` 350ms y `/url` 2s + fallback iframe con preflight + banner),
+  `DesignPanel` (iframe od-web), `TerminalPanel`
   (WS :4849), `SourceControlPanel` + `scm/{graph.ts,GraphRail.tsx,HistoryPane.tsx}`.
-- `App.tsx` hotspots desktop: `DESKTOP_STATE_KEY`/`loadDesktopState` (migra estados
+- `App.tsx` (~401L, delega en `useAppController`) hotspots desktop: `DESKTOP_STATE_KEY`/`loadDesktopState` (migra estados
   viejos), `ShellPanelCell` (DnD 5 dropZones, swap/split/openFile), clamp sidebar.
+  `DesktopState` incluye `panelBrowserUrls` + `browserTabUrls` (drag de tabs).
+- **Browser nativo**: bounds al hijo en píxeles LÓGICOS; omnibox resync solo al
+  cambiar tab/URL (nunca mientras se escribe); PiP exige gesto real dentro de la
+  página (clic `<video>` → PiP nativo, clic región → Document PiP con restore en
+  `pagehide`); **drag Chrome ↔ app solo-URL** (`utils/urlDrag.ts`: 5 MIME
+  `application/x-opencode-browser-tab|text/uri-list|URL|text/x-moz-url|text/plain`,
+  `copyMove`; drop interno por `tab-index` prioriza reorden).
 
 Móvil: navegación state-based con navStack (sessions/detail/settings/help + sheets);
 back button hardware cierra en orden: picker → sheet → detail → dialog exit.
@@ -305,7 +341,8 @@ back button hardware cierra en orden: picker → sheet → detail → dialog exi
 ### 2.10 i18n, temas, proveedores
 
 - `i18n/` — en/es/it/zh. Keys nuevas **SOLO en `en.ts`/`es.ts`**; it/zh caen al inglés
-  por fallback de `createTranslator` (`test:i18n` lo verifica).
+  por fallback de `createTranslator` (`test:i18n` lo verifica; ej.
+  `settings.chatReduceMotion` solo existe en en/es + tipo en `i18n.ts`).
 - Temas: 30+ JSON en `public/themes/`, resueltos a CSS variables en runtime
   (`utils/resolveTheme.ts`), creator custom, test de contraste (`check:contrast`).
 - `providers/` — cerebras, groq, opencodeGo: quick-chat directo a LLMs con API key
@@ -319,24 +356,35 @@ back button hardware cierra en orden: picker → sheet → detail → dialog exi
 - `ios/` — proyecto Xcode; CI en Codemagic firma y publica.
 - Firma Play Store: keystore externo (ver `PLAY-STORE.md`, no commiteado).
 
-### 2.12 Estilos — 17 archivos `src/styles/`
+### 2.12 Estilos — 25 archivos `src/styles/`
 
-`tokens.css` (30+ temas runtime) · `base.css` · `layout.css` (grid, resizers 4px) ·
-`chat.css` · `composer.css` · `desktop.css` · `sessions.css` · `settings.css` ·
-`modals.css` (`will-change`) · `shell.css` (kanban 300px cols, drop-targets explorer) ·
-`browser.css` · `buttons/forms/utilities/stats/quickchat/responsive.css` ·
-`styles.css` import-all. Tokens: `--space-1..8`, `--radius-sm/md/lg`, `--shadow-sm/md`,
-z-index sticky/modal-backdrop(40)/modal(50), `--font-family/--font-mono`.
-Animaciones `.fade-in/.animate-spin/.typing-dot` respetan `prefers-reduced-motion`.
+`tokens.css` (tokens light/dark `var(--*)`: modo claro sin hex oscuro en chrome;
+viewports web/iframe, terminal TUI y badges SCM conservan sus colores) ·
+`base.css` · `layout.css` (grid, resizers 4px) · `chat.css` (incluye `.msg-flash`) ·
+`composer.css` (anillo: `--ring-delay` para fase compartida) ·
+`motion.css` (transiciones GPU + `html.no-motion` que apaga todo) ·
+`notes.css` (bloc papel rayado solo tokens) · `editor.css` (highlight OneDark→`var(--code-*)`) ·
+`desktop.css` · `sessions.css` · `settings.css` · `modals.css` (`will-change`) ·
+`shell.css` (kanban pro: headers Linear, tabs 8px, cards sin saltos) ·
+`browser.css` · `pc-files.css` (visor `--code-bg`) · `titlebar.css` ·
+`buttons/forms/utilities/stats/quickchat/responsive/canvas/learning/scm.css` ·
+`styles.css` import-all. Tokens: `--space-1..8`, `--radius-sm/md/lg` (radio ley 6px),
+`--shadow-sm/md`, z-index sticky/modal-backdrop(40)/modal(50),
+`--font-family/--font-mono`, tipografía ley 13px body / 12px small / peso max 600.
+Animaciones `.fade-in/.animate-spin/.typing-dot` respetan `prefers-reduced-motion`
++ toggle manual `reduceMotion`. Transiciones 120-150ms, sobriedad Antigravity
+(ver `DESIGN.md`).
 Breakpoints ≤780px (tablet/mobile) y ≤430px (teléfono chico). Elementos hover-only
 llevan fallback `@media (hover: none), (pointer: coarse)`.
 
 ### 2.13 Tests y benchmarks
 
-Suites npm: `test` (vitest unit >1100), `test:i18n`, `test:ui`, `test:settings`,
-`test:model`, `test:rendered`, `check:contrast`. Del refactor: entities 262,
-shared/api 174, sse+chat 96, utils 254. Un solo archivo:
-`pnpm exec vitest run src/<ruta>/file.test.ts`. `benchmarks/runner.mjs` — benchmarks
+Suites npm: `test` (vitest unit ~1350), `test:i18n`, `test:ui`, `test:settings`,
+`test:model`, `test:rendered`, `check:contrast`. Del refactor: entities, shared/api,
+sse+chat, utils con tests por dominio (incl. `sessionDirs`, `urlDrag`,
+`browserSync`, `browserPipScript`, `chatNotes`, `ComposerRing`,
+`ChatCustomizerMotion`, `MessageListReveal`). Un solo archivo:
+`pnpm --dir web exec vitest run src/<ruta>/file.test.ts`. `benchmarks/runner.mjs` — benchmarks
 de render/lógica. Regla: todo domain/application puro lleva `.test.ts`.
 
 ---
@@ -381,27 +429,30 @@ tray-icon: Abrir/Salir · fallback sin WebView2: install_webview2_runtime_bg()
 (ureq bootstrapper) → cmd /c start URL · save_geometry en Resized/Moved/Close
 ```
 
-### 3.3 API HTTP (`src/api.rs`) — rutas `/shell/*`
+### 3.3 API HTTP (`src/api.rs` + `infrastructure/http/` — 19 routers)
 
-Enrutado con cadena `if path == ...` (**patrón prohibido para código nuevo — los
-routers van en `infrastructure/http/*_router.rs`; hoy existe `scm_router.rs` como
-primer router extraído**). Grupos:
+`api.rs` despacha por prefijo a routers (`browser|computer|config|doc|docs|
+external|fs|kanban|opencode|plugin|preview|proxy|pty|scm|search|server|stats|
+window_router.rs`); prohibido agregar `if path ==` nuevo. Grupos:
 
 | Grupo | Rutas |
 |---|---|
-| Salud/config | `GET /shell/health`, `GET\|POST /shell/config`, `config/export\|import`, `GET\|POST /shell/autostart`, `GET\|POST /shell/session-state` |
-| Filesystem | `GET /shell/fs/drives\|list\|read\|resolve\|session\|pick-folder\|favorites`, POST `delete\|copy\|write\|mkdir\|reveal\|exec\|move` |
+| Salud/config | `GET /shell/health`, `GET /shell/mem` (RSS app + WebView2, ver `memx.rs`), `GET\|POST /shell/config`, `config/export\|import`, `GET\|POST /shell/autostart`, `GET\|POST /shell/session-state`, `/shell/window/*` |
+| Filesystem | `GET /shell/fs/drives\|list\|read(64KB)\|resolve\|session\|pick-folder\|pick-app\|favorites`, POST `delete\|copy\|write\|mkdir\|reveal\|exec\|move` |
 | Git (SCM) | `GET /shell/git/status\|log\|branches\|remote-url`, POST `stage\|unstage\|discard\|commit\|push\|fetch\|pull\|checkout\|commit-diff\|show-commit-diff` (router `scm_router.rs`, motor `gitx.rs`) |
 | Docs engine | `POST /shell/doc/convert\|save` (PDF↔MD↔DOCX: pdf-extract, lopdf, quick-xml, zip) |
 | PTY | `GET /shell/pty`, `POST /shell/pty?shell=&cwd=`, `GET /pty/{id}/buffer?since=`, POST `write\|resize`, DELETE |
-| Kanban | `GET /shell/kanban`, POST/DELETE board, POST/PATCH/DELETE card (`data/kanban.json`) |
+| Kanban | `GET /shell/kanban`, POST/DELETE board, POST/PATCH/DELETE card (`data/kanban.json`, `save()` loguea a stderr) |
 | Server manager | `GET /shell/server`, `POST /shell/server/start\|stop` (`srvman.rs`) |
 | Updates/docs | `GET /shell/updates?refresh=1` (cache 1h), `GET /shell/docs[\|/read]` |
 | Stats | `GET /shell/stats`, `POST /shell/stats/start`, `GET /shell/stats/proxy/*` → :8765 |
-| Plugins/Labs | `GET /shell/plugins[\|/running]`, `POST run`, `GET /shell/plugin/{name}/{rel}`, `/shell/labs` + POST start |
+| Plugins/Labs | `GET /shell/plugins[\|/running]`, `POST run`, `GET /shell/plugin/{name}/{rel}`, `GET /shell/opencode/global`, `/shell/labs` + POST start |
+| External | `/shell/external/*` (opendesign:3000, vioeditor:1420, m3e-canvas:3005, screenshots:3002; guard `starting` 20s + gracia boot 25s + dedup frontend) |
+| Preview | `POST /shell/project/serve`, `/shell/preview/*` |
+| Computer | `/shell/computer/*` (captura + mouse/teclado para computer-use) |
 | Web search | `GET /shell/search?q=` (DDG lite top3, cache 6h `data/cache/search/<hash>.json`) |
 | Proxy CORS | ANY `/shell/proxy?url=` (limpia CSP/X-Frame, cap 16MB, sanitize_proxy_html) |
-| Browser embebido | `POST /shell/browser/open\|bounds\|visibility\|navigate\|close\|eval\|pick`, GET url (sub-WebView2 UA Chrome, MemoryUsageLevel Low oculto) |
+| Browser embebido | 9 rutas `POST /shell/browser/open\|bounds(LogicalPosition/Size)\|visibility\|navigate\|close\|eval(allowlist)\|pick`, `GET url\|shortcuts(drenado 350ms)\|pick` (sub-WebView2 UA Chrome, MemoryUsageLevel Low oculto) |
 | Design | `GET /shell/design/status\|open` (prueba 3000/3001/5173 → cmd start) |
 
 Estáticos (guard `!path.startsWith("/shell/")`): path-traversal guard
@@ -425,6 +476,10 @@ pestaña terminal.
 | Módulo | Rol |
 |---|---|
 | `state.rs` | config/persisted serde |
+| `memx.rs` | snapshot RSS app + WebView2 descendientes (`msedgewebview2.exe` vía ToolHelp32 + cadena de padres) → `GET /shell/mem` |
+| `computer.rs` | captura + input OS para computer-use (`/shell/computer/*`) |
+| `http_server.rs` + `domain/` + `infrastructure/` | servidor + 19 routers HTTP (ver §3.3) |
+| `fswatch.rs` | watcher FS nativo |
 | `fsx.rs` | operaciones FS (`move_entry`: rename atómico mismo volumen, fallback copy+delete cross-volume, rechaza carpeta dentro de sí/descendiente, colisión → sufijo `-copia`) |
 | `gitx.rs` | motor git std-only (timeout por polling): porcelain v2 parser portado de terax, 19 operaciones, 13 tests |
 | `scm_router.rs` | primer router `infrastructure/http/` (rutas `/shell/git/*`) |
@@ -437,14 +492,16 @@ pestaña terminal.
 | `common.rs` / `docsx.rs` | helpers / docs |
 
 Tests Rust: `cargo test` — gitx 13, fsx 16, opencode-stats ~44 (contra DB temporal,
-nunca la real).
+nunca la real). Nota RAM: 1,1GB típicos son `opencode2.exe serve --service`
+(`opencode.db` multi-GB + granja MCP), no la UI (heap JS ~40MB).
 
 ---
 
-## 4. `opencode-stats/` — estadísticas de uso (Rust)
+## 4. `skill-project/opencode-stats/` — estadísticas de uso (Rust)
 
 Crate `opencode-stats` v0.2.0 (edition 2024) — port Rust del backend Python previo
-(contratos JSON exactos). Miembro del workspace; consumido como **lib** por desktop-app.
+(contratos JSON exactos). Miembro del workspace (`skill-project/opencode-stats`);
+consumido como **lib** por desktop-app.
 
 ```
 opencode.db (SQLite WAL del server)
@@ -474,17 +531,22 @@ main.rs     server thread + ventana wry (close=exit(0), OPENCODE_STATS_HIDE_WIND
 
 ---
 
-## 5. OpenDesign — externo on-demand (ex `od-web/`)
+## 5. Plugins externos on-demand (open-design, vioeditor, m3e-canvas, screenshots)
 
-**Proyecto ajeno NO vendorizado**: `G:/proyectos/open-design` (`github.com/nexu-io/open-design`, Apache-2.0).
-Anteriormente vendorizado como `od-web/` v0.19.2 (~12.8k archivos, commit `1af174e3`), eliminado del repo.
-Workspace pnpm aislado 10.33.2, Node 24, Next 16 + React 18 (incompatible a propósito con React 19 + Vite del `web/`).
+**Proyectos ajenos NO vendorizados**, declarados en
+`web/src/features/external-plugins/config.ts` (`EXTERNAL_PROJECTS`):
 
-- Contenido externo: `apps/web` (Studio), `apps/daemon` (Express + SQLite, bin `od`), `apps/desktop|packaged|landing-page`,
-  16 packages, `design-systems/` (150+ marcas), `skills/`, `plugins/`, `mocks/`, `native/registry-core` napi.
-- Ciclo de vida: desktop-app expone `/shell/design/status|start|stop|open` (probe `3000/3001/5173/7456`, spawn `pnpm tools-dev run web` en `G:/proyectos/open-design`,
-  kill al cerrar pestaña). La web lo muestra como `ShellPanelKind="design"` (`◈ Open Design`) en iframe on-demand — 0 MB en reposo.
-- Actualización: `git -C G:/proyectos/open-design pull && pnpm install` (fuera del repo). `.gitignore` ignora `/od-web/`.
+| Plugin | Puerto | Dir |
+|---|---|---|
+| opendesign (nexu-io/open-design, Apache-2.0) | 3000 | `G:/Proyectos/open-design` |
+| vioeditor (Vite + Tauri) | 1420 | `G:/Proyectos/17-vioeditor/aplicacion` |
+| m3e-canvas (lnkiai/m3e-canvas) | 3005 | `G:/Proyectos/m3e-canvas` |
+| screenshots (Next.js) | 3002 | `G:/Proyectos/0 screenshots` |
+
+- Ciclo de vida: desktop-app expone `/shell/external/*` + `/shell/design/*`
+  (guard `starting` 20s + gracia boot 25s backend, `dedupedStart` frontend;
+  kill al cerrar pestaña). La web los muestra en iframe on-demand — 0 MB en reposo.
+- Actualización: `git -C <dir> pull && pnpm install` (fuera del repo). `.gitignore` ignora `/od-web/`.
 
 ---
 
@@ -493,17 +555,19 @@ Workspace pnpm aislado 10.33.2, Node 24, Next 16 + React 18 (incompatible a prop
 ### 6.1 Enviar mensaje
 
 ```
-Usuario type → Composer localValue+useTransition
+Usuario type → Composer localValue+useTransition (+ drop de archivo inserta ruta,
+`plugin:insert-text` inserta texto del visor)
    ▼ Enter
-App.tsx handleSend(text = localValueRef)  ← siempre explícito
+useAppController.handleSend(text = localValueRef)  ← siempre explícito
    │ visualSelection? → formatSelectionForPrompt
    │ offline? → queueAction → "queued"
-   │ recordPrompt, stopGenerationRef=false
+   │ recordPrompt (+ PromptHistoryPanel), stopGenerationRef=false
    ▼
 useMessages.updateSend()
   parseCommand → returns tempranos (/help /status /undo /redo /compact /themes /connect)
+  agente ocupado? → enqueueOutbox (burbuja pendiente con eliminar/editar/enviar-ahora, auto-flush al liberar)
   buildOptimisticMessage → push optimisticIDs/Texts
-  isSending=true, awaiting=true
+  isSending=true, awaiting=true (+ anillo del Composer con fase compartida `--ring-delay`)
   api.sendPrompt → POST /session/{id}/prompt_async (v1) o /api/session/:id/prompt {text} (v2)
   ok → loadSelected + poll deadline 8s(+12s imgs) cada 1.5s hasta que id desaparezca
 
@@ -519,7 +583,7 @@ Comandos slash: `/help`→vista ayuda, `/status`→mensaje estado optimista,
 
 ```
 ANTES del await: loadedSessionIDRef = sid
-limit 500/100/100 → api.loadMessages (server ignora since) → safe filter !!info.id
+limit 200 (ultra/miser 100) → api.loadMessages safeLimit=min(limit,200) → safe filter !!info.id
 setMessages merge incremental por id:
   for prev (solo sid):
     si updated existe → extraLocal = parts.filter(!remoteIDs.has)
@@ -527,6 +591,9 @@ setMessages merge incremental por id:
     else conservar prev (ventana acotada)
   for remaining → push; sort por time.created
   confirmar optimistas por id/text/imgCount
+MessageList pinta ventana visibleCount (40 iniciales, botón "Cargar anteriores"
+con tope messages.length); salto (historial/buscador) publica revealMessageID
++nonce → MessageList expande hasta el id + scroll + msg-flash (reintentado).
 ```
 
 Reglas que NO romper: optimista NO se remueve tras send; merge-only SIEMPRE;
@@ -591,7 +658,7 @@ primera carga fallida → "offline" directo, siguientes → "reconnecting"→"of
 
 | Dónde | Qué |
 |---|---|
-| `localStorage` | `ServerConfig{host,port,user,pass,apiVersion}`, `dataMode`, `theme`, `language`, `favorites`, model/agent GLOBAL, `recentModels/blockedModels/featureFlags/chatSettings`, `servers:ServerProfile[]`, `activeServer`, `statsPort`, `desktopState`, `composer`, `cursor` |
+| `localStorage` | `ServerConfig{host,port,user,pass,apiVersion}`, `dataMode`, `theme`, `language`, `favorites`, model/agent GLOBAL, `recentModels/blockedModels/featureFlags/chatSettings` (21 campos, incl. `reduceMotion`), `openher.chatNotes.<id>` (nota por sesión, 20KB), última carpeta del FolderPicker, columna kanban por tarjeta, `servers:ServerProfile[]`, `activeServer`, `statsPort`, `desktopState` (+`browserTabUrls`), `composer`, `cursor` |
 | `Documents/opencode-config.json` | sobrevive reinstalación (`persistentStorage.ts`), password cifrada |
 | `IndexedDB openher v3` | `sessions, messages, pendingActions` — merge-only, recrea si corrupta |
 | `desktop-app data/` | `config.json, kanban.json, window-geometry.json, cache/search/<hash>.json (6h), web-dist/, webview/` |
@@ -603,7 +670,7 @@ primera carga fallida → "offline" directo, siguientes → "reconnecting"→"of
 ## 8. Toolchain — build & deploy
 
 ```
-pnpm run build (web/) ──► tsc -b && vite build → dist/
+pnpm --dir web build ──► tsc --noEmit --skipLibCheck && vite build → dist/
        │
        ├─► APK: python web/scripts/copy-dist.py (NO cap copy — EPERM)
        │       → ./gradlew assembleDebug → deploy-apk.ps1
@@ -623,7 +690,10 @@ pnpm run build (web/) ──► tsc -b && vite build → dist/
 
 Regla crítica operativa: **nunca levantar servers/procesos largos desde el chat** —
 usar `Start-Process`/`.bat` detached; comandos >30s detached o timeout explícito.
-Antes de commit: `tsc -b`, tests web y `cargo check` verdes.
+Antes de commit: `tsc --noEmit --skipLibCheck` + `build` + `cargo check` +
+`pnpm test` + `test:i18n`/`test:ui`/`test:settings`/`test:model` +
+`copy-dist.py failures:none` verdes. Commitear solo hunks propios
+(`git apply --cached`; nunca `git commit -- <path>`: re-stagea el worktree).
 
 ---
 
@@ -641,11 +711,21 @@ Antes de commit: `tsc -b`, tests web y `cargo check` verdes.
 | D8 | **WebView2 vía wry directo sobre winit** (no Tauri) | Control fino del event loop, sub-webviews, deps mínimas |
 | D9 | **Stats como crate aparte read-only sobre `opencode.db`** | Cero interferencia con el server; admin con backups y bloqueo |
 | D10 | **Python → Rust** manteniendo contratos JSON exactos | Un runtime nativo compartido con el desktop-app, sin Python en producción |
-| D11 | **Refactor FSD + Hexagonal incremental** con tests por fase | Migrar sin big-bang; App.tsx God Component queda para el final |
+| D11 | **Refactor FSD + Hexagonal incremental** con tests por fase | Migrar sin big-bang; App.tsx ya delgado (~401L), queda `shellPanels.tsx` (~3.485L) |
 | D12 | **Sin librería de estado global**; hooks + Context + CSS variables | Alcance contenido; evita dependencia y boilerplate |
-| D13 | **Vendorizar OpenDesign** con workspace aislado | Evaluar integración futura sin contaminar builds |
+| D13 | **Plugins externos on-demand** (`EXTERNAL_PROJECTS`, no vendorizados) | Evaluar integración sin contaminar builds; 0 MB en reposo |
 | D14 | **Optimista confirmado por match** (no se remueve tras send) | Evita el parpadeo "el mensaje aparece cuando responde el asistente" |
 | D15 | **MJPEG por fetch+blob** (no `<img>`) | Chromium no envía Authorization en URLs de imagen |
+| D16 | **LiteEditor único editor** (FileEditor delega; sin highlight por tecla) | Un solo overlay textarea+pre; Tab/undo/símbolos propios auditados vs Monaco |
+| D17 | **Highlight compartido** (`HighlightedCode`: lowlight + langFromFilename + sanitize) | ToolPart y visor reusan; paleta `var(--code-*)`, sin duplicar lógica |
+| D18 | **Outbox por sesión** en vez de bloquear el Composer | Mensaje con agente ocupado queda pendiente con eliminar/editar/enviar-ahora |
+| D19 | **Anillo sincronizado** (`--ring-delay` alineado al reloj) + **`reduceMotion`** (`html.no-motion`) | Sesiones activas giran en fase; accesibilidad manual más fuerte que el media query |
+| D20 | **Drag Chrome ↔ app solo-URL** (5 MIME, `copyMove`, `tab-index` = reorden) | Nada de payload interno; no duplica tabs al reordenar |
+| D21 | **Bounds del browser en píxeles lógicos** + omnibox resync diferido + PiP con gesto in-page | Rust usa `LogicalPosition/Size`; el navegador exige gesto real para PiP |
+| D22 | **Puente página→host sin Rust** (drenar `/shortcuts` + poll `/url` + forwarder Ctrl+rueda) | Zoom/atajos/redirects sin tocar el shell |
+| D23 | **RAM nativa vía `/shell/mem`** (`memx.rs`: app + WebView2 descendientes) | Distingue heap JS de bulto nativo; la RAM real suele ser `opencode2` + `opencode.db` |
+| D24 | **Sesiones con `dirKey` normalizada + backfill por-dir** (unión priorizada, cap 150) | Mismo dir escrito distinto (`/` vs `\`, case, trailing) agrupaba separado; el historial capado congelaba proyectos |
+| D25 | **Modo claro por tokens** (`var(--*)` en `tokens.css`, hex oscuro prohibido en chrome) | Un solo cambio de tokens invierte el tema; terminal/TUI, viewports web y badges SCM conservados |
 
 ---
 
@@ -668,6 +748,22 @@ Antes de commit: `tsc -b`, tests web y `cargo check` verdes.
 15. `lastMessageTsRef` (por sesión) alimenta carga incremental; `translationOriginals` cap 200.
 16. Perfiles servidor (`useServers`): `updateProfile` preserva id para no perder el activo.
 17. Config persistida también en Documents (sobrevive uninstall); favoritos/bloqueados en localStorage-backed Sets.
+18. **Nunca `git commit -- <path>`**: re-stagea todo el worktree y arrastra hunks
+    ajenos — usar `git apply --cached` con patch filtrado por markers.
+19. `ChatSettings` tiene **21 campos** (`entities/ui/model.test.ts` cuenta keys):
+    agregar campo = actualizar `model.ts` + `useChatSettings.ts` DEFAULTS + test + keys en/es.
+20. i18n: keys nuevas **solo en `en.ts`/`es.ts` + tipo en `i18n.ts`**; it/zh por fallback
+    (no agregar ahí o el test de paridad falla al revés).
+21. Tests jsdom de `MessageList`: mockear `MessageBubble` a `<div data-message-id>` +
+    stubs `scrollIntoView`/`scrollTo`/rAF (jsdom no los implementa).
+22. Drag desde Chrome: el *tab handle* arrastra ventana, no URL — arrastrar el
+    icono/candado del omnibox o un link; app→Chrome suelta sobre la barra de
+    pestañas (`copyMove`, no mueve el origen).
+23. `message.list` pagina por cursor pero el cliente pide una sola página (≤200):
+    en sesiones de +200 mensajes los más viejos no existen localmente (fase 2).
+24. `opencode.db` multi-GB (1000+ sesiones) + granja MCP/npx = `opencode2` con ~1GB:
+    purgar sesiones viejas + `vacuum` si la RAM importa; el frontend es inocente
+    hasta ~50MB de heap.
 
 ---
 
@@ -682,10 +778,14 @@ Antes de commit: `tsc -b`, tests web y `cargo check` verdes.
 
 ## 12. ¿Dónde toco qué?
 
-- **UI chat/mensajes** → `components/Composer.tsx`, `ChatView.tsx`, `MessageList/Bubble.tsx`, `hooks/useMessages.ts` + `shared/sse/`, `features/chat/` (tipos nuevos → `entities/message/`, no `types.ts`)
+- **UI chat/mensajes** → `components/Composer.tsx` (anillo `--ring-delay`), `ChatView.tsx` (`jumpTarget`), `MessageList.tsx` (`visibleCount`+reveal), `MessageBubble.tsx`, `PromptHistoryPanel.tsx`, `ChatNotesPanel.tsx` + `utils/chatNotes.ts`, `ChatCustomizer.tsx` (+`reduceMotion`), `hooks/useMessages.ts` (outbox) + `shared/sse/`, `features/chat/` (tipos nuevos → `entities/message/`, no `types.ts`)
 - **Transporte** → `shared/api/client.ts`, `version.ts`, `hooks/useSSE.ts`, `usePolling.ts`, `useSSEHandler.ts`
-- **Sesiones/agentes** → `hooks/useSessions.ts`, `useAI.ts`, `entities/session|agent/model.ts`
-- **Desktop shell** → `desktop-app/src/api.rs`, `main.rs`, `ptyx.rs`, `gitx.rs`, `scm_router.rs`, `browser_view.rs`, `web/src/shell.ts`, `components/shellPanels.tsx`, `SourceControlPanel.tsx`, `App.tsx` (DesktopState/layout)
-- **Stats** → `opencode-stats/src/{db,server,payload,admin}.rs` + `static/app.js`
-- **Estilo/tema** → `styles/*.css` + `utils/resolveTheme.ts` + `public/themes/` + `ThemeCreator.tsx`
+- **Sesiones/agentes** → `hooks/useSessions.ts`, `useAI.ts`, `utils/sessionDirs.ts` (`dirKey`/backfill), `entities/session|agent/model.ts`
+- **Editor** → `components/LiteEditor.tsx` (único) + `utils/editorOps.ts`, `FileEditor.tsx` (delega), `HighlightedCode.tsx` (compartido)
+- **Browser** → `components/BrowserPanel.tsx`, `browserPipScript.ts`, `browserWheelScript.ts`, `browserSync.ts`, `utils/urlDrag.ts`, `desktop-app/src/browser_view.rs` + `infrastructure/http/browser_router.rs` (9 rutas)
+- **Kanban** → `components/shellPanels.tsx` (`KanbanPanel` + modal enviar a sesión), `shell.ts` (`kanbanPromptText`), `desktop-app/src/kanban.rs` + `kanban_router.rs`
+- **RAM** → `hooks/useMemoryUsage.ts`, `widgets/activity-bar/ActivityBar.tsx` (chip), `desktop-app/src/memx.rs` (`GET /shell/mem`)
+- **Desktop shell** → `desktop-app/src/api.rs`, `main.rs`, `ptyx.rs`, `gitx.rs`, `memx.rs`, `computer.rs`, `infrastructure/http/*_router.rs` (19), `web/src/shell.ts`, `components/shellPanels.tsx`, `SourceControlPanel.tsx`, `widgets/desktop-grid/`, `widgets/titlebar/`, `app/useAppController.ts` (DesktopState/layout)
+- **Stats** → `skill-project/opencode-stats/src/{db,server,payload,admin}.rs` + `static/app.js`
+- **Estilo/tema** → `styles/*.css` (25: `tokens.css` light/dark, `motion.css` no-motion, `notes.css`, `editor.css` `var(--code-*)`) + `utils/resolveTheme.ts` + `public/themes/` + `ThemeCreator.tsx` + `DESIGN.md`
 - **Deploy** → `web/package.json` scripts, `build-desktop.ps1`, `deploy-apk.ps1`, `codemagic.yaml`
