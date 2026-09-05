@@ -128,10 +128,10 @@
   border-color: var(--primary);
 }
 
-/* Anillo de envío alrededor de TODA la caja de texto (reemplaza al spinner
-   del chat): capas cónicas monocromo violeta girando por transform
-   (movimiento garantizado en todos los motores, sin @property). Solo visible
-   con .is-working (envío real o vista previa del ojo). */
+/* Anillo de envío alrededor de TODA la caja de texto: reemplaza al spinner
+   del chat. Un solo color violeta, giro 360° continuo por transform
+   (sin @property, funciona en todos los motores). Solo visible con
+   .is-working. Dos capas: halo exterior blur + borde nítido. */
 .composer-ring {
   position: absolute;
   inset: 0;
@@ -151,13 +151,13 @@
   height: calc(100% + 18px);
   border-radius: 16px;
   filter: blur(22px);
-  opacity: 0.5;
+  opacity: 0.55;
 }
 .composer-ring-band {
   width: calc(100% + 4px);
   height: calc(100% + 4px);
   border-radius: 12px;
-  filter: blur(0.5px) brightness(1.3);
+  filter: blur(0.5px) brightness(1.25);
 }
 .composer-ring-glow::before,
 .composer-ring-band::before {
@@ -167,18 +167,20 @@
   left: 50%;
   width: 1200px;
   height: 1200px;
-  transform: translate(-50%, -50%) rotate(60deg);
+  transform: translate(-50%, -50%) rotate(0deg);
   background-repeat: no-repeat;
-  animation: composer-ring-rotate 3s linear infinite;
+  animation: composer-ring-rotate 1.15s linear infinite;
+  will-change: transform;
 }
 .composer-ring-glow::before {
-  background-image: conic-gradient(#000, #402fb5 5%, #000 38%, #000 50%, #8f83e8 60%, #000 87%);
+  background-image: conic-gradient(#000 0%, #000 70%, #402fb5 82%, #000 92%, #000 100%);
 }
 .composer-ring-band::before {
-  background-image: conic-gradient(#14121c, #402fb5 5%, #14121c 14%, #14121c 50%, #8f83e8 60%, #14121c 64%);
+  background-image: conic-gradient(#14121c 0%, #14121c 70%, #402fb5 82%, #14121c 92%, #14121c 100%);
 }
 @keyframes composer-ring-rotate {
-  to { transform: translate(-50%, -50%) rotate(420deg); }
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 /* El anillo va detrás (z-index 0): el texto y los botones suben un nivel. */
 .composer-input-wrap.is-working textarea {
