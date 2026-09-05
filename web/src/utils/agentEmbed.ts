@@ -24,12 +24,16 @@ export function splitEmbeds(text: string): EmbedPart[] {
   return parts
 }
 
-/** file:///C:/a/b.html → C:/a/b.html. Otra cosa (http, path suelto) → null. */
+/** file:///C:/a/b.html → C:/a/b.html. Otra cosa (http, path suelto) → null.
+ *  ?query y #fragment se ignoran: sirven como cache-buster (?v=2) para
+ *  forzar la recarga del embed sin cambiar el archivo. */
 export function fileUrlToPath(src: string): string | null {
   const m = /^file:\/\/\/?(.+)$/.exec(src.trim())
   if (!m) return null
+  // Cortar ANTES de decodificar: un %3F legítimo del nombre sobrevive.
+  const raw = m[1].split(/[?#]/, 1)[0]
   try {
-    let p = decodeURIComponent(m[1])
+    let p = decodeURIComponent(raw)
     // file:///C:/x → /C:/x: quitar la barra inicial ante letra de unidad
     if (/^\/[a-zA-Z]:/.test(p)) p = p.slice(1)
     return p || null

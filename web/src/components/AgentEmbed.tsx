@@ -15,6 +15,9 @@ export const AgentEmbed = memo(function AgentEmbed({ src }: { src: string }) {
   const [html, setHtml] = useState<string | null>(src.startsWith("http") ? "" : null)
   const [error, setError] = useState<string | null>(null)
   const [tall, setTall] = useState(false)
+  // Recarga manual: el resolve va por src, así que reescribir el mismo
+  // archivo no refrescaba la vista (?v=N en el src también la dispara).
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (src.startsWith("http")) return
@@ -39,13 +42,18 @@ export const AgentEmbed = memo(function AgentEmbed({ src }: { src: string }) {
     return () => {
       cancelled = true
     }
-  }, [src])
+  }, [src, reloadKey])
 
   return (
     <div className={`agent-embed${tall ? " tall" : ""}`} data-embed-src={src} title="Arrastrá la esquina inferior derecha para redimensionar">
       <div className="agent-embed-bar">
         <span className="agent-embed-label" title={src}>Vista generada</span>
         <span className="agent-embed-actions">
+          {!error && html !== null && (
+            <button type="button" className="btn-secondary compact" onClick={() => setReloadKey((k) => k + 1)} title="Volver a leer el archivo">
+              Recargar
+            </button>
+          )}
           <button type="button" className="btn-secondary compact" onClick={() => setTall((v) => !v)} title={tall ? "Ver compacta" : "Ampliar"}>
             {tall ? "Compactar" : "Ampliar"}
           </button>
@@ -56,9 +64,9 @@ export const AgentEmbed = memo(function AgentEmbed({ src }: { src: string }) {
       ) : html === null ? (
         <div className="agent-embed-loading">Cargando vista…</div>
       ) : src.startsWith("http") ? (
-        <iframe className="agent-embed-frame" src={src} sandbox="allow-scripts" title="Vista generada" loading="lazy" />
+        <iframe key={reloadKey} className="agent-embed-frame" src={src} sandbox="allow-scripts" title="Vista generada" loading="lazy" />
       ) : (
-        <iframe className="agent-embed-frame" srcDoc={html} sandbox="allow-scripts" title="Vista generada" loading="lazy" />
+        <iframe key={reloadKey} className="agent-embed-frame" srcDoc={html} sandbox="allow-scripts" title="Vista generada" loading="lazy" />
       )}
     </div>
   )

@@ -52,4 +52,47 @@ describe("MarkdownWithEmbeds", () => {
     fireEvent.click(screen.getByText("Ampliar"))
     expect(box?.className).toContain("tall")
   })
+  it("?v=N se recorta del path leído (cache-buster)", async () => {
+    const seen: string[] = []
+    vi.stubGlobal(
+      "fetch",
+      async (input: unknown) => {
+        const url = String(input)
+        if (url.includes("/shell/fs/read")) {
+          seen.push(new URL(url, "http://x").searchParams.get("path") ?? "")
+          return new Response(
+            JSON.stringify({ path: "C:/w.html", content: HTML, truncated: false, size: HTML.length, ext: "html" }),
+            { status: 200 }
+          )
+        }
+        return new Response(JSON.stringify({}), { status: 200 })
+      }
+    )
+    render(<MarkdownWithEmbeds text={'<agent-embed src="file:///C:/w.html?v=2"></agent-embed>'} />)
+    await screen.findByTitle("Vista generada")
+    expect(seen).toEqual(["C:/w.html"])
+  })
+  it("Recargar vuelve a leer el archivo", async () => {
+    let reads = 0
+    vi.stubGlobal(
+      "fetch",
+      async (input: unknown) => {
+        const url = String(input)
+        if (url.includes("/shell/fs/read")) {
+          reads++
+          return new Response(
+            JSON.stringify({ path: "C:/w.html", content: HTML, truncated: false, size: HTML.length, ext: "html" }),
+            { status: 200 }
+          )
+        }
+        return new Response(JSON.stringify({}), { status: 200 })
+      }
+    )
+    render(<MarkdownWithEmbeds text={'<agent-embed src="file:///C:/w.html"></agent-embed>'} />)
+    await screen.findByTitle("Vista generada")
+    expect(reads).toBe(1)
+    fireEvent.click(screen.getByText("Recargar"))
+    await screen.findByTitle("Vista generada")
+    expect(reads).toBe(2)
+  })
 })
