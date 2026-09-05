@@ -159,8 +159,9 @@ fn defs() -> HashMap<&'static str, ExternalDef> {
         port: Some(3005),
         url: Some("http://127.0.0.1:3005"),
         dev_cmd: r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\m3e-canvas\node_modules\next\dist\bin\next" dev -p 3005 -H 127.0.0.1"#,
-        prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\m3e-canvas\node_modules\next\dist\bin\next" start -p 3005 -H 127.0.0.1"#),
-        prod_check: Some(r".next\BUILD_ID"),
+        // static export (`output: export`): `next start` no aplica; dev always (igual que screenshots).
+        prod_cmd: None,
+        prod_check: None,
     });
     m
 }
