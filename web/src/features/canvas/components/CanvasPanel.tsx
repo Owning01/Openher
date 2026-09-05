@@ -3,11 +3,22 @@ import type { CanvasPart, CanvasPartKind, CanvasScreen, CanvasTransition, SwipeD
 import { BACK_TARGET, partsOf, screenSizeOf, SCREEN_MARGIN, defaultPartHeight, isSquareKind } from "../model/canvasTypes"
 import { normalizeTheme, resolveScheme } from "../model/theme"
 import { canvasStore, useCanvasStore } from "../store/canvasStore"
+import {
+  ArrowLeftIcon,
+  DownloadIcon,
+  EyeIcon,
+  PencilIcon,
+  PlusIcon,
+  RedoIcon,
+  TrashIcon,
+  UndoIcon,
+} from "../../../Icons"
 import { PhoneScreen, type GuideLines } from "./PhoneScreen"
 import { Inspector } from "./Inspector"
 import { LayersPanel } from "./LayersPanel"
 import { ThemePanel } from "./ThemePanel"
 import { PromptPanel } from "./PromptPanel"
+import { ToolBtn } from "./ToolBtn"
 import "../../../styles/canvas.css"
 
 const PALETTE_GROUPS: Array<{ title: string; items: Array<{ kind: CanvasPartKind; label: string }> }> = [
@@ -327,33 +338,33 @@ export function CanvasPanel() {
         >
           {docs.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
         </select>
-        <button type="button" style={smallBtn} onClick={() => canvasStore.createDoc(`Diseño ${docs.length + 1}`)}>Nuevo</button>
-        <button type="button" style={smallBtn} onClick={() => { if (exporting || !screen) return; setExportError(null); setExporting(screen.id) }}>
-          {exporting ? "Exportando…" : "PNG"}
+        <button type="button" style={smallBtn} onClick={() => canvasStore.createDoc(`Diseño ${docs.length + 1}`)} title="Nuevo diseño" aria-label="Nuevo diseño">
+          <PlusIcon size={13} />
         </button>
+        <ToolBtn title={exporting ? "Exportando…" : "Exportar pantalla como PNG"} onClick={() => { if (exporting || !screen) return; setExportError(null); setExporting(screen.id) }}>
+          <DownloadIcon size={14} />
+        </ToolBtn>
         <span style={{ width: 1, alignSelf: "stretch", background: "var(--border)" }} />
-        <button
-          type="button" style={{ ...smallBtn, fontWeight: mode === "edit" ? 700 : 400 }}
-          onClick={() => setMode("edit")}
-        >
-          Editar
-        </button>
-        <button
-          type="button" style={{ ...smallBtn, fontWeight: mode === "preview" ? 700 : 400 }}
-          onClick={enterPreview}
-        >
-          Vista previa
-        </button>
+        <ToolBtn title="Editar" active={mode === "edit"} onClick={() => setMode("edit")}>
+          <PencilIcon size={14} />
+        </ToolBtn>
+        <ToolBtn title="Vista previa navegable" active={mode === "preview"} onClick={enterPreview}>
+          <EyeIcon size={14} />
+        </ToolBtn>
         {mode === "edit" ? (
           <>
             <button type="button" style={smallBtn} onClick={() => { if (screen) canvasStore.tidyScreen(screen.id) }}>Ordenar</button>
-            <button type="button" style={smallBtn} onClick={() => canvasStore.undo()}>Deshacer</button>
-            <button type="button" style={smallBtn} onClick={() => canvasStore.redo()}>Rehacer</button>
+            <ToolBtn title="Deshacer (Ctrl+Z)" onClick={() => canvasStore.undo()}>
+              <UndoIcon size={14} />
+            </ToolBtn>
+            <ToolBtn title="Rehacer (Ctrl+Y)" onClick={() => canvasStore.redo()}>
+              <RedoIcon size={14} />
+            </ToolBtn>
           </>
         ) : (
-          <button type="button" style={smallBtn} disabled={previewStack.length <= 1} onClick={goBack}>
-            Atras
-          </button>
+          <ToolBtn title="Atras" disabled={previewStack.length <= 1} onClick={goBack}>
+            <ArrowLeftIcon size={14} />
+          </ToolBtn>
         )}
         {exportError ? <span style={{ fontSize: 11, color: "var(--danger, #B3261E)" }}>PNG: {exportError}</span> : null}
       </div>
@@ -391,8 +402,8 @@ export function CanvasPanel() {
                 })}
               </div>
               <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-                <button type="button" style={{ ...smallBtn, flex: 1 }} onClick={() => { const id = canvasStore.addScreen("Nueva", "phone"); if (id) setScreenId(id) }}>+ Móvil</button>
-                <button type="button" style={{ ...smallBtn, flex: 1 }} onClick={() => { const id = canvasStore.addScreen("Nueva PC", "desktop"); if (id) setScreenId(id) }}>+ PC</button>
+                <button type="button" style={{ ...smallBtn, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }} onClick={() => { const id = canvasStore.addScreen("Nueva", "phone"); if (id) setScreenId(id) }}><PlusIcon size={12} /> Móvil</button>
+                <button type="button" style={{ ...smallBtn, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }} onClick={() => { const id = canvasStore.addScreen("Nueva PC", "desktop"); if (id) setScreenId(id) }}><PlusIcon size={12} /> PC</button>
               </div>
             </div>
             {PALETTE_GROUPS.map((g) => (
@@ -400,8 +411,8 @@ export function CanvasPanel() {
                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>{g.title}</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
                   {g.items.map((item) => (
-                    <button key={item.kind} type="button" style={smallBtn} onClick={() => canvasStore.addPart(screen.id, item.kind)}>
-                      + {item.label}
+                    <button key={item.kind} type="button" style={{ ...smallBtn, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }} onClick={() => canvasStore.addPart(screen.id, item.kind)}>
+                      <PlusIcon size={11} /> {item.label}
                     </button>
                   ))}
                 </div>
@@ -485,8 +496,8 @@ export function CanvasPanel() {
                       />
                     </label>
                     {doc.screens.length > 1 ? (
-                      <button type="button" className="btn-danger compact" onClick={() => canvasStore.deleteScreen(screen.id)}>
-                        Borrar pantalla
+                      <button type="button" className="btn-danger compact" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => canvasStore.deleteScreen(screen.id)}>
+                        <TrashIcon size={12} /> Borrar pantalla
                       </button>
                     ) : null}
                   </div>

@@ -1,5 +1,6 @@
 import type { CanvasPart } from "../model/canvasTypes"
 import { canvasStore } from "../store/canvasStore"
+import { ChevronDownIcon, ChevronRightIcon } from "../../../Icons"
 
 type Props = {
   screenId: string
@@ -40,17 +41,17 @@ export function LayersPanel({ screenId, parts, selectedId }: Props) {
           <span style={{ fontSize: 10, color: "var(--muted)", flexShrink: 0 }}>{p.kind}</span>
           <button
             type="button" title="Al frente" aria-label="Al frente"
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, padding: 2 }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 2, display: "flex" }}
             onClick={(e) => { e.stopPropagation(); canvasStore.reorderPart(screenId, p.id, "front") }}
           >
-            ↑
+            <ChevronRightIcon size={13} style={{ transform: "rotate(-90deg)" }} />
           </button>
           <button
             type="button" title="Al fondo" aria-label="Al fondo"
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, padding: 2 }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 2, display: "flex" }}
             onClick={(e) => { e.stopPropagation(); canvasStore.reorderPart(screenId, p.id, "back") }}
           >
-            ↓
+            <ChevronDownIcon size={13} />
           </button>
         </div>
       ))}
