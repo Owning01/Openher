@@ -1,3 +1,6 @@
+import { createTranslator, normalizeLanguage } from "../../i18n"
+import { STORAGE_KEYS } from "../../constants"
+
 export type ConfigInvalidError = {
   name: "ConfigInvalidError"
   data: {
@@ -29,6 +32,10 @@ export function formatServerError(error: unknown, translate?: Translator, fallba
   const unwrapped = unwrapNamedError(error)
   if (isConfigInvalidErrorLike(unwrapped)) return parseReadableConfigInvalidError(unwrapped, translate)
   if (isProviderModelNotFoundErrorLike(unwrapped)) return parseReadableProviderModelNotFoundError(unwrapped, translate)
+  // ClientError("Transport") del SDK (@opencode-ai/client): el fetch ni siquiera
+  // llegó al servidor (red caída, Tailscale, host/puerto, server apagado).
+  // El texto crudo "Transport" no le dice nada al usuario: mensaje accionable.
+  if (isTransportError(unwrapped)) return transportMessage(translate)
   if (error instanceof Error && error.message) return error.message
   if (typeof error === "string" && error) return error
   if (fallback) return fallback
@@ -128,4 +135,36 @@ export function errorMessage(error: unknown): string {
 const REASON_LIMIT = 1024
 export function truncateReason(reason: string): string {
   return reason.length > REASON_LIMIT ? `${reason.slice(0, REASON_LIMIT)}…` : reason
+}
+
+/** Detecta el fallo de red del SDK: `new ClientError("Transport", { cause })` en dist/promise. */
+export function isTransportError(error: unknown): boolean {
+  if (error instanceof Error) {
+    if (error.name === "ClientError" && error.message.includes("Transport")) return true
+    if (error.cause instanceof Error) return isTransportError(error.cause)
+  }
+  if (typeof error === "object" && error !== null) {
+    const o = error as Record<string, unknown>
+    if (o._tag === "Transport" || o.reason === "Transport") return true
+  }
+  return false
+}
+
+/** Traductor del idioma guardado (sin React): los callers de formatServerError no tienen `t`. */
+function storedTranslator(): Translator {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEYS.LANGUAGE) : null
+    return createTranslator(normalizeLanguage(raw || "es"))
+  } catch {
+    return createTranslator("es")
+  }
+}
+
+function transportMessage(translate?: Translator): string {
+  const t = translate ?? storedTranslator()
+  return tr(
+    t,
+    "error.transport",
+    "Could not reach the server. Check that Tailscale is connected on both devices, the host and port in Settings are correct, and opencode is still running.",
+  )
 }

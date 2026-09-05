@@ -122,7 +122,7 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
                 <input
                   className="question-custom-input"
                   type="text"
-                  placeholder={t('detail.questionCustomPlaceholder')}
+                  placeholder={t('settings.questionPlaceholder')}
                   value={customs[qi] ?? ""}
                   onChange={(e) => setCustoms((prev) => ({ ...prev, [qi]: e.target.value }))}
                 />

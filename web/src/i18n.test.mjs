@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { createTranslator, languageOptions, normalizeLanguage, loadLanguage } from './i18n.ts'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { createTranslator, languageOptions, normalizeLanguage, loadLanguage, getTranslations } from './i18n.ts'
 
 // Los chunks por idioma se cargan bajo demanda: cargar antes de usar.
 await loadLanguage('en')
@@ -49,5 +52,25 @@ assert.equal(es('settings.themeSystem'), 'Sistema')
 assert.equal(it('settings.themeDark'), 'Scuro')
 assert.equal(zh('settings.themeSystem'), '跟隨系統')
 assert.equal(en('todo.title'), 'Todo Items')
+
+// Toda clave literal t('...') usada en el código debe existir en en:
+// si falta, la UI muestra la clave cruda (ej. detail.questionSkip).
+{
+  const root = join(dirname(fileURLToPath(import.meta.url)))
+  const used = new Set()
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry)
+      if (statSync(full).isDirectory()) { walk(full); continue }
+      if (!/\.(ts|tsx)$/.test(entry)) continue
+      const src = readFileSync(full, 'utf8')
+      for (const m of src.matchAll(/(?<![\w$.])t\(\s*['"]([A-Za-z0-9_.-]+)['"]/g)) used.add(m[1])
+    }
+  }
+  walk(root)
+  const enKeys = new Set(Object.keys(getTranslations('en')))
+  const missing = [...used].filter((k) => !enKeys.has(k)).sort()
+  assert.deepEqual(missing, [], `claves i18n usadas pero ausentes en en: ${missing.join(', ')}`)
+}
 
 console.log('i18n tests passed')

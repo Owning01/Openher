@@ -72,7 +72,7 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
     <div className="question-inline">
       <div className="question-card" onClick={(e) => e.stopPropagation()}>
         <div className="question-card-header">
-          <strong>{t('detail.questionTitle')}</strong>
+          <strong>{t('settings.questionPrompt')}</strong>
         </div>
         <div className="question-card-body">
         {questions.map((q, qi) => (
@@ -99,7 +99,7 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
               <input
                 className="question-custom-input"
                 type="text"
-                placeholder={t('detail.questionCustomPlaceholder')}
+                placeholder={t('settings.questionPlaceholder')}
                 value={customs[qi] ?? ""}
                 onChange={(e) => handleCustomChange(qi, e.target.value)}
               />
@@ -109,10 +109,10 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
         </div>
         <div className="question-actions">
           <button className="btn btn-secondary" onClick={handleSkip} disabled={sending}>
-            {t('detail.questionSkip')}
+            {t('settings.questionSkip')}
           </button>
           <button className="btn btn-primary" onClick={handleSend} disabled={sending}>
-            {t('detail.questionSend')}
+            {t('settings.questionSend')}
           </button>
         </div>
       </div>
