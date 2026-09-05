@@ -14,6 +14,19 @@ export function dirKey(dir: string): string {
   return normFsPath(dir)
 }
 
+// Reemplazo full sin pérdida en fallos parciales: conserva las sesiones
+// actuales cuyo dir NO fue cubierto con éxito (el server no informó sobre
+// ellas: su ausencia no prueba borrado) y suelta las de dirs verificados
+// (ahí la ausencia sí es borrado real). Comparación por dirKey: el caller
+// pasa isCovered ya normalizado (verifiedKeys.has(dirKey(d))).
+export function keepUncoveredSessions<T extends { id: string; directory: string }>(
+  current: T[],
+  mappedIds: Set<string>,
+  isCovered: (dir: string) => boolean,
+): T[] {
+  return current.filter((s) => !mappedIds.has(s.id) && !isCovered(s.directory))
+}
+
 // Agrupa sesiones por proyecto, fusionando variantes de escritura del mismo
 // dir. display = primer raw visto (para mostrar y accionar); la key interna
 // es dirKey(display).
