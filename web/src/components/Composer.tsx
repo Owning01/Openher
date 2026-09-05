@@ -797,6 +797,12 @@ export const Composer = memo(function Composer({
         onDragLeave={handleDragLeave}
         onDrop={handleComposerDrop}
       >
+        {showWorking && (
+          <div className="composer-ring" aria-hidden="true">
+            <div className="composer-ring-glow" />
+            <div className="composer-ring-band" />
+          </div>
+        )}
         <button onClick={handleFilePick} disabled={disabled}
           className="composer-inline-btn composer-img-btn" title="Attach file"
           tabIndex={-1}>
