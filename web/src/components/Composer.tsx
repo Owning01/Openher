@@ -126,6 +126,8 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "redo", description: "Redo last undone message", source: "command" },
   { name: "compact", description: "Compact/compress conversation history", source: "command" },
   { name: "theme", description: "Open theme picker", source: "command" },
+  { name: "history", description: "Show prompt history panel", source: "command" },
+  { name: "timeline", description: "Show prompt timeline panel", source: "command" },
   { name: "connect", description: "Connect providers (API keys, OpenAI-compatible)", source: "command" },
 ]
 

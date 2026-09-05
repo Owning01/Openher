@@ -908,6 +908,14 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       setComposer("")
       return "themes"
     }
+    if (parsed?.type === "history") {
+      setComposer("")
+      return "history"
+    }
+    if (parsed?.type === "timeline") {
+      setComposer("")
+      return "timeline"
+    }
     if (parsed?.type === "connect") {
       setComposer("")
       // /connect <providerID> <apiKey> → setea la credencial directo.

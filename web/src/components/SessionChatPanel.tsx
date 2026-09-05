@@ -11,6 +11,7 @@ import { useQuestions } from "../hooks/useQuestions"
 import { useOfflineCache } from "../hooks/useOfflineCache"
 import { api } from "../api"
 import { isSessionActive } from "../utils"
+import { openPromptHistory } from "../utils/promptHistory"
 import { parseDragPayload } from "../utils/drag"
 import { usePolling } from "../hooks/usePolling"
 import type { ChatViewProps } from "./ChatView"
@@ -236,6 +237,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       onSetCommands, msgs.setRuntimeError, images,
       sendText, undefined, originalText ?? undefined)
     if (res === "connect") onOpenConnect?.()
+    if (res === "history" || res === "timeline") openPromptHistory()
     if (res === false) {
       // Rollback de pruning y restaurar composer original si hubo traducción
       if (prevMessagesSnapshot) msgs.setMessages(prevMessagesSnapshot)
