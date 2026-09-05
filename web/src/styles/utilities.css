@@ -131,6 +131,13 @@
     animation-duration: 1.2s !important;
     animation-iteration-count: infinite !important;
   }
+  /* Anillo de envío del composer: es EL indicador de progreso (reemplaza al
+     spinner del chat). Gira lento y suave aun con movimiento reducido. */
+  .composer-ring-glow::before,
+  .composer-ring-band::before {
+    animation-duration: 3.5s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 
