@@ -169,7 +169,7 @@
   height: 1200px;
   transform: translate(-50%, -50%) rotate(0deg);
   background-repeat: no-repeat;
-  animation: composer-ring-rotate 1.15s linear infinite;
+  animation: composer-ring-rotate 3.5s linear infinite;
   will-change: transform;
 }
 .composer-ring-glow::before {
@@ -189,12 +189,6 @@
 }
 .composer-input-wrap.is-working .composer-inline-btn {
   z-index: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .composer-ring-glow::before,
-  .composer-ring-band::before {
-    animation: none;
-  }
 }
 
 .composer-inline-btn {
