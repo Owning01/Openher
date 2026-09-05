@@ -1,6 +1,7 @@
 import { memo, useState, useRef } from "react"
 import { MenuDotsIcon, DownloadIcon, StarIcon, EyeIcon, ShareIcon } from "../../Icons"
 import { VSCodeFileIcon } from "../../components/VSCodeFileIcon"
+import { joinDragPaths } from "./multiSelect"
 import type { FsEntry } from "../../shell"
 import { useOutsideClick } from "../../hooks/useOutsideClick"
 import type { GitFileStatus } from "./useGitStatus"
@@ -23,6 +24,10 @@ export type FileRowProps = {
   onRenameCommit?: (entry: FsEntry) => void
   onRenameCancel?: () => void
   onStartRename?: (entry: FsEntry) => void
+  // Selección múltiple estilo Explorador (Ctrl/Shift la gestiona el panel).
+  selected?: boolean
+  onSelect?: (e: React.MouseEvent, entry: FsEntry) => void
+  getDragPayload?: (path: string) => string[]
 }
 
 export function formatFileSize(size: number | null): string {
@@ -50,6 +55,9 @@ export const FileRow = memo(function FileRow({
   onRenameCommit,
   onRenameCancel,
   onStartRename,
+  selected = false,
+  onSelect,
+  getDragPayload,
 }: FileRowProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -59,21 +67,32 @@ export const FileRow = memo(function FileRow({
 
   return (
     <div
-      className={`pcf-row pcf-file ${gitStatus ? `git-${gitStatus.status.toLowerCase()}` : ""} ${isRenaming ? "is-renaming" : ""}`}
+      className={`pcf-row pcf-file ${gitStatus ? `git-${gitStatus.status.toLowerCase()}` : ""} ${isRenaming ? "is-renaming" : ""} ${selected ? "is-selected" : ""}`}
       style={{ paddingLeft: `${depth * 14 + 18}px` }}
       title={f.path}
-      onClick={() => !isRenaming && (onOpenFile ? onOpenFile(f) : onDownload(f))}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (isRenaming) return
+        onSelect?.(e, f)
+        // Con Ctrl/Shift solo se selecciona (como en el Explorador); el click
+        // simple además abre, como antes.
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return
+        if (onOpenFile) onOpenFile(f)
+        else onDownload(f)
+      }}
       onContextMenu={onContextMenu ? (e) => onContextMenu(e, f, false) : undefined}
       draggable={!isRenaming}
       onDragStart={(e) => {
         if (isRenaming) { e.preventDefault(); return }
         const isImg = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f.name)
-        e.dataTransfer.setData("text/plain", f.path)
-        e.dataTransfer.setData("application/x-opencode-path", f.path)
+        const payload = joinDragPaths(getDragPayload ? getDragPayload(f.path) : [f.path])
+        e.dataTransfer.setData("text/plain", payload)
+        e.dataTransfer.setData("application/x-opencode-path", payload)
         e.dataTransfer.setData("application/x-opencode-is-image", isImg ? "1" : "0")
         e.dataTransfer.effectAllowed = "move"
       }}
       role="treeitem"
+      aria-selected={selected}
       tabIndex={0}
       onKeyDown={(e) => {
         if (isRenaming) return
