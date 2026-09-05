@@ -6,7 +6,7 @@ import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
 import { encrypt, decrypt, isCiphertext } from "../utils/crypto"
 
-const CONFIG_FILENAME = "opencode-mobile-config.json"
+const CONFIG_FILENAME = "openher-config.json"
 
 const defaultConfig: ServerConfig = {
   host: "",

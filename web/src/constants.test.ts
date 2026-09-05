@@ -29,10 +29,10 @@ describe("STORAGE_KEYS", () => {
     expect(Object.keys(STORAGE_KEYS).length).toBeGreaterThanOrEqual(20)
   })
 
-  it("todos los valores son strings con prefijo opencode.", () => {
+  it("todos los valores son strings con prefijo openher. u opencode.", () => {
     for (const [k, v] of Object.entries(STORAGE_KEYS)) {
       expect(typeof v, `key ${k} should be string`).toBe("string")
-      expect(v.startsWith("opencode."), `${k} => ${v} should start with opencode.`).toBe(true)
+      expect(v.startsWith("openher.") || v.startsWith("opencode."), `${k} => ${v} should start with openher. or opencode.`).toBe(true)
     }
   })
 
@@ -42,17 +42,17 @@ describe("STORAGE_KEYS", () => {
   })
 
   it("claves de servidor/móvil están correctamente namespaced", () => {
-    expect(STORAGE_KEYS.STATS).toBe("opencode.mobile.stats")
-    expect(STORAGE_KEYS.RECENT_MODELS).toBe("opencode.mobile.recentModels")
-    expect(STORAGE_KEYS.BLOCKED_MODELS).toBe("opencode.mobile.blockedModels")
-    expect(STORAGE_KEYS.FEATURE_FLAGS).toBe("opencode.mobile.featureFlags")
+    expect(STORAGE_KEYS.STATS).toBe("openher.stats")
+    expect(STORAGE_KEYS.RECENT_MODELS).toBe("openher.recentModels")
+    expect(STORAGE_KEYS.BLOCKED_MODELS).toBe("openher.blockedModels")
+    expect(STORAGE_KEYS.FEATURE_FLAGS).toBe("openher.featureFlags")
   })
 
   it("claves QUICKCHAT comparten prefijo", () => {
-    expect(STORAGE_KEYS.QUICKCHAT).toBe("opencode.mobile.quickchat.messages")
-    expect(STORAGE_KEYS.QUICKCHAT_PROVIDER).toBe("opencode.mobile.quickchat.provider")
-    expect(STORAGE_KEYS.QUICKCHAT_MODEL).toBe("opencode.mobile.quickchat.model")
-    expect(STORAGE_KEYS.QUICKCHAT_SEARCH).toBe("opencode.mobile.quickchat.search")
+    expect(STORAGE_KEYS.QUICKCHAT).toBe("openher.quickchat.messages")
+    expect(STORAGE_KEYS.QUICKCHAT_PROVIDER).toBe("openher.quickchat.provider")
+    expect(STORAGE_KEYS.QUICKCHAT_MODEL).toBe("openher.quickchat.model")
+    expect(STORAGE_KEYS.QUICKCHAT_SEARCH).toBe("openher.quickchat.search")
   })
 
   it("no hay valores duplicados", () => {
@@ -132,7 +132,7 @@ describe("numeric constants", () => {
   })
 
   it("DB constants correctos", () => {
-    expect(DB_NAME).toBe("opencode-mobile")
+    expect(DB_NAME).toBe("openher")
     expect(DB_VERSION).toBe(3)
     expect(typeof DB_VERSION).toBe("number")
     expect(DB_STORES.sessions).toBe("sessions")

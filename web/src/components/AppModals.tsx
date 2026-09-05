@@ -306,7 +306,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
             favorites={sessions.filter((s) => favorites.has(s.id))}
             onReorder={(ids) => {
               try {
-                localStorage.setItem("opencode.mobile.favoritesOrder", JSON.stringify(ids))
+                localStorage.setItem("openher.favoritesOrder", JSON.stringify(ids))
               } catch {}
             }}
             onClose={onCloseFavoritesManager}

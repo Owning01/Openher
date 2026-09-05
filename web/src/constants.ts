@@ -6,29 +6,29 @@ export const STORAGE_KEYS = {
   FAVORITES: "opencode.remote.favorites",
   MODEL: "opencode.remote.model",
   AGENT: "opencode.remote.agent",
-  STATS: "opencode.mobile.stats",
+  STATS: "openher.stats",
   CURSOR: "opencode.remote.cursor",
   LANGUAGE: "opencode.remote.language",
   NAVBAR: "opencode.remote.navbar",
-  RECENT_MODELS: "opencode.mobile.recentModels",
-  BLOCKED_MODELS: "opencode.mobile.blockedModels",
-  FEATURE_FLAGS: "opencode.mobile.featureFlags",
-  CONNECTED_PROVIDERS: "opencode.mobile.connectedProviders",
-  CHAT_SETTINGS: "opencode.mobile.chatSettings",
-  RECENT_DISMISS: "opencode.mobile.recentDismiss",
-  MODEL_VARIANT: "opencode.mobile.modelVariant",
-  SERVERS: "opencode.mobile.servers",
+  RECENT_MODELS: "openher.recentModels",
+  BLOCKED_MODELS: "openher.blockedModels",
+  FEATURE_FLAGS: "openher.featureFlags",
+  CONNECTED_PROVIDERS: "openher.connectedProviders",
+  CHAT_SETTINGS: "openher.chatSettings",
+  RECENT_DISMISS: "openher.recentDismiss",
+  MODEL_VARIANT: "openher.modelVariant",
+  SERVERS: "openher.servers",
   STATS_PORT: "opencode.remote.statsPort",
-  QUICKCHAT_PROVIDER: "opencode.mobile.quickchat.provider",
-  QUICKCHAT_MODEL: "opencode.mobile.quickchat.model",
-  QUICKCHAT_SEARCH: "opencode.mobile.quickchat.search",
-  QUICKCHAT: "opencode.mobile.quickchat.messages",
-  QUICKCHAT_KEY_GROQ: "opencode.mobile.quickchat.key.groq",
-  QUICKCHAT_KEY_CEREBRAS: "opencode.mobile.quickchat.key.cerebras",
-  QUICKCHAT_KEY_CUSTOM: "opencode.mobile.quickchat.key.custom",
-  QUICKCHAT_CUSTOM_URL: "opencode.mobile.quickchat.custom.url",
-  QUICKCHAT_CUSTOM_MODEL: "opencode.mobile.quickchat.custom.model",
-  SHELL_REMOTE: "opencode.mobile.shellBase"
+  QUICKCHAT_PROVIDER: "openher.quickchat.provider",
+  QUICKCHAT_MODEL: "openher.quickchat.model",
+  QUICKCHAT_SEARCH: "openher.quickchat.search",
+  QUICKCHAT: "openher.quickchat.messages",
+  QUICKCHAT_KEY_GROQ: "openher.quickchat.key.groq",
+  QUICKCHAT_KEY_CEREBRAS: "openher.quickchat.key.cerebras",
+  QUICKCHAT_KEY_CUSTOM: "openher.quickchat.key.custom",
+  QUICKCHAT_CUSTOM_URL: "openher.quickchat.custom.url",
+  QUICKCHAT_CUSTOM_MODEL: "openher.quickchat.custom.model",
+  SHELL_REMOTE: "openher.shellBase"
 }
 
 export const DEFAULT_STATS_PORT = 8765
@@ -51,7 +51,7 @@ export const POLL_BACKOFF_JITTER = 0.3
 export const POLL_MAX_RETRIES = 5
 export const QUESTION_POLL_INTERVAL_MS = 15_000
 
-export const DB_NAME = "opencode-mobile"
+export const DB_NAME = "openher"
 export const DB_VERSION = 3
 export const DB_STORES = { sessions: "sessions", messages: "messages", quickchat: "quickchat" } as const
 export const QUICKCHAT_CACHE_TTL_MS = 24 * 60 * 60 * 1000

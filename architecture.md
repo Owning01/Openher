@@ -10,7 +10,7 @@
 
 ## 1. Visión general
 
-**OpenCode Mobile** es un ecosistema para usar [OpenCode](https://opencode.ai) (agente
+**OpenHer** es un ecosistema para usar [OpenCode](https://opencode.ai) (agente
 de código IA) de forma remota:
 
 ```
@@ -192,7 +192,7 @@ opencode serve ──►  /event (v1)  o /api/event (v2)   text/event-stream + A
     subagentAnchor Map<partID,{sessionID,messageID}>.
 - **Mensaje optimista**: NO se remueve tras el send exitoso — la confirmación la hace
   `loadSelected` por match de texto (removerlo antes causa el bug "aparece tarde").
-- **`useOfflineCache.ts`** — IndexedDB `opencode-mobile` **DB_VERSION = 2** (NUNCA
+- **`useOfflineCache.ts`** — IndexedDB `openher` **DB_VERSION = 3** (NUNCA
   bajar; si la DB queda corrupta/sin stores, se recrea). Merge-only: `cacheMessages`
   lee-mezcla-escribe la unión; `cacheSessions` upsert. Cifrado AES-GCM de textos
   (`utils/crypto.ts`). Restauración offline si el server no responde.
@@ -571,7 +571,7 @@ v2 prompt rechaza model/agent en body (400)
 ### 6.5 Offline
 
 ```
-IndexedDB opencode-mobile v2 (never downgrade; recrea si corrupta)
+IndexedDB openher v3 (never downgrade; recrea si corrupta)
   cacheSessions upsert; cacheMessages read→union→write + AES-GCM
   onLoadSelected: getCachedMessages → preloadMessages inmediato → red
 useOfflineQueue: pendingActions IndexedDB → dequeueAll al volver connected
@@ -593,7 +593,7 @@ primera carga fallida → "offline" directo, siguientes → "reconnecting"→"of
 |---|---|
 | `localStorage` | `ServerConfig{host,port,user,pass,apiVersion}`, `dataMode`, `theme`, `language`, `favorites`, model/agent GLOBAL, `recentModels/blockedModels/featureFlags/chatSettings`, `servers:ServerProfile[]`, `activeServer`, `statsPort`, `desktopState`, `composer`, `cursor` |
 | `Documents/opencode-config.json` | sobrevive reinstalación (`persistentStorage.ts`), password cifrada |
-| `IndexedDB opencode-mobile v2` | `sessions, messages, pendingActions` — merge-only, recrea si corrupta |
+| `IndexedDB openher v3` | `sessions, messages, pendingActions` — merge-only, recrea si corrupta |
 | `desktop-app data/` | `config.json, kanban.json, window-geometry.json, cache/search/<hash>.json (6h), web-dist/, webview/` |
 | `opencode-stats` | `%LOCALAPPDATA%\OpenCodeStats\` o `data/` → `config.json`, `pricing_overrides.json`, `backups/last.json` |
 | `server` | Source of truth: `opencode.db` WAL (`session`, `part/message/todo`, `event_sequence`) |

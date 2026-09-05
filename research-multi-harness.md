@@ -143,7 +143,7 @@ Reglas FSD operantes (`AGENTS.md`):
    │  detection.ts     probeHarnesses(config) → kind+capabilities (health)  │
    │  mappers/         *por-adapter* toSession / toMessageEnvelope          │
    │  sse/             *por-adapter* event translators → SSEEvent canónico  │
-   │  offline/         cache namespacing por kind (opencode-mobile:{kind}) │
+   │  offline/         cache namespacing por kind (openher:{kind}) │
    └──────────┬─────────────────────────────────────────────────────────────┘
               │ implementan ports
    ┌──────────┴─────────────────────────────────────────────────────────────┐
@@ -306,7 +306,7 @@ async function probeSequence(config: ServerConfig): Promise<HarnessProfile> {
 | `hooks/useSessions.ts` | Migrar a `ISessionRepository` via adapter factory. | `listSessions` vs `listGlobalSessions` vs pi `~/.pi/session` se oculta en mapper. |
 | `hooks/useAI` / `hooks/useSessionSidecar` / FileBrowser / DiffViewer | Pasar por `IModelRegistry` / `IFileOps`. | UI deshabilita features según `profile.capabilities` (igual que hoy se oculta `writeFile` en v2). |
 | `components/ToolPart`, `ThinkingBlock`, `PermissionPrompt`, `QuestionPrompt` | Sin cambios: consumen `RenderedMessage.toolParts`/`thinkingParts` ya normalizados. | Cada adapter mapea su delta (Anthropic `content_block_delta`, OpenAI `function_call`) a `MessageEnvelope.parts[].state`. |
-| `useOfflineCache.ts` / IndexedDB | Namespacing por harness: `opencode-mobile:{kind}:{sessionID}` o stores separados. Nunca bajar `DB_VERSION=2`; merge-only se mantiene. | Evita mezclar shapes de diferentes adapters. |
+| `useOfflineCache.ts` / IndexedDB | Namespacing por harness: `openher:{kind}:{sessionID}` o stores separados. Nunca bajar `DB_VERSION=2`; merge-only se mantiene. | Evita mezclar shapes de diferentes adapters. |
 | `shared/api/client.ts` | Extraer `AuthHandler` + `Transport` strategy: `BasicHandler` (hoy), `BearerHandler` (hermes/openhands), `CapacitorHttp` vs `fetch` vs `WebSocket` vs `JsonlRpcOverHttp` (desktop shell proxy). | Hoy ya tiene dual `CapacitorHttp`/`fetch` + `recordDataUsage` + 1 retry + `x-next-cursor` pagination — se preserva. |
 | `desktop-app/src/api.rs` (1370 líneas, `if chain`) | Crear `infrastructure/http/harness_router.rs` (ya scaffold vacío) para `/shell/harness/*`: `{detect, proxy, events, pty}` que tape stdio harnesses (pi RPC, codex MCP). | Hoy `AGENTS.md` prohíbe `if path==` en `api.rs`; este RFC le da contenido real al scaffold. |
 
@@ -581,7 +581,7 @@ Leyenda: ✅ nativo completo · ⚠️ parcial/bridge requerido · ❌ no aplica
 - [ ] `adapters/pi/sse.ts`: emula SSE events canónicos desde JSONL stream (`token → message.part.delta`, `tool_execution → message.part.updated`, `compaction → message.part.delta type=compaction`).
 - [ ] `shared/harness/detection.ts`: extender probe para pi (`GET /shell/harness/pi/health` si desktop || `fetch http://host:pi_port/health` si remote bridge).
 - [ ] UI switches: `SettingsPanel > ServerKind selector` (Auto → opencode / pi / auto) reemplazando hoy `ServerVersion Auto/v1/v2` toggle. Mantener fallback interop.
-- [ ] Offline: namespacing IndexedDB `opencode-mobile:pi:*` para no colisionar con opencode stores.
+- [ ] Offline: namespacing IndexedDB `openher:pi:*` para no colisionar con opencode stores.
 - [ ] Tests: `features/chat/domain/chat.service.test.ts` ya 100% passer; añadir `adapters/pi/mapper.test.ts` (20+ cases: branch, fork, image parts stub) + e2e `harness:detection.test.ts`.
 - [ ] Deliverable: usuario puede agregar un `ServerProfile kind=pi` en `hooks/useServers`/`ServerProfileModal` y chatear contra pi remoto con paridad funcional `sendPrompt + loadMessages + streaming`. WriteFile opcional (pi sí soporta, pero detrás de capability gate).
 
@@ -641,7 +641,7 @@ Leyenda: ✅ nativo completo · ⚠️ parcial/bridge requerido · ❌ no aplica
 | 2 | Server v1 solo `message.part.delta` 1.18.x — no duplicar handlers v2 sin dedupe | Hermès `tool.progress` + Anthropic `content_block_delta` son otras fuentes de delta — riesgo triple dedupe | `createEventRouter` (handler.ts) registra `isDeltaEvent` por `kind` (registry en `capabilities.ts`), no global |
 | 3 | Type del evento dentro JSON, no en `event:` line | OpenAI `event: content_block_delta\ndata: {type…}` vs pi JSONL sin `event:` | Parser por adapter: `opencode: createSSEFrameParser`, `hermes: openaiSseParser`, `pi: jsonlLineParser` → todos normalizan a `SSEEvent` |
 | 4 | `refreshSessions` traga errores; backoff solo lanzando desde callback `offline` | Cada adapter tiene su lista de errores retryable (hermes 429? `RateLimitError`, openhands `overloaded_error`) | `serializedSize`/`recordDataUsage` ya centralizado; añadir `isRetryable(error, kind)` matrix |
-| 5 | No bajar `DB_VERSION=2` (merge-only) | Nuevos harness shapes pueden escribir esquemas diferentes en IndexedDB | Namespacing `DB_VERSION` por harness o prefix keys `opencode-mobile:${kind}:sessions` manteniendo `DB_VERSION=2` |
+| 5 | No bajar `DB_VERSION=2` (merge-only) | Nuevos harness shapes pueden escribir esquemas diferentes en IndexedDB | Namespacing `DB_VERSION` por harness o prefix keys `openher:${kind}:sessions` manteniendo `DB_VERSION=2` |
 | 6 | `deploy-quick.ps1` `Out-Null` oculta errores | `build-desktop.ps1 -SkipWeb -Run` oculta bridge crash (`pi --mode rpc` EOF) | Detach con log file `data/harness-${kind}.log` visible en `window.__OPENCODE_DESKTOP__` bridge health panel |
 | 7 | v2 prompt rechaza `model/agent` en body 400 | Hermes exige `model` en cada `chat/completions` body; openhands rechaza `model` en `questionReply` sin `sessionID` | `toModelBody`/`toCreateSessionModel` por adapter; 400 mapped → `responseDetail` humanizable |
 | 8 | hover-only fallback `@media (hover:none)` | ToolPart expand/collapse, `PermissionPrompt` deben ser touch-first en APK aun si adapter desktop | Sin cambio: test `test:ui` ya cubre |
@@ -745,7 +745,7 @@ Para que otro agente (o vos) pueda retomar sin releer todo:
       │  Authorization: Bearer ***    │  stdin: JSONL {type:"prompt",  │pi-agent-core loop
       │                              │           model, tools, content} │  read/write/edit/bash
       │  ┌ IndexedDB cache            │            │                     │     ▲
-      │  │ opencode-mobile:pi:sessions│  WS :4850  │  stdout: JSONL        │     │ tools
+      │  │ openher:pi:sessions│  WS :4850  │  stdout: JSONL        │     │ tools
       │  └──────────────────┐         │ /events  ◄─┼──── {type:"token",   │     │
       │                     │ merge   │            │    delta:"hello"}    ◄─────┘
       │                     │ only     │            │  {type:"tool", name:"read"…}

@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 
-const ZOOM_KEY = "opencode.mobile.ui_zoom"
+const ZOOM_KEY = "openher.ui_zoom"
 
 /**
  * Zoom general de la interfaz con Ctrl + Ruedita y atajos de teclado (Ctrl + / Ctrl - / Ctrl 0)

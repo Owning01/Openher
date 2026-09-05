@@ -1,25 +1,8 @@
 <div align="center">
 
-  <img src="https://raw.githubusercontent.com/Owning01/Opencode-Mobile/main/web/public/img/opencode-logo-dark.jpg" width="64" height="64" alt="OpenCode Logo" style="border-radius: 12px;" />
-
-# OpenCode Mobile + Desktop
+# OpenHer
 
 **Android/iOS + Windows client for [OpenCode](https://opencode.ai) — your AI coding assistant on phone and desktop**
-
-<p align="center">
-  <img src="https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=white" alt="React 19"/>
-  <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
-  <img src="https://img.shields.io/badge/Vite-8.0-646CFF?logo=vite&logoColor=white" alt="Vite"/>
-  <img src="https://img.shields.io/badge/pnpm-12.0-F69220?logo=pnpm&logoColor=white" alt="pnpm 12"/>
-  <img src="https://img.shields.io/badge/Rust-1.98-CE422B?logo=rust&logoColor=white" alt="Rust"/>
-  <img src="https://img.shields.io/badge/Capacitor-8.0-119EFF?logo=capacitor&logoColor=white" alt="Capacitor"/>
-  <img src="https://img.shields.io/badge/Node-24.20-339933?logo=nodedotjs&logoColor=white" alt="Node 24"/>
-  <br/>
-  <img src="https://img.shields.io/badge/SSE%20streaming-%E2%9C%85-6c8cff" alt="SSE"/>
-  <img src="https://img.shields.io/badge/Offline%20cache-%E2%9C%85-6c8cff" alt="Offline"/>
-  <img src="https://img.shields.io/badge/Desktop%20hybrid-mmap%2Bbr%20%7C%20hyper-6c8cff" alt="Desktop"/>
-  <img src="https://img.shields.io/badge/5%20external%20plugins-%E2%9C%85-6c8cff" alt="Plugins"/>
-</p>
 
 **[Español](README.es.md)** · **English**
 
@@ -33,16 +16,10 @@
 
 </div>
 
-| Live chat | Sessions | Connect server |
-| :---: | :---: | :---: |
-| [![Live chat](./marketing/github/thumbs/live-chat.png)](./screenshots/chat+thinking.png) | [![Sessions](./marketing/github/thumbs/sessions.png)](./screenshots/home-1.png) | [![Connect server](./marketing/github/thumbs/connect-server.png)](./screenshots/settings-1.png) |
-| **Data modes** | **Full control** | **Chat settings and more** |
-| [![Data modes](./marketing/github/thumbs/data-modes.png)](./screenshots/settings-4.png) | [![Full control](./marketing/github/thumbs/full-control.png)](./screenshots/Settings-3.png) | [![Chat settings and more](./marketing/github/thumbs/get-it-now.png)](./screenshots/Settingsdentrodelchat.png) |
-
 ```
 ┌──────────────────────────────────────────────┐
 │              📱 YOUR PHONE                    │
-│          OpenCode Mobile (the app)           │
+│          OpenHer (the app)                   │
 └──────────────────────┬───────────────────────┘
                        │
                        │  ① Tailscale — private VPN
@@ -64,9 +41,9 @@
 
 ### 📲 1 — Install the app on your phone
 
-[⬇️ **Download OpenCodeMobile.apk**](https://github.com/Owning01/Opencode-Mobile/releases/latest)
+[⬇️ **Download OpenHer.apk**](https://github.com/Owning01/Openher/releases/latest)
 
-Or build it yourself (see [development](#-development)).
+Or build it yourself (see [development](#️-development)).
 
 **iOS** (requires macOS + Xcode 16+): clone the repo and open `web/ios/App/App.xcworkspace` in Xcode, select your development team and Build & Run.
 
@@ -76,7 +53,7 @@ Or build it yourself (see [development](#-development)).
 
 ### 🖥️ 2 — Install Tailscale on your PC (for remote access)
 
-OpenCode Mobile connects to your OpenCode server over plain HTTP. For **remote access from any network** (not just your WiFi), use [**Tailscale**](https://tailscale.com) — a free, zero-config private mesh VPN.
+OpenHer connects to your OpenCode server over plain HTTP. For **remote access from any network** (not just your WiFi), use [**Tailscale**](https://tailscale.com) — a free, zero-config private mesh VPN.
 
 #### Step A — Install Tailscale on the PC (server)
 
@@ -114,7 +91,7 @@ npx -y opencode-ai serve --hostname 0.0.0.0 --port 4096
 
 #### Step D — Connect the app
 
-In OpenCode Mobile: **Settings → Server**:
+In OpenHer: **Settings → Server**:
 
 | Field | Value |
 |-------|-------|
@@ -235,14 +212,14 @@ build-desktop.ps1/.bat · deploy-apk.ps1 · codemagic.yaml
 
 | Principle | Description |
 |-----------|-------------|
-| **🔄 SSE + Polling handoff** | While SSE is active, polling runs at 5s instead of the full interval. On disconnect, backoff kicks in immediately |
-| **📈 Exponential backoff** | Polling starts at 1s, doubles per failure up to 60s, with 30% jitter. SSE similar but capped at 30s |
-| **📦 Offline-first** | IndexedDB caches sessions + messages. Browsing old data works offline; writes require connectivity |
-| **⚡ Optimistic updates** | User messages render immediately before the server round-trip |
-| **🛡️ Stale request rejection** | `loadSelected` uses a request ID to discard outdated polling responses |
-| **🎨 Dynamic themes** | 30+ themes with CSS variables applied at runtime via `resolveTheme.ts` |
-| **🧩 External plugins** | 5 projects via `external_router.rs` — mmap embed + `<base href>` + node_hidden, keep-mounted iframes |
-| **🧠 OpenCode Hub** | Live global config + skills + scannedRoots (always visible soft gray) via `/shell/opencode/global` |
+| **SSE + Polling handoff** | While SSE is active, polling runs at 5s instead of the full interval. On disconnect, backoff kicks in immediately |
+| **Exponential backoff** | Polling starts at 1s, doubles per failure up to 60s, with 30% jitter. SSE similar but capped at 30s |
+| **Offline-first** | IndexedDB caches sessions + messages. Browsing old data works offline; writes require connectivity |
+| **Optimistic updates** | User messages render immediately before the server round-trip |
+| **Stale request rejection** | `loadSelected` uses a request ID to discard outdated polling responses |
+| **Dynamic themes** | 30+ themes with CSS variables applied at runtime via `resolveTheme.ts` |
+| **External plugins** | 5 projects via `external_router.rs` — mmap embed + `<base href>` + node_hidden, keep-mounted iframes |
+| **OpenCode Hub** | Live global config + skills + scannedRoots (always visible soft gray) via `/shell/opencode/global` |
 
 </details>
 
@@ -276,8 +253,8 @@ React 19.2 + react-compiler, TS 7.0, Vite 8, Vitest 4, pnpm 12 (Rust binary), Ca
 
 <div align="center">
 
-**OpenCode Mobile** is a client for [**OpenCode**](https://opencode.ai) — the open-source AI coding assistant.
+**OpenHer** is a client for [**OpenCode**](https://opencode.ai) — the open-source AI coding assistant.
 
-Developed by [@Owning01](https://github.com/Owning01) · [Report issue](https://github.com/Owning01/Opencode-Mobile/issues) · [Contribute](https://github.com/Owning01/Opencode-Mobile)
+Developed by [@Owning01](https://github.com/Owning01) · [Report issue](https://github.com/Owning01/Openher/issues) · [Contribute](https://github.com/Owning01/Openher)
 
 </div>

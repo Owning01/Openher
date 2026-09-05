@@ -22,7 +22,7 @@ function Get-LocalIP {
     return $ip
 }
 
-Write-Host "=== OpenCode Mobile - Quick Deploy ===" -ForegroundColor Green
+Write-Host "=== OpenHer - Quick Deploy ===" -ForegroundColor Green
 
 # Build si es necesario
 if (-not $NoBuild) {

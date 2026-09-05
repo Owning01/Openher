@@ -1,6 +1,6 @@
-# DESIGN SYSTEM — OpenCode Mobile & Desktop
+# DESIGN SYSTEM — OpenHer & Desktop
 
-Guía y especificación completa del sistema de diseño, estética visual, tipografía, paleta de colores y componentes interactivos para **OpenCode Mobile / Desktop**.
+Guía y especificación completa del sistema de diseño, estética visual, tipografía, paleta de colores y componentes interactivos para **OpenHer / Desktop**.
 
 ---
 
