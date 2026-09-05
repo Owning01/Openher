@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon, EyeIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon, EyeIcon, NoteIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -16,6 +16,7 @@ import { PermissionPrompt } from "./PermissionPrompt"
 import { ChatCustomizerModal } from "./ChatCustomizerModal"
 import { ChatTerminalDock } from "./ChatTerminalDock"
 import { PromptHistoryPanel, usePromptHistoryLayout } from "./PromptHistoryPanel"
+import { ChatNotesPanel } from "./ChatNotesPanel"
 import { PROMPT_HISTORY_OPEN_EVENT, extractUserPrompts } from "../utils/promptHistory"
 import { SelectionBar } from "./SelectionBar"
 import { ExportMarkdownDialog } from "./ExportMarkdownDialog"
@@ -186,6 +187,7 @@ export const ChatView = memo(function ChatView({
   }, [chatTermId])
   const [showExport, setShowExport] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
   const historyLayout = usePromptHistoryLayout()
   const [exportBusy, setExportBusy] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
@@ -465,6 +467,16 @@ export const ChatView = memo(function ChatView({
                   aria-label={t('session.promptHistory')}
                   aria-pressed={showHistory}>
                   <HistoryIcon size={14} />
+                </button>
+              )}
+              {selectedSession && (
+                <button className={`btn-icon compact chat-notes-btn${showNotes ? " active" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); setShowNotes((v) => !v) }}
+                  title={t('session.notes')}
+                  aria-label={t('session.notes')}
+                  aria-pressed={showNotes}
+                  aria-expanded={showNotes}>
+                  <NoteIcon size={14} />
                 </button>
               )}
               <button className="btn-icon compact"
@@ -756,6 +768,14 @@ export const ChatView = memo(function ChatView({
           cwd={selectedSession.directory}
           onHide={() => setChatTermOpen(false)}
           onKill={handleKillChatTerm}
+        />
+      )}
+
+      {showNotes && selectedSession && !readingMode && (
+        <ChatNotesPanel
+          sessionID={selectedSession.id}
+          onClose={() => setShowNotes(false)}
+          onInsert={onInsertPrompt ? (text) => onInsertPrompt(text) : undefined}
         />
       )}
 

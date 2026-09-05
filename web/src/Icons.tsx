@@ -136,6 +136,9 @@ export const CameraIcon = (p: { className?: string; size?: number }) => (
 export const CopyIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Copy"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Svg>)
 
+export const NoteIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Notes"><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/><path d="M15 3v5.5h5.5"/><path d="M8.5 13.5l6-6 2.5 2.5-6 6H8.5v-2.5z"/></Svg>)
+
 export const SplitIcon = (p: { className?: string; size?: number; style?: CSSProperties }) => (
   <Svg {...p} label="Split"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></Svg>)
 

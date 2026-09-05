@@ -1,0 +1,157 @@
+/* styles/notes.css - mini bloc de notas del chat (papel rayado sobrio).
+   Solo tokens var(--*): funciona en claro y oscuro sin hex hardcodeado. */
+
+.chat-notes {
+  position: fixed;
+  right: 16px;
+  bottom: 96px;
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  height: 380px;
+  max-height: calc(100dvh - 180px);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: chat-message-in 0.15s ease-out;
+}
+
+.chat-notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 6px 6px 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-subtle);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.chat-notes-head:active {
+  cursor: grabbing;
+}
+
+.chat-notes-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-notes-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.chat-notes-insert-glyph {
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.chat-notes-actions .danger-armed {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* Papel: renglones cada 28px + margen vertical tenue (color-mix con tokens). */
+.chat-notes-paper {
+  flex: 1;
+  min-height: 0;
+  padding: 0 10px 0 34px;
+  background:
+    linear-gradient(90deg, transparent 0 27px,
+      color-mix(in srgb, var(--danger) 30%, transparent) 27px 28px,
+      transparent 28px),
+    repeating-linear-gradient(transparent 0 27px,
+      var(--border-subtle) 27px 28px);
+  background-color: var(--surface);
+}
+
+.chat-notes-area {
+  width: 100%;
+  height: 100%;
+  padding: 5px 2px;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 28px;
+  font-family: inherit;
+}
+
+.chat-notes-area::placeholder {
+  color: var(--muted);
+  line-height: 28px;
+}
+
+.chat-notes-area:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.chat-notes-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 5px 12px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.chat-notes-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.chat-notes-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.chat-notes-count {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+@media (max-width: 780px) {
+  .chat-notes {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    bottom: 120px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-notes {
+    animation: none;
+  }
+}
