@@ -34,4 +34,12 @@ describe("fileUrlToPath", () => {
     expect(fileUrlToPath("https://x/y.html")).toBeNull()
     expect(fileUrlToPath("C:/a.html")).toBeNull()
   })
+  it("ignora ?query y #fragment (cache-buster ?v=N)", () => {
+    expect(fileUrlToPath("file:///C:/a/w.html?v=2")).toBe("C:/a/w.html")
+    expect(fileUrlToPath("file:///C:/a/w.html?v=2#top")).toBe("C:/a/w.html")
+    expect(fileUrlToPath("file:///C:/a/w.html#top")).toBe("C:/a/w.html")
+  })
+  it("no corta un %3F legítimo del nombre", () => {
+    expect(fileUrlToPath("file:///C:/a/qu%C3%A9%3F.html?v=3")).toBe("C:/a/qué?.html")
+  })
 })
