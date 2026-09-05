@@ -33,6 +33,7 @@ export const TabBar = memo(function TabBar({
  onDuplicate,
  onRenameTab,
  onDropUrl,
+ browserTabUrls,
 }: {
  tabs: Array<string>
  activeIndex: number
