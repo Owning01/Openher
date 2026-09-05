@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { basename } from "../utils"
 import { PlusIcon, CloseIcon, PencilIcon } from "../Icons"
 import { useTabTitles, setTabTitle } from "../hooks/useTabTitles"
+import { extractUrlFromDataTransfer, setUrlDragData } from "../utils/urlDrag"
 
 type SessionLike = { id: string; title?: string; directory: string }
 
@@ -54,6 +55,7 @@ export const TabBar = memo(function TabBar({
  onRenameTab?: (index: number, newTitle: string) => void
  onDropUrl?: (url: string, toIndex: number) => void
  onDetach?: (index: number, where?: "bottom" | "right") => void
+ browserTabUrls?: Record<string, string>
 }) {
  const [dragIdx, setDragIdx] = useState<number | null>(null)
  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
@@ -163,18 +165,35 @@ export const TabBar = memo(function TabBar({
  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
   const id = tabs[index]
   e.dataTransfer.setData("application/x-opencode-tab-index", String(index))
-  // Origen del drag ("panel|index", -1 si la barra no pertenece a un panel)
   e.dataTransfer.setData("application/x-opencode-tab-src", `${panelIndex ?? -1}|${index}`)
+  let url: string | null = null
+  if (id) {
+   if (id.startsWith("browser:")) {
+    url = browserTabUrls?.[id] ?? null
+    if (!url && id.slice(8).includes("://")) url = id.slice(8)
+   } else if (/^https?:\/\//.test(id)) {
+    url = id
+   }
+  }
   if (id) {
    const payload = panelIndex !== undefined ? `panel:${panelIndex}:${id}` : `session:${id}`
    e.dataTransfer.setData("application/x-opencode-path", payload)
-   e.dataTransfer.setData("text/plain", payload)
+   // Para Chrome: solo URL (text/uri-list + text/plain URL). Interno queda en application/x-opencode-path
+   if (url) {
+    setUrlDragData(e.dataTransfer, url)
+    // restaurar payload interno en text/plain si setUrlDragData lo piso? No, queremos URL en text/plain para Chrome
+    // pero nuestro drop interno lee application/x-opencode-path primero, asi que no importa
+    e.dataTransfer.effectAllowed = "copyMove"
+   } else {
+    e.dataTransfer.setData("text/plain", payload)
+    e.dataTransfer.effectAllowed = "move"
+   }
   } else {
    e.dataTransfer.setData("text/plain", `tab:${index}`)
+   e.dataTransfer.effectAllowed = "move"
   }
-  e.dataTransfer.effectAllowed = "move"
   setDragIdx(index)
- }, [tabs, panelIndex])
+ }, [tabs, panelIndex, browserTabUrls])
 
  // Índice de inserción según la posición X del cursor sobre la barra
  const getIndexFromX = useCallback((clientX: number): number => {
@@ -241,37 +260,54 @@ export const TabBar = memo(function TabBar({
  }, [])
 
  const handleBarDragOver = useCallback((e: React.DragEvent) => {
-  const isInternal = e.dataTransfer.types.includes("application/x-opencode-tab-index")
-  const hasUrl = e.dataTransfer.types.includes("application/x-opencode-browser-tab") || e.dataTransfer.types.includes("text/plain")
-  // Drops externos (terminal, browser url) y reorden interno: ambos válidos
-  const isExternal = !isInternal && (hasUrl || e.dataTransfer.types.includes("application/x-opencode-path"))
+  const types = Array.from(e.dataTransfer.types as unknown as string[])
+  const isInternal = types.includes("application/x-opencode-tab-index")
+  const hasUrlType = types.includes("application/x-opencode-browser-tab") || types.includes("text/uri-list") || types.includes("text/x-moz-url") || types.includes("url") || (!isInternal && types.includes("text/plain"))
+  const isExternal = !isInternal && (hasUrlType || types.includes("application/x-opencode-path"))
   if (isInternal || isExternal) {
    e.preventDefault()
    e.stopPropagation()
-   e.dataTransfer.dropEffect = isInternal ? "move" : "copy"
+   // Si es URL externa, copy; si es interno, move
+   const urlDrag = !isInternal && hasUrlType
+   e.dataTransfer.dropEffect = isInternal && !urlDrag ? "move" : "copy"
    if (isInternal) setDragOverIdx(getIndexFromX(e.clientX))
   }
  }, [getIndexFromX])
 
  const handleBarDrop = useCallback((e: React.DragEvent) => {
-  const isInternal = e.dataTransfer.types.includes("application/x-opencode-tab-index")
+  const types = Array.from(e.dataTransfer.types as unknown as string[])
+  const isInternalTab = types.includes("application/x-opencode-tab-index")
+  // URL externa (Chrome -> app): priorizar URL si no es drag interno de tab
+  if (!isInternalTab && onDropUrl) {
+   const url = extractUrlFromDataTransfer(e.dataTransfer)
+   if (url) {
+    e.preventDefault()
+    e.stopPropagation()
+    const at = getIndexFromX(e.clientX)
+    onDropUrl(url, at)
+    setDragIdx(null)
+    setDragOverIdx(null)
+    return
+   }
+  }
+  // Si es tab interno, manejar reorden/transfer antes que URL (evita duplicar al reordenar)
   const path = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain") || ""
-  const browserUrl = e.dataTransfer.getData("application/x-opencode-browser-tab") || ""
-  const urlPayload = browserUrl || path
-  const isUrl = /^https?:\/\//i.test(urlPayload) || urlPayload.startsWith("browser:") || (urlPayload.includes(".") && !urlPayload.includes("kind:") && !urlPayload.includes("terminal-tab:"))
   const isTerminal = path.includes("kind:terminal") || path === "kind:terminal"
   const isTerminalTab = path.includes("terminal-tab:")
-  if (isUrl && onDropUrl) {
-   e.preventDefault()
-   e.stopPropagation()
-   const at = getIndexFromX(e.clientX)
-   onDropUrl(urlPayload, at)
-   setDragIdx(null)
-   setDragOverIdx(null)
-   return
+  // Si no es interno ni terminal y es URL (fallback por tipos sin tab-index)
+  if (!isInternalTab && !isTerminal && !isTerminalTab && onDropUrl) {
+   const url2 = extractUrlFromDataTransfer(e.dataTransfer)
+   if (url2) {
+    e.preventDefault()
+    e.stopPropagation()
+    const at = getIndexFromX(e.clientX)
+    onDropUrl(url2, at)
+    setDragIdx(null)
+    setDragOverIdx(null)
+    return
+   }
   }
-  // Tipos desconocidos (ej. sesión desde sidebar): dejar pasar al handler de la celda (split)
-  if (!isInternal && !isTerminal && !isTerminalTab) return
+  if (!isInternalTab && !isTerminal && !isTerminalTab) return
   e.preventDefault()
   e.stopPropagation()
   const at = getIndexFromX(e.clientX)

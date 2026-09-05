@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useState, useRef } from "react"
 import { useIsDesktop } from "../../hooks/useIsDesktop"
+import { extractUrlFromDataTransfer, setUrlDragData } from "../../utils/urlDrag"
 import { TabBar } from "../../components/TabBar"
 import { WeatherChip } from "../../components/WeatherChip"
 import {
@@ -261,16 +262,29 @@ export const TitleBar = memo(function TitleBar({
     const id = currentStack[index]
     e.dataTransfer.setData("application/x-opencode-tab-index", String(index))
     e.dataTransfer.setData("application/x-opencode-tab-src", `${activePanel}|${index}`)
+    let url: string | null = null
+    if (id?.startsWith("browser:")) {
+      url = browserTabUrls?.[id] ?? null
+      if (!url && id.slice(8).includes("://")) url = id.slice(8)
+    } else if (id && /^https?:\/\//.test(id)) {
+      url = id
+    }
     if (id) {
       const payload = `panel:${activePanel}:${id}`
       e.dataTransfer.setData("application/x-opencode-path", payload)
-      e.dataTransfer.setData("text/plain", payload)
+      if (url) {
+        setUrlDragData(e.dataTransfer, url)
+        e.dataTransfer.effectAllowed = "copyMove"
+      } else {
+        e.dataTransfer.setData("text/plain", payload)
+        e.dataTransfer.effectAllowed = "move"
+      }
     } else {
       e.dataTransfer.setData("text/plain", `tab:${index}`)
+      e.dataTransfer.effectAllowed = "move"
     }
-    e.dataTransfer.effectAllowed = "move"
     setDragIdx(index)
-  }, [currentStack, activePanel])
+  }, [currentStack, activePanel, browserTabUrls])
 
   // Índice de inserción según la posición X del cursor sobre la barra
   const getIndexFromX = useCallback((clientX: number): number => {
@@ -297,15 +311,39 @@ export const TitleBar = memo(function TitleBar({
   }, [])
 
   const handleBarDragOver = useCallback((e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes("application/x-opencode-tab-index")) return
-    e.preventDefault()
-    e.stopPropagation()
-    e.dataTransfer.dropEffect = "move"
-    setDragOverIdx(getIndexFromX(e.clientX))
-  }, [getIndexFromX])
+    const types = Array.from(e.dataTransfer.types as unknown as string[])
+    const isInternal = types.includes("application/x-opencode-tab-index")
+    const hasUrlType = types.includes("application/x-opencode-browser-tab") || types.includes("text/uri-list") || types.includes("text/x-moz-url") || types.includes("url") || (!isInternal && types.includes("text/plain"))
+    if (isInternal) {
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = "move"
+      setDragOverIdx(getIndexFromX(e.clientX))
+      return
+    }
+    if (hasUrlType && onOpenBrowser) {
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = "copy"
+    }
+  }, [getIndexFromX, onOpenBrowser])
 
   const handleBarDrop = useCallback((e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes("application/x-opencode-tab-index")) return
+    const types = Array.from(e.dataTransfer.types as unknown as string[])
+    const isInternal = types.includes("application/x-opencode-tab-index")
+    if (!isInternal && onOpenBrowser) {
+      const url = extractUrlFromDataTransfer(e.dataTransfer)
+      if (url) {
+        e.preventDefault()
+        e.stopPropagation()
+        clearDrag()
+        const at = getIndexFromX(e.clientX)
+        // nuevo browser tab en el panel activo (indice at ignorado por openBrowserAsTab que appendea, pero mantenemos compat)
+        onOpenBrowser(url, activePanel)
+        return
+      }
+    }
+    if (!isInternal) return
     e.preventDefault()
     e.stopPropagation()
     const origin = readDragOrigin(e)
@@ -313,15 +351,13 @@ export const TitleBar = memo(function TitleBar({
     if (!origin) return
     const at = getIndexFromX(e.clientX)
     if (origin.panel === activePanel) {
-      // Reorden dentro del mismo header
       let to = at
       if (origin.index < to) to -= 1
       if (to !== origin.index && to >= 0) onMoveTab?.(activePanel, origin.index, to)
     } else {
-      // Tab arrastrado desde la barra de otro panel
       onTransferTab?.(origin.panel, origin.index, activePanel, at)
     }
-  }, [readDragOrigin, clearDrag, getIndexFromX, activePanel, onMoveTab, onTransferTab])
+  }, [readDragOrigin, clearDrag, getIndexFromX, activePanel, onMoveTab, onTransferTab, onOpenBrowser])
 
   return (
     <div
@@ -425,6 +461,7 @@ export const TitleBar = memo(function TitleBar({
                     tabs={stack}
                     activeIndex={Math.max(0, stack.indexOf(sid ?? ""))}
                     sessions={buildPanelSessions(stack, sessions, browserTabUrls)}
+                    browserTabUrls={browserTabUrls}
                     busySessionIds={busySessions}
                     onSwitch={(idx) => onSwitchTab?.(pi, idx)}
                     onClose={(idx) => onRemoveTab?.(pi, idx)}

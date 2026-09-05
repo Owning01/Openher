@@ -3,6 +3,7 @@ import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../..
 import type { ChatViewProps } from "../../components/ChatView"
 import { SessionChatPanel } from "../../components/SessionChatPanel"
 import { DesktopPanelRenderer } from "./DesktopPanelRenderer"
+import { extractUrlFromDataTransfer } from "../../utils/urlDrag"
 import { calcDropZone, isOverTabBar, compactLayout, type DropZone } from "./model"
 
 export type DesktopGridProps = {
@@ -469,10 +470,23 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
               .join(" "),
           }}
           onDragOver={(e) => {
-            const isTabDrag = e.dataTransfer.types.includes("application/x-opencode-tab-index")
-            const hasPath = e.dataTransfer.types.includes("application/x-opencode-path")
-            if (!isTabDrag && !hasPath) {
+            const types = Array.from(e.dataTransfer.types as unknown as string[])
+            const isTabDrag = types.includes("application/x-opencode-tab-index")
+            const hasPath = types.includes("application/x-opencode-path")
+            const hasUrl = types.includes("application/x-opencode-browser-tab") || types.includes("text/uri-list") || types.includes("text/plain") || types.includes("URL") || types.includes("text/x-moz-url")
+            if (!isTabDrag && !hasPath && !hasUrl) {
               setGridDragOver(null)
+              return
+            }
+            // si es drag URL de Chrome, permitir drop en celda (copia)
+            if (hasUrl && !isTabDrag && !hasPath) {
+              const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
+              if (!target) { setGridDragOver(null); return }
+              e.preventDefault()
+              e.dataTransfer.dropEffect = "copy"
+              const allCells = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
+              const idx = allCells.indexOf(target)
+              if (idx !== -1) setGridDragOver({ idx, zone: "center" as any })
               return
             }
             const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
@@ -511,6 +525,16 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
           onDrop={(e) => {
             e.preventDefault()
             setGridDragOver(null)
+            // URL de Chrome -> abrir browser en la celda destino
+            const urlFromDrag = extractUrlFromDataTransfer(e.dataTransfer)
+            if (urlFromDrag) {
+              const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
+              if (target) {
+                const allCells = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
+                const idx = allCells.indexOf(target)
+                if (idx !== -1) { onOpenBrowser(urlFromDrag, idx); return }
+              }
+            }
             const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("application/x-opencode-browser-tab") || ""
             if (!raw) return
             const isUrl = /^https?:\/\//i.test(raw) || raw.startsWith("browser:") || (/^[a-z0-9.-]+\.[a-z]{2,}/i.test(raw) && !raw.includes("kind:") && !raw.includes("terminal"))
