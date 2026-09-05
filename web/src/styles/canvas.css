@@ -1,0 +1,194 @@
+/* Canvas M3E: scope de color Material 3 Expressive. Excepcion justificada al
+   monocromo de la app: un editor de diseño necesita color real. Todo vive
+   bajo .m3e-scope para no fugar a ningun otro panel. */
+
+.m3e-scope {
+  --m3-primary: #6750a4;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #eaddff;
+  --m3-on-primary-container: #21005d;
+  --m3-secondary-container: #e8def8;
+  --m3-on-secondary-container: #1d192b;
+  --m3-surface: #fef7ff;
+  --m3-surface-low: #f7f2fa;
+  --m3-surface-container: #f3edf7;
+  --m3-surface-high: #ece6f0;
+  --m3-surface-highest: #e6e0e9;
+  --m3-on-surface: #1d1b20;
+  --m3-on-variant: #49454f;
+  --m3-outline: #79747e;
+  --m3-outline-variant: #cac4d0;
+  font-family: Roboto, system-ui, sans-serif;
+}
+
+.m3e-phone {
+  border-radius: 40px;
+  background: #101014;
+  padding: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.m3e-screen {
+  position: relative;
+  border-radius: 30px;
+  overflow: hidden;
+  background: var(--m3-surface);
+  color: var(--m3-on-surface);
+  user-select: none;
+}
+
+.m3e-part {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.m3e-part.m3e-selected {
+  outline: 2px solid var(--m3-primary);
+  outline-offset: 2px;
+}
+
+.m3e-part.m3e-tappable {
+  cursor: pointer;
+}
+
+.m3e-btn {
+  height: 56px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0 24px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.m3e-btn-filled { background: var(--m3-primary); color: var(--m3-on-primary); }
+.m3e-btn-tonal { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3e-btn-outlined { background: transparent; color: var(--m3-primary); border: 1px solid var(--m3-outline); }
+.m3e-btn-text { background: transparent; color: var(--m3-primary); }
+
+.m3e-chip {
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--m3-outline);
+  color: var(--m3-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.m3e-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--m3-surface);
+  color: var(--m3-on-surface);
+  overflow: hidden;
+}
+
+.m3e-bar-top { height: 64px; font-size: 22px; font-weight: 500; border-bottom: 1px solid var(--m3-outline-variant); }
+.m3e-bar-bottom {
+  height: 80px;
+  background: var(--m3-surface-container);
+  border-top: 1px solid var(--m3-outline-variant);
+  justify-content: space-around;
+  font-size: 12px;
+  color: var(--m3-on-variant);
+}
+
+.m3e-text { display: flex; align-items: center; overflow: hidden; }
+.m3e-card {
+  background: var(--m3-surface-highest);
+  border-radius: 20px;
+  padding: 16px;
+  overflow: hidden;
+}
+.m3e-list {
+  height: 72px;
+  background: var(--m3-surface-low);
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  overflow: hidden;
+}
+.m3e-field {
+  height: 56px;
+  border-radius: 16px;
+  border: 1px solid var(--m3-outline);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 14px;
+  color: var(--m3-on-variant);
+  background: transparent;
+  overflow: hidden;
+}
+.m3e-switch-track {
+  width: 52px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--m3-surface-highest);
+  border: 1px solid var(--m3-outline);
+  position: relative;
+  flex-shrink: 0;
+}
+.m3e-switch-track.on { background: var(--m3-primary); border-color: var(--m3-primary); }
+.m3e-switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--m3-outline);
+  transform: translateY(-50%);
+}
+.m3e-switch-track.on .m3e-switch-thumb { left: 28px; width: 24px; height: 24px; background: var(--m3-on-primary); }
+.m3e-divider { height: 16px; display: flex; align-items: center; }
+.m3e-divider::after { content: ""; height: 1px; width: 100%; background: var(--m3-outline-variant); }
+.m3e-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.m3e-search {
+  height: 56px;
+  border-radius: 999px;
+  background: var(--m3-surface-high);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  font-size: 15px;
+  color: var(--m3-on-variant);
+  overflow: hidden;
+}
+
+@keyframes m3e-enter {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+.m3e-enter { animation: m3e-enter 0.22s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .m3e-enter { animation: none; }
+}

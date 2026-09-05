@@ -35,6 +35,8 @@ import { loadDesktopConfig } from "../desktop"
 import { loadGoAccounts } from "../goUsage"
 import { useVisualSelection } from "../hooks/useVisualSelection"
 import { pluginHost, tabRegistry } from "../plugins"
+import { ensureCanvasRegistered } from "../features/canvas/register"
+import { ensureCssPlaygroundRegistered } from "../features/css-playground/register"
 import { useVirtualTabs } from "../hooks/useVirtualTabs"
 import { useSidebarPrefs } from "../hooks/useSidebarPrefs"
 import { useDesktopLayoutState } from "../hooks/useDesktopLayoutState"
@@ -307,6 +309,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
   useGlobalKeyShortcuts({ vs, shortcuts, setShowShortcuts })
 
   useEffect(() => {
+    // Tabs builtin: registro barato (el codigo del panel carga por lazy solo al abrirse)
+    ensureCanvasRegistered()
+    ensureCssPlaygroundRegistered()
     if (isDesktop) {
       pluginHost.reloadAll().catch((err) => console.error("[Plugins] Error al inicializar:", err))
     }

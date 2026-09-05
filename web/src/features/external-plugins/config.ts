@@ -53,6 +53,13 @@ export type BuiltinPlugin = {
 
 export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
   {
+    key: "openher:canvas",
+    title: "Canvas M3E",
+    description: "Boceta pantallas Material 3 y genera el prompt para el agente",
+    iconKind: "paint",
+    group: "herramientas",
+  },
+  {
     key: "openher:css-playground",
     title: "CSS Visual Playground",
     description: "Playground visual 8-Progavio — flex/absolute, exporta CSS",
