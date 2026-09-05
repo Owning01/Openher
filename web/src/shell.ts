@@ -11,6 +11,12 @@ export type FsEntry = { name: string; path: string; is_dir: boolean; size: numbe
 export type KanbanBoard = { id: string; name: string; columns: { id: string; title: string }[]; cards: KanbanCard[] }
 export type KanbanCard = { id: string; board: string; column: string; title: string; notes: string; color: string }
 
+/** Texto del prompt al enviar una tarjeta a una sesión: título + notas. */
+export function kanbanPromptText(title: string, notes: string): string {
+  const n = (notes ?? "").trim()
+  return n ? `${(title ?? "").trim()}\n\n${n}` : (title ?? "").trim()
+}
+
 export type LabApp = { id: string; title: string; kind: string; configured: boolean }
 
 export type ShellPlugin = { name: string; title: string; type: string; description: string; version: string }
