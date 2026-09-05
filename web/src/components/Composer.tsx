@@ -1,6 +1,6 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
 import { createPortal } from "react-dom"
-import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon, EyeIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import { api } from "../api"
@@ -167,19 +167,6 @@ export const Composer = memo(function Composer({
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const modelToggleRef = useRef<HTMLButtonElement | null>(null)
   const [editingImage, setEditingImage] = useState<ImageAttachment | null>(null)
-  // PREVIEW TEMPORAL del anillo de envío (se quita al aprobar): fuerza el
-  // estado visual de is-working 8s sin mandar nada.
-  const [previewRing, setPreviewRing] = useState(false)
-  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => () => {
-    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
-  }, [])
-  const startRingPreview = useCallback(() => {
-    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
-    setPreviewRing(true)
-    previewTimerRef.current = setTimeout(() => setPreviewRing(false), 8000)
-  }, [])
-  const showWorking = isWorking || previewRing
 
   // En móvil (táctil) Enter = nueva línea; en desktop Enter envía.
   // En wry desktop (WebView2) forzamos desktop aunque el device reporte pointer:coarse (laptop táctil)
@@ -791,13 +778,13 @@ export const Composer = memo(function Composer({
         </div>
       )}
       <div
-        className={`composer-input-wrap${supported ? " has-mic" : ""}${isDraggingOver ? " drag-over" : ""}${showWorking ? " is-working" : ""}`}
+        className={`composer-input-wrap${supported ? " has-mic" : ""}${isDraggingOver ? " drag-over" : ""}${isWorking ? " is-working" : ""}`}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleComposerDrop}
       >
-        {showWorking && (
+        {isWorking && (
           <div className="composer-ring" aria-hidden="true">
             <div className="composer-ring-glow" />
             <div className="composer-ring-band" />
@@ -866,7 +853,7 @@ export const Composer = memo(function Composer({
             <MicIcon size={18} />
           </button>
         )}
-        {showWorking && (
+        {isWorking && (
           <button
             type="button"
             onClick={onAbort}
@@ -953,19 +940,6 @@ export const Composer = memo(function Composer({
           {contextLabel && <span className="context-usage-label">{contextLabel}</span>}
         </div>
         <div className="composer-bar-right">
-          {/* PREVIEW TEMPORAL: ver el anillo sin mandar nada (se quita al aprobar) */}
-          {!showWorking && (
-            <button
-              type="button"
-              onClick={startRingPreview}
-              className="composer-tsl-btn"
-              title="Vista previa del anillo de envío (temporal)"
-              aria-label="Vista previa del anillo de envío"
-              tabIndex={-1}
-            >
-              <EyeIcon size={13} />
-            </button>
-          )}
           {localValue.length > 0 && (            <span className={`composer-char-count${charLimit > 0 && localValue.length >= charLimit ? " over" : ""}`}
               title={charLimit > 0 ? `${localValue.length}/${charLimit}` : `${localValue.length} chars`}>
               {charLimit > 0 ? `${localValue.length}/${charLimit}` : localValue.length}
