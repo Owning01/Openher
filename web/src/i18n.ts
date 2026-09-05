@@ -635,6 +635,7 @@ type TranslationKey =
   | 'settings.chatPreviewAssistant'
   | 'settings.chatCompactTools'
   | 'settings.chatCompletionSound'
+  | 'settings.chatReduceMotion'
   | 'settings.chatCharLimit'
   | 'settings.chatCharLimitOff'
   | 'settings.snippets'

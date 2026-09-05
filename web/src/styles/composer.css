@@ -170,6 +170,10 @@
   transform: translate(-50%, -50%) rotate(0deg);
   background-repeat: no-repeat;
   animation: composer-ring-rotate 3.5s linear infinite;
+  /* Fase compartida por todas las instancias (style="--ring-delay" desde el
+     Composer, alineada al reloj): sesiones activas en varios paneles giran
+     en sincronía en vez de arrancar cada una en 0deg al montar/activar. */
+  animation-delay: var(--ring-delay, 0s);
   will-change: transform;
 }
 .composer-ring-glow::before {

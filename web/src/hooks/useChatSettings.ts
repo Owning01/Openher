@@ -25,6 +25,7 @@ const DEFAULTS: ChatSettings = {
   compactTools: false,
   minimalistMode: false,
   completionSound: true,
+  reduceMotion: false,
   composerCharLimit: 0,
   desktopGutter: 12,
 }
@@ -63,6 +64,7 @@ function applyCSSVars(s: ChatSettings) {
   root.style.setProperty("--chat-bubble-radius", `${s.bubbleRadius}px`)
   root.style.setProperty("--chat-max-width", textMaxWidth(s.desktopGutter))
   root.style.setProperty("--chat-font-family", FONT_MAP[s.fontFamily])
+  root.classList.toggle("no-motion", s.reduceMotion)
 }
 
 export function useChatSettings() {

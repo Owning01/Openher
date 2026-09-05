@@ -1,4 +1,5 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
+import type { CSSProperties } from "react"
 import { createPortal } from "react-dom"
 import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
@@ -13,6 +14,9 @@ import { ModelSelectorModal } from "./ModelSelectorModal"
 type ImageAttachment = { id: string; base64: string; mime: string; name: string }
 
 const IMAGE_MAX_SIZE = 1600
+
+/** Periodo del giro del anillo del composer: IGUAL que el `3.5s` de composer.css. */
+const RING_PERIOD_MS = 3500
 
 /** Downscale de imágenes grandes antes de base64: reduce heap ~4x y tiempo de upload. */
 async function downscaleImage(file: File): Promise<string> {
@@ -168,6 +172,16 @@ export const Composer = memo(function Composer({
   const [showModelMenu, setShowModelMenu] = useState(false)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const modelToggleRef = useRef<HTMLButtonElement | null>(null)
+  // Sincronía visual entre sesiones activas: delay negativo alineado al reloj
+  // (punto del ciclo de 3.5s a Date.now()) para que todos los anillos de la
+  // app compartan fase. Sin esto cada Composer arranca en 0deg al montar o
+  // al activar isWorking y giran desfasados. Se recalcula al cambiar
+  // isWorking para que una sesión recién activada entre en fase al instante.
+  const ringDelay = useMemo(
+    () => `-${((Date.now() % RING_PERIOD_MS) / 1000).toFixed(3)}s`,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isWorking],
+  )
   const [editingImage, setEditingImage] = useState<ImageAttachment | null>(null)
 
   // En móvil (táctil) Enter = nueva línea; en desktop Enter envía.
@@ -787,7 +801,7 @@ export const Composer = memo(function Composer({
         onDrop={handleComposerDrop}
       >
         {isWorking && (
-          <div className="composer-ring" aria-hidden="true">
+          <div className="composer-ring" aria-hidden="true" style={{ "--ring-delay": ringDelay } as CSSProperties}>
             <div className="composer-ring-glow" />
             <div className="composer-ring-band" />
           </div>

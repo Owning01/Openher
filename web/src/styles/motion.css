@@ -96,3 +96,16 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Toggle manual "Reducir animaciones" (settings.chatReduceMotion): apaga
+   animaciones y transiciones en toda la app, incluido el anillo del composer
+   y los spinners. Más fuerte que el media query: none en vez de 0.01ms. */
+html.no-motion *,
+html.no-motion *::before,
+html.no-motion *::after {
+  animation: none !important;
+  transition: none !important;
+}
+html.no-motion {
+  scroll-behavior: auto !important;
+}
