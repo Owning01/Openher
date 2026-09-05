@@ -64,7 +64,7 @@ if ($missing.Count -gt 0) { throw "Falta: $($missing -join ', ')" }
 & $Adb start-server | Out-Null
 Write-Host "== Dispositivos =="
 & $Adb devices -l
-$serials = & $Adb devices | Select-Object -Skip 1 | Where-Object { $_ -match "\tdevice$" } | ForEach-Object { ($_ -split "\t")[0] }
+$serials = @(& $Adb devices | Select-Object -Skip 1 | Where-Object { $_ -match "\tdevice$" } | ForEach-Object { ($_ -split "\t")[0] })
 if (-not $serials -or $serials.Count -eq 0) {
   throw "No hay celular conectado (adb devices vacio). Activa depuracion USB y acepta la huella RSA en el telefono."
 }
