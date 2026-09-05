@@ -66,7 +66,9 @@ export const SessionList = memo(function SessionList({
   void _activeSessions
   const { confirm } = useDialog()
   const containerRef = useRef<HTMLDivElement>(null)
-  const [expandedProject, setExpandedProject] = useState<string | null>(null)
+  // Varias carpetas desplegadas a la vez (Set de dirs): antes un solo
+  // string|null obligaba a ver las sesiones de un único proyecto cada vez.
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
   const [searchOpen, setSearchOpen] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -80,28 +82,32 @@ export const SessionList = memo(function SessionList({
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
 
-  // Subagentes (parentID) fuera de las listas visibles: recientes, favoritos y proyectos
+  // Subagentes: solo se ocultan cuando su padre TAMBIÉN está listado (ya se
+  // ven agrupados bajo él en la tarjeta del proyecto). Los huérfanos (padre
+  // borrado o ausente) SÍ se muestran: el `!s.parentID` a secas los borraba
+  // de TODAS las vistas y un proyecto solo-subagentes desaparecía entero.
+  const sessionIds = useMemo(() => new Set(sessions.map((s) => s.id)), [sessions])
+  const isListedChild = useCallback(
+    (s: SessionView) => !!s.parentID && sessionIds.has(s.parentID),
+    [sessionIds]
+  )
+
   const recentFiltered = useMemo(
-    () => recentSessions.filter((s) => !s.parentID),
-    [recentSessions]
+    () => recentSessions.filter((s) => !isListedChild(s)),
+    [recentSessions, isListedChild]
   )
 
   const favoriteSessions = useMemo(
-    () => sessions.filter((s) => favorites.has(s.id) && !s.parentID),
-    [sessions, favorites]
+    () => sessions.filter((s) => favorites.has(s.id) && !isListedChild(s)),
+    [sessions, favorites, isListedChild]
   )
 
-  const visibleProjects = useMemo(
-    () => projects
-      .map(([dir, list]): [string, SessionView[]] => [dir, list.filter((s) => !s.parentID)])
-      .filter(([, list]) => list.length > 0),
-    [projects]
-  )
+  // Proyectos: listas completas (padres + hijos). renderSessionCards agrupa
+  // los hijos bajo su padre y muestra los huérfanos; el filtro anterior los
+  // eliminaba aquí y el grupo solo-subagentes caía por `length > 0`.
+  const visibleProjects = projects
 
-  const visibleProjectSessions = useMemo(
-    () => projectSessions.filter((s) => !s.parentID),
-    [projectSessions]
-  )
+  const visibleProjectSessions = projectSessions
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
     try {
@@ -129,7 +135,12 @@ export const SessionList = memo(function SessionList({
   }, [])
 
   const toggleProject = useCallback((dir: string) => {
-    setExpandedProject((prev) => prev === dir ? null : dir)
+    setExpandedProjects((prev) => {
+      const next = new Set(prev)
+      if (next.has(dir)) next.delete(dir)
+      else next.add(dir)
+      return next
+    })
   }, [])
 
   const toggleSelectMode = useCallback(() => {
@@ -580,7 +591,7 @@ export const SessionList = memo(function SessionList({
           </div>
         ) : (
           visibleProjects.map(([dir, projectSessionsList]) => {
-            const isExpanded = expandedProject === dir
+            const isExpanded = expandedProjects.has(dir)
             const { name: projName, parent: projParent } = getProjectDisplay(dir)
             return (
               <div key={dir} className="project-card-wrap fade-in">
