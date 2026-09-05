@@ -388,8 +388,16 @@ export const Composer = memo(function Composer({
       return
     }
     if (localValue.startsWith("/")) {
-      setShowSlashMenu(true)
-      setSlashIndex(0)
+      // Comando ya elegido (nombre + espacio/args, ej "/compact foco"):
+      // NO reabrir el menú. Antes se reabría tras cada autocompletado y el
+      // Enter quedaba atrapado en el loop completar→reabrir→completar,
+      // obligando a 2-3 Enters para enviar un slash command.
+      if (/^\/\S+\s/.test(localValue)) {
+        if (showSlashMenu) setShowSlashMenu(false)
+      } else {
+        setShowSlashMenu(true)
+        setSlashIndex(0)
+      }
     } else {
       setShowSlashMenu(false)
     }
@@ -444,12 +452,19 @@ export const Composer = memo(function Composer({
     if (showSlashMenu && slashFiltered.length > 0) {
       if (e.key === "ArrowDown") { e.preventDefault(); setSlashIndex((i) => (i + 1) % slashFiltered.length); return true }
       if (e.key === "ArrowUp") { e.preventDefault(); setSlashIndex((i) => (i - 1 + slashFiltered.length) % slashFiltered.length); return true }
-      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); selectSlashCommand(slashFiltered[slashIndex]); return true }
+      if (e.key === "Tab") { e.preventDefault(); selectSlashCommand(slashFiltered[slashIndex]); return true }
+      if (e.key === "Enter") {
+        const cur = localValueRef.current ?? ""
+        const m = cur.match(/^\/([A-Za-z0-9_-]+)(\s|$)/)
+        const exact = m != null && allSlashCommands.some((c) => c.name.toLowerCase() === m[1].toLowerCase())
+        if (exact) return false
+        e.preventDefault(); selectSlashCommand(slashFiltered[slashIndex]); return true
+      }
       if (e.key === "Escape") { e.preventDefault(); setShowSlashMenu(false); return true }
       return false
     }
     return false
-  }, [showSlashMenu, slashFiltered, slashIndex, selectSlashCommand, showAtMenu, mentionItems, atIndex, selectMention])
+  }, [showSlashMenu, slashFiltered, slashIndex, selectSlashCommand, showAtMenu, mentionItems, atIndex, selectMention, allSlashCommands])
 
   const t = useT()
   const language = useLanguage()
@@ -625,6 +640,36 @@ export const Composer = memo(function Composer({
   }, [primaryVisibleAgents, activeAgentID, onChangeAgent])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Enter con comando slash EXACTO (ej "/compact" o "/compact args"):
+    // ENVÍA al primer Enter. Antes caía en handleSlashKeys, que lo
+    // "autocompletaba" a "/compact " y el menú se reabría, atrapando el
+    // siguiente Enter en el mismo loop (2-3 Enters para enviar).
+    if (e.key === "Enter" && !e.shiftKey && !showAtMenu) {
+      const curExact = localValueRef.current ?? ""
+      if (curExact.startsWith("/")) {
+        const m = curExact.match(/^\/([A-Za-z0-9_-]+)(\s|$)/)
+        const name = m?.[1]?.toLowerCase()
+        if (name === "theme") {
+          if (isMobileInput) return
+          e.preventDefault()
+          setShowSlashMenu(false)
+          handleChange("")
+          pushHistory(curExact)
+          historyIndexRef.current = -1; setHistoryDraft(null)
+          onThemeCommand?.()
+          return
+        }
+        if (m && allSlashCommands.some((c) => c.name.toLowerCase() === name)) {
+          if (isMobileInput || isSending) return
+          e.preventDefault()
+          setShowSlashMenu(false)
+          if (curExact.trim()) pushHistory(curExact)
+          historyIndexRef.current = -1; setHistoryDraft(null)
+          handleSendWithImages()
+          return
+        }
+      }
+    }
     if (handleSlashKeys(e)) return
     const cur = localValueRef.current
 
@@ -674,7 +719,7 @@ export const Composer = memo(function Composer({
       historyIndexRef.current = -1; setHistoryDraft(null)
       handleSendWithImages()
     }
-  }, [showSlashMenu, showAtMenu, onShellSend, pushHistory, handleChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput, isSending])
+  }, [showSlashMenu, showAtMenu, onShellSend, pushHistory, handleChange, handleSendWithImages, handleSlashKeys, historyDraft, onThemeCommand, isMobileInput, isSending, allSlashCommands])
 
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const dragDepthRef = useRef(0)
