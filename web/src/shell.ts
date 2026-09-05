@@ -11,6 +11,12 @@ export type FsEntry = { name: string; path: string; is_dir: boolean; size: numbe
 export type KanbanBoard = { id: string; name: string; columns: { id: string; title: string }[]; cards: KanbanCard[] }
 export type KanbanCard = { id: string; board: string; column: string; title: string; notes: string; color: string }
 
+/** Texto del prompt al enviar una tarjeta a una sesión: título + notas. */
+export function kanbanPromptText(title: string, notes: string): string {
+  const n = (notes ?? "").trim()
+  return n ? `${(title ?? "").trim()}\n\n${n}` : (title ?? "").trim()
+}
+
 export type LabApp = { id: string; title: string; kind: string; configured: boolean }
 
 export type ShellPlugin = { name: string; title: string; type: string; description: string; version: string }
@@ -267,6 +273,11 @@ export const shell = {
     toggleFavorite: (path: string, add: boolean) => post("/shell/fs/favorites", { path, add }),
     sessionFor: (path: string) => get<{ ok: boolean; directory?: string }>(`/shell/fs/session?path=${encodeURIComponent(path)}`),
     delete: (path: string) => post("/shell/fs/delete", { path }),
+    trash: (path: string) => post("/shell/fs/trash", { path }),
+    zip: (paths: string[], dest: string, name: string) =>
+      post<{ ok: boolean; path: string }>("/shell/fs/zip", { paths, dest, name }),
+    unzip: (path: string) => post<{ ok: boolean; path: string }>("/shell/fs/unzip", { path }),
+    terminal: (path: string) => post("/shell/fs/terminal", { path }),
     move: (src: string, destDir: string) => post<{ ok: boolean; path: string }>("/shell/fs/move", { src, dest: destDir }),
     copy: (src: string, dest: string) => post<{ ok: boolean; path: string }>("/shell/fs/copy", { src, dest }),
     write: (path: string, dataBase64: string) => post("/shell/fs/write", { path, data: dataBase64 }),

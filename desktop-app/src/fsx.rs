@@ -201,6 +201,223 @@ pub fn delete_entry(path: &str) -> Result<(), String> {
     }
 }
 
+/// Mueve a la Papelera de reciclaje (recuperable), a diferencia de
+/// delete_entry que borra definitivo. En Windows usa SHFileOperation con
+/// FOF_ALLOWUNDO (sin dependencias nuevas: windows-sys ya está).
+pub fn trash_entry(path: &str) -> Result<(), String> {
+    let p = Path::new(path);
+    if !p.exists() {
+        return Err("No existe".into());
+    }
+    #[cfg(windows)]
+    {
+        trash_win(p)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = p;
+        Err("Papelera no soportada en esta plataforma".into())
+    }
+}
+
+#[cfg(windows)]
+fn trash_win(p: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::{
+        SHFileOperationW, SHFILEOPSTRUCTW, FOF_ALLOWUNDO, FOF_NOERRORUI, FOF_NOCONFIRMATION,
+        FOF_SILENT, FO_DELETE,
+    };
+    // pFrom exige UTF-16 con doble nulo final.
+    let mut wide: Vec<u16> = p.as_os_str().encode_wide().collect();
+    wide.push(0);
+    wide.push(0);
+    let mut op = SHFILEOPSTRUCTW {
+        hwnd: std::ptr::null_mut(),
+        wFunc: FO_DELETE,
+        pFrom: wide.as_ptr(),
+        pTo: std::ptr::null(),
+        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT) as u16,
+        fAnyOperationsAborted: 0,
+        hNameMappings: std::ptr::null_mut(),
+        lpszProgressTitle: std::ptr::null(),
+    };
+    let rc = unsafe { SHFileOperationW(&mut op) };
+    if rc != 0 {
+        return Err(format!("Papelera falló (código {rc})"));
+    }
+    if op.fAnyOperationsAborted != 0 {
+        return Err("Operación cancelada".into());
+    }
+    Ok(())
+}
+
+/// Crea un .zip en dest_dir con los paths dados (archivos y/o carpetas,
+/// recursivo, sin seguir enlaces). Devuelve el path del zip. Colisión de
+/// nombre: sufijo -copia como copy/move.
+pub fn zip_create(paths: &[String], dest_dir: &str, name: &str) -> Result<String, String> {
+    if paths.is_empty() {
+        return Err("Nada que comprimir".into());
+    }
+    let d = Path::new(dest_dir);
+    if !d.is_dir() {
+        return Err("Destino no es carpeta".into());
+    }
+    let mut clean = name.trim().replace(['/', '\\'], "");
+    if clean.is_empty() {
+        return Err("Nombre vacío".into());
+    }
+    if !clean.to_lowercase().ends_with(".zip") {
+        clean.push_str(".zip");
+    }
+    let mut target = d.join(&clean);
+    if target.exists() {
+        let stem = clean.trim_end_matches(".zip").trim_end_matches(".ZIP");
+        let mut candidate = d.join(format!("{stem}-copia.zip"));
+        let mut n = 2;
+        while candidate.exists() {
+            candidate = d.join(format!("{stem}-copia-{n}.zip"));
+            n += 1;
+        }
+        target = candidate;
+    }
+    let file = std::fs::File::create(&target).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let mut added = 0usize;
+    for p in paths {
+        let src = Path::new(p);
+        if !src.exists() {
+            continue;
+        }
+        let root = src
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("item")
+            .to_string();
+        add_to_zip(&mut zip, src, &root, options)?;
+        added += 1;
+    }
+    if added == 0 {
+        drop(zip);
+        let _ = std::fs::remove_file(&target);
+        return Err("Ningún origen existe".into());
+    }
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(crate::state::pstring(&target))
+}
+
+fn add_to_zip<W: std::io::Write + std::io::Seek>(
+    zip: &mut zip::ZipWriter<W>,
+    src: &Path,
+    entry: &str,
+    options: zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    // Sin seguir enlaces simbólicos (evita ciclos y fugas fuera del árbol).
+    if std::fs::symlink_metadata(src)
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    if src.is_dir() {
+        zip.add_directory(entry, options).map_err(|e| e.to_string())?;
+        let mut children: Vec<_> = std::fs::read_dir(src)
+            .map_err(|e| e.to_string())?
+            .flatten()
+            .collect();
+        children.sort_by_key(|e| e.file_name());
+        for child in children {
+            let name = child.file_name().to_string_lossy().to_string();
+            add_to_zip(zip, &child.path(), &format!("{entry}/{name}"), options)?;
+        }
+    } else if src.is_file() {
+        zip.start_file(entry, options).map_err(|e| e.to_string())?;
+        let mut f = std::fs::File::open(src).map_err(|e| e.to_string())?;
+        std::io::copy(&mut f, zip).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Extrae un .zip en una carpeta hermana `<nombre>/` (sufijo -copia si
+/// colisiona). Ignora entradas con traversal (..) vía enclosed_name.
+/// Devuelve el path de la carpeta creada.
+pub fn zip_extract(zip_path: &str) -> Result<String, String> {
+    let zp = Path::new(zip_path);
+    if !zp.is_file() {
+        return Err("No es archivo".into());
+    }
+    let parent = zp.parent().ok_or("Sin carpeta padre")?;
+    let stem = zp
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .ok_or("Nombre inválido")?;
+    let mut dest = parent.join(stem);
+    if dest.exists() {
+        let mut candidate = parent.join(format!("{stem}-copia"));
+        let mut n = 2;
+        while candidate.exists() {
+            candidate = parent.join(format!("{stem}-copia-{n}"));
+            n += 1;
+        }
+        dest = candidate;
+    }
+    std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+    let file = std::fs::File::open(zp).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    for i in 0..archive.len() {
+        let mut f = archive.by_index(i).map_err(|e| e.to_string())?;
+        let out = match f.enclosed_name() {
+            Some(p) => dest.join(p),
+            None => continue,
+        };
+        if f.is_dir() {
+            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+        } else {
+            if let Some(par) = out.parent() {
+                if !par.exists() {
+                    std::fs::create_dir_all(par).map_err(|e| e.to_string())?;
+                }
+            }
+            let mut outf = std::fs::File::create(&out).map_err(|e| e.to_string())?;
+            std::io::copy(&mut f, &mut outf).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(crate::state::pstring(&dest))
+}
+
+/// Abre una terminal del SO en la carpeta (Windows: PowerShell). Si path es
+/// archivo usa su carpeta padre. Best-effort como reveal_in_explorer.
+pub fn open_terminal(path: &str) -> Result<(), String> {
+    let p = Path::new(path.trim());
+    let dir: &Path = if p.is_dir() {
+        p
+    } else if let Some(par) = p.parent().filter(|par| par.is_dir()) {
+        par
+    } else {
+        return Err("No es carpeta".into());
+    };
+    #[cfg(windows)]
+    {
+        let loc = format!(
+            "Set-Location -LiteralPath '{}'",
+            dir.to_string_lossy().replace('\'', "''")
+        );
+        std::process::Command::new("powershell.exe")
+            .args(["-NoExit", "-Command", &loc])
+            .current_dir(dir)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = dir;
+        Err("Terminal no soportada en esta plataforma".into())
+    }
+}
+
 pub fn mkdir_entry(path: &str) -> Result<(), String> {
     let p = Path::new(path);
     std::fs::create_dir_all(p).map_err(|e| e.to_string())
@@ -675,6 +892,43 @@ mod tests {
         move_entry(src.to_str().unwrap(), dest.to_str().unwrap()).unwrap();
         assert_eq!(std::fs::read_to_string(dest.join("x.txt")).unwrap(), "viejo");
         assert_eq!(std::fs::read_to_string(dest.join("x-copia.txt")).unwrap(), "nuevo");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn zip_roundtrip_keeps_tree_and_content() {
+        let root = tmpdir("zip");
+        let sub = root.join("docs");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(root.join("a.txt"), b"hola zip").unwrap();
+        std::fs::write(sub.join("b.txt"), b"anidado").unwrap();
+        let paths = vec![
+            root.join("a.txt").to_string_lossy().to_string(),
+            sub.to_string_lossy().to_string(),
+        ];
+        let out = zip_create(&paths, root.to_str().unwrap(), "paquete.zip").unwrap();
+        assert!(out.ends_with("paquete.zip"));
+        assert!(Path::new(&out).is_file());
+        let dest = zip_extract(&out).unwrap();
+        assert_eq!(std::fs::read_to_string(Path::new(&dest).join("a.txt")).unwrap(), "hola zip");
+        assert_eq!(
+            std::fs::read_to_string(Path::new(&dest).join("docs").join("b.txt")).unwrap(),
+            "anidado"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn zip_rejects_empty_and_bad_dest() {
+        let root = tmpdir("zipbad");
+        assert!(zip_create(&[], root.to_str().unwrap(), "x.zip").is_err());
+        assert!(zip_create(
+            &["C:\\no\\existe\\nada.txt".to_string()],
+            root.to_str().unwrap(),
+            "x.zip"
+        )
+        .is_err());
+        assert!(zip_extract(root.join("no.zip").to_str().unwrap()).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 }
