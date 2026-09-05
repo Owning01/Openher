@@ -30,6 +30,7 @@ secrets.json
 # Play Store / release artifacts (no commitear)
 *.aab
 *.apk
+/OpenHer-debug.apk
 OpenCodeMobile-release.aab
 play/
 fastlane/
