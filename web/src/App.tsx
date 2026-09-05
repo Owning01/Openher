@@ -383,6 +383,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         showPluginsModal={c.showPluginsModal}
         setShowPluginsModal={c.setShowPluginsModal}
         openExternalProject={c.openExternalProject}
+        openPluginAsTab={c.openPluginAsTab}
       />
     </>
   )

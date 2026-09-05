@@ -84,6 +84,7 @@ export type AppModalsContainerProps = {
   showPluginsModal: boolean
   setShowPluginsModal: (s: boolean) => void
   openExternalProject: (name: string) => void
+  openPluginAsTab?: (key: string) => void
 }
 
 export const AppModalsContainer = memo(function AppModalsContainer(props: AppModalsContainerProps) {
@@ -166,6 +167,7 @@ export const AppModalsContainer = memo(function AppModalsContainer(props: AppMod
     showPluginsModal,
     setShowPluginsModal,
     openExternalProject,
+    openPluginAsTab,
   } = props
 
   return (
@@ -257,7 +259,7 @@ export const AppModalsContainer = memo(function AppModalsContainer(props: AppMod
         runtimeError={runtimeError}
         onCloseRuntimeError={() => setRuntimeError(null)}
       />
-      <PluginsModal open={showPluginsModal} onClose={() => setShowPluginsModal(false)} onOpenProject={openExternalProject} />
+      <PluginsModal open={showPluginsModal} onClose={() => setShowPluginsModal(false)} onOpenProject={openExternalProject} onOpenPlugin={openPluginAsTab} />
     </>
   )
 })
