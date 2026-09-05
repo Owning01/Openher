@@ -12,6 +12,7 @@ import {
 } from "./browserOverlayScript"
 import { buildPipScript } from "./browserPipScript"
 import { buildWheelScript } from "./browserWheelScript"
+import { extractUrlFromDataTransfer, setUrlDragData } from "../utils/urlDrag"
 import { parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, BROWSER_STACK_PREFIX, loadBrowserStack, saveBrowserStack, buildFindCountScript, parseFindCount, domainOf, zoomForDomain, withZoomForDomain, BROWSER_ZOOM_MAP_KEY, type PageShortcutAction } from "./browserSync"
 
 const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
@@ -1370,6 +1371,8 @@ export const BrowserPanel = memo(function BrowserPanel({
     <div
       className={`browser-shell${minimal ? " browser-minimal" : ""}${isFullscreen ? " browser-fullscreen" : ""}`}
       onFocusCapture={() => { document.body.dataset.opencodeBrowserFocused = "true" }}
+      onDragOver={(e) => { if (e.dataTransfer.types.includes("application/x-opencode-tab-index")) return; if (extractUrlFromDataTransfer(e.dataTransfer)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy" } }}
+      onDrop={(e) => { if (e.dataTransfer.types.includes("application/x-opencode-tab-index")) return; const url = extractUrlFromDataTransfer(e.dataTransfer); if (!url) return; e.preventDefault(); e.stopPropagation(); navigateTab(url) }}
       style={minimal ? { height: "100%" } : undefined}
     >
       {/* Minimal toggle floating */}
@@ -1378,7 +1381,7 @@ export const BrowserPanel = memo(function BrowserPanel({
       )}
       {/* 1. Chrome-like Tab Bar on Top (pestañas nativas del navegador) */}
       {!minimal && !hideTabBar && (
-      <div className="browser-tabbar">
+      <div className="browser-tabbar" onDragOver={(e) => { const url = extractUrlFromDataTransfer(e.dataTransfer); if (url || e.dataTransfer.types.includes("application/x-opencode-browser-tab") || e.dataTransfer.types.includes("text/uri-list")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy" } }} onDrop={(e) => { const url = extractUrlFromDataTransfer(e.dataTransfer); if (!url) return; e.preventDefault(); e.stopPropagation(); const bar = e.currentTarget as HTMLElement; const tabsEls = Array.from(bar.querySelectorAll(".browser-tab")); let at = tabsEls.length; for (let k=0;k<tabsEls.length;k++){ const r=(tabsEls[k] as HTMLElement).getBoundingClientRect(); if (e.clientX < r.left + r.width/2){ at=k; break } } const newId = `tab-${Date.now().toString(36)}`; const title = formatDisplayTitle(url); const nt = { id: newId, url, title, history: [url], historyIdx: 0 }; setTabs(prev => { const n=[...prev]; n.splice(Math.min(at, n.length),0,nt as any); return n }); setActiveTabId(newId); setInputUrl(url); pushHistory(url) }}
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId
           return (
@@ -1389,9 +1392,9 @@ export const BrowserPanel = memo(function BrowserPanel({
               title={tab.url}
               draggable
               onDragStart={(e) => {
-                e.dataTransfer.setData("application/x-opencode-path", tab.url)
-                e.dataTransfer.setData("text/plain", tab.url)
-                e.dataTransfer.setData("application/x-opencode-browser-tab", tab.url)
+                setUrlDragData(e.dataTransfer, tab.url)
+                // compat interno
+                try { e.dataTransfer.setData("application/x-opencode-path", tab.url) } catch {}
                 e.dataTransfer.effectAllowed = "copyMove"
               }}
             >
