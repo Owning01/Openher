@@ -61,13 +61,19 @@ describe("scheduler central", () => {
     expect(fn).not.toHaveBeenCalled()
   })
 
-  it("runOnRegister dispara en el primer tick", async () => {
+  it("runOnRegister corre sincrónico al registrar (poll inmediato)", async () => {
     let now = 0
     scheduler.setNowFn(() => now)
     const fn = vi.fn()
     scheduler.register("eager", 60000, fn, { runOnRegister: true })
+    expect(fn).toHaveBeenCalledTimes(1)
+    // El próximo disparo respeta el intervalo completo desde el run inmediato.
+    now = 59000
     await scheduler.tick()
     expect(fn).toHaveBeenCalledTimes(1)
+    now = 60000
+    await scheduler.tick()
+    expect(fn).toHaveBeenCalledTimes(2)
   })
 
   it("trigger manual dispara sin esperar intervalo", async () => {

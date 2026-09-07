@@ -43,16 +43,21 @@ class Scheduler {
   }
 
   register(key: string, intervalMs: number, fn: TaskFn, opts: TaskOpts = {}, onError?: (e: unknown) => void) {
-    this.tasks.set(key, {
+    const t: Task = {
       key,
       intervalMs: Math.max(intervalMs, TICK_MS),
       fn,
       onlyWhenVisible: opts.onlyWhenVisible ?? true,
-      lastRun: opts.runOnRegister ? -Infinity : this.nowFn(),
+      lastRun: this.nowFn(),
       busy: false,
       onError,
-    })
+    }
+    this.tasks.set(key, t)
     this.ensureRunning()
+    // Paridad con el `poll()` inmediato de los effects originales: corre YA
+    // (sincrónico hasta el primer await) y fija lastRun=ahora para que el
+    // próximo disparo sea a intervalo completo, no en el tick siguiente.
+    if (opts.runOnRegister) void this.run(t)
   }
 
   unregister(key: string) {

@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useState, useRef } from "react"
 import { useIsDesktop } from "../../hooks/useIsDesktop"
+import { useScheduled } from "../../hooks/useScheduled"
 import { WindowResizeHandles } from "./WindowResizeHandles"
 import { extractUrlFromDataTransfer, setUrlDragData } from "../../utils/urlDrag"
 import { TabBar } from "../../components/TabBar"
@@ -182,15 +183,16 @@ export const TitleBar = memo(function TitleBar({
     document.documentElement.setAttribute("data-frameless", "true")
     document.documentElement.setAttribute("data-window-maximized", isMax ? "true" : "false")
     refresh()
-    const id = window.setInterval(refresh, 1200)
     const onResize = () => refresh()
     window.addEventListener("resize", onResize)
     return () => {
-      window.clearInterval(id)
       window.removeEventListener("resize", onResize)
       ctrlRef.current?.abort()
     }
   }, [refresh, isDesktop, isMax])
+
+  // Reloj central (Plan 3): el refresh inmediato lo hace el effect de arriba.
+  useScheduled("titlebar-window-state", 1200, refresh, { enabled: isDesktop })
 
   useEffect(() => {
     if (!isDesktop) return

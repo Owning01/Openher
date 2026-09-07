@@ -3,6 +3,7 @@ import { api } from "../api"
 import type { Question, PermissionRequest, ServerConfig } from "../types"
 import { QUESTION_POLL_INTERVAL_MS } from "../constants"
 import { isQuestionSettled, onQuestionSettledChange } from "../utils/questionStore"
+import { useScheduled } from "./useScheduled"
 
 type UseQuestionsOptions = {
   config: ServerConfig | null
@@ -39,66 +40,71 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
     })
   }, [])
 
-  useEffect(() => {
-    if (!config || !enabledQ) return
-    let alive = true
-    const poll = async () => {
-      try {
-        const qs = await api.listPendingQuestions(config, directory)
-        if (!alive) return
-        const fresh = qs.filter((q) =>
-          (!fallbackSessionID || !q.sessionID || q.sessionID === fallbackSessionID) &&
-          !dismissedQuestions.has(q.id) &&
-          !isQuestionSettled(q.id),
-        )
-        // Guard anti-loop: `filter` crea array nuevo siempre; solo setear si
-        // cambió el contenido (mismos ids en orden) para no re-renderizar.
-        setPendingQuestions((prev) => {
-          if (prev.length === fresh.length && prev.every((p, i) => p.id === fresh[i].id)) return prev
-          return fresh
-        })
-        const notify = notifyRef.current
-        if (notify) {
-          for (const q of fresh) {
-            if (notifiedQuestionIDs.current.has(q.id)) continue
-            notifiedQuestionIDs.current.add(q.id)
-            notify(tFn('notification.questionTitle'), (q as { question?: string }).question ?? (q as { questions?: { question: string }[] }).questions?.[0]?.question ?? "")
-          }
+  // Reloj central (Plan 3): sin setInterval propio. El scheduler aporta pausa
+  // en hidden + anti-solapamiento; el key con fingerprint re-dispara el poll
+  // inmediato cuando cambian los parámetros (igual que el effect anterior).
+  const host = config?.host ?? ""
+  const port = config?.port ?? 0
+  const pollQuestions = useCallback(async () => {
+    if (!config) return
+    try {
+      const qs = await api.listPendingQuestions(config, directory)
+      const fresh = qs.filter((q) =>
+        (!fallbackSessionID || !q.sessionID || q.sessionID === fallbackSessionID) &&
+        !dismissedQuestions.has(q.id) &&
+        !isQuestionSettled(q.id),
+      )
+      // Guard anti-loop: `filter` crea array nuevo siempre; solo setear si
+      // cambió el contenido (mismos ids en orden) para no re-renderizar.
+      setPendingQuestions((prev) => {
+        if (prev.length === fresh.length && prev.every((p, i) => p.id === fresh[i].id)) return prev
+        return fresh
+      })
+      const notify = notifyRef.current
+      if (notify) {
+        for (const q of fresh) {
+          if (notifiedQuestionIDs.current.has(q.id)) continue
+          notifiedQuestionIDs.current.add(q.id)
+          notify(tFn('notification.questionTitle'), (q as { question?: string }).question ?? (q as { questions?: { question: string }[] }).questions?.[0]?.question ?? "")
         }
-      } catch { /* ignore */ }
-    }
-    poll()
-    const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
-    return () => { alive = false; clearInterval(id) }
-  }, [config, enabledQ, directory, fallbackSessionID, dismissedQuestions, tFn])
+      }
+    } catch { /* ignore */ }
+  }, [config, directory, fallbackSessionID, dismissedQuestions, tFn])
 
-  useEffect(() => {
-    if (!config || !enabledP) return
-    let alive = true
-    const poll = async () => {
-      try {
-        const perms = await api.listPermissions(config, directory)
-        if (!alive) return
-        const pending = perms.find((p) =>
-          p.status === "pending" && (!fallbackSessionID || !p.sessionID || p.sessionID === fallbackSessionID),
-        )
-        // Guard anti-loop: mismo requestID → mismo estado, no re-render.
-        setPermissionRequest((prev) => {
-          const next = pending ?? null
-          if ((prev?.requestID ?? null) === (next?.requestID ?? null)) return prev
-          return next
-        })
-        const notify = notifyRef.current
-        if (pending && notify && !notifiedPermissionIDs.current.has(pending.requestID)) {
-          notifiedPermissionIDs.current.add(pending.requestID)
-          notify(tFn('notification.permissionTitle'), pending.permission ?? "")
-        }
-      } catch { /* ignore */ }
-    }
-    poll()
-    const id = setInterval(poll, QUESTION_POLL_INTERVAL_MS)
-    return () => { alive = false; clearInterval(id) }
-  }, [config, enabledP, directory, fallbackSessionID, tFn])
+  useScheduled(
+    `questions:${enabledQ}:${host}:${port}:${directory}:${fallbackSessionID}:${dismissedQuestions.size}`,
+    QUESTION_POLL_INTERVAL_MS,
+    pollQuestions,
+    { enabled: !!config && enabledQ, runOnRegister: true },
+  )
+
+  const pollPermissions = useCallback(async () => {
+    if (!config) return
+    try {
+      const perms = await api.listPermissions(config, directory)
+      const pending = perms.find((p) =>
+        p.status === "pending" && (!fallbackSessionID || !p.sessionID || p.sessionID === fallbackSessionID),
+      )
+      // Guard anti-loop: mismo requestID → mismo estado, no re-render.
+      setPermissionRequest((prev) => {
+        const next = pending ?? null
+        if ((prev?.requestID ?? null) === (next?.requestID ?? null)) return prev
+        return next
+      })
+      const notify = notifyRef.current
+      if (pending && notify && !notifiedPermissionIDs.current.has(pending.requestID)) {
+        notifiedPermissionIDs.current.add(pending.requestID)
+        notify(tFn('notification.permissionTitle'), pending.permission ?? "")
+      }
+    } catch { /* ignore */ }
+  }, [config, directory, fallbackSessionID, tFn])
+
+  useScheduled(
+    `permissions:${enabledP}:${host}:${port}:${directory}:${fallbackSessionID}`,
+    QUESTION_POLL_INTERVAL_MS,
+    pollPermissions,
+    { enabled: !!config && enabledP, runOnRegister: true },
+  )
 
   const handleQuestionReply = useCallback(async (requestID: string, answers: string[][]) => {
     if (!config) return
