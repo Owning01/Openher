@@ -8,17 +8,17 @@ afterEach(() => {
 })
 
 describe("useFeatureFlags virtualChat", () => {
-  it("default OFF (rollback seguro: MessageList clásico)", () => {
+  it("default ON (chat virtualizado)", () => {
     const { result } = renderHook(() => useFeatureFlags())
-    expect(result.current.flags.virtualChat).toBe(false)
+    expect(result.current.flags.virtualChat).toBe(true)
   })
 
   it("toggle enciende y apaga", () => {
     const { result } = renderHook(() => useFeatureFlags())
     act(() => result.current.toggleFlag("virtualChat"))
-    expect(result.current.flags.virtualChat).toBe(true)
-    act(() => result.current.toggleFlag("virtualChat"))
     expect(result.current.flags.virtualChat).toBe(false)
+    act(() => result.current.toggleFlag("virtualChat"))
+    expect(result.current.flags.virtualChat).toBe(true)
   })
 
   it("persiste en localStorage", () => {

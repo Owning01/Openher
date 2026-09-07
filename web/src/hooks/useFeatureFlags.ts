@@ -16,7 +16,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   questionAuto: true,
   permissionUI: true,
   autoOpencode2: false,
-  virtualChat: false,
+  virtualChat: true,
 }
 
 export function useFeatureFlags() {
