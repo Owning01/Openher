@@ -144,9 +144,8 @@ pub fn serve_file_mmap(root: &Path, rel: &str) -> Option<(Vec<u8>, &'static str)
             if let Ok(file) = std::fs::File::open(&path) {
                 if let Ok(mmap) = unsafe { memmap2::Mmap::map(&file) } {
                     let mime = mime_for(&path);
-                    // Copia necesaria para tiny_http Response::from_data que toma ownership Vec<u8>
-                    // En hyper path zero-copy se usará Bytes::from(mmap[..].to_vec()) o Bytes copy
-                    // Mantener copia para compat; el win es evitar 2 copias y usar page cache
+                    // Copia a Vec<u8> para el body owned de la respuesta
+                    // (page cache de mmap hace que el costo sea una sola copia)
                     return Some((mmap[..].to_vec(), mime));
                 }
             }

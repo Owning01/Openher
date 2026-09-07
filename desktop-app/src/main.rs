@@ -1,6 +1,6 @@
 //! OpenCode Desktop - shell portable que embebe la web app de OpenHer.
 //!
-//! F0-F4: ventana wry (WebView2) + server local (tiny_http) que sirve
+//! F0-F4: ventana wry (WebView2) + server local (hyper+tokio) que sirve
 //! web/dist y la API /shell/* (explorador, terminales, kanban, updates,
 //! docs, stats, plugins, labs, config, autostart, sesiones). Portable:
 //! data/ junto al exe, sin escrituras en C:.
@@ -35,7 +35,6 @@ use std::thread;
 use std::time::Duration;
 
 use state::AppState;
-use tiny_http::Server;
 use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
 
 fn split_cmd(cmd: &str) -> Vec<String> {
@@ -967,28 +966,18 @@ fn main() {
         eprintln!("opencode-desktop: flag minimizado detectado (args_min={args_min} config={})", config.start_minimized);
     }
 
-    // Server HTTP local (sirve web/dist + API /shell/*). Bind 0.0.0.0 para que Tailscale (100.x) llegue directo al :4848 sin túnel.
+    // Server HTTP local (Plan 1): hyper+tokio en el puerto principal (estáticos
+    // mmap+br + /shell/* por dispatch puro). Bind 0.0.0.0 para que Tailscale
+    // (100.x) llegue directo al :4848 sin túnel. Prueba port..port+200.
+    // Se pre-bindea el socket std (evita race) y se entrega a hyper.
     let port = config.port;
-    let mut server = None;
-    let mut chosen = port;
-    for p in port..(port + 200) {
-        match Server::http(("0.0.0.0", p)) {
-            Ok(s) => {
-                chosen = match s.server_addr() {
-                    tiny_http::ListenAddr::IP(ip) => ip.port(),
-                    #[cfg(unix)]
-                    tiny_http::ListenAddr::Unix(_) => p,
-                };
-                server = Some(s);
-                break;
-            }
-            Err(_) => continue,
-        }
-    }
-    let server = server.unwrap_or_else(|| {
-        eprintln!("opencode-desktop: no se encontró puerto libre");
-        std::process::exit(1);
-    });
+    let std_listener = (port..(port + 200))
+        .find_map(|p| std::net::TcpListener::bind(("0.0.0.0", p)).ok())
+        .unwrap_or_else(|| {
+            eprintln!("opencode-desktop: no se encontró puerto libre");
+            std::process::exit(1);
+        });
+    let chosen = std_listener.local_addr().map(|a| a.port()).unwrap_or(port);
 
     let (browser_mgr, browser_rx) = browser_view::SubWebViewManager::new();
     let browser_tx = browser_mgr.tx.clone();
@@ -1022,18 +1011,19 @@ fn main() {
     // Stats server arranca con la app (botón del panel izquierdo lo abre).
     statsx::ensure(&app_state);
 
-    // hyper static server (mmap+br) en chosen+2 — IOCP tokio, coexiste con tiny_http
+    // hyper principal (mmap+br + /shell/*): runtime tokio propio en thread dedicado.
     {
         let hyper_state = app_state.clone();
-        let hyper_port = chosen + 2;
-        std::thread::Builder::new().name("hyper-static".into()).spawn(move || {
+        std::thread::Builder::new().name("hyper-main".into()).spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async move {
-                match crate::http_server::serve_hyper(hyper_state, hyper_port).await {
-                    Ok(p) => eprintln!("opencode-desktop: hyper static en http://127.0.0.1:{p} (mmap+br)"),
+                std_listener.set_nonblocking(true).ok();
+                match tokio::net::TcpListener::from_std(std_listener) {
+                    Ok(listener) => {
+                        crate::http_server::serve_listener(hyper_state, listener).await;
+                    }
                     Err(e) => eprintln!("opencode-desktop: hyper no iniciado: {e}"),
                 }
-                loop { tokio::time::sleep(Duration::from_secs(3600)).await; }
             });
         }).ok();
     }
@@ -1159,21 +1149,7 @@ fn main() {
         eprintln!("opencode-desktop: ws pty no disponible: {e}");
     }
 
-    {
-        let spawn = app_state.clone();
-        thread::Builder::new()
-            .name("shell-http".into())
-            .spawn(move || {
-                for request in server.incoming_requests() {
-                    let st = spawn.clone();
-                    thread::Builder::new()
-                        .name("shell-req".into())
-                        .spawn(move || api::route(request, st))
-                        .ok();
-                }
-            })
-            .ok();
-    }
+    // (El HTTP local lo sirve hyper en el thread "hyper-main"; sin thread por request.)
 
     let event_loop = EventLoop::with_user_event().build().unwrap();
     event_loop.set_control_flow(ControlFlow::Wait);

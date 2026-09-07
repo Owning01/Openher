@@ -2,45 +2,45 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::gitx;
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 /// Atiende rutas git. Devuelve Some(response) si la ruta es del módulo.
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     _state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     let route = path.strip_prefix("/shell/git")?;
     macro_rules! j {
         ($res:expr) => {
             match $res {
-                Ok(v) => serde_json::to_value(v).map(|v| json_ok(&v)).unwrap_or_else(|e| json_err(500, &e.to_string())),
-                Err(e) => json_err(400, &e),
+                Ok(v) => serde_json::to_value(v).map(|v| ShellResponse::ok_json(&v)).unwrap_or_else(|e| ShellResponse::err_json(500, &e.to_string())),
+                Err(e) => ShellResponse::err_json(400, &e),
             }
         };
     }
 
     let resp = match (method, route) {
-        (Method::Get, "/panel") => j!(gitx::panel_snapshot(&q("path"))),
-        (Method::Get, "/status") => j!(gitx::status(&q("path"))),
-        (Method::Get, "/diff") => j!(gitx::diff(
+        ("GET", "/panel") => j!(gitx::panel_snapshot(&q("path"))),
+        ("GET", "/status") => j!(gitx::status(&q("path"))),
+        ("GET", "/diff") => j!(gitx::diff(
             &q("path"),
             Some(q("file").as_str()).filter(|s| !s.is_empty()),
             q("staged") == "true"
         )),
-        (Method::Get, "/diff-content") => j!(gitx::diff_content(
+        ("GET", "/diff-content") => j!(gitx::diff_content(
             &q("path"),
             &q("file"),
             q("staged") == "true",
             Some(q("originalPath").as_str()).filter(|s| !s.is_empty())
         )),
-        (Method::Get, "/log") => {
+        ("GET", "/log") => {
             let limit: u32 = q("limit").parse().unwrap_or(50);
             let before = q("before");
             let search = q("search");
@@ -51,69 +51,69 @@ pub fn handle(
                 Some(search.as_str()).filter(|s| !s.is_empty())
             ))
         }
-        (Method::Get, "/commit-files") => j!(gitx::commit_files(&q("path"), &q("sha"))),
-        (Method::Post, "/commit-diff") => {
-            let body = read_body(req).unwrap_or(serde_json::Value::Null);
+        ("GET", "/commit-files") => j!(gitx::commit_files(&q("path"), &q("sha"))),
+        ("POST", "/commit-diff") => {
+            let body = req.json_body().unwrap_or(serde_json::Value::Null);
             let sha = body.get("sha").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let file = body.get("file").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let original = body.get("originalPath").and_then(|v| v.as_str()).unwrap_or("").to_string();
             match gitx::commit_file_diff(&q("path"), &sha, &file, Some(original.as_str()).filter(|s| !s.is_empty())) {
-                Ok(v) => serde_json::to_value(v).map(|v| json_ok(&v)).unwrap_or_else(|e| json_err(500, &e.to_string())),
-                Err(e) => json_err(400, &e),
+                Ok(v) => serde_json::to_value(v).map(|v| ShellResponse::ok_json(&v)).unwrap_or_else(|e| ShellResponse::err_json(500, &e.to_string())),
+                Err(e) => ShellResponse::err_json(400, &e),
             }
         }
-        (Method::Get, "/remote-url") => j!(gitx::remote_url(&q("path"), &q("name"))),
-        (Method::Get, "/branches") => j!(gitx::list_branches(&q("path"))),
-        (Method::Post, "/stage") => match body_strings(req, "files") {
+        ("GET", "/remote-url") => j!(gitx::remote_url(&q("path"), &q("name"))),
+        ("GET", "/branches") => j!(gitx::list_branches(&q("path"))),
+        ("POST", "/stage") => match body_strings(req, "files") {
             Ok(files) => j!(gitx::stage(&q("path"), &files)),
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/unstage") => match body_strings(req, "files") {
+        ("POST", "/unstage") => match body_strings(req, "files") {
             Ok(files) => j!(gitx::unstage(&q("path"), &files)),
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/discard") => match body_discard(req) {
+        ("POST", "/discard") => match body_discard(req) {
             Ok(entries) => j!(gitx::discard(&q("path"), &entries)),
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/commit") => {
-            let body = read_body(req).unwrap_or(serde_json::Value::Null);
+        ("POST", "/commit") => {
+            let body = req.json_body().unwrap_or(serde_json::Value::Null);
             let message = body.get("message").and_then(|v| v.as_str()).unwrap_or("").to_string();
             j!(gitx::commit(&q("path"), &message))
         }
-        (Method::Post, "/push") => j!(gitx::push(&q("path"))),
-        (Method::Post, "/fetch") => {
+        ("POST", "/push") => j!(gitx::push(&q("path"))),
+        ("POST", "/fetch") => {
             match gitx::fetch(&q("path")) {
-                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(400, &e),
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(400, &e),
             }
         }
-        (Method::Post, "/pull") => {
+        ("POST", "/pull") => {
             match gitx::pull_ff_only(&q("path")) {
-                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(400, &e),
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(400, &e),
             }
         }
-        (Method::Post, "/checkout") => {
-            let body = read_body(req).unwrap_or(serde_json::Value::Null);
+        ("POST", "/checkout") => {
+            let body = req.json_body().unwrap_or(serde_json::Value::Null);
             let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
             match gitx::checkout_branch(&q("path"), &name) {
-                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(400, &e),
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(400, &e),
             }
         }
-        (Method::Post, "/show-commit-diff") => {
-            let body = read_body(req).unwrap_or(serde_json::Value::Null);
+        ("POST", "/show-commit-diff") => {
+            let body = req.json_body().unwrap_or(serde_json::Value::Null);
             let sha = body.get("sha").and_then(|v| v.as_str()).unwrap_or("").to_string();
             j!(gitx::show_commit_diff(&q("path"), &sha))
         }
-        _ => return Some(json_err(404, "ruta git desconocida")),
+        _ => return Some(ShellResponse::err_json(404, "ruta git desconocida")),
     };
     Some(resp)
 }
 
-fn body_strings(req: &mut Request, key: &str) -> Result<Vec<String>, String> {
-    let body = read_body(req)?;
+fn body_strings(req: &ShellRequest, key: &str) -> Result<Vec<String>, String> {
+    let body = req.json_body()?;
     let arr = body
         .get(key)
         .and_then(|v| v.as_array())
@@ -124,8 +124,8 @@ fn body_strings(req: &mut Request, key: &str) -> Result<Vec<String>, String> {
         .collect())
 }
 
-fn body_discard(req: &mut Request) -> Result<Vec<(String, bool)>, String> {
-    let body = read_body(req)?;
+fn body_discard(req: &ShellRequest) -> Result<Vec<(String, bool)>, String> {
+    let body = req.json_body()?;
     let arr = body
         .get("entries")
         .and_then(|v| v.as_array())

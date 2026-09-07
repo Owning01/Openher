@@ -4,34 +4,34 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     _state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     _q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
-    if path == "/shell/doc/convert" && method == Method::Post {
-        return Some(match read_body(req) {
+) -> Option<ShellResponse> {
+    if path == "/shell/doc/convert" && method == "POST" {
+        return Some(match req.json_body() {
             Ok(b) => {
                 let src = b["src"].as_str().unwrap_or("");
                 let target = b["target"].as_str().unwrap_or("md");
                 let dest = b["dest"].as_str();
                 match crate::doc_engine::convert_file(src, target, dest) {
-                    Ok(val) => json_ok(&val),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(val) => ShellResponse::ok_json(&val),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
-    if path == "/shell/doc/save" && method == Method::Post {
-        return Some(match read_body(req) {
+    if path == "/shell/doc/save" && method == "POST" {
+        return Some(match req.json_body() {
             Ok(b) => {
                 let path_str = b["path"].as_str().unwrap_or("");
                 let md_content = b["content"].as_str().unwrap_or("");
@@ -49,15 +49,15 @@ pub fn handle(
                     _ => std::fs::write(p, md_content.as_bytes()).map_err(|e| e.to_string()),
                 };
                 match res {
-                    Ok(_) => json_ok(&serde_json::json!({ "ok": true, "path": path_str })),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(_) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": path_str })),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
     if path.starts_with("/shell/doc") {
-        return Some(json_err(404, "ruta doc desconocida"));
+        return Some(ShellResponse::err_json(404, "ruta doc desconocida"));
     }
     None
 }

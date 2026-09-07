@@ -2,18 +2,18 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     let route = path.strip_prefix("/shell/pty")?;
     if !route.is_empty() && !route.starts_with('/') {
         return None;
@@ -21,10 +21,10 @@ pub fn handle(
     // ruta vacía o "/" corresponde a /shell/pty
     if route.is_empty() || route == "/" {
         match method {
-            Method::Get => {
-                return Some(json_ok(&serde_json::json!({ "terms": state.pty.list() })));
+            "GET" => {
+                return Some(ShellResponse::ok_json(&serde_json::json!({ "terms": state.pty.list() })));
             }
-            Method::Post => {
+            "POST" => {
                 let shell = q("shell");
                 let cwd = q("cwd");
                 let cfg_shell = {
@@ -33,8 +33,8 @@ pub fn handle(
                 };
                 let shell_param = if shell.is_empty() { cfg_shell } else { Some(shell) };
                 return Some(match state.pty.create(shell_param, if cwd.is_empty() { None } else { Some(cwd) }) {
-                    Ok(id) => json_ok(&serde_json::json!({ "id": id, "ws_port": state.port + 1 })),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(id) => ShellResponse::ok_json(&serde_json::json!({ "id": id, "ws_port": state.port + 1 })),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 });
             }
             _ => return None,
@@ -47,7 +47,7 @@ pub fn handle(
         None => (rest.to_string(), String::new()),
     };
 
-    if op == "buffer" && method == Method::Get {
+    if op == "buffer" && method == "GET" {
         let since = q("since").parse::<usize>().unwrap_or(0);
         let out = state.pty.stream_rx(&id);
         let info = match out {
@@ -65,38 +65,38 @@ pub fn handle(
             }
             None => serde_json::json!({ "error": "no existe" }),
         };
-        return Some(json_ok(&info));
+        return Some(ShellResponse::ok_json(&info));
     }
-    if op == "write" && method == Method::Post {
-        return Some(match read_body(req) {
+    if op == "write" && method == "POST" {
+        return Some(match req.json_body() {
             Ok(b) => {
                 let data = b["data"].as_str().unwrap_or("");
                 match state.pty.write(&id, data.as_bytes()) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(404, &e),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(404, &e),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
-    if op == "resize" && method == Method::Post {
-        return Some(match read_body(req) {
+    if op == "resize" && method == "POST" {
+        return Some(match req.json_body() {
             Ok(b) => {
                 let cols = b["cols"].as_u64().unwrap_or(100) as u16;
                 let rows = b["rows"].as_u64().unwrap_or(30) as u16;
                 let pw = b["pixel_width"].as_u64().unwrap_or(b["pixelWidth"].as_u64().unwrap_or(0)) as u16;
                 let ph = b["pixel_height"].as_u64().unwrap_or(b["pixelHeight"].as_u64().unwrap_or(0)) as u16;
                 match state.pty.resize_px(&id, cols, rows, pw, ph) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(404, &e),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(404, &e),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
-    if op.is_empty() && method == Method::Delete {
+    if op.is_empty() && method == "DELETE" {
         state.pty.kill(&id);
-        return Some(json_ok(&serde_json::json!({ "ok": true })));
+        return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true })));
     }
 
     None

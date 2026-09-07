@@ -1,14 +1,14 @@
 //! Router /shell/proxy — bypass CORS con ureq, 16MB cap, SSRF normalize 0.0.0.0.
-//! Extraído desde api.rs: tiny_http como puente, limpia CSP/X-Frame, reinyecta CORS.
+//! Extraído desde api.rs: limpia CSP/X-Frame, reinyecta CORS.
 //! Fix Google session: CookieJar por host + forward Set-Cookie (ureq all("Set-Cookie")).
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::sync::Arc;
 
-use tiny_http::{Header, Method, Request, Response, StatusCode};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, AppState};
+use crate::state::AppState;
 
 // ── CookieJar global (por dominio) ──────────────────────────────────────────
 static COOKIE_JAR: OnceLock<Mutex<HashMap<String, HashMap<String, String>>>> = OnceLock::new();
@@ -100,58 +100,47 @@ fn store_set_cookies(request_host: &str, set_cookies: Vec<&str>) {
         jar.entry(domain.clone()).or_default().insert(name, value);
     }
 }
-fn with_cors(mut resp: Response<std::io::Cursor<Vec<u8>>>) -> Response<std::io::Cursor<Vec<u8>>> {
-    resp = resp.with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap());
-    resp = resp.with_header(Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap());
-    resp = resp.with_header(Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Cookie, Set-Cookie").unwrap());
-    resp = resp.with_header(Header::from_bytes("Access-Control-Expose-Headers", "Content-Length, Content-Type, Set-Cookie").unwrap());
+fn with_cors(mut resp: ShellResponse) -> ShellResponse {
+    resp = resp.with_header("Access-Control-Allow-Origin", "*");
+    resp = resp.with_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    resp = resp.with_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Cookie, Set-Cookie");
+    resp = resp.with_header("Access-Control-Expose-Headers", "Content-Length, Content-Type, Set-Cookie");
     resp
 }
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     _state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     if path != "/shell/proxy" {
         return None;
     }
     // Preflight CORS
-    if method == Method::Options {
-        let origin = req
-            .headers()
-            .iter()
-            .find(|h| h.field.as_str() == "Origin")
-            .map(|h| h.value.as_str().to_string())
-            .unwrap_or_else(|| "*".to_string());
+    if method == "OPTIONS" {
+        let origin = req.header("Origin").unwrap_or("*").to_string();
         let req_headers = req
-            .headers()
-            .iter()
-            .find(|h| h.field.as_str() == "Access-Control-Request-Headers")
-            .map(|h| h.value.as_str().to_string())
-            .unwrap_or_else(|| "Content-Type, Authorization, X-Requested-With, Cookie".to_string());
+            .header("Access-Control-Request-Headers")
+            .unwrap_or("Content-Type, Authorization, X-Requested-With, Cookie")
+            .to_string();
         return Some(
-            Response::from_string("")
-                .with_status_code(StatusCode(204))
-                .with_header(Header::from_bytes("Access-Control-Allow-Origin", origin.as_bytes()).unwrap())
+            ShellResponse::from_string(204, String::new())
+                .with_header("Access-Control-Allow-Origin", &origin)
                 .with_header(
-                    Header::from_bytes(
-                        "Access-Control-Allow-Methods",
-                        "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD",
-                    )
-                    .unwrap(),
+                    "Access-Control-Allow-Methods",
+                    "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD",
                 )
-                .with_header(Header::from_bytes("Access-Control-Allow-Headers", req_headers.as_bytes()).unwrap())
-                .with_header(Header::from_bytes("Access-Control-Max-Age", "86400").unwrap())
-                .with_header(Header::from_bytes("Access-Control-Allow-Credentials", "true").unwrap()),
+                .with_header("Access-Control-Allow-Headers", &req_headers)
+                .with_header("Access-Control-Max-Age", "86400")
+                .with_header("Access-Control-Allow-Credentials", "true"),
         );
     }
     let url_param = q("url");
     if url_param.is_empty() {
-        return Some(json_err(400, "Falta parámetro url (?url=)"));
+        return Some(ShellResponse::err_json(400, "Falta parámetro url (?url=)"));
     }
     let mut target_url = if !url_param.starts_with("http://") && !url_param.starts_with("https://") {
         format!("https://{url_param}")
@@ -159,7 +148,7 @@ pub fn handle(
         url_param
     };
     if !target_url.starts_with("http://") && !target_url.starts_with("https://") {
-        return Some(json_err(400, "URL debe ser http(s)"));
+        return Some(ShellResponse::err_json(400, "URL debe ser http(s)"));
     }
     if target_url.contains("://0.0.0.0:") {
         target_url = target_url.replacen("://0.0.0.0:", "://127.0.0.1:", 1);
@@ -172,40 +161,24 @@ pub fn handle(
     }
     // SSRF: bloquear loop interno al propio shell (lectura de config.json con password desde página embebida)
     if target_url.contains("127.0.0.1:4848/shell") || target_url.contains("localhost:4848/shell") || target_url.contains("[::1]:4848/shell") {
-        return Some(json_err(403, "proxy loop forbidden"));
+        return Some(ShellResponse::err_json(403, "proxy loop forbidden"));
     }
     let host_key = host_from_url(&target_url);
     // Leer body crudo si hay (para POST/PUT/PATCH que vienen via proxy) — cap 16MB
-    let mut fwd_body: Vec<u8> = Vec::new();
-    let has_body = matches!(method, Method::Post | Method::Put | Method::Patch);
-    if has_body {
-        let mut buf = Vec::new();
-        let reader = req.as_reader();
-        let mut chunk = [0u8; 8192];
-        let mut total = 0usize;
-        loop {
-            match reader.read(&mut chunk) {
-                Ok(0) => break,
-                Ok(n) => {
-                    total += n;
-                    if total > 16 * 1024 * 1024 {
-                        break;
-                    }
-                    buf.extend_from_slice(&chunk[..n]);
-                }
-                Err(_) => break,
-            }
-        }
-        fwd_body = buf;
-    }
+    let has_body = matches!(method, "POST" | "PUT" | "PATCH");
+    let fwd_body: Vec<u8> = if has_body {
+        req.body.iter().take(16 * 1024 * 1024).copied().collect()
+    } else {
+        Vec::new()
+    };
     // Headers a reenviar (whitelist)
     let mut fwd_content_type: Option<String> = None;
     let mut fwd_auth: Option<String> = None;
     let mut fwd_accept: Option<String> = None;
     let mut fwd_cookie_in: Option<String> = None;
-    for h in req.headers() {
-        let k = h.field.as_str().to_ascii_lowercase();
-        let v = h.value.as_str().to_string();
+    for (k, v) in &req.headers {
+        let k = k.to_ascii_lowercase();
+        let v = v.clone();
         match k.as_str() {
             "content-type" => fwd_content_type = Some(v),
             "authorization" => fwd_auth = Some(v),
@@ -218,7 +191,7 @@ pub fn handle(
         .timeout(std::time::Duration::from_secs(15))
         .redirects(5)
         .build();
-    let method_str = method.as_str().to_string();
+    let method_str = method.to_string();
     let mut ureq_req = client.request(&method_str, &target_url);
     ureq_req = ureq_req.set(
         "User-Agent",
@@ -265,27 +238,20 @@ pub fn handle(
             if is_html {
                 if let Ok(html) = String::from_utf8(body_bytes.clone()) {
                     let cleaned = sanitize_proxy_html(html, &target_url);
-                    let mut r = Response::from_string(cleaned)
-                        .with_status_code(StatusCode(status))
-                        .with_header(Header::from_bytes("Content-Type", ct.as_bytes()).unwrap())
-                        .with_header(Header::from_bytes("Cache-Control", "no-cache").unwrap());
+                    let mut r = ShellResponse::from_string(status, cleaned)
+                        .with_header("Content-Type", &ct)
+                        .with_header("Cache-Control", "no-cache");
                     r = with_cors(r);
                     for sc in set_cookies {
-                        if let Ok(h) = Header::from_bytes("Set-Cookie", sc.as_bytes()) {
-                            r = r.with_header(h);
-                        }
+                        r = r.with_header("Set-Cookie", &sc);
                     }
                     return Some(r);
                 }
             }
-            let mut r = Response::from_data(body_bytes)
-                .with_status_code(StatusCode(status))
-                .with_header(Header::from_bytes("Content-Type", ct.as_bytes()).unwrap());
+            let mut r = ShellResponse::data(status, body_bytes, &ct);
             r = with_cors(r);
             for sc in set_cookies {
-                if let Ok(h) = Header::from_bytes("Set-Cookie", sc.as_bytes()) {
-                    r = r.with_header(h);
-                }
+                r = r.with_header("Set-Cookie", &sc);
             }
             r
         }
@@ -311,14 +277,11 @@ pub fn handle(
             } else {
                 body_str
             };
-            let mut r = Response::from_string(sanitized)
-                .with_status_code(StatusCode(status))
-                .with_header(Header::from_bytes("Content-Type", ct.as_bytes()).unwrap());
+            let mut r = ShellResponse::from_string(status, sanitized)
+                .with_header("Content-Type", &ct);
             r = with_cors(r);
             for sc in set_cookies {
-                if let Ok(h) = Header::from_bytes("Set-Cookie", sc.as_bytes()) {
-                    r = r.with_header(h);
-                }
+                r = r.with_header("Set-Cookie", &sc);
             }
             r
         }
@@ -327,9 +290,8 @@ pub fn handle(
                 "<!DOCTYPE html><html><body style='font-family:sans-serif;padding:30px;background:#1e1e1e;color:#fff;'><h3>No se pudo cargar: {}</h3><p style='color:#ef4444;'>{}</p><p style='color:#888;'>Proxy: /shell/proxy?url=encodeURIComponent(target)</p></body></html>",
                 target_url, e
             );
-            let mut r = Response::from_string(err_html)
-                .with_status_code(StatusCode(502))
-                .with_header(Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap());
+            let mut r = ShellResponse::from_string(502, err_html)
+                .with_header("Content-Type", "text/html; charset=utf-8");
             r = with_cors(r);
             r
         }

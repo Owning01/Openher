@@ -533,61 +533,6 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
-// ================================================================== Helpers
-
-pub fn json_ok(body: &serde_json::Value) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
-    tiny_http::Response::from_string(body.to_string())
-        .with_status_code(200)
-        .with_header(
-            tiny_http::Header::from_bytes("Content-Type", "application/json; charset=utf-8")
-                .unwrap(),
-        )
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap())
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept").unwrap())
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition, Authorization").unwrap())
-}
-
-pub fn json_err(code: u16, msg: &str) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
-    tiny_http::Response::from_string(serde_json::json!({ "error": msg }).to_string())
-        .with_status_code(tiny_http::StatusCode(code))
-        .with_header(
-            tiny_http::Header::from_bytes("Content-Type", "application/json; charset=utf-8")
-                .unwrap(),
-        )
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap())
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept").unwrap())
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition, Authorization").unwrap())
-}
-
-/// Lee el body de un request HTTP y lo parsea como JSON.
-/// Cap de 16 MB para evitar OOM con payloads maliciosos o accidentsales
-/// (base64 de archivos grandes, uploads sin límite).
-pub fn read_body(req: &mut tiny_http::Request) -> Result<serde_json::Value, String> {
-    const MAX_BODY_BYTES: usize = 16 * 1024 * 1024; // 16 MB
-    let mut buf = Vec::new();
-    let reader = req.as_reader();
-    let mut total = 0usize;
-    let mut chunk = [0u8; 8192];
-    loop {
-        let n = reader.read(&mut chunk).map_err(|e| format!("read error: {e}"))?;
-        if n == 0 { break }
-        total += n;
-        if total > MAX_BODY_BYTES {
-            return Err(format!("body too large: >{MAX_BODY_BYTES} bytes"))
-        }
-        buf.extend_from_slice(&chunk[..n]);
-    }
-    // simd-json fast path >1KB, fallback serde
-    if buf.len() > 1024 {
-        crate::common::parse_json_simd(&mut buf)
-    } else {
-        let s = String::from_utf8_lossy(&buf);
-        serde_json::from_str(&s).map_err(|e| format!("json inválido: {e}"))
-    }
-}
-
 /// Escapa un path para salida JSON sin romper backslashes.
 pub fn pstring(p: &Path) -> String {
     p.to_string_lossy().to_string()

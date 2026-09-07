@@ -3,28 +3,27 @@
 use std::io::Read;
 use std::sync::Arc;
 
-use tiny_http::{Header, Method, Request, Response, StatusCode};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     _q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     if path == "/shell/stats" {
-        return Some(json_ok(&state.stats.status()));
+        return Some(ShellResponse::ok_json(&state.stats.status()));
     }
-    if path == "/shell/stats/start" && method == Method::Post {
+    if path == "/shell/stats/start" && method == "POST" {
         crate::statsx::ensure(&state);
-        return Some(json_ok(&state.stats.status()));
+        return Some(ShellResponse::ok_json(&state.stats.status()));
     }
     if let Some(rest) = path.strip_prefix("/shell/stats/proxy/") {
-        let url = req.url().to_string();
-        let query = url.split('?').nth(1).unwrap_or("");
+        let query = req.query.as_str();
         let qs = if query.is_empty() { String::new() } else { format!("?{query}") };
         let stats_url = format!("http://127.0.0.1:8765/api/{rest}{qs}");
         let agent = ureq::builder().timeout(std::time::Duration::from_secs(15)).build();
@@ -33,20 +32,19 @@ pub fn handle(
                 let mut body = Vec::new();
                 resp.into_reader().read_to_end(&mut body).unwrap_or_default();
                 let ct = "application/json";
-                Response::from_string(String::from_utf8_lossy(&body).to_string())
-                    .with_header(Header::from_bytes("Content-Type", ct).unwrap())
-                    .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
-                    .with_header(Header::from_bytes("Cache-Control", "no-store").unwrap())
-                    .with_status_code(StatusCode(200))
+                ShellResponse::from_string(200, String::from_utf8_lossy(&body).to_string())
+                    .with_header("Content-Type", ct)
+                    .with_header("Access-Control-Allow-Origin", "*")
+                    .with_header("Cache-Control", "no-store")
             }
             Err(ureq::Error::Status(code, resp)) => {
                 let mut body = Vec::new();
                 resp.into_reader().read_to_end(&mut body).unwrap_or_default();
                 let msg = String::from_utf8_lossy(&body).to_string();
                 let body_json = if msg.is_empty() { format!("stats HTTP {code}") } else { msg };
-                json_err(code, &body_json)
+                ShellResponse::err_json(code, &body_json)
             }
-            Err(_) => json_err(502, "stats server unavailable"),
+            Err(_) => ShellResponse::err_json(502, "stats server unavailable"),
         });
     }
 
@@ -72,26 +70,26 @@ pub fn handle(
             }
         }
         return Some(if let Some(url) = found {
-            json_ok(&serde_json::json!({ "running": true, "url": url }))
+            ShellResponse::ok_json(&serde_json::json!({ "running": true, "url": url }))
         } else {
-            json_ok(&serde_json::json!({ "running": false, "url": "http://localhost:3000" }))
+            ShellResponse::ok_json(&serde_json::json!({ "running": false, "url": "http://localhost:3000" }))
         });
     }
-    if path == "/shell/design/open" && method == Method::Post {
-        return Some(match read_body(req) {
+    if path == "/shell/design/open" && method == "POST" {
+        return Some(match req.json_body() {
             Ok(b) => {
                 let url = b["url"].as_str().unwrap_or("http://localhost:3000").to_string();
                 if !url.starts_with("http://") && !url.starts_with("https://") {
-                    json_err(400, "URL debe ser http(s)")
+                    ShellResponse::err_json(400, "URL debe ser http(s)")
                 } else {
                     let url_c = url.clone();
                     let _ = std::process::Command::new("cmd")
                         .args(["/c", "start", "", &url_c])
                         .spawn();
-                    json_ok(&serde_json::json!({ "ok": true, "url": url }))
+                    ShellResponse::ok_json(&serde_json::json!({ "ok": true, "url": url }))
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
 

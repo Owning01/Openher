@@ -1,53 +1,45 @@
-//! Hyper + tokio server (plan §3.1) — IOCP en Windows, zero-copy.
-//! Fase 1: sirve estáticos via `common::serve_file_mmap` (mmap) + brotli.
-//! Fase 2 (TODO): migrar `/shell/*` de `tiny_http` a `hyper` con `dispatch` genérico
-//! para eliminar `1 thread/req` y CORS overhead. Por ahora coexiste con `tiny_http`.
+//! Hyper + tokio server (Plan §3.1 completado) — IOCP en Windows.
+//! Sirve estáticos via `common::serve_file_mmap` (mmap) + brotli y
+//! `/shell/*` via `api::dispatch` (mismo dispatch puro, sin tiny_http).
+//! El dispatch corre en spawn_blocking: handlers con I/O bloqueante
+//! (ureq outbound) jamás stallean un worker tokio.
 
 use std::sync::Arc;
-use std::net::SocketAddr;
 
 use bytes::Bytes;
-use http_body_util::Full;
+use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper::{Request, Response, StatusCode};
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 use crate::state::AppState;
 
-/// Inicia hyper en `0.0.0.0:port` (tokio runtime). Retorna el puerto elegido.
-/// Si falla, cae a tiny_http existente en `main.rs`.
-pub async fn serve_hyper(state: Arc<AppState>, port: u16) -> Result<u16, String> {
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let listener = TcpListener::bind(addr).await.map_err(|e| e.to_string())?;
-    let bound = listener.local_addr().map_err(|e| e.to_string())?.port();
-    eprintln!("opencode-desktop: hyper sirviendo en http://0.0.0.0:{bound} (tokio IOCP, mmap)");
-
-    let state_clone = state.clone();
-    tokio::spawn(async move {
-        loop {
-            let (stream, _) = match listener.accept().await {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
-            let io = TokioIo::new(stream);
-            let st = state_clone.clone();
-            tokio::spawn(async move {
-                let svc = service_fn(move |req: Request<Incoming>| {
-                    let st = st.clone();
-                    async move { handle_hyper(req, st).await }
-                });
-                if let Err(e) = hyper::server::conn::http1::Builder::new()
-                    .serve_connection(io, svc)
-                    .await
-                {
-                    eprintln!("hyper conn error: {e}");
-                }
+/// Accept loop sobre un listener ya bindeado (main pre-bindea el socket std
+/// para elegir el puerto ANTES de construir AppState). No retorna.
+pub async fn serve_listener(state: Arc<AppState>, listener: TcpListener) {
+    loop {
+        let (stream, _) = match listener.accept().await {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let io = TokioIo::new(stream);
+        let st = state.clone();
+        tokio::spawn(async move {
+            let svc = service_fn(move |req: Request<Incoming>| {
+                let st = st.clone();
+                async move { handle_hyper(req, st).await }
             });
-        }
-    });
-    Ok(bound)
+            if let Err(e) = hyper::server::conn::http1::Builder::new()
+                .serve_connection(io, svc)
+                .await
+            {
+                eprintln!("hyper conn error: {e}");
+            }
+        });
+    }
 }
 
 async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Response<Full<Bytes>>, std::convert::Infallible> {
@@ -102,15 +94,42 @@ async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Re
         return Ok(resp);
     }
 
-    // /shell/* — por ahora proxy a tiny_http interno (evita refactor masivo de routers)
-    // TODO: dispatch genérico que llame a `crate::api::dispatch` sin tiny_http Request.
-    // Hacer fetch interno a tiny_http port+1000? No — responder 501 hasta migrar dispatch.
-    let body = format!("{{\"error\":\"hyper /shell proxy no migrado aún: {method} {path}?{query}\"}}");
-    let resp = Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .header("content-type", "application/json")
-        .header("access-control-allow-origin", "*")
-        .body(Full::new(Bytes::from(body)))
-        .unwrap();
-    Ok(resp)
+    // /shell/* — dispatch puro compartido (Plan 1). El body se recolecta con
+    // cap 16MB (igual que el viejo read_body); el dispatch corre en
+    // spawn_blocking porque algunos handlers hacen I/O bloqueante (ureq
+    // outbound en proxy/search/stats) y jamás debe stall un worker tokio.
+    const MAX_BODY: usize = 16 * 1024 * 1024;
+    let method = method.to_string();
+    let mut headers: Vec<(String, String)> = Vec::new();
+    for (k, v) in req.headers().iter() {
+        headers.push((
+            k.as_str().to_ascii_lowercase(),
+            v.to_str().unwrap_or("").to_string(),
+        ));
+    }
+    let body = req
+        .into_body()
+        .collect()
+        .await
+        .map(|b| b.to_bytes())
+        .unwrap_or_default();
+    if body.len() > MAX_BODY {
+        let r = ShellResponse::err_json(413, "body too large");
+        return Ok(shell_to_hyper(r));
+    }
+    let sreq = ShellRequest { method, path: path.clone(), query, headers, body: body.to_vec() };
+    let resp = tokio::task::spawn_blocking(move || crate::api::dispatch(&sreq, &state))
+        .await
+        .unwrap_or_else(|_| ShellResponse::err_json(500, "dispatch panicked"));
+    Ok(shell_to_hyper(resp))
+}
+
+fn shell_to_hyper(r: ShellResponse) -> Response<Full<Bytes>> {
+    let mut b = Response::builder().status(
+        StatusCode::from_u16(r.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+    );
+    for (k, v) in &r.headers {
+        b = b.header(k.as_str(), v.as_str());
+    }
+    b.body(Full::new(Bytes::from(r.body))).unwrap()
 }

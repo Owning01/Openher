@@ -3,35 +3,35 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    _req: &mut Request,
+    _req: &ShellRequest,
     state: Arc<AppState>,
     path: &str,
-    _method: Method,
+    _method: &str,
     q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     if path == "/shell/updates" {
         let force = q("refresh") == "1";
-        return Some(json_ok(&crate::updates::build(&state, force)));
+        return Some(ShellResponse::ok_json(&crate::updates::build(&state, force)));
     }
     if path == "/shell/docs" {
-        return Some(json_ok(&crate::docsx::list(&state)));
+        return Some(ShellResponse::ok_json(&crate::docsx::list(&state)));
     }
     if path == "/shell/docs/read" {
         let rel = q("path");
         return Some(match crate::docsx::read(&state, &rel) {
-            Ok(v) => json_ok(&v),
-            Err(e) => json_err(404, &e),
+            Ok(v) => ShellResponse::ok_json(&v),
+            Err(e) => ShellResponse::err_json(404, &e),
         });
     }
     // Prefijo no manejado pero para evitar caer a 404 genérico sin indicar dominio
     if path.starts_with("/shell/docs") || path.starts_with("/shell/updates") {
-        return Some(json_err(404, "ruta docs/updates desconocida"));
+        return Some(ShellResponse::err_json(404, "ruta docs/updates desconocida"));
     }
     None
 }

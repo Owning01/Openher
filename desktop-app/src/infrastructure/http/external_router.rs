@@ -8,9 +8,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, AppState};
+use crate::state::AppState;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const DETACHED_PROCESS: u32 = 0x00000008;
@@ -212,12 +212,12 @@ fn external_manager(state: &AppState) -> Arc<crate::state::ExternalManager> {
 }
 
 pub fn handle(
-    _req: &mut Request,
+    _req: &ShellRequest,
     state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     _q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     // path: /shell/external/<name>/status | /start | /stop | /list
     if !path.starts_with("/shell/external") {
         return None;
@@ -271,7 +271,7 @@ pub fn handle(
                 "running": running,
             }));
         }
-        return Some(json_ok(&serde_json::json!({ "ok": true, "items": items })));
+        return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "items": items })));
     }
 
     // Embed static: /shell/external/<name>/embed/<path> → sirve dist via mmap sin Node (vite preview 0ms)
@@ -326,19 +326,15 @@ pub fn handle(
                     } else {
                         html = format!("{}{}", fwd_script, html);
                     }
-                    tiny_http::Response::from_data(html.into_bytes())
-                        .with_status_code(200)
-                        .with_header(tiny_http::Header::from_bytes("Content-Type", mime).unwrap())
-                        .with_header(tiny_http::Header::from_bytes("Cache-Control", "no-cache").unwrap())
+                    ShellResponse::data(200, html.into_bytes(), &mime)
+                        .with_header("Cache-Control", "no-cache")
                 } else {
-                    tiny_http::Response::from_data(bytes)
-                        .with_status_code(200)
-                        .with_header(tiny_http::Header::from_bytes("Content-Type", mime).unwrap())
-                        .with_header(tiny_http::Header::from_bytes("Cache-Control", "public, max-age=31536000, immutable").unwrap())
+                    ShellResponse::data(200, bytes, &mime)
+                        .with_header("Cache-Control", "public, max-age=31536000, immutable")
                 };
                 return Some(resp);
             }
-            return Some(json_err(404, &format!("embed no encontrado: {rel} en {}", embed_root.display())));
+            return Some(ShellResponse::err_json(404, &format!("embed no encontrado: {rel} en {}", embed_root.display())));
         }
     }
 
@@ -351,12 +347,12 @@ pub fn handle(
     let defs_map = defs();
     let def = match defs_map.get(name.as_str()) {
         Some(d) => d.clone(),
-        None => return Some(json_err(404, "proyecto externo no existe")),
+        None => return Some(ShellResponse::err_json(404, "proyecto externo no existe")),
     };
 
     let mgr = external_manager(&state);
 
-    if action == "status" && method == Method::Get {
+    if action == "status" && method == "GET" {
         let running = if def.port.is_some() {
             let is_vite_embed = (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
             if is_vite_embed {
@@ -376,10 +372,10 @@ pub fn handle(
                 stored = embed_url;
             }
         }
-        return Some(json_ok(&serde_json::json!({ "ok": true, "name": name, "running": running, "url": stored, "dir": def.dir, "port": def.port })));
+        return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "name": name, "running": running, "url": stored, "dir": def.dir, "port": def.port })));
     }
 
-    if action == "start" && method == Method::Post {
+    if action == "start" && method == "POST" {
         // Anti-doble-spawn: si otro /start del mismo plugin está en curso (<20s),
         // no spawnear otro tools-dev (StrictMode / prewarm / doble instancia).
         {
@@ -388,7 +384,7 @@ pub fn handle(
                 if at.elapsed() < Duration::from_secs(20) {
                     let url = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned()
                         .unwrap_or_else(|| def.url.map(|s| s.to_string()).unwrap_or_default());
-                    return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "starting": true, "url": url })));
+                    return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "starting": true, "url": url })));
                 } else {
                     starting.remove(&name);
                 }
@@ -425,7 +421,7 @@ pub fn handle(
             } else {
                 mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                 let stored = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned().unwrap_or(url.clone());
-                return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "url": stored })));
+                return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "url": stored })));
             }
         }
         // probe si ya está corriendo externamente (usuario lo lanzó manual) — skip para vite embed, sin lock
@@ -434,7 +430,7 @@ pub fn handle(
             if !is_vite_embed && def.port.is_some() && probe(&def) {
                 mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                 let url = def.url.map(|s| s.to_string()).unwrap_or_default();
-                return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "url": url, "external": true })));
+                return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "url": url, "external": true })));
             }
         }
         // Nunca permitir que dos plugins compartan el mismo puerto — skip para vite embed (mmap, sin Node)
@@ -445,7 +441,7 @@ pub fn handle(
                     if *other_name == name.as_str() || *other_name == "" { continue; }
                     if other_def.port == Some(port) {
                         mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
-                        return Some(json_err(409, &format!("puerto {} ya configurado para '{}', '{}' no puede usar el mismo puerto", port, other_name, name)));
+                        return Some(ShellResponse::err_json(409, &format!("puerto {} ya configurado para '{}', '{}' no puede usar el mismo puerto", port, other_name, name)));
                     }
                 }
                 if probe(&def) {
@@ -455,7 +451,7 @@ pub fn handle(
                         .find(|(n, d)| *n != &name.as_str() && d.port == Some(port))
                         .map(|(n, _)| *n)
                         .unwrap_or("proceso externo");
-                    return Some(json_err(409, &format!("puerto {} ya en uso por '{}', no se puede iniciar '{}'", port, owner, name)));
+                    return Some(ShellResponse::err_json(409, &format!("puerto {} ya en uso por '{}', no se puede iniciar '{}'", port, owner, name)));
                 }
             }
         }
@@ -470,13 +466,13 @@ pub fn handle(
                 }
                 mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                 eprintln!("external: {} embed static → {} (sin spawn)", name, url);
-                return Some(json_ok(&serde_json::json!({ "ok": true, "already": true, "url": url, "embed": true })));
+                return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "url": url, "embed": true })));
             }
         }
         let dir = PathBuf::from(def.dir);
         if !dir.exists() {
             mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
-            return Some(json_err(404, &format!("directorio no existe: {}", def.dir)));
+            return Some(ShellResponse::err_json(404, &format!("directorio no existe: {}", def.dir)));
         }
         let cmd_str = effective_cmd(&def);
         // log file para debug (data/external-<name>.log)
@@ -503,7 +499,7 @@ pub fn handle(
             }
             match c.spawn() {
                 Ok(ch) => ch,
-                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(json_err(500, &e.to_string())); }
+                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(ShellResponse::err_json(500, &e.to_string())); }
             }
         } else if cmd_str.trim_start().starts_with("G:\\Dev\\nodejs") {
             // Direct node (screenshots/opendesign) - evita pnpm y conhost, oculta ventana
@@ -528,7 +524,7 @@ pub fn handle(
             }
             match c.spawn() {
                 Ok(ch) => ch,
-                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(json_err(500, &e.to_string())); }
+                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(ShellResponse::err_json(500, &e.to_string())); }
             }
         } else {
             // pnpm directo oculto sin cmd visible: evita conhost S/N y WindowsTerminal. Usa binario Rust directo.
@@ -563,7 +559,7 @@ pub fn handle(
             }
             match c.spawn() {
                 Ok(ch) => ch,
-                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(json_err(500, &e.to_string())); }
+                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(ShellResponse::err_json(500, &e.to_string())); }
             }
         };
         let pid = child.id();
@@ -585,14 +581,14 @@ pub fn handle(
                     mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                     mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
                     eprintln!("external: {} start con daemon already running pero web ok → pid {}", name, pid);
-                    return Some(json_ok(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "daemon_already": true })));
+                    return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "daemon_already": true })));
                 }
             }
             let code = status.code().unwrap_or(-1);
             let log_tail = std::fs::read_to_string(crate::state::data_dir().join(format!("external-{}.log", name))).unwrap_or_default();
             let tail = log_tail.chars().rev().take(800).collect::<String>().chars().rev().collect::<String>();
             mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
-            return Some(json_err(500, &format!("proceso salió inmediato (code {code}): {tail} | cmd: {cmd_str}")));
+            return Some(ShellResponse::err_json(500, &format!("proceso salió inmediato (code {code}): {tail} | cmd: {cmd_str}")));
         }
         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
         // guardar
@@ -633,21 +629,21 @@ pub fn handle(
             }
         });
 
-        return Some(json_ok(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir })));
+        return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir })));
     }
 
-    if action == "mtime" && method == Method::Get {
+    if action == "mtime" && method == "GET" {
         let m = plugin_mtime(&def);
-        return Some(json_ok(&serde_json::json!({ "ok": true, "name": name, "mtime": m, "dir": def.dir, "port": def.port })));
+        return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "name": name, "mtime": m, "dir": def.dir, "port": def.port })));
     }
 
-    if action == "restart" && method == Method::Post {
+    if action == "restart" && method == "POST" {
         // Embed estático: no hay proceso, solo invalidar probe y devolver ok para que el frontend recargue con cache-bust
         let is_vite_embed_restart = (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
         if is_vite_embed_restart {
             if let Some(port) = def.port { invalidate_probe(port); }
             let url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
-            return Some(json_ok(&serde_json::json!({ "ok": true, "restarted": true, "embed": true, "url": url, "mtime": plugin_mtime(&def) })));
+            return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "restarted": true, "embed": true, "url": url, "mtime": plugin_mtime(&def) })));
         }
         // Matar proceso existente si lo hay
         {
@@ -684,7 +680,7 @@ pub fn handle(
         // Reutilizar lógica de start: verificar directorio, elegir comando y spawnear
         let dir = PathBuf::from(def.dir);
         if !dir.exists() {
-            return Some(json_err(404, &format!("directorio no existe: {}", def.dir)));
+            return Some(ShellResponse::err_json(404, &format!("directorio no existe: {}", def.dir)));
         }
         // Para plugins con dist y prod, tras restart preferir dev si el puerto estaba en uso? No, usar effective_cmd igual que start
         let cmd_str = effective_cmd(&def);
@@ -701,7 +697,7 @@ pub fn handle(
                 if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
                 c.stderr(std::process::Stdio::from(f));
             } else { c.stdout(std::process::Stdio::null()); c.stderr(std::process::Stdio::null()); }
-            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(json_err(500, &e.to_string())) }
+            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(ShellResponse::err_json(500, &e.to_string())) }
         } else if cmd_str.trim_start().starts_with("G:\\Dev\\nodejs") {
             let parts = split_cmd(cmd_str);
             let mut c = std::process::Command::new(&parts[0]);
@@ -715,7 +711,7 @@ pub fn handle(
                 if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
                 c.stderr(std::process::Stdio::from(f));
             } else { c.stdout(std::process::Stdio::null()); c.stderr(std::process::Stdio::null()); }
-            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(json_err(500, &e.to_string())) }
+            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(ShellResponse::err_json(500, &e.to_string())) }
         } else {
             let pnpm_bin = r"G:\Dev\nodejs-24\node_modules\pnpm\pnpm.exe";
             let pnpm_bin_alt = r"G:\Dev\nodejs-24\node_modules\pnpm\bin\pnpm.cjs";
@@ -735,7 +731,7 @@ pub fn handle(
                 if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
                 c.stderr(std::process::Stdio::from(f));
             } else { c.stdout(std::process::Stdio::null()); c.stderr(std::process::Stdio::null()); }
-            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(json_err(500, &e.to_string())) }
+            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(ShellResponse::err_json(500, &e.to_string())) }
         };
         let pid = child.id();
         std::thread::sleep(Duration::from_millis(1200));
@@ -747,13 +743,13 @@ pub fn handle(
                     let url = def.url.map(|s| s.to_string()).unwrap_or_default();
                     { let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()); urls.insert(name.clone(), url.clone()); }
                     mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
-                    return Some(json_ok(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "restarted": true, "daemon_already": true })));
+                    return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "restarted": true, "daemon_already": true })));
                 }
             }
             let code = status.code().unwrap_or(-1);
             let log_tail = std::fs::read_to_string(crate::state::data_dir().join(format!("external-{}.log", name))).unwrap_or_default();
             let tail = log_tail.chars().rev().take(800).collect::<String>().chars().rev().collect::<String>();
-            return Some(json_err(500, &format!("reinicio falló, proceso salió (code {code}): {tail} | cmd: {cmd_str}")));
+            return Some(ShellResponse::err_json(500, &format!("reinicio falló, proceso salió (code {code}): {tail} | cmd: {cmd_str}")));
         }
         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
         { let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner()); procs.insert(name.clone(), child); }
@@ -775,10 +771,10 @@ pub fn handle(
                 drop(procs);
             }
         });
-        return Some(json_ok(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "restarted": true })));
+        return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "restarted": true })));
     }
 
-    if action == "stop" && method == Method::Post {
+    if action == "stop" && method == "POST" {
         let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(mut child) = procs.remove(&name) {
             let pid = child.id();
@@ -806,11 +802,11 @@ pub fn handle(
             }
             mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
             mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
-            return Some(json_ok(&serde_json::json!({ "ok": true, "stopped": true })));
+            return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "stopped": true })));
         } else {
-            return Some(json_ok(&serde_json::json!({ "ok": true, "stopped": false, "msg": "no hay proceso gestionado" })));
+            return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "stopped": false, "msg": "no hay proceso gestionado" })));
         }
     }
 
-    Some(json_err(404, "ruta external no encontrada"))
+    Some(ShellResponse::err_json(404, "ruta external no encontrada"))
 }

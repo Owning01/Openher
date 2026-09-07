@@ -2,60 +2,60 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     _q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     // /shell/opencode/global GET y POST
     if path == "/shell/opencode/global" {
-        if method == Method::Get {
+        if method == "GET" {
             return Some(handle_global_get());
         }
-        if method == Method::Post {
-            return Some(match read_body(req) {
+        if method == "POST" {
+            return Some(match req.json_body() {
                 Ok(b) => {
                     let config_path = b["configPath"].as_str().or_else(|| b["path"].as_str()).unwrap_or("");
                     let content = b["content"].as_str().unwrap_or("");
                     if config_path.is_empty() || content.is_empty() {
-                        json_err(400, "Ruta o contenido inválido")
+                        ShellResponse::err_json(400, "Ruta o contenido inválido")
                     } else {
                         let p = std::path::PathBuf::from(config_path);
                         if let Some(parent) = p.parent() {
                             let _ = std::fs::create_dir_all(parent);
                         }
                         match std::fs::write(&p, content) {
-                            Ok(_) => json_ok(&serde_json::json!({ "ok": true })),
-                            Err(e) => json_err(500, &format!("Error al escribir archivo: {}", e)),
+                            Ok(_) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                            Err(e) => ShellResponse::err_json(500, &format!("Error al escribir archivo: {}", e)),
                         }
                     }
                 }
-                Err(e) => json_err(400, &e.to_string()),
+                Err(e) => ShellResponse::err_json(400, &e.to_string()),
             });
         }
-        return Some(json_err(405, "method not allowed"));
+        return Some(ShellResponse::err_json(405, "method not allowed"));
     }
 
     // /shell/labs y /shell/labs/start
     let labs_route = path.strip_prefix("/shell/labs")?;
     let resp = match (method, labs_route) {
-        (Method::Get, "") | (Method::Get, "/") => json_ok(&crate::plugins::labs_list(&state)),
-        (Method::Post, "/start") => match read_body(req) {
+        ("GET", "") | ("GET", "/") => ShellResponse::ok_json(&crate::plugins::labs_list(&state)),
+        ("POST", "/start") => match req.json_body() {
             Ok(b) => {
                 let id = b["id"].as_str().unwrap_or("");
                 match crate::plugins::labs_start(&state, id) {
-                    Ok(v) => json_ok(&v),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(v) => ShellResponse::ok_json(&v),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         },
         // soporte ruta exacta /shell/labs sin strip para compatibilidad
         _ => return None,
@@ -63,7 +63,7 @@ pub fn handle(
     Some(resp)
 }
 
-fn handle_global_get() -> Response<std::io::Cursor<Vec<u8>>> {
+fn handle_global_get() -> ShellResponse {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .or_else(|_| std::env::var("HOMEPATH").map(|hp| format!("{}{}", std::env::var("HOMEDRIVE").unwrap_or_default(), hp)))
@@ -214,7 +214,7 @@ fn handle_global_get() -> Response<std::io::Cursor<Vec<u8>>> {
         }
     }
 
-    json_ok(&serde_json::json!({
+    ShellResponse::ok_json(&serde_json::json!({
         "configPath": config_path_found,
         "configContent": config_content,
         "configJson": config_json,
