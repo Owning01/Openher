@@ -35,12 +35,3 @@ App local de Rust (2024 edition) que lee `opencode.db` en solo-lectura y muestra
 - Frontend: tema dark fijo (`#0b0e14` bg / `#141a24` panels), tablas DRY con un solo `renderTable(thId, tbId, cols, rows)` + config `COLS` en `app.js`
 - Commits: conventional commits en inglÃ©s (`feat/fix/refactor(scope)`); UI, docs y mensajes de usuario en espaÃ±ol
 
----
-
-<!-- GLOBAL-AGENTS-SYNC v2 -->
-## Memoria del proyecto (no duplicar, solo referenciar)
-- **Index-First:** antes de investigar, revisar `../../.agents/INDEX.md`; si una skill aplica, leer UNICAMENTE su `SKILL.md`.
-- **Anti-Patterns:** revisar `../../.agents/ANTIPATTERNS.md` (locks/EPERM, sin bash en PowerShell, sin volcar `node_modules`/`.git`/`dist`).
-- **Eficiencia:** cero charla ociosa, lectura selectiva, `fast-find "<termino>"`.
-- **Contribuir:** patron/bug -> `../../.agents/skills/<nombre>/SKILL.md` (max 25 lineas) + fila en `INDEX.md`; trampa -> regla en `ANTIPATTERNS.md`.
-

@@ -18,7 +18,7 @@ Si tu tarea es modificar o investigar una funcionalidad, ve **directamente** a e
 | **Chat: Estado & Streaming** (árbol mensajes, SSE, reconexión, outbox) | `hooks/useMessages.ts`<br>`hooks/useSSE.ts`<br>`hooks/useSSEHandler.ts`<br>`hooks/useAI.ts` | OpenCode Server (`:4096`/`:4097`) |
 | **Modelos & Preguntas al Usuario** (selector, permisos, asks) | `components/ModelSelectorModal.tsx`<br>`components/QuestionPrompt.tsx`<br>`hooks/useQuestions.ts` | — |
 | **Sesiones** (lista, agrupado por proyecto, `+` con FolderPicker) | `hooks/useSessions.ts`<br>`utils/sessionDirs.ts` (`dirKey`/backfill)<br>`app/useAppController.ts` | — |
-| **IDE Desktop: Layout & Split** (docks, paneles, resize) | `components/shellPanels.tsx` (~3.485L)<br>`widgets/desktop-grid/`<br>`widgets/titlebar/` | `desktop-app/src/main.rs` |
+| **IDE Desktop: Layout & Split** (docks, paneles, resize) | `components/shellPanels.tsx` (~3.2KL)+`components/KanbanPanel.tsx` (split P1)<br>`widgets/desktop-grid/`<br>`widgets/titlebar/` | `desktop-app/src/main.rs` |
 | **IDE: Terminal PTY** (xterm, tabs de terminal, split) | `components/TerminalView.tsx`<br>`components/ChatTerminalDock.tsx` | `desktop-app/src/ptyx.rs`<br>(WS `:4849` o SSE) |
 | **IDE: Explorador de Archivos** (árbol, picker, iconos, visor) | `features/pc-files/PCFilesPanel.tsx`<br>`components/FileBrowser.tsx`<br>`components/FolderPicker.tsx`<br>`hooks/useFileBrowser.ts` | `desktop-app/src/fsx.rs`<br>(`/shell/fs/*`, `read` 64KB) |
 | **IDE: Editor de Código** (LiteEditor único, diffs) | `components/LiteEditor.tsx` (único editor)<br>`components/FileEditor.tsx` (delega)<br>`components/DiffView.tsx`<br>`components/ADEDiffPanel.tsx`<br>`utils/editorOps.ts` | `desktop-app/src/fsx.rs` |
@@ -121,16 +121,17 @@ desktop-app.exe (Rust)             OpenCode Server (Go/TS)
 
 ### A. Frontend (`web/src/`)
 - `App.tsx` (~401L): delega en `app/useAppController.ts` (composition root: sesiones, paneles, modales, `+` abre FolderPicker). Orquestador raíz ya delgado.
-- `api.ts`: Cliente HTTP para el servidor OpenCode (`:4096`/`:4097`). `loadMessages` con `safeLimit=min(limit,200)`; variantes del client beta + fallback HTTP v1/v2.
+- `api.ts`: Cliente HTTP para el servidor OpenCode (`:4096`/`:4097`). `loadMessages` con `safeLimit=min(limit,200)`; variantes del client beta + fallback HTTP v1/v2. `sendPrompt`/`sendCommand` v2 con fallback HTTP directo si el SDK falla. `shared/api/opencodeClient.ts` inyecta `fetch` por `CapacitorHttp` en nativo (sin preflight CORS: en Android por Tailscale los POST caían aunque los GETs cargaban).
 - `shell.ts`: Cliente HTTP para el backend Rust (`:4848`). 15 `ShellPanelKind` + `kanbanPromptText` + clientes git/fs.
 - `utils/`: `sessionDirs.ts` (`dirKey`/agrupado/backfill), `urlDrag.ts` (bridge solo-URL 5 MIME), `chatNotes.ts` (nota por sesión 20KB), `promptHistory.ts`, `editorOps.ts`, `fsChanges.ts` (`normFsPath`).
-- `hooks/useMessages.ts` (~921L): árbol de mensajes + outbox por sesión + batch SSE por rAF + `renderedCacheRef`; límite 200 (ultra/miser 100).
+- `hooks/useMessages.ts` (~921L): árbol de mensajes + outbox por sesión + batch SSE por rAF + `renderedCacheRef`; límite 200 (ultra/miser 100). Rehidrata bytes de imagen en el eco (`rehydrateImages` en `utils/parseCommand.ts`: el server poda dataURLs y la imagen "aparecía y se borraba").
 - `hooks/useSSEHandler.ts`: Parser de eventos SSE del servidor (tokens de texto, inicio/fin de tools, errores).
 - `hooks/useMemoryUsage.ts`: heap JS + `GET /shell/mem` (chip apilado en ActivityBar).
 - `hooks/useChatSettings.ts`: 21 campos incl. `reduceMotion` → `html.no-motion`.
 - `hooks/useDesktopLayoutState.ts`: Estado de paneles divididos (editor, terminal, git, browser).
-- `widgets/titlebar/`, `widgets/desktop-grid/`, `widgets/activity-bar/`, `widgets/message-list/`: TitleBar, celdas con drops URL, chip RAM, lista virtualizada.
-- `components/shellPanels.tsx` (~3.485L, split pendiente): contenedor maestro del IDE desktop (KanbanPanel con envío a sesión, BrowserPanel PiP/sync, ExplorerPanel, TerminalPanel, SourceControlPanel…).
+- `widgets/titlebar/`, `widgets/desktop-grid/`, `widgets/activity-bar/`, `widgets/message-list/`: TitleBar, celdas con drops URL, chip RAM, lista de mensajes.
+- `components/shellPanels.tsx` (~3.2KL, split P1 en curso) + `components/KanbanPanel.tsx` (extraído, re-export): contenedor maestro del IDE desktop (KanbanPanel con envío a sesión, BrowserPanel PiP/sync, ExplorerPanel, TerminalPanel, SourceControlPanel…).
+- `widgets/message-list/MessageVirtualList.tsx`: virtualizer con medición dinámica (sin delegación: `MessageList.tsx` usa siempre la ventana sliceada de 40 — el virtualizador metía jank de 1s al abrir/cerrar y rompía el anclaje al último mensaje; tanstack fuera del eager).
 - `components/LiteEditor.tsx`: editor único (FileEditor delega). `components/HighlightedCode.tsx`: highlight compartido.
 - `styles/tokens.css` (+24): sistema de diseño light/dark por tokens, `motion.css` (`no-motion`), `notes.css`, `editor.css` (`var(--code-*)`). Ver `DESIGN.md` (Antigravity).
 
