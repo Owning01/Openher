@@ -2,6 +2,7 @@
 // kanban, docs, updates, stats, labs y config. Todos hablan con /shell/*.
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react"
+import { useScheduled } from "../hooks/useScheduled"
 import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
@@ -2754,11 +2755,8 @@ export const StatsPanel = memo(function StatsPanel() {
       })
   }, [starting])
 
-  useEffect(() => {
-    load()
-    const iv = window.setInterval(load, 5000)
-    return () => window.clearInterval(iv)
-  }, [load])
+  // Reloj central (Plan 3) con load inmediato.
+  useScheduled("stats-panel", 5000, load, { runOnRegister: true })
 
   return (
     <div className="shell-stats">
@@ -2791,11 +2789,8 @@ export const LabsPanel = memo(function LabsPanel() {
     shell.server.status().then(setServer)
     shell.autostart.get().then((r) => setAutostart(r.enabled))
   }, [])
-  useEffect(() => {
-    load()
-    const iv = window.setInterval(load, 6000)
-    return () => window.clearInterval(iv)
-  }, [load])
+  // Reloj central (Plan 3) con load inmediato.
+  useScheduled("labs-panel", 6000, load, { runOnRegister: true })
 
   const start = async (appId: string) => {
     setBusy(appId)
@@ -3201,11 +3196,8 @@ export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID, on
     }
   }, [sessionID])
 
-  useEffect(() => {
-    load()
-    const iv = window.setInterval(load, 15_000)
-    return () => window.clearInterval(iv)
-  }, [load])
+  // Reloj central (Plan 3) con load inmediato; re-registra al cambiar de sesión.
+  useScheduled(`session-stats:${sessionID}`, 15_000, load, { runOnRegister: true })
 
   return (
     <div className="session-stats-modal">

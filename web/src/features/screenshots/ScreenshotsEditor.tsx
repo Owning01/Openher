@@ -1,22 +1,32 @@
-import { memo, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { useScheduled } from "../../hooks/useScheduled"
 
 const SCREENSHOTS_URL = "http://127.0.0.1:3002"
 
 export const ScreenshotsEditor = memo(function ScreenshotsEditor() {
   const [status, setStatus] = useState<"checking" | "ready" | "offline">("checking")
 
+  const probe = useCallback(async () => {
+    try {
+      const r = await fetch(SCREENSHOTS_URL, { method: "HEAD", cache: "no-store" })
+      if (r.ok) setStatus("ready")
+      else setStatus((prev) => (prev === "checking" ? "offline" : prev))
+    } catch {
+      setStatus((prev) => (prev === "checking" ? "offline" : prev))
+    }
+  }, [])
+
+  // Reloj central (Plan 3): el probe inmediato lo hace el effect de abajo al
+  // cambiar status; el scheduler solo reintenta mientras no esté ready.
+  useScheduled("screenshots-probe", 3000, probe, { enabled: status !== "ready" })
+
   useEffect(() => {
+    if (status === "ready") return
     let cancelled = false
     fetch(SCREENSHOTS_URL, { method: "HEAD", cache: "no-store" })
       .then(r => { if (!cancelled) setStatus(r.ok ? "ready" : "offline") })
       .catch(() => { if (!cancelled) setStatus("offline") })
-    const id = setInterval(() => {
-      if (status === "ready") return
-      fetch(SCREENSHOTS_URL, { method: "HEAD", cache: "no-store" })
-        .then(r => { if (!cancelled && r.ok) setStatus("ready") })
-        .catch(() => {})
-    }, 3000)
-    return () => { cancelled = true; clearInterval(id) }
+    return () => { cancelled = true }
   }, [status])
 
   if (status === "checking") return <div style={{ padding: 24, color: "var(--muted)" }}>Verificando 0 screenshots en {SCREENSHOTS_URL}…</div>

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react"
+import { useCallback, useState } from "react"
+import { useScheduled } from "./useScheduled"
 
 export interface MemoryInfo {
   jsHeapUsed: number
@@ -11,44 +12,38 @@ export interface MemoryInfo {
 
 export function useMemoryUsage(intervalMs = 5000): MemoryInfo | null {
   const [mem, setMem] = useState<MemoryInfo | null>(null)
+  const perf = typeof performance !== "undefined" ? (performance as any) : null
+  const supported = !!perf?.memory
 
-  useEffect(() => {
-    const perf = (performance as any)
+  const poll = useCallback(() => {
     if (!perf?.memory) return
+    try {
+      setMem((prev) => ({
+        jsHeapUsed: perf.memory.usedJSHeapSize,
+        jsHeapTotal: perf.memory.totalJSHeapSize,
+        // Conservar el último valor nativo: el fetch es best-effort.
+        ...(prev?.webviewRss ? { webviewRss: prev.webviewRss } : {}),
+        ...(prev?.appRss ? { appRss: prev.appRss } : {}),
+      }));
+    } catch { /* ignore */ }
+    // RAM del WebView nativo (misma origen en desktop; inexistente en
+    // web remota/APK → se ignora en silencio y el chip muestra solo JS).
+    fetch("/shell/mem", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j || typeof j.webview_rss !== "number") return
+        const webviewRss = j.webview_rss > 0 ? j.webview_rss : undefined
+        const appRss = typeof j.app_rss === "number" && j.app_rss > 0 ? j.app_rss : undefined
+        if (webviewRss === undefined && appRss === undefined) return
+        setMem((prev) =>
+          prev ? { ...prev, ...(webviewRss ? { webviewRss } : {}), ...(appRss ? { appRss } : {}) } : prev
+        )
+      })
+      .catch(() => {})
+  }, [perf])
 
-    let alive = true
-    const poll = () => {
-      try {
-        setMem((prev) => ({
-          jsHeapUsed: perf.memory.usedJSHeapSize,
-          jsHeapTotal: perf.memory.totalJSHeapSize,
-          // Conservar el último valor nativo: el fetch es best-effort.
-          ...(prev?.webviewRss ? { webviewRss: prev.webviewRss } : {}),
-          ...(prev?.appRss ? { appRss: prev.appRss } : {}),
-        }));
-      } catch { /* ignore */ }
-      // RAM del WebView nativo (misma origen en desktop; inexistente en
-      // web remota/APK → se ignora en silencio y el chip muestra solo JS).
-      fetch("/shell/mem", { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => {
-          if (!alive || !j || typeof j.webview_rss !== "number") return
-          const webviewRss = j.webview_rss > 0 ? j.webview_rss : undefined
-          const appRss = typeof j.app_rss === "number" && j.app_rss > 0 ? j.app_rss : undefined
-          if (webviewRss === undefined && appRss === undefined) return
-          setMem((prev) =>
-            prev ? { ...prev, ...(webviewRss ? { webviewRss } : {}), ...(appRss ? { appRss } : {}) } : prev
-          )
-        })
-        .catch(() => {})
-    }
-    poll()
-    const id = setInterval(poll, intervalMs)
-    return () => {
-      alive = false
-      clearInterval(id)
-    }
-  }, [intervalMs])
+  // Reloj central (Plan 3) con poll inmediato.
+  useScheduled("memory-usage", intervalMs, poll, { enabled: supported, runOnRegister: true })
 
   return mem
 }

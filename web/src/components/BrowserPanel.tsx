@@ -1,4 +1,5 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
+import { useScheduled } from "../hooks/useScheduled"
 import { RefreshIcon, MonitorIcon, PipIcon, LoadingIcon, CloseIcon, FolderIcon, GlobeIcon, SearchIcon, FileIcon, PaintIcon, KeyboardIcon, MaximizeIcon, ChevronIcon, CheckIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
@@ -803,46 +804,42 @@ export const BrowserPanel = memo(function BrowserPanel({
       return { ...t, url: u, title: formatDisplayTitle(u), history: nextHist, historyIdx: nextHist.length - 1 }
     }))
   }, [])
-  useEffect(() => {
+  // Reloj central (Plan 3). Los guards (browserFailed, nativeReady) quedan
+  // dentro del fn; el scheduler aporta pausa en hidden + anti-solapamiento.
+  useScheduled(`browser-url:${isActive}:${browserFailed}`, 2000, async () => {
     if (!IS_DESKTOP || !isActive) return
-    let stopped = false
-    const id = window.setInterval(async () => {
-      if (stopped || document.visibilityState === "hidden" || browserFailed) return
-      if (!nativeReady.current) return
-      try {
-        const r = await bUrl().catch(() => null)
-        const u = (r as any)?.url
-        if (typeof u !== "string") return
-        const typing = document.activeElement === omniboxRef.current
-        const cur = tabsRef.current.find((t) => t.id === activeTabIdRef.current)?.url ?? ""
-        if (!shouldAdoptExternalUrl(u, cur, typing)) return
-        commitExternalUrl(u)
-        if (!typing) setInputUrl(u)
-      } catch {}
-    }, 2000)
-    return () => { stopped = true; window.clearInterval(id) }
-  }, [isActive, browserFailed, commitExternalUrl])
+    if (browserFailed) return
+    if (!nativeReady.current) return
+    try {
+      const r = await bUrl().catch(() => null)
+      const u = (r as any)?.url
+      if (typeof u !== "string") return
+      const typing = document.activeElement === omniboxRef.current
+      const cur = tabsRef.current.find((t) => t.id === activeTabIdRef.current)?.url ?? ""
+      if (!shouldAdoptExternalUrl(u, cur, typing)) return
+      commitExternalUrl(u)
+      if (!typing) setInputUrl(u)
+    } catch {}
+  }, { enabled: IS_DESKTOP && isActive })
 
   // Descargas completadas (data/downloads): aviso no bloqueante con la ruta.
-  useEffect(() => {
+  // Reloj central (Plan 3). El hideTimer de 9s sigue siendo timeout propio
+  // (one-shot, no polling).
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }, [])
+  useScheduled(`browser-downloads:${isActive}`, 4000, async () => {
     if (!IS_DESKTOP || !isActive) return
-    let stopped = false
-    let hideTimer: ReturnType<typeof setTimeout> | null = null
-    const id = window.setInterval(async () => {
-      if (stopped || document.visibilityState === "hidden") return
-      try {
-        const r = await shell.browser.downloads().catch(() => null)
-        const items = (r as any)?.downloads
-        if (!Array.isArray(items) || items.length === 0) return
-        const last = items[items.length - 1]
-        if (!last || typeof last.url !== "string") return
-        setLastDownload({ url: last.url, path: typeof last.path === "string" ? last.path : null, ok: last.ok !== false })
-        if (hideTimer) clearTimeout(hideTimer)
-        hideTimer = setTimeout(() => { if (!stopped) setLastDownload(null) }, 9000)
-      } catch {}
-    }, 4000)
-    return () => { stopped = true; window.clearInterval(id); if (hideTimer) clearTimeout(hideTimer) }
-  }, [isActive])
+    try {
+      const r = await shell.browser.downloads().catch(() => null)
+      const items = (r as any)?.downloads
+      if (!Array.isArray(items) || items.length === 0) return
+      const last = items[items.length - 1]
+      if (!last || typeof last.url !== "string") return
+      setLastDownload({ url: last.url, path: typeof last.path === "string" ? last.path : null, ok: last.ok !== false })
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = setTimeout(() => setLastDownload(null), 9000)
+    } catch {}
+  }, { enabled: IS_DESKTOP && isActive })
 
   // Perfil portable (qué data/ usa este exe): lazy al abrir configuración.
   useEffect(() => {

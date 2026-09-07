@@ -62,8 +62,21 @@ let flushTimer: ReturnType<typeof setInterval> | null = null
 // flush (antes cada 3s durante streaming, con hasta 5000 entries).
 let memEntries: DataUsageEntry[] | null = null
 
+function stopFlushTimer() {
+  if (flushTimer) {
+    clearInterval(flushTimer)
+    flushTimer = null
+    window.removeEventListener("beforeunload", flush)
+  }
+}
+
 function flush(): boolean {
-  if (pendingBatch.length === 0) return false
+  if (pendingBatch.length === 0) {
+    // Sin nada pendiente no hay razón para seguir tickeando cada 15s:
+    // se libera el timer (era permanente desde el primer record).
+    stopFlushTimer()
+    return false
+  }
   const entries = readEntries()
   entries.push(...pendingBatch)
   pendingBatch = []
