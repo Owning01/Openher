@@ -222,8 +222,8 @@ describe("getDataUsage - aggregation and time ranges", () => {
 
   it("flushes pending via timer interval", () => {
     recordDataUsage(555, "down")
-    // advance 3s to trigger interval flush
-    vi.advanceTimersByTime(3000)
+    // advance 15s to trigger interval flush
+    vi.advanceTimersByTime(15000)
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
     expect(raw.some((e: { bytes: number }) => e.bytes === 555)).toBe(true)
   })
@@ -285,7 +285,7 @@ describe("persistence and edge cases", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(many))
     // trigger write via record + flush
     recordDataUsage(10, "up")
-    vi.advanceTimersByTime(3000)
+    vi.advanceTimersByTime(15000)
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
     expect(stored.length).toBeLessThanOrEqual(5000)
     // the stored should contain the newest 5000 (slice(-5000) behavior)
@@ -294,7 +294,7 @@ describe("persistence and edge cases", () => {
 
   it("resetDataUsage clears storage", () => {
     recordDataUsage(123, "up")
-    vi.advanceTimersByTime(3000)
+    vi.advanceTimersByTime(15000)
     expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull()
     resetDataUsage()
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
@@ -308,7 +308,7 @@ describe("persistence and edge cases", () => {
     const setSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("full") })
     // record will try to write on flush, should not throw
     recordDataUsage(100, "up")
-    expect(() => vi.advanceTimersByTime(3000)).not.toThrow()
+    expect(() => vi.advanceTimersByTime(15000)).not.toThrow()
     expect(() => getDataUsage()).not.toThrow()
     setSpy.mockRestore()
 

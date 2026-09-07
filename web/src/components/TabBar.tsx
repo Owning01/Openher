@@ -271,7 +271,10 @@ export const TabBar = memo(function TabBar({
    // Si es URL externa, copy; si es interno, move
    const urlDrag = !isInternal && hasUrlType
    e.dataTransfer.dropEffect = isInternal && !urlDrag ? "move" : "copy"
-   if (isInternal) setDragOverIdx(getIndexFromX(e.clientX))
+   if (isInternal) {
+    const nextIdx = getIndexFromX(e.clientX)
+    setDragOverIdx((prev) => (prev === nextIdx ? prev : nextIdx))
+   }
   }
  }, [getIndexFromX])
 

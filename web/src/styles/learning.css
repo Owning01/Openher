@@ -713,3 +713,277 @@
   .learning-lesson-diagram .learning-diagram-wrap { padding: 10px 10px 8px; overflow-x: auto; }
   .learning-lesson-diagram .learning-diagram-wrap svg { min-width: 560px; max-width: none; width: max(100%, 560px); }
 }
+
+/* ===== Mejora plugin: acciones de header, resume, skeletons, TOC móvil, roadmap táctil ===== */
+.learning-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.learning-pager-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 1px;
+  background: var(--surface-subtle);
+}
+.learning-pager-inline .btn-icon { min-width: 32px; min-height: 32px; }
+
+/* Banner "continuar donde quedé" — signature del dashboard */
+.learning-resume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 32px);
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.learning-resume:hover { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 11%, var(--surface)); }
+.learning-resume-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--primary);
+  color: #fff;
+}
+.learning-resume-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.learning-resume-label { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); }
+.learning-resume-lesson { font-size: 0.86rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Estados vacíos útiles */
+.learning-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+.learning-empty-icon { color: var(--muted); display: grid; place-items: center; }
+.learning-empty-title { margin: 0; font-size: 0.9rem; font-weight: 600; color: var(--muted-strong); }
+
+/* Skeletons anti-CLS (mismo tamaño que el contenido real) */
+.learning-skeleton {
+  border-radius: 8px;
+  background: var(--surface-strong);
+  animation: learning-pulse 1.4s ease-in-out infinite;
+}
+.learning-skeleton-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.learning-lesson-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 1.5rem 0;
+  max-width: 720px;
+}
+@keyframes learning-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* TOC móvil colapsable (el lateral se oculta <900px) */
+.learning-toc-mobile { display: none; }
+@media (max-width: 900px) {
+  .learning-toc-mobile {
+    display: block;
+    margin: 0 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+  }
+  .learning-toc-mobile-summary {
+    padding: 12px 14px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .learning-toc-mobile .learning-toc-list { padding: 0 14px 12px; }
+  .learning-toc-mobile .learning-toc-link { padding: 10px 0; font-size: 0.84rem; }
+}
+.learning-toc-link.active { color: var(--primary); font-weight: 700; }
+
+/* Dashboard: ver más, abrir pendiente, nivel legible */
+.learning-more-btn {
+  margin: 4px 12px 12px;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px 4px;
+  min-height: 36px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+.learning-more-btn:hover { text-decoration: underline; }
+.learning-cat-card-open {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 0.75rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.learning-depth-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* Sidebar: filas, herramientas, hints */
+.learning-cat-header-row { display: flex; align-items: center; gap: 4px; }
+.learning-cat-toggle-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.learning-cat-tools { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.learning-badge-mini { font-size: 0.6rem; padding: 0 4px; }
+.learning-drop-hint { font-size: 0.72rem; color: var(--muted); padding: 6px 8px; display: block; }
+.learning-drop-hint.dim { opacity: 0.6; }
+.learning-nested-item { position: relative; }
+.learning-item-row { display: flex; align-items: center; gap: 2px; }
+.learning-item-row .learning-item { flex: 1; min-width: 0; }
+.learning-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.learning-item-del { flex-shrink: 0; width: 28px; height: 28px; color: var(--muted); }
+.learning-item-del:hover { color: var(--danger); }
+
+/* Confirmación armada en 2 pasos (mismo patrón que chat-notes) */
+.learning-topbar .danger-armed,
+.learning-cat-tools .danger-armed,
+.learning-item-del.danger-armed {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.learning-visibility-btn.active { color: var(--primary); background: var(--primary-soft); }
+
+/* Roadmap accionable: foco visible + scroll táctil en móvil */
+.learning-roadmap-diagram { overflow-x: auto; }
+.learning-roadmap-diagram svg g[role="button"] { outline: none; }
+.learning-roadmap-diagram svg g[role="button"]:focus-visible circle {
+  stroke: var(--primary);
+  stroke-width: 2.5;
+}
+@media (max-width: 780px) {
+  .learning-roadmap-diagram svg { min-width: 560px; width: max(100%, 560px); }
+}
+
+/* Targets táctiles 44px en móvil */
+@media (max-width: 780px) {
+  .learning-lesson-row { min-height: 44px; }
+  .learning-item { min-height: 44px; }
+  .learning-cat-toggle { min-height: 44px; }
+  .learning-resume { width: calc(100% - 24px); margin: 10px 12px 0; }
+  .learning-stat-lessons { display: none; }
+  .learning-stat-remaining { display: none; }
+  .learning-lesson-head { flex-wrap: wrap; }
+  .learning-head-actions { width: 100%; justify-content: flex-end; }
+  .learning-done-btn { min-height: 44px; }
+}
+
+/* Foco visible nítido en filas del plugin */
+.learning-lesson-row:focus-visible,
+.learning-item:focus-visible,
+.learning-more-btn:focus-visible,
+.learning-resume:focus-visible,
+.learning-cat-card-open:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* Botón buscar del topbar: solo móvil (en desktop el sidebar ya muestra el buscador) */
+.learning-search-btn { display: none; }
+@media (max-width: 780px) {
+  .learning-search-btn { display: inline-grid; place-items: center; }
+}
+
+/* Recientes: chips horizontales con scroll */
+.learning-recent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 0;
+}
+.learning-recent-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.learning-recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  min-width: 0;
+  scrollbar-width: thin;
+}
+.learning-recent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.learning-recent-chip:hover { border-color: var(--primary); background: var(--primary-soft); }
+.learning-recent-chip.done { color: var(--muted); }
+.learning-recent-chip.done svg { color: var(--success); }
+.learning-recent-chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+@media (max-width: 780px) {
+  .learning-recent { padding: 10px 12px 0; }
+  .learning-recent-chip { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learning-skeleton,
+  .learning-mobile-panel,
+  .learning-lightbox,
+  .learning-cat-card,
+  .learning-desktop-sidebar,
+  .learning-sidebar-toggle {
+    animation: none;
+    transition: none;
+  }
+}

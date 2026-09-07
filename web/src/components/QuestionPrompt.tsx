@@ -1,6 +1,7 @@
 import { memo, useState, useCallback } from "react"
 import { api } from "../api"
 import { useT } from "../i18n-context"
+import { CheckIcon } from "../Icons"
 import type { ServerConfig } from "../types"
 
 type QuestionItem = {
@@ -17,7 +18,7 @@ type Props = {
   config: ServerConfig
   directory?: string
   sessionID?: string
-  onDone: () => void
+  onDone: (status: "answered" | "rejected", answers?: string[][]) => void
 }
 
 export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestID, config, directory, sessionID, onDone }: Props) {
@@ -52,8 +53,9 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
     })
     try {
       await api.questionReply(config, requestID, answers, directory, sessionID)
-      onDone()
-    } catch {
+      onDone("answered", answers)
+    } catch (err) {
+      console.error("[QuestionPrompt] Failed to reply to question:", err)
       setSending(false)
     }
   }, [questions, selected, customs, config, requestID, directory, sessionID, onDone])
@@ -62,8 +64,9 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
     setSending(true)
     try {
       await api.questionReject(config, requestID, directory, sessionID)
-      onDone()
-    } catch {
+      onDone("rejected")
+    } catch (err) {
+      console.error("[QuestionPrompt] Failed to reject/skip question:", err)
       setSending(false)
     }
   }, [config, requestID, directory, sessionID, onDone])
@@ -85,17 +88,19 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
                   return (
                     <button
                       key={opt.label}
-                      className={`question-option${isActive ? " active" : ""}`}
+                      type="button"
+                      className={`question-option${isActive ? " picked" : ""}`}
                       onClick={() => handleToggle(qi, opt.label)}
                     >
-                      {opt.label}
+                      <span className="question-opt-label">{opt.label}</span>
                       {opt.description && <span className="question-opt-desc">{opt.description}</span>}
+                      {isActive && <span className="question-opt-check"><CheckIcon size={12} /></span>}
                     </button>
                   )
                 })}
               </div>
             )}
-            {q.custom && (
+            {q.custom !== false && (
               <input
                 className="question-custom-input"
                 type="text"

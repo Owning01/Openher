@@ -332,3 +332,16 @@ html[data-desktop="true"] .app-shell {
   color: var(--text);
   background: color-mix(in srgb, var(--text) 8%, transparent);
 }
+
+/* Resize frameless via web: los descendientes del WebView pueden tragar el WM_NCHITTEST antes de llegar al padre; estos handles llaman a POST /shell/window/resize que inicia drag_resize_window del SO. */
+.win-resize-container { position: fixed; inset: 0; pointer-events: none; z-index: 100000; }
+html[data-window-maximized="true"] .win-resize-container { display: none; }
+.win-resize-handle { position: fixed; pointer-events: auto; touch-action: none; }
+.win-resize-top { top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.win-resize-bottom { bottom: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.win-resize-left { top: 0; bottom: 0; left: 0; width: 6px; cursor: ew-resize; }
+.win-resize-right { top: 0; bottom: 0; right: 0; width: 6px; cursor: ew-resize; }
+.win-resize-top-left { top: 0; left: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.win-resize-top-right { top: 0; right: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.win-resize-bottom-left { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.win-resize-bottom-right { bottom: 0; right: 0; width: 12px; height: 12px; cursor: nwse-resize; }

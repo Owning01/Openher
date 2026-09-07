@@ -12,6 +12,7 @@ import { Markdown } from "./Markdown"
 import { HighlightedCode } from "./HighlightedCode"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { computeRenderedMessages } from "../utils/rendered"
+import { useQuestionSettled } from "../utils/questionStore"
 
 export type ToolPartData = {
   id: string
@@ -397,6 +398,7 @@ function SubagentTaskCard({
                       part={tp}
                       config={config}
                       directory={directory}
+                      sessionID={resolvedSessionId ?? undefined}
                       onViewSubagents={onViewSubagents}
                     />
                   ))}
@@ -458,16 +460,23 @@ export function DiffStatBadge({ add, del }: { add: number; del: number }) {
   )
 }
 
-export const ToolPart = memo(function ToolPart({ part, config, directory, onViewSubagents, compact: _compact }: {
+export const ToolPart = memo(function ToolPart({ part, config, directory, sessionID, onViewSubagents, compact: _compact }: {
   part: ToolPartData
   config?: ServerConfig
   directory?: string
+  sessionID?: string
   onViewSubagents?: (subagentID?: string) => void
   compact?: boolean
 }) {
   const t = useT()
+  const [locallyAnswered, setLocallyAnswered] = useState(false)
+  const [localAnswers, setLocalAnswers] = useState<string[][] | undefined>(undefined)
   const text = part.text?.trim()
   const toolName = useMemo(() => part.tool ?? detectToolName(text ?? ""), [part.tool, text])
+  const callID = useMemo(() => extractParam(text ?? "", "callID") || text?.match(/callID="([^"]+)"/)?.[1] || part.callID || part.id, [text, part.callID, part.id])
+  const idCandidates = useMemo(() => [callID, part.callID, part.id, text?.match(/callID="([^"]+)"/)?.[1], extractParam(text ?? "", "callID")].filter((x): x is string => !!x), [callID, part.callID, part.id, text])
+  const settledInfo = useQuestionSettled(idCandidates)
+  const isSettled = !!settledInfo
   const [expanded, setExpanded] = useState(false)
   const meta = toolName ? toolMeta[toolName] : null
   const filePath = useMemo(() => extractFilePath(text ?? ""), [text])
@@ -485,10 +494,16 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     return text ?? ""
   }, [part.state?.input, text, directory])
 
+  // Cabeza del output para los regex de conteo: los outputs pueden ser MBs
+  // (logs) y solo importan las primeras líneas para "N results/files".
   const outputText = useMemo(() => {
     if (part.state?.output != null) return formatInput(part.state.output, directory)
     return resultText
   }, [part.state?.output, resultText, directory])
+  const outputHead = useMemo(
+    () => (typeof outputText === "string" ? outputText.slice(0, 2048) : outputText),
+    [outputText],
+  )
 
   // Comandos de terminal: muestran el command en la línea del toggle (visible
   // sin expandir) y la salida al expandir.
@@ -612,12 +627,12 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
         ?? (part.state?.output != null && typeof part.state.output === "object"
           ? (part.state.output as Record<string, unknown>).answers ?? null
           : null)
-      // Respondida = el tool ya completó o trae respuestas no vacías.
+      // Respondida = el tool ya completó, trae respuestas no vacías, o fue respondida/saltada localmente o en el store.
       const hasAnswers = answerData != null && answerData !== false
         && !(Array.isArray(answerData) && answerData.length === 0)
-      const answered = isDone || hasAnswers
-      const callID = extractParam(text ?? "", "callID") || text?.match(/callID="([^"]+)"/)?.[1] || part.callID || part.id
+      const answered = isDone || hasAnswers || locallyAnswered || isSettled
       const questions = Array.isArray(rawQuestions) ? rawQuestions.filter((q: any) => q?.question) : []
+      const effectiveSessionID = part.sessionID ?? sessionID
 
       if (questions.length > 0 && !answered) {
         return (
@@ -632,21 +647,33 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
             requestID={callID}
             config={config!}
             directory={directory}
-            sessionID={part.sessionID}
-            onDone={() => {}}
+            sessionID={effectiveSessionID}
+            onDone={(_status, ans) => {
+              setLocallyAnswered(true)
+              if (ans) setLocalAnswers(ans)
+            }}
           />
         )
       }
       if (questions.length > 0 && answered) {
+        const storedAns = settledInfo?.answers ?? localAnswers
         const ansText = Array.isArray(answerData)
-          ? answerData.map((a: unknown) => Array.isArray(a) ? a.join(", ") : String(a)).join(" · ")
-          : typeof answerData === "string" ? answerData : ""
+          ? answerData.map((a: unknown) => Array.isArray(a) ? a.join(", ") : String(a)).filter(Boolean).join(" · ")
+          : typeof answerData === "string" && answerData
+            ? answerData
+            : Array.isArray(storedAns)
+              ? storedAns.map((a: unknown) => Array.isArray(a) ? a.join(", ") : String(a)).filter(Boolean).join(" · ")
+              : typeof storedAns === "object" && storedAns !== null
+                ? Object.values(storedAns).map((v) => Array.isArray(v) ? v.join(", ") : String(v)).filter(Boolean).join(" · ")
+                : (settledInfo?.status === "rejected" || (locallyAnswered && !localAnswers))
+                  ? (t('settings.questionSkipped') || "Omitida")
+                  : ""
         return (
           <div className="tool-part tool-question answered">
             <span className="tool-part-verb">Asked</span>
             <span className="tool-part-target">
               <span className="tool-target-text">{questions[0]?.question ?? "question"}</span>
-              {ansText && <span className="tool-target-meta">{ansText.slice(0, 120)}</span>}
+              {ansText && <span className="tool-target-meta">({ansText.slice(0, 120)})</span>}
             </span>
           </div>
         )
@@ -728,8 +755,8 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     if (norm.includes("search") || norm.includes("grep")) {
       const query = inputObj?.Query || inputObj?.query || inputObj?.pattern || inputText
       let resultCountTag: string | null = null
-      if (typeof outputText === "string") {
-        const match = outputText.match(/Found (\d+) matches|(\d+) results/i)
+      if (typeof outputHead === "string") {
+        const match = outputHead.match(/Found (\d+) matches|(\d+) results/i)
         if (match) resultCountTag = `${match[1] || match[2]} results`
       }
       return {
@@ -748,8 +775,8 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
     // 5. Explore / Find / List (find_by_name, list_dir)
     if (norm.includes("find") || norm.includes("list") || norm.includes("dir")) {
       let fileCountTag = "files"
-      if (typeof outputText === "string") {
-        const match = outputText.match(/Found (\d+) results|(\d+) matches/i)
+      if (typeof outputHead === "string") {
+        const match = outputHead.match(/Found (\d+) results|(\d+) matches/i)
         if (match) fileCountTag = `${match[1]} files`
       }
       return {
@@ -767,7 +794,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, onView
       target: <span className="tool-target-text">{subtitle || inputText || ""}</span>,
       badge: null,
     }
-  }, [toolName, isShellTool, bashCommand, inputText, outputText, diffPath, fileDiff, subtitle, part.state?.input])
+  }, [toolName, isShellTool, bashCommand, inputText, outputHead, diffPath, fileDiff, subtitle, part.state?.input])
 
   // El error vive en state.error, no en state.output: si el tool falló, el
   // cuerpo debe mostrar el motivo, no el input repetido.

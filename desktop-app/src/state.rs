@@ -409,6 +409,12 @@ pub struct WindowGeometry {
     pub height: f64,
     /// Factor de escala (DPI) al que se midió la geometría.
     pub scale: f64,
+    /// La ventana estaba maximizada: al restaurar se reaplica con
+    /// set_maximized en vez del rect (el rect maximizado tiene origen
+    /// negativo y tamaño fullscreen — como geometría normal dejaría una
+    /// ventana oversize con los bordes fuera de pantalla).
+    #[serde(default)]
+    pub maximized: bool,
 }
 
 pub fn load_window_geometry() -> Option<WindowGeometry> {

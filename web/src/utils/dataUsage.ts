@@ -1,6 +1,7 @@
 const STORAGE_KEY = "opencode.datausage.v1"
 const MAX_AGE_MS = 31 * 24 * 60 * 60 * 1000
-const FLUSH_INTERVAL_MS = 3000
+const FLUSH_INTERVAL_MS = 15000
+const FLUSH_BATCH_MAX = 200
 
 export type DataPeriod = "day" | "week" | "month"
 export type NetworkKind = "mobile" | "wifi" | "other"
@@ -12,15 +13,22 @@ export type DataUsageEntry = {
   net: NetworkKind
 }
 
+let netCache: NetworkKind = "other"
+let netCacheAt = 0
+
 function detectNetwork(): NetworkKind {
+  // Cache 60s: se llama por chunk SSE (~60/s en streaming) y solo lee el DOM.
+  const now = Date.now()
+  if (now - netCacheAt < 60_000) return netCache
+  netCacheAt = now
   try {
     const conn = (navigator as unknown as { connection?: { type?: string } }).connection
     const type = (conn?.type ?? "").toLowerCase()
-    if (type === "cellular" || type === "mobile" || type === "3g" || type === "4g" || type === "5g") return "mobile"
-    if (type === "wifi" || type === "ethernet") return "wifi"
-    return "other"
+    if (type === "cellular" || type === "mobile" || type === "3g" || type === "4g" || type === "5g") return (netCache = "mobile")
+    if (type === "wifi" || type === "ethernet") return (netCache = "wifi")
+    return (netCache = "other")
   } catch {
-    return "other"
+    return (netCache = "other")
   }
 }
 
@@ -47,16 +55,21 @@ function writeEntries(entries: DataUsageEntry[]) {
   }
 }
 
-// --- Batch: acumula en memoria, flush cada FLUSH_INTERVAL_MS ---
+// --- Batch: acumula en memoria, flush cada FLUSH_INTERVAL_MS o al llenar ---
 let pendingBatch: DataUsageEntry[] = []
 let flushTimer: ReturnType<typeof setInterval> | null = null
+// Caché en memoria del log: evita un read+JSON.parse de localStorage en cada
+// flush (antes cada 3s durante streaming, con hasta 5000 entries).
+let memEntries: DataUsageEntry[] | null = null
 
-function flush() {
-  if (pendingBatch.length === 0) return
+function flush(): boolean {
+  if (pendingBatch.length === 0) return false
   const entries = readEntries()
   entries.push(...pendingBatch)
   pendingBatch = []
   writeEntries(entries)
+  memEntries = entries
+  return true
 }
 
 function scheduleFlush() {
@@ -68,7 +81,9 @@ function scheduleFlush() {
 export function recordDataUsage(bytes: number, dir: "up" | "down") {
   if (!Number.isFinite(bytes) || bytes <= 0) return
   pendingBatch.push({ ts: Date.now(), bytes: Math.round(bytes), dir, net: detectNetwork() })
-  scheduleFlush()
+  // Flush temprano si el batch crece (streaming intenso); si no, el intervalo.
+  if (pendingBatch.length >= FLUSH_BATCH_MAX) flush()
+  else scheduleFlush()
 }
 
 export type NetworkUsage = { up: number; down: number; total: number }
@@ -100,8 +115,10 @@ export function getDataUsage(): DataUsageSummary {
   const totals = { day: empty(), week: empty(), month: empty() }
 
   // Flush pendientes antes de leer para que el resumen incluya datos frescos.
-  flush()
-  for (const e of readEntries()) {
+  // Si no había pendientes, lee storage fresco (otra pestaña/tests pueden
+  // haber escrito directo); si flusheó, reusa el array en memoria.
+  const flushed = flush()
+  for (const e of flushed && memEntries ? memEntries : readEntries()) {
     const net: NetworkKind = e.net === "mobile" || e.net === "wifi" ? e.net : "other"
     for (const period of ["day", "week", "month"] as const) {
       if (e.ts >= ranges[period]) {
@@ -124,6 +141,8 @@ export function getDataUsage(): DataUsageSummary {
 
 export function resetDataUsage() {
   flush()
+  memEntries = []
+  netCacheAt = 0
   try {
     localStorage.removeItem(STORAGE_KEY)
   } catch {

@@ -107,9 +107,10 @@
   line-height: 28px;
 }
 
-.chat-notes-area:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+.chat-notes-area:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .chat-notes-foot {

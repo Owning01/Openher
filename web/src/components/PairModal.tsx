@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
-import jsQR from "jsqr"
 import { ModalHeader } from "./ModalHeader"
 import { CameraIcon, CheckIcon, CloseIcon, ServerIcon } from "../Icons"
 import { useT } from "../i18n-context"
@@ -22,6 +21,8 @@ export const PairModal = memo(function PairModal({ onSave, onClose }: Props) {
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef(0)
   const scanRef = useRef(false)
+  // jsqr (~150KB) solo se carga al escanear: import dinámico, fuera del bundle inicial.
+  const jsqrRef = useRef<((data: Uint8ClampedArray, w: number, h: number, opts?: object) => { data: string } | null) | null>(null)
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "scanning" | "error">("idle")
   const [cameraError, setCameraError] = useState("")
   const [pasted, setPasted] = useState("")
@@ -67,7 +68,7 @@ export const PairModal = memo(function PairModal({ onSave, onClose }: Props) {
         ctx.drawImage(video, 0, 0)
         try {
           const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
-          const qr = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" })
+          const qr = jsqrRef.current?.(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" })
           if (qr?.data) handleScan(qr.data)
         } catch { /* ignore frame errors */ }
       }
@@ -85,6 +86,8 @@ export const PairModal = memo(function PairModal({ onSave, onClose }: Props) {
     }
     setCameraState("starting")
     try {
+      // Precarga del decoder QR en paralelo al permiso de cámara.
+      import("jsqr").then((m) => { jsqrRef.current = m.default as typeof jsqrRef.current }).catch(() => {})
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
       })

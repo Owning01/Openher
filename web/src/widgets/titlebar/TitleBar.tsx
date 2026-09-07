@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useState, useRef } from "react"
 import { useIsDesktop } from "../../hooks/useIsDesktop"
+import { WindowResizeHandles } from "./WindowResizeHandles"
 import { extractUrlFromDataTransfer, setUrlDragData } from "../../utils/urlDrag"
 import { TabBar } from "../../components/TabBar"
 import { WeatherChip } from "../../components/WeatherChip"
@@ -318,7 +319,10 @@ export const TitleBar = memo(function TitleBar({
       e.preventDefault()
       e.stopPropagation()
       e.dataTransfer.dropEffect = "move"
-      setDragOverIdx(getIndexFromX(e.clientX))
+      // Guard anti-tormenta: dragover dispara por cada mousemove; setear el
+      // mismo índice re-renderiza la barra entera (ver DesktopGrid).
+      const nextIdx = getIndexFromX(e.clientX)
+      setDragOverIdx((prev) => (prev === nextIdx ? prev : nextIdx))
       return
     }
     if (hasUrlType && onOpenBrowser) {
@@ -530,6 +534,7 @@ export const TitleBar = memo(function TitleBar({
           </svg>
         </button>
       </div>
+      {isDesktop && <WindowResizeHandles isMax={isMax} />}
     </div>
   )
 })

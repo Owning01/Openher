@@ -27,7 +27,7 @@ assert.ok(app.includes('AGENT_STORAGE_KEY') || useAI.includes('AGENT_STORAGE_KEY
 assert.ok(useAI.includes('agent.mode === "primary" || agent.mode === "all"'), 'agent picker should expose primary agents such as build and plan')
 assert.ok(useAI.includes('activeAgent?.id ?? primaryAgentOptions'), 'agent selection should fallback through primary options then build')
 const composer = readFileSync(new URL('./components/Composer.tsx', import.meta.url), 'utf8')
-assert.ok(composer.includes('onChangeAgent(item.id)'), 'AI sheet should render an agent selector')
+assert.ok(composer.includes('onChangeAgent(item.id)') || composer.includes('onChangeAgent(next.id)'), 'AI sheet should render an agent selector')
 assert.ok(useMessages.includes('api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID)') ||
   useMessages.includes('api.sendPrompt(config, selectedSession.id, text, selectedSession.directory'), 'chat prompts should use selected agent')
 assert.ok(useMessages.includes('api.sendCommand(config, selectedSession.id, parsed.command') || useMessages.includes('api.sendCommand(config, selectedSession.id, command'), 'slash commands should use selected agent')

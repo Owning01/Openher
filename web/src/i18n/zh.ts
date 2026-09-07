@@ -192,6 +192,7 @@ export default {
   'settings.questionPlaceholder': '輸入你的回答...',
   'settings.questionSend': '發送',
   'settings.questionSkip': '跳過',
+  'settings.questionSkipped': '已略過',
 'settings.featureFlags': '附加功能',
 'settings.featureFlagsDesc': '啟用或停用附加功能',
   'settings.fileBrowser': '檔案瀏覽器',

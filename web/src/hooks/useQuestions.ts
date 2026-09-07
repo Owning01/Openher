@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { api } from "../api"
 import type { Question, PermissionRequest, ServerConfig } from "../types"
 import { QUESTION_POLL_INTERVAL_MS } from "../constants"
+import { isQuestionSettled, onQuestionSettledChange } from "../utils/questionStore"
 
 type UseQuestionsOptions = {
   config: ServerConfig | null
@@ -32,6 +33,13 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
   const notifiedPermissionIDs = useRef<Set<string>>(new Set())
 
   useEffect(() => {
+    return onQuestionSettledChange((id) => {
+      setDismissedQuestions((prev) => new Set(prev).add(id))
+      setPendingQuestions((prev) => prev.filter((q) => q.id !== id))
+    })
+  }, [])
+
+  useEffect(() => {
     if (!config || !enabledQ) return
     let alive = true
     const poll = async () => {
@@ -40,7 +48,8 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
         if (!alive) return
         const fresh = qs.filter((q) =>
           (!fallbackSessionID || !q.sessionID || q.sessionID === fallbackSessionID) &&
-          !dismissedQuestions.has(q.id),
+          !dismissedQuestions.has(q.id) &&
+          !isQuestionSettled(q.id),
         )
         // Guard anti-loop: `filter` crea array nuevo siempre; solo setear si
         // cambió el contenido (mismos ids en orden) para no re-renderizar.

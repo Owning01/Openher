@@ -372,12 +372,26 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   // el merge de useMessages protege el mensaje en curso (awaiting) contra borrado.
   // Con streaming activo el poll va lento (15s): recargar 200 msgs cada 3s en pleno
   // stream saturaba GC/DOM justo mientras se lee.
+  // Además reconcilia el STATUS con el server: `session.status` del padre solo
+  // cambia vía onSettled/refreshSessions, así que si el evento SSE de fin se
+  // pierde (reconnect sin replay, panel sin suscripción, gate de awaiting),
+  // `isWorking` quedaba en true para siempre — spinner "escribiendo" colgado
+  // hasta salir y re-entrar. El server (listStatuses) es la verdad, igual que
+  // ya hace el path móvil en useAppLifecycle.
   const isStreamingActive = streamState === "streaming"
   const baseInterval = isWorking ? 3000 : dataMode === "full" ? 5000 : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
   const pollInterval = isStreamingActive ? Math.max(baseInterval, 15000) : baseInterval
   usePolling(async () => {
     await msgs.loadSelected(session.id, session.directory).catch(() => undefined)
-  }, pollInterval, [session.id, session.directory, dataMode, isWorking, isStreamingActive], false)
+    // Solo cuando localmente parece trabajando: en idle no hay nada que reconciliar.
+    if (!isSessionActive(session) && !msgs.awaitingAssistantReply) return
+    const st = await api.listStatuses(config, session.directory).catch(() => undefined)
+    const real = st?.[session.id]
+    if (real && real.type !== "busy" && real.type !== "retry") {
+      msgs.setAwaitingAssistantReply(false)
+      onSettled(session.id, session.directory)
+    }
+  }, pollInterval, [session.id, session.directory, session.status, dataMode, isWorking, isStreamingActive, msgs.awaitingAssistantReply], false)
 
   const chatProps: ChatViewProps = useMemo(() => ({
     ...baseProps,
@@ -456,7 +470,9 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       onDragOver={(e) => {
         e.preventDefault()
         const zone = calcDropZone(e)
-        setDropZone(zone)
+        // Guard anti-tormenta (igual que DesktopGrid): dragover dispara por
+        // cada mousemove; solo re-render si la zona realmente cambió.
+        setDropZone((prev) => (prev === zone ? prev : zone))
       }}
       onDragLeave={() => setDropZone(null)}
       onDrop={(e) => {

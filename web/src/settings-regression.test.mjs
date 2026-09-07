@@ -42,7 +42,7 @@ assert.ok(pairUtil.includes('export type PairInfo'), 'QR payload parser should e
 assert.ok(pairUtil.includes('username ?? obj.user'), 'QR parser should accept user/username JSON keys')
 
 const pairModal = readFileSync(new URL('./components/PairModal.tsx', import.meta.url), 'utf8')
-assert.ok(pairModal.includes('from "jsqr"'), 'PairModal should use jsQR for QR decoding')
+assert.ok(pairModal.includes('import("jsqr")'), 'PairModal should use jsQR for QR decoding (dynamic import, fuera del bundle inicial)')
 assert.ok(pairModal.includes('getUserMedia'), 'PairModal should use the camera for live scanning')
 assert.ok(pairModal.includes('parsePairPayload'), 'PairModal should parse the scanned/pasted payload')
 

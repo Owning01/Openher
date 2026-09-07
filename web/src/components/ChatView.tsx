@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, LoadingIcon, EyeIcon, NoteIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, EyeIcon, NoteIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { Composer } from "./Composer"
@@ -21,10 +21,10 @@ import { PROMPT_HISTORY_OPEN_EVENT, extractUserPrompts } from "../utils/promptHi
 import { SelectionBar } from "./SelectionBar"
 import { ExportMarkdownDialog } from "./ExportMarkdownDialog"
 import type { VisualSelection } from "../hooks/useVisualSelection"
+import { isQuestionTool } from "../utils/toolMeta"
 
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { killTerminalPty } from "../utils/terminalStore"
-import { useDevServer } from "../hooks/useDevServer"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, AgentOption, ModelOption, DataMode, CommandInfo,
   ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, ChatSettings, TokenUsage } from "../types"
@@ -147,7 +147,7 @@ export const ChatView = memo(function ChatView({
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen: _onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
   agents, config, sessions, onOpenSession, onOpenSettings, onOpenSessionStats, onShellSend, onThemeCommand,
-  onOpenRemoteDesktop, onOpenBrowser, onOpenOpenCodeHub,
+  onOpenRemoteDesktop, onOpenBrowser: _onOpenBrowser, onOpenOpenCodeHub,
   onToggleReadingMode,
   flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
   pendingQuestions, permissionRequest,
@@ -199,10 +199,38 @@ export const ChatView = memo(function ChatView({
   }, [])
   const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
   const messagesWrapRef = useRef<HTMLDivElement | null>(null)
-  const devServer = useDevServer(selectedSession?.directory)
   // Mantener último modelo visible para evitar flicker cuando recarga
   const prevModelRef = useRef(activeModelOption)
   useEffect(() => { if (activeModelOption) prevModelRef.current = activeModelOption }, [activeModelOption])
+
+  // Si la pregunta pendiente ya está renderizada inline en los mensajes del chat,
+  // no duplicarla mostrando también el modal overlay flotante.
+  const isQuestionInCurrentMessages = useMemo(() => {
+    if (!pendingQuestions || pendingQuestions.length === 0) return false
+    const activeQ = pendingQuestions[0]
+    const qId = activeQ.id
+    const callId = activeQ.tool?.callID
+    const firstPromptText = (activeQ.questions?.[0]?.question || activeQ.question || "").trim()
+
+    return messages.some((m) =>
+      m.toolParts?.some((tp) => {
+        if (tp.id === qId || tp.callID === qId) return true
+        if (callId && (tp.id === callId || tp.callID === callId)) return true
+        // Chequeo por contenido de pregunta o coincidencia de tool/input
+        const isQTool = tp.tool === "question" || isQuestionTool(tp.text ?? "") || (Array.isArray((tp.state?.input as any)?.questions))
+        if (isQTool) {
+          if (firstPromptText && (tp.text?.includes(firstPromptText) || (tp.state?.input as any)?.questions?.[0]?.question === firstPromptText)) {
+            return true
+          }
+          // Si hay una pregunta activa y este toolPart está pendiente/en curso en esta sesión
+          if (!tp.state?.status || tp.state.status === "pending" || tp.state.status === "running") {
+            return true
+          }
+        }
+        return false
+      })
+    )
+  }, [pendingQuestions, messages])
   const displayModelOption = activeModelOption ?? prevModelRef.current
 
   // Copiar selección: aparece solo cuando hay texto seleccionado dentro del chat;
@@ -379,49 +407,6 @@ export const ChatView = memo(function ChatView({
           <div className="detail-header-actions">
             {pendingCount > 0 && <span className="pending-badge" title={t('session.pendingCount', { count: pendingCount })}>{pendingCount}</span>}
             <span style={{ display: "none" }} aria-hidden="true">{t('detail.changeModel')}</span>
-            {devServer.hasDevServer && (
-              <button
-                type="button"
-                className={`header-dev-server-btn${devServer.status === "running" ? " running" : devServer.status === "starting" ? " starting" : ""}`}
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  try {
-                    const url = await devServer.startDevServer()
-                    if (onOpenBrowser) {
-                      onOpenBrowser(url)
-                    } else {
-                      window.open(url, "_blank")
-                    }
-                  } catch (err) {
-                    console.error("Error starting dev server:", err)
-                  }
-                }}
-                title={
-                  devServer.status === "running"
-                    ? `Dev server corriendo en ${devServer.serverUrl} (Clic para abrir pestaña de navegador)`
-                    : devServer.status === "starting"
-                    ? "Iniciando dev server..."
-                    : `Ejecutar "${devServer.devCommand}" y abrir vista previa web`
-                }
-              >
-                {devServer.status === "starting" ? (
-                  <>
-                    <LoadingIcon size={12} />
-                    <span>Iniciando...</span>
-                  </>
-                ) : devServer.status === "running" ? (
-                  <>
-                    <span style={{ color: "var(--success)", fontSize: "0.8rem" }}>●</span>
-                    <span>{devServer.serverUrl ? devServer.serverUrl.replace(/^https?:\/\//, "") : "Web"}</span>
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontSize: "0.75rem" }}>▶</span>
-                    <span>Abrir proyecto</span>
-                  </>
-                )}
-              </button>
-            )}
             {diffFiles && diffFiles.length > 0 && onOpenADEDiff && (
               <button
                 type="button"
@@ -838,7 +823,7 @@ export const ChatView = memo(function ChatView({
         document.body
       )}
 
-      {flags.questionAuto && pendingQuestions && pendingQuestions.length > 0 && onQuestionReply && onDismissQuestion && (
+      {flags.questionAuto && pendingQuestions && pendingQuestions.length > 0 && !isQuestionInCurrentMessages && onQuestionReply && onDismissQuestion && (
         <AutoQuestionPrompt
           question={pendingQuestions[0]}
           onReply={onQuestionReply}

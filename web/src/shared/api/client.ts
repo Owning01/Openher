@@ -206,13 +206,17 @@ export async function requestRaw<T>(config: ServerConfig, target: string, option
 
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), timeout)
+      // Un solo stringify: se reusa para el fetch y para la medición de subida
+      // (antes serializedSize() lo re-serializaba; en prompts con imágenes
+      // base64 eso duplicaba MBs de CPU por envío).
+      const bodyText = options.body === undefined ? undefined : JSON.stringify(options.body)
       let response: Response
       try {
         try {
           response = await fetch(target, {
             method,
             headers,
-            body: options.body === undefined ? undefined : JSON.stringify(options.body),
+            body: bodyText,
             signal: controller.signal,
           })
         } catch (netErr) {
@@ -229,7 +233,7 @@ export async function requestRaw<T>(config: ServerConfig, target: string, option
             response = await fetch(proxyUrl, {
               method,
               headers,
-              body: options.body === undefined ? undefined : JSON.stringify(options.body),
+              body: bodyText,
               signal: controller.signal,
             })
           } else {
@@ -260,7 +264,7 @@ export async function requestRaw<T>(config: ServerConfig, target: string, option
       }
 
       const responseHeaders = normalizeHeaders(Object.fromEntries(response.headers.entries()))
-      recordDataUsage(serializedSize(options.body), "up")
+      if (bodyText !== undefined) recordDataUsage(new TextEncoder().encode(bodyText).length, "up")
       const contentLength = Number(response.headers.get("content-length"))
       if (contentLength > 0) recordDataUsage(contentLength, "down")
       if (response.status === 204) return { data: true as T, headers: responseHeaders }

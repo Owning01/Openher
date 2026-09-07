@@ -42,15 +42,22 @@ function getPartImageData(p: { type: string; data?: string; url?: string; mimeTy
   // Solo renderizable en el browser: data: o http(s). Paths locales del
   // server (C:\…, /tmp/…) no cargan en el webview y se ignoran.
   const renderableUrl = url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://") ? url : ""
+  // Algunos servers devuelven el base64 crudo (sin prefijo data:): se compone
+  // con el mime del part para que el <img> lo cargue.
+  const dataUrl = (p.data ?? "").startsWith("data:")
+    ? (p.data as string)
+    : p.data
+      ? `data:${p.mimeType ?? p.mime ?? "image/png"};base64,${p.data}`
+      : ""
   if (p.type === "image") {
-    if (p.data) return p.data
+    if (dataUrl) return dataUrl
     if (renderableUrl) return renderableUrl
     return null
   }
   if (p.type === "file") {
     const mime = p.mime || p.mimeType || ""
     if (!isImagePart({ type: p.type, mimeType: mime })) return null
-    if (p.data) return p.data
+    if (dataUrl) return dataUrl
     if (renderableUrl) return renderableUrl
   }
   return null
@@ -315,6 +322,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
                   part={tp}
                   config={config}
                   directory={directory}
+                  sessionID={message.info.sessionID}
                   onViewSubagents={onViewSubagents}
                   compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
                 />
