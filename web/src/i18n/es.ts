@@ -218,6 +218,8 @@ export default {
   'settings.questionAutoDesc': 'Mostrar automáticamente preguntas de la IA',
   'settings.permissionUI': 'Solicitudes de permiso',
   'settings.permissionUIDesc': 'Mostrar diálogos de permiso para acceso a herramientas',
+  'settings.virtualChat': 'Chat virtualizado',
+  'settings.virtualChatDesc': 'Renderiza solo los mensajes visibles (sesiones largas más rápidas)',
   'settings.permissionRequest': 'Solicitud de permiso',
   'settings.permissionAllow': 'Permitir',
   'settings.permissionDeny': 'Denegar',

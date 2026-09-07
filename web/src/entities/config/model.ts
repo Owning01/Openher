@@ -46,6 +46,7 @@ export type FeatureFlags = {
   questionAuto: boolean
   permissionUI: boolean
   autoOpencode2: boolean
+  virtualChat: boolean
 }
 
 // ---------------------------------------------------------------------------

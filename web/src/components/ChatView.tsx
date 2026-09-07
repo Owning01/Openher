@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, EyeIcon, NoteIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
+import { MessageVirtualList } from "../widgets/message-list/MessageVirtualList"
 import { Composer } from "./Composer"
 import { PromptPresetSheet } from "./PromptPresetSheet"
 export { ThinkingLevels } from "./ThinkingLevels"
@@ -614,6 +615,40 @@ export const ChatView = memo(function ChatView({
           />
         )}
         <div className="messages-wrap" ref={messagesWrapRef}>
+        {flags.virtualChat ? (
+        <MessageVirtualList
+          messages={messages}
+          pendingIndex={pendingIndex}
+          loadingSessionID={loadingSessionID}
+          selectedID={selectedID}
+          showTypingBubble={showTypingBubble}
+          compacting={compacting}
+          isWorking={isWorking}
+          messageScrollSignature={messageScrollSignature}
+          view={view}
+          revert={revertObj}
+          onRevertToMessage={onRevertToMessage}
+          onEditMessage={onEditMessage}
+          agents={agents}
+          config={config}
+          directory={selectedSession?.directory}
+          onViewSubagents={handleViewSubagents}
+          onContextMenu={flags.contextMenu ? handleContextMenu : undefined}
+          showTodoButton={showTodoButton ?? false}
+          onToggleTodos={onTodosToggle}
+          todosOpen={todosExpanded}
+          highlight={deferredQuery.trim() || undefined}
+          scrollToMessageID={scrollToMessageID}
+          revealMessageID={jumpTarget?.id ?? null}
+          revealNonce={jumpTarget?.n ?? 0}
+          compactTools={compactTools}
+          minimalistMode={minimalistMode}
+          thinkingDefault={thinkingDefault}
+          onRegenerate={onRegenerate}
+          onOpenADEDiff={onOpenADEDiff}
+          outboxActions={outboxActions}
+        />
+        ) : (
         <MessageList
           messages={messages}
           pendingIndex={pendingIndex}
@@ -646,6 +681,7 @@ export const ChatView = memo(function ChatView({
           onOpenADEDiff={onOpenADEDiff}
           outboxActions={outboxActions}
         />
+        )}
         </div>
         {showHistory && historyLayout.layout.placement === "right" && (
           <PromptHistoryPanel
