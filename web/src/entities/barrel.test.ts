@@ -243,6 +243,8 @@ describe("barrel re-exports via ../types", () => {
       offlineCache: false,
       questionAuto: true,
       permissionUI: false,
+      autoOpencode2: false,
+      virtualChat: false,
     }
     expect(obj).toBeDefined()
     expect(obj.fileBrowser).toBe(true)

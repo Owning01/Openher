@@ -16,6 +16,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   questionAuto: true,
   permissionUI: true,
   autoOpencode2: false,
+  virtualChat: false,
 }
 
 export function useFeatureFlags() {
@@ -28,7 +29,8 @@ export function useFeatureFlags() {
   const BOOL_FLAGS: ReadonlySet<keyof FeatureFlags> = new Set([
     "fileBrowser", "inlineDiff", "contextMenu", "planBreakdown",
     "gitOps", "mcpConfig", "sessionArchive", "streamingFull",
-    "offlineCache", "questionAuto", "permissionUI", "autoOpencode2"
+    "offlineCache", "questionAuto", "permissionUI", "autoOpencode2",
+    "virtualChat"
   ])
 
   const toggleFlag = useCallback((key: keyof FeatureFlags) => {

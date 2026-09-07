@@ -85,6 +85,7 @@ describe("FeatureFlags", () => {
       fileBrowser: true, inlineDiff: true, contextMenu: true, planBreakdown: true,
       gitOps: true, mcpConfig: true, sessionArchive: true, streamingFull: true,
       offlineCache: true, questionAuto: true, permissionUI: true,
+      autoOpencode2: true, virtualChat: true,
     }
     for (const v of Object.values(f)) expect(v).toBe(true)
   })
@@ -94,17 +95,19 @@ describe("FeatureFlags", () => {
       fileBrowser: false, inlineDiff: false, contextMenu: false, planBreakdown: false,
       gitOps: false, mcpConfig: false, sessionArchive: false, streamingFull: false,
       offlineCache: false, questionAuto: false, permissionUI: false,
+      autoOpencode2: false, virtualChat: false,
     }
     for (const v of Object.values(f)) expect(v).toBe(false)
   })
 
-  it("tiene exactamente 11 claves booleanas", () => {
+  it("tiene exactamente 13 claves booleanas", () => {
     const f: FeatureFlags = {
       fileBrowser: true, inlineDiff: false, contextMenu: true, planBreakdown: false,
       gitOps: true, mcpConfig: false, sessionArchive: true, streamingFull: false,
       offlineCache: true, questionAuto: false, permissionUI: true,
+      autoOpencode2: false, virtualChat: true,
     }
-    expect(Object.keys(f)).toHaveLength(11)
+    expect(Object.keys(f)).toHaveLength(13)
     for (const v of Object.values(f)) expect(typeof v).toBe("boolean")
   })
 
@@ -113,6 +116,7 @@ describe("FeatureFlags", () => {
       fileBrowser: true, inlineDiff: false, contextMenu: true, planBreakdown: true,
       gitOps: false, mcpConfig: true, sessionArchive: false, streamingFull: true,
       offlineCache: false, questionAuto: true, permissionUI: false,
+      autoOpencode2: true, virtualChat: false,
     }
     expect(f.fileBrowser).toBe(true)
     expect(f.gitOps).toBe(false)

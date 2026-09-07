@@ -290,6 +290,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   { key: "offlineCache" as const, label: t('settings.offlineCache'), desc: t('settings.offlineCacheDesc') },
   { key: "questionAuto" as const, label: t('settings.questionAuto'), desc: t('settings.questionAutoDesc') },
   { key: "permissionUI" as const, label: t('settings.permissionUI'), desc: t('settings.permissionUIDesc') },
+  { key: "virtualChat" as const, label: t('settings.virtualChat'), desc: t('settings.virtualChatDesc') },
  ]
 
  type CategoryKey = "servers" | "system" | "appearance" | "models" | "chat" | "remote"

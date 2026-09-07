@@ -185,6 +185,8 @@ export default {
   'settings.questionAutoDesc': '自動顯示 AI 的提問',
   'settings.permissionUI': '權限請求',
   'settings.permissionUIDesc': '顯示工具訪問權限請求對話框',
+  'settings.virtualChat': '虛擬化聊天',
+  'settings.virtualChatDesc': '僅渲染可見訊息（長會話更快）',
   'settings.permissionRequest': '權限請求',
   'settings.permissionAllow': '允許',
   'settings.permissionDeny': '拒絕',
