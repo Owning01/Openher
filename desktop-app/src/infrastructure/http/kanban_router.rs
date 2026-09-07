@@ -2,18 +2,18 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     let route = path.strip_prefix("/shell/kanban")?;
     if !route.is_empty() && !route.starts_with('/') {
         return None;
@@ -21,25 +21,25 @@ pub fn handle(
     let route = if route.is_empty() { "/" } else { route };
 
     let resp = match (method, route) {
-        (Method::Get, "/") => json_ok(&state.kanban.all()),
-        (Method::Post, "/board") => match read_body(req) {
+        ("GET", "/") => ShellResponse::ok_json(&state.kanban.all()),
+        ("POST", "/board") => match req.json_body() {
             Ok(b) => {
                 let name = b["name"].as_str().unwrap_or("Nuevo board");
                 match state.kanban.add_board(name) {
-                    Ok(v) => json_ok(&serde_json::json!({ "ok": true, "board": v })),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(v) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "board": v })),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         },
-        (Method::Delete, "/board") => {
+        ("DELETE", "/board") => {
             let id = q("id");
             match state.kanban.delete_board(&id) {
-                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(404, &e),
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(404, &e),
             }
         }
-        (Method::Post, "/card") => match read_body(req) {
+        ("POST", "/card") => match req.json_body() {
             Ok(b) => {
                 let board = b["board"].as_str().unwrap_or("");
                 let column = b["column"].as_str().unwrap_or("todo");
@@ -47,27 +47,27 @@ pub fn handle(
                 let notes = b["notes"].as_str().unwrap_or("");
                 let color = b["color"].as_str().unwrap_or("#fab283");
                 match state.kanban.add_card(board, column, title, notes, color) {
-                    Ok(v) => json_ok(&serde_json::json!({ "ok": true, "card": v })),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(v) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "card": v })),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         },
-        (Method::Patch, "/card") => match read_body(req) {
+        ("PATCH", "/card") => match req.json_body() {
             Ok(b) => {
                 let id = b["id"].as_str().unwrap_or("");
                 match state.kanban.update_card(id, &b) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(404, &e),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(404, &e),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         },
-        (Method::Delete, "/card") => {
+        ("DELETE", "/card") => {
             let id = q("id");
             match state.kanban.delete_card(&id) {
-                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(404, &e),
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(404, &e),
             }
         }
         _ => return None,

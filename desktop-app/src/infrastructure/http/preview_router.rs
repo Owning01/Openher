@@ -2,24 +2,24 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Header, Method, Request, Response, StatusCode};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     _q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     // /shell/project/serve POST — genera token y previewUrl
     if path == "/shell/project/serve" {
-        if method != Method::Post {
-            return Some(json_err(405, "method not allowed"));
+        if method != "POST" {
+            return Some(ShellResponse::err_json(405, "method not allowed"));
         }
-        return Some(match read_body(req) {
+        return Some(match req.json_body() {
             Ok(b) => {
                 let p_str = b["path"].as_str().unwrap_or("");
                 let p = std::path::PathBuf::from(p_str);
@@ -30,7 +30,7 @@ pub fn handle(
                 };
 
                 if !dir.exists() || !dir.is_dir() {
-                    json_err(400, "El directorio no existe")
+                    ShellResponse::err_json(400, "El directorio no existe")
                 } else {
                     let token = format!(
                         "p{:x}",
@@ -111,7 +111,7 @@ pub fn handle(
                         format!("http://127.0.0.1:{}/shell/preview/{}/index.html", state.port, token)
                     };
 
-                    json_ok(&serde_json::json!({
+                    ShellResponse::ok_json(&serde_json::json!({
                         "ok": true,
                         "token": token,
                         "previewUrl": preview_url,
@@ -123,7 +123,7 @@ pub fn handle(
                     }))
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
 
@@ -155,13 +155,11 @@ pub fn handle(
                 }
             }
             return Some(
-                Response::from_data(bytes)
-                    .with_status_code(StatusCode(200))
-                    .with_header(Header::from_bytes("Content-Type", mime).unwrap())
-                    .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
-                    .with_header(Header::from_bytes("Cache-Control", "no-cache").unwrap()),
+                ShellResponse::data(200, bytes, &mime)
+                    .with_header("Access-Control-Allow-Origin", "*")
+                    .with_header("Cache-Control", "no-cache"),
             );
         }
     }
-    Some(json_err(404, "Archivo de proyecto no encontrado"))
+    Some(ShellResponse::err_json(404, "Archivo de proyecto no encontrado"))
 }

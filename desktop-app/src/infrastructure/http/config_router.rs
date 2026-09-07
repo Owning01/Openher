@@ -2,79 +2,79 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     _q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
-    if path == "/shell/config" && method == Method::Get {
+) -> Option<ShellResponse> {
+    if path == "/shell/config" && method == "GET" {
         let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
-        return Some(json_ok(&serde_json::to_value(cfg).unwrap_or_default()));
+        return Some(ShellResponse::ok_json(&serde_json::to_value(cfg).unwrap_or_default()));
     }
-    if path == "/shell/config" && method == Method::Post {
-        return Some(match read_body(req) {
+    if path == "/shell/config" && method == "POST" {
+        return Some(match req.json_body() {
             Ok(patch) => {
                 let mut cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
                 merge_config(&mut cfg, &patch);
                 crate::state::save_config(&cfg);
                 *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
-                json_ok(&serde_json::json!({ "ok": true, "config": cfg }))
+                ShellResponse::ok_json(&serde_json::json!({ "ok": true, "config": cfg }))
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
     if path == "/shell/config/export" {
         let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
-        return Some(json_ok(&serde_json::json!({ "config": cfg })));
+        return Some(ShellResponse::ok_json(&serde_json::json!({ "config": cfg })));
     }
-    if path == "/shell/config/import" && method == Method::Post {
-        return Some(match read_body(req) {
+    if path == "/shell/config/import" && method == "POST" {
+        return Some(match req.json_body() {
             Ok(body) => {
                 if let Some(cfg_val) = body.get("config") {
                     if let Ok(cfg) = serde_json::from_value::<crate::state::ShellConfig>(cfg_val.clone()) {
                         crate::state::save_config(&cfg);
                         *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
-                        json_ok(&serde_json::json!({ "ok": true }))
+                        ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
                     } else {
-                        json_err(400, "config inválida")
+                        ShellResponse::err_json(400, "config inválida")
                     }
                 } else {
-                    json_err(400, "config inválida")
+                    ShellResponse::err_json(400, "config inválida")
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
 
-    if path == "/shell/autostart" && method == Method::Get {
-        return Some(json_ok(&serde_json::json!({ "enabled": crate::state::autostart_enabled() })));
+    if path == "/shell/autostart" && method == "GET" {
+        return Some(ShellResponse::ok_json(&serde_json::json!({ "enabled": crate::state::autostart_enabled() })));
     }
-    if path == "/shell/autostart" && method == Method::Post {
-        return Some(match read_body(req) {
+    if path == "/shell/autostart" && method == "POST" {
+        return Some(match req.json_body() {
             Ok(b) => {
                 let enabled = b["enabled"].as_bool().unwrap_or(false);
                 match crate::state::set_autostart(enabled) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true, "enabled": enabled })),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "enabled": enabled })),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
 
-    if path == "/shell/session-state" && method == Method::Get {
+    if path == "/shell/session-state" && method == "GET" {
         let s = state.persisted.read().unwrap_or_else(|e| e.into_inner()).clone();
-        return Some(json_ok(&serde_json::to_value(s).unwrap_or_default()));
+        return Some(ShellResponse::ok_json(&serde_json::to_value(s).unwrap_or_default()));
     }
-    if path == "/shell/session-state" && method == Method::Post {
-        return Some(match read_body(req) {
+    if path == "/shell/session-state" && method == "POST" {
+        return Some(match req.json_body() {
             Ok(b) => {
                 let mut s = state.persisted.write().unwrap_or_else(|e| e.into_inner());
                 if let Some(w) = b["window_w"].as_f64() {
@@ -87,9 +87,9 @@ pub fn handle(
                     s.last_panels = p.clone();
                 }
                 crate::state::save_persisted(&s);
-                json_ok(&serde_json::json!({ "ok": true }))
+                ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         });
     }
 

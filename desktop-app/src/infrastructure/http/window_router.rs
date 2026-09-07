@@ -2,44 +2,44 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_ok, AppState};
+use crate::state::AppState;
 
 pub fn handle(
-    _req: &mut Request,
+    _req: &ShellRequest,
     _state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     let route = path.strip_prefix("/shell/window")?;
     let resp = match (method, route) {
-        (Method::Get, "/state") => {
+        ("GET", "/state") => {
             let maximized = crate::state::window_is_maximized();
-            json_ok(&serde_json::json!({ "maximized": maximized }))
+            ShellResponse::ok_json(&serde_json::json!({ "maximized": maximized }))
         }
-        (Method::Post, "/minimize") => {
+        ("POST", "/minimize") => {
             crate::state::window_minimize();
-            json_ok(&serde_json::json!({ "ok": true }))
+            ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
         }
-        (Method::Post, "/maximize") => {
+        ("POST", "/maximize") => {
             crate::state::window_maximize_toggle();
             let maximized = crate::state::window_is_maximized();
-            json_ok(&serde_json::json!({ "ok": true, "maximized": maximized }))
+            ShellResponse::ok_json(&serde_json::json!({ "ok": true, "maximized": maximized }))
         }
-        (Method::Post, "/close") => {
+        ("POST", "/close") => {
             crate::state::window_close();
-            json_ok(&serde_json::json!({ "ok": true }))
+            ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
         }
-        (Method::Post, "/drag") => {
+        ("POST", "/drag") => {
             crate::state::window_drag();
-            json_ok(&serde_json::json!({ "ok": true }))
+            ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
         }
         // Resize iniciado desde la web (handles .win-resize-*): no depende
         // del hit-test nativo, que el renderer del WebView (proceso hijo)
         // puede tragar devolviendo HTCLIENT antes de llegar al padre.
-        (Method::Post, "/resize") => {
+        ("POST", "/resize") => {
             use crate::state::WindowResizeDirection as D;
             let dir = match q("edge").as_str() {
                 "top" => Some(D::Top),
@@ -55,9 +55,9 @@ pub fn handle(
             match dir {
                 Some(d) => {
                     crate::state::window_resize(d);
-                    json_ok(&serde_json::json!({ "ok": true }))
+                    ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
                 }
-                None => crate::state::json_err(400, "edge inválido (top|bottom|left|right|top-left|top-right|bottom-left|bottom-right)"),
+                None => ShellResponse::err_json(400, "edge inválido (top|bottom|left|right|top-left|top-right|bottom-left|bottom-right)"),
             }
         }
         _ => return None,

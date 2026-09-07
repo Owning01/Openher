@@ -3,22 +3,22 @@
 
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     let route = path.strip_prefix("/shell/browser")?;
     // /shell/browser/pick tiene GET y POST — diferenciar por método
     let resp = match (method, route) {
-        (Method::Post, "/open") => match read_body(req) {
+        ("POST", "/open") => match req.json_body() {
             Ok(v) => {
                 let view = v["view"].as_str().unwrap_or("");
                 let url = v["url"].as_str().unwrap_or("about:blank");
@@ -37,14 +37,14 @@ pub fn handle(
                         if is_default_bounds {
                             let _ = state.browser.set_visible(view, false);
                         }
-                        json_ok(&serde_json::json!({ "ok": true, "hidden_default": is_default_bounds }))
+                        ShellResponse::ok_json(&serde_json::json!({ "ok": true, "hidden_default": is_default_bounds }))
                     }
-                    Err(e) => json_err(500, &e.to_string()),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         },
-        (Method::Post, "/bounds") => match read_body(req) {
+        ("POST", "/bounds") => match req.json_body() {
             Ok(v) => {
                 let view = v["view"].as_str().unwrap_or("");
                 let bx = v["x"].as_f64().unwrap_or(0.0);
@@ -56,71 +56,71 @@ pub fn handle(
                     size: wry::dpi::LogicalSize::new(bw, bh).into(),
                 };
                 match state.browser.set_bounds(view, bounds) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         },
-        (Method::Post, "/visibility") => match read_body(req) {
+        ("POST", "/visibility") => match req.json_body() {
             Ok(v) => {
                 let view = v["view"].as_str().unwrap_or("");
                 let visible = v["visible"].as_bool().unwrap_or(true);
                 match state.browser.set_visible(view, visible) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         },
-        (Method::Post, "/navigate") => match read_body(req) {
+        ("POST", "/navigate") => match req.json_body() {
             Ok(v) => {
                 let view = v["view"].as_str().unwrap_or("");
                 let url = v["url"].as_str().unwrap_or("");
                 let action = v["action"].as_str();
                 match state.browser.navigate(view, url, action) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(e) => json_err(400, &e.to_string()),
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
         },
         // POST /close drena UNA vista ({"view": bid}) o todas (sin body).
         // El frontend cierra la vista nativa al podar el bid huérfano.
-        (Method::Post, "/close") => {
-            let view: Option<String> = read_body(req).ok().and_then(|v| v["view"].as_str().map(|s| s.to_string()));
+        ("POST", "/close") => {
+            let view: Option<String> = req.json_body().ok().and_then(|v| v["view"].as_str().map(|s| s.to_string()));
             match state.browser.close(view.as_deref()) {
-                Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                Err(e) => json_err(500, &e.to_string()),
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(500, &e.to_string()),
             }
         }
-        (Method::Get, "/url") => match state.browser.current_url(q("view").as_str()) {
-            Ok(url) => json_ok(&serde_json::json!({ "url": url })),
-            Err(e) => json_err(500, &e.to_string()),
+        ("GET", "/url") => match state.browser.current_url(q("view").as_str()) {
+            Ok(url) => ShellResponse::ok_json(&serde_json::json!({ "url": url })),
+            Err(e) => ShellResponse::err_json(500, &e.to_string()),
         },
         // Descargas completadas desde la última lectura (cola, máx 20).
-        (Method::Get, "/downloads") => {
+        ("GET", "/downloads") => {
             let items = state.browser.drain_downloads();
-            json_ok(&serde_json::json!({ "downloads": items }))
+            ShellResponse::ok_json(&serde_json::json!({ "downloads": items }))
         }
-        (Method::Get, "/shortcuts") => {
+        ("GET", "/shortcuts") => {
             let shortcuts: Vec<serde_json::Value> = state
                 .browser
                 .drain_shortcuts()
                 .into_iter()
                 .filter_map(|s| serde_json::from_str(&s).ok())
                 .collect();
-            json_ok(&serde_json::json!({ "shortcuts": shortcuts }))
+            ShellResponse::ok_json(&serde_json::json!({ "shortcuts": shortcuts }))
         }
-        (Method::Post, "/eval") => match read_body(req) {
+        ("POST", "/eval") => match req.json_body() {
             Ok(v) => {
                 let view = v["view"].as_str().unwrap_or("");
                 let code = v["code"].as_str().unwrap_or("");
                 if code.is_empty() {
-                    return Some(json_err(400, "missing code"));
+                    return Some(ShellResponse::err_json(400, "missing code"));
                 }
                 if code.len() > 256 * 1024 {
-                    return Some(json_err(413, "code too large"));
+                    return Some(ShellResponse::err_json(413, "code too large"));
                 }
                 // Allowlist: solo scripts de inspección generados por el host; bloquea XSS arbitrario desde markdown
                 let trimmed = code.trim_start();
@@ -133,35 +133,35 @@ pub fn handle(
                     || trimmed.starts_with("(function()");
                 if !is_allowed {
                     eprintln!("[browser][eval] forbidden code blocked (len={})", code.len());
-                    return Some(json_err(403, "eval forbidden"));
+                    return Some(ShellResponse::err_json(403, "eval forbidden"));
                 }
                 match state.browser.eval(view, code) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e.to_string()),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }
             }
-            Err(_) => json_err(400, "bad body"),
+            Err(_) => ShellResponse::err_json(400, "bad body"),
         },
-        (Method::Post, "/pick") => match read_body(req) {
+        ("POST", "/pick") => match req.json_body() {
             Ok(v) => {
                 let serialized = v.to_string();
                 if serialized.len() > 128 * 1024 {
-                    return Some(json_err(413, "pick too large"));
+                    return Some(ShellResponse::err_json(413, "pick too large"));
                 }
                 let mut queue = state.browser_picks.lock().unwrap_or_else(|e| e.into_inner());
                 if queue.len() < 64 {
                     queue.push(serialized);
                 }
-                json_ok(&serde_json::json!({ "ok": true }))
+                ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
             }
-            Err(_) => json_err(400, "bad body"),
+            Err(_) => ShellResponse::err_json(400, "bad body"),
         },
-        (Method::Get, "/pick") => {
+        ("GET", "/pick") => {
             let drained: Vec<serde_json::Value> = {
                 let mut queue = state.browser_picks.lock().unwrap_or_else(|e| e.into_inner());
                 queue.drain(..).map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::Null)).collect()
             };
-            json_ok(&serde_json::json!({ "picks": drained }))
+            ShellResponse::ok_json(&serde_json::json!({ "picks": drained }))
         }
         _ => return None,
     };

@@ -3,33 +3,33 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use tiny_http::{Header, Method, Request, Response, StatusCode};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::fsx;
-use crate::state::{json_err, json_ok, read_body, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    req: &mut Request,
+    req: &ShellRequest,
     _state: Arc<AppState>,
     path: &str,
-    method: Method,
+    method: &str,
     q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     let route = path.strip_prefix("/shell/fs")?;
 
     macro_rules! j {
         ($res:expr) => {
             match $res {
-                Ok(v) => json_ok(&v),
-                Err(e) => json_err(400, &e),
+                Ok(v) => ShellResponse::ok_json(&v),
+                Err(e) => ShellResponse::err_json(400, &e),
             }
         };
     }
 
     let resp = match (method, route) {
-        (Method::Get, "/drives") => json_ok(&serde_json::json!({ "drives": fsx::drives() })),
-        (Method::Get, "/list") => {
+        ("GET", "/drives") => ShellResponse::ok_json(&serde_json::json!({ "drives": fsx::drives() })),
+        ("GET", "/list") => {
             let p = q("path").replace("%2F", "/");
             // Watch on-demand: el dir listado queda vigilado para /changes
             // (dedupeado por el mapa interno; no recursivo salvo project root)
@@ -39,10 +39,10 @@ pub fn handle(
             }
             j!(fsx::list_dir(&p))
         }
-        (Method::Get, "/changes") => {
+        ("GET", "/changes") => {
             let since = q("since").parse::<u64>().unwrap_or(0);
             let (seq, events) = crate::fswatch::global().changes_since(since);
-            json_ok(&serde_json::json!({
+            ShellResponse::ok_json(&serde_json::json!({
                 "seq": seq,
                 "events": events.iter().map(|(s, e)| serde_json::json!({
                     "seq": s,
@@ -51,23 +51,23 @@ pub fn handle(
                 })).collect::<Vec<_>>(),
             }))
         }
-        (Method::Get, "/search") => {
+        ("GET", "/search") => {
             let p = q("path").replace("%2F", "/");
             let query = q("q");
             let limit = q("limit").parse::<usize>().unwrap_or(100);
             j!(fsx::search_code(&p, &query, limit))
         }
-        (Method::Get, "/download") => {
+        ("GET", "/download") => {
             let p = q("path");
             if p.is_empty() {
-                return Some(json_err(400, "falta path"));
+                return Some(ShellResponse::err_json(400, "falta path"));
             }
             let path_buf = Path::new(&p).to_path_buf();
             if !path_buf.exists() {
-                return Some(json_err(404, "no existe"));
+                return Some(ShellResponse::err_json(404, "no existe"));
             }
             if path_buf.is_dir() {
-                return Some(json_err(400, "es directorio, no archivo"));
+                return Some(ShellResponse::err_json(400, "es directorio, no archivo"));
             }
             let mime = crate::common::mime_for(&path_buf);
             let file_name = path_buf
@@ -81,71 +81,66 @@ pub fn handle(
                     let len = bytes.len().to_string();
                     let cd = format!("attachment; filename=\"{}\"", sanitized);
                     return Some(
-                        Response::from_data(bytes)
-                            .with_status_code(StatusCode(200))
-                            .with_header(Header::from_bytes("Content-Type", mime).unwrap())
-                            .with_header(Header::from_bytes("Content-Length", len.as_bytes()).unwrap())
-                            .with_header(Header::from_bytes("Content-Disposition", cd.as_bytes()).unwrap())
-                            .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+                        ShellResponse::data(200, bytes, mime)
+                            .with_header("Content-Length", &len)
+                            .with_header("Content-Disposition", &cd)
+                            .with_header("Access-Control-Allow-Origin", "*")
                             .with_header(
-                                Header::from_bytes(
-                                    "Access-Control-Expose-Headers",
-                                    "Content-Disposition, Content-Length, Content-Type",
-                                )
-                                .unwrap(),
+                                "Access-Control-Expose-Headers",
+                                "Content-Disposition, Content-Length, Content-Type",
                             ),
                     );
                 }
-                Err(e) => return Some(json_err(500, &e.to_string())),
+                Err(e) => return Some(ShellResponse::err_json(500, &e.to_string())),
             }
         }
-        (Method::Get, "/read") => {
+        ("GET", "/read") => {
             let p = q("path");
             match fsx::read_file(&p, 65536) {
-                Ok(v) => json_ok(&v),
-                Err(e) => json_err(404, &e),
+                Ok(v) => ShellResponse::ok_json(&v),
+                Err(e) => ShellResponse::err_json(404, &e),
             }
         }
-        (Method::Get, "/resolve") => json_ok(&fsx::resolve(&q("path"))),
-        (Method::Get, "/session") => json_ok(&fsx::session_for_dir(&q("path"))),
-        (Method::Get, "/pick-folder") => match fsx::pick_folder() {
-            Ok(Some(p)) => json_ok(&serde_json::json!({ "ok": true, "path": p })),
-            Ok(None) => json_ok(&serde_json::json!({ "ok": false, "path": null })),
-            Err(e) => json_err(500, &e),
+        ("GET", "/resolve") => ShellResponse::ok_json(&fsx::resolve(&q("path"))),
+        ("GET", "/session") => ShellResponse::ok_json(&fsx::session_for_dir(&q("path"))),
+        ("GET", "/pick-folder") => match fsx::pick_folder() {
+            Ok(Some(p)) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": p })),
+            Ok(None) => ShellResponse::ok_json(&serde_json::json!({ "ok": false, "path": null })),
+            Err(e) => ShellResponse::err_json(500, &e),
         },
-        (Method::Get, "/favorites") => json_ok(&serde_json::json!({ "favorites": fsx::favorites() })),
-        (Method::Post, "/favorites") => match read_body(req) {
+        ("GET", "/favorites") => ShellResponse::ok_json(&serde_json::json!({ "favorites": fsx::favorites() })),
+        ("POST", "/favorites") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("").to_string();
                 let add = b["add"].as_bool().unwrap_or(true);
                 match fsx::toggle_favorite(&p, add) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/delete") => match read_body(req) {
+        ("POST", "/delete") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
                 match fsx::delete_entry(p) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/trash") => match read_body(req) {
+        ("POST", "/trash") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
                 match fsx::trash_entry(p) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/zip") => match read_body(req) {
+        ("POST", "/zip") => match req.json_body() {
             Ok(b) => {
                 let paths: Vec<String> = b["paths"]
                     .as_array()
@@ -154,128 +149,128 @@ pub fn handle(
                 let dest = b["dest"].as_str().unwrap_or("");
                 let name = b["name"].as_str().unwrap_or("archivos.zip");
                 match fsx::zip_create(&paths, dest, name) {
-                    Ok(target) => json_ok(&serde_json::json!({ "ok": true, "path": target })),
-                    Err(e) => json_err(500, &e),
+                    Ok(target) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": target })),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/unzip") => match read_body(req) {
+        ("POST", "/unzip") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
                 match fsx::zip_extract(p) {
-                    Ok(target) => json_ok(&serde_json::json!({ "ok": true, "path": target })),
-                    Err(e) => json_err(500, &e),
+                    Ok(target) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": target })),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/terminal") => match read_body(req) {
+        ("POST", "/terminal") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
                 match fsx::open_terminal(p) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/copy") => match read_body(req) {
+        ("POST", "/copy") => match req.json_body() {
             Ok(b) => {
                 let src = b["src"].as_str().unwrap_or("");
                 let dest = b["dest"].as_str().unwrap_or("");
                 match fsx::copy_entry(src, dest) {
-                    Ok(target) => json_ok(&serde_json::json!({ "ok": true, "path": target })),
-                    Err(e) => json_err(500, &e),
+                    Ok(target) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": target })),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/move") => match read_body(req) {
+        ("POST", "/move") => match req.json_body() {
             Ok(b) => {
                 let src = b["src"].as_str().unwrap_or("");
                 let dest = b["dest"].as_str().unwrap_or("");
                 match fsx::move_entry(src, dest) {
-                    Ok(target) => json_ok(&serde_json::json!({ "ok": true, "path": target })),
-                    Err(e) => json_err(400, &e),
+                    Ok(target) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": target })),
+                    Err(e) => ShellResponse::err_json(400, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/write") => match read_body(req) {
+        ("POST", "/write") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
                 let data = b["data"].as_str().unwrap_or("");
                 match fsx::write_file(p, data) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/mkdir") => match read_body(req) {
+        ("POST", "/mkdir") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
                 match fsx::mkdir_entry(p) {
-                    Ok(()) => json_ok(&serde_json::json!({ "ok": true })),
-                    Err(e) => json_err(500, &e),
+                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/rename") => match read_body(req) {
+        ("POST", "/rename") => match req.json_body() {
             Ok(b) => {
                 let old = b["oldPath"].as_str().or(b["path"].as_str()).unwrap_or("");
                 let name = b["newName"].as_str().or(b["name"].as_str()).unwrap_or("");
                 match fsx::rename_entry(old, name) {
-                    Ok(target) => json_ok(&serde_json::json!({ "ok": true, "path": target })),
-                    Err(e) => json_err(400, &e),
+                    Ok(target) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": target })),
+                    Err(e) => ShellResponse::err_json(400, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/reveal") => match read_body(req) {
+        ("POST", "/reveal") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
-                json_ok(&fsx::reveal_in_explorer(p))
+                ShellResponse::ok_json(&fsx::reveal_in_explorer(p))
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/exec") => match read_body(req) {
+        ("POST", "/exec") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
                 match fsx::execute_file(p) {
-                    Ok(val) => json_ok(&val),
-                    Err(e) => json_err(500, &e),
+                    Ok(val) => ShellResponse::ok_json(&val),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/open") => match read_body(req) {
+        ("POST", "/open") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
                 match fsx::open_default(p) {
-                    Ok(val) => json_ok(&val),
-                    Err(e) => json_err(500, &e),
+                    Ok(val) => ShellResponse::ok_json(&val),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Post, "/open-with") => match read_body(req) {
+        ("POST", "/open-with") => match req.json_body() {
             Ok(b) => {
                 let p = b["path"].as_str().unwrap_or("");
                 let app = b["app"].as_str().unwrap_or("");
                 match fsx::open_with(p, app) {
-                    Ok(val) => json_ok(&val),
-                    Err(e) => json_err(500, &e),
+                    Ok(val) => ShellResponse::ok_json(&val),
+                    Err(e) => ShellResponse::err_json(500, &e),
                 }
             }
-            Err(e) => json_err(400, &e),
+            Err(e) => ShellResponse::err_json(400, &e),
         },
-        (Method::Get, "/pick-app") => match fsx::pick_app() {
-            Ok(Some(p)) => json_ok(&serde_json::json!({ "ok": true, "path": p })),
-            Ok(None) => json_ok(&serde_json::json!({ "ok": false, "path": null })),
-            Err(e) => json_err(500, &e),
+        ("GET", "/pick-app") => match fsx::pick_app() {
+            Ok(Some(p)) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": p })),
+            Ok(None) => ShellResponse::ok_json(&serde_json::json!({ "ok": false, "path": null })),
+            Err(e) => ShellResponse::err_json(500, &e),
         },
         _ => return None,
     };

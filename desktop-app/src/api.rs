@@ -3,24 +3,14 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use tiny_http::{Header, Method, Request, Response, StatusCode};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_ok, AppState};
+use crate::state::AppState;
 
-fn cors_headers() -> Vec<Header> {
-    vec![
-        Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap(),
-        Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap(),
-        Header::from_bytes("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept").unwrap(),
-        Header::from_bytes("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition, Authorization").unwrap(),
-        Header::from_bytes("Access-Control-Max-Age", "86400").unwrap(),
-    ]
-}
-
-fn is_loopback_host(req: &Request) -> bool {
-    for h in req.headers() {
-        if h.field.as_str().to_ascii_lowercase() == "host" {
-            let v = h.value.as_str().to_ascii_lowercase();
+fn is_loopback(headers: &[(String, String)]) -> bool {
+    for (k, v) in headers {
+        if k == "host" {
+            let v = v.to_ascii_lowercase();
             let host = v.split(':').next().unwrap_or(&v);
             return host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "[::1]";
         }
@@ -29,8 +19,8 @@ fn is_loopback_host(req: &Request) -> bool {
     false
 }
 
-fn check_shell_auth(req: &Request, state: &AppState) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
-    if is_loopback_host(req) {
+fn check_shell_auth(headers: &[(String, String)], state: &AppState) -> Option<ShellResponse> {
+    if is_loopback(headers) {
         return None;
     }
     let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
@@ -38,25 +28,19 @@ fn check_shell_auth(req: &Request, state: &AppState) -> Option<Response<std::io:
         return None;
     }
     let expected = format!("Basic {}", crate::state::base64_encode(format!("{}:{}", cfg.server.username, cfg.server.password).as_bytes()));
-    let got = req.headers().iter().find(|h| h.field.as_str().to_ascii_lowercase() == "authorization").map(|h| h.value.as_str().to_string()).unwrap_or_default();
+    let got = headers.iter().find(|(k, _)| k == "authorization").map(|(_, v)| v.as_str()).unwrap_or_default();
     if got == expected {
         return None;
     }
-    let mut r = Response::from_string(serde_json::json!({ "error": "unauthorized" }).to_string())
-        .with_status_code(StatusCode(401))
-        .with_header(Header::from_bytes("Content-Type", "application/json").unwrap())
-        .with_header(Header::from_bytes("WWW-Authenticate", "Basic realm=\"opencode-desktop\"").unwrap());
-    for h in cors_headers() {
-        r = r.with_header(h);
-    }
-    Some(r)
+    Some(ShellResponse::unauthorized())
 }
 
-pub fn route(mut req: Request, state: Arc<AppState>) {
-    let url = req.url().to_string();
-    let method = req.method().clone();
-    let path = url.split('?').next().unwrap_or(&url).to_string();
-    let query = url.split('?').nth(1).unwrap_or("").to_string();
+/// Dispatch puro de `/shell/*` + estáticos (Plan 1). Agnóstico al servidor:
+/// lo llaman el adaptador hyper (`http_server.rs`) y los tests.
+pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
+    let method = sreq.method.as_str();
+    let path = sreq.path.as_str();
+    let query = sreq.query.as_str();
     let q = |k: &str| {
         query
             .split('&')
@@ -66,24 +50,15 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             .unwrap_or_default()
     };
 
-    if method == Method::Options {
-        let origin = req.headers().iter().find(|h| h.field.as_str().to_ascii_lowercase() == "origin").map(|h| h.value.as_str().to_string()).unwrap_or_else(|| "*".to_string());
-        let req_headers = req.headers().iter().find(|h| h.field.as_str().to_ascii_lowercase() == "access-control-request-headers").map(|h| h.value.as_str().to_string()).unwrap_or_else(|| "Content-Type, Authorization, X-Requested-With".to_string());
-        let _ = req.respond(
-            Response::from_string("")
-                .with_status_code(StatusCode(204))
-                .with_header(Header::from_bytes("Access-Control-Allow-Origin", origin.as_bytes()).unwrap())
-                .with_header(Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD").unwrap())
-                .with_header(Header::from_bytes("Access-Control-Allow-Headers", req_headers.as_bytes()).unwrap())
-                .with_header(Header::from_bytes("Access-Control-Max-Age", "86400").unwrap()),
-        );
-        return;
+    if method == "OPTIONS" {
+        let origin = sreq.header("origin").unwrap_or("*").to_string();
+        let req_headers = sreq.header("access-control-request-headers").unwrap_or("Content-Type, Authorization, X-Requested-With").to_string();
+        return ShellResponse::options_preflight(&origin, &req_headers);
     }
 
     if path.starts_with("/shell/") {
-        if let Some(resp) = check_shell_auth(&req, &state) {
-            let _ = req.respond(resp);
-            return;
+        if let Some(resp) = check_shell_auth(&sreq.headers, state) {
+            return resp;
         }
     }
 
@@ -95,120 +70,107 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             "dist": state.dist.is_some(),
             "ws_port": state.port + 1,
         });
-        let _ = req.respond(json_ok(&body));
-        return;
+        return ShellResponse::ok_json(&body);
     }
 
     // RAM nativa: proceso app + WebViews propios (msedgewebview2 hijas).
     // La usa el chip de RAM del ActivityBar junto al JS heap.
     if path == "/shell/mem" {
-        let _ = req.respond(json_ok(&crate::memx::snapshot()));
-        return;
+        return ShellResponse::ok_json(&crate::memx::snapshot());
     }
 
     // ============================== Window controls (extraído)
     if path.starts_with("/shell/window") {
-        if let Some(resp) = crate::infrastructure::http::window_router::handle(&mut req, state.clone(), &path, method.clone(), &q) {
-            let _ = req.respond(resp);
-            return;
+        if let Some(resp) = crate::infrastructure::http::window_router::handle(sreq, state.clone(), &path, method, &q) {
+            return resp;
         }
     }
 
     // ============================== Source control (git)
     if path.starts_with("/shell/git/") {
         if let Some(resp) =
-            crate::infrastructure::http::scm_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::scm_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== Proyectos externos on-demand (plugins)
     if path.starts_with("/shell/external") {
         if let Some(resp) =
-            crate::infrastructure::http::external_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::external_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== Computer v2 (extraído a router — fix duplicados screenshot.bin)
     if path.starts_with("/shell/computer") {
         if let Some(resp) =
-            crate::infrastructure::http::computer_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::computer_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     if path.starts_with("/shell/pty") {
         if let Some(resp) =
-            crate::infrastructure::http::pty_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::pty_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     if path.starts_with("/shell/kanban") {
         if let Some(resp) =
-            crate::infrastructure::http::kanban_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::kanban_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== Config / Autostart / Session (extraído)
     if path.starts_with("/shell/config") || path == "/shell/autostart" || path == "/shell/session-state" {
         if let Some(resp) =
-            crate::infrastructure::http::config_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::config_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== File explorer
     if path.starts_with("/shell/fs") {
         if let Some(resp) =
-            crate::infrastructure::http::fs_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::fs_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== Conversor y Editor de Documentos (Rust ultra-ligero) (extraído)
     if path.starts_with("/shell/doc") {
         if let Some(resp) =
-            crate::infrastructure::http::doc_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::doc_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== Server manager (extraído) + perfil portable
     if path.starts_with("/shell/server") || path == "/shell/profile" {
         if let Some(resp) =
-            crate::infrastructure::http::server_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::server_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== Updates + Docs (extraído)
     if path == "/shell/updates" || path.starts_with("/shell/docs") {
         if let Some(resp) =
-            crate::infrastructure::http::docs_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::docs_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
@@ -217,60 +179,54 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     // ============================== Stats / Design (extraído)
     if path.starts_with("/shell/stats") || path.starts_with("/shell/design") {
         if let Some(resp) =
-            crate::infrastructure::http::stats_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::stats_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== Plugins + Labs (extraído)
     if path.starts_with("/shell/plugins") || path.starts_with("/shell/plugin") {
         if let Some(resp) =
-            crate::infrastructure::http::plugin_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::plugin_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== Project Auto-Serve / Preview (extraído)
     if path == "/shell/project/serve" || path.starts_with("/shell/preview") {
         if let Some(resp) =
-            crate::infrastructure::http::preview_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::preview_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== OpenCode global + Labs (extraído)
     if path == "/shell/opencode/global" || path.starts_with("/shell/labs") {
         if let Some(resp) =
-            crate::infrastructure::http::opencode_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::opencode_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== QuickChat web search (DDG lite, token-min) (extraído)
     if path == "/shell/search" {
         if let Some(resp) =
-            crate::infrastructure::http::search_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::search_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
     // ============================== Proxy robusto (extraído)
     if path == "/shell/proxy" {
         if let Some(resp) =
-            crate::infrastructure::http::proxy_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::proxy_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
@@ -282,7 +238,7 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
         if let Some(base) = state.dist.as_ref() {
         let rel = path.trim_start_matches('/');
         // brotli precomprimido: si Accept-Encoding incluye br y existe .br, servirlo
-        let accept_br = req.headers().iter().any(|h| h.field.as_str().to_ascii_lowercase() == "accept-encoding" && h.value.as_str().contains("br"));
+        let accept_br = sreq.header("accept-encoding").map(|v| v.contains("br")).unwrap_or(false);
         let mut file = base.join(rel);
         if !file.starts_with(base) {
             file = base.join("index.html");
@@ -293,14 +249,9 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
             if br_file.is_file() && br_file.starts_with(base) {
                 if let Ok(br_bytes) = std::fs::read(&br_file) {
                     let mime = mime_for(&file);
-                    let _ = req.respond(
-                        Response::from_data(br_bytes)
-                            .with_status_code(StatusCode(200))
-                            .with_header(Header::from_bytes("Content-Type", mime).unwrap())
-                            .with_header(Header::from_bytes("Content-Encoding", "br").unwrap())
-                            .with_header(Header::from_bytes("Cache-Control", "public, max-age=31536000, immutable").unwrap()),
-                    );
-                    return;
+                    return ShellResponse::data(200, br_bytes, mime)
+                        .with_header("content-encoding", "br")
+                        .with_header("cache-control", "public, max-age=31536000, immutable");
                 }
             }
         }
@@ -323,24 +274,15 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
                     } else {
                         s.push_str(&inject);
                     }
-                    let _ = req.respond(
-                        Response::from_string(s)
-                            .with_status_code(StatusCode(200))
-                            .with_header(Header::from_bytes("Content-Type", mime).unwrap())
-                            .with_header(Header::from_bytes("Cache-Control", "no-cache").unwrap()),
-                    );
-                    return;
+                    return ShellResponse::from_string(200, s)
+                        .with_header("content-type", mime)
+                        .with_header("cache-control", "no-cache");
                 }
             }
             // Cache agresivo para assets hasheados, no-cache para index
             let cache = if is_index { "no-cache" } else { "public, max-age=31536000, immutable" };
-            let _ = req.respond(
-                Response::from_data(bytes)
-                    .with_status_code(StatusCode(200))
-                    .with_header(Header::from_bytes("Content-Type", mime).unwrap())
-                    .with_header(Header::from_bytes("Cache-Control", cache).unwrap()),
-            );
-            return;
+            return ShellResponse::data(200, bytes, mime)
+                .with_header("cache-control", cache);
         }
     }
     } // fin guard /shell/*
@@ -348,18 +290,14 @@ pub fn route(mut req: Request, state: Arc<AppState>) {
     // ============================== Browser (Sub-WebView2 nativo ultra-ligero) (extraído)
     if path.starts_with("/shell/browser") {
         if let Some(resp) =
-            crate::infrastructure::http::browser_router::handle(&mut req, state.clone(), &path, method.clone(), &q)
+            crate::infrastructure::http::browser_router::handle(sreq, state.clone(), &path, method, &q)
         {
-            let _ = req.respond(resp);
-            return;
+            return resp;
         }
     }
 
-    let _ = req.respond(
-        Response::from_string("not found")
-            .with_status_code(StatusCode(404))
-            .with_header(Header::from_bytes("Content-Type", "text/plain").unwrap()),
-    );
+    ShellResponse::from_string(404, "not found".to_string())
+        .with_header("content-type", "text/plain")
 }
 
 const MIME: &[(&str, &str)] = &[

@@ -4,24 +4,24 @@
 use std::io::Read;
 use std::sync::Arc;
 
-use tiny_http::{Method, Request, Response};
+use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
-use crate::state::{json_err, json_ok, AppState};
+use crate::state::AppState;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle(
-    _req: &mut Request,
+    _req: &ShellRequest,
     _state: Arc<AppState>,
     path: &str,
-    _method: Method,
+    _method: &str,
     q: &dyn Fn(&str) -> String,
-) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+) -> Option<ShellResponse> {
     if path != "/shell/search" {
         return None;
     }
     let query = q("q");
     if query.trim().is_empty() {
-        return Some(json_err(400, "Falta parámetro q"));
+        return Some(ShellResponse::err_json(400, "Falta parámetro q"));
     }
     let query_trim = query.trim().to_string();
     // File cache: data/cache/search/<hash>.json, TTL 6h
@@ -47,7 +47,7 @@ pub fn handle(
                             if let Some(obj) = out.as_object_mut() {
                                 obj.insert("cached".into(), serde_json::json!(true));
                             }
-                            return Some(json_ok(&out));
+                            return Some(ShellResponse::ok_json(&out));
                         }
                     }
                 }
@@ -88,7 +88,7 @@ pub fn handle(
                     String::from_utf8_lossy(&buf).to_string()
                 }
                 Err(e) => {
-                    return Some(json_err(502, &format!("search fetch failed: {e}")));
+                    return Some(ShellResponse::err_json(502, &format!("search fetch failed: {e}")));
                 }
             }
         }
@@ -181,7 +181,7 @@ pub fn handle(
     }
     let out = serde_json::json!({"results": results, "cached": false});
     let _ = std::fs::write(&cache_file, serde_json::to_string(&out).unwrap_or_default());
-    Some(json_ok(&out))
+    Some(ShellResponse::ok_json(&out))
 }
 
 fn url_encode(s: &str) -> String {
