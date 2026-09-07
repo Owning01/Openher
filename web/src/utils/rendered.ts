@@ -84,7 +84,7 @@ export function computeRenderedMessages(
         toolParts.push({
           id: part.id,
           type: part.type,
-          sessionID: part.sessionID,
+          sessionID: part.sessionID ?? message.info.sessionID,
           text: part.text,
           callID: part.callID,
           tool: part.tool,

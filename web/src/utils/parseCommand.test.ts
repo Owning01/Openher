@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "./parseCommand"
+import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "./parseCommand"
 import type { ServerConfig, SessionView } from "../types"
 
 // Mock api module for resolveCommand
@@ -271,6 +271,75 @@ describe("buildOptimisticMessage", () => {
     const session = makeSession({ id: "custom-id" })
     const msg = buildOptimisticMessage(session, "hi")
     expect(msg.info.sessionID).toBe("custom-id")
+  })
+})
+
+describe("rehydrateImages (eco sin bytes)", () => {
+  const DATAURL = "data:image/png;base64,AAA"
+  const RAW = "AAA"
+
+  function serverMsg(parts: Array<{ id: string; type: string; text?: string; data?: string; url?: string; mimeType?: string; mime?: string }>, text = "hola"): any {
+    return { info: { id: "srv-1", role: "user", sessionID: "sess-1", time: { created: 1 } }, parts }
+  }
+  function local(text: string, datas: Array<{ data: string; mime: string }> = [{ data: DATAURL, mime: "image/png" }]): LocalImageEntry {
+    return { sessionID: "sess-1", text, datas }
+  }
+
+  it("rellena el part vacío con id derivado estable", () => {
+    const list = [serverMsg([
+      { id: "t", type: "text", text: "hola" },
+      { id: "f", type: "file", mime: "image/png", filename: "clipboard.png" },
+    ])]
+    const rest = rehydrateImages(list, [local("hola")], "sess-1")
+    expect(rest).toHaveLength(0)
+    const filled = list[0].parts.find((p: { id: string }) => p.id === "f#local")
+    expect(filled?.data).toBe(DATAURL)
+    // Re-ejecución idempotente: no duplica parts.
+    rehydrateImages(list, [local("hola")], "sess-1")
+    expect(list[0].parts.filter((p: { type: string }) => p.type === "image" || p.type === "file")).toHaveLength(1)
+  })
+
+  it("appendea cuando el server podó el part entero", () => {
+    const list = [serverMsg([{ id: "t", type: "text", text: "hola" }])]
+    rehydrateImages(list, [local("hola")], "sess-1")
+    const added = list[0].parts.find((p: { type: string; data?: string }) => p.type === "image" && p.data === DATAURL)
+    expect(added).toBeTruthy()
+  })
+
+  it("casa placeholder (image) con optimista solo-imagen y lo quita", () => {
+    const list = [serverMsg([
+      { id: "t", type: "text", text: "(image)" },
+      { id: "f", type: "file", mime: "image/png" },
+    ], "(image)")]
+    rehydrateImages(list, [local("")], "sess-1")
+    expect(list[0].parts.some((p: { text?: string }) => p.text === "(image)")).toBe(false)
+    expect(list[0].parts.some((p: { data?: string }) => p.data === DATAURL)).toBe(true)
+  })
+
+  it("no toca el eco que ya trae bytes ni consume el entry", () => {
+    const list = [serverMsg([
+      { id: "t", type: "text", text: "hola" },
+      { id: "f", type: "file", mime: "image/png", url: DATAURL },
+    ])]
+    const locals = [local("hola")]
+    const rest = rehydrateImages(list, locals, "sess-1")
+    expect(list[0].parts).toHaveLength(2)
+    expect(rest).toHaveLength(1)
+  })
+
+  it("ignora otras sesiones y textos distintos", () => {
+    const list = [serverMsg([{ id: "t", type: "text", text: "otro" }])]
+    const rest = rehydrateImages(list, [local("hola"), { sessionID: "otra", text: "otro", datas: [{ data: DATAURL, mime: "image/png" }] }], "sess-1")
+    expect(list[0].parts).toHaveLength(1)
+    expect(rest).toHaveLength(2)
+  })
+
+  it("collectLocalImages extrae bytes de optimistas", () => {
+    const session = makeSession()
+    const opt = buildOptimisticMessage(session, "mira", [{ base64: RAW, mime: "image/png" }])
+    const entries = collectLocalImages([opt as never])
+    expect(entries).toHaveLength(1)
+    expect(entries[0].datas[0].data).toBe(RAW)
   })
 })
 

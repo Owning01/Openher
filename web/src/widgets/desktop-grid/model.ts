@@ -90,6 +90,21 @@ export function insertTabInStack(stack: string[], tabId: string, toIndex: number
   return [...stack.slice(0, at), tabId, ...stack.slice(at)]
 }
 
+/** Al dividir (split) se inserta una columna/fila: conservar los tamaños que
+ * el usuario ya ajustó con los divisores en vez de resetearlos a null.
+ * Normaliza el largo antes de insertar (defensa contra layouts viejos). */
+export function insertSplitSize(
+  sizes: Array<number | null> | undefined,
+  count: number,
+  at: number
+): Array<number | null> {
+  const next = Array.isArray(sizes) ? [...sizes] : []
+  while (next.length < count) next.push(null)
+  if (next.length > count) next.length = count
+  next.splice(Math.max(0, Math.min(at, next.length)), 0, null)
+  return next
+}
+
 export type CompactLayoutInput = {
   cols: number
   rows: number

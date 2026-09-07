@@ -198,3 +198,22 @@ export function removeLessonMove(lessonId: string) {
   const { [lessonId]: _, ...rest } = layout.lessonMoves
   saveCustomLayout({ ...layout, lessonMoves: rest })
 }
+
+export function removeCustomCategory(categoryId: string) {
+  const cats = loadCustomCategories().filter((c) => c.id !== categoryId)
+  saveCustomCategories(cats)
+  // Limpia docs y movimientos que solo referenciaban a la sección eliminada
+  const alive = new Set<string>()
+  for (const c of cats) for (const it of c.items) alive.add(it.id)
+  const layout = loadCustomLayout()
+  const moves = { ...(layout.lessonMoves || {}) }
+  for (const [id, mv] of Object.entries(moves)) {
+    if (mv.toCategory === categoryId) delete moves[id]
+    else alive.add(id)
+  }
+  saveCustomLayout({ ...layout, lessonMoves: moves, categoryOrder: (layout.categoryOrder || []).filter((id) => id !== categoryId) })
+  const docs = loadCustomDocs()
+  const next: Record<string, string> = {}
+  for (const id of alive) if (docs[id] !== undefined) next[id] = docs[id]
+  try { localStorage.setItem(KEY_DOCS, JSON.stringify(next)) } catch { /* ignore */ }
+}

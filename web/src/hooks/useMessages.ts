@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
 import { api } from "../api"
-import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage } from "../utils/parseCommand"
+import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "../utils/parseCommand"
 import { computeRenderedMessages } from "../utils/rendered"
 import { isImagePart, countImageParts } from "../utils"
 import { formatServerError } from "../shared/errors/serverErrors"
@@ -326,6 +326,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // Defensivo: un item null/corrupto del server no debe tumbar el render
     // (msg.map(m => m.info.id) con m undefined = TypeError).
     const safe = msg.filter((m): m is MessageEnvelope => !!m && !!m.info?.id)
+    // Eco sin bytes: reinyectar los dataURL locales en el mensaje confirmado
+    // (el server puede podarlos por tamaño). Sin esto la imagen "aparece y se
+    // borra": el optimista se elimina por conteo y el eco queda sin src.
+    localImagesRef.current = rehydrateImages(safe, localImagesRef.current, sessionID)
     // Si el fetch ya trajo el mensaje de compaction, podemos apagar el spinner aunque el SSE aún no haya llegado
     // Detectar por part type compaction O por role compaction (v2 nativo) para no depender del mapper
     const hasCompaction = safe.some((m) => m.parts.some((p) => p.type === "compaction") || (m.info as unknown as { role?: string }).role === "compaction" || (m as unknown as { type?: string }).type === "compaction")
@@ -495,9 +499,14 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // con role "assistant") — matchea cualquier envío en vuelo, no solo el último.
   const optimisticIDsRef = useRef<Set<string>>(new Set())
   const optimisticTextsRef = useRef<Set<string>>(new Set())
+  const localImagesRef = useRef<LocalImageEntry[]>([])
   useEffect(() => {
     optimisticIDsRef.current = new Set(optimisticUserMessages.map((m) => m.info.id))
     optimisticTextsRef.current = new Set(optimisticUserMessages.map(extractText).map((t) => t.trim()).filter(Boolean))
+    // Bytes locales de imágenes para rehidratar el eco del server (que puede
+    // podar los dataURL): se reconstruye del estado — si el optimista sigue
+    // pendiente, sus bytes siguen disponibles para el próximo fetch.
+    localImagesRef.current = collectLocalImages(optimisticUserMessages)
   }, [optimisticUserMessages])
 
   const abortSession = useCallback(async (sessionID: string, directory: string) => {

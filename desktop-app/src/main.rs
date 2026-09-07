@@ -103,6 +103,9 @@ struct App {
     browser_inner: browser_view::SubWebViewInner,
     /// Último instante en que se persistió la geometría (throttle de escritura).
     last_geom_save: std::time::Instant,
+    /// La ventana estaba maximizada en el último save (el rect guardado es el
+    /// último normal conocido, nunca la huella fullscreen).
+    geom_maximized: bool,
     modifiers: winit::keyboard::ModifiersState,
     start_minimized: bool,
     /// Minimizar a bandeja (ver ShellConfig::minimize_to_tray). Se lee al
@@ -465,7 +468,13 @@ impl ApplicationHandler<AppEvent> for App {
         // Restaurar geometría persistida si existe y es visible en algún monitor.
         // Si la ventana quedó fuera de pantalla (segundo monitor desconectado,
         // coordenadas inválidas), se ignora y se usa el default centrado.
+        // El estado maximizado se persiste como FLAG (nunca como rect): las
+        // versiones viejas guardaban la huella fullscreen con origen negativo
+        // y al restaurar dejaban una ventana oversize con los bordes fuera de
+        // pantalla (no se podía redimensionar ni mover). Esa huella se detecta
+        // y se migra a maximizado real.
         let mut use_saved_geometry = false;
+        let mut restore_maximized = false;
         if let Some(g) = state::load_window_geometry() {
             if g.width >= 100.0 && g.height >= 100.0 && g.width <= 8000.0 && g.height <= 8000.0 {
                 let monitors: Vec<_> = event_loop.available_monitors().collect();
@@ -473,24 +482,50 @@ impl ApplicationHandler<AppEvent> for App {
                 let saved_y = g.y;
                 let saved_w = g.width;
                 let saved_h = g.height;
+                // Monitor con mayor solape (para la migración de huella).
+                let mut best_overlap = 0.0f64;
+                let mut best_mon = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+                for m in &monitors {
+                    let pos = m.position().to_logical::<f64>(m.scale_factor());
+                    let size = m.size().to_logical::<f64>(m.scale_factor());
+                    let ox = (saved_x + saved_w).min(pos.x + size.width) - saved_x.max(pos.x);
+                    let oy = (saved_y + saved_h).min(pos.y + size.height) - saved_y.max(pos.y);
+                    let area = ox.max(0.0) * oy.max(0.0);
+                    if area > best_overlap {
+                        best_overlap = area;
+                        best_mon = (pos.x, pos.y, size.width, size.height);
+                    }
+                }
                 let visible = if monitors.is_empty() {
                     // Sin info de monitores, al menos validar que no sea absurdamente off-screen
                     saved_x > -10000.0 && saved_x < 10000.0 && saved_y > -10000.0 && saved_y < 10000.0
                 } else {
-                    monitors.iter().any(|m| {
-                        let pos = m.position().to_logical::<f64>(m.scale_factor());
-                        let size = m.size().to_logical::<f64>(m.scale_factor());
-                        let mx = pos.x;
-                        let my = pos.y;
-                        let mw = size.width;
-                        let mh = size.height;
-                        // Chequear intersección: ventana y monitor se solapan al menos 100px
-                        let overlap_x = (saved_x + saved_w).min(mx + mw) - saved_x.max(mx);
-                        let overlap_y = (saved_y + saved_h).min(my + mh) - saved_y.max(my);
-                        overlap_x > 100.0 && overlap_y > 100.0
-                    })
+                    best_overlap > 100.0 * 100.0
                 };
-                if visible {
+                // Huella de maximizado vieja: casi todo el monitor con origen
+                // negativo (overshoot DWM de ~7px). No aplicar como rect normal.
+                let footprint = if monitors.is_empty() {
+                    false
+                } else {
+                    let (mx, my, mw, mh) = best_mon;
+                    saved_w >= mw - 64.0
+                        && saved_h >= mh - 128.0
+                        && saved_x <= mx + 1.0
+                        && saved_x >= mx - 64.0
+                        && saved_y <= my + 1.0
+                        && saved_y >= my - 64.0
+                };
+                if g.maximized || footprint {
+                    if footprint && !g.maximized {
+                        eprintln!("opencode-desktop: huella de maximizado vieja ({},{} {}x{}), reabriendo maximizado", g.x, g.y, g.width, g.height);
+                    }
+                    restore_maximized = true;
+                    if visible && !footprint {
+                        attributes.position = Some(LogicalPosition::new(g.x, g.y).into());
+                        attributes.inner_size = Some(LogicalSize::new(g.width, g.height).into());
+                        use_saved_geometry = true;
+                    }
+                } else if visible {
                     attributes.position = Some(LogicalPosition::new(g.x, g.y).into());
                     attributes.inner_size = Some(LogicalSize::new(g.width, g.height).into());
                     use_saved_geometry = true;
@@ -518,6 +553,12 @@ impl ApplicationHandler<AppEvent> for App {
             event_loop.exit();
             return;
         };
+        // Geometría maximizada persistida (o huella vieja migrada): reabrir
+        // maximizado en vez de una ventana oversize sin bordes alcanzables.
+        if restore_maximized && !self.start_minimized {
+            window.set_maximized(true);
+        }
+        self.geom_maximized = restore_maximized;
         // Guardar HWND para controles /shell/window/* (min/max/close/drag) + patch resize
         #[cfg(windows)]
         {
@@ -609,13 +650,10 @@ impl ApplicationHandler<AppEvent> for App {
                         size: LogicalSize::new(size.width, size.height).into(),
                     });
                 }
-                #[cfg(windows)]
-                {
-                    let hwnd = crate::state::WINDOW_HWND.load(std::sync::atomic::Ordering::Relaxed);
-                    if hwnd != 0 {
-                        unsafe { patch_child_windows(hwnd); }
-                    }
-                }
+                // Sin patch_child_windows aquí: EnumChildWindows + re-subclass
+                // en cada evento de resize corría dentro del loop modal del SO
+                // y trababa el gesto. Los HWNDs nuevos del WebView ya los cubre
+                // el re-parcheo periódico cada 2s.
                 self.save_geometry();
                 // Minimizar (—) → a bandeja SOLO si está activado en
                 // configuración; si no, minimize normal a la barra de tareas.
@@ -745,24 +783,59 @@ impl ApplicationHandler<AppEvent> for App {
 impl App {
     /// Persiste posición+tamaño de la ventana (throttle ~400ms) para reabrir
     /// la app donde el usuario la dejó.
+    /// NUNCA persiste la huella de maximizado/minimizado como geometría
+    /// normal: al restaurar abriría una ventana oversize con los bordes fuera
+    /// de pantalla (imposible redimensionar/mover). El maximizado se guarda
+    /// como flag (`geom_maximized`); el rect guardado es siempre el último
+    /// normal conocido.
+    /// La escritura va en hilo aparte: Moved/Resized corren dentro del loop
+    /// modal de arrastre del SO y un fsync+rename en el hilo UI trababa el
+    /// movimiento (~20fps vs 100fps del resto).
     fn save_geometry(&mut self) {
-        if let Some(window) = &self.window {
-            let now = std::time::Instant::now();
-            if now.duration_since(self.last_geom_save).as_millis() < 400 {
-                return;
-            }
-            self.last_geom_save = now;
-            let sf = window.scale_factor();
-            let pos = window.outer_position().unwrap_or_default().to_logical::<f64>(sf);
-            let size = window.inner_size().to_logical::<f64>(sf);
-            state::save_window_geometry(&state::WindowGeometry {
-                x: pos.x,
-                y: pos.y,
-                width: size.width,
-                height: size.height,
-                scale: sf,
-            });
+        let window = match &self.window {
+            Some(w) => w,
+            None => return,
+        };
+        if window.is_minimized().unwrap_or(false) {
+            return;
         }
+        if window.is_maximized() {
+            // Solo marcar el flag (sin throttle: esto corre en transiciones).
+            // El rect guardado sigue siendo el último normal conocido.
+            if !self.geom_maximized {
+                self.geom_maximized = true;
+                std::thread::spawn(|| {
+                    if let Some(mut g) = state::load_window_geometry() {
+                        g.maximized = true;
+                        state::save_window_geometry(&g);
+                    } else {
+                        state::save_window_geometry(&state::WindowGeometry {
+                            maximized: true,
+                            ..Default::default()
+                        });
+                    }
+                });
+            }
+            return;
+        }
+        self.geom_maximized = false;
+        let now = std::time::Instant::now();
+        if now.duration_since(self.last_geom_save).as_millis() < 400 {
+            return;
+        }
+        self.last_geom_save = now;
+        let sf = window.scale_factor();
+        let pos = window.outer_position().unwrap_or_default().to_logical::<f64>(sf);
+        let size = window.inner_size().to_logical::<f64>(sf);
+        let g = state::WindowGeometry {
+            x: pos.x,
+            y: pos.y,
+            width: size.width,
+            height: size.height,
+            scale: sf,
+            maximized: false,
+        };
+        std::thread::spawn(move || state::save_window_geometry(&g));
     }
 }
 
@@ -1142,6 +1215,7 @@ fn main() {
             download_events: app_state.browser.download_events_handle(),
         },
         last_geom_save: std::time::Instant::now(),
+        geom_maximized: false,
         modifiers: winit::keyboard::ModifiersState::empty(),
         start_minimized,
         minimize_to_tray: config.minimize_to_tray,

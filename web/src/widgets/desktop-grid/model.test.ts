@@ -5,6 +5,7 @@ import {
   reorderTabsInStack,
   removeTabFromStack,
   insertTabInStack,
+  insertSplitSize,
 } from "./model"
 
 describe("desktop-grid model", () => {
@@ -57,5 +58,16 @@ describe("desktop-grid model", () => {
   it("inserts tab into stack at correct position", () => {
     const stack = ["tab-1", "tab-3"]
     expect(insertTabInStack(stack, "tab-2", 1)).toEqual(["tab-1", "tab-2", "tab-3"])
+  })
+
+  it("insertSplitSize conserva los tamaños al dividir", () => {
+    expect(insertSplitSize([300, 500], 2, 1)).toEqual([300, null, 500])
+    expect(insertSplitSize([300, 500], 2, 0)).toEqual([null, 300, 500])
+  })
+
+  it("insertSplitSize normaliza layouts viejos desincronizados", () => {
+    expect(insertSplitSize([300], 2, 1)).toEqual([300, null, null])
+    expect(insertSplitSize([1, 2, 3, 4], 2, 2)).toEqual([1, 2, null])
+    expect(insertSplitSize(undefined, 1, 1)).toEqual([null, null])
   })
 })

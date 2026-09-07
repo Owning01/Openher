@@ -1,11 +1,11 @@
-import { memo, useState, useEffect, useRef, useCallback } from "react"
+import { memo, useState, useEffect, useRef, useCallback, lazy, Suspense } from "react"
 import { api } from "../api"
 import { shell } from "../shell"
 import { ModalHeader } from "./ModalHeader"
 import { CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { basename } from "../utils"
-import { CodeMirrorEditor } from "./CodeMirrorEditor"
+const CodeMirrorEditor = lazy(() => import("./CodeMirrorEditor").then((m) => ({ default: m.CodeMirrorEditor })))
 import { langFromFilename } from "../utils/highlight"
 import type { ServerConfig } from "../types"
 
@@ -178,6 +178,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
           ) : error ? (
             <p className="error-text">{error}</p>
           ) : (
+            <Suspense fallback={<p className="subtle">{t('fileEditor.loading')}</p>}>
             <CodeMirrorEditor
               path={path}
               value={content}
@@ -186,6 +187,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
               onCursor={setCursor}
               savedValue={saved}
             />
+            </Suspense>
           )}
         </div>
         {!loading && !error && (

@@ -192,6 +192,7 @@ export default {
   'settings.questionPlaceholder': 'Scrivi la tua risposta...',
   'settings.questionSend': 'Invia',
   'settings.questionSkip': 'Salta',
+  'settings.questionSkipped': 'Saltata',
 'settings.featureFlags': 'Funzionalità aggiuntive',
 'settings.featureFlagsDesc': 'Attiva o disattiva funzionalità aggiuntive',
   'settings.fileBrowser': 'Esplora file',

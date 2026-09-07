@@ -97,7 +97,7 @@ export const SessionToolbar = memo(function SessionToolbar({
             <CheckboxIcon size={15} />
           </button>
         )}
-        <span className="mode-indicator" title={t("settings.dataModeTitle")}>
+        <span className={`mode-indicator mode-${dataMode}`} title={t("settings.dataModeTitle")}>
           <span className="mode-btn-text">{modeLabel(dataMode, t)}</span>
         </span>
         {onOpenSettings && (

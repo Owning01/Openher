@@ -30,6 +30,11 @@ type MessageVirtualListProps = {
   todosOpen?: boolean
   highlight?: string
   scrollToMessageID?: string | null
+  // Salto desde el historial de prompts (igual que MessageList): id + nonce.
+  revealMessageID?: string | null
+  revealNonce?: number
+  // Cola visible: acciones por id de mensaje pendiente.
+  outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
   compactTools?: boolean
   minimalistMode?: boolean
   thinkingDefault?: "auto" | "expanded" | "collapsed"
@@ -45,7 +50,7 @@ const DEFAULT_OVERSCAN = 8
 
 export const MessageVirtualList = memo(function MessageVirtualList({
   messages, pendingIndex, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff,
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, revealMessageID, revealNonce, outboxActions, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff,
   overscan = DEFAULT_OVERSCAN,
   estimatedRowHeight = DEFAULT_ESTIMATE,
 }: MessageVirtualListProps) {
@@ -157,6 +162,33 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     scrollToMessage(scrollToMessageID)
   }, [scrollToMessageID, view, scrollToMessage])
 
+  // Salto del historial: scrollToIndex + destello (el nodo puede montarse un
+  // frame después del scroll, se reintenta una vez).
+  const flashedRevealRef = useRef(0)
+  useEffect(() => {
+    if (!revealMessageID || !revealNonce || flashedRevealRef.current === revealNonce) return
+    scrollToMessage(revealMessageID)
+    const t = window.setTimeout(() => {
+      const wrap = parentRef.current
+      if (!wrap) return
+      let sel = `[data-message-id="${revealMessageID}"]`
+      try {
+        sel = `[data-message-id="${CSS.escape(revealMessageID)}"]`
+      } catch {
+        /* ids generados: el fallback plano vale */
+      }
+      const el = wrap.querySelector(sel)
+      if (!el) return
+      flashedRevealRef.current = revealNonce
+      el.scrollIntoView({ block: "center", behavior: "smooth" })
+      el.classList.remove("msg-flash")
+      void (el as HTMLElement).offsetWidth
+      el.classList.add("msg-flash")
+      window.setTimeout(() => el.classList.remove("msg-flash"), 1800)
+    }, 160)
+    return () => window.clearTimeout(t)
+  })
+
   // Cuando el viewport es más alto que el contenido, el paddingTop shift debe aplicarse
   // sin aumentar scrollHeight más allá de viewportH (ver cálculo totalSize+paddingTop).
 
@@ -201,6 +233,7 @@ export const MessageVirtualList = memo(function MessageVirtualList({
                     <div
                       key={message.info.id}
                       data-index={virtualRow.index}
+                      data-message-id={message.info.id}
                       ref={rowVirtualizer.measureElement}
                       style={{
                         position: "absolute",
@@ -213,6 +246,7 @@ export const MessageVirtualList = memo(function MessageVirtualList({
                       <MessageBubble
                         message={message}
                         queued={pendingIndex !== undefined && actualIndex > pendingIndex}
+                        outbox={outboxActions?.[message.info.id]}
                         revert={revert}
                         isReverted={revertIndex >= 0 && actualIndex >= revertIndex}
                         onRevertToMessage={onRevertToMessage}

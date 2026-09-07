@@ -538,6 +538,12 @@
   font-family: var(--font-mono);
 }
 
+/* Escritorio: "full" es el modo por defecto asumido, no se muestra.
+   Solo aparece si el usuario cambia a otro modo. */
+html[data-desktop="true"] .mode-indicator.mode-full {
+  display: none;
+}
+
 /* ===== Quick Access ===== */
 .quick-access {
   margin-bottom: 12px;

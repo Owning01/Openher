@@ -8,6 +8,7 @@ import type {
   ModelSelection,
   ProjectCurrent,
   PathInfo,
+  Question,
   QuestionOption,
   ServerConfig,
   ServerProviderList,
@@ -26,7 +27,7 @@ import {
   withDirectory,
   withLocationDirectory
 } from "./shared/api/client"
-import { getApiVersion, rememberApiVersion, resolveApiVersion, setHealthProbe } from "./shared/api/version"
+import { getApiVersion, rememberApiVersion, resolveApiVersion, setHealthProbe, apiPath } from "./shared/api/version"
 import {
   mapProviderModels,
   modelWireName,
@@ -38,6 +39,7 @@ import {
 } from "./shared/api/mappers"
 import type { V2Message, V2Session, ConfigProvidersResponse, AgentResponse } from "./shared/api/mappers"
 import { getOpencodeClient } from "./shared/api/opencodeClient"
+import { recordQuestionSettled } from "./utils/questionStore"
 
 function errorStatus(error: unknown): number | undefined {
   if (!(error instanceof Error)) return undefined
@@ -71,6 +73,10 @@ export type { ConfigProvidersResponse, AgentResponse, V2Session, V2Message } fro
 export { mapProviderModels, toAgentOption, toModelBody, toCreateSessionModel, modelWireName, toSessionV1, toMessageEnvelopeV1 } from "./shared/api/mappers"
 export { normalizeSlashes, toServerRelative, withDirectory, withLocationDirectory, fetchFileBytes, arrayBufferToBase64, responseDetail, normalizeHeaders, serializedSize, requestWithHeaders, requestRaw, request } from "./shared/api/client"
 export type { RequestOptions, ResponseWithHeaders } from "./shared/api/client"
+
+// Variante del SDK que resolvió message.list por host (ver loadMessages):
+// evita re-probar variantes fallidas en cada apertura de sesión.
+const messageVariantCache = new Map<string, number>()
 
 export const api = {
   async health(config: ServerConfig): Promise<HealthResponse> {
@@ -369,8 +375,13 @@ export const api = {
     const safeLimit = Math.min(limit, 200)
     try {
       const client = await getOpencodeClient(config)
-      // Probar múltiples variantes del client — el nombre exacto varía entre betas v2
+      // Probar múltiples variantes del client — el nombre exacto varía entre betas v2.
+      // Caché por host de la variante que funcionó: la primera apertura prueba
+      // en orden, las siguientes van directo (evita N llamadas fallidas por open).
+      const variantKey = `${config.host}:${config.port}`
+      const startAt = messageVariantCache.get(variantKey) ?? 0
       let res: unknown
+      let hitIndex = -1
       const tryCall = async (fn: unknown, args: unknown) => {
         if (typeof fn !== "function") return undefined
         try { return await (fn as any)(args) } catch { return undefined }
@@ -378,11 +389,19 @@ export const api = {
       // En v2, client.message.list({ sessionID }) consulta /api/session/:id/message (historial persistente real)
       // NUNCA consultar session.context primero: /context devuelve solo el prompt context activo para inferencia,
       // que tras un abort o entre turnos omite mensajes de usuario no completados o devuelve solo metadata sin texto.
-      res = await tryCall((client as any).message?.list, { sessionID, limit: safeLimit })
-      if (!res) res = await tryCall((client as any).session?.messages, { sessionID, limit: safeLimit })
-      if (!res) res = await tryCall((client as any).session?.getMessages, { sessionID, limit: safeLimit })
-      if (!res) res = await tryCall((client as any).message?.listMessages, { sessionID, limit: safeLimit })
-      if (!res) res = await tryCall((client as any).session?.context, { sessionID })
+      const variants = [
+        (client as any).message?.list,
+        (client as any).session?.messages,
+        (client as any).session?.getMessages,
+        (client as any).message?.listMessages,
+        (client as any).session?.context,
+      ]
+      for (let i = 0; i < variants.length && !res; i++) {
+        const idx = (startAt + i) % variants.length
+        res = await tryCall(variants[idx], { sessionID, limit: safeLimit })
+        if (res) hitIndex = idx
+      }
+      if (hitIndex >= 0) messageVariantCache.set(variantKey, hitIndex)
       const rawList: unknown = Array.isArray(res) ? res : (res as any)?.data ?? res
       if (Array.isArray(rawList)) {
         const mapped = (rawList as any[]).map((m: any) => {
@@ -502,17 +521,26 @@ export const api = {
   ) {
     const version = await getApiVersion(config)
     if (version === "v2") {
-      const client = await getOpencodeClient(config)
-      await syncV2SessionContext(client, sessionID, model, agentID)
-      const res = await (client as any).session.prompt({
-        sessionID,
-        text,
-        files: images?.map((img) => ({
-          uri: `data:${img.mime};base64,${img.base64.includes(",") ? img.base64.split(",")[1] : img.base64}`,
-          name: `clipboard.${img.mime.split("/")[1] || "png"}`,
-        })),
-      })
-      return (res ?? true) as boolean
+      const files = images?.map((img) => ({
+        uri: `data:${img.mime};base64,${img.base64.includes(",") ? img.base64.split(",")[1] : img.base64}`,
+        name: `clipboard.${img.mime.split("/")[1] || "png"}`,
+      }))
+      try {
+        const client = await getOpencodeClient(config)
+        await syncV2SessionContext(client, sessionID, model, agentID)
+        const res = await (client as any).session.prompt({ sessionID, text, files })
+        return (res ?? true) as boolean
+      } catch {
+        // Fallback HTTP directo (CapacitorHttp en nativo, sin CORS): el SDK
+        // usa fetch del WebView y en Android por Tailscale el POST puede caer
+        // por preflight aunque los GETs funcionen (tenían su propio fallback).
+        return request<boolean>(config, apiPath(config, `/session/${sessionID}/prompt`), {
+          method: "POST",
+          body: { text, files },
+          readTimeout: 180_000,
+          retryable: false,
+        })
+      }
     }
     const parts: Array<{ type: string; text?: string; data?: string; mimeType?: string; mime?: string; url?: string; filename?: string }> = []
     if (text) {
@@ -549,13 +577,24 @@ export const api = {
   ) {
     const version = await getApiVersion(config)
     if (version === "v2") {
-      const client = await getOpencodeClient(config)
-      await syncV2SessionContext(client, sessionID, model, agentID)
-      const res = await (client as any).session.command({ sessionID, command, text: argumentsText })
-      if (res) {
-        try { return toMessageEnvelopeV1(res as V2Message) } catch { return res as MessageEnvelope }
+      try {
+        const client = await getOpencodeClient(config)
+        await syncV2SessionContext(client, sessionID, model, agentID)
+        const res = await (client as any).session.command({ sessionID, command, text: argumentsText })
+        if (res) {
+          try { return toMessageEnvelopeV1(res as V2Message) } catch { return res as MessageEnvelope }
+        }
+        return true as unknown as MessageEnvelope
+      } catch {
+        // Mismo fallback sin-CORS que sendPrompt (ver arriba).
+        await request<boolean>(config, apiPath(config, `/session/${sessionID}/command`), {
+          method: "POST",
+          body: { command, text: argumentsText },
+          readTimeout: 300_000,
+          retryable: false,
+        })
+        return true as unknown as MessageEnvelope
       }
-      return true as unknown as MessageEnvelope
     }
     return request<MessageEnvelope>(config, withDirectory(`/session/${sessionID}/command`, directory), {
       method: "POST",
@@ -647,36 +686,176 @@ export const api = {
     })
   },
 
-  async questionReply(config: ServerConfig, requestID: string, answers: string[][], directory?: string, sessionID?: string) {
-    if ((await getApiVersion(config)) === "v2") {
-      if (!sessionID) throw new Error("v2 question reply requires sessionID")
-      return request<boolean>(config, withDirectory(`/session/${sessionID}/question/${encodeURIComponent(requestID)}/reply`, directory), {
-        method: "POST",
-        body: { answers },
-        retryable: false,
-      })
+  async questionReply(
+    config: ServerConfig,
+    requestID: string,
+    answers: string[][] | Record<string, unknown>,
+    directory?: string,
+    sessionID?: string,
+  ) {
+    const version = await getApiVersion(config)
+    if (version === "v2") {
+      let sid = sessionID
+      if (!sid) {
+        try {
+          const list = await api.listPendingQuestions(config, directory)
+          const found = list.find((q) => q.id === requestID)
+          if (found?.sessionID) sid = found.sessionID
+        } catch { /* ignore */ }
+      }
+      if (!sid) sid = "global"
+
+      let answerRecord: Record<string, unknown> = {}
+      if (!Array.isArray(answers) && typeof answers === "object" && answers !== null) {
+        answerRecord = answers as Record<string, unknown>
+      } else {
+        const arr = Array.isArray(answers) ? answers : []
+        let formFields: Array<{ key: string; type?: string }> | null = null
+        try {
+          const form = await request<{ fields?: Array<{ key: string; type?: string }> }>(
+            config,
+            withLocationDirectory(`/session/${encodeURIComponent(sid)}/form/${encodeURIComponent(requestID)}`, directory),
+          )
+          if (form && Array.isArray(form.fields)) {
+            formFields = form.fields
+          }
+        } catch {
+          if (sid !== "global") {
+            try {
+              const form = await request<{ fields?: Array<{ key: string; type?: string }> }>(
+                config,
+                withLocationDirectory(`/session/global/form/${encodeURIComponent(requestID)}`, directory),
+              )
+              if (form && Array.isArray(form.fields)) {
+                formFields = form.fields
+                sid = "global"
+              }
+            } catch { /* ignore */ }
+          }
+        }
+
+        if (formFields && formFields.length > 0) {
+          formFields.forEach((f, i) => {
+            const ans = arr[i] ?? []
+            if (f.type === "multiselect") {
+              answerRecord[f.key] = ans
+            } else {
+              answerRecord[f.key] = ans.length > 0 ? (ans.length === 1 ? ans[0] : ans) : ""
+            }
+          })
+        } else {
+          arr.forEach((ans, i) => {
+            const val = ans.length === 1 ? ans[0] : ans
+            answerRecord[String(i)] = val
+          })
+        }
+      }
+
+      // 1. Intentar endpoint oficial de formulario v2 (/session/:id/form/:id/reply)
+      try {
+        const res = await request<boolean>(
+          config,
+          withLocationDirectory(`/session/${encodeURIComponent(sid)}/form/${encodeURIComponent(requestID)}/reply`, directory),
+          {
+            method: "POST",
+            body: { answer: answerRecord, answers: Array.isArray(answers) ? answers : undefined },
+            retryable: false,
+          },
+        )
+        recordQuestionSettled(requestID, "answered", answers)
+        return res
+      } catch (err) {
+        const status = errorStatus(err)
+        if (status !== 404 && !/404|not found/i.test(String(err))) throw err
+      }
+
+      // 2. Fallback a endpoint de sesión (/session/:id/question/:id/reply)
+      try {
+        const res = await request<boolean>(
+          config,
+          withDirectory(`/session/${encodeURIComponent(sid)}/question/${encodeURIComponent(requestID)}/reply`, directory),
+          {
+            method: "POST",
+            body: { answers: Array.isArray(answers) ? answers : Object.values(answerRecord).map((v) => Array.isArray(v) ? v : [String(v)]) },
+            retryable: false,
+          },
+        )
+        recordQuestionSettled(requestID, "answered", answers)
+        return res
+      } catch (err) {
+        const status = errorStatus(err)
+        if (status !== 404 && !/404|not found/i.test(String(err))) throw err
+      }
     }
-    return request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reply`, directory), {
+
+    // 3. Fallback a endpoint global v1 (/question/:id/reply)
+    const res = await request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reply`, directory), {
       method: "POST",
-      body: { answers },
+      body: { answers: Array.isArray(answers) ? answers : [] },
       retryable: false,
     })
+    recordQuestionSettled(requestID, "answered", answers)
+    return res
   },
 
   async questionReject(config: ServerConfig, requestID: string, directory?: string, sessionID?: string) {
-    if ((await getApiVersion(config)) === "v2") {
-      if (!sessionID) throw new Error("v2 question reject requires sessionID")
-      return request<boolean>(config, withDirectory(`/session/${sessionID}/question/${encodeURIComponent(requestID)}/reject`, directory), {
-        method: "POST",
-        body: {},
-        retryable: false,
-      })
+    const version = await getApiVersion(config)
+    if (version === "v2") {
+      let sid = sessionID
+      if (!sid) {
+        try {
+          const list = await api.listPendingQuestions(config, directory)
+          const found = list.find((q) => q.id === requestID)
+          if (found?.sessionID) sid = found.sessionID
+        } catch { /* ignore */ }
+      }
+      if (!sid) sid = "global"
+
+      // 1. Intentar endpoint oficial de cancelación de formulario v2 (/session/:id/form/:id/cancel)
+      try {
+        const res = await request<boolean>(
+          config,
+          withLocationDirectory(`/session/${encodeURIComponent(sid)}/form/${encodeURIComponent(requestID)}/cancel`, directory),
+          {
+            method: "POST",
+            body: {},
+            retryable: false,
+          },
+        )
+        recordQuestionSettled(requestID, "rejected")
+        return res
+      } catch (err) {
+        const status = errorStatus(err)
+        if (status !== 404 && !/404|not found/i.test(String(err))) throw err
+      }
+
+      // 2. Fallback a endpoint de sesión (/session/:id/question/:id/reject)
+      try {
+        const res = await request<boolean>(
+          config,
+          withDirectory(`/session/${encodeURIComponent(sid)}/question/${encodeURIComponent(requestID)}/reject`, directory),
+          {
+            method: "POST",
+            body: {},
+            retryable: false,
+          },
+        )
+        recordQuestionSettled(requestID, "rejected")
+        return res
+      } catch (err) {
+        const status = errorStatus(err)
+        if (status !== 404 && !/404|not found/i.test(String(err))) throw err
+      }
     }
-    return request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reject`, directory), {
+
+    // 3. Fallback a endpoint global v1 (/question/:id/reject)
+    const res = await request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reject`, directory), {
       method: "POST",
       body: {},
       retryable: false,
     })
+    recordQuestionSettled(requestID, "rejected")
+    return res
   },
 
   async findFiles(config: ServerConfig, query: string, directory?: string, limit = 20) {
@@ -740,20 +919,38 @@ export const api = {
     return request<{ id: string; name: string; description?: string }[]>(config, "/skill")
   },
 
-  async listPendingQuestions(config: ServerConfig, directory?: string) {
+  async listPendingQuestions(config: ServerConfig, directory?: string): Promise<Question[]> {
     if ((await getApiVersion(config)) === "v2") {
       try {
         const raw = await request<unknown>(config, withLocationDirectory("/form/request", directory))
-        if (!Array.isArray(raw)) return []
-        return raw.map((q) => {
-          const item = q as { id: string; sessionID?: string; questions?: unknown[]; tool?: { messageID: string; id: string } }
+        const items = Array.isArray(raw)
+          ? raw
+          : raw && typeof raw === "object" && Array.isArray((raw as any).data)
+            ? (raw as any).data
+            : []
+        return items.map((q: any) => {
+          let questions: { question: string; header?: string; options: QuestionOption[]; multiple?: boolean; custom?: boolean }[] = []
+          if (Array.isArray(q.questions)) {
+            questions = q.questions as typeof questions
+          } else if (Array.isArray(q.fields)) {
+            questions = q.fields.map((f: any) => ({
+              question: f.title || f.key || "",
+              header: f.key,
+              options: Array.isArray(f.options)
+                ? f.options.map((opt: any) => ({
+                    label: opt.label || opt.value || "",
+                    description: opt.description,
+                  }))
+                : [],
+              multiple: f.type === "multiselect",
+              custom: f.custom !== false,
+            }))
+          }
           return {
-            id: item.id,
-            sessionID: item.sessionID,
-            questions: Array.isArray(item.questions)
-              ? (item.questions as { question: string; header?: string; options: QuestionOption[]; multiple?: boolean; custom?: boolean }[])
-              : [],
-            tool: item.tool ? { messageID: item.tool.messageID, callID: item.tool.id } : undefined,
+            id: q.id,
+            sessionID: q.sessionID,
+            questions,
+            tool: q.tool ? { messageID: q.tool.messageID, callID: q.tool.id } : undefined,
           }
         })
       } catch {
@@ -804,8 +1001,16 @@ export const api = {
 
   async permissionReply(config: ServerConfig, requestID: string, approve: boolean, directory?: string, sessionID?: string) {
     if ((await getApiVersion(config)) === "v2") {
-      if (!sessionID) throw new Error("v2 permission reply requires sessionID")
-      return request<boolean>(config, withDirectory(`/session/${sessionID}/permission/${encodeURIComponent(requestID)}/reply`, directory), {
+      let sid = sessionID
+      if (!sid) {
+        try {
+          const perms = await api.listPermissions(config, directory)
+          const found = perms.find((p) => p.requestID === requestID)
+          if (found?.sessionID) sid = found.sessionID
+        } catch { /* ignore */ }
+      }
+      if (!sid) sid = "global"
+      return request<boolean>(config, withDirectory(`/session/${encodeURIComponent(sid)}/permission/${encodeURIComponent(requestID)}/reply`, directory), {
         method: "POST",
         body: { reply: approve ? "once" : "reject" },
         retryable: false,

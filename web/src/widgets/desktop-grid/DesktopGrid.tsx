@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState } from "react"
+import React, { memo, useCallback, useEffect, useRef, useState } from "react"
 import type { SessionView, ServerConfig, ConnectionState, DataMode } from "../../types"
 import type { ChatViewProps } from "../../components/ChatView"
 import { SessionChatPanel } from "../../components/SessionChatPanel"
@@ -101,9 +101,21 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
   const gridRef = useRef<HTMLDivElement | null>(null)
   const [gridDragOver, setGridDragOver] = useState<{ idx: number; zone: DropZone } | null>(null)
 
+  // Guard anti-tormenta: dragover dispara a ~60-300Hz y cada evento creaba un
+  // objeto nuevo → re-render de TODO el grid (todos los paneles) por cada
+  // mousemove = lag/delay muy notable al arrastrar tabs. Solo setear si cambia.
+  const gridDragOverRef = useRef<{ idx: number; zone: DropZone } | null>(null)
+  const setGridDragOverGuarded = useCallback((next: { idx: number; zone: DropZone } | null) => {
+    const prev = gridDragOverRef.current
+    if (prev === next) return
+    if (prev && next && prev.idx === next.idx && prev.zone === next.zone) return
+    gridDragOverRef.current = next
+    setGridDragOver(next)
+  }, [])
+
   // Limpieza global: si el drag termina fuera del grid (Esc, drop fuera, ventana), quitar overlay
   useEffect(() => {
-    const clear = () => setGridDragOver(null)
+    const clear = () => setGridDragOverGuarded(null)
     window.addEventListener("dragend", clear)
     window.addEventListener("drop", clear)
     // Cuando cambia el layout (split/close) el índice viejo queda huérfano
@@ -111,12 +123,12 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
       window.removeEventListener("dragend", clear)
       window.removeEventListener("drop", clear)
     }
-  }, [])
+  }, [setGridDragOverGuarded])
 
   // Si cols/rows cambian, el índice previo puede apuntar a celda inexistente
   useEffect(() => {
-    setGridDragOver(null)
-  }, [desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions.length])
+    setGridDragOverGuarded(null)
+  }, [desktopLayout.cols, desktopLayout.rows, desktopLayout.sessions.length, setGridDragOverGuarded])
 
   // Ponytail: compactar layout persistido con filas/columnas vacías que dejan hueco negro 50% ([Image 1] cortada abajo)
   useEffect(() => {
@@ -475,33 +487,33 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
             const hasPath = types.includes("application/x-opencode-path")
             const hasUrl = types.includes("application/x-opencode-browser-tab") || types.includes("text/uri-list") || types.includes("text/plain") || types.includes("URL") || types.includes("text/x-moz-url")
             if (!isTabDrag && !hasPath && !hasUrl) {
-              setGridDragOver(null)
+              setGridDragOverGuarded(null)
               return
             }
             // si es drag URL de Chrome, permitir drop en celda (copia)
             if (hasUrl && !isTabDrag && !hasPath) {
               const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
-              if (!target) { setGridDragOver(null); return }
+              if (!target) { setGridDragOverGuarded(null); return }
               e.preventDefault()
               e.dataTransfer.dropEffect = "copy"
               const allCells = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
               const idx = allCells.indexOf(target)
-              if (idx !== -1) setGridDragOver({ idx, zone: "center" as any })
+              if (idx !== -1) setGridDragOverGuarded({ idx, zone: "center" as any })
               return
             }
             const target = (e.target as HTMLElement).closest(".desktop-cell") as HTMLElement | null
             if (!target || (e.target as HTMLElement).closest(".desktop-shell-cell-wrapper, .desktop-cell-placeholder")) {
-              setGridDragOver(null)
+              setGridDragOverGuarded(null)
               return
             }
             const rect = target.getBoundingClientRect()
             // Banda de 40px superior: drag de pestaña hacia la barra → delegar a TabBar, sin overlay split
             if (isTabDrag && ((e.target as HTMLElement).closest(".tab-bar") || isOverTabBar(e.clientY, rect))) {
-              setGridDragOver(null)
+              setGridDragOverGuarded(null)
               return
             }
             if ((e.target as HTMLElement).closest(".tab-bar")) {
-              setGridDragOver(null)
+              setGridDragOverGuarded(null)
               return
             }
             e.preventDefault()
@@ -509,22 +521,22 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
             const allCells = Array.from(gridRef.current?.querySelectorAll(".desktop-cell") ?? [])
             const idx = allCells.indexOf(target)
             if (idx === -1) {
-              setGridDragOver(null)
+              setGridDragOverGuarded(null)
               return
             }
             const zone = calcDropZone(e.clientX, e.clientY, rect, "session")
-            setGridDragOver({ idx, zone })
+            setGridDragOverGuarded({ idx, zone })
           }}
           onDragLeave={(e) => {
             // Solo limpiar al salir realmente del grid, no al pasar entre celdas hijas
             const rt = e.relatedTarget as Node | null
             if (!rt || !e.currentTarget.contains(rt)) {
-              setGridDragOver(null)
+              setGridDragOverGuarded(null)
             }
           }}
           onDrop={(e) => {
             e.preventDefault()
-            setGridDragOver(null)
+            setGridDragOverGuarded(null)
             // URL de Chrome -> abrir browser en la celda destino
             const urlFromDrag = extractUrlFromDataTransfer(e.dataTransfer)
             if (urlFromDrag) {

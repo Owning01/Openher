@@ -11,7 +11,7 @@ pub fn handle(
     _state: Arc<AppState>,
     path: &str,
     method: Method,
-    _q: &dyn Fn(&str) -> String,
+    q: &dyn Fn(&str) -> String,
 ) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
     let route = path.strip_prefix("/shell/window")?;
     let resp = match (method, route) {
@@ -35,6 +35,30 @@ pub fn handle(
         (Method::Post, "/drag") => {
             crate::state::window_drag();
             json_ok(&serde_json::json!({ "ok": true }))
+        }
+        // Resize iniciado desde la web (handles .win-resize-*): no depende
+        // del hit-test nativo, que el renderer del WebView (proceso hijo)
+        // puede tragar devolviendo HTCLIENT antes de llegar al padre.
+        (Method::Post, "/resize") => {
+            use crate::state::WindowResizeDirection as D;
+            let dir = match q("edge").as_str() {
+                "top" => Some(D::Top),
+                "bottom" => Some(D::Bottom),
+                "left" => Some(D::Left),
+                "right" => Some(D::Right),
+                "top-left" => Some(D::TopLeft),
+                "top-right" => Some(D::TopRight),
+                "bottom-left" => Some(D::BottomLeft),
+                "bottom-right" => Some(D::BottomRight),
+                _ => None,
+            };
+            match dir {
+                Some(d) => {
+                    crate::state::window_resize(d);
+                    json_ok(&serde_json::json!({ "ok": true }))
+                }
+                None => crate::state::json_err(400, "edge inválido (top|bottom|left|right|top-left|top-right|bottom-left|bottom-right)"),
+            }
         }
         _ => return None,
     };

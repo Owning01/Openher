@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react"
 import type { ShellPanelKind } from "../../../shell"
 import type { DesktopLayout } from "../../../types"
 import { parseDockPayload } from "../../../utils/drag"
+import { insertSplitSize } from "../model"
 import { killTerminalPty, transferTerminalTab } from "../../../utils/terminalStore"
 import { genPanelId } from "../../../hooks/useDesktopLayoutState"
 
@@ -855,7 +856,7 @@ export function useDesktopGridActions({
               }
             }
           }
-          const colSizes = new Array(cols).fill(null)
+          const colSizes = insertSplitSize(prev.colSizes, prev.cols, insertCol)
           return { ...prev, cols, sessions, panelKinds, panelIds, colSizes }
         })
 
@@ -950,7 +951,7 @@ export function useDesktopGridActions({
               }
             }
           }
-          const rowSizes = new Array(rows).fill(null)
+          const rowSizes = insertSplitSize(prev.rowSizes, prev.rows, dir === "bottom" ? row + 1 : row)
           return { ...prev, rows, sessions, panelKinds, panelIds, rowSizes }
         })
 
@@ -1084,7 +1085,7 @@ export function useDesktopGridActions({
             panelEditorPaths,
             panelEditorTabStacks,
             panelEditorActive,
-            colSizes: new Array(cols).fill(null),
+            colSizes: insertSplitSize(prev.colSizes, prev.cols, insertCol),
           }
         }
 
@@ -1170,7 +1171,7 @@ export function useDesktopGridActions({
           panelEditorPaths,
           panelEditorTabStacks,
           panelEditorActive,
-          colSizes: new Array(cols).fill(null),
+          colSizes: insertSplitSize(prev.colSizes, prev.cols, insertCol),
         }
       })
     },
