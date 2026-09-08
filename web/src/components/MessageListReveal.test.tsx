@@ -16,6 +16,13 @@ function msgs(n: number): any[] {
   }))
 }
 
+function msgsFor(sessionID: string, n: number): any[] {
+  return Array.from({ length: n }, (_, i) => ({
+    info: { id: `${sessionID}-m${i}`, role: "user", sessionID, time: { created: i } },
+    text: `prompt ${i}`,
+  }))
+}
+
 const base = {
   loadingSessionID: null,
   selectedID: "s1",
@@ -74,5 +81,24 @@ describe("MessageList reveal (salto del historial)", () => {
       rerender(<MessageList {...base} messages={msgs(60)} revealMessageID="m0" revealNonce={2} />)
     })
     expect(fn.mock.calls.length).toBeGreaterThan(calls1)
+  })
+
+  it("cambio de sesión: velo sobre stale y ancla solo con frescos (igual longitud)", () => {
+    const stale = msgsFor("s1", 60)
+    const fresh = msgsFor("s2", 60) // misma longitud: el ancla por longitud no re-dispararía
+    const { rerender } = render(
+      <MessageList {...base} selectedID="s2" messages={stale} revealMessageID={null} revealNonce={0} />
+    )
+    const wrap = document.querySelector(".messages") as HTMLElement
+    expect(wrap.style.opacity).toBe("0") // stale oculto: no se ve el chat viejo
+    const scrollTo = window.HTMLElement.prototype.scrollTo as unknown as ReturnType<typeof vi.fn>
+    scrollTo.mockClear()
+    act(() => {
+      rerender(
+        <MessageList {...base} selectedID="s2" messages={fresh} revealMessageID={null} revealNonce={0} />
+      )
+    })
+    expect(scrollTo).toHaveBeenCalled() // frescos: ancla directa al final
+    expect(wrap.style.opacity).toBe("1")
   })
 })

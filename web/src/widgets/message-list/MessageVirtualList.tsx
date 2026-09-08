@@ -131,9 +131,7 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     }
   }, [messages, rowVirtualizer])
 
-  // Ir al final de forma determinista (virtualizer-aware). scrollToBottom
-  // usa scrollHeight, que con alturas estimadas deriva al medir las burbujas
-  // reales (el chat abría arriba). scrollToIndex ancla al último mensaje.
+  // Ir al final de forma determinista (virtualizer-aware).
   const scrollToEnd = useCallback((behavior: ScrollBehavior = "auto") => {
     if (messages.length === 0) return
     setIsAtBottom(true)
@@ -141,55 +139,65 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     // Ledger anti-parpadeo (igual que scrollToBottom clásico): los scroll
     // intermedios del settling no voltean isAtBottom a false.
     programmaticUntilRef.current = Date.now() + 150
+    const el = parentRef.current
+    if (el) {
+      if (behavior === "auto") {
+        el.scrollTop = el.scrollHeight || 99999999
+      }
+      el.scrollTo({ top: el.scrollHeight || 99999999, behavior })
+    }
     rowVirtualizer.scrollToIndex(messages.length - 1, { align: "end", behavior })
   }, [messages.length, rowVirtualizer, setIsAtBottom, programmaticUntilRef])
 
-  // Entrada a sesión/vista y carga inicial (0 → N): fuerza el final antes del paint
-  // para que el chat aparezca DIRECTAMENTE en el último mensaje sin animación de scroll
-  // ni salto visible desde arriba.
-  const lastSessionRef = useRef<string | null>(null)
-  const prevLenRef = useRef(0)
-  const [settledSession, setSettledSession] = useState<string | null>(null)
-  const isSettling = Boolean(selectedID && messages.length > 0 && settledSession !== selectedID)
+  // Entrada a sesión: useMessages fusiona sin limpiar al cambiar de chat, así
+  // que el primer render tras el switch trae mensajes STALE de la sesión
+  // anterior. Solo se ancla con mensajes FRESCOS (sessionID === selectedID) y
+  // por identidad (first/last id), no por longitud: un swap con igual longitud
+  // nunca re-disparaba el efecto y el scroll quedaba a mitad (o el follow-tail
+  // lo arrastraba abajo con animación visible, o nunca llegaba).
+  const firstID = messages.length > 0 ? messages[0]!.info.id : ""
+  const lastID = messages.length > 0 ? messages[messages.length - 1]!.info.id : ""
+  const msgsSessionID: string | null = messages.length > 0 ? messages[0]!.info.sessionID : null
+  const isFresh = messages.length === 0 || msgsSessionID === selectedID
+  const needsAnchorRef = useRef(true)
+  const [revealed, setRevealed] = useState(false)
 
   useLayoutEffect(() => {
-    if (view !== "detail" || !selectedID || messages.length === 0) {
-      setSettledSession(selectedID)
-      return
-    }
-    const switched = selectedID !== lastSessionRef.current
-    lastSessionRef.current = selectedID
-    if (!switched && prevLenRef.current !== 0) {
-      prevLenRef.current = messages.length
-      return
-    }
-    prevLenRef.current = messages.length
+    if (view !== "detail" || !selectedID || messages.length === 0) return
+    if (!isFresh || !needsAnchorRef.current) return
+    needsAnchorRef.current = false
     atBottomRef.current = true
 
-    // Anclar el scroll del DOM inmediatamente
+    // Anclar el scroll del DOM inmediatamente de forma síncrona
     const el = parentRef.current
     if (el) {
       el.scrollTop = el.scrollHeight || 99999999
     }
     scrollToEnd("auto")
-
-    let cancelled = false
-    let raf2 = 0
-    const raf1 = requestAnimationFrame(() => {
-      if (!cancelled && atBottomRef.current) scrollToEnd("auto")
-      raf2 = requestAnimationFrame(() => {
-        if (!cancelled) {
-          if (atBottomRef.current) scrollToEnd("auto")
-          setSettledSession(selectedID)
-        }
-      })
-    })
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(raf1)
-      cancelAnimationFrame(raf2)
+    // Re-afirmar tras la medición real de filas (el primer ancla usa alturas
+    // estimadas; al medir, el total crece y el scroll absoluto queda a mitad)
+    // e imágenes/bloques que expanden tarde. Solo mientras el usuario no toque.
+    let n = 0
+    let raf = 0
+    const tick = () => {
+      if (n++ >= 2 || !atBottomRef.current) return
+      scrollToEnd("auto")
+      raf = requestAnimationFrame(tick)
     }
-  }, [view, selectedID, messages.length, scrollToEnd])
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [view, selectedID, firstID, lastID, isFresh, scrollToEnd])
+
+  // Velo anti-parpadeo: el primer paint va oculto (este pasivo corre tras
+  // pintar) y se revela en el frame siguiente ya anclado. Ni el stale ni el
+  // layout estimado se ven un solo frame.
+
+  useEffect(() => {
+    if (revealed || view !== "detail" || !selectedID) return
+    if (!isFresh) return
+    const raf = requestAnimationFrame(() => setRevealed(true))
+    return () => cancelAnimationFrame(raf)
+  }, [revealed, view, selectedID, isFresh, firstID, lastID])
 
   // followTail durante streaming: si estamos al fondo, anclar al último
   // mensaje (scrollToIndex, no scrollHeight estimado). Tolerancia 80px como
@@ -197,6 +205,8 @@ export const MessageVirtualList = memo(function MessageVirtualList({
   // scroll hacia arriba dentro de la zona te arrastraba de vuelta).
   useEffect(() => {
     if (view !== "detail") return
+    // La entrada la gobierna el ancla fresca (stale = quieto).
+    if (needsAnchorRef.current) return
     if (isAtBottom) {
       scrollToEnd("auto")
     } else if (messages.length > 0 && messageScrollSignature) {
@@ -277,8 +287,8 @@ export const MessageVirtualList = memo(function MessageVirtualList({
                 height: `${totalSize + paddingTop}px`,
                 width: "100%",
                 position: "relative",
-                opacity: isSettling ? 0 : 1,
-                transition: isSettling ? "none" : "opacity 0.08s ease-out",
+                opacity: revealed ? 1 : 0,
+                transition: revealed ? "opacity 0.08s ease-out" : "none",
               }}
             >
               <div
