@@ -97,6 +97,9 @@ export type UseBaseChatPropsParams = {
   resetChatSettings: () => void
   vs: any
   outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
+  hasMoreMessages?: boolean
+  isLoadingMore?: boolean
+  loadMoreMessages?: () => void
 }
 
 export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps {
@@ -194,6 +197,9 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     resetChatSettings,
     vs,
     outboxActions,
+    hasMoreMessages,
+    isLoadingMore,
+    loadMoreMessages,
   } = params
 
   return useMemo<ChatViewProps>(
@@ -316,6 +322,9 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       onClearVisualSelection: vs.clear,
       onFocusVisualFile: (path: string) => handleOpenFile(path),
       outboxActions,
+      hasMoreMessages,
+      isLoadingMore,
+      onLoadMoreMessages: loadMoreMessages,
     }),
     [
       selectedSession,
@@ -412,6 +421,9 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       setDesktopCfg,
       loadDesktopConfig,
       outboxActions,
+      hasMoreMessages,
+      isLoadingMore,
+      loadMoreMessages,
     ]
   )
 }

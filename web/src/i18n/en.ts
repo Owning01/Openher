@@ -682,6 +682,8 @@ export default {
   'settings.snippetRemove': 'Remove snippet',
   'composer.snippets': 'Insert snippet',
   'common.cancel': 'Cancel',
+  'common.collapse': 'Collapse tools',
+  'detail.moreTools': 'more tools',
   'chat.moreActions': 'Message actions',
   'chat.copyText': 'Copy text',
   'chat.regenerate': 'Regenerate reply',

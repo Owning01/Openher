@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useMemo, useRef, useEffect } from "react"
-import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon, TrashIcon, SendIcon } from "../Icons"
+import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon, TrashIcon, SendIcon, ChevronDownIcon } from "../Icons"
 import { formatTime, isImagePart } from "../utils"
 import { getTranslationOriginal } from "../hooks/useMessages"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
@@ -191,6 +191,9 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const [activityOpen, setActivityOpen] = useState(isWorkingTurn)
   useEffect(() => { if (!isWorkingTurn) setActivityOpen(false) }, [isWorkingTurn])
 
+  // Plegado inteligente de herramientas: cuando hay muchas (>3) y el turno terminó, plegar por defecto.
+  const [toolsFolded, setToolsFolded] = useState(true)
+
   const handleConfirmUndo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     setShowConfirm(false)
@@ -314,9 +317,14 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             </div>
           ) : null
 
+          const shouldFoldTools = !isWorkingTurn && message.toolParts.length > 3
+          const visibleToolParts = shouldFoldTools && toolsFolded
+            ? message.toolParts.slice(0, 2)
+            : message.toolParts
+
           const toolsEl = hasTools ? (
             <div className="tool-parts">
-              {message.toolParts.map((tp) => (
+              {visibleToolParts.map((tp) => (
                 <ToolPart
                   key={tp.id}
                   part={tp}
@@ -327,6 +335,27 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
                   compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
                 />
               ))}
+              {shouldFoldTools && (
+                <button
+                  type="button"
+                  className="tools-fold-btn"
+                  onClick={() => setToolsFolded((v) => !v)}
+                  aria-expanded={!toolsFolded}
+                >
+                  <ChevronDownIcon
+                    size={13}
+                    style={{
+                      transform: toolsFolded ? "rotate(0deg)" : "rotate(180deg)",
+                      transition: "transform 0.15s ease",
+                    }}
+                  />
+                  <span>
+                    {toolsFolded
+                      ? `${message.toolParts.length - 2} ${t('detail.moreTools') || "herramientas más"}`
+                      : (t('common.collapse') || "Contraer herramientas")}
+                  </span>
+                </button>
+              )}
             </div>
           ) : null
 

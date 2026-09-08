@@ -648,6 +648,8 @@ type TranslationKey =
   | 'settings.snippetRemove'
   | 'composer.snippets'
   | 'common.cancel'
+  | 'common.collapse'
+  | 'detail.moreTools'
   | 'chat.moreActions'
   | 'chat.copyText'
   | 'chat.regenerate'

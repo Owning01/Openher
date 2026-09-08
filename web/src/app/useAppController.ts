@@ -163,6 +163,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     applyPart,
     compacting,
     setCompacting,
+    hasMoreMessages,
+    isLoadingMore,
+    loadMoreMessages,
   } = useMessages(config)
 
   const composerRef = useRef(composer)
@@ -1019,6 +1022,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     loadingSessionID,
     selectedID,
     messageScrollSignature,
+    hasMoreMessages,
+    isLoadingMore,
+    loadMoreMessages,
     view,
     dataMode,
     renamingSessionID,
