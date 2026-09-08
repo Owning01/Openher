@@ -1,6 +1,6 @@
-// Carga y cachea manifest + lecciones markdown.
 import type { LearningManifest, LearningLesson, LearningCategory } from "./types"
 import { applyCustomToManifest, getCustomDoc } from "./customStore"
+import { shell } from "../../shell"
 
 let cachedManifest: LearningManifest | null = null
 
@@ -30,7 +30,6 @@ export async function loadManifest(): Promise<LearningManifest> {
     let reports: ReportEntry[] | null = null
     // try desktop shell.fs first
     try {
-      const { shell } = await import("../../shell")
       const candidates = [
         "G:\\Proyectos\\opencode-remote-android\\data\\reports\\manifest.json",
         "G:\\Proyectos\\53plataforma-informes\\public\\reports.json",
@@ -103,7 +102,6 @@ export async function loadLesson(lesson: LearningLesson): Promise<string> {
   // reports from informes category are under /reports/
   if (lesson.file.startsWith("reports/")) {
     try {
-      const { shell } = await import("../../shell")
       const candidates = [
         `G:\\Proyectos\\opencode-remote-android\\data\\reports\\${lesson.file.replace("reports/", "")}`,
         `G:\\Proyectos\\opencode-remote-android\\public\\${lesson.file}`,

@@ -4,11 +4,10 @@
 // xterm se descarga diferido (lazy) solo al abrirlo) y el patrón de
 // TerminalView: resize por arrastre del borde superior (alto persistido) y
 // modo flotante arrastrable desde el header (posición persistida).
-import { memo, Suspense, lazy, useCallback, useEffect, useRef, useState } from "react"
+import { memo, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { CloseIcon, ChevronDownIcon, TerminalIcon, MaximizeIcon, MinimizeIcon } from "../Icons"
 import { useT } from "../i18n-context"
-
-const SingleTerminal = lazy(() => import("./shellPanels").then((m) => ({ default: m.SingleTerminal })))
+import { SingleTerminal } from "./shellPanels"
 
 type Props = {
   tabId: string

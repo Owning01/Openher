@@ -25,6 +25,7 @@ pub enum WindowAction {
     Minimize,
     MaximizeToggle,
     Close,
+    #[allow(dead_code)]
     Resize(WindowResizeDirection),
 }
 
@@ -139,9 +140,6 @@ pub fn window_resize(direction: WindowResizeDirection) {
     if window_is_maximized() {
         return;
     }
-    if request_window_action(WindowAction::Resize(direction)) {
-        return;
-    }
     let h = WINDOW_HWND.load(Ordering::Relaxed);
     if h == 0 {
         return;
@@ -157,12 +155,14 @@ pub fn window_resize(direction: WindowResizeDirection) {
         WindowResizeDirection::BottomRight => 17,// HTBOTTOMRIGHT
     };
     unsafe {
-        windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture();
-        windows_sys::Win32::UI::WindowsAndMessaging::SendMessageW(
+        let mut pos = core::mem::zeroed::<windows_sys::Win32::Foundation::POINT>();
+        windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut pos);
+        let points = (((pos.y as i16 as u32) << 16) | (pos.x as i16 as u32 & 0xFFFF)) as isize;
+        windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(
             h as *mut core::ffi::c_void,
             0x00A1, // WM_NCLBUTTONDOWN
             ht,
-            0,
+            points,
         );
     }
 }

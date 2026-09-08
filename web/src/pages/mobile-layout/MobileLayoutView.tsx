@@ -4,9 +4,9 @@ import type { LanguageCode } from "../../i18n"
 import { NavBar } from "../../components/NavBar"
 import { SessionsPage } from "../sessions/SessionsPage"
 import { DetailPage } from "../detail/DetailPage"
-import { SettingsPanel } from "../../components/SettingsPanel"
 import { lazyRetry } from "../../utils/lazyRetry"
 
+const SettingsPanel = lazyRetry(() => import("../../components/SettingsPanel").then((m) => ({ default: m.SettingsPanel })))
 const HelpPage = lazyRetry(() => import("../../components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const QuickChatPanel = lazyRetry(() => import("../../components/QuickChatPanel").then((m) => ({ default: m.QuickChatPanel })))
 const LearningPage = lazyRetry(() => import("../../features/learning/LearningPage").then((m) => ({ default: m.default })))
@@ -208,90 +208,92 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
 
         {view === "settings" && (
           <div className="settings-view">
-            <SettingsPanel
-              draftConfig={draftConfig}
-              onChange={setDraftConfig}
-              onTest={handleTest}
-              testingConnection={testingConnection}
-              canTestDraft={canTestDraft}
-              testAlreadyPassedForDraft={testAlreadyPassedForDraft}
-              connectedVersion={connectedVersion ?? ""}
-              settingsNotice={settingsNotice}
-              language={language}
-              onLanguageChange={handleLanguageChange}
-              theme={theme}
-              onThemeChange={setTheme}
-              languageOptions={languageOptions}
-              dataMode={dataMode}
-              onDataModeChange={changeDataMode}
-              onNavigate={onNavigate}
-              modelOptions={modelOptions}
-              selectedModelKey={selectedModelKey ?? ""}
-              onChangeModel={changeModel}
-              modelKey={modelKey}
-              selectedVariant={selectedVariant}
-              allPrimaryAgents={allPrimaryAgents}
-              disabledAgents={disabledAgents}
-              onToggleAgentEnabled={toggleAgentEnabled}
-              stats={stats}
-              onResetStats={resetStats}
-              activeModelOption={activeModelOption}
-              blockedModels={blockedModels}
-              onOpenThemePicker={() => setShowThemePicker(true)}
-              onOpenThemeCreator={() => setShowThemeCreator(true)}
-              flags={flags}
-              onToggleFlag={toggleFlag}
-              onSetFlag={setFlag}
-              providers={providerList}
-              connectingProvider={connectingProvider}
-              providerError={providerError}
-              onConnectProvider={(pid, key) => {
-                connectProvider(pid, key).then((ok) => {
-                  if (ok) loadModels().catch(() => undefined)
-                })
-              }}
-              onDisconnectProvider={(pid) => {
-                disconnectProvider(pid).then(() => loadModels().catch(() => undefined))
-              }}
-              serverProfiles={serverProfiles}
-              onAddServerProfile={(name, _kind, cfg) => addProfile(name, { config: cfg })}
-              onAddPairServer={(name, cfg) => {
-                const profile = addProfile(name, { config: cfg, kind: "pair" })
-                if (profile) {
-                  setActiveServerProfileID(profile.id)
-                  localStorage.setItem("openher.activeServer", profile.id)
-                  setDraftConfig(cfg)
-                  saveConfig(t)
-                }
-              }}
-              onRemoveServerProfile={(id) => {
-                removeProfile(id)
-                if (activeServerProfileID === id) {
-                  setActiveServerProfileID(null)
-                  localStorage.removeItem("openher.activeServer")
-                }
-              }}
-              onUpdateServerProfile={(id, name, cfg) => updateProfile(id, { name, config: cfg })}
-              onApplyServerProfile={applyServerProfile}
-              activeServerProfileID={activeServerProfileID}
-              chatSettings={chatSettings}
-              onChatSettingChange={setChatSetting}
-              onResetChatSettings={resetChatSettings}
-              snippets={promptSnippets}
-              onAddSnippet={addSnippet}
-              onRemoveSnippet={removeSnippet}
-              onShutdownHost={handleShutdownHost}
-              onRestartHost={handleRestartHost}
-              onOpenGitHub={handleOpenGitHub}
-              onOpenFavoritesManager={() => setShowFavoritesManager(true)}
-              onOpenArchivedView={() => setShowArchivedView(true)}
-              onOpenShortcuts={() => setShowShortcuts(true)}
-              onOpenOpenCodeHub={() => setShowOpenCodeHub(true)}
-              onClose={() => {
-                if (navStackLength > 0) goBack()
-                else onNavigate("sessions")
-              }}
-            />
+            <Suspense fallback={null}>
+              <SettingsPanel
+                draftConfig={draftConfig}
+                onChange={setDraftConfig}
+                onTest={handleTest}
+                testingConnection={testingConnection}
+                canTestDraft={canTestDraft}
+                testAlreadyPassedForDraft={testAlreadyPassedForDraft}
+                connectedVersion={connectedVersion ?? ""}
+                settingsNotice={settingsNotice}
+                language={language}
+                onLanguageChange={handleLanguageChange}
+                theme={theme}
+                onThemeChange={setTheme}
+                languageOptions={languageOptions}
+                dataMode={dataMode}
+                onDataModeChange={changeDataMode}
+                onNavigate={onNavigate}
+                modelOptions={modelOptions}
+                selectedModelKey={selectedModelKey}
+                onChangeModel={changeModel}
+                modelKey={modelKey}
+                selectedVariant={selectedVariant}
+                allPrimaryAgents={allPrimaryAgents}
+                disabledAgents={disabledAgents}
+                onToggleAgentEnabled={toggleAgentEnabled}
+                stats={stats}
+                onResetStats={resetStats}
+                activeModelOption={activeModelOption}
+                blockedModels={blockedModels}
+                onOpenThemePicker={() => setShowThemePicker(true)}
+                onOpenThemeCreator={() => setShowThemeCreator(true)}
+                flags={flags}
+                onToggleFlag={toggleFlag}
+                onSetFlag={setFlag}
+                providers={providerList}
+                connectingProvider={connectingProvider}
+                providerError={providerError}
+                onConnectProvider={(pid, key) => {
+                  connectProvider(pid, key).then((ok) => {
+                    if (ok) loadModels().catch(() => undefined)
+                  })
+                }}
+                onDisconnectProvider={(pid) => {
+                  disconnectProvider(pid).then(() => loadModels().catch(() => undefined))
+                }}
+                serverProfiles={serverProfiles}
+                onAddServerProfile={(name, _kind, cfg) => addProfile(name, { config: cfg })}
+                onAddPairServer={(name, cfg) => {
+                  const profile = addProfile(name, { config: cfg, kind: "pair" })
+                  if (profile) {
+                    setActiveServerProfileID(profile.id)
+                    localStorage.setItem("openher.activeServer", profile.id)
+                    setDraftConfig(cfg)
+                    saveConfig(t)
+                  }
+                }}
+                onRemoveServerProfile={(id) => {
+                  removeProfile(id)
+                  if (activeServerProfileID === id) {
+                    setActiveServerProfileID(null)
+                    localStorage.removeItem("openher.activeServer")
+                  }
+                }}
+                onUpdateServerProfile={(id, name, cfg) => updateProfile(id, { name, config: cfg })}
+                onApplyServerProfile={applyServerProfile}
+                activeServerProfileID={activeServerProfileID}
+                chatSettings={chatSettings}
+                onChatSettingChange={setChatSetting}
+                onResetChatSettings={resetChatSettings}
+                snippets={promptSnippets}
+                onAddSnippet={addSnippet}
+                onRemoveSnippet={removeSnippet}
+                onShutdownHost={handleShutdownHost}
+                onRestartHost={handleRestartHost}
+                onOpenGitHub={handleOpenGitHub}
+                onOpenFavoritesManager={() => setShowFavoritesManager(true)}
+                onOpenArchivedView={() => setShowArchivedView(true)}
+                onOpenShortcuts={() => setShowShortcuts(true)}
+                onOpenOpenCodeHub={() => setShowOpenCodeHub(true)}
+                onClose={() => {
+                  if (navStackLength > 0) goBack()
+                  else onNavigate("sessions")
+                }}
+              />
+            </Suspense>
           </div>
         )}
 

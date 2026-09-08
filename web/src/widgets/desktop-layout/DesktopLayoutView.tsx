@@ -11,9 +11,10 @@ import { ADEDiffPanel } from "../../components/ADEDiffPanel"
 import { BrainIcon } from "../../Icons"
 import { PluginSlot } from "../../plugins"
 import { useT } from "../../i18n-context"
-import { QuickChatPanel } from "../../components/QuickChatPanel"
-import { SettingsPanel } from "../../components/SettingsPanel"
 import { TitleBar } from "../titlebar/TitleBar"
+
+const QuickChatPanel = React.lazy(() => import("../../components/QuickChatPanel").then((m) => ({ default: m.QuickChatPanel })))
+const SettingsPanel = React.lazy(() => import("../../components/SettingsPanel").then((m) => ({ default: m.SettingsPanel })))
 
 export type DesktopLayoutViewProps = {
   shellRef: React.RefObject<HTMLDivElement | null>
@@ -376,43 +377,44 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
       <main className="app-desktop-content">
         {view === "settings" && draftConfig && setDraftConfig ? (
           <div className="settings-view" style={{ height: "100%", overflowY: "auto" }}>
-            <SettingsPanel
-              draftConfig={draftConfig}
-              onChange={setDraftConfig}
-              onTest={handleTest ?? (() => {})}
-              testingConnection={testingConnection ?? false}
-              canTestDraft={canTestDraft ?? false}
-              testAlreadyPassedForDraft={testAlreadyPassedForDraft ?? false}
-              connectedVersion={connectedVersion ?? ""}
-              settingsNotice={settingsNotice ?? null}
-              language={language ?? "es"}
-              onLanguageChange={handleLanguageChange ?? (() => {})}
-              theme={theme ?? "dark"}
-              onThemeChange={setTheme ?? (() => {})}
-              languageOptions={languageOptions ?? []}
-              dataMode={dataMode}
-              onDataModeChange={changeDataMode ?? (() => {})}
-              onNavigate={handleNavigate}
-              modelOptions={modelOptions}
-              selectedModelKey={selectedModelKey ?? ""}
-              onChangeModel={changeModel ?? (() => {})}
-              modelKey={modelKey ?? (() => "")}
-              selectedVariant={selectedVariant ?? null}
-              allPrimaryAgents={allPrimaryAgents}
-              disabledAgents={disabledAgents}
-              onToggleAgentEnabled={toggleAgentEnabled}
-              stats={stats ?? { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }}
-              onResetStats={resetStats ?? (() => {})}
-              activeModelOption={activeModelOption ?? null}
-              blockedModels={blockedModels}
-              onOpenThemePicker={() => setShowThemePicker?.(true)}
-              onOpenThemeCreator={() => setShowThemeCreator?.(true)}
-              flags={flags ?? {} as any}
-              onToggleFlag={toggleFlag ?? (() => {})}
-              onSetFlag={setFlag ?? (() => {})}
-              providers={providerList}
-              connectingProvider={connectingProvider ?? null}
-              providerError={providerError ?? null}
+            <React.Suspense fallback={<div className="panel-loading" style={{ padding: 24, color: "var(--muted)" }}>Cargando ajustes…</div>}>
+              <SettingsPanel
+                draftConfig={draftConfig}
+                onChange={setDraftConfig}
+                onTest={handleTest ?? (() => {})}
+                testingConnection={testingConnection ?? false}
+                canTestDraft={canTestDraft ?? false}
+                testAlreadyPassedForDraft={testAlreadyPassedForDraft ?? false}
+                connectedVersion={connectedVersion ?? ""}
+                settingsNotice={settingsNotice ?? null}
+                language={language ?? "es"}
+                onLanguageChange={handleLanguageChange ?? (() => {})}
+                theme={theme ?? "dark"}
+                onThemeChange={setTheme ?? (() => {})}
+                languageOptions={languageOptions ?? []}
+                dataMode={dataMode}
+                onDataModeChange={changeDataMode ?? (() => {})}
+                onNavigate={handleNavigate}
+                modelOptions={modelOptions}
+                selectedModelKey={selectedModelKey ?? ""}
+                onChangeModel={changeModel ?? (() => {})}
+                modelKey={modelKey ?? (() => "")}
+                selectedVariant={selectedVariant ?? null}
+                allPrimaryAgents={allPrimaryAgents}
+                disabledAgents={disabledAgents}
+                onToggleAgentEnabled={toggleAgentEnabled}
+                stats={stats ?? { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }}
+                onResetStats={resetStats ?? (() => {})}
+                activeModelOption={activeModelOption ?? null}
+                blockedModels={blockedModels}
+                onOpenThemePicker={() => setShowThemePicker?.(true)}
+                onOpenThemeCreator={() => setShowThemeCreator?.(true)}
+                flags={flags ?? {} as any}
+                onToggleFlag={toggleFlag ?? (() => {})}
+                onSetFlag={setFlag ?? (() => {})}
+                providers={providerList}
+                connectingProvider={connectingProvider ?? null}
+                providerError={providerError ?? null}
               onConnectProvider={(pid, key) => {
                 connectProvider?.(pid, key).then((ok) => {
                   if (ok) loadModels?.().catch(() => undefined)
@@ -457,6 +459,7 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
               onOpenOpenCodeHub={() => setShowOpenCodeHub?.(true)}
               onClose={() => handleNavigate(desktopLayout.sessions.some(Boolean) ? "detail" : "sessions")}
             />
+            </React.Suspense>
           </div>
         ) : (
           <DesktopGrid
@@ -538,17 +541,19 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
               </span>
             </div>
             <div className="desktop-sidebar-body">
-              <QuickChatPanel
-                cerebrasKey={quickChatKeys.cerebras}
-                groqKey={quickChatKeys.groq}
-                goKey={quickChatKeys.go}
-                customKey={quickChatKeys.custom}
-                customUrl={quickChatKeys.customUrl}
-                config={config}
-                modelOptions={modelOptions}
-                providers={providerList}
-                onOpenSettings={onNavigateSettings}
-              />
+              <React.Suspense fallback={<div className="panel-loading" style={{ padding: 12, color: "var(--muted)" }}>Cargando QuickChat…</div>}>
+                <QuickChatPanel
+                  cerebrasKey={quickChatKeys.cerebras}
+                  groqKey={quickChatKeys.groq}
+                  goKey={quickChatKeys.go}
+                  customKey={quickChatKeys.custom}
+                  customUrl={quickChatKeys.customUrl}
+                  config={config}
+                  modelOptions={modelOptions}
+                  providers={providerList}
+                  onOpenSettings={onNavigateSettings}
+                />
+              </React.Suspense>
               <PluginSlot id="sidebar.right" />
             </div>
             <div

@@ -1,12 +1,8 @@
 import { memo, useState, Suspense, type DragEvent } from "react"
 import { calcDropZone, type DropZone } from "./model"
 import { parseDragPayload, isTerminalTabPayload } from "../../utils/drag"
-import { lazyRetry } from "../../utils/lazyRetry"
 import type { ShellPanelKind } from "../../types"
-
-const ShellPanel = lazyRetry(() =>
-  import("../../components/shellPanels").then((m) => ({ default: m.ShellPanel }))
-)
+import { ShellPanel } from "../../components/shellPanels"
 
 const PANEL_SUSPENSE_FALLBACK = (
   <div

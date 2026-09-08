@@ -7,7 +7,7 @@ import { LearningSidebar } from "./Sidebar"
 import { LessonView } from "./LessonView"
 import { shouldShowDiagram } from "./diagrams"
 import type { LearningManifest, LearningLesson, LearningProgress } from "./types"
-import { loadCustomCategories, saveCustomCategories, saveCustomDoc, deleteCustomDoc, createCustomCategory, createCustomLesson, persistLessonMove, persistCategoryOrder, removeCustomCategory } from "./customStore"
+import { loadCustomCategories, saveCustomCategories, saveCustomDoc, deleteCustomDoc, createCustomCategory, createCustomLesson, persistLessonMove, persistCategoryOrder, removeCustomCategory, removeLessonMove } from "./customStore"
 import { loadManifest, invalidateManifestCache, cacheLessonContent } from "./data"
 
 type MobilePane = "list" | "lesson"
@@ -205,7 +205,6 @@ export default function LearningPage() {
     for (const c of cats) c.count = c.items.length
     saveCustomCategories(cats.filter(c => c.id !== "__custom_pool__" || c.items.length > 0))
     deleteCustomDoc(lessonId)
-    const { removeLessonMove } = await import("./customStore")
     removeLessonMove(lessonId)
     setSelected((prev) => (prev?.id === lessonId ? null : prev))
     await reloadWithCustom()

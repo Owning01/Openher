@@ -20,13 +20,12 @@ import { LedSwitch } from "./LedSwitch"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { useDevServer } from "../hooks/useDevServer"
 
-import { terminalStore, terminalPtyStore, rememberTerminalPty, killTerminalPty, transferTerminalTab, getTerminalFontSize, setTerminalFontSize, TERMINAL_FONT_MIN, TERMINAL_FONT_MAX } from "../utils/terminalStore"
+import { terminalStore, terminalPtyStore, rememberTerminalPty, killTerminalPty, transferTerminalTab, getTerminalFontSize, setTerminalFontSize, TERMINAL_FONT_MIN, TERMINAL_FONT_MAX, consumePendingAutoOpencode2 } from "../utils/terminalStore"
 export { killTerminalPty, transferTerminalTab }
 import { createPortal } from "react-dom"
 import { useT } from "../i18n-context"
 import { useDialog } from "./DialogProvider"
 import { Markdown } from "./Markdown"
-import { Modal } from "./Modal"
 import { sanitizeHtml } from "../utils/sanitize"
 
 /** Ruta absoluta del FS (Windows `C:\…`, UNC o POSIX `/…`). El server solo
@@ -495,7 +494,6 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
         connectWs(wsPort, ptyId)
         // Auto opencode2: solo la primera terminal de la sesión si el flag está pendiente (evita que cada nueva pestaña ejecute opencode2)
         try {
-          const { consumePendingAutoOpencode2 } = await import("../utils/terminalStore")
           const pending = consumePendingAutoOpencode2()
           if (pending) {
             // Resolver exe real desde shell config (evita PATH no encontrado con instalación bun global)
@@ -1296,7 +1294,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
   onOpenFile?: (path: string) => void
 }) {
   const t = useT()
-  const { confirm } = useDialog()
+  const [deleteConfirm, setDeleteConfirm] = useState<FsEntry | null>(null)
   const [drives, setDrives] = useState<string[]>([])
   const [showDrives, setShowDrives] = useState(false)
   const [cwd, setCwd] = useState<string | null>(initialCwd || null)
@@ -1545,9 +1543,40 @@ export const ExplorerPanel = memo(function ExplorerPanel({
     }
   }
 
-  const handleDeleteItem = async (entry: FsEntry) => {
+  const handleDeleteItem = useCallback((entry: FsEntry) => {
     setContextMenu(null)
-    if (!(await confirm({ title: t('common.confirmDelete') ?? "Confirmar", message: `¿Eliminar definitivamente "${entry.name}"?`, confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" }))) return
+    setExecConfirm(null)
+    setDeleteConfirm(entry)
+  }, [])
+
+  const cancelDeleteItem = useCallback(() => {
+    setDeleteConfirm(null)
+  }, [])
+
+  const cancelExecFile = useCallback(() => {
+    setExecConfirm(null)
+  }, [])
+
+  const confirmExecFile = useCallback(async () => {
+    const target = execConfirm
+    if (!target) return
+    setExecConfirm(null)
+    try {
+      const res = await shell.fs.execFile(target.path)
+      if (res.ok) {
+        showNotice(`Ejecutando: ${target.name}`)
+      } else {
+        showNotice(`Error al ejecutar archivo`)
+      }
+    } catch (err: unknown) {
+      showNotice(`Error: ${(err as Error)?.message || "al ejecutar"}`)
+    }
+  }, [execConfirm])
+
+  const confirmDeleteItem = useCallback(async () => {
+    const entry = deleteConfirm
+    if (!entry) return
+    setDeleteConfirm(null)
     try {
       await shell.fs.delete(entry.path)
       showNotice(`Eliminado: ${entry.name}`)
@@ -1555,7 +1584,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
     } catch {
       showNotice(`Error al eliminar`)
     }
-  }
+  }, [deleteConfirm, cwd, load])
 
   const handleDropExternal = async (e: React.DragEvent, targetDir: string) => {
     e.preventDefault()
@@ -1778,6 +1807,40 @@ export const ExplorerPanel = memo(function ExplorerPanel({
           </button>
         )}
       </div>
+      {deleteConfirm && (
+        <div className="explorer-confirm is-danger fade-in" role="alertdialog" aria-labelledby="explorer-delete-title" aria-describedby="explorer-delete-desc">
+          <span className="explorer-confirm-icon" aria-hidden="true"><TrashIcon size={16} /></span>
+          <div className="explorer-confirm-body">
+            <strong id="explorer-delete-title">Eliminar definitivamente</strong>
+            <span id="explorer-delete-desc" className="explorer-confirm-path" title={deleteConfirm.path}>“{deleteConfirm.name}”</span>
+          </div>
+          <div className="explorer-confirm-actions">
+            <button type="button" className="btn-secondary compact" onClick={cancelDeleteItem} autoFocus>
+              {t('common.cancel')}
+            </button>
+            <button type="button" className="btn-danger compact" onClick={confirmDeleteItem}>
+              Eliminar
+            </button>
+          </div>
+        </div>
+      )}
+      {execConfirm && (
+        <div className="explorer-confirm is-exec fade-in" role="alertdialog" aria-labelledby="explorer-exec-title" aria-describedby="explorer-exec-desc">
+          <span className="explorer-confirm-icon" aria-hidden="true"><TerminalIcon size={16} /></span>
+          <div className="explorer-confirm-body">
+            <strong id="explorer-exec-title">Ejecutar script</strong>
+            <span id="explorer-exec-desc" className="explorer-confirm-path" title={execConfirm.path}>{execConfirm.name}</span>
+          </div>
+          <div className="explorer-confirm-actions">
+            <button type="button" className="btn-secondary compact" onClick={cancelExecFile} autoFocus>
+              {t('common.cancel')}
+            </button>
+            <button type="button" className="btn-primary compact" onClick={confirmExecFile}>
+              <TerminalIcon size={14} /> Ejecutar
+            </button>
+          </div>
+        </div>
+      )}
       {actionNotice && (
         <div style={{ padding: "4px 8px", fontSize: "0.75rem", background: "var(--primary-soft)", color: "var(--primary)", borderBottom: "1px solid var(--border)" }}>
           {actionNotice}
@@ -2095,44 +2158,6 @@ export const ExplorerPanel = memo(function ExplorerPanel({
         </div>
       )}
 
-      {execConfirm && (
-        <Modal onClose={() => setExecConfirm(null)} className="compact-modal" aria-labelledby="exec-confirm-title">
-          <h2 id="exec-confirm-title" style={{ display: "flex", alignItems: "center", gap: 8, margin: 0, fontSize: "1.1rem" }}>
-            <TerminalIcon size={18} /> Ejecutar archivo
-          </h2>
-          <p style={{ margin: "12px 0 6px", fontSize: "0.9rem" }}>
-            ¿Estás seguro de que deseas ejecutar <strong>{execConfirm.name}</strong>?
-          </p>
-          <p className="subtle" style={{ wordBreak: "break-all", fontSize: "0.8rem", margin: "0 0 16px" }}>
-            {execConfirm.path}
-          </p>
-          <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button type="button" className="btn-secondary compact" onClick={() => setExecConfirm(null)}>
-              {t('common.cancel')}
-            </button>
-            <button
-              type="button"
-              className="btn-primary compact"
-              onClick={async () => {
-                const target = execConfirm
-                setExecConfirm(null)
-                try {
-                  const res = await shell.fs.execFile(target.path)
-                  if (res.ok) {
-                    showNotice(`Ejecutando: ${target.name}`)
-                  } else {
-                    showNotice(`Error al ejecutar archivo`)
-                  }
-                } catch (err: any) {
-                  showNotice(`Error: ${err?.message || "al ejecutar"}`)
-                }
-              }}
-            >
-              <TerminalIcon size={14} /> Ejecutar
-            </button>
-          </div>
-        </Modal>
-      )}
     </div>
   )
 })

@@ -22,6 +22,7 @@ import { useIsDesktop } from "../hooks/useIsDesktop"
 import { useAutoOpencode2 } from "../hooks/useAutoOpencode2"
 import { useSidebarPrefs, SIDEBAR_ITEM_IDS } from "../hooks/useSidebarPrefs"
 import { STORAGE_KEYS } from "../constants"
+import { shell } from "../shell"
 
 type UsageStats = {
  promptsSent: number
@@ -124,13 +125,11 @@ export const SettingsPanel = memo(function SettingsPanel({
  const [minimizeToTray, setMinimizeToTray] = useState(false)
  useEffect(() => {
   if (!isDesktop) return
-  import("../shell").then(({ shell }) => {
-   shell.autostart.get().then((r) => setAutostartEnabled(!!r.enabled)).catch(() => {})
-   shell.config.get().then((c) => {
-    setStartMinimized(!!(c as any).start_minimized)
-    setMinimizeToTray(!!(c as any).minimize_to_tray)
-   }).catch(() => {})
-  })
+  shell.autostart.get().then((r) => setAutostartEnabled(!!r.enabled)).catch(() => {})
+  shell.config.get().then((c) => {
+   setStartMinimized(!!(c as any).start_minimized)
+   setMinimizeToTray(!!(c as any).minimize_to_tray)
+  }).catch(() => {})
  }, [isDesktop])
  const { prefs: sidebarPrefs, setPosition: setSidebarPosition, toggleItem: toggleSidebarItem } = useSidebarPrefs()
  const [qcProvider, setQcProvider] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_PROVIDER) || "groq")
@@ -753,17 +752,16 @@ export const SettingsPanel = memo(function SettingsPanel({
          <p className="setting-item-desc">Abre OpenHer automáticamente al iniciar sesión (registro HKCU\Run).</p>
         </div>
         <div className="setting-item-control">
-         <LedSwitch
-          label="Iniciar con Windows"
-          checked={autostartEnabled}
-          onChange={async (next) => {
-           try {
-            const { shell } = await import("../shell")
-            await shell.autostart.set(next)
-            setAutostartEnabled(next)
-           } catch {}
-          }}
-         />
+          <LedSwitch
+           label="Iniciar con Windows"
+           checked={autostartEnabled}
+           onChange={async (next) => {
+            try {
+             await shell.autostart.set(next)
+             setAutostartEnabled(next)
+            } catch {}
+           }}
+          />
         </div>
        </div>
        <div className="setting-item-row">
@@ -777,7 +775,6 @@ export const SettingsPanel = memo(function SettingsPanel({
           checked={startMinimized}
           onChange={async (next) => {
            try {
-            const { shell } = await import("../shell")
             await shell.config.patch({ start_minimized: next } as any)
             setStartMinimized(next)
            } catch {}
@@ -796,7 +793,6 @@ export const SettingsPanel = memo(function SettingsPanel({
           checked={minimizeToTray}
           onChange={async (next) => {
            try {
-            const { shell } = await import("../shell")
             await shell.config.patch({ minimize_to_tray: next } as any)
             setMinimizeToTray(next)
            } catch {}

@@ -8,6 +8,8 @@ import { createOpencodeGoProvider } from "../providers/opencodeGo"
 import { createCustomProvider } from "../providers/custom"
 import type { QuickChatProviderId } from "../providers/types"
 import type { ModelOption, ProviderInfo } from "../types"
+import { shell } from "../shell"
+import { saveGoAccounts } from "../goUsage"
 import { Markdown } from "./Markdown"
 import { LedSwitch } from "./LedSwitch"
 import { BrainIcon, SettingsIcon, TrashIcon, CloseIcon } from "../Icons"
@@ -252,17 +254,14 @@ export function QuickChatPanel({
       if (provider === "groq") {
         localStorage.setItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ, val)
         try {
-          const { shell } = await import("../shell")
           await shell.config.patch({ groq_api_key: val } as any)
         } catch {}
       } else if (provider === "cerebras") {
         localStorage.setItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS, val)
         try {
-          const { shell } = await import("../shell")
           await shell.config.patch({ cerebras_api_key: val } as any)
         } catch {}
       } else if (provider === "opencode-go") {
-        const { saveGoAccounts } = await import("../goUsage")
         await saveGoAccounts([val])
       } else if (provider === "custom") {
         localStorage.setItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM, val)

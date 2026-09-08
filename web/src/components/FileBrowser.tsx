@@ -1,4 +1,4 @@
-import { memo, useState } from "react"
+import { memo, useCallback, useState } from "react"
 import { FolderIcon, CloseIcon, LoadingIcon, TerminalIcon } from "../Icons"
 import { FileTypeIcon } from "./FileTypeIcon"
 import { useT } from "../i18n-context"
@@ -201,10 +201,31 @@ export const FileBrowser = memo(function FileBrowser({
   const [notice, setNotice] = useState<string | null>(null)
   const [filter, setFilter] = useState("")
 
-  const showNotice = (msg: string) => {
+  const showNotice = useCallback((msg: string) => {
     setNotice(msg)
     window.setTimeout(() => setNotice((m) => (m === msg ? null : m)), 2500)
-  }
+  }, [])
+
+  const cancelExecFile = useCallback(() => {
+    setExecConfirm(null)
+  }, [])
+
+  const confirmExecFile = useCallback(async () => {
+    const target = execConfirm
+    if (!target) return
+    setExecConfirm(null)
+    const fullPath = target.absolute || target.path || target.name
+    try {
+      const res = await shell.fs.execFile(fullPath)
+      if (res.ok) {
+        showNotice(`Ejecutando: ${target.name}`)
+      } else {
+        showNotice(`Error al ejecutar archivo`)
+      }
+    } catch (err: unknown) {
+      showNotice(`Error: ${(err as Error)?.message || "al ejecutar"}`)
+    }
+  }, [execConfirm, showNotice])
 
   const filteredItems = filter
     ? items.filter((i) => i.name.toLowerCase().includes(filter.toLowerCase()))
@@ -257,43 +278,21 @@ export const FileBrowser = memo(function FileBrowser({
       </div>
 
       {execConfirm && (
-        <Modal onClose={() => setExecConfirm(null)} className="compact-modal" aria-labelledby="exec-confirm-title">
-          <h2 id="exec-confirm-title" style={{ display: "flex", alignItems: "center", gap: 8, margin: 0, fontSize: "1.1rem" }}>
-            <TerminalIcon size={18} /> Ejecutar archivo
-          </h2>
-          <p style={{ margin: "12px 0 6px", fontSize: "0.9rem" }}>
-            ¿Estás seguro de que deseas ejecutar <strong>{execConfirm.name}</strong>?
-          </p>
-          <p className="subtle" style={{ wordBreak: "break-all", fontSize: "0.8rem", margin: "0 0 16px" }}>
-            {execConfirm.absolute || execConfirm.path || execConfirm.name}
-          </p>
-          <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button type="button" className="btn-secondary compact" onClick={() => setExecConfirm(null)}>
+        <div className="explorer-confirm is-exec fade-in" role="alertdialog" aria-labelledby="fb-exec-title" aria-describedby="fb-exec-desc">
+          <span className="explorer-confirm-icon" aria-hidden="true"><TerminalIcon size={16} /></span>
+          <div className="explorer-confirm-body">
+            <strong id="fb-exec-title">Ejecutar script</strong>
+            <span id="fb-exec-desc" className="explorer-confirm-path" title={execConfirm.absolute || execConfirm.path || execConfirm.name}>{execConfirm.name}</span>
+          </div>
+          <div className="explorer-confirm-actions">
+            <button type="button" className="btn-secondary compact" onClick={cancelExecFile} autoFocus>
               {t('common.cancel')}
             </button>
-            <button
-              type="button"
-              className="btn-primary compact"
-              onClick={async () => {
-                const target = execConfirm
-                setExecConfirm(null)
-                const fullPath = target.absolute || target.path || target.name
-                try {
-                  const res = await shell.fs.execFile(fullPath)
-                  if (res.ok) {
-                    showNotice(`Ejecutando: ${target.name}`)
-                  } else {
-                    showNotice(`Error al ejecutar archivo`)
-                  }
-                } catch (err: any) {
-                  showNotice(`Error: ${err?.message || "al ejecutar"}`)
-                }
-              }}
-            >
+            <button type="button" className="btn-primary compact" onClick={confirmExecFile}>
               <TerminalIcon size={14} /> Ejecutar
             </button>
           </div>
-        </Modal>
+        </div>
       )}
     </Modal>
   )
