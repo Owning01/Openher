@@ -41,7 +41,6 @@ pdf-extract = "0.7"
 lopdf = "0.34"
 quick-xml = { version = "0.37", features = ["serialize"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
-opencode-stats = { path = "../skill-project/opencode-stats" }
 comrak = "0.29"
 headless_chrome = "1.0"
 base64 = "0.22"
