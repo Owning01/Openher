@@ -2,7 +2,6 @@ pub mod io;
 pub mod scm_router;
 pub mod external_router;
 pub mod fs_router;
-pub mod computer_router;
 pub mod window_router;
 pub mod config_router;
 pub mod kanban_router;

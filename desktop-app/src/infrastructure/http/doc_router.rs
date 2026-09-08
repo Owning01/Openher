@@ -17,38 +17,15 @@ pub fn handle(
     _q: &dyn Fn(&str) -> String,
 ) -> Option<ShellResponse> {
     if path == "/shell/doc/convert" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(b) => {
-                let src = b["src"].as_str().unwrap_or("");
-                let target = b["target"].as_str().unwrap_or("md");
-                let dest = b["dest"].as_str();
-                match crate::doc_engine::convert_file(src, target, dest) {
-                    Ok(val) => ShellResponse::ok_json(&val),
-                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
-                }
-            }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        return Some(ShellResponse::err_json(400, "el motor de conversión de documentos pesados ha sido desacoplado"));
     }
     if path == "/shell/doc/save" && method == "POST" {
         return Some(match req.json_body() {
             Ok(b) => {
                 let path_str = b["path"].as_str().unwrap_or("");
                 let md_content = b["content"].as_str().unwrap_or("");
-                let format = b["format"].as_str().unwrap_or("md").to_lowercase();
                 let p = Path::new(path_str);
-                let res: Result<(), String> = match format.as_str() {
-                    "docx" => match crate::doc_engine::md_to_docx(md_content) {
-                        Ok(bytes) => std::fs::write(p, bytes).map_err(|e| e.to_string()),
-                        Err(e) => Err(e),
-                    },
-                    "pdf" => match crate::doc_engine::md_to_pdf(md_content) {
-                        Ok(bytes) => std::fs::write(p, bytes).map_err(|e| e.to_string()),
-                        Err(e) => Err(e),
-                    },
-                    _ => std::fs::write(p, md_content.as_bytes()).map_err(|e| e.to_string()),
-                };
-                match res {
+                match std::fs::write(p, md_content.as_bytes()) {
                     Ok(_) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": path_str })),
                     Err(e) => ShellResponse::err_json(500, &e.to_string()),
                 }

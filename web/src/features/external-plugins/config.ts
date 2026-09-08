@@ -69,11 +69,4 @@ export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
     iconKind: "paint",
     group: "herramientas",
   },
-  {
-    key: "openher:css-playground",
-    title: "CSS Visual Playground",
-    description: "Playground visual 8-Progavio — flex/absolute, exporta CSS",
-    iconKind: "code",
-    group: "herramientas",
-  },
 ]
