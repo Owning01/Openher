@@ -899,9 +899,6 @@ fn main() {
         None => println!("opencode-desktop: AVISO - web/dist no encontrado; la app estará vacía"),
     }
 
-    // Stats server arranca con la app (botón del panel izquierdo lo abre).
-    statsx::ensure(&app_state);
-
     // hyper principal (mmap+br + /shell/*): runtime tokio propio en thread dedicado.
     {
         let hyper_state = app_state.clone();

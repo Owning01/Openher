@@ -1,28 +1,24 @@
-//! Stats integrado: levanta el server de opencode-stats (lib) en un thread
-//! lazy. El frontend lo muestra en un iframe a http://127.0.0.1:8765.
+//! Stats: detecta si un servidor de stats externo está corriendo en :8765.
+//! Ya no embebe el motor de base de datos opencode-stats en el binario.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::state::AppState;
 
 const STATS_PORT: u16 = 8765;
 
-pub struct StatsManager {
-    running: Mutex<bool>,
-}
+#[derive(Default)]
+pub struct StatsManager;
 
 impl StatsManager {
     pub fn new() -> Self {
-        Self {
-            running: Mutex::new(false),
-        }
+        Self
     }
 
     pub fn status(&self) -> serde_json::Value {
-        let running = *self.running.lock().unwrap_or_else(|e| e.into_inner());
         let alive = probe(STATS_PORT);
         serde_json::json!({
-            "running": running || alive,
+            "running": alive,
             "port": STATS_PORT,
             "url": format!("http://127.0.0.1:{STATS_PORT}"),
         })
@@ -38,29 +34,9 @@ fn probe(port: u16) -> bool {
     )
 }
 
-/// Arranca (si no está) el server de stats en un thread. Idempotente.
-pub fn ensure(state: &Arc<AppState>) {
-    {
-        let mut running = state.stats.running.lock().unwrap_or_else(|e| e.into_inner());
-        if *running {
-            return;
-        }
-        if probe(STATS_PORT) {
-            *running = true;
-            return;
-        }
-        *running = true; // reserva el slot antes de spawnear
-    }
-    let state = state.clone();
-    std::thread::Builder::new()
-        .name("stats".into())
-        .spawn(move || {
-            let _ = opencode_stats::server::serve(STATS_PORT);
-            if let Ok(mut r) = state.stats.running.lock() {
-                *r = false;
-            }
-        })
-        .ok();
+/// Ya no levanta servidor embebido. Mantiene la firma para compatibilidad.
+pub fn ensure(_state: &Arc<AppState>) {
+    // No-op: opencode-stats no está embebido
 }
 
 #[allow(dead_code)]
