@@ -41,4 +41,33 @@ describe("generatePrompt", () => {
     const out = generatePrompt(doc, { lang: "es" })
     expect(out).toContain("vuelve a la pantalla anterior")
   })
+
+  it("describe las partes nuevas de app y el preset app", () => {
+    const doc = makeDoc("MiApp")
+    const home = doc.screens[0]!
+    const appScreen = makeScreen("Principal", "app")
+    doc.screens.push(appScreen)
+    doc.parts[appScreen.id] = [
+      { ...makePart("sideBar", 1280), label: "Inicio, Ajustes" },
+      { ...makePart("chatBubble", 1280), label: "Hola", variant: "filled" },
+      { ...makePart("avatar", 1280), label: "Ada Lovelace" },
+      { ...makePart("tabBar", 1280), label: "Chats, Llamadas" },
+    ]
+    const es = generatePrompt(doc, { lang: "es" })
+    expect(es).toContain("ventana de app desktop 1280x800")
+    expect(es).toContain("Barra lateral")
+    expect(es).toContain("propia")
+    expect(es).toContain("Avatar")
+    expect(es).toContain("Pestañas")
+    const en = generatePrompt(doc, { lang: "en", screenId: appScreen.id })
+    expect(en).toContain("desktop app window")
+    expect(en).toContain("outgoing chat bubble")
+    expect(en).toContain("avatar with initials")
+  })
+
+  it("makePart da tamaños coherentes a las partes nuevas", () => {
+    expect(makePart("sideBar", 1280).w).toBe(232)
+    expect(makePart("avatar", 412).w).toBe(48)
+    expect(makePart("chatBubble", 412).variant).toBe("tonal")
+  })
 })

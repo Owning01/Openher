@@ -7,6 +7,8 @@ import type {
   ScreenPreset,
 } from "../model/canvasTypes"
 import {
+  STATUS_H,
+  defaultPartHeight,
   isValidDoc,
   makeDoc,
   makePart,
@@ -225,11 +227,12 @@ export const canvasStore = {
     const { w: sw, h: sh } = screenSizeOf(screen)
     const list = partsOf(active, screenId)
     const p = makePart(kind, sw, at ?? { x: SCREEN_MARGIN, y: SCREEN_MARGIN + list.length * 8 })
-    const h = kind === "topAppBar" || kind === "bottomNav" ? (kind === "topAppBar" ? 64 : 80) : 56
+    const h = defaultPartHeight(kind)
+    const topY = screen.preset === "phone" && kind === "topAppBar" ? STATUS_H : 0
     const placed = kind === "bottomNav"
-      ? { ...p, x: 0, y: sh - 80 }
+      ? { ...p, x: 0, y: sh - h }
       : kind === "topAppBar"
-        ? { ...p, x: 0, y: 0 }
+        ? { ...p, x: 0, y: topY }
         : clampPart(p, sw, sh, h)
     updateActiveDoc((d) => ({ ...d, parts: { ...d.parts, [screenId]: [...partsOf(d, screenId), placed] } }))
     setState({ ...state, selection: { screenId, partId: placed.id } })
@@ -249,12 +252,13 @@ export const canvasStore = {
     const screen = active?.screens.find((s) => s.id === screenId)
     if (!active || !screen) return
     const { w: sw, h: sh } = screenSizeOf(screen)
+    const byId = new Map(partsOf(active, screenId).map((p) => [p.id, p.kind] as const))
     const apply = (d: CanvasDoc) => ({
       ...d,
       parts: {
         ...d.parts,
         [screenId]: partsOf(d, screenId).map((p) =>
-          p.id === partId ? clampPart({ ...p, x, y }, sw, sh, 56) : p,
+          p.id === partId ? clampPart({ ...p, x, y }, sw, sh, defaultPartHeight(byId.get(partId) ?? p.kind)) : p,
         ),
       },
     })
@@ -302,11 +306,12 @@ export const canvasStore = {
     const { w: sw, h: sh } = screenSizeOf(screen)
     updateActiveDoc((d) => {
       let y = SCREEN_MARGIN
+      const isPhone = screen.preset === "phone"
       const list = partsOf(d, screenId).map((p) => {
-        if (p.kind === "topAppBar") return { ...p, x: 0, y: 0, w: sw }
-        if (p.kind === "bottomNav") return { ...p, x: 0, y: sh - 80, w: sw }
-        if (p.kind === "fab") return { ...p, x: sw - 56 - SCREEN_MARGIN, y: sh - 56 - 96 }
-        const h = 56
+        const h = defaultPartHeight(p.kind)
+        if (p.kind === "topAppBar") return { ...p, x: 0, y: isPhone ? STATUS_H : 0, w: sw }
+        if (p.kind === "bottomNav") return { ...p, x: 0, y: sh - h, w: sw }
+        if (p.kind === "fab") return { ...p, x: sw - h - SCREEN_MARGIN, y: sh - h - 96 }
         const w = Math.min(p.w ?? sw - SCREEN_MARGIN * 2, sw - SCREEN_MARGIN * 2)
         const out = { ...p, x: SCREEN_MARGIN, y, w }
         y += h + SCREEN_MARGIN

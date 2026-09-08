@@ -9,7 +9,7 @@ type Props = {
 }
 
 const VARIANTS = ["filled", "tonal", "outlined", "text"] as const
-const EDITABLE_KINDS: CanvasPartKind[] = ["button", "chip"]
+const EDITABLE_KINDS: CanvasPartKind[] = ["button", "chip", "chatBubble"]
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -50,13 +50,13 @@ export function Inspector({ doc, screen, part }: Props) {
       </Row>
 
       {EDITABLE_KINDS.includes(part.kind) ? (
-        <Row label="Estilo">
+        <Row label={part.kind === "chatBubble" ? "Lado (filled = propia)" : "Estilo"}>
           <select
             style={inputStyle}
-            value={part.variant ?? "filled"}
+            value={part.variant ?? (part.kind === "chatBubble" ? "tonal" : "filled")}
             onChange={(e) => patch({ variant: e.target.value as CanvasPart["variant"] })}
           >
-            {VARIANTS.map((v) => <option key={v} value={v}>{v}</option>)}
+            {(part.kind === "chatBubble" ? ["filled", "tonal"] : VARIANTS).map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
         </Row>
       ) : null}

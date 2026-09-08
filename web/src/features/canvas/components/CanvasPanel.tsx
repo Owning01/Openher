@@ -20,7 +20,13 @@ const PALETTE: Array<{ kind: CanvasPartKind; label: string }> = [
   { kind: "divider", label: "Divisor" },
   { kind: "fab", label: "FAB" },
   { kind: "bottomNav", label: "Barra inf." },
+  { kind: "sideBar", label: "Barra lat." },
+  { kind: "chatBubble", label: "Burbuja" },
+  { kind: "avatar", label: "Avatar" },
+  { kind: "tabBar", label: "Pestañas" },
 ]
+
+const PRESET_NAME: Record<string, string> = { phone: "Móvil", desktop: "PC", app: "App" }
 
 export function CanvasPanel() {
   const { docs, activeId, selection } = useCanvasStore()
@@ -155,13 +161,16 @@ export function CanvasPanel() {
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {s.name} · {s.preset === "desktop" ? "PC" : "Móvil"}
+                    {s.name} · {PRESET_NAME[s.preset] ?? s.preset}
                   </button>
                 ))}
               </div>
               <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
                 <button type="button" style={{ ...smallBtn, flex: 1 }} onClick={() => { const id = canvasStore.addScreen("Nueva", "phone"); if (id) setScreenId(id) }}>+ Móvil</button>
                 <button type="button" style={{ ...smallBtn, flex: 1 }} onClick={() => { const id = canvasStore.addScreen("Nueva PC", "desktop"); if (id) setScreenId(id) }}>+ PC</button>
+              </div>
+              <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                <button type="button" style={{ ...smallBtn, flex: 1 }} onClick={() => { const id = canvasStore.addScreen("Nueva App", "app"); if (id) setScreenId(id) }}>+ App</button>
               </div>
             </div>
             <div>
@@ -183,6 +192,7 @@ export function CanvasPanel() {
             <PhoneScreen
               screen={screen}
               parts={parts}
+              maxWidth={screen.preset === "phone" ? 300 : 620}
               mode="edit"
               selectedId={selectedPart?.id ?? null}
               onSelect={(partId) => canvasStore.select(partId ? { screenId: screen.id, partId } : null)}
@@ -213,6 +223,7 @@ export function CanvasPanel() {
                     <div style={{ display: "flex", gap: 8 }}>
                       <button type="button" style={{ ...smallBtn, flex: 1 }} onClick={() => canvasStore.setPreset(screen.id, "phone")}>Móvil</button>
                       <button type="button" style={{ ...smallBtn, flex: 1 }} onClick={() => canvasStore.setPreset(screen.id, "desktop")}>PC</button>
+                      <button type="button" style={{ ...smallBtn, flex: 1 }} onClick={() => canvasStore.setPreset(screen.id, "app")}>App</button>
                     </div>
                     {doc.screens.length > 1 ? (
                       <button type="button" className="btn-danger compact" onClick={() => canvasStore.deleteScreen(screen.id)}>
@@ -238,6 +249,7 @@ export function CanvasPanel() {
               <PhoneScreen
                 screen={previewScreen}
                 parts={partsOf(doc, previewScreen.id)}
+                maxWidth={previewScreen.preset === "phone" ? 300 : 620}
                 mode="preview"
                 onTap={handleTap}
               />
