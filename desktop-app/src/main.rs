@@ -1063,7 +1063,10 @@ fn main() {
     }
 
     let mut app = App {
-        url: format!("http://127.0.0.1:{chosen}"),
+        // ?v=BUILD_ID: cache-busting ante cachés del WebView2 envenenadas.
+        // El query cambia la clave de caché sin cambiar el origen (mismo
+        // localStorage) y sin tocar el perfil en disco.
+        url: format!("http://127.0.0.1:{chosen}/?v={}", env!("OPENHER_BUILD_ID")),
         window: None,
         webview: None,
         web_context: None,
