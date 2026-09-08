@@ -1,6 +1,5 @@
 import { defineConfig } from "vite"
-import react, { reactCompilerPreset } from "@vitejs/plugin-react"
-import babel from "@rolldown/plugin-babel"
+import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 
 export default defineConfig({
@@ -16,9 +15,8 @@ export default defineConfig({
   },
   plugins: [
     tailwindcss(),
-    react(),
-    // React Compiler: memoización automática.
-    babel({ presets: [reactCompilerPreset({ target: "19" })] }),
+    // React Compiler nativo en Rust (Oxc): memoización automática.
+    react({ compiler: true }),
   ],
   build: {
     rollupOptions: {
