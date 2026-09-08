@@ -13,7 +13,7 @@ beforeEach(() => {
           JSON.stringify({
             path: "/proj",
             dirs: [{ name: "sub", path: "/proj/sub" }],
-            files: [],
+            files: [{ name: "app.ts", path: "/proj/app.ts", size: 12 }],
           }),
           { status: 200 }
         )
@@ -62,5 +62,29 @@ describe("ExplorerPanel nueva sesión", () => {
     expect(items.length).toBeGreaterThan(0)
     fireEvent.click(items[0]!)
     await waitFor(() => expect(onOpen).toHaveBeenCalledWith("/proj"))
+  })
+
+  it("eliminar muestra confirm inline con borde danger y cancela/acepta", async () => {
+    const onOpen = vi.fn()
+    const { container } = renderExplorer(onOpen)
+    await screen.findByText("app.ts")
+    const row = container.querySelector(".shell-file")
+    expect(row).toBeTruthy()
+    fireEvent.contextMenu(row!, { clientX: 50, clientY: 50 })
+    const delItem = await screen.findByText("Eliminar")
+    fireEvent.click(delItem)
+    // Inline dentro del panel, no modal overlay
+    const banner = await screen.findByRole("alertdialog")
+    expect(banner.className).toContain("is-danger")
+    expect(container.querySelector(".modal-backdrop")).toBeNull()
+    // Cancelar cierra sin borrar
+    fireEvent.click(container.querySelector(".explorer-confirm.is-danger .btn-secondary")!)
+    expect(screen.queryByRole("alertdialog")).toBeNull()
+    // Reabrir y aceptar elimina + avisa
+    fireEvent.contextMenu(row!, { clientX: 50, clientY: 50 })
+    fireEvent.click(await screen.findByText("Eliminar"))
+    await screen.findByRole("alertdialog")
+    fireEvent.click(container.querySelector(".explorer-confirm.is-danger .btn-danger")!)
+    await screen.findByText("Eliminado: app.ts")
   })
 })

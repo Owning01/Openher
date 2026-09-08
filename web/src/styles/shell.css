@@ -228,6 +228,72 @@
   padding: 4px 6px;
 }
 
+/* Confirmaciones inline del explorador (eliminar / ejecutar script):
+   sustituyen al modal overlay para no tapar el árbol. */
+.explorer-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.explorer-confirm.is-danger {
+  border: 2px solid var(--danger);
+  border-radius: var(--radius-sm);
+  margin: 6px 8px;
+  padding: 10px 12px;
+  background: var(--danger-soft, rgba(239, 68, 68, 0.08));
+}
+
+.explorer-confirm.is-exec {
+  border: 1px solid var(--primary);
+  border-left-width: 4px;
+  background: var(--surface);
+}
+
+.explorer-confirm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.explorer-confirm.is-danger .explorer-confirm-icon {
+  color: var(--danger);
+}
+
+.explorer-confirm.is-exec .explorer-confirm-icon {
+  color: var(--primary);
+}
+
+.explorer-confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 0.82rem;
+}
+
+.explorer-confirm-path {
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .shell-tree-group {
   margin-bottom: 4px;
 }

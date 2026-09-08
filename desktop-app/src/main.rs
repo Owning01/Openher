@@ -27,6 +27,7 @@ mod state;
 mod statsx;
 mod updates;
 mod doc_engine;
+mod undecorated_resizing;
 
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -169,98 +170,6 @@ enum AppEvent {
 static ORIG_WNDPROC: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
 
 #[cfg(windows)]
-static CHILD_WNDPROCS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<isize, isize>>> =
-    std::sync::OnceLock::new();
-
-#[cfg(windows)]
-fn child_map() -> &'static std::sync::Mutex<std::collections::HashMap<isize, isize>> {
-    CHILD_WNDPROCS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
-}
-
-#[cfg(windows)]
-unsafe extern "system" fn child_frameless_wndproc(
-    hwnd: *mut core::ffi::c_void,
-    msg: u32,
-    wparam: usize,
-    lparam: isize,
-) -> isize {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CallWindowProcW, DefWindowProcW, GetAncestor, GetWindowRect, IsZoomed, WM_NCHITTEST,
-    };
-    const GA_ROOT: u32 = 2;
-    const WM_NCHITTEST_VAL: u32 = WM_NCHITTEST;
-    const HTTRANSPARENT: isize = -1;
-    // NOTA: no tocar WM_NCCALCSIZE en hijos — devolver 0 rompía el layout del
-    // WebView2 y su hit-test. Solo se intercepta NCHITTEST en el borde.
-    if msg == WM_NCHITTEST_VAL {
-        let root = GetAncestor(hwnd, GA_ROOT);
-        if !root.is_null() && IsZoomed(root) == 0 {
-            let x = (lparam & 0xFFFF) as i16 as i32;
-            let y = ((lparam >> 16) & 0xFFFF) as i16 as i32;
-            let mut rect = std::mem::zeroed::<windows_sys::Win32::Foundation::RECT>();
-            if GetWindowRect(root, &mut rect) != 0 {
-                let border: i32 = 16;
-                let left = rect.left;
-                let right = rect.right;
-                let top = rect.top;
-                let bottom = rect.bottom;
-                // Si el cursor está en el borde del frame del top-level, devolver
-                // HTTRANSPARENT para que el hit test caiga en el padre y sea él
-                // quien inicie el resize (resizing un child no mueve la ventana).
-                let on_border = y < top + border
-                    || y >= bottom - border
-                    || x < left + border
-                    || x >= right - border;
-                if on_border {
-                    return HTTRANSPARENT;
-                }
-            }
-        }
-    }
-    let orig = child_map()
-        .lock()
-        .ok()
-        .and_then(|m| m.get(&(hwnd as isize)).copied())
-        .unwrap_or(0);
-    if orig != 0 {
-        return CallWindowProcW(
-            Some(std::mem::transmute::<isize, unsafe extern "system" fn(*mut core::ffi::c_void, u32, usize, isize) -> isize>(orig)),
-            hwnd,
-            msg,
-            wparam,
-            lparam,
-        );
-    }
-    return DefWindowProcW(hwnd, msg, wparam, lparam);
-}
-
-#[cfg(windows)]
-pub(crate) unsafe fn patch_child_windows(parent_hwnd: isize) {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{EnumChildWindows, GetWindowLongPtrW, SetWindowLongPtrW, GWLP_WNDPROC};
-    unsafe extern "system" fn enum_cb(child: *mut core::ffi::c_void, _lparam: isize) -> i32 {
-        // Evitar re-parchear
-        let already = child_map()
-            .lock()
-            .ok()
-            .map(|m| m.contains_key(&(child as isize)))
-            .unwrap_or(false);
-        if !already {
-            let orig = GetWindowLongPtrW(child, GWLP_WNDPROC);
-            if orig != 0 {
-                if let Ok(mut m) = child_map().lock() {
-                    m.insert(child as isize, orig);
-                }
-                SetWindowLongPtrW(child, GWLP_WNDPROC, child_frameless_wndproc as *const () as isize);
-            }
-        }
-        // Recursivo: parchear hijos de este child también
-        EnumChildWindows(child, Some(enum_cb), 0);
-        1
-    }
-    EnumChildWindows(parent_hwnd as *mut core::ffi::c_void, Some(enum_cb), 0);
-}
-
-#[cfg(windows)]
 unsafe extern "system" fn frameless_wndproc(
     hwnd: *mut core::ffi::c_void,
     msg: u32,
@@ -273,12 +182,6 @@ unsafe extern "system" fn frameless_wndproc(
     };
     const WM_NCHITTEST_VAL: u32 = WM_NCHITTEST;
     const WM_NCCALCSIZE: u32 = 0x0083;
-    // Solo quitar el non-client cuando está maximizada (evita el borde
-    // automático de 8px que Windows añade al maximizar). En modo ventana se
-    // deja el frame del SO intacto: conserva el grip invisible EXTERIOR de 8px
-    // (funciona aunque el WebView tape el cliente) y nuestro HT* interior de
-    // 16px actúa como segunda zona de agarre. Antes se devolvía 0 siempre y se
-    // perdía el grip exterior → la derecha/esquina sup-der eran casi imposibles.
     if msg == WM_NCCALCSIZE && wparam == 1 {
         if IsZoomed(hwnd) != 0 {
             return 0;
@@ -302,7 +205,7 @@ unsafe extern "system" fn frameless_wndproc(
             let y = ((lparam >> 16) & 0xFFFF) as i16 as i32;
             let mut rect = std::mem::zeroed::<windows_sys::Win32::Foundation::RECT>();
             if GetWindowRect(hwnd, &mut rect) != 0 {
-                let border: i32 = 16;
+                let border: i32 = 8;
                 let titlebar_h: i32 = 38;
                 let left = rect.left;
                 let right = rect.right;
@@ -347,7 +250,7 @@ unsafe extern "system" fn frameless_wndproc(
             lparam,
         );
     }
-    return DefWindowProcW(hwnd, msg, wparam, lparam);
+    DefWindowProcW(hwnd, msg, wparam, lparam)
 }
 
 #[cfg(windows)]
@@ -383,9 +286,6 @@ unsafe fn patch_frameless_resizable(hwnd: *mut core::ffi::c_void) {
         let margins = MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 };
         let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
     }
-    // Parchear hijos existentes (por si ya hay WebView) para que el resize
-    // desde bordes/esquinas funcione aunque el WebView tape el cliente.
-    patch_child_windows(hwnd as isize);
 }
 
 /// ¿Está instalado el runtime de WebView2 (Evergreen)? En Windows 10 no
@@ -603,20 +503,7 @@ impl ApplicationHandler<AppEvent> for App {
                 {
                     let hwnd = crate::state::WINDOW_HWND.load(std::sync::atomic::Ordering::Relaxed);
                     if hwnd != 0 {
-                        unsafe { patch_child_windows(hwnd); }
-                        std::thread::spawn(move || {
-                            std::thread::sleep(std::time::Duration::from_millis(400));
-                            unsafe { patch_child_windows(hwnd); }
-                            std::thread::sleep(std::time::Duration::from_millis(800));
-                            unsafe { patch_child_windows(hwnd); }
-                            // Re-parcheo periódico INFINITO: WebView2 recrea child windows al navegar/recargar
-                            // (antes era 60×2s = solo 2 min; pasado ese tiempo los HWND nuevos quedaban
-                            // sin parche y la derecha/esquinas dejaban de redimensionar).
-                            loop {
-                                std::thread::sleep(std::time::Duration::from_millis(2000));
-                                unsafe { patch_child_windows(hwnd); }
-                            }
-                        });
+                        undecorated_resizing::attach_resize_handler(hwnd);
                     }
                 }
             }
@@ -643,16 +530,20 @@ impl ApplicationHandler<AppEvent> for App {
         match event {
             WindowEvent::Resized(size) => {
                 if let (Some(window), Some(webview)) = (&self.window, &self.webview) {
-                    let size = size.to_logical::<f64>(window.scale_factor());
+                    let logical_size = size.to_logical::<f64>(window.scale_factor());
                     let _ = webview.set_bounds(Rect {
                         position: LogicalPosition::new(0, 0).into(),
-                        size: LogicalSize::new(size.width, size.height).into(),
+                        size: LogicalSize::new(logical_size.width, logical_size.height).into(),
                     });
                 }
-                // Sin patch_child_windows aquí: EnumChildWindows + re-subclass
-                // en cada evento de resize corría dentro del loop modal del SO
-                // y trababa el gesto. Los HWNDs nuevos del WebView ya los cubre
-                // el re-parcheo periódico cada 2s.
+                #[cfg(windows)]
+                {
+                    let hwnd = crate::state::WINDOW_HWND.load(std::sync::atomic::Ordering::Relaxed);
+                    if hwnd != 0 {
+                        let is_max = self.window.as_ref().map(|w| w.is_maximized()).unwrap_or(false);
+                        undecorated_resizing::update_resize_handler(hwnd, size.width, size.height, is_max);
+                    }
+                }
                 self.save_geometry();
                 // Minimizar (—) → a bandeja SOLO si está activado en
                 // configuración; si no, minimize normal a la barra de tareas.

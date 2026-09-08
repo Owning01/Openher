@@ -1,11 +1,12 @@
-import { memo, Suspense, type ReactNode } from "react"
+import React, { memo, Suspense, type ReactNode } from "react"
 import { useT } from "../../i18n-context"
 import { PluginSlot } from "../../plugins"
 import type { DesktopActivity } from "../activity-bar/ActivityBar"
 import type { SessionView } from "../../types"
-import { PCFilesPanel } from "../../features/pc-files/PCFilesPanel"
-import { SourceControlPanel } from "../../components/SourceControlPanel"
 import { ConfigPanel } from "../../components/shellPanels"
+
+const PCFilesPanel = React.lazy(() => import("../../features/pc-files/PCFilesPanel").then((m) => ({ default: m.PCFilesPanel })))
+const SourceControlPanel = React.lazy(() => import("../../components/SourceControlPanel").then((m) => ({ default: m.SourceControlPanel })))
 
 const PANEL_SUSPENSE_FALLBACK = (
   <div

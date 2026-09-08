@@ -14,10 +14,10 @@ import {
   KanbanPanel,
   FileEditorPanel,
 } from "../../components/shellPanels"
-import { BrowserPanel } from "../../components/BrowserPanel"
-import LearningPage from "../../features/learning/LearningPage"
-import { PCFilesPanel } from "../../features/pc-files/PCFilesPanel"
-import { QuickChatPanel } from "../../components/QuickChatPanel"
+const BrowserPanel = React.lazy(() => import("../../components/BrowserPanel").then((m) => ({ default: m.BrowserPanel })))
+const LearningPage = React.lazy(() => import("../../features/learning/LearningPage"))
+const PCFilesPanel = React.lazy(() => import("../../features/pc-files/PCFilesPanel").then((m) => ({ default: m.PCFilesPanel })))
+const QuickChatPanel = React.lazy(() => import("../../components/QuickChatPanel").then((m) => ({ default: m.QuickChatPanel })))
 
 export const PANEL_SUSPENSE_FALLBACK = (
   <div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando…</div>
@@ -407,17 +407,19 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
           <button className="btn-icon compact" onClick={onClose} aria-label="Cerrar panel">×</button>
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
-          <QuickChatPanel
-            cerebrasKey={quickChatKeys.cerebras}
-            groqKey={quickChatKeys.groq}
-            goKey={quickChatKeys.go}
-            customKey={quickChatKeys.custom}
-            customUrl={quickChatKeys.customUrl}
-            config={config}
-            modelOptions={modelOptions}
-            providers={providerList}
-            onOpenSettings={onNavigateSettings}
-          />
+          <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
+            <QuickChatPanel
+              cerebrasKey={quickChatKeys.cerebras}
+              groqKey={quickChatKeys.groq}
+              goKey={quickChatKeys.go}
+              customKey={quickChatKeys.custom}
+              customUrl={quickChatKeys.customUrl}
+              config={config}
+              modelOptions={modelOptions}
+              providers={providerList}
+              onOpenSettings={onNavigateSettings}
+            />
+          </Suspense>
         </div>
       </div>
     )

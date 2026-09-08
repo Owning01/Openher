@@ -130,8 +130,11 @@ function toRelativePath(fullPath: string, baseDir?: string): string {
 }
 
 function previewLines(text: string, maxLines = 5): string {
-  const lines = text.split("\n")
-  if (lines.length <= maxLines) return text
+  if (!text) return ""
+  // Cortar a un límite razonable antes de hacer split para no fragmentar el heap con arrays gigantes
+  const safeText = text.length > 30000 ? text.slice(0, 30000) : text
+  const lines = safeText.split("\n")
+  if (lines.length <= maxLines && text.length <= 30000) return text
   return lines.slice(0, maxLines).join("\n") + "\n..."
 }
 

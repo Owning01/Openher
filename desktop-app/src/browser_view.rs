@@ -388,18 +388,6 @@ fn cmd_open(
         },
     );
     inner.park_others(view);
-    #[cfg(windows)]
-    {
-        let hwnd = crate::state::WINDOW_HWND.load(std::sync::atomic::Ordering::Relaxed);
-        if hwnd != 0 {
-            unsafe { crate::patch_child_windows(hwnd); }
-            let hwnd2 = hwnd;
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(350));
-                unsafe { crate::patch_child_windows(hwnd2); }
-            });
-        }
-    }
     Ok(())
 }
 
