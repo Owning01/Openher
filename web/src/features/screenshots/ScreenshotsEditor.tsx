@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useState } from "react"
 import { useScheduled } from "../../hooks/useScheduled"
 
 const SCREENSHOTS_URL = "http://127.0.0.1:3002"
