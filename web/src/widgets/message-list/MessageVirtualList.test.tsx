@@ -90,4 +90,39 @@ describe("MessageVirtualList (Plan 2)", () => {
     }).not.toThrow()
     tree!.unmount()
   })
+
+  it("leyendo arriba (200px del fondo), un mensaje nuevo NO arrastra abajo", async () => {
+    const { rerender } = render(
+      <MessageVirtualList {...base} messages={msgs(200)} messageScrollSignature="sig1" revealMessageID={null} revealNonce={0} />
+    )
+    // Asentar scroll de entrada + expirar el ledger programático (150ms).
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250))
+    })
+    const el = document.querySelector(".messages") as HTMLElement
+    // Viewport simulado: distancia al fondo = 200px (entre 80 y los 400
+    // viejos: con la tolerancia vieja esto te arrastraba, con 80px no).
+    Object.defineProperty(el, "scrollHeight", { configurable: true, value: 20000 })
+    Object.defineProperty(el, "clientHeight", { configurable: true, value: 800 })
+    el.scrollTop = 20000 - 800 - 200
+    const scrollTo = window.HTMLElement.prototype.scrollTo as unknown as ReturnType<typeof vi.fn>
+    scrollTo.mockClear()
+    // Usuario scrollea hacia arriba.
+    await act(async () => {
+      el.dispatchEvent(new Event("scroll"))
+    })
+    // Aparece el botón "ir abajo": el sistema sabe que no estamos al fondo.
+    expect(document.querySelector(".scroll-to-bottom")).not.toBeNull()
+    scrollTo.mockClear()
+    // Llega un mensaje nuevo (streaming): no debe robar la lectura.
+    rerender(
+      <MessageVirtualList {...base} messages={msgs(201)} messageScrollSignature="sig2" revealMessageID={null} revealNonce={0} />
+    )
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    expect(scrollTo).not.toHaveBeenCalled()
+    expect(el.scrollTop).toBe(20000 - 800 - 200)
+    expect(document.querySelector(".scroll-to-bottom")).not.toBeNull()
+  })
 })

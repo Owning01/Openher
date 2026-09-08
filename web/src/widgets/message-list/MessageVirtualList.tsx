@@ -56,7 +56,7 @@ export const MessageVirtualList = memo(function MessageVirtualList({
 }: MessageVirtualListProps) {
   const t = useT()
   const parentRef = useRef<HTMLDivElement | null>(null)
-  const { isAtBottom, setIsAtBottom, isNearBottom } = useFollowTail(parentRef, { threshold: 120 })
+  const { isAtBottom, setIsAtBottom, isNearBottom, programmaticUntilRef } = useFollowTail(parentRef, { threshold: 120 })
   const atBottomRef = useRef(true)
   useEffect(() => { atBottomRef.current = isAtBottom }, [isAtBottom])
 
@@ -134,14 +134,18 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     if (messages.length === 0) return
     setIsAtBottom(true)
     atBottomRef.current = true
+    // Ledger anti-parpadeo (igual que scrollToBottom clásico): los scroll
+    // intermedios del settling no voltean isAtBottom a false.
+    programmaticUntilRef.current = Date.now() + 150
     rowVirtualizer.scrollToIndex(messages.length - 1, { align: "end", behavior })
-  }, [messages.length, rowVirtualizer, setIsAtBottom])
+  }, [messages.length, rowVirtualizer, setIsAtBottom, programmaticUntilRef])
 
   // Entrada a sesión/vista y carga inicial (0 → N): fuerza el final.
-  // scrollToIndex usa estimaciones al inicio; se re-afirma en rAF + 150ms
-  // porque la medición real cambia totalSize. El crecimiento por streaming
-  // NO pasa por aquí (lo maneja el follow-tail de abajo). Si el usuario
-  // scrolleó hacia arriba en el medio, no se le roba la lectura.
+  // scrollToIndex usa estimaciones al inicio; se re-afirma en 2 rAF
+  // (~32ms, antes de que el usuario pueda tomar el control) porque la
+  // medición real cambia totalSize. Sin timeout largo: el de 150ms le
+  // robaba el scroll al usuario si se movía en el medio. El crecimiento
+  // por streaming NO pasa por aquí (lo maneja el follow-tail de abajo).
   const lastSessionRef = useRef<string | null>(null)
   const prevLenRef = useRef(0)
   useEffect(() => {
@@ -156,27 +160,32 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     atBottomRef.current = true
     scrollToEnd("auto")
     let cancelled = false
-    const raf = requestAnimationFrame(() => {
+    // Doble rAF: el segundo corre tras el paint con las burbujas del fondo
+    // ya medidas. Sin timeout largo para no robar scroll al usuario.
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
       if (!cancelled && atBottomRef.current) scrollToEnd("auto")
+      raf2 = requestAnimationFrame(() => {
+        if (!cancelled && atBottomRef.current) scrollToEnd("auto")
+      })
     })
-    const timer = window.setTimeout(() => {
-      if (!cancelled && atBottomRef.current) scrollToEnd("auto")
-    }, 150)
     return () => {
       cancelled = true
-      cancelAnimationFrame(raf)
-      window.clearTimeout(timer)
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
     }
   }, [view, selectedID, messages.length, scrollToEnd])
 
   // followTail durante streaming: si estamos al fondo, anclar al último
-  // mensaje (scrollToIndex, no scrollHeight estimado).
+  // mensaje (scrollToIndex, no scrollHeight estimado). Tolerancia 80px como
+  // el MessageList clásico: con 400px era imposible escapar del fondo (cada
+  // scroll hacia arriba dentro de la zona te arrastraba de vuelta).
   useEffect(() => {
     if (view !== "detail") return
     if (isAtBottom) {
       scrollToEnd("auto")
     } else if (messages.length > 0 && messageScrollSignature) {
-      if (isNearBottom(400)) {
+      if (isNearBottom(80)) {
         scrollToEnd("auto")
       }
     }
