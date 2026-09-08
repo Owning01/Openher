@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
 import { api } from "../api"
-import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "../utils/parseCommand"
+import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage, buildNoticeMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "../utils/parseCommand"
 import { computeRenderedMessages } from "../utils/rendered"
 import { isImagePart, countImageParts } from "../utils"
 import { formatServerError } from "../shared/errors/serverErrors"
@@ -998,6 +998,30 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         }
       }
       return "connect"
+    }
+    if (parsed?.type === "rename") {
+      setComposer("")
+      const title = parsed.title.trim()
+      if (!title) {
+        setOptimisticUserMessages((current) => [...current, optimisticMessage, buildNoticeMessage(selectedSession, "Usage: /rename <new title>")])
+        return
+      }
+      try {
+        await api.renameSession(config, selectedSession.id, title, selectedSession.directory)
+        try {
+          await onRefreshSessions()
+        } catch {
+          // ignore
+        }
+        setOptimisticUserMessages((current) => [...current, optimisticMessage, buildNoticeMessage(selectedSession, `Session renamed to "${title}"`)])
+      } catch (err) {
+        onSetRuntimeError(formatServerError(err))
+      }
+      return
+    }
+    if (parsed?.type === "export") {
+      setComposer("")
+      return "export"
     }
     if (parsed?.type === "command") {
       const { isKnown } = await resolveCommand(config, parsed.command, commands, onSetCommands)

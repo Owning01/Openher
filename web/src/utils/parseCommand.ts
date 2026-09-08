@@ -19,6 +19,8 @@ export type ParseCommandResult =
   | { type: "history" }
   | { type: "timeline" }
   | { type: "connect"; text: string }
+  | { type: "rename"; title: string }
+  | { type: "export" }
   | { type: "send_raw"; text: string }
   | null
 
@@ -39,11 +41,13 @@ export function parseCommand(text: string): ParseCommandResult {
 
   if (localCommand === "undo") return { type: "undo" }
   if (localCommand === "redo") return { type: "redo" }
-  if (localCommand === "compact") return { type: "compact" }
+  if (localCommand === "compact" || localCommand === "summarize") return { type: "compact" }
   if (localCommand === "themes") return { type: "themes" }
   if (localCommand === "history") return { type: "history" }
   if (localCommand === "timeline") return { type: "timeline" }
   if (localCommand === "connect") return { type: "connect", text: args }
+  if (localCommand === "rename") return { type: "rename", title: args }
+  if (localCommand === "export") return { type: "export" }
 
   return { type: "command", command, args }
 }
@@ -172,5 +176,14 @@ export function buildStatusMessage(selectedSession: SessionView): MessageEnvelop
   return {
     info: { id: uniqueId("local-assistant"), role: "assistant", sessionID: selectedSession.id, time: { created: now, completed: now } },
     parts: [{ id: uniqueId("local-assistant-part"), type: "text", text: status }]
+  }
+}
+
+// Aviso local del asistente (confirmaciones/errores de slash commands).
+export function buildNoticeMessage(selectedSession: SessionView, text: string): MessageEnvelope {
+  const now = Date.now()
+  return {
+    info: { id: uniqueId("local-assistant"), role: "assistant", sessionID: selectedSession.id, time: { created: now, completed: now } },
+    parts: [{ id: uniqueId("local-assistant-part"), type: "text", text }]
   }
 }

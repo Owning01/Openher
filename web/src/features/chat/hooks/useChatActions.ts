@@ -175,6 +175,11 @@ export function useChatActions(params: UseChatActionsParams) {
     [buildMarkdown, setRuntimeError]
   )
 
+  const handleExportMarkdown = useCallback(() => {
+    const p = getExportDefaultPath()
+    if (p) void exportMarkdownTo(p)
+  }, [getExportDefaultPath, exportMarkdownTo])
+
   const handleSnapshot = useCallback(() => {
     if (!selectedSession) return
     const snapshot = {
@@ -322,6 +327,7 @@ export function useChatActions(params: UseChatActionsParams) {
       }
       if (result === "connect") setShowConnectSheet(true)
       if (result === "history" || result === "timeline") openPromptHistory()
+      if (result === "export") handleExportMarkdown()
       return typeof result === "boolean" ? result : true
     },
     [
@@ -350,6 +356,7 @@ export function useChatActions(params: UseChatActionsParams) {
       enqueueOutbox,
       stopGenerationRef,
       setLocalRevertID,
+      handleExportMarkdown,
       setCommands,
       composerRef,
     ]
@@ -651,10 +658,7 @@ export function useChatActions(params: UseChatActionsParams) {
     handleExportChat,
     getExportDefaultPath,
     exportMarkdownTo,
-    handleExportMarkdown: () => {
-      const p = getExportDefaultPath()
-      if (p) void exportMarkdownTo(p)
-    },
+    handleExportMarkdown,
     handleSnapshot,
     handleSend,
     outboxActions,

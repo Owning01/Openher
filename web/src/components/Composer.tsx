@@ -76,18 +76,24 @@ async function downscaleImage(file: File): Promise<string> {
   }
 }
 
-const HISTORY_KEY = "opencode.remote.promptHistory"
+const HISTORY_BASE_KEY = "opencode.remote.promptHistory"
 const MAX_HISTORY = 50
 
-function loadHistory(): string[] {
+// Historial POR SESIÓN (igual que el draft): con key global las flechas
+// ↑/↓ mostraban prompts de todas las sesiones mezclados.
+function historyKey(sessionID?: string): string {
+  return sessionID ? `${HISTORY_BASE_KEY}.${sessionID}` : HISTORY_BASE_KEY
+}
+
+function loadHistory(sessionID?: string): string[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY)
+    const raw = localStorage.getItem(historyKey(sessionID))
     return raw ? JSON.parse(raw) : []
   } catch { return [] }
 }
 
-function saveHistory(h: string[]) {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)) } catch { }
+function saveHistory(sessionID: string | undefined, h: string[]) {
+  try { localStorage.setItem(historyKey(sessionID), JSON.stringify(h)) } catch { }
 }
 
 type MentionItem = { id: string; name: string; description?: string; source: "agent" | "file" | "mcp" | "skill" }
@@ -129,7 +135,10 @@ const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
   { name: "undo", description: "Undo last message", source: "command" },
   { name: "redo", description: "Redo last undone message", source: "command" },
   { name: "compact", description: "Compact/compress conversation history", source: "command" },
-  { name: "theme", description: "Open theme picker", source: "command" },
+  { name: "summarize", description: "Compact/compress conversation history (alias)", source: "command" },
+  { name: "rename", description: "Rename current session: /rename <title>", source: "command" },
+  { name: "export", description: "Export conversation to Markdown", source: "command" },
+  { name: "themes", description: "List available themes", source: "command" },
   { name: "history", description: "Show prompt history panel", source: "command" },
   { name: "timeline", description: "Show prompt timeline panel", source: "command" },
   { name: "connect", description: "Connect providers (API keys, OpenAI-compatible)", source: "command" },
@@ -282,9 +291,16 @@ export const Composer = memo(function Composer({
     return () => window.removeEventListener("plugin:insert-text", handleInsert)
   }, [handleChange])
 
-  const promptHistoryRef = useRef<string[]>(loadHistory())
+  const promptHistoryRef = useRef<string[]>(loadHistory(sessionID))
   const historyIndexRef = useRef(-1)
   const [historyDraft, setHistoryDraft] = useState<string | null>(null)
+
+  // Cambio de chat: se adopta el historial de esa sesión (no el global).
+  useEffect(() => {
+    promptHistoryRef.current = loadHistory(sessionID)
+    historyIndexRef.current = -1
+    setHistoryDraft(null)
+  }, [sessionID])
 
   const visibleAgentsRaw = useMemo(
     () => (allAgentOptions ?? primaryAgentOptions).filter((a) => !a.hidden),
@@ -422,8 +438,8 @@ export const Composer = memo(function Composer({
     if (h[0] === text) return
     const next = [text, ...h].slice(0, MAX_HISTORY)
     promptHistoryRef.current = next
-    saveHistory(next)
-  }, [])
+    saveHistory(sessionID, next)
+  }, [sessionID])
 
   const selectMention = useCallback((item: MentionItem) => {
     const cur = localValueRef.current ?? ""
