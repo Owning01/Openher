@@ -239,13 +239,13 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ===== LedSwitch: on/off con LED (rojo = off, verde = on) =====
-   Adaptado del diseño 210x50 a fila de settings (84x30): misma pista
-   oscura, pastilla deslizante con agarre y punto LED con glow. */
+   Compacto para fila de settings (54x22): misma pista oscura, pastilla
+   deslizante con agarre y punto LED con glow. */
 .led-switch {
   position: relative;
   flex: 0 0 auto;
-  width: 84px;
-  height: 30px;
+  width: 54px;
+  height: 22px;
   box-sizing: border-box;
   padding: 2px;
   background: #0d0d0d;
@@ -278,9 +278,9 @@ input[type="range"]::-moz-range-thumb {
 .led-switch input[type="checkbox"] + label:before {
   content: "";
   display: inline-block;
-  width: 5px;
-  height: 5px;
-  margin-left: 7px;
+  width: 4px;
+  height: 4px;
+  margin-left: 5px;
   background: #fff;
   border-radius: 50%;
   vertical-align: middle;
@@ -302,8 +302,8 @@ input[type="range"]::-moz-range-thumb {
   top: 50%;
   left: 50%;
   width: 2px;
-  height: 14px;
-  margin-top: -7px;
+  height: 10px;
+  margin-top: -5px;
   margin-left: -1px;
   border-radius: 2px;
   background: #0d0d0d;
@@ -321,10 +321,10 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.3);
 }
 .led-switch input[type="checkbox"] + label i:before {
-  left: -4px;
+  left: -3px;
 }
 .led-switch input[type="checkbox"] + label i:after {
-  left: 4px;
+  left: 3px;
 }
 .led-switch input[type="checkbox"]:checked + label {
   left: 50%;

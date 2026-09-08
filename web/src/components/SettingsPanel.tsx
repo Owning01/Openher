@@ -6,6 +6,7 @@ import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, Vie
 import type { LanguageCode } from "../i18n"
 import { describeProfile, isPairProfile } from "../hooks/useServers"
 import { ProviderManager } from "./ProviderManager"
+import { DefaultModelPicker } from "./DefaultModelPicker"
 import { ChatCustomizer } from "./ChatCustomizer"
 import { SnippetManager } from "./SnippetManager"
 import { DataUsageModal } from "./DataUsageModal"
@@ -533,6 +534,23 @@ export const SettingsPanel = memo(function SettingsPanel({
            </button>
           ))}
          </div>
+        </div>
+       </div>
+
+       <p className="settings-group-heading">{t('settings.defaultModel')}</p>
+       <div className="setting-item-row">
+        <div className="setting-item-info">
+         <span className="setting-item-title">{t('settings.defaultModel')}</span>
+         <p className="setting-item-desc">Modelo de lenguaje predeterminado para nuevas conversaciones.</p>
+        </div>
+        <div className="setting-item-control">
+         <DefaultModelPicker
+          modelOptions={uniqueModels}
+          selectedModelKey={selectedModelKey}
+          onChangeModel={onChangeModel}
+          modelKey={mk}
+          isBlocked={blockedModels.isBlocked}
+         />
         </div>
        </div>
 
