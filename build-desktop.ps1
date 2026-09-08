@@ -25,6 +25,14 @@ try {
   Write-Host "  OpenHer Desktop - Build & Packaging" -ForegroundColor Cyan
   Write-Host "==========================================" -ForegroundColor Cyan
 
+  # Fail-fast: con el .exe abierto Windows lo bloquea y la copia quedaría vieja.
+  # Se revalida después de compilar (pudo abrirse durante el build).
+  $runningNow = Get-Process "opencode-desktop" -ErrorAction SilentlyContinue
+  if ($runningNow) {
+    $pidsNow = ($runningNow | ForEach-Object { $_.Id }) -join ", "
+    throw "opencode-desktop.exe está en ejecución (PID $pidsNow). Ciérrelo antes de compilar."
+  }
+
   # PATH y resolución de pnpm
   $node24 = "G:\Dev\nodejs-24"
   $pnpmCmd = Join-Path $node24 "pnpm.cmd"
@@ -96,6 +104,24 @@ try {
 
   Write-Host "  -> Binario origen: $targetExe" -ForegroundColor DarkGray
 
+  # El .exe en ejecución queda bloqueado por Windows y Copy-Item falla.
+  # Antes se avisaba (o silenciaba) y se imprimía ÉXITO igual: fail-fast.
+  $running = Get-Process "opencode-desktop" -ErrorAction SilentlyContinue
+  if ($running) {
+    $pids = ($running | ForEach-Object { $_.Id }) -join ", "
+    throw "opencode-desktop.exe está en ejecución (PID $pids). Ciérrelo antes de compilar: con el .exe abierto Windows lo bloquea y la copia queda vieja."
+  }
+
+  function Copy-Verified([string]$src, [string]$dst) {
+    Copy-Item -Path $src -Destination $dst -Force
+    $a = (Get-FileHash -Path $src -Algorithm SHA256).Hash
+    $b = (Get-FileHash -Path $dst -Algorithm SHA256).Hash
+    if ($a -ne $b) {
+      throw "Verificación fallida al copiar a $dst (hash distinto al origen). Cierre opencode-desktop.exe y recompile."
+    }
+    Write-Host "  -> Copiado y verificado: $dst" -ForegroundColor Green
+  }
+
   # 3. Empaquetar y copiar a la carpeta destino
   Write-Host "Empaquetando en $OutputDir..." -ForegroundColor Yellow
 
@@ -103,23 +129,14 @@ try {
   $destDataWebDist = Join-Path $OutputDir "data\web-dist"
   New-Item -ItemType Directory -Force -Path $destDataWebDist | Out-Null
 
-  # Copiar ejecutable al OutputDir
+  # Copiar ejecutable al OutputDir (error fatal si falla o no verifica)
   $destExe = Join-Path $OutputDir "opencode-desktop.exe"
-  try {
-    Copy-Item -Path $targetExe -Destination $destExe -Force
-    Write-Host "  -> Copiado: $destExe" -ForegroundColor Green
-  } catch {
-    Write-Host "  -> AVISO: $destExe está en uso por un proceso activo." -ForegroundColor Yellow
-  }
+  Copy-Verified $targetExe $destExe
 
-  # Copiar ejecutable también a desktop-app/ si no está en uso
+  # Copiar ejecutable también a desktop-app/ (mismo criterio)
   $devExe = Join-Path $desktopAppDir "opencode-desktop.exe"
   if ($devExe -ne $targetExe) {
-    try {
-      Copy-Item -Path $targetExe -Destination $devExe -Force
-    } catch {
-      # Ignorar si está abierto en ejecución
-    }
+    Copy-Verified $targetExe $devExe
   }
 
   # Copiar data/web-dist a OutputDir

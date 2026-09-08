@@ -40,17 +40,21 @@ type MessageVirtualListProps = {
   thinkingDefault?: "auto" | "expanded" | "collapsed"
   onRegenerate?: () => void
   onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
+  hasMoreMessages?: boolean
+  isLoadingMore?: boolean
+  onLoadMoreMessages?: () => void
   // virtualizer tuning
   overscan?: number
   estimatedRowHeight?: number
 }
 
 const DEFAULT_ESTIMATE = 180
-const DEFAULT_OVERSCAN = 8
+const DEFAULT_OVERSCAN = 2
 
 export const MessageVirtualList = memo(function MessageVirtualList({
   messages, pendingIndex, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
   revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen, highlight, scrollToMessageID, revealMessageID, revealNonce, outboxActions, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff,
+  hasMoreMessages, isLoadingMore, onLoadMoreMessages,
   overscan = DEFAULT_OVERSCAN,
   estimatedRowHeight = DEFAULT_ESTIMATE,
 }: MessageVirtualListProps) {
@@ -244,6 +248,18 @@ export const MessageVirtualList = memo(function MessageVirtualList({
           </div>
         ) : (
           <>
+            {hasMoreMessages && (
+              <div className="load-previous-wrap">
+                <button
+                  type="button"
+                  className="load-previous-messages-btn"
+                  onClick={onLoadMoreMessages}
+                  disabled={isLoadingMore}
+                >
+                  {isLoadingMore ? "Cargando mensajes anteriores..." : "↑ Cargar mensajes anteriores"}
+                </button>
+              </div>
+            )}
             {/* Contenedor virtual con bottom alignment */}
             <div
               style={{

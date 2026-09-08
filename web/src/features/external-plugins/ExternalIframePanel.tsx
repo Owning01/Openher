@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { shell } from "../../shell"
 import { ContextMenu } from "../../components/ContextMenu"
+import { RefreshIcon, TrashIcon, CheckIcon } from "../../Icons"
 
 type Props = { name: string; title: string; url: string; isWidget?: boolean }
 
@@ -404,9 +405,9 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
    y={ctxMenu.y}
    onClose={() => setCtxMenu(null)}
    actions={[
-    { id: "restart", label: restarting ? "Reiniciando…" : "Reiniciar servidor", icon: "↻", onAction: doRestart },
-    { id: "hard", label: "Borrar caché y recargar (Ctrl+Shift+R)", icon: "", onAction: doHardReload },
-    { id: "auto", label: autoReload ? "Auto-actualizar: ON" : "Auto-actualizar: OFF", icon: autoReload ? "●" : "○", onAction: () => setAutoReload((v) => !v) },
+    { id: "restart", label: restarting ? "Reiniciando…" : "Reiniciar servidor", icon: <RefreshIcon size={15} />, onAction: doRestart },
+    { id: "hard", label: "Borrar caché y recargar", icon: <TrashIcon size={15} />, shortcut: "Ctrl+Shift+R", onAction: doHardReload },
+    { id: "auto", label: autoReload ? "Auto-actualizar: ON" : "Auto-actualizar: OFF", icon: autoReload ? <CheckIcon size={15} /> : undefined, onAction: () => setAutoReload((v) => !v) },
    ]}
    />
   )}
@@ -563,9 +564,9 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
    y={ctxMenu.y}
    onClose={() => setCtxMenu(null)}
    actions={[
-   { id: "restart", label: restarting ? "Reiniciando…" : "Reiniciar servidor", icon: "↻", onAction: doRestart },
-   { id: "hard", label: "Borrar caché y recargar (Ctrl+Shift+R)", icon: "", onAction: doHardReload },
-   { id: "auto", label: autoReload ? "Auto-actualizar: ON" : "Auto-actualizar: OFF", icon: autoReload ? "●" : "○", onAction: () => setAutoReload((v) => !v) },
+    { id: "restart", label: restarting ? "Reiniciando…" : "Reiniciar servidor", icon: <RefreshIcon size={15} />, onAction: doRestart },
+    { id: "hard", label: "Borrar caché y recargar", icon: <TrashIcon size={15} />, shortcut: "Ctrl+Shift+R", onAction: doHardReload },
+    { id: "auto", label: autoReload ? "Auto-actualizar: ON" : "Auto-actualizar: OFF", icon: autoReload ? <CheckIcon size={15} /> : undefined, onAction: () => setAutoReload((v) => !v) },
    ]}
   />
   )}

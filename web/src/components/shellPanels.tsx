@@ -1113,6 +1113,7 @@ export const TerminalPanel = memo(function TerminalPanel({
             ...(onClose ? [{
               id: "close",
               label: "Cerrar terminal",
+              dividerBefore: true,
               onAction: () => onClose(),
             }] : []),
           ]}
@@ -1993,6 +1994,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
               >
                 <span><SaveIcon size={14} /></span> Obtener ruta completa
               </button>
+              <div className="menu-separator" role="separator" />
               <button
                 type="button"
                 className="overflow-item"
@@ -2027,6 +2029,7 @@ export const ExplorerPanel = memo(function ExplorerPanel({
               >
                 <span><MonitorIcon size={14} /></span> Abrir en el Explorador
               </button>
+              <div className="menu-separator" role="separator" />
               <button
                 type="button"
                 className="overflow-item"

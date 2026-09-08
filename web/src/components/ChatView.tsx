@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, EyeIcon, NoteIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, EyeIcon, NoteIcon, CopyIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { MessageVirtualList } from "../widgets/message-list/MessageVirtualList"
@@ -134,6 +134,9 @@ export type ChatViewProps = {
   onFocusVisualFile?: (path: string) => void
   // Cola visible: acciones por id de mensaje pendiente (eliminar/editar/enviar).
   outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
+  hasMoreMessages?: boolean
+  isLoadingMore?: boolean
+  onLoadMoreMessages?: () => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -159,7 +162,8 @@ export const ChatView = memo(function ChatView({
   onExportMarkdownTo, exportDefaultPath, onEditFile,
   charLimit, compactTools, minimalistMode, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt,
   chatSettings, onChatSettingChange, onResetChatSettings, onOpenADEDiff,
-  visualSelection, onClearVisualSelection, onFocusVisualFile, outboxActions
+  visualSelection, onClearVisualSelection, onFocusVisualFile, outboxActions,
+  hasMoreMessages, isLoadingMore, onLoadMoreMessages
 }: ChatViewProps) {
   const t = useT()
   const [messageQuery, setMessageQuery] = useState("")
@@ -647,6 +651,9 @@ export const ChatView = memo(function ChatView({
           onRegenerate={onRegenerate}
           onOpenADEDiff={onOpenADEDiff}
           outboxActions={outboxActions}
+          hasMoreMessages={hasMoreMessages}
+          isLoadingMore={isLoadingMore}
+          onLoadMoreMessages={onLoadMoreMessages}
         />
         ) : (
         <MessageList
@@ -724,10 +731,10 @@ export const ChatView = memo(function ChatView({
           x={contextMenu.x}
           y={contextMenu.y}
           actions={[
-            { id: "copy", label: t('detail.contextMenu.copy'), onAction: () => navigator.clipboard.writeText(
+            { id: "copy", label: t('detail.contextMenu.copy'), icon: <CopyIcon size={15} />, onAction: () => navigator.clipboard.writeText(
               messages.find(m => m.info.id === contextMenu.messageID)?.text ?? ""
             )},
-            { id: "revert", label: t('detail.contextMenu.revert'), onAction: () => onRevertToMessage?.(contextMenu.messageID) },
+            { id: "revert", label: t('detail.contextMenu.revert'), icon: <HistoryIcon size={15} />, onAction: () => onRevertToMessage?.(contextMenu.messageID) },
           ]}
           onClose={() => setContextMenu(null)}
         />

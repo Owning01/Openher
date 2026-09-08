@@ -3,6 +3,26 @@ import { isImagePart } from "../utils.ts"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
+const MAX_TOOL_OUTPUT_CHARS = 1500
+const PRESERVE_TOOL_HEAD_CHARS = 800
+
+function pruneToolState(state: MessageEnvelope["parts"][number]["state"]): MessageEnvelope["parts"][number]["state"] {
+  if (!state || typeof state !== "object") return state
+  const s = state as Record<string, any>
+  if (s.status !== "completed") return state
+
+  let modified = false
+  const pruned = { ...s }
+
+  if (typeof s.output === "string" && s.output.length > MAX_TOOL_OUTPUT_CHARS) {
+    const total = s.output.length
+    pruned.output = s.output.slice(0, PRESERVE_TOOL_HEAD_CHARS) + `\n... [output pruned for RAM: ${total} chars]`
+    modified = true
+  }
+
+  return modified ? pruned : state
+}
+
 export type RenderedCacheEntry = {
   src: MessageEnvelope
   rendered: RenderedMessage
@@ -81,14 +101,19 @@ export function computeRenderedMessages(
         if (part.sessionID && part.sessionID !== message.info.sessionID && !isTaskCard) {
           continue
         }
+        let toolText = part.text
+        if (typeof toolText === "string" && toolText.length > MAX_TOOL_OUTPUT_CHARS) {
+          toolText = toolText.slice(0, PRESERVE_TOOL_HEAD_CHARS) + `\n... [text pruned for RAM: ${toolText.length} chars]`
+        }
+
         toolParts.push({
           id: part.id,
           type: part.type,
           sessionID: part.sessionID ?? message.info.sessionID,
-          text: part.text,
+          text: toolText,
           callID: part.callID,
           tool: part.tool,
-          state: part.state,
+          state: pruneToolState(part.state),
         })
         continue
       }

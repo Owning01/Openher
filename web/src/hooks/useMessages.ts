@@ -83,10 +83,16 @@ function buildOutboxMessage(item: OutboxItem): MessageEnvelope {
   }
 }
 
+const INITIAL_PAGE_LIMIT = 35
+const PAGE_SIZE = 35
+
 export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKey = COMPOSER_STORAGE_KEY) {
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<MessageEnvelope[]>([])
   const [outbox, setOutbox] = useState<OutboxItem[]>([])
+  const [messageLimit, setMessageLimit] = useState(INITIAL_PAGE_LIMIT)
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const enqueueOutbox = useCallback((sessionID: string, text: string, images?: OutboxItem["images"]) => {
     const item: OutboxItem = {
       id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -291,6 +297,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     loadedSessionIDRef.current = null
     setCurrentSessionId(null)
     subagentAnchorRef.current.clear()
+    setMessageLimit(INITIAL_PAGE_LIMIT)
+    setHasMoreMessages(false)
+    setIsLoadingMore(false)
     setMessages([])
     setOptimisticUserMessages([])
     setAwaitingAssistantReply(false)
@@ -318,7 +327,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // Podar anchors de subagentes: solo eran válidos para la sesión previa.
     // Sin poda, el map crece toda la vida de la app y retiene mensajes viejos.
     subagentAnchorRef.current.clear()
-    const limit = dataMode === "ultra" ? 100 : dataMode === "miser" ? 100 : 200
+    const limit = Math.max(INITIAL_PAGE_LIMIT, messageLimit)
 
     const raw = await api.loadMessages(config, sessionID, directory, limit)
     if (requestID !== loadSelectedRequestRef.current) return
@@ -326,6 +335,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // Defensivo: un item null/corrupto del server no debe tumbar el render
     // (msg.map(m => m.info.id) con m undefined = TypeError).
     const safe = msg.filter((m): m is MessageEnvelope => !!m && !!m.info?.id)
+    setHasMoreMessages(safe.length >= limit)
     // Eco sin bytes: reinyectar los dataURL locales en el mensaje confirmado
     // (el server puede podarlos por tamaño). Sin esto la imagen "aparece y se
     // borra": el optimista se elimina por conteo y el eco queda sin src.
@@ -487,7 +497,55 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         }
       }
     }
-  }, [config, dataMode])
+  }, [config, dataMode, messageLimit])
+
+  const loadMoreMessages = useCallback(async () => {
+    if (isLoadingMore) return
+    const sid = loadedSessionIDRef.current ?? currentSessionId
+    if (!sid) return
+    setIsLoadingMore(true)
+    const nextLimit = messageLimit + PAGE_SIZE
+    setMessageLimit(nextLimit)
+    try {
+      const raw = await api.loadMessages(config, sid, undefined, nextLimit)
+      const msg = dataMode === "full" || dataMode === "saver" ? raw : raw.map((m) => stripNonEssential(m, dataMode))
+      const safe = msg.filter((m): m is MessageEnvelope => !!m && !!m.info?.id)
+      setHasMoreMessages(safe.length >= nextLimit)
+      setMessages((prev) => {
+        const seen = new Set<string>()
+        let changed = prev.some((m) => m.info.sessionID !== sid)
+        const msgMap = new Map(safe.map((m) => [m.info.id, m]))
+        const merged: MessageEnvelope[] = []
+        for (const m of prev) {
+          if (m.info.sessionID !== sid) continue
+          if (seen.has(m.info.id)) { changed = true; continue }
+          seen.add(m.info.id)
+          const updated = msgMap.get(m.info.id)
+          if (updated) {
+            const remoteIDs = new Set(updated.parts.map((p) => p.id))
+            const extraLocal = m.parts.filter((p) => !remoteIDs.has(p.id))
+            merged.push(extraLocal.length > 0 ? { ...updated, parts: [...updated.parts, ...extraLocal] } : updated)
+          } else {
+            merged.push(m)
+          }
+        }
+        for (const m of safe) {
+          if (!seen.has(m.info.id)) {
+            changed = true
+            seen.add(m.info.id)
+            merged.push(m)
+          }
+        }
+        if (!changed && merged.length === prev.length) return prev
+        merged.sort((a, b) => (a.info.time.created ?? 0) - (b.info.time.created ?? 0))
+        return merged
+      })
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }, [isLoadingMore, currentSessionId, messageLimit, config, dataMode])
 
   const removeOptimistic = useCallback((id: string) => {
     setOptimisticUserMessages((current) => current.filter((m) => m.info.id !== id))
@@ -979,6 +1037,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     completionShouldPlayRef,
     clearSession, preloadMessages, loadSelected, send: updateSend, abortSession,
     undoMessage, redoMessage, compactSession, sendShell: sendShellCallback,
-    applyDelta, applyPart
+    applyDelta, applyPart,
+    hasMoreMessages, isLoadingMore, loadMoreMessages
   }
 }

@@ -1,5 +1,5 @@
 import { memo, useRef, useState, useCallback, useMemo } from "react"
-import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon, ArchiveIcon, TrashIcon } from "../Icons"
+import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon, ArchiveIcon, TrashIcon, ChatIcon, StarIcon, PencilIcon, CopyIcon, MonitorIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
@@ -237,6 +237,7 @@ export const SessionList = memo(function SessionList({
         {
           id: "open",
           label: t('sessions.open') || "Abrir",
+          icon: <ChatIcon size={15} />,
           onAction: () => {
             onOpen(sessionContextMenu.session.id, sessionContextMenu.session.directory)
           }
@@ -246,6 +247,7 @@ export const SessionList = memo(function SessionList({
           label: favorites.has(sessionContextMenu.session.id)
             ? t('favorites.remove')
             : t('favorites.add'),
+          icon: <StarIcon size={15} />,
           onAction: () => {
             onToggleFavorite(sessionContextMenu.session.id)
           }
@@ -253,6 +255,7 @@ export const SessionList = memo(function SessionList({
         {
           id: "rename",
           label: t('session.rename') || "Renombrar sesión",
+          icon: <PencilIcon size={15} />,
           onAction: () => {
             onStartRename(sessionContextMenu.session)
           }
@@ -260,6 +263,8 @@ export const SessionList = memo(function SessionList({
         ...(onArchive ? [{
           id: "archive",
           label: t('detail.archive') || "Archivar sesión",
+          icon: <ArchiveIcon size={15} />,
+          dividerBefore: true,
           onAction: () => {
             onArchive(sessionContextMenu.session.id)
           }
@@ -267,6 +272,9 @@ export const SessionList = memo(function SessionList({
         {
           id: "delete",
           label: t('session.delete') || "Eliminar sesión",
+          icon: <TrashIcon size={15} />,
+          danger: true,
+          dividerBefore: !onArchive,
           onAction: () => {
             onDelete(sessionContextMenu.session)
           }
@@ -274,6 +282,8 @@ export const SessionList = memo(function SessionList({
         {
           id: "copy-id",
           label: "Copiar ID",
+          icon: <CopyIcon size={15} />,
+          dividerBefore: true,
           onAction: () => {
             navigator.clipboard?.writeText(sessionContextMenu.session.id).catch(() => {})
           }
@@ -291,6 +301,7 @@ export const SessionList = memo(function SessionList({
         {
           id: "new-session",
           label: t('project.newSession'),
+          icon: <PlusIcon size={15} />,
           onAction: () => {
             onNewSessionHere?.(projectContextMenu.dir)
           }
@@ -298,6 +309,7 @@ export const SessionList = memo(function SessionList({
         ...(onOpenExplorer ? [{
           id: "view-explorer",
           label: t('project.viewExplorer'),
+          icon: <FolderIcon size={15} />,
           onAction: () => {
             onOpenExplorer(projectContextMenu.dir)
           }
@@ -305,6 +317,7 @@ export const SessionList = memo(function SessionList({
         {
           id: "reveal-explorer",
           label: t('project.revealExplorer'),
+          icon: <MonitorIcon size={15} />,
           onAction: () => {
             shell.fs.reveal(projectContextMenu.dir).catch(() => {})
           }
@@ -314,6 +327,8 @@ export const SessionList = memo(function SessionList({
           label: projectContextMenu.sessions.length > 0 && projectContextMenu.sessions.every((s) => favorites.has(s.id))
             ? t('favorites.remove')
             : t('favorites.add'),
+          icon: <StarIcon size={15} />,
+          dividerBefore: true,
           onAction: () => {
             if (projectContextMenu.sessions.length === 0) return
             const allFav = projectContextMenu.sessions.every((s) => favorites.has(s.id))
@@ -331,6 +346,8 @@ export const SessionList = memo(function SessionList({
         {
           id: "copy-path",
           label: t('project.copyPath'),
+          icon: <CopyIcon size={15} />,
+          dividerBefore: true,
           onAction: () => {
             navigator.clipboard?.writeText(projectContextMenu.dir).catch(() => {})
           }
