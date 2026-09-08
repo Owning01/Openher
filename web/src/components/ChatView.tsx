@@ -285,7 +285,7 @@ export const ChatView = memo(function ChatView({
     }
   }, [])
   const overflowRef = useRef<HTMLDivElement | null>(null)
-  const promptEntries = useMemo(() => extractUserPrompts(messages), [messages])
+  const promptEntries = useMemo(() => extractUserPrompts(messages, selectedSession?.id), [messages, selectedSession?.id])
   // Salto a un prompt: publica el id objetivo (con nonce para repetir clics
   // sobre el mismo) y MessageList expande la ventana visible hasta incluirlo,
   // luego hace scroll + destello. Sin esto, los prompts anteriores a la

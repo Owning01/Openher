@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "./parseCommand"
+import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage, buildNoticeMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "./parseCommand"
 import type { ServerConfig, SessionView } from "../types"
 
 // Mock api module for resolveCommand
@@ -89,6 +89,29 @@ describe("parseCommand", () => {
 
   it("parses /themes", () => {
     expect(parseCommand("/themes")).toEqual({ type: "themes" })
+  })
+
+  it("parses /summarize as compact alias", () => {
+    expect(parseCommand("/summarize")).toEqual({ type: "compact" })
+    expect(parseCommand("/SUMMARIZE")).toEqual({ type: "compact" })
+  })
+
+  it("parses /rename with title", () => {
+    expect(parseCommand("/rename Mi sesión")).toEqual({ type: "rename", title: "Mi sesión" })
+  })
+
+  it("parses /rename without title as empty title", () => {
+    expect(parseCommand("/rename")).toEqual({ type: "rename", title: "" })
+    expect(parseCommand("/rename   ")).toEqual({ type: "rename", title: "" })
+  })
+
+  it("parses /rename case-insensitively and trims args", () => {
+    expect(parseCommand("/RENAME  título con espacios  ")).toEqual({ type: "rename", title: "título con espacios" })
+  })
+
+  it("parses /export", () => {
+    expect(parseCommand("/export")).toEqual({ type: "export" })
+    expect(parseCommand("/EXPORT")).toEqual({ type: "export" })
   })
 
   it("parses /history and /timeline to panel types", () => {
@@ -381,5 +404,21 @@ describe("buildStatusMessage", () => {
     const session = makeSession({ title: "", status: "", directory: "" })
     const msg = buildStatusMessage(session)
     expect(msg.parts[0].text).toBe("Session:  ()\nDirectory: ")
+  })
+})
+
+describe("buildNoticeMessage", () => {
+  it("builds assistant message with given text", () => {
+    const session = makeSession()
+    const msg = buildNoticeMessage(session, 'Session renamed to "Nueva"')
+    expect(msg.info.role).toBe("assistant")
+    expect(msg.info.sessionID).toBe(session.id)
+    expect(msg.parts).toHaveLength(1)
+    expect(msg.parts[0].text).toBe('Session renamed to "Nueva"')
+  })
+
+  it("sets completed time equal to created", () => {
+    const msg = buildNoticeMessage(makeSession(), "hi")
+    expect(msg.info.time.completed).toBe(msg.info.time.created)
   })
 })

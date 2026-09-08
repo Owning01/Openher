@@ -125,6 +125,7 @@ desktop-app.exe (Rust)             OpenCode Server (Go/TS)
 - `shell.ts`: Cliente HTTP para el backend Rust (`:4848`). 15 `ShellPanelKind` + `kanbanPromptText` + clientes git/fs.
 - `utils/`: `sessionDirs.ts` (`dirKey`/agrupado/backfill), `urlDrag.ts` (bridge solo-URL 5 MIME), `chatNotes.ts` (nota por sesión 20KB), `promptHistory.ts`, `editorOps.ts`, `fsChanges.ts` (`normFsPath`).
 - `hooks/useMessages.ts` (~921L): árbol de mensajes + outbox por sesión + batch SSE por rAF + `renderedCacheRef`; límite 200 (ultra/miser 100). Rehidrata bytes de imagen en el eco (`rehydrateImages` en `utils/parseCommand.ts`: el server poda dataURLs y la imagen "aparecía y se borraba").
+- `components/Composer.tsx`: historial ↑/↓ POR SESIÓN (`opencode.remote.promptHistory.<id>`, 50 c/u; antes key global mezclaba todas). `utils/promptHistory.ts`: `extractUserPrompts(msgs, sessionID?)` filtra el panel /history a la sesión activa.
 - `hooks/useSSEHandler.ts`: Parser de eventos SSE del servidor (tokens de texto, inicio/fin de tools, errores).
 - `hooks/useMemoryUsage.ts`: heap JS + `GET /shell/mem` (chip apilado en ActivityBar).
 - `hooks/useChatSettings.ts`: 21 campos incl. `reduceMotion` → `html.no-motion`.

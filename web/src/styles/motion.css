@@ -73,6 +73,7 @@
 }
 
 /* Mensajes: desactivar animación pesada cuando virtualizado usa position:absolute */
+.messages [data-index] .message,
 .messages .message[data-virtualized] {
   animation: none !important;
 }

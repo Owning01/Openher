@@ -1,4 +1,4 @@
-import { memo, useRef, useEffect, useState, useMemo, useCallback } from "react"
+import { memo, useRef, useEffect, useLayoutEffect, useState, useMemo, useCallback } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { ChatIcon, ScrollDownIcon, CompressIcon } from "../../Icons"
 import { useT } from "../../i18n-context"
@@ -144,16 +144,19 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     rowVirtualizer.scrollToIndex(messages.length - 1, { align: "end", behavior })
   }, [messages.length, rowVirtualizer, setIsAtBottom, programmaticUntilRef])
 
-  // Entrada a sesión/vista y carga inicial (0 → N): fuerza el final.
-  // scrollToIndex usa estimaciones al inicio; se re-afirma en 2 rAF
-  // (~32ms, antes de que el usuario pueda tomar el control) porque la
-  // medición real cambia totalSize. Sin timeout largo: el de 150ms le
-  // robaba el scroll al usuario si se movía en el medio. El crecimiento
-  // por streaming NO pasa por aquí (lo maneja el follow-tail de abajo).
+  // Entrada a sesión/vista y carga inicial (0 → N): fuerza el final antes del paint
+  // para que el chat aparezca DIRECTAMENTE en el último mensaje sin animación de scroll
+  // ni salto visible desde arriba.
   const lastSessionRef = useRef<string | null>(null)
   const prevLenRef = useRef(0)
-  useEffect(() => {
-    if (view !== "detail" || !selectedID || messages.length === 0) return
+  const [settledSession, setSettledSession] = useState<string | null>(null)
+  const isSettling = Boolean(selectedID && messages.length > 0 && settledSession !== selectedID)
+
+  useLayoutEffect(() => {
+    if (view !== "detail" || !selectedID || messages.length === 0) {
+      setSettledSession(selectedID)
+      return
+    }
     const switched = selectedID !== lastSessionRef.current
     lastSessionRef.current = selectedID
     if (!switched && prevLenRef.current !== 0) {
@@ -162,15 +165,23 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     }
     prevLenRef.current = messages.length
     atBottomRef.current = true
+
+    // Anclar el scroll del DOM inmediatamente
+    const el = parentRef.current
+    if (el) {
+      el.scrollTop = el.scrollHeight || 99999999
+    }
     scrollToEnd("auto")
+
     let cancelled = false
-    // Doble rAF: el segundo corre tras el paint con las burbujas del fondo
-    // ya medidas. Sin timeout largo para no robar scroll al usuario.
     let raf2 = 0
     const raf1 = requestAnimationFrame(() => {
       if (!cancelled && atBottomRef.current) scrollToEnd("auto")
       raf2 = requestAnimationFrame(() => {
-        if (!cancelled && atBottomRef.current) scrollToEnd("auto")
+        if (!cancelled) {
+          if (atBottomRef.current) scrollToEnd("auto")
+          setSettledSession(selectedID)
+        }
       })
     })
     return () => {
@@ -266,6 +277,8 @@ export const MessageVirtualList = memo(function MessageVirtualList({
                 height: `${totalSize + paddingTop}px`,
                 width: "100%",
                 position: "relative",
+                opacity: isSettling ? 0 : 1,
+                transition: isSettling ? "none" : "opacity 0.08s ease-out",
               }}
             >
               <div
