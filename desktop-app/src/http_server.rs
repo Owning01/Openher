@@ -42,8 +42,19 @@ pub async fn serve_listener(state: Arc<AppState>, listener: TcpListener) {
     }
 }
 
-async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Response<Full<Bytes>>, std::convert::Infallible> {
-    let method = req.method().clone();
+/// Cache para estáticos: solo /assets/* es immutable (vite les pone hash en
+/// el nombre y cambian por build). index.html, el fallback SPA y el resto
+/// (manifest, themes, audio...) van con no-cache: sus nombres no cambian
+/// entre builds y con max-age el WebView2 mostraba la UI vieja hasta 1h.
+fn static_cache_for(rel: &str) -> &'static str {
+    if rel.starts_with("/assets/") {
+        "public, max-age=31536000, immutable"
+    } else {
+        "no-cache"
+    }
+}
+
+async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Response<Full<Bytes>>, std::convert::Infallible> {    let method = req.method().clone();
     let uri = req.uri().clone();
     let path = uri.path().to_string();
     let query = uri.query().unwrap_or("").to_string();
@@ -64,7 +75,7 @@ async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Re
                             .status(StatusCode::OK)
                             .header("content-type", mime)
                             .header("content-encoding", "br")
-                            .header("cache-control", "public, max-age=31536000, immutable")
+                            .header("cache-control", static_cache_for(rel))
                             .body(Full::new(Bytes::from(bytes)))
                             .unwrap();
                         return Ok(resp);
@@ -75,7 +86,7 @@ async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Re
                 let resp = Response::builder()
                     .status(StatusCode::OK)
                     .header("content-type", mime)
-                    .header("cache-control", "public, max-age=3600")
+                    .header("cache-control", static_cache_for(rel))
                     .body(Full::new(Bytes::from(bytes)))
                     .unwrap();
                 return Ok(resp);
@@ -85,6 +96,7 @@ async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Re
                 let resp = Response::builder()
                     .status(StatusCode::OK)
                     .header("content-type", "text/html; charset=utf-8")
+                    .header("cache-control", static_cache_for("/index.html"))
                     .body(Full::new(Bytes::from(bytes)))
                     .unwrap();
                 return Ok(resp);
