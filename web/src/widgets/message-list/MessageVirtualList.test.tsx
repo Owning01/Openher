@@ -69,6 +69,16 @@ describe("MessageVirtualList (Plan 2)", () => {
     expect(document.querySelector(".typing-bubble")).not.toBeNull()
   })
 
+  it("al entrar intenta ir al final (scroll programático)", async () => {
+    render(<MessageVirtualList {...base} messages={msgs(200)} revealMessageID={null} revealNonce={0} />)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    const el = document.querySelector(".messages") as HTMLElement
+    const scrollTo = window.HTMLElement.prototype.scrollTo as unknown as ReturnType<typeof vi.fn>
+    expect(scrollTo.mock.calls.length + (el.scrollTop > 0 ? 1 : 0)).toBeGreaterThan(0)
+  })
+
   it("reveal no crashea", () => {
     let tree: ReturnType<typeof render>
     expect(() => {
