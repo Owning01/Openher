@@ -160,10 +160,56 @@ export const MessageVirtualList = memo(function MessageVirtualList({
   const msgsSessionID: string | null = messages.length > 0 ? messages[0]!.info.sessionID : null
   const isFresh = messages.length === 0 || msgsSessionID === selectedID
   const needsAnchorRef = useRef(true)
+  // Asentamiento: el ancla inicial usa alturas ESTIMADAS (180px); al medir las
+  // filas reales el total crece y el scroll absoluto queda por encima del fondo.
+  // El velo se levanta solo cuando el scroll está clavado al fondo Y el tamaño
+  // lleva 3 frames estable (o timeout): así la corrección estimado→real y las
+  // etapas caché→fetch ocurren ocultas, sin "scroll rápido" visible.
+  // Todo auto-scroll posterior (streaming) espera a settledRef.
+  const settledRef = useRef(false)
+  const touchedRef = useRef(false)
   const [revealed, setRevealed] = useState(false)
+
+  // Interrupción del usuario: si toca el scroll durante el asentamiento, se
+  // aborta el clavado (nunca pelear con la mano) y se revela de inmediato.
+  useEffect(() => {
+    const el = parentRef.current
+    if (!el) return
+    const interrupt = () => { touchedRef.current = true }
+    el.addEventListener("wheel", interrupt, { passive: true })
+    el.addEventListener("touchstart", interrupt, { passive: true })
+    el.addEventListener("pointerdown", interrupt, { passive: true })
+    return () => {
+      el.removeEventListener("wheel", interrupt)
+      el.removeEventListener("touchstart", interrupt)
+      el.removeEventListener("pointerdown", interrupt)
+    }
+  }, [])
+
+  // Pegamento post-asentamiento: imágenes/fuentes que expanden tarde. Solo
+  // re-clava si el usuario sigue al fondo (lectura arriba intacta). El evento
+  // "load" en captura caza <img>/<iframe> internos sin tocar MessageBubble.
+  useEffect(() => {
+    const el = parentRef.current
+    if (!el) return
+    const onLateLoad = () => {
+      if (settledRef.current && !touchedRef.current && atBottomRef.current) {
+        try {
+          el.scrollTop = el.scrollHeight
+        } catch {
+          /* detached */
+        }
+      }
+    }
+    el.addEventListener("load", onLateLoad, true)
+    return () => el.removeEventListener("load", onLateLoad, true)
+  }, [])
 
   useLayoutEffect(() => {
     if (view !== "detail" || !selectedID || messages.length === 0) return
+    // Rama del spinner: el DOM de mensajes no existe; anclar acá (scrollHeight
+    // del spinner) consume el ancla y deja el scroll arriba al montar la lista.
+    if (loadingSessionID === selectedID) return
     if (!isFresh || !needsAnchorRef.current) return
     needsAnchorRef.current = false
     atBottomRef.current = true
@@ -186,18 +232,58 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [view, selectedID, firstID, lastID, isFresh, scrollToEnd])
+  }, [view, selectedID, loadingSessionID, firstID, lastID, isFresh, scrollToEnd])
 
-  // Velo anti-parpadeo: el primer paint va oculto (este pasivo corre tras
-  // pintar) y se revela en el frame siguiente ya anclado. Ni el stale ni el
-  // layout estimado se ven un solo frame.
-
+  // Velo anti-parpadeo con asentamiento: el primer paint va oculto y se revela
+  // solo cuando el scroll está clavado al fondo con tamaño estable (filas ya
+  // medidas, no estimadas). Ni el stale, ni el estimado, ni las etapas
+  // caché→fetch se ven un solo frame. Timeout de ~45 frames (~750ms) para no
+  // atrapar nunca la vista en blanco (imágenes lentas las cubre el pegamento).
+  // Si los mensajes cambian a mitad (fetch tras preload), el efecto re-corre y
+  // re-asienta todavía oculto.
   useEffect(() => {
     if (revealed || view !== "detail" || !selectedID) return
     if (!isFresh) return
-    const raf = requestAnimationFrame(() => setRevealed(true))
+    if (loadingSessionID === selectedID) return
+    if (messages.length === 0) {
+      settledRef.current = true
+      setRevealed(true)
+      return
+    }
+    let frames = 0
+    let stable = 0
+    let lastTotal = -1
+    let lastScrollH = -1
+    let raf = 0
+    const step = () => {
+      if (touchedRef.current) {
+        settledRef.current = true
+        setRevealed(true)
+        return
+      }
+      // Re-clavar instantáneo mientras se asienta (la medición real mueve el fondo).
+      scrollToEnd("auto")
+      const el = parentRef.current
+      const total = rowVirtualizer.getTotalSize()
+      const sh = el?.scrollHeight ?? 0
+      if (total === lastTotal && sh === lastScrollH) stable++
+      else {
+        stable = 0
+        lastTotal = total
+        lastScrollH = sh
+      }
+      const dist = el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0
+      frames++
+      if ((stable >= 3 && dist <= 2) || frames >= 45) {
+        settledRef.current = true
+        setRevealed(true)
+        return
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [revealed, view, selectedID, isFresh, firstID, lastID])
+  }, [revealed, view, selectedID, loadingSessionID, isFresh, firstID, lastID, messages.length, rowVirtualizer, scrollToEnd])
 
   // followTail durante streaming: si estamos al fondo, anclar al último
   // mensaje (scrollToIndex, no scrollHeight estimado). Tolerancia 80px como
@@ -205,8 +291,9 @@ export const MessageVirtualList = memo(function MessageVirtualList({
   // scroll hacia arriba dentro de la zona te arrastraba de vuelta).
   useEffect(() => {
     if (view !== "detail") return
-    // La entrada la gobierna el ancla fresca (stale = quieto).
-    if (needsAnchorRef.current) return
+    // La entrada la gobierna el ancla fresca + asentamiento (stale = quieto,
+    // settling = oculto). Sin esto, cada etapa caché→fetch pegaba un salto visible.
+    if (needsAnchorRef.current || !settledRef.current) return
     if (isAtBottom) {
       scrollToEnd("auto")
     } else if (messages.length > 0 && messageScrollSignature) {
@@ -255,7 +342,13 @@ export const MessageVirtualList = memo(function MessageVirtualList({
 
   return (
     <div className="message-list-root">
-      <div className="messages" ref={parentRef}>
+      {/* Velo exterior: oculta estimado/stale/etapas hasta asentarse. La rama
+          del spinner de carga queda exenta (feedback de progreso visible). */}
+      <div
+        className="messages"
+        ref={parentRef}
+        style={{ opacity: revealed || loadingSessionID === selectedID ? 1 : 0 }}
+      >
         {loadingSessionID && loadingSessionID === selectedID ? (
           <div className="empty-state compact">
             <GridSpinner label={t('detail.loading')} />

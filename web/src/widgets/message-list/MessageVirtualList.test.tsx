@@ -114,9 +114,10 @@ describe("MessageVirtualList (Plan 2)", () => {
     const { rerender } = render(
       <MessageVirtualList {...base} messages={msgs(200)} messageScrollSignature="sig1" revealMessageID={null} revealNonce={0} />
     )
-    // Asentar scroll de entrada + expirar el ledger programático (150ms).
+    // Asentar scroll de entrada (velo + clavado hasta tamaño estable, ~12
+    // frames en jsdom) + expirar el ledger programático (150ms tras el último pin).
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 250))
+      await new Promise((r) => setTimeout(r, 600))
     })
     const el = document.querySelector(".messages") as HTMLElement
     // Viewport simulado: distancia al fondo = 200px (entre 80 y los 400
@@ -143,5 +144,51 @@ describe("MessageVirtualList (Plan 2)", () => {
     expect(scrollTo).not.toHaveBeenCalled()
     expect(el.scrollTop).toBe(20000 - 800 - 200)
     expect(document.querySelector(".scroll-to-bottom")).not.toBeNull()
+  })
+
+  it("entrada: velo exterior hasta asentarse y ningún scroll suave (solo instantáneos)", async () => {
+    const fresh = msgsFor("s2", 50)
+    render(
+      <MessageVirtualList {...base} selectedID="s2" messages={fresh} revealMessageID={null} revealNonce={0} />
+    )
+    const el = document.querySelector(".messages") as HTMLElement
+    // Velo exterior (no el interno): estimado/stale/etapas ocultos.
+    expect(el.style.opacity).toBe("0")
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400))
+    })
+    expect(el.style.opacity).toBe("1")
+    const scrollTo = window.HTMLElement.prototype.scrollTo as unknown as ReturnType<typeof vi.fn>
+    expect(scrollTo.mock.calls.length).toBeGreaterThan(0)
+    // Regresión del "scroll rápido desde arriba": el ancla y el asentamiento
+    // nunca animan; todo programático de entrada es instantáneo.
+    for (const c of scrollTo.mock.calls) {
+      expect((c[0] as { behavior?: string } | undefined)?.behavior ?? "auto").not.toBe("smooth")
+    }
+  })
+
+  it("no ancla sobre la rama del spinner: espera a los mensajes reales", async () => {
+    const fresh = msgsFor("s1", 50)
+    const { rerender } = render(
+      <MessageVirtualList {...base} messages={fresh} loadingSessionID="s1" revealMessageID={null} revealNonce={0} />
+    )
+    const scrollTo = window.HTMLElement.prototype.scrollTo as unknown as ReturnType<typeof vi.fn>
+    // TanStack hace un scroll interno al montar (top ~0); lo que no debe pasar
+    // sobre el spinner es NUESTRA ancla al fondo (top = scrollHeight enorme).
+    // Sin este guard, el ancla se consumía con scrollHeight del spinner y al
+    // montar la lista real el scroll quedaba arriba + salto visible.
+    const tops = () =>
+      scrollTo.mock.calls.map((c) => (c[0] as { top?: number } | undefined)?.top ?? 0)
+    expect(tops().every((t) => t < 1000)).toBe(true)
+    const callsBefore = scrollTo.mock.calls.length
+    await act(async () => {
+      rerender(
+        <MessageVirtualList {...base} messages={fresh} loadingSessionID={null} revealMessageID={null} revealNonce={0} />
+      )
+      await new Promise((r) => setTimeout(r, 400))
+    })
+    // Carga terminada: el ancla al fondo sí corre (llamadas nuevas con top grande).
+    expect(scrollTo.mock.calls.length).toBeGreaterThan(callsBefore)
+    expect(tops().some((t) => t >= 1000)).toBe(true)
   })
 })

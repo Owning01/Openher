@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { renderHook, act } from "@testing-library/react"
 import { useFollowTail } from "./useFollowTail"
 
@@ -47,5 +47,16 @@ describe("useFollowTail", () => {
     const { result } = renderHook(() => useFollowTail(ref))
     expect(result.current.isNearBottom(400)).toBe(true)
     expect(result.current.isNearBottom(200)).toBe(false)
+  })
+
+  it("scrollToBottom auto es instantáneo: fija scrollTop directo sin depender de CSS", () => {
+    const el = makeContainer({ scrollHeight: 2000, scrollTop: 0, clientHeight: 500 })
+    el.scrollTo = vi.fn()
+    const ref = { current: el } as any
+    const { result } = renderHook(() => useFollowTail(ref))
+    act(() => result.current.scrollToBottom("auto"))
+    // Instantáneo aunque el UA tenga scroll-behavior suave: el ancla de
+    // entrada nunca debe animarse (causa del "scroll rápido desde arriba").
+    expect(el.scrollTop).toBe(2000)
   })
 })
