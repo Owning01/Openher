@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { shell } from "../shell"
+import { setPendingAutoOpencode2 } from "../utils/terminalStore"
 
 const KEY = "opencode.auto_opencode2"
 const EVT = "opencode:auto-opencode2-toggle"
@@ -64,6 +65,23 @@ export function useAutoOpencode2(): {
   const toggle = useCallback((): void => {
     setEnabled(!enabledRef.current)
   }, [setEnabled])
+
+  // Arma el one-shot por sesión: la primera terminal que cree su PTY
+  // (shellPanels) consume el pending y ejecuta opencode2. Sin esto el
+  // flag enabled nunca se traduce en arranque.
+  useEffect(() => {
+    if (!enabled) return
+    try {
+      if (sessionStorage.getItem("opencode.auto_opencode2.pendingDone") === "1") return
+      if (sessionStorage.getItem("opencode.auto_opencode2.pending") === "1") return
+    } catch {}
+    try {
+      setPendingAutoOpencode2(true)
+    } catch {}
+    try {
+      sessionStorage.setItem("opencode.auto_opencode2.pendingDone", "1")
+    } catch {}
+  }, [enabled])
 
   return { enabled, setEnabled, toggle }
 }
