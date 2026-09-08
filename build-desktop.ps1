@@ -96,10 +96,25 @@ function Copy-Verified([string]$src, [string]$dst) {
 }
 
 function Clear-DirContents([string]$dir) {
-  if (Test-Path $dir) {
-    Remove-Item (Join-Path $dir "*") -Recurse -Force
-  } else {
+  if (-not (Test-Path $dir)) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    return
+  }
+  # Locks transitorios (indexador/antivirus retienen bundles viejos): reintentar.
+  # Si persiste, se avisa y se sigue: los bundles llevan hash en el nombre y los
+  # huérfanos no los referencia el nuevo index.html (que sí se verifica hash).
+  # El Copy-Item posterior igual sobrescribe todo lo que no esté bloqueado.
+  for ($i = 1; $i -le 4; $i++) {
+    try {
+      Remove-Item (Join-Path $dir "*") -Recurse -Force -ErrorAction Stop
+      return
+    } catch {
+      if ($i -eq 4) {
+        Write-Host "  AVISO: no se pudo limpiar $dir ($($_.Exception.Message)). Se continúa." -ForegroundColor Yellow
+        return
+      }
+      Start-Sleep -Milliseconds 1500
+    }
   }
 }
 
