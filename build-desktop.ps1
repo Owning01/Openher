@@ -4,8 +4,8 @@
 .DESCRIPTION
   Al terminar imprime un resumen verificable (hash + fecha del .exe destino y
   de data/web-dist) y lo deja en build-desktop.log. Si el .exe está en
-  ejecución el build se aborta (Windows lo bloquea y la copia quedaría vieja),
-  salvo que se pase -Kill.
+  ejecución, el propio script lo cierra antes de compilar/copiar (Windows lo
+  bloquea y la copia quedaría vieja).
 .PARAMETER OutputDir
   Carpeta destino donde se copiarán el .exe y la carpeta data/web-dist. Por defecto: .\dist-desktop
 .PARAMETER Run
@@ -13,7 +13,8 @@
 .PARAMETER SkipWeb
   Si se especifica, omite el paso de pnpm run build.
 .PARAMETER Kill
-  Cierra las instancias de opencode-desktop.exe en ejecución antes de compilar.
+  Compatibilidad: el script siempre cierra el .exe en ejecución; se conserva
+  el flag para no romper invocaciones existentes.
 .PARAMETER Pause
   Fuerza la pausa final ("Presione Enter..."). Por defecto solo pausa si se
   lanzó con doble clic (padre = explorer).
@@ -58,7 +59,7 @@ function Stop-RunningDesktop {
   $running = Get-RunningDesktop
   if ($running.Count -eq 0) { return }
   $pids = ($running | ForEach-Object { $_.Id }) -join ", "
-  Write-Host "Cerrando opencode-desktop.exe (PID $pids) por -Kill..." -ForegroundColor Yellow
+  Write-Host "opencode-desktop.exe en ejecución (PID $pids): se cierra solo para compilar..." -ForegroundColor Yellow
   foreach ($p in $running) {
     try { $p.CloseMainWindow() | Out-Null } catch { }
   }
@@ -74,14 +75,6 @@ function Stop-RunningDesktop {
   $still = Get-RunningDesktop
   if ($still.Count -gt 0) {
     throw "No se pudo cerrar opencode-desktop.exe (PID $(($still | ForEach-Object { $_.Id }) -join ', ')). Ciérrelo a mano y recompile."
-  }
-}
-
-function Assert-NoRunningDesktop([string]$stage) {
-  $running = Get-RunningDesktop
-  if ($running.Count -gt 0) {
-    $pids = ($running | ForEach-Object { $_.Id }) -join ", "
-    throw "opencode-desktop.exe está en ejecución (PID $pids) [$stage]. Ciérrelo antes de compilar, o recompile con -Kill."
   }
 }
 
@@ -132,13 +125,10 @@ try {
   } catch { }
   Write-Host "  Log: $logFile" -ForegroundColor DarkGray
 
-  if ($Kill) {
-    Stop-RunningDesktop
-  } else {
-    # Fail-fast: con el .exe abierto Windows lo bloquea y la copia quedaría vieja.
-    # Se revalida después de compilar (pudo abrirse durante el build).
-    Assert-NoRunningDesktop "inicio"
-  }
+  # El .exe abierto bloquea la copia en Windows: el propio script lo cierra
+  # (elegante primero, forzado si no responde). Se revalida antes de copiar
+  # por si se reabrió durante el build.
+  Stop-RunningDesktop
 
   # PATH y resolución de pnpm
   $node24 = "G:\Dev\nodejs-24"
@@ -228,8 +218,9 @@ try {
 
   Write-Host "  -> Binario origen: $targetExe" -ForegroundColor DarkGray
 
-  # El .exe en ejecución queda bloqueado por Windows y Copy-Item falla.
-  Assert-NoRunningDesktop "copia"
+  # El .exe en ejecución queda bloqueado por Windows y Copy-Item falla:
+  # revalidar por si se reabrió durante el build (el script lo cierra solo).
+  Stop-RunningDesktop
 
   # 3. Empaquetar y copiar a la carpeta destino
   Write-Phase "[3/3] Empaquetando en $OutputDir..."
