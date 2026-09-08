@@ -56,7 +56,9 @@ export const MessageVirtualList = memo(function MessageVirtualList({
 }: MessageVirtualListProps) {
   const t = useT()
   const parentRef = useRef<HTMLDivElement | null>(null)
-  const { isAtBottom, scrollToBottom, isNearBottom } = useFollowTail(parentRef, { threshold: 120 })
+  const { isAtBottom, setIsAtBottom, isNearBottom } = useFollowTail(parentRef, { threshold: 120 })
+  const atBottomRef = useRef(true)
+  useEffect(() => { atBottomRef.current = isAtBottom }, [isAtBottom])
 
   // Viewport height for bottom alignment (when content < viewport)
   const [viewportH, setViewportH] = useState(0)
@@ -125,35 +127,60 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     }
   }, [messages, rowVirtualizer])
 
-  // Scroll al entrar a sesión / cambio de view
-  useEffect(() => {
-    if (view !== "detail") return
-    scrollToBottom("auto")
-  }, [view, scrollToBottom])
+  // Ir al final de forma determinista (virtualizer-aware). scrollToBottom
+  // usa scrollHeight, que con alturas estimadas deriva al medir las burbujas
+  // reales (el chat abría arriba). scrollToIndex ancla al último mensaje.
+  const scrollToEnd = useCallback((behavior: ScrollBehavior = "auto") => {
+    if (messages.length === 0) return
+    setIsAtBottom(true)
+    atBottomRef.current = true
+    rowVirtualizer.scrollToIndex(messages.length - 1, { align: "end", behavior })
+  }, [messages.length, rowVirtualizer, setIsAtBottom])
 
+  // Entrada a sesión/vista y carga inicial (0 → N): fuerza el final.
+  // scrollToIndex usa estimaciones al inicio; se re-afirma en rAF + 150ms
+  // porque la medición real cambia totalSize. El crecimiento por streaming
+  // NO pasa por aquí (lo maneja el follow-tail de abajo). Si el usuario
+  // scrolleó hacia arriba en el medio, no se le roba la lectura.
+  const lastSessionRef = useRef<string | null>(null)
+  const prevLenRef = useRef(0)
   useEffect(() => {
-    if (view !== "detail") return
-    if (loadingSessionID === selectedID) return
-    if (messages.length > 0) scrollToBottom("auto")
-  }, [view, loadingSessionID, selectedID, messages.length, scrollToBottom])
+    if (view !== "detail" || !selectedID || messages.length === 0) return
+    const switched = selectedID !== lastSessionRef.current
+    lastSessionRef.current = selectedID
+    if (!switched && prevLenRef.current !== 0) {
+      prevLenRef.current = messages.length
+      return
+    }
+    prevLenRef.current = messages.length
+    atBottomRef.current = true
+    scrollToEnd("auto")
+    let cancelled = false
+    const raf = requestAnimationFrame(() => {
+      if (!cancelled && atBottomRef.current) scrollToEnd("auto")
+    })
+    const timer = window.setTimeout(() => {
+      if (!cancelled && atBottomRef.current) scrollToEnd("auto")
+    }, 150)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+      window.clearTimeout(timer)
+    }
+  }, [view, selectedID, messages.length, scrollToEnd])
 
-  useEffect(() => {
-    if (!selectedID) return
-    const t = setTimeout(() => scrollToBottom("auto"), 80)
-    return () => clearTimeout(t)
-  }, [selectedID, scrollToBottom])
-
-  // followTail durante streaming: si estamos al fondo, anclar
+  // followTail durante streaming: si estamos al fondo, anclar al último
+  // mensaje (scrollToIndex, no scrollHeight estimado).
   useEffect(() => {
     if (view !== "detail") return
     if (isAtBottom) {
-      scrollToBottom("auto")
+      scrollToEnd("auto")
     } else if (messages.length > 0 && messageScrollSignature) {
       if (isNearBottom(400)) {
-        scrollToBottom("auto")
+        scrollToEnd("auto")
       }
     }
-  }, [messageScrollSignature, isWorking, showTypingBubble, view, isAtBottom, isNearBottom, scrollToBottom, messages.length])
+  }, [messageScrollSignature, isWorking, showTypingBubble, view, isAtBottom, isNearBottom, scrollToEnd, messages.length])
 
   // Búsqueda: centrar coincidencia
   useEffect(() => {
