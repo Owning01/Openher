@@ -251,9 +251,7 @@ fn trash_win(p: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Crea un .zip en dest_dir con los paths dados (archivos y/o carpetas,
-/// recursivo, sin seguir enlaces). Devuelve el path del zip. Colisión de
-/// nombre: sufijo -copia como copy/move.
+/// Crea un .zip en dest_dir con los paths dados usando tar nativo del SO.
 pub fn zip_create(paths: &[String], dest_dir: &str, name: &str) -> Result<String, String> {
     if paths.is_empty() {
         return Err("Nada que comprimir".into());
@@ -280,68 +278,25 @@ pub fn zip_create(paths: &[String], dest_dir: &str, name: &str) -> Result<String
         }
         target = candidate;
     }
-    let file = std::fs::File::create(&target).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipWriter::new(file);
-    let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-    let mut added = 0usize;
+
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = std::process::Command::new("tar");
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    cmd.arg("-a").arg("-c").arg("-f").arg(&target);
     for p in paths {
-        let src = Path::new(p);
-        if !src.exists() {
-            continue;
-        }
-        let root = src
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("item")
-            .to_string();
-        add_to_zip(&mut zip, src, &root, options)?;
-        added += 1;
+        cmd.arg(p);
     }
-    if added == 0 {
-        drop(zip);
-        let _ = std::fs::remove_file(&target);
-        return Err("Ningún origen existe".into());
+    let output = cmd.output().map_err(|e| format!("Error creando zip: {e}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
-    zip.finish().map_err(|e| e.to_string())?;
     Ok(crate::state::pstring(&target))
 }
 
-fn add_to_zip<W: std::io::Write + std::io::Seek>(
-    zip: &mut zip::ZipWriter<W>,
-    src: &Path,
-    entry: &str,
-    options: zip::write::SimpleFileOptions,
-) -> Result<(), String> {
-    // Sin seguir enlaces simbólicos (evita ciclos y fugas fuera del árbol).
-    if std::fs::symlink_metadata(src)
-        .map(|m| m.file_type().is_symlink())
-        .unwrap_or(false)
-    {
-        return Ok(());
-    }
-    if src.is_dir() {
-        zip.add_directory(entry, options).map_err(|e| e.to_string())?;
-        let mut children: Vec<_> = std::fs::read_dir(src)
-            .map_err(|e| e.to_string())?
-            .flatten()
-            .collect();
-        children.sort_by_key(|e| e.file_name());
-        for child in children {
-            let name = child.file_name().to_string_lossy().to_string();
-            add_to_zip(zip, &child.path(), &format!("{entry}/{name}"), options)?;
-        }
-    } else if src.is_file() {
-        zip.start_file(entry, options).map_err(|e| e.to_string())?;
-        let mut f = std::fs::File::open(src).map_err(|e| e.to_string())?;
-        std::io::copy(&mut f, zip).map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-/// Extrae un .zip en una carpeta hermana `<nombre>/` (sufijo -copia si
-/// colisiona). Ignora entradas con traversal (..) vía enclosed_name.
-/// Devuelve el path de la carpeta creada.
+/// Extrae un .zip en una carpeta hermana `<nombre>/` usando tar nativo del SO.
 pub fn zip_extract(zip_path: &str) -> Result<String, String> {
     let zp = Path::new(zip_path);
     if !zp.is_file() {
@@ -364,31 +319,22 @@ pub fn zip_extract(zip_path: &str) -> Result<String, String> {
         dest = candidate;
     }
     std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
-    let file = std::fs::File::open(zp).map_err(|e| e.to_string())?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-    for i in 0..archive.len() {
-        let mut f = archive.by_index(i).map_err(|e| e.to_string())?;
-        let out = match f.enclosed_name() {
-            Some(p) => dest.join(p),
-            None => continue,
-        };
-        if f.is_dir() {
-            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-        } else {
-            if let Some(par) = out.parent() {
-                if !par.exists() {
-                    std::fs::create_dir_all(par).map_err(|e| e.to_string())?;
-                }
-            }
-            let mut outf = std::fs::File::create(&out).map_err(|e| e.to_string())?;
-            std::io::copy(&mut f, &mut outf).map_err(|e| e.to_string())?;
-        }
+
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = std::process::Command::new("tar");
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    cmd.arg("-xf").arg(zp).arg("-C").arg(&dest);
+    let output = cmd.output().map_err(|e| format!("Error extrayendo zip: {e}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
     Ok(crate::state::pstring(&dest))
 }
 
-/// Abre una terminal del SO en la carpeta (Windows: PowerShell). Si path es
-/// archivo usa su carpeta padre. Best-effort como reveal_in_explorer.
+/// Abre una terminal del SO en la carpeta (Windows: PowerShell).
 pub fn open_terminal(path: &str) -> Result<(), String> {
     let p = Path::new(path.trim());
     let dir: &Path = if p.is_dir() {

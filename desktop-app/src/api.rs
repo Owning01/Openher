@@ -104,15 +104,6 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
         }
     }
 
-    // ============================== Computer v2 (extraído a router — fix duplicados screenshot.bin)
-    if path.starts_with("/shell/computer") {
-        if let Some(resp) =
-            crate::infrastructure::http::computer_router::handle(sreq, state.clone(), &path, method, &q)
-        {
-            return resp;
-        }
-    }
-
     if path.starts_with("/shell/pty") {
         if let Some(resp) =
             crate::infrastructure::http::pty_router::handle(sreq, state.clone(), &path, method, &q)

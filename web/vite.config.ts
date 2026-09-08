@@ -29,9 +29,9 @@ export default defineConfig({
           // jsqr: solo lo usa PairModal vía import() dinámico. Fuera del
           // catch-all => chunk async bajo demanda en vez de ~150KB eager.
           if (id.includes("jsqr")) return undefined
-          // @xterm y pdf.js: solo los alcanzan chunks async (TerminalView/paneles desktop,
-          // visor de PDF). Sacarlos del catch-all evita ~385KB + ~1MB eager.
-          if (id.includes("@xterm") || id.includes("pdfjs-dist")) return undefined
+          // @xterm: solo lo alcanzan chunks async (TerminalView/paneles desktop).
+          // Sacarlo del catch-all evita ~385KB eager.
+          if (id.includes("@xterm")) return undefined
           // CodeMirror: TODO el core va bajo demanda con CodeMirrorEditor (lazy
           // en shellPanels/FileEditor). Los lenguajes ya eran async; el core
           // (@codemirror/state/view/language/...) + @lezer/* quedaban en

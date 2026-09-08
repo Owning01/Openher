@@ -11,7 +11,6 @@
 mod api;
 mod browser_view;
 mod common;
-mod computer;
 mod docsx;
 mod fsx;
 mod fswatch;
@@ -26,7 +25,6 @@ mod srvman;
 mod state;
 mod statsx;
 mod updates;
-mod doc_engine;
 mod undecorated_resizing;
 
 use std::os::windows::process::CommandExt;
