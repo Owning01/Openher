@@ -159,11 +159,55 @@ export const MessageList = memo(function MessageList({
   const msgsSessionID: string | null = messages.length > 0 ? messages[0]!.info.sessionID : null
   const isFresh = messages.length === 0 || msgsSessionID === selectedID
   const needsAnchorRef = useRef(true)
+  // Asentamiento (igual que la virtual): el velo se levanta solo con el scroll
+  // clavado al fondo y scrollHeight estable 3 frames (o timeout ~750ms), para
+  // que imágenes/fuentes tardías y etapas caché→fetch no produzcan el "scroll
+  // rápido desde arriba" visible. Los auto-scrolls esperan a settledRef.
+  const settledRef = useRef(false)
+  const touchedRef = useRef(false)
+  const atBottomMirrorRef = useRef(true)
+  useEffect(() => { atBottomMirrorRef.current = isAtBottom }, [isAtBottom])
   const [revealed, setRevealed] = useState(false)
+
+  // Interrupción del usuario: aborta el clavado, nunca pelear con la mano.
+  useEffect(() => {
+    const el = messagesRef.current
+    if (!el) return
+    const interrupt = () => { touchedRef.current = true }
+    el.addEventListener("wheel", interrupt, { passive: true })
+    el.addEventListener("touchstart", interrupt, { passive: true })
+    el.addEventListener("pointerdown", interrupt, { passive: true })
+    return () => {
+      el.removeEventListener("wheel", interrupt)
+      el.removeEventListener("touchstart", interrupt)
+      el.removeEventListener("pointerdown", interrupt)
+    }
+  }, [])
+
+  // Pegamento post-asentamiento: <img>/<iframe> que expanden tarde re-clavan
+  // solo si el usuario sigue al fondo (evento "load" en captura).
+  useEffect(() => {
+    const el = messagesRef.current
+    if (!el) return
+    const onLateLoad = () => {
+      if (settledRef.current && !touchedRef.current && atBottomMirrorRef.current) {
+        try {
+          el.scrollTop = el.scrollHeight
+        } catch {
+          /* detached */
+        }
+      }
+    }
+    el.addEventListener("load", onLateLoad, true)
+    return () => el.removeEventListener("load", onLateLoad, true)
+  }, [])
 
   // Scroll síncrono al entrar con mensajes frescos, antes del paint (sin animación ni saltos visibles)
   useLayoutEffect(() => {
     if (view !== "detail" || !selectedID || messages.length === 0) return
+    // Rama del spinner: sin DOM de mensajes; anclar acá deja el scroll arriba
+    // al montar la lista real.
+    if (loadingSessionID === selectedID) return
     if (!isFresh || !needsAnchorRef.current) return
     needsAnchorRef.current = false
     const el = messagesRef.current
@@ -172,21 +216,63 @@ export const MessageList = memo(function MessageList({
     }
     setIsAtBottom(true)
     scrollToBottom("auto")
-  }, [view, selectedID, firstID, lastID, isFresh, scrollToBottom, setIsAtBottom])
+  }, [view, selectedID, loadingSessionID, firstID, lastID, isFresh, scrollToBottom, setIsAtBottom])
 
-  // Velo anti-parpadeo: primer paint oculto, reveal tras pintar ya anclado.
+  // Velo anti-parpadeo con asentamiento (ver MessageVirtualList): revela solo
+  // clavado al fondo + scrollHeight estable, o por timeout. Re-corre si los
+  // mensajes cambian a mitad (fetch tras preload), todavía oculto.
   useEffect(() => {
     if (revealed || view !== "detail" || !selectedID) return
     if (!isFresh) return
-    const raf = requestAnimationFrame(() => setRevealed(true))
+    if (loadingSessionID === selectedID) return
+    if (messages.length === 0) {
+      settledRef.current = true
+      setRevealed(true)
+      return
+    }
+    let frames = 0
+    let stable = 0
+    let lastH = -1
+    let raf = 0
+    const step = () => {
+      if (touchedRef.current) {
+        settledRef.current = true
+        setRevealed(true)
+        return
+      }
+      const el = messagesRef.current
+      if (el) {
+        try {
+          el.scrollTop = el.scrollHeight
+        } catch {
+          /* detached */
+        }
+      }
+      const h = el?.scrollHeight ?? 0
+      if (h === lastH) stable++
+      else {
+        stable = 0
+        lastH = h
+      }
+      const dist = el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0
+      frames++
+      if ((stable >= 3 && dist <= 2) || frames >= 45) {
+        settledRef.current = true
+        setRevealed(true)
+        return
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [revealed, view, selectedID, isFresh, firstID, lastID])
+  }, [revealed, view, selectedID, loadingSessionID, isFresh, firstID, lastID, messages.length])
 
   useEffect(() => {
     if (view !== "detail") return
     if (loadingSessionID === selectedID) return
-    // La entrada la gobierna el ancla fresca (stale = quieto).
-    if (needsAnchorRef.current) return
+    // La entrada la gobierna el ancla fresca + asentamiento (stale = quieto,
+    // settling = oculto).
+    if (needsAnchorRef.current || !settledRef.current) return
     if (messages.length > 0) {
       if (isAtBottom || isNearBottom(80)) scrollToBottom("auto")
     }
@@ -212,8 +298,9 @@ export const MessageList = memo(function MessageList({
   // Durante streaming, seguir solo si está abajo o muy cerca (80px); no robar lectura arriba.
   useEffect(() => {
     if (view !== "detail") return
-    // La entrada la gobierna el ancla fresca (stale = quieto).
-    if (needsAnchorRef.current) return
+    // La entrada la gobierna el ancla fresca + asentamiento (stale = quieto,
+    // settling = oculto).
+    if (needsAnchorRef.current || !settledRef.current) return
     if (isAtBottom) {
       scrollToBottom("auto")
     } else if (messages.length > 0 && messageScrollSignature) {

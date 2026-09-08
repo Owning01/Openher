@@ -41,6 +41,16 @@ export function useFollowTail(
       programmaticUntilRef.current = Date.now() + (behavior === "smooth" ? smoothDelay : autoDelay)
       const container = containerRef.current
       if (container) {
+        // Anclas ("auto"): scrollTop directo = instantáneo SIEMPRE, sin
+        // importar scroll-behavior CSS heredado. El scrollTo posterior conserva
+        // el ledger/timing; con "smooth" (botón del usuario) no se toca.
+        if (behavior !== "smooth") {
+          try {
+            container.scrollTop = container.scrollHeight
+          } catch {
+            /* contenedor detached: el scrollTo posterior lo intenta igual */
+          }
+        }
         container.scrollTo({ top: container.scrollHeight, behavior })
         requestAnimationFrame(() => {
           const c = containerRef.current

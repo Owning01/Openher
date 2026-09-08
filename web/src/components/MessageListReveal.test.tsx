@@ -101,4 +101,32 @@ describe("MessageList reveal (salto del historial)", () => {
     expect(scrollTo).toHaveBeenCalled() // frescos: ancla directa al final
     expect(wrap.style.opacity).toBe("1")
   })
+
+  it("entrada: ningún scroll suave (todo ancla/asentamiento instantáneo)", () => {
+    render(<MessageList {...base} messages={msgs(60)} revealMessageID={null} revealNonce={0} />)
+    const scrollTo = window.HTMLElement.prototype.scrollTo as unknown as ReturnType<typeof vi.fn>
+    expect(scrollTo.mock.calls.length).toBeGreaterThan(0)
+    // Regresión del "scroll rápido desde arriba": nada de la entrada anima.
+    for (const c of scrollTo.mock.calls) {
+      expect((c[0] as { behavior?: string } | undefined)?.behavior ?? "auto").not.toBe("smooth")
+    }
+  })
+
+  it("no ancla sobre el spinner: espera a que termine la carga", () => {
+    const fresh = msgsFor("s1", 60)
+    const { rerender } = render(
+      <MessageList {...base} messages={fresh} loadingSessionID="s1" revealMessageID={null} revealNonce={0} />
+    )
+    const scrollTo = window.HTMLElement.prototype.scrollTo as unknown as ReturnType<typeof vi.fn>
+    // Spinner montado (sin DOM de mensajes): el ancla no se consume acá.
+    expect(scrollTo).not.toHaveBeenCalled()
+    act(() => {
+      rerender(
+        <MessageList {...base} messages={fresh} loadingSessionID={null} revealMessageID={null} revealNonce={0} />
+      )
+    })
+    expect(scrollTo).toHaveBeenCalled()
+    const wrap = document.querySelector(".messages") as HTMLElement
+    expect(wrap.style.opacity).toBe("1")
+  })
 })
