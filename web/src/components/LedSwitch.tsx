@@ -1,7 +1,7 @@
 import { memo, useId } from "react"
 
 // Switch on/off estilo LED (rojo apagado / verde encendido), adaptado a fila
-// de configuración (84x30). Misma idea que el diseño 210x50: pista oscura,
+// de configuración (54x22). Misma idea que el diseño 210x50: pista oscura,
 // pastilla deslizante con agarre y punto LED con glow.
 export const LedSwitch = memo(function LedSwitch({
   checked,
