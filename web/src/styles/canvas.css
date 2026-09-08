@@ -192,3 +192,228 @@
 @media (prefers-reduced-motion: reduce) {
   .m3e-enter { animation: none; }
 }
+
+/* --- Marco de celular: notch + barra de estado --- */
+.m3e-notch {
+  width: 120px;
+  height: 22px;
+  border-radius: 999px;
+  background: #101014;
+  margin: 2px auto 8px;
+}
+.m3e-statusbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m3-on-surface);
+  background: var(--m3-surface);
+  pointer-events: none;
+  z-index: 5;
+}
+.m3e-sb-icons { display: flex; align-items: center; gap: 7px; }
+.m3e-sb-signal { display: flex; align-items: flex-end; gap: 1.5px; }
+.m3e-sb-signal i { width: 3px; border-radius: 1px; background: var(--m3-on-surface); display: block; }
+.m3e-sb-battery {
+  width: 22px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1px solid var(--m3-on-surface);
+  position: relative;
+  opacity: 0.85;
+}
+.m3e-sb-battery i {
+  position: absolute;
+  inset: 1.5px;
+  right: 30%;
+  border-radius: 1.5px;
+  background: var(--m3-on-surface);
+}
+
+/* --- Ventana desktop / app --- */
+.m3e-window {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1b1c1f;
+  border: 1px solid var(--m3-outline-variant);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+.m3e-titlebar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  background: #202124;
+  color: #e6e1e5;
+  font-size: 13px;
+  font-weight: 600;
+}
+.m3e-titlebar-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.m3e-titlebar-btns {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  opacity: 0.85;
+}
+.m3e-titlebar.m3e-browser { background: var(--m3-surface-high); color: var(--m3-on-surface); }
+.m3e-dot { width: 12px; height: 12px; border-radius: 999px; background: var(--m3-outline-variant); }
+.m3e-dot:nth-of-type(1) { background: #ff5f57; }
+.m3e-dot:nth-of-type(2) { background: #febc2e; }
+.m3e-dot:nth-of-type(3) { background: #28c840; }
+.m3e-url {
+  flex: 1;
+  background: var(--m3-surface);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--m3-on-variant);
+  padding: 5px 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.m3e-screen-window { border-radius: 0; }
+
+/* --- Nav inferior con iconos --- */
+.m3e-navitem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.m3e-navitem.active { color: var(--m3-primary); font-weight: 700; }
+
+/* --- Lista con icono --- */
+.m3e-list-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* --- Tarjeta con media --- */
+.m3e-card-media {
+  height: 84px;
+  border-radius: 12px;
+  background: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+/* --- Barra lateral (preset app/desktop) --- */
+.m3e-sidebar {
+  height: 100%;
+  background: var(--m3-surface-container);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.m3e-sidebar-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--m3-primary);
+  margin: 4px 4px 12px;
+  flex-shrink: 0;
+}
+.m3e-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--m3-on-surface);
+  overflow: hidden;
+}
+.m3e-sidebar-item.active {
+  background: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+  font-weight: 600;
+}
+
+/* --- Burbuja de chat --- */
+.m3e-bubble-wrap { display: flex; height: 100%; overflow: hidden; }
+.m3e-bubble {
+  max-width: 85%;
+  align-self: flex-start;
+  background: var(--m3-surface-high);
+  color: var(--m3-on-surface);
+  border-radius: 4px 20px 20px 20px;
+  padding: 12px 16px;
+  font-size: 15px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+.m3e-bubble.mine {
+  align-self: flex-end;
+  margin-left: auto;
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  border-radius: 20px 20px 4px 20px;
+}
+
+/* --- Avatar --- */
+.m3e-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* --- Pestañas segmentadas --- */
+.m3e-tabs {
+  height: 56px;
+  border-radius: 999px;
+  background: var(--m3-surface-highest);
+  padding: 4px;
+  display: flex;
+  gap: 4px;
+  overflow: hidden;
+}
+.m3e-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--m3-on-variant);
+  border-radius: 999px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.m3e-tab.active {
+  background: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+  font-weight: 600;
+}

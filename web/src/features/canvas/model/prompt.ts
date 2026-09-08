@@ -19,6 +19,10 @@ function partEs(p: CanvasPart): string {
     case "fab": return "boton flotante (FAB)"
     case "bottomNav": return "barra de navegacion inferior"
     case "searchBar": return `buscador con placeholder ${q(p.label)}`
+    case "sideBar": return `barra lateral con secciones ${q(p.label)}`
+    case "chatBubble": return `burbuja de chat ${p.variant === "filled" ? "propia" : "ajena"} con texto ${q(p.label)}`
+    case "avatar": return `avatar con iniciales de ${q(p.label)}`
+    case "tabBar": return `pestañas ${q(p.label)}`
   }
 }
 
@@ -37,6 +41,10 @@ function partEn(p: CanvasPart): string {
     case "fab": return "a floating action button (FAB)"
     case "bottomNav": return "a bottom navigation bar"
     case "searchBar": return `a search bar with placeholder ${q(p.label)}`
+    case "sideBar": return `a sidebar with sections ${q(p.label)}`
+    case "chatBubble": return `a ${p.variant === "filled" ? "outgoing" : "incoming"} chat bubble with text ${q(p.label)}`
+    case "avatar": return `an avatar with initials of ${q(p.label)}`
+    case "tabBar": return `tabs ${q(p.label)}`
   }
 }
 
@@ -83,7 +91,9 @@ export function generatePrompt(
   for (const s of screens) {
     const size = s.preset === "desktop"
       ? (lang === "es" ? "layout desktop 1280x800" : "1280x800 desktop layout")
-      : (lang === "es" ? "layout movil" : "mobile layout")
+      : s.preset === "app"
+        ? (lang === "es" ? "ventana de app desktop 1280x800 con barra de titulo y contenido" : "1280x800 desktop app window with title bar and content")
+        : (lang === "es" ? "layout movil" : "mobile layout")
     lines.push(lang === "es" ? `Pantalla "${s.name}" (${size}):` : `Screen "${s.name}" (${size}):`)
     const ps = describeParts(partsOf(doc, s.id), doc.screens, lang)
     if (ps.length === 0) lines.push(lang === "es" ? "- (vacia)" : "- (empty)")

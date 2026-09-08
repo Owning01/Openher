@@ -11,6 +11,10 @@ export type CanvasPartKind =
   | "fab"
   | "bottomNav"
   | "searchBar"
+  | "sideBar"
+  | "chatBubble"
+  | "avatar"
+  | "tabBar"
 
 export type CanvasVariant = "filled" | "tonal" | "outlined" | "text"
 
@@ -32,7 +36,7 @@ export type CanvasPart = {
   action?: CanvasAction
 }
 
-export type ScreenPreset = "phone" | "desktop"
+export type ScreenPreset = "phone" | "desktop" | "app"
 
 export type CanvasScreen = {
   id: string
@@ -55,10 +59,16 @@ export const PHONE_W = 412
 export const PHONE_H = 892
 export const DESKTOP_W = 1280
 export const DESKTOP_H = 800
+export const APP_W = 1280
+export const APP_H = 800
 export const SCREEN_MARGIN = 16
+/** Alto de la barra de estado del marco de celular (overlay, no editable). */
+export const STATUS_H = 28
 
 export function screenSizeOf(s: CanvasScreen): { w: number; h: number } {
-  return s.preset === "desktop" ? { w: DESKTOP_W, h: DESKTOP_H } : { w: PHONE_W, h: PHONE_H }
+  if (s.preset === "desktop") return { w: DESKTOP_W, h: DESKTOP_H }
+  if (s.preset === "app") return { w: APP_W, h: APP_H }
+  return { w: PHONE_W, h: PHONE_H }
 }
 
 export function uid(): string {
@@ -79,6 +89,10 @@ export function defaultLabelFor(kind: CanvasPartKind): string {
     case "fab": return ""
     case "bottomNav": return ""
     case "searchBar": return "Buscar"
+    case "sideBar": return "Inicio, Buscar, Ajustes"
+    case "chatBubble": return "Hola, ¿en que te ayudo?"
+    case "avatar": return "Ada Lovelace"
+    case "tabBar": return "Chats, Estados, Llamadas"
   }
 }
 
@@ -96,6 +110,10 @@ export function defaultPartHeight(kind: CanvasPartKind): number {
     case "fab": return 56
     case "bottomNav": return 80
     case "searchBar": return 56
+    case "sideBar": return 480
+    case "chatBubble": return 96
+    case "avatar": return 48
+    case "tabBar": return 56
   }
 }
 
@@ -114,6 +132,10 @@ export function defaultPartWidth(kind: CanvasPartKind, screenW: number): number 
     case "fab": return 56
     case "bottomNav": return screenW
     case "searchBar": return content
+    case "sideBar": return 232
+    case "chatBubble": return content
+    case "avatar": return 48
+    case "tabBar": return content
   }
 }
 
@@ -124,7 +146,7 @@ export function makePart(kind: CanvasPartKind, screenW: number, at?: { x: number
     kind,
     label: defaultLabelFor(kind),
     icon: kind === "fab" || kind === "searchBar" ? "add" : null,
-    variant: kind === "button" ? "filled" : kind === "chip" || kind === "textField" ? "outlined" : kind === "fab" ? "tonal" : undefined,
+    variant: kind === "button" ? "filled" : kind === "chatBubble" || kind === "fab" ? "tonal" : kind === "chip" || kind === "textField" ? "outlined" : undefined,
     x: at?.x ?? (fullBleed ? 0 : SCREEN_MARGIN),
     y: at?.y ?? SCREEN_MARGIN,
     w: defaultPartWidth(kind, screenW),
