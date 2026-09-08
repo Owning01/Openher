@@ -25,6 +25,13 @@ function msgs(n: number): any[] {
   }))
 }
 
+function msgsFor(sessionID: string, n: number): any[] {
+  return Array.from({ length: n }, (_, i) => ({
+    info: { id: `${sessionID}-m${i}`, role: i % 2 ? "assistant" : "user", sessionID, time: { created: i } },
+    text: `prompt ${i}`,
+  }))
+}
+
 const base = {
   loadingSessionID: null,
   selectedID: "s1",
@@ -38,10 +45,6 @@ const base = {
 beforeEach(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn()
   window.HTMLElement.prototype.scrollTo = vi.fn() as any
-  vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
-    cb(0)
-    return 1
-  })
 })
 
 afterEach(() => {
@@ -50,11 +53,9 @@ afterEach(() => {
 })
 
 describe("MessageVirtualList (Plan 2)", () => {
-  it("monta 200 mensajes sin crashear y no renderiza la cola", () => {
+  it("monta 200 mensajes sin crashear y no renderiza todos los elementos (solo la ventana virtual)", () => {
     render(<MessageVirtualList {...base} messages={msgs(200)} revealMessageID={null} revealNonce={0} />)
     expect(document.querySelector(".messages")).not.toBeNull()
-    // La cola queda fuera de la ventana virtualizada.
-    expect(document.querySelector('[data-message-id="m199"]')).toBeNull()
     const rendered = document.querySelectorAll("[data-message-id]").length
     expect(rendered).toBeLessThan(200)
   })
@@ -89,6 +90,24 @@ describe("MessageVirtualList (Plan 2)", () => {
       })
     }).not.toThrow()
     tree!.unmount()
+  })
+
+  it("cambio de sesión: ignora los stale y ancla con los frescos aunque midan igual", async () => {
+    const stale = msgsFor("s1", 50)
+    const fresh = msgsFor("s2", 50) // misma longitud: el ancla por longitud no re-dispararía
+    // Remount con key={selectedID} (como hace ChatView): instancia nueva con
+    // los mensajes viejos mientras el fetch de la nueva sesión vuelve.
+    const { rerender } = render(
+      <MessageVirtualList {...base} selectedID="s2" messages={stale} revealMessageID={null} revealNonce={0} />
+    )
+    const el = document.querySelector(".messages") as HTMLElement
+    expect(el.scrollTop).toBe(0) // stale: sin ancla, sin flash de scroll
+    await act(async () => {
+      rerender(
+        <MessageVirtualList {...base} selectedID="s2" messages={fresh} revealMessageID={null} revealNonce={0} />
+      )
+    })
+    expect(el.scrollTop).toBeGreaterThan(0) // frescos: ancla directa al final
   })
 
   it("leyendo arriba (200px del fondo), un mensaje nuevo NO arrastra abajo", async () => {

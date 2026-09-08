@@ -1,4 +1,4 @@
-import { memo, useRef, useEffect, useState, Fragment, useMemo } from "react"
+import { memo, useRef, useEffect, useLayoutEffect, useState, Fragment, useMemo } from "react"
 import { ChatIcon, ScrollDownIcon, CompressIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
@@ -150,29 +150,47 @@ export const MessageList = memo(function MessageList({
 
 
 
-  // Scroll al entrar a la sesión (móvil: cambio de vista, desktop: cambio de selectedID)
-  // Fuerza scroll incluso si messages.length no cambió entre cache y red.
-  useEffect(() => {
-    if (view !== "detail") return
+  // Entrada a sesión: igual que la virtual — useMessages fusiona sin limpiar
+  // al cambiar de chat y el primer render trae mensajes STALE de la sesión
+  // anterior. Solo se ancla con mensajes FRESCOS y por identidad de
+  // contenido, no por longitud (un swap con igual longitud no re-disparaba).
+  const firstID = messages.length > 0 ? messages[0]!.info.id : ""
+  const lastID = messages.length > 0 ? messages[messages.length - 1]!.info.id : ""
+  const msgsSessionID: string | null = messages.length > 0 ? messages[0]!.info.sessionID : null
+  const isFresh = messages.length === 0 || msgsSessionID === selectedID
+  const needsAnchorRef = useRef(true)
+  const [revealed, setRevealed] = useState(false)
+
+  // Scroll síncrono al entrar con mensajes frescos, antes del paint (sin animación ni saltos visibles)
+  useLayoutEffect(() => {
+    if (view !== "detail" || !selectedID || messages.length === 0) return
+    if (!isFresh || !needsAnchorRef.current) return
+    needsAnchorRef.current = false
+    const el = messagesRef.current
+    if (el) {
+      el.scrollTop = el.scrollHeight
+    }
     setIsAtBottom(true)
     scrollToBottom("auto")
-  }, [view])
+  }, [view, selectedID, firstID, lastID, isFresh, scrollToBottom, setIsAtBottom])
+
+  // Velo anti-parpadeo: primer paint oculto, reveal tras pintar ya anclado.
+  useEffect(() => {
+    if (revealed || view !== "detail" || !selectedID) return
+    if (!isFresh) return
+    const raf = requestAnimationFrame(() => setRevealed(true))
+    return () => cancelAnimationFrame(raf)
+  }, [revealed, view, selectedID, isFresh, firstID, lastID])
 
   useEffect(() => {
     if (view !== "detail") return
     if (loadingSessionID === selectedID) return
+    // La entrada la gobierna el ancla fresca (stale = quieto).
+    if (needsAnchorRef.current) return
     if (messages.length > 0) {
       if (isAtBottom || isNearBottom(80)) scrollToBottom("auto")
     }
   }, [view, loadingSessionID, selectedID, messages.length, isAtBottom, isNearBottom, scrollToBottom])
-
-  // Desktop: selectedID cambia sin que view cambie. Fuerza scroll al cambiar de sesión.
-  useEffect(() => {
-    if (!selectedID) return
-    // Pequeño delay para que los mensajes del cache se pinten antes de medir
-    const t = setTimeout(() => scrollToBottom("auto"), 80)
-    return () => clearTimeout(t)
-  }, [selectedID])
 
   // Navegación del buscador: centra el mensaje con la coincidencia actual.
   // Re-corre al crecer visibleMessages: el objetivo puede entrar al DOM un
@@ -194,6 +212,8 @@ export const MessageList = memo(function MessageList({
   // Durante streaming, seguir solo si está abajo o muy cerca (80px); no robar lectura arriba.
   useEffect(() => {
     if (view !== "detail") return
+    // La entrada la gobierna el ancla fresca (stale = quieto).
+    if (needsAnchorRef.current) return
     if (isAtBottom) {
       scrollToBottom("auto")
     } else if (messages.length > 0 && messageScrollSignature) {
@@ -205,7 +225,7 @@ export const MessageList = memo(function MessageList({
 
   return (
     <div className="message-list-root">
-      <div className="messages" ref={messagesRef}>
+      <div className="messages" ref={messagesRef} style={{ opacity: revealed || (loadingSessionID !== null && loadingSessionID === selectedID) ? 1 : 0 }}>
         {loadingSessionID && loadingSessionID === selectedID ? (
           <div className="empty-state compact">
             <GridSpinner label={t('detail.loading')} />
