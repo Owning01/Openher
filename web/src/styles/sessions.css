@@ -850,6 +850,26 @@ html[data-desktop="true"] .mode-indicator.mode-full {
   opacity: 0.85;
 }
 
+/* Rename in-place estilo Windows: el título se sustituye por el campo. */
+.session-card.is-renaming,
+.quick-access-card.is-renaming {
+  cursor: default;
+}
+
+.session-card .rename-inline,
+.quick-access-card .rename-inline {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.session-card .rename-input,
+.quick-access-card .rename-input {
+  font-size: 12px;
+  font-weight: 400;
+  padding: 1px 5px;
+  min-width: 0;
+}
+
 .session-card-header {
   display: flex;
   align-items: center;

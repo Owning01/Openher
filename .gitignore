@@ -81,3 +81,6 @@ desktop-app/opencode-desktop.exe
 dist-desktop/
 web/dist-locked/
 web/dist-locked2/
+
+# Artefactos de build Rust (raíz del repo; desktop-app/target ya está arriba)
+target/

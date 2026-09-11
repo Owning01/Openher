@@ -2,6 +2,7 @@ import type { QuickChatProvider, QuickChatProviderId } from "./types"
 import { createCerebrasProvider } from "./cerebras"
 import { createGroqProvider } from "./groq"
 import { createOpencodeGoProvider } from "./opencodeGo"
+import { createOpencodeLocalProvider } from "./opencodeLocal"
 import { createCustomProvider } from "./custom"
 import type { ServerConfig } from "../types"
 
@@ -13,6 +14,7 @@ export function getQuickChatProvider(id: QuickChatProviderId, opts: {
   customUrl?: string
   config: ServerConfig | null
 }): QuickChatProvider {
+  if (id === "opencode") return createOpencodeLocalProvider(opts.config)
   if (id === "groq") return createGroqProvider(opts.groqKey ?? "")
   if (id === "opencode-go") return createOpencodeGoProvider(opts.goKey ?? "")
   if (id === "custom") return createCustomProvider(opts.customKey ?? "", opts.customUrl)

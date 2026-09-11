@@ -1505,6 +1505,14 @@
   gap: 2px;
 }
 
+.settings-build-stamp {
+  padding: 4px 10px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  user-select: none;
+}
+
 .settings-sidebar-user-card {
   display: flex;
   align-items: center;

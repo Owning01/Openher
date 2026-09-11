@@ -3,7 +3,8 @@ import { createPortal } from "react-dom"
 import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, EyeIcon, NoteIcon, CopyIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
-import { MessageVirtualList } from "../widgets/message-list/MessageVirtualList"
+import { FilePathProvider } from "./FilePathButton"
+import { ChatVirtuosoList } from "../widgets/message-list/ChatVirtuosoList"
 import { Composer } from "./Composer"
 import { PromptPresetSheet } from "./PromptPresetSheet"
 export { ThinkingLevels } from "./ThinkingLevels"
@@ -26,6 +27,7 @@ import { isQuestionTool } from "../utils/toolMeta"
 
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { killTerminalPty } from "../utils/terminalStore"
+import { groupTurnDiffs } from "../utils/rendered"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, AgentOption, ModelOption, DataMode, CommandInfo,
   ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, ChatSettings, TokenUsage } from "../types"
@@ -166,6 +168,7 @@ export const ChatView = memo(function ChatView({
   hasMoreMessages, isLoadingMore, onLoadMoreMessages
 }: ChatViewProps) {
   const t = useT()
+  const turnChanges = useMemo(() => groupTurnDiffs(messages), [messages])
   const [messageQuery, setMessageQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
   const [searchPos, setSearchPos] = useState(0)
@@ -179,6 +182,17 @@ export const ChatView = memo(function ChatView({
   // El historial es por sesión: al cambiar se cierra; /history y /timeline
   // (más el botón del header) lo abren vía evento (patrón plugin:insert-text).
   useEffect(() => { setShowHistory(false) }, [selectedSession?.id])
+  // El buscador y el salto a prompt también son por sesión: sin reset, la
+  // query vieja centra (con smooth) una coincidencia al azar del chat nuevo
+  // y el jumpTarget stale expande la ventana sin motivo.
+  useEffect(() => {
+    setMessageQuery("")
+    setSearchPos(0)
+    setShowSearch(false)
+    setJumpTarget(null)
+    setContextMenu(null)
+    setSelectionCopy(null)
+  }, [selectedSession?.id])
   useEffect(() => {
     const open = () => setShowHistory(true)
     window.addEventListener(PROMPT_HISTORY_OPEN_EVENT, open)
@@ -619,8 +633,10 @@ export const ChatView = memo(function ChatView({
           />
         )}
         <div className="messages-wrap" ref={messagesWrapRef}>
+        <FilePathProvider onOpenFile={onEditFile} directory={selectedSession?.directory}>
         {flags.virtualChat ? (
-        <MessageVirtualList
+        <ChatVirtuosoList
+          key={selectedID ?? "empty"}
           messages={messages}
           pendingIndex={pendingIndex}
           loadingSessionID={loadingSessionID}
@@ -657,6 +673,7 @@ export const ChatView = memo(function ChatView({
         />
         ) : (
         <MessageList
+          key={selectedID ?? "empty"}
           messages={messages}
           pendingIndex={pendingIndex}
           loadingSessionID={loadingSessionID}
@@ -689,6 +706,7 @@ export const ChatView = memo(function ChatView({
           outboxActions={outboxActions}
         />
         )}
+        </FilePathProvider>
         </div>
         {showHistory && historyLayout.layout.placement === "right" && (
           <PromptHistoryPanel
@@ -828,6 +846,7 @@ export const ChatView = memo(function ChatView({
           onChangeModel={onChangeModel}
           variantGroups={variantGroups as any}
           sessionID={selectedSession?.id}
+          turnChanges={turnChanges}
         />
       )}
 

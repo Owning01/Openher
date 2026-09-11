@@ -1,0 +1,711 @@
+/* styles/desktop-narrow.css — GENERADO, no editar a mano.
+   Proyecta los bloques @media (min-width: 781px) de layout.css para
+   html[data-desktop="true"] dentro de @media (max-width: 780px): la app wry
+   conserva el layout de escritorio real cuando la ventana se achica.
+   Regenerar: node scripts/gen-desktop-css.mjs
+   Fuente de verdad: styles/layout.css */
+
+@media (max-width: 780px) {
+html[data-desktop="true"] .app-shell[data-navbar="bottom"] {
+padding-bottom: 80px;
+}
+html[data-desktop="true"] .app-shell {
+display: grid;
+    /* Ancla del overlay de la sidebar derecha (position:absolute <=1100px):
+       sin esto se posiciona contra el viewport y tapa la titlebar. */
+    position: relative;
+    grid-template-columns: calc(44px * var(--ui-scale, 1)) calc(340px * var(--ui-scale, 1)) minmax(0, 1fr);
+    height: 100dvh;
+    overflow: hidden;
+    padding: 0;
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+}
+html[data-desktop="true"] .top-nav {
+display: none;
+}
+html[data-desktop="true"] .app-mobile-content {
+display: contents;
+}
+html[data-desktop="true"] .app-desktop-sidebar {
+position: relative;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    container-type: inline-size;
+}
+html[data-desktop="true"] .app-desktop-sidebar > .panel.sessions {
+height: 100%;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+html[data-desktop="true"] .app-desktop-activity {
+display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    padding: calc(8px * var(--ui-scale, 1)) 0;
+    overflow-y: auto;
+}
+html[data-desktop="true"] .app-desktop-activity-top, html[data-desktop="true"] .app-desktop-activity-bottom {
+display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(6px * var(--ui-scale, 1));
+}
+html[data-desktop="true"] .activity-btn {
+width: calc(38px * var(--ui-scale, 1));
+    height: calc(38px * var(--ui-scale, 1));
+    min-width: calc(38px * var(--ui-scale, 1));
+    min-height: calc(38px * var(--ui-scale, 1));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+html[data-desktop="true"] .activity-btn:hover {
+color: var(--text);
+    background: var(--surface-hover);
+    border-color: var(--border);
+}
+html[data-desktop="true"] .activity-btn.active {
+color: var(--text);
+    background: var(--surface-strong);
+    border-color: var(--border-strong);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+html[data-desktop="true"] .activity-ram-chip {
+font-size: 0.875rem;
+    color: var(--muted, #888);
+    font-family: var(--font-mono, monospace);
+    padding: 2px 0;
+    text-align: center;
+    letter-spacing: -0.02em;
+    opacity: 0.6;
+    user-select: none;
+    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+html[data-desktop="true"] .activity-ram-wv {
+font-size: 0.75rem;
+    opacity: 0.8;
+}
+html[data-desktop="true"] .desktop-sidebar-body > .shell-explorer, html[data-desktop="true"] .desktop-sidebar-body > .shell-kanban, html[data-desktop="true"] .desktop-sidebar-body > .shell-docs, html[data-desktop="true"] .desktop-sidebar-body > .shell-updates, html[data-desktop="true"] .desktop-sidebar-body > .shell-stats, html[data-desktop="true"] .desktop-sidebar-body > .shell-labs, html[data-desktop="true"] .desktop-sidebar-body > .shell-config {
+height: 100%;
+}
+html[data-desktop="true"] .app-desktop-content {
+min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    gap: 0;
+}
+html[data-desktop="true"] .app-desktop-content > .panel {
+flex: 1;
+    min-height: 0;
+}
+html[data-desktop="true"] .app-desktop-content > .panel.detail, html[data-desktop="true"] .app-desktop-content .panel.detail {
+border-radius: var(--radius-lg);
+    /* Fondo igual al del chat (incluye el fondo personalizado del
+       ChatCustomizer): el panel y el header no deben tener otro color. */
+    background-color: var(--chat-bg-color, var(--surface));
+}
+html[data-desktop="true"]:root[data-theme="dark"] .app-desktop-content > .panel.detail, html[data-desktop="true"]:root[data-theme="dark"] .app-desktop-content .panel.detail {
+background-color: var(--chat-bg-color, #000);
+}
+html[data-desktop="true"] .app-desktop-content .detail-header {
+background-color: var(--chat-bg-color, var(--surface));
+}
+html[data-desktop="true"]:root[data-theme="dark"] .app-desktop-content .detail-header {
+background-color: var(--chat-bg-color, #000);
+}
+html[data-desktop="true"]:root {
+--chat-desktop-fixed-width: 880px;
+}
+html[data-desktop="true"] .desktop-cell:not([data-split="true"]) .messages-wrap, html[data-desktop="true"] .desktop-cell:not([data-split="true"]) .composer, html[data-desktop="true"] .desktop-cell:not([data-split="true"]) .todo-panel, html[data-desktop="true"] .desktop-cell:not([data-split="true"]) .message-search-bar, html[data-desktop="true"] .desktop-maximized .messages-wrap, html[data-desktop="true"] .desktop-maximized .composer, html[data-desktop="true"] .desktop-maximized .todo-panel, html[data-desktop="true"] .desktop-maximized .message-search-bar {
+max-width: min(var(--chat-desktop-fixed-width, 880px), calc(100% - 32px)) !important;
+    margin-inline: auto !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+html[data-desktop="true"] .desktop-cell:not([data-split="true"]) .message, html[data-desktop="true"] .desktop-maximized .message {
+max-width: 100% !important;
+    margin-inline: 0 !important;
+    width: 100% !important;
+}
+html[data-desktop="true"] .desktop-cell[data-split="true"] .messages-wrap, html[data-desktop="true"] .desktop-cell[data-split="true"] .composer, html[data-desktop="true"] .desktop-cell[data-split="true"] .todo-panel, html[data-desktop="true"] .desktop-cell[data-split="true"] .message-search-bar, html[data-desktop="true"] .desktop-grid[data-split="true"] .desktop-cell .messages-wrap, html[data-desktop="true"] .desktop-grid[data-split="true"] .desktop-cell .composer, html[data-desktop="true"] .desktop-grid[data-cols="2"] .desktop-cell .messages-wrap, html[data-desktop="true"] .desktop-grid[data-cols="2"] .desktop-cell .composer, html[data-desktop="true"] .desktop-grid[data-cols="3"] .desktop-cell .messages-wrap, html[data-desktop="true"] .desktop-grid[data-cols="3"] .desktop-cell .composer, html[data-desktop="true"] .desktop-grid[data-cols="4"] .desktop-cell .messages-wrap, html[data-desktop="true"] .desktop-grid[data-cols="4"] .desktop-cell .composer {
+max-width: 100% !important;
+    margin-inline: 0 !important;
+    width: 100% !important;
+    padding-inline: 16px !important;
+    box-sizing: border-box !important;
+}
+html[data-desktop="true"] .desktop-cell[data-split="true"] .message, html[data-desktop="true"] .desktop-grid[data-split="true"] .desktop-cell .message, html[data-desktop="true"] .desktop-grid[data-cols="2"] .desktop-cell .message, html[data-desktop="true"] .desktop-grid[data-cols="3"] .desktop-cell .message, html[data-desktop="true"] .desktop-grid[data-cols="4"] .desktop-cell .message {
+max-width: 100% !important;
+    margin-inline: 0 !important;
+    width: 100% !important;
+}
+html[data-desktop="true"] .app-mobile-content .messages-wrap, html[data-desktop="true"] .app-mobile-content .composer, html[data-desktop="true"] .app-mobile-content .message {
+max-width: 100% !important;
+    margin-inline: 0 !important;
+    width: 100% !important;
+}
+html[data-desktop="true"] .app-desktop-placeholder {
+flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+html[data-desktop="true"] .detail-header .back-btn {
+display: none;
+}
+html[data-desktop="true"] .desktop-grid {
+flex: 1;
+    min-height: 0;
+    display: grid;
+}
+html[data-desktop="true"] .desktop-cell {
+min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--surface);
+}
+html[data-desktop="true"] .desktop-cell-placeholder {
+position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 0;
+    background: var(--surface);
+    cursor: pointer;
+}
+html[data-desktop="true"] .desktop-cell-placeholder:hover {
+border-color: var(--primary);
+    color: var(--primary);
+}
+html[data-desktop="true"] .desktop-cell-placeholder.drag-over {
+border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+html[data-desktop="true"] .desktop-cell-placeholder.drag-over .icon-empty-state, html[data-desktop="true"] .desktop-cell-placeholder.drag-over p {
+color: var(--primary);
+}
+html[data-desktop="true"] .desktop-resize-col {
+cursor: col-resize;
+    background: transparent;
+    position: relative;
+    touch-action: none;
+    /* 4px hit-area en vez de 6px: no tapa la scrollbar de los paneles adyacentes */
+    width: calc(4px * var(--ui-scale, 1));
+}
+html[data-desktop="true"] .desktop-resize-row {
+cursor: row-resize;
+    background: transparent;
+    position: relative;
+    touch-action: none;
+    height: calc(4px * var(--ui-scale, 1));
+}
+html[data-desktop="true"] .desktop-resize-col::after {
+content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 1px;
+    right: 1px;
+    background: var(--border-strong);
+    transition: background 0.12s;
+}
+html[data-desktop="true"] .desktop-resize-row::after {
+content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 1px;
+    bottom: 1px;
+    background: var(--border-strong);
+    transition: background 0.12s;
+}
+html[data-desktop="true"] .desktop-resize-col:hover::after, html[data-desktop="true"] .desktop-resize-row:hover::after {
+background: var(--text);
+}
+html[data-desktop="true"] .desktop-cell-placeholder .desktop-cell-close {
+position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+}
+html[data-desktop="true"] .session-panel {
+flex: 1;
+    min-height: 0;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 0;
+}
+html[data-desktop="true"] .session-panel.active {
+box-shadow: inset 0 0 0 2px var(--primary);
+}
+html[data-desktop="true"] .session-panel-header {
+display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 0.25rem var(--space-2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    /* Fondo igual al del chat (incluye el fondo personalizado del
+       ChatCustomizer): el header no debe tener otro color que el chat. */
+    background-color: var(--chat-bg-color, var(--surface));
+}
+html[data-desktop="true"]:root[data-theme="dark"] .session-panel-header {
+background-color: var(--chat-bg-color, #000);
+}
+html[data-desktop="true"] .session-panel-title {
+font-size: 13px;
+    font-weight: 700;
+    font-family: var(--font-family);
+    color: var(--muted-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+html[data-desktop="true"] .session-panel-actions {
+display: flex;
+    gap: var(--space-1);
+    flex-shrink: 0;
+}
+html[data-desktop="true"] .tab-bar {
+display: flex;
+    align-items: center;
+    gap: 1px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 var(--space-1);
+    min-height: 24px;
+    height: 24px;
+    border-radius: 0;
+}
+html[data-desktop="true"] .tab-bar::-webkit-scrollbar {
+display: none;
+}
+html[data-desktop="true"] .tab {
+display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-family: var(--font-family);
+    color: var(--muted-strong);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+    min-width: 64px;
+    min-height: 36px;
+    height: 36px;
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    border-bottom: none;
+    transition: background 0.1s, color 0.1s;
+    user-select: none;
+    flex-shrink: 0;
+}
+html[data-desktop="true"] .tab:hover {
+background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+}
+html[data-desktop="true"] .tab.active {
+background: var(--chat-bg-color, var(--surface));
+    color: var(--text);
+    border-color: var(--border);
+    font-weight: 600;
+    border-radius: 0;
+    position: relative;
+}
+html[data-desktop="true"] .tab.active::after {
+content: "";
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--chat-bg-color, var(--surface));
+}
+html[data-desktop="true"] .tab-label {
+overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+html[data-desktop="true"] .tab-busy {
+width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary);
+    flex-shrink: 0;
+    animation: pulse-busy 1.5s ease-in-out infinite;
+}
+html[data-desktop="true"] .tab-dragging {
+opacity: 0.4;
+}
+html[data-desktop="true"] .tab-drag-over {
+border-left: 2px solid var(--primary);
+}
+html[data-desktop="true"] .tab-close {
+display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    color: var(--muted-strong);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.1s, background 0.1s;
+}
+html[data-desktop="true"] .tab:hover .tab-close, html[data-desktop="true"] .tab.active .tab-close {
+opacity: 1;
+}
+html[data-desktop="true"] .tab-close:hover {
+background: rgba(128, 128, 128, 0.15);
+    color: var(--text);
+}
+html[data-desktop="true"] .tab-add {
+display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    color: var(--muted-strong);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background 0.1s, color 0.1s;
+}
+html[data-desktop="true"] .tab-add:hover {
+background: rgba(128, 128, 128, 0.12);
+    color: var(--text);
+}
+html[data-desktop="true"] .tab-rename-input {
+background: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-family: var(--font-mono);
+    padding: 2px 6px;
+    outline: none;
+    min-width: 0;
+    line-height: 1.2;
+}
+html[data-desktop="true"] .tab-rename-input:focus {
+border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-soft);
+}
+html[data-desktop="true"] .app-desktop-sidebar {
+position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+html[data-desktop="true"] .desktop-sidebar-header {
+display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    min-height: 32px;
+}
+html[data-desktop="true"] .desktop-sidebar-title {
+font-family: var(--font-family);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted, #71717a);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+html[data-desktop="true"] .desktop-sidebar-actions {
+display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+html[data-desktop="true"] .desktop-sidebar-body {
+flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    display: flex;
+    flex-direction: column;
+}
+html[data-desktop="true"] .app-desktop-sidebar .panel.sessions {
+height: 100%;
+    border: none;
+    border-radius: 0;
+    padding: 8px 10px;
+    background: transparent;
+}
+html[data-desktop="true"] .app-desktop-sidebar .btn-icon {
+min-width: 32px;
+    min-height: 32px;
+}
+html[data-desktop="true"] .desktop-sidebar-rail {
+width: calc(40px * var(--ui-scale, 1));
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+    border-right: 1px solid var(--border-subtle);
+    background: var(--surface);
+}
+html[data-desktop="true"] .desktop-sidebar-resizer {
+position: absolute;
+    top: 0;
+    right: calc(-3px * var(--ui-scale, 1));
+    bottom: 0;
+    width: calc(6px * var(--ui-scale, 1));
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 3;
+}
+html[data-desktop="true"] .desktop-sidebar-resizer::after {
+content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 2px;
+    right: 2px;
+    background: var(--border-subtle);
+    transition: background 0.12s;
+}
+html[data-desktop="true"] .desktop-sidebar-resizer:hover::after {
+background: var(--primary);
+}
+html[data-desktop="true"] .app-desktop-sidebar--right {
+position: relative;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    container-type: inline-size;
+}
+html[data-desktop="true"] .app-desktop-sidebar--right.collapsed {
+overflow: visible;
+}
+html[data-desktop="true"] .desktop-sidebar-resizer--right {
+position: absolute;
+    top: 0;
+    left: calc(-3px * var(--ui-scale, 1));
+    right: auto;
+    bottom: 0;
+    width: calc(6px * var(--ui-scale, 1));
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 3;
+}
+html[data-desktop="true"] .desktop-sidebar-resizer--right::after {
+content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 2px;
+    right: 2px;
+    background: var(--border-subtle);
+    transition: background 0.12s;
+}
+html[data-desktop="true"] .desktop-sidebar-resizer--right:hover::after {
+background: var(--primary);
+}
+@media (max-width: 1100px) {
+html[data-desktop="true"] .app-desktop-sidebar--right:not(.collapsed) {
+position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: calc(340px * var(--ui-scale, 1));
+      z-index: 20;
+      box-shadow: -8px 0 24px rgba(0,0,0,0.18);
+}
+
+}
+html[data-desktop="true"] .desktop-layout-area {
+flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+html[data-desktop="true"] .desktop-maximized {
+flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    overflow: hidden;
+}
+html[data-desktop="true"] .desktop-maximized .session-panel {
+border: none;
+    border-radius: 0;
+}
+html[data-desktop="true"] .session-panel-busy-dot {
+width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warning);
+    flex-shrink: 0;
+    animation: pulse-dot 1.2s ease-in-out infinite;
+}
+html[data-desktop="true"] .session-panel-header {
+user-select: none;
+}
+html[data-desktop="true"] .session-panel-header[draggable="true"] {
+cursor: grab;
+}
+html[data-desktop="true"] .session-panel-header[draggable="true"]:active {
+cursor: grabbing;
+}
+html[data-desktop="true"] .session-panel .panel.detail {
+border: none;
+    border-radius: 0;
+    /* height:auto rompía la cadena flex: el chat crecía con el contenido
+       (scrollHeight 7x el panel), el composer quedaba debajo de la celda
+       (oculto por overflow:hidden) y .messages no scrolleaba. Encajar al
+       panel y dejar el scroll interno del chat. */
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+html[data-desktop="true"] .bottom-nav {
+position: fixed;
+    left: 50%;
+    bottom: var(--space-4);
+    transform: translateX(-50%);
+    z-index: var(--z-sticky);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    padding: var(--space-1);
+    width: min(400px, 90vw);
+}
+html[data-desktop="true"] .bottom-nav button {
+min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+html[data-desktop="true"] .bottom-nav button.active {
+background: transparent;
+    color: var(--primary);
+}
+html[data-desktop="true"] .bottom-nav button:hover:not(:disabled) {
+background: var(--surface-strong);
+}
+html[data-desktop="true"] .bottom-nav button:disabled {
+opacity: 0.3;
+    cursor: default;
+}
+
+html[data-desktop="true"] .app-shell[data-sidebarpos="right"] > .app-desktop-activity {
+order: 10;
+    border-right: none;
+    border-left: 1px solid var(--border);
+}
+html[data-desktop="true"] .app-shell[data-sidebarpos="top"] > .app-desktop-activity {
+grid-column: 1 / -1;
+    grid-row: 1;
+    flex-direction: row;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 0 calc(8px * var(--ui-scale, 1));
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+html[data-desktop="true"] .app-shell[data-sidebarpos="top"] .app-desktop-activity-top, html[data-desktop="true"] .app-shell[data-sidebarpos="top"] .app-desktop-activity-bottom {
+flex-direction: row;
+    align-items: center;
+}
+html[data-desktop="true"] .app-shell[data-sidebarpos="top"] > .app-desktop-sidebar {
+grid-column: 1;
+    grid-row: 2;
+}
+html[data-desktop="true"] .app-shell[data-sidebarpos="top"] > .app-desktop-content {
+grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+}
+html[data-desktop="true"] .app-shell[data-sidebarpos="top"] > .app-desktop-sidebar--right {
+grid-column: 3;
+    grid-row: 2;
+}
+html[data-desktop="true"] .app-shell[data-sidebarpos="top"] > .ade-diff-panel {
+grid-column: 4;
+    grid-row: 2;
+}
+html[data-desktop="true"] .app-shell[data-sbhide~="sessions"] .activity-btn[data-item="sessions"], html[data-desktop="true"] .app-shell[data-sbhide~="explorer"] .activity-btn[data-item="explorer"], html[data-desktop="true"] .app-shell[data-sbhide~="terminal"] .activity-btn[data-item="terminal"], html[data-desktop="true"] .app-shell[data-sbhide~="stats"] .activity-btn[data-item="stats"], html[data-desktop="true"] .app-shell[data-sbhide~="browser"] .activity-btn[data-item="browser"], html[data-desktop="true"] .app-shell[data-sbhide~="kanban"] .activity-btn[data-item="kanban"], html[data-desktop="true"] .app-shell[data-sbhide~="quickchat"] .activity-btn[data-item="quickchat"], html[data-desktop="true"] .app-shell[data-sbhide~="scm"] .activity-btn[data-item="scm"], html[data-desktop="true"] .app-shell[data-sbhide~="design"] .activity-btn[data-item="design"], html[data-desktop="true"] .app-shell[data-sbhide~="learning"] .activity-btn[data-item="learning"], html[data-desktop="true"] .app-shell[data-sbhide~="settings"] .activity-btn[data-item="settings"] {
+display: none;
+}
+
+  /* La titlebar frameless (38px) ya la descuenta el body: el shell no debe
+     pedir 100dvh completo ni desbordar (titlebar.css). */
+  html[data-frameless="true"][data-desktop="true"] .app-shell {
+    height: calc(100dvh - 38px);
+  }
+}

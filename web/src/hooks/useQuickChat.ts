@@ -3,6 +3,7 @@ import { STORAGE_KEYS, QUICKCHAT_CACHE_TTL_MS } from "../constants"
 import { shell } from "../shell"
 import { getQuickChatProvider, type QuickChatMessage, type QuickChatProviderId } from "../providers"
 import type { ServerConfig } from "../types"
+import { QC_SYSTEM_PROMPT, QC_SYSTEM_PROMPT_RESEARCH } from "../utils/promptCache"
 
 type QCState = QuickChatMessage & { id: string }
 
@@ -31,6 +32,7 @@ export function useQuickChat(opts: {
   customUrl?: string
   config: ServerConfig | null
   searchEnabled: boolean
+  researchMode?: boolean
 }) {
   const [messages, setMessages] = useState<QCState[]>(() => loadStored())
   const [busy, setBusy] = useState(false)
@@ -80,16 +82,34 @@ export function useQuickChat(opts: {
     setError(null)
     const userMsg: QCState = { id: `u${Date.now()}`, role: "user", content: q }
     setMessages(prev => [...prev, userMsg])
-    // web search if enabled
+    // Investigación profunda: web search + contexto enriquecido
+    // CRÍTICO para prompt caching: el searchBlock NO va como system nuevo (invalidaría el prefix cacheado).
+    // Se fusiona al ÚLTIMO user message → prefix (system + historial) queda estable y cacheable.
     let searchResults: { title: string; url: string; snippet: string }[] | undefined
     let searchBlock = ""
-    if (opts.searchEnabled) {
+    const needSearch = opts.searchEnabled || opts.researchMode
+    if (needSearch) {
       try {
         const r = await shell.search.query(q).catch(() => null) as any
-        const arr = r?.results ?? r?.data?.results ?? []
-        if (Array.isArray(arr) && arr.length) {
-          searchResults = arr.slice(0, 3)
-          searchBlock = searchResults.map(r => `- ${r.title}: ${r.snippet} (${r.url})`).join("\n")
+        const arr = r?.results ?? r?.data?.results ?? r?.data ?? []
+        const list = Array.isArray(arr) ? arr : Array.isArray(r) ? r : []
+        if (list.length) {
+          searchResults = list.slice(0, opts.researchMode ? 5 : 3)
+          const header = opts.researchMode
+            ? "Contexto web ampliado (usa para investigar, cita URLs, genera diagrama mermaid si ayuda):"
+            : "Contexto web (usa si responde la pregunta, cita URLs si es útil):"
+          searchBlock = `${header}\n${searchResults.map(r => `- ${r.title}: ${r.snippet} (${r.url})`).join("\n")}`
+          // En modo investigación, intentar enriquecer el top result vía proxy (texto real)
+          if (opts.researchMode && searchResults[0]?.url) {
+            try {
+              const prox = await shell.proxy.fetch(searchResults[0].url, { headers: { Accept: "text/html" } } as any).then(rr => rr.text()).catch(() => "")
+              if (prox && prox.length > 500) {
+                // extraer texto plano básico sin traer todo el HTML (truncado 4k)
+                const textOnly = prox.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000)
+                if (textOnly.length > 400) searchBlock += `\n\n[Contenido ampliado de ${searchResults[0].title}]:\n${textOnly.slice(0, 3500)}`
+              }
+            } catch {}
+          }
         }
       } catch {}
     }
@@ -103,22 +123,37 @@ export function useQuickChat(opts: {
     const ac = new AbortController()
     abortRef.current = ac
     try {
-      const hist: QuickChatMessage[] = [...messages, userMsg].map(m => ({ role: m.role as any, content: m.content }))
-      const toSend: QuickChatMessage[] = searchBlock
-        ? [{ role: "system", content: `Contexto web (usa si responde la pregunta, cita URLs si es útil):\n${searchBlock}` }, ...hist.slice(-6)]
-        : hist.slice(-8)
-
+      // Harness caching: historial estable + system cacheado, searchBlock fusionado al último user
+      const isOpencode = opts.provider === "opencode"
+      // Para opencode-local, no reenviamos historial (la sesión del server ya lo tiene) — solo el prompt nuevo con search
+      let toSend: QuickChatMessage[]
+      if (isOpencode) {
+        const enriched = searchBlock ? `${q}\n\n${searchBlock}` : q
+        toSend = [{ role: "user", content: enriched }]
+        // pero el provider ignorará historia y usará solo esto; igual lo pasamos consistente
+      } else {
+        const hist: QuickChatMessage[] = [...messages, userMsg].map(m => ({ role: m.role as any, content: m.content }))
+        if (searchBlock) {
+          // Fusionar al último user para no romper prefix cacheable
+          const lastIdx = hist.length - 1
+          hist[lastIdx] = { ...hist[lastIdx]!, content: `${hist[lastIdx]!.content}\n\n${searchBlock}` }
+        }
+        // Ventana 8, system inyectado por el provider (no aquí) — aquí mandamos solo user/assistant
+        toSend = hist.slice(-8)
+      }
       const assistantId = `a${Date.now()}`
       setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", searchResults }])
       let acc = ""
+      const systemPrompt = opts.researchMode ? QC_SYSTEM_PROMPT_RESEARCH : QC_SYSTEM_PROMPT
       const res = await provider.chat(toSend, {
         model: opts.model,
         signal: ac.signal,
+        systemPrompt,
         onChunk: (chunk: string) => {
           acc += chunk
           setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: acc } : m))
         },
-      })
+      } as any)
       const finalText = (res.text || acc).trim()
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: finalText } : m))
       setCachedAnswer(q, searchBlock, finalText)
@@ -130,7 +165,7 @@ export function useQuickChat(opts: {
     } finally {
       setBusy(false)
     }
-  }, [busy, getCachedAnswer, messages, opts.model, opts.searchEnabled, provider, setCachedAnswer])
+  }, [busy, getCachedAnswer, messages, opts.model, opts.searchEnabled, opts.researchMode, provider, setCachedAnswer])
 
   const clear = useCallback(() => {
     abortRef.current?.abort()

@@ -27,6 +27,7 @@ import { useFileBrowser } from "../hooks/useFileBrowser"
 import { useOfflineQueue } from "../hooks/useOfflineQueue"
 import { useNotifications } from "../hooks/useNotifications"
 import { useIsDesktop } from "../hooks/useIsDesktop"
+import { useShellViewport } from "../hooks/useShellViewport"
 import { useDesktopShortcuts } from "../hooks/useDesktopShortcuts"
 import { useQuestions } from "../hooks/useQuestions"
 import { useSSEHandler } from "../hooks/useSSEHandler"
@@ -82,6 +83,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
 
   const { theme, setTheme } = useTheme()
   const isDesktop = useIsDesktop()
+  const { narrow: shellNarrow, rightOverlay } = useShellViewport()
   useUIZoom()
 
   const pluginTabs = useSyncExternalStore(
@@ -688,7 +690,19 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     },
   })
 
-  const { streamState } = useSSE(config, sseHandler, selectedSession?.directory, selectedSession?.id)
+  // Stop real en la vista principal: mientras el flag sigue activo se dropean
+  // los deltas en vuelo (igual que SessionChatPanel); sin esto el texto
+  // seguía creciendo tras el clic aunque el server ya hubiera parado.
+  const sseHandlerGuarded = useCallback((event: Parameters<typeof sseHandler>[0]) => {
+    if (stopGenerationRef.current) {
+      if (event.type === "message.part.delta" || event.type === "message.updated" || event.type === "message.part.updated"
+        || event.type === "session.next.text.delta" || event.type === "session.next.reasoning.delta"
+        || event.type === "session.next.tool.input.delta") return
+    }
+    sseHandler(event)
+  }, [sseHandler])
+
+  const { streamState } = useSSE(config, sseHandlerGuarded, selectedSession?.directory, selectedSession?.id)
 
   const { memInfo } = useAppLifecycle({
     config,
@@ -883,6 +897,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
       rightSidebarWidth,
       desktopDiffOpen,
       desktopDiffWidth,
+      narrow: shellNarrow,
+      rightOverlay,
     }),
     [
       sidebarPrefs.position,
@@ -892,6 +908,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
       rightSidebarWidth,
       desktopDiffOpen,
       desktopDiffWidth,
+      shellNarrow,
+      rightOverlay,
     ]
   )
   const shellGridStyle = useMemo(
@@ -1003,6 +1021,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
   )
 
   const isSessionRunning = Boolean(selectedSession && isSessionActive(selectedSession))
+  // stopping/chatStopping NO entran acá: el guard anti-deltas vive en
+  // stopGenerationRef (fondo) y la burbuja debe caer al confirmar el stop.
   const isWorking = awaitingAssistantReply || isSessionRunning
 
   const baseChatProps = useBaseChatProps({

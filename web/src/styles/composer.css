@@ -390,6 +390,163 @@
   color: var(--primary);
 }
 
+/* ===== Composer: cambios del turno (resumen +/− por turno) ===== */
+.turn-changes-row {
+  display: flex;
+  align-items: center;
+}
+
+.turn-changes-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 10px 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.turn-changes-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.turn-add {
+  color: var(--success, #3fb950);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-del {
+  color: var(--danger);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-changes-panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: min(380px, 82vw);
+  max-height: min(420px, 52vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  z-index: var(--z-dropdown);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.turn-changes-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.78rem;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.turn-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-pager button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0 5px;
+}
+
+.turn-pager button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.turn-pager button:not(:disabled):hover {
+  color: var(--text);
+}
+
+.turn-changes-label {
+  padding: 6px 12px 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.turn-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+  font-size: 0.78rem;
+  padding: 7px 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.turn-file-row:hover {
+  background: var(--surface-subtle);
+}
+
+.turn-file-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.turn-chev {
+  color: var(--muted);
+  font-size: 0.7rem;
+  transition: transform 0.15s;
+}
+
+.turn-chev.open {
+  transform: rotate(90deg);
+}
+
+.turn-patch {
+  border-bottom: 1px solid var(--border-subtle);
+  max-height: 260px;
+  overflow: auto;
+}
+
+.turn-changes-foot {
+  padding: 6px 12px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border-subtle);
+}
+
 .composer-char-count {
   font-size: 0.875rem;
   font-family: var(--font-mono);

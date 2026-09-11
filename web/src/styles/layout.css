@@ -274,6 +274,9 @@
   /* ===== Vista escritorio: sidebar de sesiones + contenido ===== */
   .app-shell {
     display: grid;
+    /* Ancla del overlay de la sidebar derecha (position:absolute <=1100px):
+       sin esto se posiciona contra el viewport y tapa la titlebar. */
+    position: relative;
     grid-template-columns: calc(44px * var(--ui-scale, 1)) calc(340px * var(--ui-scale, 1)) minmax(0, 1fr);
     height: 100dvh;
     overflow: hidden;

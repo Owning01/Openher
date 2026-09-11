@@ -14,6 +14,7 @@ import { ThinkingLevels } from "./ThinkingLevels"
 import { PairModal } from "./PairModal"
 import { PluginSlot } from "../plugins"
 import { LedSwitch } from "./LedSwitch"
+import { Opencode2Button } from "../features/opencode2/Opencode2Button"
 import { WeatherSettings } from "./WeatherSettings"
 import { ExportCacheButton } from "./ExportCacheButton"
 import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type DesktopConfig } from "../desktop"
@@ -23,6 +24,7 @@ import { useIsDesktop } from "../hooks/useIsDesktop"
 import { useAutoOpencode2 } from "../hooks/useAutoOpencode2"
 import { useSidebarPrefs, SIDEBAR_ITEM_IDS } from "../hooks/useSidebarPrefs"
 import { STORAGE_KEYS } from "../constants"
+import { BuildStamp } from "./BuildStamp"
 import { shell } from "../shell"
 
 type UsageStats = {
@@ -381,6 +383,7 @@ export const SettingsPanel = memo(function SettingsPanel({
        <button type="button" className="settings-nav-btn" onClick={onOpenGitHub}>
         <span className="settings-nav-label">Provide Feedback</span>
        </button>
+       <BuildStamp />
 
        <div
         className="settings-sidebar-user-card"
@@ -780,6 +783,15 @@ export const SettingsPanel = memo(function SettingsPanel({
             } catch {}
            }}
           />
+        </div>
+       </div>
+       <div className="setting-item-row">
+        <div className="setting-item-info">
+         <span className="setting-item-title">Servidor opencode2 (headless)</span>
+         <p className="setting-item-desc">Un clic levanta :4098 en background y lo deja arrancando solo con Windows, sin consola ni ventana.</p>
+        </div>
+        <div className="setting-item-control" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+         <Opencode2Button />
         </div>
        </div>
        <div className="setting-item-row">

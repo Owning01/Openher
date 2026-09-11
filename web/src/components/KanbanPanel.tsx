@@ -10,9 +10,9 @@ import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
 import type { Session } from "../entities/session/model"
 import type { ServerConfig } from "../types"
-import { SendIcon } from "../Icons"
+import { SendIcon, CloseIcon, TrashIcon } from "../Icons"
 
-export const KanbanPanel = memo(function KanbanPanel() {
+export const KanbanPanel = memo(function KanbanPanel({ onClose }: { onClose?: () => void }) {
   const t = useT()
   const { confirm } = useDialog()
   const [boards, setBoards] = useState<KanbanBoard[]>([])
@@ -245,7 +245,10 @@ export const KanbanPanel = memo(function KanbanPanel() {
           </div>
           <span style={{ fontSize: "0.72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>{totalCards} tarjetas · {colCount} columnas</span>
           <button type="button" className={`btn-secondary compact${showNotes ? " active" : ""}`} onClick={() => setShowNotes((v) => !v)} title="Notas del tablero" aria-pressed={showNotes}>Notas</button>
-          <button className="btn-icon compact" title={t('shell.deleteBoard')} onClick={async () => { if (board && !(await confirm({ message: t('shell.deleteBoard'), confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" }))) return; shell.kanban.delBoard(board.id).then(load) }} style={{ color: "var(--muted)" }}>×</button>
+          <button className="btn-icon compact" title={t('shell.deleteBoard')} aria-label={t('shell.deleteBoard')} onClick={async () => { if (board && !(await confirm({ message: t('shell.deleteBoard'), confirmText: t('common.yes'), cancelText: t('common.cancel'), variant: "danger" }))) return; shell.kanban.delBoard(board.id).then(load) }} style={{ color: "var(--muted)" }}><TrashIcon size={14} /></button>
+          {onClose && (
+            <button type="button" className="btn-icon compact" title="Cerrar panel" aria-label="Cerrar panel" onClick={onClose}><CloseIcon size={14} /></button>
+          )}
         </div>
       </div>
 

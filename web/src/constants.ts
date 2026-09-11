@@ -28,6 +28,7 @@ export const STORAGE_KEYS = {
   QUICKCHAT_KEY_CUSTOM: "openher.quickchat.key.custom",
   QUICKCHAT_CUSTOM_URL: "openher.quickchat.custom.url",
   QUICKCHAT_CUSTOM_MODEL: "openher.quickchat.custom.model",
+  QUICKCHAT_RESEARCH: "openher.quickchat.research",
   SHELL_REMOTE: "openher.shellBase"
 }
 

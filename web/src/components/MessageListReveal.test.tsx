@@ -8,6 +8,7 @@ vi.mock("./MessageBubble", () => ({
 }))
 
 import { MessageList } from "./MessageList"
+import { __clearScrollMemory, resolveSessionEntry } from "../shared/lib/useFollowTail"
 
 function msgs(n: number): any[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -34,6 +35,8 @@ const base = {
 } as const
 
 beforeEach(() => {
+  __clearScrollMemory()
+  sessionStorage.clear()
   window.HTMLElement.prototype.scrollIntoView = vi.fn()
   window.HTMLElement.prototype.scrollTo = vi.fn() as any
   vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
@@ -83,14 +86,18 @@ describe("MessageList reveal (salto del historial)", () => {
     expect(fn.mock.calls.length).toBeGreaterThan(calls1)
   })
 
-  it("cambio de sesión: velo sobre stale y ancla solo con frescos (igual longitud)", () => {
+  it("cambio de sesión: spinner sobre stale y ancla solo con frescos (igual longitud)", () => {
     const stale = msgsFor("s1", 60)
     const fresh = msgsFor("s2", 60) // misma longitud: el ancla por longitud no re-dispararía
     const { rerender } = render(
       <MessageList {...base} selectedID="s2" messages={stale} revealMessageID={null} revealNonce={0} />
     )
     const wrap = document.querySelector(".messages") as HTMLElement
-    expect(wrap.style.opacity).toBe("0") // stale oculto: no se ve el chat viejo
+    // Stale oculto: no se ve el chat viejo; en su lugar un spinner de carga
+    // (nunca un área negra vacía).
+    expect(wrap.style.opacity).toBe("1")
+    expect(wrap.querySelector(".grid-spinner")).not.toBeNull()
+    expect(wrap.querySelector('[data-message-id="s1-m59"]')).toBeNull()
     const scrollTo = window.HTMLElement.prototype.scrollTo as unknown as ReturnType<typeof vi.fn>
     scrollTo.mockClear()
     act(() => {
@@ -100,6 +107,7 @@ describe("MessageList reveal (salto del historial)", () => {
     })
     expect(scrollTo).toHaveBeenCalled() // frescos: ancla directa al final
     expect(wrap.style.opacity).toBe("1")
+    expect(wrap.querySelector('[data-message-id="s2-m59"]')).not.toBeNull()
   })
 
   it("entrada: ningún scroll suave (todo ancla/asentamiento instantáneo)", () => {
@@ -128,5 +136,50 @@ describe("MessageList reveal (salto del historial)", () => {
     expect(scrollTo).toHaveBeenCalled()
     const wrap = document.querySelector(".messages") as HTMLElement
     expect(wrap.style.opacity).toBe("1")
+  })
+
+  it("memoria envenenada (ancla inexistente): entra abajo y limpia la memoria", () => {
+    sessionStorage.setItem(
+      "openher.chatScroll.v3",
+      JSON.stringify({ mem: { s2: { dist: 9999, ts: Date.now(), mid: "m-que-no-existe" } }, lastSel: "s2" }),
+    )
+    render(
+      <MessageList {...base} selectedID="s2" messages={msgsFor("s2", 60)} revealMessageID={null} revealNonce={0} />
+    )
+    // La distancia guardada no es representable y el mid no existe: NO clavar
+    // arriba; la entrada cae al fondo y la memoria queda limpia para la próxima.
+    expect(resolveSessionEntry("s2")).toEqual({ kind: "fresh" })
+    const wrap = document.querySelector(".messages") as HTMLElement
+    expect(wrap.style.opacity).toBe("1")
+  })
+
+  it("datos stale no escriben memoria de la sesión nueva", () => {
+    const stale = msgsFor("s1", 60)
+    render(
+      <MessageList {...base} selectedID="s2" messages={stale} revealMessageID={null} revealNonce={0} />
+    )
+    // Con stale montado (velo oculto), un scroll no debe persistir bajo s2.
+    const el = document.querySelector(".messages") as HTMLElement
+    act(() => {
+      Object.defineProperty(el, "scrollTop", { value: 5000, writable: true })
+      el.dispatchEvent(new Event("scroll"))
+    })
+    expect(resolveSessionEntry("s2")).toEqual({ kind: "fresh" })
+  })
+
+  it("cap duro: revela aunque el loop de asentamiento no corra (nunca chat negro)", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    // rAF no-op: el loop de settle nunca avanza (simula ráfagas de merges que
+    // reinician el presupuesto de frames).
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 1)
+    render(<MessageList {...base} messages={msgs(60)} revealMessageID={null} revealNonce={0} />)
+    const wrap = document.querySelector(".messages") as HTMLElement
+    expect(wrap.style.opacity).toBe("0")
+    act(() => {
+      vi.advanceTimersByTime(1300)
+    })
+    // El cap por reloj muestra el contenido pase lo que pase.
+    expect(wrap.style.opacity).toBe("1")
+    vi.useRealTimers()
   })
 })

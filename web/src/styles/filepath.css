@@ -1,0 +1,45 @@
+/* styles/filepath.css — chip de rutas de archivo detectadas en el chat.
+   Reemplaza al inline-code cuando el contenido ES una ruta: click → menú para
+   abrir en el editor, con la app predeterminada, elegir app o copiar. */
+
+.filepath-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(100%, 560px);
+  margin: 0 1px;
+  padding: 0 6px;
+  vertical-align: baseline;
+  border: 1px solid var(--border, #222226);
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, var(--primary, #6366f1) 9%, transparent);
+  color: var(--md-code, var(--success, #4ade80));
+  font-family: var(--font-mono, monospace);
+  font-size: 0.86em;
+  line-height: 1.9;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.filepath-chip:hover {
+  background: color-mix(in srgb, var(--primary, #6366f1) 18%, transparent);
+  border-color: var(--primary, #6366f1);
+  color: var(--text, #f4f4f5);
+}
+
+.filepath-chip:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--primary, #6366f1));
+  outline-offset: 1px;
+}
+
+.filepath-chip > svg {
+  flex: 0 0 auto;
+  opacity: 0.75;
+}
+
+.filepath-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}

@@ -22,6 +22,7 @@ import {
   baseUrl,
   fetchFileBytes,
   request,
+  requestRaw,
   requestWithHeaders,
   toServerRelative,
   withDirectory,
@@ -613,25 +614,77 @@ export const api = {
   },
 
   async abort(config: ServerConfig, sessionID: string, directory?: string) {
-    const version = await getApiVersion(config)
-    if (version === "v2") {
-      const client = await getOpencodeClient(config)
-      const res = await (client as any).session.interrupt({ sessionID })
-      return (res as any)?.interrupted ?? true
+    const forced = config.apiVersion
+    const failures: string[] = []
+    const note = (e: unknown) => {
+      failures.push(e instanceof Error ? e.message : String(e))
+    }
+    // Interrupt crudo v2 (sin SDK): cubre SDK roto o versión sin detectar.
+    // El prefijo /api va explícito porque request() no lo agrega sin detección.
+    const rawV2Interrupt = async () => {
+      const target = `${baseUrl(config)}/api${withDirectory(`/session/${sessionID}/interrupt`, directory)}`
+      const res = await requestRaw<{ interrupted?: boolean } | boolean>(config, target, {
+        method: "POST",
+        retryable: false,
+      })
+      const data = res.data as { interrupted?: boolean } | boolean
+      return typeof data === "boolean" ? data : (data?.interrupted ?? true)
+    }
+    if (forced !== "v1") {
+      let version: "v1" | "v2" = "v1"
+      try {
+        version = await getApiVersion(config)
+      } catch (e) {
+        note(e)
+      }
+      if (version === "v2") {
+        try {
+          const client = await getOpencodeClient(config)
+          const res = await (client as any).session.interrupt({ sessionID })
+          return (res as any)?.interrupted ?? true
+        } catch (e) {
+          note(e)
+        }
+        // El SDK falló: reintentar por path crudo antes de rendirse.
+        try {
+          return await rawV2Interrupt()
+        } catch (e) {
+          note(e)
+        }
+        if (forced === "v2") {
+          throw new Error(`No se pudo detener la sesión (${failures.join(" | ")})`)
+        }
+        // auto: caer a la rama v1 por compatibilidad con servers viejos
+      }
     }
     const primary = `/session/${sessionID}/abort`
     const secondary = `/session/${sessionID}/interrupt`
     try {
-      return await request<boolean>(config, withDirectory(primary, directory), {
-        method: "POST",
-        retryable: false,
-      })
+      try {
+        return await request<boolean>(config, withDirectory(primary, directory), {
+          method: "POST",
+          retryable: false,
+        })
+      } catch (error) {
+        if (errorStatus(error) !== 404) throw error
+        return await request<boolean>(config, withDirectory(secondary, directory), {
+          method: "POST",
+          retryable: false,
+        })
+      }
     } catch (error) {
-      if (errorStatus(error) !== 404) throw error
-      return await request<boolean>(config, withDirectory(secondary, directory), {
-        method: "POST",
-        retryable: false,
-      })
+      // auto sin versión detectada: el server puede ser v2 (rutas bajo /api) —
+      // último intento por el path crudo antes de informar el fallo real.
+      if (forced !== "v1" && forced !== "v2") {
+        try {
+          return await rawV2Interrupt()
+        } catch (e) {
+          note(e)
+        }
+      } else {
+        note(error)
+      }
+      throw new Error(`No se pudo detener la sesión en :${config.port} (${failures.join(" | ") || "sin respuesta del servidor"})`)
     }
   },
 

@@ -1,4 +1,4 @@
-import { memo, useRef, useState, useCallback, useMemo } from "react"
+import { memo, useRef, useState, useCallback, useEffect, useMemo } from "react"
 import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon, ArchiveIcon, TrashIcon, ChatIcon, StarIcon, PencilIcon, CopyIcon, MonitorIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
@@ -81,7 +81,6 @@ export const SessionList = memo(function SessionList({
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
-
   // Subagentes: solo se ocultan cuando su padre TAMBIÉN está listado (ya se
   // ven agrupados bajo él en la tarjeta del proyecto). Los huérfanos (padre
   // borrado o ausente) SÍ se muestran: el `!s.parentID` a secas los borraba
@@ -142,6 +141,35 @@ export const SessionList = memo(function SessionList({
       return next
     })
   }, [])
+
+  // Rename estilo Windows: el campo in-place vive dentro de la tarjeta, así
+  // que al entrar en rename la tarjeta debe estar visible: se expande su
+  // proyecto (y su padre si es un subagente colapsado) y su sección rápida.
+  useEffect(() => {
+    if (!renamingSessionID) return
+    for (const [dir, list] of projects) {
+      if (list.some((s) => s.id === renamingSessionID)) {
+        setExpandedProjects((prev) => (prev.has(dir) ? prev : new Set(prev).add(dir)))
+        break
+      }
+    }
+    const renaming = sessions.find((s) => s.id === renamingSessionID)
+    if (renaming?.parentID) {
+      const pid = renaming.parentID
+      setCollapsedParents((prev) => {
+        if (!prev.has(pid)) return prev
+        const next = new Set(prev)
+        next.delete(pid)
+        return next
+      })
+    }
+    if (favorites.has(renamingSessionID)) {
+      setCollapsedSections((prev) => (prev.favorites ? { ...prev, favorites: false } : prev))
+    }
+    if (recentSessions.some((s) => s.id === renamingSessionID)) {
+      setCollapsedSections((prev) => (prev.recent ? { ...prev, recent: false } : prev))
+    }
+  }, [renamingSessionID, projects, sessions, favorites, recentSessions])
 
   const toggleSelectMode = useCallback(() => {
     setSelectMode((v) => {
@@ -562,7 +590,13 @@ export const SessionList = memo(function SessionList({
                 <QuickAccessCard key={session.id} session={session} isFavorite
                   onOpen={onOpen} onToggleFavorite={onToggleFavorite}
                   onDragStartSession={onDragStartSession}
-                  onContextMenu={handleSessionContextMenu} />
+                  onContextMenu={handleSessionContextMenu}
+                  isRenaming={renamingSessionID === session.id}
+                  renameValue={renameValue}
+                  onStartRename={onStartRename}
+                  onRenameChange={onRenameChange}
+                  onRenameConfirm={onRenameConfirm}
+                  onRenameCancel={onRenameCancel} />
               ))}
             </div>
           )}
@@ -585,7 +619,13 @@ export const SessionList = memo(function SessionList({
                     onOpen={onOpen} onToggleFavorite={onToggleFavorite}
                     onDismiss={(id) => setConfirmingDismissId(id)}
                     onDragStartSession={onDragStartSession}
-                    onContextMenu={handleSessionContextMenu} />
+                    onContextMenu={handleSessionContextMenu}
+                    isRenaming={renamingSessionID === session.id}
+                    renameValue={renameValue}
+                    onStartRename={onStartRename}
+                    onRenameChange={onRenameChange}
+                    onRenameConfirm={onRenameConfirm}
+                    onRenameCancel={onRenameCancel} />
                 )
               ))}
             </div>

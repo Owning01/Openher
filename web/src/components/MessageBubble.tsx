@@ -429,7 +429,20 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
         })()
         }
 
-        {isCompaction && message.text ? (
+        {message.isToolCatalog ? (
+          <div className="tool-catalog-card">
+            <CollapsibleSection
+              icon={<ToolIcon size={13} />}
+              title="Code Mode · catálogo de herramientas"
+              subtitle={`${(message.text.length / 1024).toFixed(1)} KB · clic para ver`}
+              defaultOpen={false}
+            >
+              <div className="tool-catalog-body">
+                <pre className="tool-part-pre">{message.text}</pre>
+              </div>
+            </CollapsibleSection>
+          </div>
+        ) : isCompaction && message.text ? (
           <div className="compaction-card">
             <button
               type="button"

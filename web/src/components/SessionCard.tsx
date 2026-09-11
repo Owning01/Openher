@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef } from "react"
+import { memo, useCallback, useEffect, useRef } from "react"
 import { StarIcon, ChevronIcon, CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { formatTimeCompact, formatTime } from "../utils"
@@ -37,12 +37,23 @@ type SessionCardProps = {
 export const SessionCard = memo(function SessionCard({
   session, isSelected, isRenaming, renameValue, isFavorite, isChild = false,
   hasChildren = false, isCollapsed = false, onToggleCollapse, onOpenParent,
-  onOpen, onStartRename: _onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
+  onOpen, onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   onToggleFavorite, onDragStartSession, onContextMenu,
   selectMode = false, isChecked = false, onToggleCheck
 }: SessionCardProps) {
   const t = useT()
   const clickTimer = useRef<number | null>(null)
+  const cardRef = useRef<HTMLElement | null>(null)
+
+  // Al entrar en rename (p. ej. desde click derecho con la tarjeta fuera de
+  // vista) asegura que el campo quede visible.
+  useEffect(() => {
+    if (isRenaming) {
+      try {
+        cardRef.current?.scrollIntoView({ block: "nearest" })
+      } catch { /* ignore */ }
+    }
+  }, [isRenaming])
 
   const handleOpen = useCallback(() => onOpen(session.id, session.directory), [session.id, session.directory, onOpen])
   const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
@@ -68,6 +79,7 @@ export const SessionCard = memo(function SessionCard({
   }, [selectMode, onToggleCheck, hasChildren, onToggleCollapse, handleOpen])
 
   const handleCardDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (isRenaming) return
     if (!hasChildren || !onOpenParent) return
     e.stopPropagation()
     if (clickTimer.current) {
@@ -75,14 +87,37 @@ export const SessionCard = memo(function SessionCard({
       clickTimer.current = null
     }
     onOpenParent()
-  }, [hasChildren, onOpenParent])
+  }, [isRenaming, hasChildren, onOpenParent])
+
+  // Estilo Windows: F2 o segundo click sobre el título de la tarjeta ya
+  // seleccionada abre la edición in-place.
+  const handleStartRename = useCallback((e: React.SyntheticEvent) => {
+    e.stopPropagation()
+    if (selectMode || isRenaming) return
+    onStartRename(session)
+  }, [selectMode, isRenaming, onStartRename, session])
+
+  const handleCardKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (isRenaming) return
+    if (e.key === "F2") {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!selectMode) onStartRename(session)
+    } else if (e.key === "Enter" && !selectMode) {
+      e.preventDefault()
+      handleOpen()
+    }
+  }, [isRenaming, selectMode, onStartRename, session, handleOpen])
 
   return (
     <article
-      className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${isChild ? "is-child-session" : ""} ${hasChildren ? "has-children" : ""} ${selectMode ? "select-mode" : ""} ${isChecked ? "checked" : ""} fade-in`}
-      draggable={!!onDragStartSession && !selectMode}
+      ref={cardRef}
+      className={`session-card ${isSelected ? "active" : ""} ${isFavorite ? "is-favorite" : ""} ${isChild ? "is-child-session" : ""} ${hasChildren ? "has-children" : ""} ${selectMode ? "select-mode" : ""} ${isChecked ? "checked" : ""}${isRenaming ? " is-renaming" : ""} fade-in`}
+      draggable={!!onDragStartSession && !selectMode && !isRenaming}
+      tabIndex={0}
       onClick={handleCardClick}
       onDoubleClick={handleCardDoubleClick}
+      onKeyDown={handleCardKeyDown}
       title={session.title}
       onContextMenu={(e) => {
         if (onContextMenu) {
@@ -133,7 +168,8 @@ export const SessionCard = memo(function SessionCard({
               onCancel={onRenameCancel}
               placeholder={t('session.renamePlaceholder')} />
           ) : (
-            <span className="session-title">{session.title}</span>
+            <span className="session-title" onClick={isSelected ? handleStartRename : undefined}
+              title={isSelected ? t('session.rename') : undefined}>{session.title}</span>
           )}
         </div>
         <span className="time-label" title={formatTime(session.updated)}>

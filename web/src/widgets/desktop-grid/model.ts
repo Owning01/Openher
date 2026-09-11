@@ -11,6 +11,12 @@ export interface BuildGridTemplateOptions {
   desktopDiffOpen?: boolean
   desktopDiffWidth?: number
   overrides?: { sidebarW?: number; rightW?: number }
+  /** Ventana <600px: el shell desktop deja solo el rail de actividad + contenido
+      (las sidebars quedan con columna 0, clipeadas por su overflow:hidden). */
+  narrow?: boolean
+  /** Ventana <=1100px: el QuickChat pasa a overlay por CSS (position:absolute)
+      y no debe reservar columna en el grid o el contenido queda encajonado. */
+  rightOverlay?: boolean
 }
 
 export function buildGridTemplate({
@@ -22,10 +28,14 @@ export function buildGridTemplate({
   desktopDiffOpen = false,
   desktopDiffWidth = 400,
   overrides,
+  narrow = false,
+  rightOverlay = false,
 }: BuildGridTemplateOptions): CSSProperties {
   const activityCol = "calc(48px * var(--ui-scale, 1))"
-  const s = sidebarCollapsed ? "0px" : `calc(${overrides?.sidebarW ?? sidebarWidth}px * var(--ui-scale, 1))`
-  const r = rightSidebarCollapsed ? "0px" : `calc(${overrides?.rightW ?? rightSidebarWidth}px * var(--ui-scale, 1))`
+  const hideSidebar = sidebarCollapsed || narrow
+  const hideRight = rightSidebarCollapsed || rightOverlay || narrow
+  const s = hideSidebar ? "0px" : `calc(${overrides?.sidebarW ?? sidebarWidth}px * var(--ui-scale, 1))`
+  const r = hideRight ? "0px" : `calc(${overrides?.rightW ?? rightSidebarWidth}px * var(--ui-scale, 1))`
   const diff = desktopDiffOpen ? ` calc(${desktopDiffWidth}px * var(--ui-scale, 1))` : ""
 
   if (position === "top") {

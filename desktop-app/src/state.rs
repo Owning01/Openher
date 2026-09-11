@@ -228,7 +228,7 @@ pub struct ShellConfig {
 }
 
 fn default_opencode2_port() -> u16 {
-    4097
+    4098
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -268,8 +268,8 @@ impl Default for ShellConfig {
             quickchat_provider: String::new(),
             quickchat_model: String::new(),
             auto_opencode2: false,
-            opencode2_enabled: false,
-            opencode2_port: 4097,
+            opencode2_enabled: true,
+            opencode2_port: 4098,
             opencode2_command: String::new(),
         }
     }
@@ -370,7 +370,34 @@ pub fn now_ms() -> u64 {
 pub fn load_config() -> ShellConfig {
     let path = config_path();
     if let Ok(raw) = std::fs::read_to_string(&path) {
-        if let Ok(cfg) = serde_json::from_str::<ShellConfig>(&raw) {
+        if let Ok(mut cfg) = serde_json::from_str::<ShellConfig>(&raw) {
+            // Migración: configs viejas con puerto 4097 / cmd vacío / disabled
+            // dejaban el server caído tras reiniciar Windows. El service real
+            // escucha en 4098 (service.json) con binario npm-global.
+            let mut dirty = false;
+            if cfg.opencode2_port == 4097 {
+                cfg.opencode2_port = 4098;
+                dirty = true;
+            }
+            if cfg.opencode2_port == 0 {
+                cfg.opencode2_port = 4098;
+                dirty = true;
+            }
+            if !cfg.server_ports.contains(&4098) {
+                cfg.server_ports.push(4098);
+                dirty = true;
+            }
+            // Si el usuario ya pedía auto_opencode2 pero el server estaba
+            // deshabilitado por default viejo, habilitarlo (respeta disable
+            // explícito solo si también apagó auto_opencode2).
+            if cfg.auto_opencode2 && !cfg.opencode2_enabled {
+                cfg.opencode2_enabled = true;
+                dirty = true;
+            }
+            if dirty {
+                let _ = std::fs::create_dir_all(data_dir());
+                let _ = std::fs::write(&path, serde_json::to_string_pretty(&cfg).unwrap_or_default());
+            }
             return cfg;
         }
     }
@@ -531,6 +558,147 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
         let _ = run.delete_value("OpenCodeDesktop");
     }
     Ok(())
+}
+
+/// Autostart dedicado del servidor opencode2 (headless, sin UI).
+/// Entrada HKCU\Run `OpenCode2Server` -> `"exe" --ensure-opencode2-and-exit`.
+/// El exe es `windows_subsystem="windows"`: no hay flash de consola en logon.
+/// Sin esto, tras reiniciar Windows solo abría el desktop minimizado pero el
+/// `:4098` nunca levantaba (config con `opencode2_enabled=false` + cmd vacío).
+pub const OPENCODE2_RUN_VALUE: &str = "OpenCode2Server";
+
+pub fn opencode2_autostart_enabled() -> bool {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(run) = hkcu.open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run") {
+        return run.get_value::<String, _>(OPENCODE2_RUN_VALUE).is_ok();
+    }
+    false
+}
+
+pub fn set_opencode2_autostart(enabled: bool) -> Result<(), String> {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE};
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let run = hkcu
+        .open_subkey_with_flags(
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            KEY_SET_VALUE | KEY_READ,
+        )
+        .map_err(|e| e.to_string())?;
+    if enabled {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let cmd = format!("\"{}\" --ensure-opencode2-and-exit", exe.display());
+        run.set_value(OPENCODE2_RUN_VALUE, &cmd)
+            .map_err(|e| e.to_string())?;
+    } else {
+        let _ = run.delete_value(OPENCODE2_RUN_VALUE);
+    }
+    Ok(())
+}
+
+/// Localiza el binario funcional de opencode2. `X:\Dev\bun\bin\opencode2.exe`
+/// está corrupto (remap bun roto); el que sirve `:4098` es el de npm-global.
+/// Orden: PATH (where.exe) -> candidatos conocidos -> fallback PATH genérico.
+pub fn discover_opencode2_exe() -> Option<String> {
+    // 1. where.exe (evita alias `where` de PowerShell)
+    if let Ok(out) = std::process::Command::new("where.exe")
+        .arg("opencode2")
+        .output()
+    {
+        if out.status.success() {
+            let txt = String::from_utf8_lossy(&out.stdout);
+            // Preferir .exe real sobre .cmd/.ps1 (el .exe hace serve --service daemon)
+            let mut fallback: Option<String> = None;
+            for line in txt.lines().map(str::trim).filter(|l| !l.is_empty()) {
+                let low = line.to_ascii_lowercase();
+                if low.ends_with("opencode2.exe") {
+                    // Evitar el shim bun corrupto si hay alternativa sana
+                    if line.contains(r"npm-global\node_modules\@opencode\cli\bin") {
+                        return Some(line.to_string());
+                    }
+                    if fallback.is_none() {
+                        fallback = Some(line.to_string());
+                    }
+                }
+            }
+            if let Some(f) = fallback {
+                // Verificar que no sea el bun corrupto si existe el sano
+                let healthy = r"X:\Dev\npm-global\node_modules\@opencode\cli\bin\opencode2.exe";
+                if f.contains(r"bun\bin\opencode2.exe") && std::path::Path::new(healthy).exists() {
+                    return Some(healthy.to_string());
+                }
+                return Some(f);
+            }
+        }
+    }
+    // 2. Candidatos conocidos
+    for cand in [
+        r"X:\Dev\npm-global\node_modules\@opencode\cli\bin\opencode2.exe",
+        r"G:\Dev\bun\bin\opencode2.exe",
+    ] {
+        if std::path::Path::new(cand).exists() {
+            return Some(cand.to_string());
+        }
+    }
+    // 3. HOME/.bun/bin
+    if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
+        let p = PathBuf::from(home).join(".bun").join("bin").join("opencode2.exe");
+        if p.exists() {
+            return Some(p.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+/// Comando efectivo para levantar el server headless (`serve --service`
+/// daemoniza en `:4098` según service.json). Si la config trae comando lo
+/// respeta; si está vacío (bug actual) auto-descubre el binario sano.
+pub fn resolve_opencode2_cmd(cfg: &ShellConfig) -> Option<String> {
+    let custom = cfg.opencode2_command.trim();
+    if !custom.is_empty() {
+        return Some(custom.to_string());
+    }
+    discover_opencode2_exe().map(|exe| format!("{exe} serve --service"))
+}
+
+/// Asegura el server opencode2 headless (sin consola): si el puerto ya
+/// responde no hace nada; si no, lanza `resolve_opencode2_cmd` detached
+/// (CREATE_NO_WINDOW) y re-sondea hasta ~8s. Retorna true si quedó UP.
+pub fn ensure_opencode2_running(cfg: &ShellConfig) -> bool {
+    let port = if cfg.opencode2_port == 0 { 4098 } else { cfg.opencode2_port };
+    if crate::common::probe_http(port, "/session", std::time::Duration::from_millis(900), &[200, 401]) {
+        return true;
+    }
+    // El daemon a veces escucha en 4098 aunque la config vieja diga 4097
+    if port != 4098
+        && crate::common::probe_http(4098, "/session", std::time::Duration::from_millis(900), &[200, 401])
+    {
+        return true;
+    }
+    let Some(cmd) = resolve_opencode2_cmd(cfg) else {
+        eprintln!("opencode-desktop: opencode2 sin binario (no se pudo descubrir)");
+        return false;
+    };
+    match crate::common::spawn_detached(&cmd, None) {
+        Ok(child) => eprintln!("opencode-desktop: opencode2 lanzado headless pid={} cmd={cmd}", child.id()),
+        Err(e) => {
+            eprintln!("opencode-desktop: opencode2 no pudo lanzarse headless: {e}");
+            return false;
+        }
+    }
+    // `serve --service` daemoniza y el child sale rápido: sondear hasta 8s
+    for _ in 0..16 {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if crate::common::probe_http(port, "/session", std::time::Duration::from_millis(600), &[200, 401])
+            || crate::common::probe_http(4098, "/session", std::time::Duration::from_millis(600), &[200, 401])
+        {
+            return true;
+        }
+    }
+    eprintln!("opencode-desktop: opencode2 no respondió tras 8s (cmd={cmd})");
+    false
 }
 
 /// Escapa un path para salida JSON sin romper backslashes.

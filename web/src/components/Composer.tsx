@@ -1,12 +1,16 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
 import type { CSSProperties } from "react"
 import { createPortal } from "react-dom"
-import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon, BranchIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
+import { useOutsideClick } from "../hooks/useOutsideClick"
 import { api } from "../api"
-import type { AgentOption, CommandInfo, ServerConfig, ModelOption } from "../types"
+import type { AgentOption, CommandInfo, ServerConfig, ModelOption, TurnChanges } from "../types"
 import { ImageEditor } from "./ImageEditor"
+import { FileTypeIcon } from "./FileTypeIcon"
+import { DiffStatBadge, toRelativePath } from "./ToolPart"
+import { DiffView } from "./DiffView"
 import { readComposerDraft, writeComposerDraft } from "../utils/composerDraft"
 import { PluginSlot } from "../plugins"
 import { ModelSelectorModal } from "./ModelSelectorModal"
@@ -125,6 +129,7 @@ type ComposerProps = {
   onChangeModel?: (key: string, variant?: string | null, sessionID?: string) => void
   variantGroups?: { recentModels: ModelOption[]; groups: Map<string, any> }
   sessionID?: string
+  turnChanges?: TurnChanges[]
 }
 
 let imgId = 0
@@ -171,6 +176,7 @@ export const Composer = memo(function Composer({
   onChangeModel,
   variantGroups,
   sessionID,
+  turnChanges,
 }: ComposerProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
@@ -181,6 +187,30 @@ export const Composer = memo(function Composer({
   const [showModelMenu, setShowModelMenu] = useState(false)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const modelToggleRef = useRef<HTMLButtonElement | null>(null)
+  // Cambios del turno: vista mínima de archivos +/− por turno (estilo
+  // Copilot/Cursor). Colapsado por defecto, costo cero hasta abrir.
+  const [showTurnChanges, setShowTurnChanges] = useState(false)
+  const [turnIdx, setTurnIdx] = useState(-1)
+  const [openPatch, setOpenPatch] = useState<string | null>(null)
+  const turnWrapRef = useRef<HTMLDivElement | null>(null)
+  const closeTurnChanges = useCallback(() => setShowTurnChanges(false), [])
+  useOutsideClick(turnWrapRef, closeTurnChanges, showTurnChanges)
+  useEffect(() => {
+    if (!showTurnChanges) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowTurnChanges(false) }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [showTurnChanges])
+  const turns = turnChanges ?? []
+  const activeTurnIdx = turns.length === 0 ? -1 : turnIdx < 0 ? turns.length - 1 : Math.min(turnIdx, turns.length - 1)
+  const activeTurn = activeTurnIdx >= 0 ? turns[activeTurnIdx]! : null
+  const latestTurn = turns.length > 0 ? turns[turns.length - 1]! : null
+  const latestTotals = useMemo(() => {
+    let add = 0
+    let del = 0
+    for (const f of latestTurn?.files ?? []) { add += f.additions ?? 0; del += f.deletions ?? 0 }
+    return { add, del, count: latestTurn?.files.length ?? 0 }
+  }, [latestTurn])
   // Sincronía visual entre sesiones activas: delay negativo alineado al reloj
   // (punto del ciclo de 3.5s a Date.now()) para que todos los anillos de la
   // app compartan fase. Sin esto cada Composer arranca en 0deg al montar o
@@ -509,11 +539,16 @@ export const Composer = memo(function Composer({
   const handleFocus = useCallback(() => {
     // Scrollear SOLO el contenedor de mensajes de este panel (nunca
     // scrollIntoView: scrollea también la ventana y con el teclado abierto
-    // en Android la página salta para arriba).
+    // en Android la página salta para arriba). Y SOLO si ya estábamos al
+    // fondo: si el usuario lee a mitad (retorno donde lo dejó), el foco no
+    // debe robarle la posición 400ms después ("se cambia donde lo dejé").
     setTimeout(() => {
       const wrap = composerRef.current?.closest<HTMLElement>(".app-mobile-content, .session-panel")
       const container = wrap?.querySelector<HTMLElement>(".messages")
-      if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
+      if (!container) return
+      const dist = container.scrollHeight - container.scrollTop - container.clientHeight
+      if (dist > 200) return
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
     }, 400)
   }, [])
 
@@ -533,7 +568,12 @@ export const Composer = memo(function Composer({
       showMicNotice(t('voice.unavailable'))
     } else {
       prefixRef.current = localValueRef.current ?? ""
-      start((text) => handleChange(prefixRef.current + (prefixRef.current && text ? " " : "") + text))
+      start(
+        (text) => handleChange(prefixRef.current + (prefixRef.current && text ? " " : "") + text),
+        (code) => showMicNotice(/denied|denegado|permission|not-allowed/i.test(code)
+          ? t('voice.permissionDenied')
+          : t('voice.unavailable')),
+      )
         .catch((err: unknown) => {
           stop()
           const msg = (err as Error)?.message ?? ""
@@ -752,7 +792,9 @@ export const Composer = memo(function Composer({
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    e.dataTransfer.dropEffect = "copy"
+    // effectAllowed "move" (arrastres del explorador interno) es incompatible
+    // con "copy": el navegador no dispara drop y la ruta nunca llega.
+    e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed === "move" ? "move" : "copy"
     if (!isDraggingOver) setIsDraggingOver(true)
   }, [isDraggingOver])
 
@@ -852,6 +894,67 @@ export const Composer = memo(function Composer({
               </div>
             )
           })}
+        </div>
+      )}
+      {latestTurn && (
+        <div className="turn-changes-row">
+            <div ref={turnWrapRef} style={{ position: "relative", flexShrink: 0 }}>
+              <button
+                type="button"
+                className="turn-changes-btn"
+                onClick={() => { setTurnIdx(turns.length - 1); setOpenPatch(null); setShowTurnChanges((v) => !v) }}
+                aria-expanded={showTurnChanges}
+                title={t('diff.filesModified', { count: latestTotals.count }) ?? "Archivos cambiados en este turno"}
+              >
+                <BranchIcon size={13} />
+                <span>{latestTotals.count} archivo{latestTotals.count === 1 ? "" : "s"}</span>
+                <span className="turn-add">+{latestTotals.add}</span>
+                <span className="turn-del">−{latestTotals.del}</span>
+              </button>
+              {showTurnChanges && activeTurn && (
+                <div className="turn-changes-panel fade-in" role="dialog" aria-label="Cambios del turno">
+                  <div className="turn-changes-head">
+                    <strong>Cambios del turno</strong>
+                    <span className="turn-add">+{activeTurn.files.reduce((n, f) => n + (f.additions ?? 0), 0)}</span>
+                    <span className="turn-del">−{activeTurn.files.reduce((n, f) => n + (f.deletions ?? 0), 0)}</span>
+                    <span style={{ flex: 1 }} />
+                    <span className="turn-pager">
+                      <button type="button" disabled={activeTurnIdx <= 0} onClick={() => { setTurnIdx(activeTurnIdx - 1); setOpenPatch(null) }} aria-label="Turno anterior">‹</button>
+                      <span>{activeTurnIdx + 1}/{turns.length}</span>
+                      <button type="button" disabled={activeTurnIdx >= turns.length - 1} onClick={() => { setTurnIdx(activeTurnIdx + 1); setOpenPatch(null) }} aria-label="Turno siguiente">›</button>
+                    </span>
+                  </div>
+                  {activeTurn.label && <div className="turn-changes-label" title={activeTurn.label}>{activeTurn.label}</div>}
+                  <div className="turn-changes-files">
+                    {activeTurn.files.map((f) => {
+                      const key = `${activeTurnIdx}:${f.file}`
+                      const isOpen = openPatch === key
+                      return (
+                        <div key={key}>
+                          <button
+                            type="button"
+                            className="turn-file-row"
+                            onClick={() => setOpenPatch((p) => (p === key ? null : key))}
+                            aria-expanded={isOpen}
+                          >
+                            <FileTypeIcon name={f.file || ""} size={14} />
+                            <span className="turn-file-name" title={f.file}>{toRelativePath(f.file || "", directory)}</span>
+                            <DiffStatBadge add={f.additions ?? 0} del={f.deletions ?? 0} />
+                            <span className={`turn-chev${isOpen ? " open" : ""}`}>›</span>
+                          </button>
+                          {isOpen && f.patch && (
+                            <div className="turn-patch">
+                              <DiffView patch={f.patch} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="turn-changes-foot">Solo este turno · clic en un archivo para ver el diff</div>
+                </div>
+              )}
+            </div>
         </div>
       )}
       <div

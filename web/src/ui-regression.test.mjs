@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { cssBundle } from './css-bundle.mjs'
+import { buildDesktopNarrowCss, DESKTOP_NARROW_URL } from './genDesktopCss.mjs'
 
 const sessionList = readFileSync(new URL('./components/SessionList.tsx', import.meta.url), 'utf8')
 const sessionToolbar = readFileSync(new URL('./components/SessionToolbar.tsx', import.meta.url), 'utf8')
@@ -19,6 +20,32 @@ const useSessions = readFileSync(new URL('./hooks/useSessions.ts', import.meta.u
 const useConfig = readFileSync(new URL('./hooks/useConfig.ts', import.meta.url), 'utf8')
 const icons = readFileSync(new URL('./Icons.tsx', import.meta.url), 'utf8')
 const styles = cssBundle()
+
+// Desktop (wry) a cualquier ancho: desktop-narrow.css reproyecta el layout
+// desktop de layout.css a html[data-desktop="true"]; es generado, y si
+// layout.css cambió sin regenerar, esto falla.
+const desktopNarrow = readFileSync(DESKTOP_NARROW_URL, 'utf8')
+assert.equal(
+  desktopNarrow.replace(/\r\n/g, '\n'),
+  buildDesktopNarrowCss(),
+  'desktop-narrow.css desincronizado: correr "node scripts/gen-desktop-css.mjs"'
+)
+assert.ok(
+  /html\[data-desktop="true"\] \.app-desktop-activity \{[\s\S]*?flex-direction: column/.test(desktopNarrow),
+  'desktop angosto: el rail de actividades debe conservar su columna'
+)
+assert.ok(
+  /html\[data-desktop="true"\] \.desktop-cell \{[\s\S]*?display: flex/.test(desktopNarrow),
+  'desktop angosto: las celdas del grid deben conservar su layout de escritorio'
+)
+assert.ok(
+  /html\[data-desktop="true"\] \.app-desktop-sidebar \{[\s\S]*?flex-direction: column/.test(desktopNarrow),
+  'desktop angosto: la sidebar debe conservar su columna (header/body apilados)'
+)
+assert.ok(
+  /html\[data-frameless="true"\]\[data-desktop="true"\] \.app-shell \{[\s\S]*?height: calc\(100dvh - 38px\)/.test(desktopNarrow),
+  'desktop angosto: el shell frameless no debe desbordar por la titlebar de 38px'
+)
 
 const refreshButton = sessionToolbar.match(/<button onClick=\{handleRefresh\}[\s\S]*?<LoadingIcon[\s\S]*?<\/button>/)
 assert.ok(refreshButton, 'sessions refresh button should call refreshSessionsWithIndicator')

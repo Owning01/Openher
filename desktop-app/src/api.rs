@@ -24,7 +24,11 @@ fn check_shell_auth(headers: &[(String, String)], state: &AppState) -> Option<Sh
         return None;
     }
     let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
-    if cfg.server.username.is_empty() && cfg.server.password.is_empty() {
+    // Sin password no hay secreto que validar: los clientes móviles pareados
+    // sin contraseña no mandan Authorization y antes quedaban en 401 en cada
+    // llamada a /shell/* (el explorador de archivos nunca cargaba). Con
+    // password configurado, la auth sigue exigiéndose.
+    if cfg.server.username.is_empty() || cfg.server.password.is_empty() {
         return None;
     }
     let expected = format!("Basic {}", crate::state::base64_encode(format!("{}:{}", cfg.server.username, cfg.server.password).as_bytes()));
@@ -121,7 +125,7 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
     }
 
     // ============================== Config / Autostart / Session (extraído)
-    if path.starts_with("/shell/config") || path == "/shell/autostart" || path == "/shell/session-state" {
+    if path.starts_with("/shell/config") || path == "/shell/autostart" || path == "/shell/session-state" || path.starts_with("/shell/opencode2") {
         if let Some(resp) =
             crate::infrastructure::http::config_router::handle(sreq, state.clone(), &path, method, &q)
         {

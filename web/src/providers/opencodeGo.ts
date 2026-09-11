@@ -1,5 +1,6 @@
 import type { QuickChatMessage, QuickChatProvider, QuickChatResult } from "./types"
 import { shell } from "../shell"
+import { buildOpenAIPayload, QC_SYSTEM_PROMPT } from "../utils/promptCache"
 
 async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response> {
   try {
@@ -54,26 +55,34 @@ export function createOpencodeGoProvider(apiKey: string): QuickChatProvider {
       // Fallback: no assumption — return empty so UI forces explicit pick or shows config
       return []
     },
-    async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void }): Promise<QuickChatResult> {
+    async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void; systemPrompt?: string }): Promise<QuickChatResult> {
       if (!apiKey) throw new Error("NO_KEY_GO")
       if (!opts.model) throw new Error("Seleccioná un modelo")
       const rl = checkRateLimit()
       if (rl) throw new Error(rl)
-      const sys: QuickChatMessage = { role: "system", content: "Sos asistente breve y directo. Respondé conciso, sin rodeos. Máximo 12 líneas." }
-      const trimmed = [sys, ...messages.slice(-8)]
-      let totalEst = trimmed.reduce((a, m) => a + estimateTokens(m.content), 0) + 500
-      if (totalEst > 6000) trimmed.splice(1, Math.max(1, trimmed.length - 6))
-      recordRequest()
-
       const rawModel = opts.model
       const model = rawModel.startsWith("opencode-go/") ? rawModel.slice("opencode-go/".length) : rawModel
       const useStream = typeof opts.onChunk === "function"
+      const basePayload = buildOpenAIPayload(messages, {
+        model,
+        systemPrompt: opts.systemPrompt ?? QC_SYSTEM_PROMPT,
+        temperature: 0.3,
+        maxTokens: 500,
+        stream: useStream,
+        cacheKey: `quickchat:go:${model}`,
+      })
+      let msgs = basePayload.messages
+      let totalEst = msgs.reduce((a, m) => a + estimateTokens(m.content), 0) + 500
+      if (totalEst > 6000) msgs = [msgs[0]!, ...msgs.slice(-5)]
+      recordRequest()
+
       const body: any = {
         model,
-        messages: trimmed.map(m => ({ role: m.role, content: m.content })),
+        messages: msgs,
         max_tokens: 500,
         temperature: 0.3,
         stream: useStream,
+        prompt_cache_key: basePayload.prompt_cache_key,
       }
 
       const doFetch = async (url: string) => proxyAwareFetch(url, {

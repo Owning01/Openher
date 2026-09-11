@@ -9,6 +9,7 @@ import { formatLimit } from "./utils"
 import { STORAGE_KEYS } from "./constants"
 import { ThemeVariantProvider } from "./context/themeVariant"
 import { DialogProvider } from "./components/DialogProvider"
+import { ToastProvider } from "./components/Toasts"
 import { DesktopLayoutView } from "./widgets/desktop-layout/DesktopLayoutView"
 import { MobileLayoutView } from "./pages/mobile-layout/MobileLayoutView"
 import { AppModalsContainer } from "./app/AppModalsContainer"
@@ -398,7 +399,9 @@ export default function App() {
       <ThemeVariantProvider>
         <ErrorBoundary>
           <DialogProvider>
-            <AppInner language={language} setLanguage={setLanguage} />
+            <ToastProvider>
+              <AppInner language={language} setLanguage={setLanguage} />
+            </ToastProvider>
           </DialogProvider>
         </ErrorBoundary>
       </ThemeVariantProvider>

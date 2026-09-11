@@ -112,13 +112,16 @@ function toBase64(input: string): string {
   return btoa(binary)
 }
 
-function shellAuthHeader(): Record<string, string> {
+export function shellAuthHeader(): Record<string, string> {
   try {
     const raw = localStorage.getItem("opencode.remote.server")
     if (!raw) return {}
     const cfg = JSON.parse(raw) as { username?: string; password?: string }
-    if (cfg.username && cfg.password) {
-      return { Authorization: `Basic ${toBase64(`${cfg.username}:${cfg.password}`)}` }
+    // El shell exige Basic con user:pass y admite password vacío (el pair de
+    // opencode puede no traer contraseña). Antes solo se mandaba con password
+    // no vacío: en móvil (host no-loopback) todas las llamadas daban 401.
+    if (cfg.username) {
+      return { Authorization: `Basic ${toBase64(`${cfg.username}:${cfg.password ?? ""}`)}` }
     }
   } catch {}
   return {}
@@ -419,8 +422,14 @@ export const shell = {
     stop: () => post("/shell/server/stop"),
   },
   autostart: {
-    get: () => get<{ enabled: boolean }>("/shell/autostart"),
-    set: (enabled: boolean) => post("/shell/autostart", { enabled }),
+    get: () => get<{ enabled: boolean; opencode2?: boolean; opencode2_enabled?: boolean }>("/shell/autostart"),
+    set: (enabled: boolean, opencode2?: boolean) => post("/shell/autostart", opencode2 === undefined ? { enabled } : { enabled, opencode2 }),
+  },
+  opencode2: {
+    status: () => get<{ ok: boolean; running: boolean; port: number; autostart: boolean; enabled: boolean }>("/shell/opencode2/status"),
+    autostartGet: () => get<{ enabled: boolean; opencode2_enabled: boolean; port: number; cmd: string | null }>("/shell/opencode2/autostart"),
+    autostartSet: (enabled: boolean) => post<{ ok: boolean; enabled: boolean }>("/shell/opencode2/autostart", { enabled }),
+    ensure: () => post<{ ok: boolean; already?: boolean; started?: boolean; port?: number }>("/shell/opencode2/ensure"),
   },
   doc: {
     convert: (src: string, target: "md" | "docx" | "pdf", dest?: string) =>

@@ -18,20 +18,20 @@ Si tu tarea es modificar o investigar una funcionalidad, ve **directamente** a e
 | **Chat: Estado & Streaming** (árbol mensajes, SSE, reconexión, outbox) | `hooks/useMessages.ts`<br>`hooks/useSSE.ts`<br>`hooks/useSSEHandler.ts`<br>`hooks/useAI.ts` | OpenCode Server (`:4096`/`:4097`) |
 | **Modelos & Preguntas al Usuario** (selector, permisos, asks) | `components/ModelSelectorModal.tsx`<br>`components/QuestionPrompt.tsx`<br>`hooks/useQuestions.ts` | — |
 | **Sesiones** (lista, agrupado por proyecto, `+` con FolderPicker) | `hooks/useSessions.ts`<br>`utils/sessionDirs.ts` (`dirKey`/backfill)<br>`app/useAppController.ts` | — |
-| **IDE Desktop: Layout & Split** (docks, paneles, resize) | `components/shellPanels.tsx` (~3.2KL)+`components/KanbanPanel.tsx` (split P1)<br>`widgets/desktop-grid/`<br>`widgets/titlebar/` | `desktop-app/src/main.rs` |
+| **IDE Desktop: Layout & Split** (docks, paneles, resize) | `components/shellPanels.tsx` (~2.3KL)+`components/KanbanPanel.tsx` (split P1)<br>`widgets/desktop-grid/`<br>`widgets/titlebar/` | `desktop-app/src/main.rs` |
 | **IDE: Terminal PTY** (xterm, tabs de terminal, split) | `components/TerminalView.tsx`<br>`components/ChatTerminalDock.tsx` | `desktop-app/src/ptyx.rs`<br>(WS `:4849` o SSE) |
 | **IDE: Explorador de Archivos** (árbol, picker, iconos, visor) | `features/pc-files/PCFilesPanel.tsx`<br>`components/FileBrowser.tsx`<br>`components/FolderPicker.tsx`<br>`hooks/useFileBrowser.ts` | `desktop-app/src/fsx.rs`<br>(`/shell/fs/*`, `read` 64KB) |
-| **IDE: Editor de Código** (LiteEditor único, diffs) | `components/LiteEditor.tsx` (único editor)<br>`components/FileEditor.tsx` (delega)<br>`components/DiffView.tsx`<br>`components/ADEDiffPanel.tsx`<br>`utils/editorOps.ts` | `desktop-app/src/fsx.rs` |
+| **IDE: Editor de Código** (CodeMirror único, diffs) | `components/CodeMirrorEditor.tsx` (único editor, lazy)<br>`components/FileEditor.tsx` (delega)<br>`components/DiffView.tsx`<br>`components/ADEDiffPanel.tsx`<br>`utils/editorOps.ts` | `desktop-app/src/fsx.rs` |
 | **IDE: Git / Control de Versiones** (staging, diff, commit) | `components/SourceControlPanel.tsx`<br>`components/scm/*` | `desktop-app/src/gitx.rs`<br>(`/shell/git/*`) |
 | **IDE: Browser Integrado** (preview web, sync, PiP, drag URL) | `components/BrowserPanel.tsx`<br>`components/browserSync.ts`<br>`components/browserPipScript.ts`<br>`components/browserWheelScript.ts`<br>`utils/urlDrag.ts` | `desktop-app/src/browser_view.rs`<br>(`/shell/browser/*` 9 rutas) |
-| **IDE: Kanban** (tablero + enviar tarjeta a sesión) | `components/shellPanels.tsx` (`KanbanPanel`)<br>`shell.ts` (`kanbanPromptText`) | `desktop-app/src/kanban.rs`<br>(`/shell/kanban`) |
+| **IDE: Kanban** (tablero + enviar tarjeta a sesión) | `components/KanbanPanel.tsx`<br>`shell.ts` (`kanbanPromptText`) | `desktop-app/src/kanban.rs`<br>(`/shell/kanban`) |
 | **IDE: RAM / Memoria** (chip JS + WebView nativo) | `hooks/useMemoryUsage.ts`<br>`widgets/activity-bar/ActivityBar.tsx` | `desktop-app/src/memx.rs`<br>(`GET /shell/mem`) |
 | **Plugin Canvas M3E** (boceto pantallas → prompt al agente) | `features/canvas/` (model/store/components/register) | — (localStorage, fase 2: `/shell/canvas/*`) |
 | **IDE: Computer-Use / OS Automation** (mouse, teclado, capture) | `components/RemoteDesktop.tsx`<br>`hooks/useRemoteDesktop.ts` | `desktop-app/src/computer.rs`<br>(`/shell/computer/*`) |
 | **Cliente de Red / Conexión OpenCode** (endpoints REST, auth) | `api.ts` (`loadMessages` tope 200, sin paginación cursor)<br>`hooks/useServers.ts`<br>`hooks/useAutoOpencode2.ts` | `desktop-app/src/srvman.rs` |
 | **Cliente Shell Desktop Rust** (comunicación HTTP local) | `shell.ts` (kinds: session/editor/terminal/explorer/kanban/docs/updates/stats/session-stats/labs/browser/doc/design/quickchat/config) | `desktop-app/src/api.rs` + `infrastructure/http/` (19 routers)<br>(`/shell/*`) |
 | **Estadísticas & Métricas** (tokens, costos, gráficos) | `components/StatsView.tsx`<br>`hooks/useStats.ts` | `desktop-app/src/statsx.rs`<br>`skill-project/opencode-stats/` (`:8765`) |
-| **Configuración, Temas & Atajos** (incl. reducir animaciones) | `components/SettingsPanel.tsx`<br>`components/ChatCustomizer.tsx` (`reduceMotion` → `html.no-motion`)<br>`styles/*.css` (25)<br>`shortcuts.ts` | — |
+| **Configuración, Temas & Atajos** (incl. reducir animaciones) | `components/SettingsPanel.tsx`<br>`components/ChatCustomizer.tsx` (`reduceMotion` → `html.no-motion`)<br>`styles/*.css` (26)<br>`shortcuts.ts` | — |
 | **Android / Capacitor Nativo** | `capacitor.config.ts`<br>`scripts/copy-dist.py` | `android/` |
 
 ---
@@ -131,9 +131,11 @@ desktop-app.exe (Rust)             OpenCode Server (Go/TS)
 - `hooks/useChatSettings.ts`: 21 campos incl. `reduceMotion` → `html.no-motion`.
 - `hooks/useDesktopLayoutState.ts`: Estado de paneles divididos (editor, terminal, git, browser).
 - `widgets/titlebar/`, `widgets/desktop-grid/`, `widgets/activity-bar/`, `widgets/message-list/`: TitleBar, celdas con drops URL, chip RAM, lista de mensajes.
-- `components/shellPanels.tsx` (~3.2KL, split P1 en curso) + `components/KanbanPanel.tsx` (extraído, re-export): contenedor maestro del IDE desktop (KanbanPanel con envío a sesión, BrowserPanel PiP/sync, ExplorerPanel, TerminalPanel, SourceControlPanel…).
-- `widgets/message-list/MessageVirtualList.tsx`: virtualizer con medición dinámica (sin delegación: `MessageList.tsx` usa siempre la ventana sliceada de 40 — el virtualizador metía jank de 1s al abrir/cerrar y rompía el anclaje al último mensaje; tanstack fuera del eager).
-- `components/LiteEditor.tsx`: editor único (FileEditor delega). `components/HighlightedCode.tsx`: highlight compartido.
+- `components/shellPanels.tsx` (adelgazado: el Explorer propio de ~1150L se eliminó) + `components/KanbanPanel.tsx` (extraído, re-export): contenedor maestro del IDE desktop (KanbanPanel con envío a sesión, BrowserPanel PiP/sync, ExplorerPanel —adaptador fino sobre el explorer único—, TerminalPanel, SourceControlPanel…).
+- Explorer ÚNICO `features/pc-files/PCFilesPanel.tsx` (+`FileRow`/`TreeFolder`/`usePaneState`): el mismo en sidebar, panel `__pcFiles__`, móvil y celda explorer del grid (vía adaptador `ExplorerPanel` con `initialCwd` + `onOpenSessionDir`). Confirms inline en flujo por panel (Papelera/definitivo/ejecutar script, Aceptar/Cancelar, borde notorio) + animación de eliminado `is-deleting` (slide-out rojo 280ms, instantáneo con `no-motion`).
+- Toasts flotantes `components/Toasts.tsx` (`ToastProvider` en `App.tsx`, portal a body, `styles/toasts.css`): todos los avisos del explorer salen por encima del contenido (info/error), nada inline dentro del panel.
+- `widgets/message-list/MessageVirtualList.tsx` (tanstack, medición dinámica): path POR DEFECTO (`flags.virtualChat: true`); `MessageList.tsx` (ventana sliceada de 40) es el fallback. Entrada con velo anti-salto + ancla fresca por identidad + pin en layout ante prepends; `SessionChatPanel` expone `loadingSessionID` real para cubrir vacío→caché→fetch.
+- `components/CodeMirrorEditor.tsx` (lazy; `FileEditor` delega): editor único. `components/HighlightedCode.tsx`: highlight compartido.
 - `styles/tokens.css` (+24): sistema de diseño light/dark por tokens, `motion.css` (`no-motion`), `notes.css`, `editor.css` (`var(--code-*)`). Ver `DESIGN.md` (Antigravity).
 
 ### B. Backend Desktop (`desktop-app/src/`)
@@ -177,7 +179,7 @@ desktop-app.exe (Rust)             OpenCode Server (Go/TS)
 # --- Frontend (desde la raíz: el paquete es openher-mobile-web) ---
 pnpm --dir web exec tsc --noEmit --skipLibCheck   # tipos (paquete web; --filter web NO matchea)
 pnpm --dir web exec vitest run src/<ruta>/file.test.ts  # un solo archivo
-pnpm --dir web test                            # vitest unitario (~1350)
+pnpm --dir web test                            # vitest unitario (~1490)
 pnpm --dir web run test:i18n                   # paridad i18n (keys solo en/es)
 pnpm --dir web run test:ui                     # regresión UI
 pnpm --dir web run test:settings               # regresión settings

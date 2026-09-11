@@ -848,6 +848,20 @@ fn main() {
 
     let config = state::load_config();
     let persisted = state::load_persisted();
+    // Modo headless para autostart de Windows (HKCU\Run OpenCode2Server):
+    // asegura el server :4098 sin abrir UI ni consola (el exe es
+    // windows_subsystem="windows") y sale. Lo usa el logon de Windows para
+    // que el server levante solo tras reiniciar, en background.
+    let args: Vec<String> = std::env::args().collect();
+    let ensure_only = args.iter().any(|a| a == "--ensure-opencode2-and-exit");
+    let ensure_bg = args.iter().any(|a| a == "--ensure-opencode2");
+    if ensure_only || ensure_bg {
+        let up = state::ensure_opencode2_running(&config);
+        eprintln!("opencode-desktop: ensure-opencode2 headless up={up}");
+        if ensure_only {
+            std::process::exit(if up { 0 } else { 1 });
+        }
+    }
     // Flag --autostart o --minimized (registro autostart + config start_minimized) -> iniciar en bandeja
     let args_min = std::env::args().any(|a| a == "--autostart" || a == "--minimized" || a == "--start-minimized");
     let start_minimized = args_min || config.start_minimized;
@@ -921,23 +935,26 @@ fn main() {
         }
     }
 
-    // opencode2: si está habilitado y no responde, lanzarlo detached
+    // opencode2: headless en background. Si está habilitado (default true) y
+    // no responde :4098, lanzarlo detached sin consola. El cmd vacío de
+    // configs viejas se auto-descubre (npm-global, no el shim bun corrupto).
+    // Además self-heal del Run OpenCode2Server para que Windows lo levante
+    // solo al iniciar sesión aunque el usuario solo haya activado el toggle.
     {
-        let op2_enabled = config.opencode2_enabled;
-        let op2_port = config.opencode2_port;
-        let op2_cmd = config.opencode2_command.clone();
-        if op2_enabled && !op2_cmd.trim().is_empty() {
-            let probing = op2_port;
+        let cfg_clone = config.clone();
+        if cfg_clone.opencode2_enabled {
+            if !state::opencode2_autostart_enabled() {
+                if let Err(e) = state::set_opencode2_autostart(true) {
+                    eprintln!("opencode-desktop: no se pudo registrar autostart opencode2: {e}");
+                } else {
+                    eprintln!("opencode-desktop: autostart opencode2 registrado (HKCU Run OpenCode2Server)");
+                }
+            }
             std::thread::Builder::new()
                 .name("opencode2-ensure".into())
                 .spawn(move || {
-                    let up = crate::common::probe_http(probing, "/session", std::time::Duration::from_millis(1200), &[200, 401]);
-                    if !up {
-                        match crate::common::spawn_detached(&op2_cmd, None) {
-                            Ok(child) => eprintln!("opencode-desktop: opencode2 lanzado pid={} cmd={op2_cmd}", child.id()),
-                            Err(e) => eprintln!("opencode-desktop: opencode2 no pudo lanzarse: {e}"),
-                        }
-                    }
+                    let up = state::ensure_opencode2_running(&cfg_clone);
+                    eprintln!("opencode-desktop: opencode2-ensure headless up={up}");
                 })
                 .ok();
         }

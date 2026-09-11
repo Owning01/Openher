@@ -1,5 +1,6 @@
 import type { QuickChatMessage, QuickChatProvider, QuickChatResult } from "./types"
 import { shell } from "../shell"
+import { buildOpenAIPayload, QC_SYSTEM_PROMPT } from "../utils/promptCache"
 
 async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response> {
   try {
@@ -43,29 +44,36 @@ export function createCerebrasProvider(apiKey: string, baseUrl?: string): QuickC
     id: "cerebras",
     labelKey: "quickchat.providerCerebras",
     async listModels() { return MODELS },
-    async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal }): Promise<QuickChatResult> {
+    async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void; systemPrompt?: string }): Promise<QuickChatResult> {
       if (!apiKey) throw new Error("NO_KEY")
       const rl = checkRateLimit()
       if (rl) throw new Error(rl)
-      // Token-min: keep last 8 messages + system, trim to ~2000 tokens
-      const sys: QuickChatMessage = { role: "system", content: "Sos asistente breve y directo. Respondé conciso, sin rodeos. Máximo 12 líneas." }
-      const trimmed = [sys, ...messages.slice(-8)]
-      let totalEst = trimmed.reduce((a, m) => a + estimateTokens(m.content), 0) + 500
-      if (totalEst > 28000) {
-        // drop oldest user/assistant keeping system
-        trimmed.splice(1, Math.max(1, trimmed.length - 6))
-      }
       if (!opts.model) throw new Error("Seleccioná un modelo")
+      const payload = buildOpenAIPayload(messages, {
+        model: opts.model,
+        systemPrompt: opts.systemPrompt ?? QC_SYSTEM_PROMPT,
+        temperature: 0.3,
+        maxTokens: 500,
+        stream: false,
+        cacheKey: `quickchat:cerebras:${opts.model}`,
+      })
+      let msgs = payload.messages
+      let totalEst = msgs.reduce((a, m) => a + estimateTokens(m.content), 0) + 500
+      if (totalEst > 28000) {
+        msgs = [msgs[0]!, ...msgs.slice(-5)]
+      }
       recordRequest()
+      void (opts as any).onChunk
       const res = await proxyAwareFetch(CEREBRAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: opts.model,
-          messages: trimmed.map(m => ({ role: m.role, content: m.content })),
+          messages: msgs,
           max_completion_tokens: 500,
           temperature: 0.3,
           stream: false,
+          prompt_cache_key: payload.prompt_cache_key,
         }),
         signal: opts.signal,
       })

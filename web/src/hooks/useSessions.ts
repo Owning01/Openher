@@ -344,11 +344,8 @@ export function useSessions(
   const startRename = useCallback((session: SessionView) => {
     setRenameValueState(session.title)
     setRenamingSessionID(session.id)
-    setTimeout(() => {
-      const input = document.querySelector<HTMLInputElement>(".rename-input")
-      input?.focus()
-      input?.select()
-    }, 50)
+    // El foco + selección los hace el propio InlineRename al montar
+    // (estilo Windows: escribir directamente reemplaza el título).
   }, [])
 
   const cancelRename = useCallback(() => {

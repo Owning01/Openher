@@ -4,8 +4,14 @@ import { SpeechRecognition as CapSpeechRecognition } from "@capacitor-community/
 import { STORAGE_KEYS } from "../constants"
 import type { LanguageCode } from "../i18n"
 import { normalizeLanguage } from "../i18n-context"
+import { appendWebFinal, combineDisplay, mergeNativePartial } from "./dictationBuffer"
 
-const WebSpeechAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+// Lectura perezosa (no en import): WebView2/Capacitor exponen la API
+// tarde y en tests se instala un doble antes del render.
+function getWebSpeechAPI(): any | null {
+  if (typeof window === "undefined") return null
+  return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null
+}
 
 const LANG_MAP: Record<string, string> = {
   en: "en-US",
@@ -24,12 +30,42 @@ export function useSpeechRecognition(language?: LanguageCode) {
   const [supported, setSupported] = useState(false)
   const currentTranscript = useRef("")
   const onResultRef = useRef<((text: string) => void) | null>(null)
+  const onErrorRef = useRef<((message: string) => void) | null>(null)
   const recognitionRef = useRef<any>(null)
   const cleanupListenersRef = useRef<(() => void) | null>(null)
   const manuallyStoppedRef = useRef(false)
+  // Buffer de finales acumulados: sobrevive a pausas y a reinicios automáticos.
+  // Solo crece (appendWebFinal/mergeNativePartial): jamás se recorta ni vacía.
+  const finalBufferRef = useRef("")
+  // Web: nº de finales ya volcados (los finales son prefijo ordenado por
+  // sesión; por conteo, no por contenido: repetir una palabra no se pierde).
+  const committedFinalsRef = useRef(0)
+  // Web: último interim visto; se consolida si la sesión muere en silencio.
+  const pendingInterimRef = useRef("")
+  // Nativo: longitud del buffer al empezar la utterance (solo se reescribe la cola).
+  const utteranceBaseRef = useRef(0)
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isNative = Capacitor.isNativePlatform()
   const availableRef = useRef<boolean | null>(null)
+
+  const emit = useCallback((text: string) => {
+    currentTranscript.current = text
+    onResultRef.current?.(text)
+  }, [])
+
+  const detachNative = useCallback(() => {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current)
+      restartTimerRef.current = null
+    }
+    try {
+      cleanupListenersRef.current?.()
+    } catch {
+      /* noop */
+    }
+    cleanupListenersRef.current = null
+  }, [])
 
   useEffect(() => {
     if (isNative) {
@@ -42,9 +78,14 @@ export function useSpeechRecognition(language?: LanguageCode) {
           if (!available) setSupported(false)
         })
         .catch(() => { /* mantener optimista */ })
-      return
+      return () => {
+        manuallyStoppedRef.current = true
+        detachNative()
+        CapSpeechRecognition.stop().catch(() => {})
+      }
     }
 
+    const WebSpeechAPI = getWebSpeechAPI()
     if (!WebSpeechAPI) {
       setSupported(false)
       return
@@ -58,61 +99,141 @@ export function useSpeechRecognition(language?: LanguageCode) {
     rec.maxAlternatives = 1
 
     rec.onresult = (event: any) => {
+      const results = event?.results
+      if (!results) return
+      const finals: string[] = []
       let interim = ""
-      let final = ""
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          final += t
-        } else {
-          interim += t
-        }
+      for (let i = 0; i < results.length; i++) {
+        const t = (results[i]?.[0]?.transcript ?? "") as string
+        if ((results[i] as any)?.isFinal) finals.push(t)
+        else if (t) interim += (interim ? " " : "") + t
       }
-      currentTranscript.current = final || interim
-      onResultRef.current?.(final || interim)
+      let buf = finalBufferRef.current
+      for (let i = committedFinalsRef.current; i < finals.length; i++) {
+        buf = appendWebFinal(buf, finals[i])
+      }
+      committedFinalsRef.current = finals.length
+      finalBufferRef.current = buf
+      pendingInterimRef.current = interim.trim()
+      emit(combineDisplay(buf, interim))
+    }
+
+    const flushAndRestart = () => {
+      // La sesión murió (pausa larga): consolidar el interim pendiente
+      // ANTES de reiniciar, o la última frase se pierde.
+      const pend = pendingInterimRef.current
+      if (pend) {
+        const next = appendWebFinal(finalBufferRef.current, pend)
+        if (next !== finalBufferRef.current) {
+          finalBufferRef.current = next
+          emit(next)
+        }
+        pendingInterimRef.current = ""
+      }
+      committedFinalsRef.current = 0
+      try {
+        rec.start()
+      } catch {
+        /* noop */
+      }
     }
 
     rec.onend = () => {
-      if (!manuallyStoppedRef.current) {
-        try { rec.start() } catch {}
+      if (manuallyStoppedRef.current) {
+        setIsListening(false)
         return
       }
-      setIsListening(false)
+      // Reinicio automático para dictado continuo con pausas.
+      flushAndRestart()
     }
 
     rec.onerror = (event: any) => {
-      if (event.error === "no-speech" || event.error === "aborted") {
+      const code = String(event?.error ?? "")
+      if (code === "no-speech" || code === "aborted") {
         if (!manuallyStoppedRef.current) {
-          try { rec.start() } catch {}
+          try {
+            rec.start()
+          } catch {
+            /* noop */
+          }
         }
         return
       }
+      // Error fatal (permiso, red, servicio): no reintentar en bucle,
+      // avisar una vez para que el usuario actúe.
+      manuallyStoppedRef.current = true
       setIsListening(false)
+      onErrorRef.current?.(code || "unavailable")
     }
 
     recognitionRef.current = rec
     return () => {
-      try { rec.abort() } catch {}
+      manuallyStoppedRef.current = true
+      try {
+        rec.abort()
+      } catch {
+        /* noop */
+      }
     }
-  }, [isNative, language])
+  }, [isNative, language, emit, detachNative])
 
-  const start = useCallback(async (onResult: (text: string) => void) => {
+  const start = useCallback(async (
+    onResult: (text: string) => void,
+    onError?: (message: string) => void,
+  ) => {
     manuallyStoppedRef.current = false
     onResultRef.current = onResult
+    onErrorRef.current = onError ?? null
     currentTranscript.current = ""
+    finalBufferRef.current = ""
+    committedFinalsRef.current = 0
+    pendingInterimRef.current = ""
+    utteranceBaseRef.current = 0
 
     if (isNative) {
       if (availableRef.current === false) {
         throw new Error("Speech service is not available on this device")
       }
+      // Sin listeners duplicados de sesiones previas (doble emisión).
+      detachNative()
       try {
         const partialHandler = await CapSpeechRecognition.addListener("partialResults", (data) => {
-          const text = data.matches?.[0] ?? ""
-          currentTranscript.current = text
-          onResultRef.current?.(text)
+          const text = (data.matches?.[0] ?? "").trim()
+          // Parcial vacío o ya contenido: IGNORAR. Jamás borrar (era el bug:
+          // tras una pausa llegaba un parcial corto y vaciaba todo).
+          if (!text) return
+          const prev = finalBufferRef.current
+          const next = mergeNativePartial(prev, utteranceBaseRef.current, text)
+          if (next === prev) return
+          finalBufferRef.current = next
+          emit(next)
         })
         const stateHandler = await CapSpeechRecognition.addListener("listeningState", (data) => {
-          setIsListening(data.status === "started")
+          if (data.status === "started") {
+            setIsListening(true)
+            return
+          }
+          if (manuallyStoppedRef.current) {
+            setIsListening(false)
+            return
+          }
+          // El servicio corta solo tras una pausa: rearmar para dictado
+          // continuo sin perder lo acumulado (nueva utterance = nueva cola).
+          utteranceBaseRef.current = finalBufferRef.current.length
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
+          restartTimerRef.current = setTimeout(() => {
+            if (manuallyStoppedRef.current) return
+            CapSpeechRecognition.start({
+              language: getLanguage(language),
+              partialResults: true,
+              popup: false,
+              maxResults: 5,
+            }).catch((e: unknown) => {
+              manuallyStoppedRef.current = true
+              setIsListening(false)
+              onErrorRef.current?.((e as Error)?.message ?? "unavailable")
+            })
+          }, 250)
         })
         cleanupListenersRef.current = () => {
           partialHandler.remove()
@@ -122,8 +243,7 @@ export function useSpeechRecognition(language?: LanguageCode) {
         const perm = await CapSpeechRecognition.requestPermissions()
         const status = (perm as { speechRecognition?: string }).speechRecognition ?? (perm as { status?: string }).status
         if (status && status !== "granted") {
-          cleanupListenersRef.current?.()
-          cleanupListenersRef.current = null
+          detachNative()
           throw new Error("Microphone permission denied — enable it in system settings")
         }
         await CapSpeechRecognition.start({
@@ -135,8 +255,7 @@ export function useSpeechRecognition(language?: LanguageCode) {
         setIsListening(true)
         return
       } catch (err) {
-        cleanupListenersRef.current?.()
-        cleanupListenersRef.current = null
+        detachNative()
         throw err
       }
     }
@@ -148,23 +267,26 @@ export function useSpeechRecognition(language?: LanguageCode) {
     rec.lang = getLanguage(language)
     rec.start()
     setIsListening(true)
-  }, [isNative, language])
+  }, [isNative, language, detachNative, emit])
 
   const stop = useCallback(() => {
     manuallyStoppedRef.current = true
     if (isNative) {
+      detachNative()
       CapSpeechRecognition.stop().catch(() => {})
-      cleanupListenersRef.current?.()
-      cleanupListenersRef.current = null
       setIsListening(false)
       return
     }
 
     const rec = recognitionRef.current
     if (!rec) return
-    rec.stop()
+    try {
+      rec.stop()
+    } catch {
+      /* noop */
+    }
     setIsListening(false)
-  }, [isNative])
+  }, [isNative, detachNative])
 
   return { isListening, supported, start, stop, currentTranscript }
 }

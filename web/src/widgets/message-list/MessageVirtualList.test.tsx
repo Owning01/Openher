@@ -17,6 +17,7 @@ vi.stubGlobal(
 )
 
 import { MessageVirtualList } from "./MessageVirtualList"
+import { __clearScrollMemory } from "../../shared/lib/useFollowTail"
 
 function msgs(n: number): any[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -43,6 +44,8 @@ const base = {
 } as const
 
 beforeEach(() => {
+  __clearScrollMemory()
+  sessionStorage.clear()
   window.HTMLElement.prototype.scrollIntoView = vi.fn()
   window.HTMLElement.prototype.scrollTo = vi.fn() as any
 })

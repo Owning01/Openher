@@ -1,5 +1,6 @@
 import type { QuickChatMessage, QuickChatProvider, QuickChatResult } from "./types"
 import { shell } from "../shell"
+import { buildOpenAIPayload, QC_SYSTEM_PROMPT } from "../utils/promptCache"
 
 async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response> {
   try {
@@ -70,26 +71,38 @@ export function createGroqProvider(apiKey: string, baseUrl?: string): QuickChatP
       }
       return MODELS
     },
-    async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void }): Promise<QuickChatResult> {
+    async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void; systemPrompt?: string }): Promise<QuickChatResult> {
       if (!apiKey) throw new Error("NO_KEY_GROQ")
       const rl = checkRateLimit()
       if (rl) throw new Error(rl)
-      const sys: QuickChatMessage = { role: "system", content: "Sos asistente breve y directo. Respondé conciso, sin rodeos. Máximo 12 líneas." }
-      const trimmed = [sys, ...messages.slice(-8)]
-      let totalEst = trimmed.reduce((a, m) => a + estimateTokens(m.content), 0) + 500
-      if (totalEst > 6000) trimmed.splice(1, Math.max(1, trimmed.length - 6))
+      // Prompt-cache friendly: system estable + historia con prompt_cache_key (OpenAI automático)
+      // No inyectar system variable; el searchBlock ya viene fusionado al último user
+      const model = opts.model || MODELS[0].id
+      const useStream = typeof opts.onChunk === "function"
+      const payload = buildOpenAIPayload(messages, {
+        model,
+        systemPrompt: opts.systemPrompt ?? QC_SYSTEM_PROMPT,
+        temperature: 0.3,
+        maxTokens: 500,
+        stream: useStream,
+        cacheKey: `quickchat:groq:${model}`,
+      })
+      // Trim si excede ventana (mantener prefix cacheado intacto, recortar medio)
+      let msgs = payload.messages
+      let totalEst = msgs.reduce((a, m) => a + estimateTokens(m.content), 0) + 500
+      if (totalEst > 6000) {
+        // conservar system (0) + últimos 5
+        msgs = [msgs[0]!, ...msgs.slice(-5)]
+      }
       recordRequest()
 
-      const model = opts.model || MODELS[0].id
-      // If caller wants streaming (QuickChat does), use stream:true
-      const useStream = typeof opts.onChunk === "function"
-
       const body: any = {
-        model,
-        messages: trimmed.map(m => ({ role: m.role, content: m.content })),
+        model: payload.model,
+        messages: msgs,
         max_tokens: 500,
         temperature: 0.3,
         stream: useStream,
+        prompt_cache_key: payload.prompt_cache_key,
       }
 
       const res = await proxyAwareFetch(GROQ_URL, {

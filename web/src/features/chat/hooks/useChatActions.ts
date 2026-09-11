@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
@@ -469,9 +469,19 @@ export function useChatActions(params: UseChatActionsParams) {
     ]
   )
 
+  // Stop real: guard anti-deltas tardíos + anti doble-clic. Vive en
+  // stopGenerationRef (fondo) y lo apaga el timeout de handleAbort o el
+  // próximo handleSend. `stopping` se conserva por compat de retorno pero YA
+  // NO entra en isWorking: la animación de "respondiendo" debe caer al
+  // confirmar el stop, no 10s después.
+  const [stopping, setStopping] = useState(false)
+
   const handleAbort = useCallback(async () => {
     if (!selectedSession) return
+    // Doble clic: el flag se pone sincrónico abajo, el segundo llamado sale acá.
+    if (stopGenerationRef.current) return
     stopGenerationRef.current = true
+    setStopping(true)
     setAwaitingAssistantReply(false)
     completionShouldPlayRef.current = false
     setSessions((prev) =>
@@ -491,11 +501,21 @@ export function useChatActions(params: UseChatActionsParams) {
     })
     const sid = selectedSession.id
     const dir = selectedSession.directory
-    await abortSession(sid, dir).catch(() => {})
-    await settleSession(sid, dir).catch(() => undefined)
-    setTimeout(() => {
-      stopGenerationRef.current = false
-    }, 2000)
+    try {
+      await abortSession(sid, dir)
+      await settleSession(sid, dir).catch(() => undefined)
+    } catch (e) {
+      // Antes se tragaba en silencio y el server seguía generando ("no para").
+      setRuntimeError(`No se pudo detener la generación: ${(e as Error)?.message ?? String(e)}`)
+    } finally {
+      // El flag se apaga al confirmar idle (efecto abajo); timeout de
+      // seguridad por si el server nunca reporta (antes: 2s fijos que
+      // reabrían el stream a mitad del abort).
+      window.setTimeout(() => {
+        stopGenerationRef.current = false
+        setStopping(false)
+      }, 10000)
+    }
   }, [
     selectedSession,
     abortSession,
@@ -504,9 +524,15 @@ export function useChatActions(params: UseChatActionsParams) {
     setAwaitingAssistantReply,
     setSessions,
     setMessages,
+    setRuntimeError,
     stopGenerationRef,
     completionShouldPlayRef,
   ])
+
+  // Sin apagado temprano por idle: handleAbort pone la sesión en idle de
+  // forma optimista, así que limpiar el guard al ver idle lo mataba en el
+  // siguiente render y los deltas tardíos se colaban. El timeout del finally
+  // de handleAbort (10s) y el próximo handleSend son los únicos que lo apagan.
 
   const handleRevertToMessage = useCallback(
     async (messageID: string) => {
@@ -666,6 +692,7 @@ export function useChatActions(params: UseChatActionsParams) {
     handleInsertPrompt,
     handleSendPrompt,
     handleAbort,
+    stopping,
     handleRevertToMessage,
     handleEditMessage,
     handleUndo,

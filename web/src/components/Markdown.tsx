@@ -1,8 +1,11 @@
-import { memo, useState, useCallback, type ComponentProps, type ReactNode } from "react"
-import ReactMarkdown from "react-markdown"
+import { memo, useState, useCallback, cloneElement, isValidElement, type ComponentProps, type ReactNode, type ReactElement } from "react"
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Capacitor } from "@capacitor/core"
 import { lowlight } from "../utils/highlight"
+import { cleanInlineCodePath, pathFromOpenherHref } from "../shared/lib/filePaths"
+import { remarkFilePaths } from "../shared/lib/remarkFilePaths"
+import { FilePathButton } from "./FilePathButton"
 
 // Reemplazo de rehype-highlight: ese paquete embebe lowlight/lib/common
 // (37 lenguajes) de forma inseparable. Este plugin usa solo los registrados.
@@ -47,6 +50,9 @@ function Table({ children }: ComponentProps<"table">) {
 }
 
 function Link({ href, children, ...rest }: ComponentProps<"a">) {
+  // Rutas detectadas por remarkFilePaths: chip con menú de apertura.
+  const filePath = href ? pathFromOpenherHref(href) : null
+  if (filePath) return <FilePathButton path={filePath} />
   return (
     <a
       href={href}
@@ -64,6 +70,12 @@ function Link({ href, children, ...rest }: ComponentProps<"a">) {
       {children}
     </a>
   )
+}
+
+// react-markdown sanitiza URLs con esquema desconocido; el nuestro se preserva
+// para que <Link> lo reconozca.
+function filePathUrlTransform(url: string): string {
+  return pathFromOpenherHref(url) !== null ? url : defaultUrlTransform(url)
 }
 
 // Envuelve cada ocurrencia case-insensitive del query en <mark>.
@@ -110,6 +122,13 @@ function remarkHighlight(query?: string) {
   }
 }
 
+// Marca el <code> interno de un fence para que InlineCode no interprete una
+// ruta de un bloque de código como inline code (chip).
+function markBlockCode(children: ReactNode): ReactNode {
+  if (!isValidElement(children)) return children
+  return cloneElement(children as ReactElement<{ "data-block"?: string }>, { "data-block": "true" })
+}
+
 function CodeBlock({ children, ...props }: ComponentProps<"pre">) {
   const [copied, setCopied] = useState(false)
   // Extract language from the inner <code> className
@@ -142,16 +161,27 @@ function CodeBlock({ children, ...props }: ComponentProps<"pre">) {
           <span>{copied ? "Copied!" : "Copy"}</span>
         </button>
       </div>
-      <pre {...props}>{children}</pre>
+      <pre {...props}>{markBlockCode(children)}</pre>
     </div>
   )
 }
 
 function InlineCode({ className, children, ...props }: ComponentProps<"code">) {
   const isBlock = Boolean(className && (className.includes("hljs") || className.includes("language-")))
-  if (isBlock) {
+  // Marca que CodeBlock pone en el <code> de un fence sin lenguaje: no es
+  // inline code, así que una ruta adentro no debe volverse chip.
+  const inPre = (props as Record<string, unknown>)["data-block"] === "true"
+  if (isBlock || inPre) {
     return <code className={className} {...props}>{children}</code>
   }
+  // `C:\ruta\archivo.ts` o `src/foo.tsx` → chip con menú de apertura.
+  const raw = typeof children === "string"
+    ? children
+    : Array.isArray(children) && children.every((c) => typeof c === "string")
+      ? children.join("")
+      : null
+  const path = raw ? cleanInlineCodePath(raw) : null
+  if (path) return <FilePathButton path={path} label={raw!.trim()} />
   return (
     <code
       style={{
@@ -193,9 +223,10 @@ export const Markdown = memo(function Markdown({ text, highlight, components: ex
   const mergedComponents = extraComponents ? { ...baseComponents, ...extraComponents } : baseComponents
   const el = (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkHighlight(highlight)]}
+      remarkPlugins={[remarkGfm, remarkHighlight(highlight), remarkFilePaths]}
       rehypePlugins={[rehypeHighlightLocal]}
       components={mergedComponents}
+      urlTransform={filePathUrlTransform}
     >
       {text}
     </ReactMarkdown>

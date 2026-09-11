@@ -5,7 +5,7 @@ import { useT } from "../../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../../types"
 import { MessageBubble } from "../../components/MessageBubble"
 import { GridSpinner } from "../../components/GridSpinner"
-import { useFollowTail } from "../../shared/lib/useFollowTail"
+import { useFollowTail, resolveSessionEntry, anchorScrollToSaved } from "../../shared/lib/useFollowTail"
 
 type MessageVirtualListProps = {
   messages: RenderedMessage[]
@@ -60,7 +60,7 @@ export const MessageVirtualList = memo(function MessageVirtualList({
 }: MessageVirtualListProps) {
   const t = useT()
   const parentRef = useRef<HTMLDivElement | null>(null)
-  const { isAtBottom, setIsAtBottom, isNearBottom, programmaticUntilRef } = useFollowTail(parentRef, { threshold: 120 })
+  const { isAtBottom, setIsAtBottom, isNearBottom, programmaticUntilRef, resetSavedPosition } = useFollowTail(parentRef, { threshold: 120, persistKey: selectedID })
   const atBottomRef = useRef(true)
   useEffect(() => { atBottomRef.current = isAtBottom }, [isAtBottom])
 
@@ -112,12 +112,17 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     return messages.findIndex((m) => m.info.id === revert.messageID)
   }, [messages, revert?.messageID])
 
-  // Virtualizer con medición dinámica (ResizeObserver interno via measureElement ref)
+  // Virtualizer con medición dinámica (ResizeObserver interno via measureElement ref).
+  // getItemKey por id de mensaje: sin esto, al anteponer historial (fetch tras
+  // preload, polls, loadMore) todos los índices se desplazan y el caché de
+  // medidas queda asociado al mensaje equivocado → totalSize erróneo y el
+  // ancla al fondo cae a mitad ("no comienza desde abajo").
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => estimatedRowHeight,
     overscan,
+    getItemKey: (index: number) => messages[index]?.info.id ?? index,
   })
 
   const virtualItems = rowVirtualizer.getVirtualItems()
@@ -160,6 +165,9 @@ export const MessageVirtualList = memo(function MessageVirtualList({
   const msgsSessionID: string | null = messages.length > 0 ? messages[0]!.info.sessionID : null
   const isFresh = messages.length === 0 || msgsSessionID === selectedID
   const needsAnchorRef = useRef(true)
+  // Objetivo de entrada: abajo (cambio de chat) o distancia guardada
+  // (retorno al mismo chat). Se resuelve una sola vez por montaje.
+  const entryTargetRef = useRef<{ mode: "bottom" } | { mode: "at"; dist: number; mid?: string; moff?: number } | null>(null)
   // Asentamiento: el ancla inicial usa alturas ESTIMADAS (180px); al medir las
   // filas reales el total crece y el scroll absoluto queda por encima del fondo.
   // El velo se levanta solo cuando el scroll está clavado al fondo Y el tamaño
@@ -212,6 +220,49 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     if (loadingSessionID === selectedID) return
     if (!isFresh || !needsAnchorRef.current) return
     needsAnchorRef.current = false
+    if (!entryTargetRef.current) {
+      const r = resolveSessionEntry(selectedID)
+      entryTargetRef.current = r.kind === "return" ? { mode: "at", dist: r.dist, mid: r.mid, moff: r.moff } : { mode: "bottom" }
+    }
+    const target = entryTargetRef.current
+    if (target.mode === "at") {
+      // Retorno donde lo dejaste: por mensaje si existe (inmune a streaming que
+      // creció abajo), sino por distancia. Para la virtual, el nodo puede no
+      // estar montado aún: hacer scrollToIndex y luego fine-tune por DOM.
+      const el = parentRef.current
+      if (el && target.mid) {
+        const idx = messages.findIndex((m) => m.info.id === target.mid)
+        if (idx >= 0) {
+          try { rowVirtualizer.scrollToIndex(idx, { align: "start", behavior: "auto" }) } catch {}
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              const ee = parentRef.current
+              if (ee) {
+                anchorScrollToSaved(ee, target)
+                const d2 = ee.scrollHeight - ee.scrollTop - ee.clientHeight
+                const at2 = d2 <= 2
+                atBottomRef.current = at2
+                setIsAtBottom(at2)
+              }
+            })
+          })
+          atBottomRef.current = false
+          setIsAtBottom(false)
+          return
+        }
+      }
+      if (el) {
+        anchorScrollToSaved(el, target)
+        const d = el.scrollHeight - el.scrollTop - el.clientHeight
+        const at = d <= 2
+        atBottomRef.current = at
+        setIsAtBottom(at)
+      } else {
+        atBottomRef.current = false
+        setIsAtBottom(false)
+      }
+      return
+    }
     atBottomRef.current = true
 
     // Anclar el scroll del DOM inmediatamente de forma síncrona
@@ -219,6 +270,7 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     if (el) {
       el.scrollTop = el.scrollHeight || 99999999
     }
+    resetSavedPosition()
     scrollToEnd("auto")
     // Re-afirmar tras la medición real de filas (el primer ancla usa alturas
     // estimadas; al medir, el total crece y el scroll absoluto queda a mitad)
@@ -232,15 +284,34 @@ export const MessageVirtualList = memo(function MessageVirtualList({
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [view, selectedID, loadingSessionID, firstID, lastID, isFresh, scrollToEnd])
+  }, [view, selectedID, loadingSessionID, firstID, lastID, isFresh, scrollToEnd, resetSavedPosition])
+
+  // Fusión que antepone historial (fetch/poll tras preload): firstID cambia
+  // con lastID igual y el scrollHeight crece hacia ARRIBA. Si el usuario está
+  // al fondo, re-clavar en LAYOUT (antes del paint): si no, se pinta 1 frame
+  // a mitad del chat antes del re-anclaje.
+  const prevFirstIDRef = useRef(firstID)
+  useLayoutEffect(() => {
+    if (prevFirstIDRef.current === firstID) return
+    prevFirstIDRef.current = firstID
+    if (!settledRef.current || touchedRef.current) return
+    if (view !== "detail" || loadingSessionID === selectedID) return
+    if (messages.length === 0) return
+    const el = parentRef.current
+    if (el && atBottomRef.current) {
+      try {
+        el.scrollTop = el.scrollHeight
+      } catch {
+        /* detached */
+      }
+    }
+  }, [firstID, view, loadingSessionID, selectedID, messages.length])
 
   // Velo anti-parpadeo con asentamiento: el primer paint va oculto y se revela
-  // solo cuando el scroll está clavado al fondo con tamaño estable (filas ya
-  // medidas, no estimadas). Ni el stale, ni el estimado, ni las etapas
-  // caché→fetch se ven un solo frame. Timeout de ~45 frames (~750ms) para no
-  // atrapar nunca la vista en blanco (imágenes lentas las cubre el pegamento).
-  // Si los mensajes cambian a mitad (fetch tras preload), el efecto re-corre y
-  // re-asienta todavía oculto.
+  // solo cuando el scroll está clavado (abajo o ancla mid estable) + tamaño
+  // estable. Ni el stale, ni el estimado, ni las etapas caché→fetch se ven un
+  // solo frame. Timeout 60 frames (~1s) para no atrapar nunca en blanco.
+  // Si los mensajes cambian a mitad (fetch tras preload), re-corre oculto.
   useEffect(() => {
     if (revealed || view !== "detail" || !selectedID) return
     if (!isFresh) return
@@ -261,8 +332,30 @@ export const MessageVirtualList = memo(function MessageVirtualList({
         setRevealed(true)
         return
       }
-      // Re-clavar instantáneo mientras se asienta (la medición real mueve el fondo).
-      scrollToEnd("auto")
+      const target = entryTargetRef.current
+      if (!target || target.mode === "bottom") {
+        // Re-clavar instantáneo mientras se asienta (la medición real mueve el fondo).
+        scrollToEnd("auto")
+      } else {
+        // Retorno a mitad: por virtualizer si hay mid, sino por distancia.
+        if (target.mid) {
+          const idx = messages.findIndex((m) => m.info.id === target.mid)
+          if (idx >= 0) {
+            try { rowVirtualizer.scrollToIndex(idx, { align: "start", behavior: "auto" }) } catch {}
+            // Fine-tune por DOM en el próximo frame (cuando el nodo ya esté montado)
+            requestAnimationFrame(() => {
+              const ee = parentRef.current
+              if (ee) anchorScrollToSaved(ee, target)
+            })
+          } else {
+            const ell = parentRef.current
+            if (ell) anchorScrollToSaved(ell, target)
+          }
+        } else {
+          const ell = parentRef.current
+          if (ell) anchorScrollToSaved(ell, target)
+        }
+      }
       const el = parentRef.current
       const total = rowVirtualizer.getTotalSize()
       const sh = el?.scrollHeight ?? 0
@@ -274,7 +367,9 @@ export const MessageVirtualList = memo(function MessageVirtualList({
       }
       const dist = el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0
       frames++
-      if ((stable >= 3 && dist <= 2) || frames >= 45) {
+      // Retorno a mitad: revelar con tamaño estable (dist<=2 es solo del fondo).
+      const onTarget = !target || target.mode === "bottom" ? dist <= 2 : true
+      if ((stable >= 3 && onTarget) || frames >= 45) {
         settledRef.current = true
         setRevealed(true)
         return
@@ -335,7 +430,9 @@ export const MessageVirtualList = memo(function MessageVirtualList({
       window.setTimeout(() => el.classList.remove("msg-flash"), 1800)
     }, 160)
     return () => window.clearTimeout(t)
-  })
+    // Deps explícitas (antes corría en CADA render: reprogramaba el timeout
+    // sin fin y re-disparaba scrollToIndex smooth en pleno streaming).
+  }, [revealMessageID, revealNonce, messages.length, firstID])
 
   // Cuando el viewport es más alto que el contenido, el paddingTop shift debe aplicarse
   // sin aumentar scrollHeight más allá de viewportH (ver cálculo totalSize+paddingTop).

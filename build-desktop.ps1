@@ -88,29 +88,6 @@ function Copy-Verified([string]$src, [string]$dst) {
   Write-Host "  -> Copiado y verificado: $dst" -ForegroundColor Green
 }
 
-function Clear-DirContents([string]$dir) {
-  if (-not (Test-Path $dir)) {
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    return
-  }
-  # Locks transitorios (indexador/antivirus retienen bundles viejos): reintentar.
-  # Si persiste, se avisa y se sigue: los bundles llevan hash en el nombre y los
-  # huérfanos no los referencia el nuevo index.html (que sí se verifica hash).
-  # El Copy-Item posterior igual sobrescribe todo lo que no esté bloqueado.
-  for ($i = 1; $i -le 4; $i++) {
-    try {
-      Remove-Item (Join-Path $dir "*") -Recurse -Force -ErrorAction Stop
-      return
-    } catch {
-      if ($i -eq 4) {
-        Write-Host "  AVISO: no se pudo limpiar $dir ($($_.Exception.Message)). Se continúa." -ForegroundColor Yellow
-        return
-      }
-      Start-Sleep -Milliseconds 1500
-    }
-  }
-}
-
 try {
   $rootDir = $PSScriptRoot
   $webDir = Join-Path $rootDir "web"
@@ -142,8 +119,15 @@ try {
     Write-Phase "[1/2] Compilando frontend web (pnpm run build)..."
     Push-Location $webDir
     try {
-      & $pnpmCmd run build
-      if ($LASTEXITCODE -ne 0) { throw "Error al compilar el frontend web (pnpm run build exit $LASTEXITCODE)." }
+      # PS 5.1 convierte el stderr nativo (warnings de vite) en error fatal
+      # con $ErrorActionPreference=Stop: se baja a Continue solo aquí y el
+      # fallo real lo decide el exit code.
+      $prevEAP = $ErrorActionPreference
+      $ErrorActionPreference = "Continue"
+      & $pnpmCmd run build 2>&1 | ForEach-Object { "$_" }
+      $webCode = $LASTEXITCODE
+      $ErrorActionPreference = $prevEAP
+      if ($webCode -ne 0) { throw "Error al compilar el frontend web (pnpm run build exit $webCode)." }
 
       $copyScript = Join-Path $webDir "scripts\copy-dist.py"
       if (Test-Path $copyScript) {
@@ -225,9 +209,15 @@ try {
   # 3. Empaquetar y copiar a la carpeta destino
   Write-Phase "[3/3] Empaquetando en $OutputDir..."
 
-  # Asegurar directorios de destino (limpios: sin bundles viejos huérfanos)
+  # NOTA: no se limpia el destino. Los bundles llevan hash en el nombre y un
+  # cliente en ejecución (ventana abierta con el bundle anterior) puede pedir
+  # chunks viejos por lazy-load; borrarlos rompe esos paneles con
+  # "Failed to fetch dynamically imported module" (MIME text/html por el
+  # fallback SPA). Sobrescribir suma ~MBs por build y nunca rompe al vivo.
   $destDataWebDist = Join-Path $OutputDir "data\web-dist"
-  Clear-DirContents $destDataWebDist
+  if (-not (Test-Path $destDataWebDist)) {
+    New-Item -ItemType Directory -Force -Path $destDataWebDist | Out-Null
+  }
 
   # Copiar ejecutable al OutputDir (error fatal si falla o no verifica)
   $destExe = Join-Path $OutputDir "opencode-desktop.exe"
@@ -246,14 +236,19 @@ try {
   if ($srcIdxHash -ne $dstIdxHash) { throw "Verificación fallida de index.html en $destDataWebDist." }
   Write-Host "  -> Copiado estáticos: $destDataWebDist" -ForegroundColor Green
 
-  # También copiar a desktop-app/data/web-dist
+  # También copiar a desktop-app/data/web-dist (sobrescribir, sin limpiar:
+  # ver nota en $destDataWebDist sobre chunks de clientes en ejecución).
   $sourceDataWebDist = Join-Path $desktopAppDir "data\web-dist"
-  Clear-DirContents $sourceDataWebDist
+  if (-not (Test-Path $sourceDataWebDist)) {
+    New-Item -ItemType Directory -Force -Path $sourceDataWebDist | Out-Null
+  }
   Copy-Item -Path "$webDist\*" -Destination $sourceDataWebDist -Recurse -Force
 
   if ($targetDir) {
     $targetReleaseWebDist = Join-Path $targetDir "release\data\web-dist"
-    Clear-DirContents $targetReleaseWebDist
+    if (-not (Test-Path $targetReleaseWebDist)) {
+      New-Item -ItemType Directory -Force -Path $targetReleaseWebDist | Out-Null
+    }
     Copy-Item -Path "$webDist\*" -Destination $targetReleaseWebDist -Recurse -Force
   }
 

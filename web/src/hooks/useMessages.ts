@@ -182,7 +182,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [])
 
   const queueMessageUpdate = useCallback((patch: (prev: MessageEnvelope[]) => MessageEnvelope[], sid: string | null = null, immediate = false) => {
-    if (immediate) {
+    // Minimizado/oculto: rAF congelado + Virtuoso sin layout. Acumular sin
+    // pintar; al volver se drena en un solo frame antes de re-anclar.
+    const hidden = typeof document !== "undefined" && document.hidden
+    if (immediate && !hidden) {
       setMessages((prev) => {
         const loaded = loadedSessionIDRef.current
         if (sid && loaded && sid !== loaded) return prev
@@ -191,14 +194,21 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       return
     }
     messageBatchRef.current.push({ sid, patch })
-    if (batchFrameRef.current === null && batchMountedRef.current) {
+    if (!hidden && batchFrameRef.current === null && batchMountedRef.current) {
       batchFrameRef.current = requestAnimationFrame(flushMessageBatch)
     }
   }, [flushMessageBatch])
 
   useEffect(() => {
     batchMountedRef.current = true
+    const onVis = () => {
+      if (!document.hidden && messageBatchRef.current.length > 0 && batchFrameRef.current === null) {
+        batchFrameRef.current = requestAnimationFrame(flushMessageBatch)
+      }
+    }
+    document.addEventListener("visibilitychange", onVis)
     return () => {
+      document.removeEventListener("visibilitychange", onVis)
       batchMountedRef.current = false
       if (batchFrameRef.current !== null) cancelAnimationFrame(batchFrameRef.current)
       batchFrameRef.current = null

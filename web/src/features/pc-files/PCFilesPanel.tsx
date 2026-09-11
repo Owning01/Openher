@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
 import {
+  ChatIcon,
   FolderIcon,
   RefreshIcon,
   FileIcon,
@@ -35,7 +36,7 @@ import {
 } from "../../Icons"
 import { shell, type FsEntry, type CodeSearchResult } from "../../shell"
 import { useT } from "../../i18n-context"
-import { useDialog } from "../../components/DialogProvider"
+import { useToast } from "../../components/Toasts"
 import { calcMenuPos, calcMenuPosForAnchor, type MenuPos } from "../../utils/menuPos"
 import { FileRow } from "./FileRow"
 import { OpenWithDialog } from "./OpenWithDialog"
@@ -49,6 +50,9 @@ import { useRowSelection, parseDragPaths } from "./multiSelect"
 import { sortFsEntries, splitCrumbs, pushHistory, type SortMode } from "./explorerView"
 
 const EXPLORER_RECENT_KEY = "opencode.explorer.recentDirs"
+// Duración de la animación de eliminado (slide-out rojo) antes del borrado
+// real. Debe coincidir con el keyframe pcf-delete-out en pc-files.css.
+const DELETE_ANIM_MS = 280
 function loadExplorerRecent(): string[] {
   try {
     const raw = localStorage.getItem(EXPLORER_RECENT_KEY)
@@ -136,15 +140,86 @@ const PcfCodeLines = memo(function PcfCodeLines({ path, content, target }: { pat
   )
 })
 
+// Confirmación inline en flujo (dentro del árbol, no modal ni overlay): nace
+// sobre las filas del panel afectado, con Aceptar/Cancelar y borde notorio.
+function PcfInlineConfirm({
+  variant,
+  title,
+  detail,
+  detailTitle,
+  confirmLabel,
+  onCancel,
+  onConfirm,
+}: {
+  variant: "danger" | "exec"
+  title: string
+  detail: string
+  detailTitle?: string
+  confirmLabel: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    boxRef.current?.scrollIntoView?.({ block: "nearest" })
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.stopPropagation(); onCancel() }
+      else if (e.key === "Enter" && !e.shiftKey) {
+        // Con foco en un botón manda el click nativo (no robar el Enter de
+        // "Cancelar" para confirmar).
+        const el = e.target as HTMLElement | null
+        if (el && (el.tagName === "BUTTON" || el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return
+        e.preventDefault(); onConfirm()
+      }
+    }
+    document.addEventListener("keydown", onKey, true)
+    return () => document.removeEventListener("keydown", onKey, true)
+  }, [onCancel, onConfirm])
+  const isDanger = variant === "danger"
+  return (
+    <div
+      ref={boxRef}
+      className={`pcf-inline-confirm ${isDanger ? "is-danger" : "is-exec"}`}
+      role="alertdialog"
+      aria-label={title}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="pcf-inline-confirm-icon" aria-hidden="true">
+        {isDanger ? <TrashIcon size={16} /> : <TerminalIcon size={16} />}
+      </span>
+      <div className="pcf-inline-confirm-body">
+        <strong>{title}</strong>
+        <span className="pcf-inline-confirm-path" title={detailTitle ?? detail}>{detail}</span>
+      </div>
+      <div className="pcf-inline-confirm-actions">
+        <button type="button" className="btn-secondary compact" onClick={onCancel} autoFocus>
+          Cancelar
+        </button>
+        <button type="button" className={isDanger ? "btn-danger compact" : "btn-primary compact"} onClick={onConfirm}>
+          {!isDanger && <TerminalIcon size={14} />} {confirmLabel}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export const PCFilesPanel = memo(function PCFilesPanel({
   onCollapseSidebar,
   onOpenFile,
+  onOpenBrowser,
+  initialCwd,
+  onOpenSessionDir,
 }: {
   onCollapseSidebar?: () => void
   onOpenFile?: (path: string) => void
+  onOpenBrowser?: (url: string) => void
+  /** Carpeta inicial (la usa el panel explorer del grid; si falta, recientes). */
+  initialCwd?: string | null
+  /** Si se provee, el menú ofrece "Nueva sesión de chat aquí". */
+  onOpenSessionDir?: (dir: string) => void
 }) {
   const t = useT()
-  const { confirm } = useDialog()
+  const { toast } = useToast()
   const [cwd, setCwd] = useState<string | null>(null)
   const [dirs, setDirs] = useState<FsEntry[]>([])
   const [files, setFiles] = useState<FsEntry[]>([])
@@ -152,14 +227,12 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const [drives, setDrives] = useState<string[]>([])
   const [showDrives, setShowDrives] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
   const [searchMode, setSearchMode] = useState<"files" | "code">("files")
   const [codeResults, setCodeResults] = useState<CodeSearchResult | null>(null)
   const [codeSearching, setCodeSearching] = useState(false)
   const [downloading, setDownloading] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [rootExpanded, setRootExpanded] = useState(true)
   const [collapseSignal, setCollapseSignal] = useState(0)
 
@@ -241,7 +314,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   } | null>(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const [copiedPaths, setCopiedPaths] = useState<string[]>([])
-  const [execConfirm, setExecConfirm] = useState<{ path: string; name: string } | null>(null)
+  const [execConfirm, setExecConfirm] = useState<{ path: string; name: string; pane: "first" | "second" } | null>(null)
   const [openWithFile, setOpenWithFile] = useState<FsEntry | null>(null)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const [renamingValue, setRenamingValue] = useState("")
@@ -273,10 +346,15 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     }
   }, [creatingType])
 
+  // Avisos flotantes por encima del contenido (toast): nada se renderiza
+  // dentro del panel. showNotice = info/success, showError = error.
   const showNotice = useCallback((msg: string) => {
-    setNotice(msg)
-    window.setTimeout(() => setNotice((m) => (m === msg ? null : m)), 2800)
-  }, [])
+    toast(msg, "info")
+  }, [toast])
+
+  const showError = useCallback((msg: string) => {
+    toast(msg, "error")
+  }, [toast])
 
   const isExecScript = (p?: string) => {
     if (!p) return false
@@ -451,7 +529,6 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       if (!path) return
       setCwd(path)
       setLoading(true)
-      setError(null)
       try {
         const r = await shell.fs.list(path)
         setDirs(r.dirs || [])
@@ -464,13 +541,13 @@ export const PCFilesPanel = memo(function PCFilesPanel({
         } catch {}
         setExplorerRecent(cur.slice(0, 20))
       } catch (e: any) {
-        setError(e?.message || "No se pudo leer el directorio")
+        showError(e?.message || "No se pudo leer el directorio")
       } finally {
         setLoading(false)
         refreshGit()
       }
     },
-    [refreshGit]
+    [refreshGit, showError]
   )
 
   const loadRef = useRef(load)
@@ -483,6 +560,12 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       .favorites()
       .then(({ favorites: f }) => setFavorites(f))
       .catch(() => {})
+    // initialCwd (panel explorer del grid) manda sobre recientes/unidades.
+    if (initialCwd) {
+      loadRef.current(initialCwd)
+      shell.fs.drives().then(({ drives: d }) => setDrives(d)).catch(() => {})
+      return
+    }
     const recent = loadExplorerRecent()
     if (recent.length > 0 && recent[0]) {
       loadRef.current(recent[0])
@@ -500,6 +583,15 @@ export const PCFilesPanel = memo(function PCFilesPanel({
         .catch(() => {})
     }
   }, [])
+
+  // Si el padre cambia la carpeta del panel (grid desktop), navegar a ella.
+  const prevInitialCwd = useRef<string | null | undefined>(initialCwd)
+  useEffect(() => {
+    if (initialCwd && initialCwd !== prevInitialCwd.current) {
+      prevInitialCwd.current = initialCwd
+      loadRef.current(initialCwd)
+    }
+  }, [initialCwd])
 
   useEffect(() => {
     if (searchMode !== "code" || !query.trim() || !cwd) {
@@ -523,7 +615,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
           if (!cancelled) {
             setCodeResults(null)
             setCodeSearching(false)
-            showNotice(`Error en búsqueda: ${e instanceof Error ? e.message : String(e)}`)
+            showError(`Error en búsqueda: ${e instanceof Error ? e.message : String(e)}`)
           }
         })
     }, 350)
@@ -583,7 +675,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
           showNotice(`Descargando: ${fileName}`)
         }
       } catch (e) {
-        showNotice(`Error al descargar: ${e instanceof Error ? e.message : String(e)}`)
+        showError(`Error al descargar: ${e instanceof Error ? e.message : String(e)}`)
       } finally {
         setDownloading(null)
       }
@@ -594,7 +686,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const [codeViewer, setCodeViewer] = useState<{ path: string; line: number; content: string } | null>(null)
   const [htmlPreview, setHtmlPreview] = useState<{ path: string } | null>(null)
   const [showSecondPane, setShowSecondPane] = useState(false)
-  const secondPane = usePaneState()
+  const secondPane = usePaneState(null, { onError: showError })
   const [activePane, setActivePane] = useState<"first" | "second">("first")
   const [contextMenuPane, setContextMenuPane] = useState<"first" | "second">("first")
 
@@ -622,80 +714,119 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     setHIdxSecond(r.idx)
   }, [secondPane.cwd, histSecond, hIdxSecond])
 
+  // Confirmación inline (en flujo, sobre el árbol del panel afectado) con
+  // Aceptar/Cancelar y borde notorio. Reemplaza al modal de diálogo.
+  type PendingDelete = { pane: "first" | "second"; paths: string[]; permanent: boolean }
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
+  // Filas en animación de eliminado (slide-out rojo) antes del borrado real.
+  const [deletingPaths, setDeletingPaths] = useState<string[]>([])
+
+  const baseName = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() || p
+
   // Borrado a la Papelera (recuperable). El definitivo vive en
   // handleDeletePermanent como item separado del menú.
-  const handleDeletePaths = useCallback(async (
+  const handleDeletePaths = useCallback((
     pane: "first" | "second",
     paths: string[],
   ) => {
     if (paths.length === 0) return
     setContextMenu(null)
-    const baseName = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() || p
-    const confirmed = await confirm({
-      message: paths.length > 1
-        ? `Mover ${paths.length} elementos a la Papelera?`
-        : `Mover "${baseName(paths[0]!)}" a la Papelera?`,
-      confirmText: t('common.yes'),
-      cancelText: t('common.cancel'),
-      variant: "danger",
-    })
-    if (!confirmed) return
-    let done = 0
-    for (const p of paths) {
-      try {
-        await shell.fs.trash(p)
-        done++
-      } catch {}
-    }
-    showNotice(
-      paths.length > 1
-        ? (done === paths.length ? `A la Papelera: ${done} elementos` : `A la Papelera ${done} de ${paths.length} (${paths.length - done} con error)`)
-        : (done === 1 ? `A la Papelera: ${baseName(paths[0]!)}` : "No se pudo mover a la Papelera"),
-    )
-    if (pane === "second") {
-      selSecond.clear()
-      if (secondPane.cwd) secondPane.load(secondPane.cwd)
-    } else {
-      selFirst.clear()
-      if (cwd) load(cwd)
-    }
-  }, [confirm, t, showNotice, cwd, load, secondPane, selFirst, selSecond])
+    setPendingDelete({ pane, paths, permanent: false })
+  }, [])
 
-  // Borrado definitivo (sin Papelera): segunda confirmación implícita en el
-  // propio item del menú, diferenciado del Eliminar habitual.
-  const handleDeletePermanent = useCallback(async (
+  // Borrado definitivo (sin Papelera): diferenciado del Eliminar habitual.
+  const handleDeletePermanent = useCallback((
     pane: "first" | "second",
     paths: string[],
   ) => {
     if (paths.length === 0) return
     setContextMenu(null)
-    const confirmed = await confirm({
-      message: paths.length > 1
-        ? `Borrar PARA SIEMPRE ${paths.length} elementos (sin Papelera)?`
-        : `Borrar PARA SIEMPRE "${paths[0]!.split(/[/\\]/).filter(Boolean).pop()}" (sin Papelera)?`,
-      confirmText: "Borrar",
-      cancelText: t('common.cancel'),
-      variant: "danger",
-    })
-    if (!confirmed) return
+    setPendingDelete({ pane, paths, permanent: true })
+  }, [])
+
+  const cancelPendingDelete = useCallback(() => setPendingDelete(null), [])
+
+  const confirmPendingDelete = useCallback(async () => {
+    const cur = pendingDelete
+    if (!cur) return
+    setPendingDelete(null)
+    setDeletingPaths(cur.paths)
+    const reduceMotion = document.documentElement.classList.contains("no-motion")
+      || (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    if (!reduceMotion) await new Promise((r) => setTimeout(r, DELETE_ANIM_MS))
     let done = 0
-    for (const p of paths) {
+    for (const p of cur.paths) {
       try {
-        await shell.fs.delete(p)
+        if (cur.permanent) await shell.fs.delete(p)
+        else await shell.fs.trash(p)
         done++
       } catch {}
     }
-    showNotice(done === paths.length
-      ? `Borrado definitivo: ${done}`
-      : `Borrados ${done} de ${paths.length}`)
-    if (pane === "second") {
+    setDeletingPaths([])
+    if (cur.paths.length > 1) {
+      if (done === cur.paths.length) showNotice(cur.permanent ? `Borrado definitivo: ${done}` : `A la Papelera: ${done} elementos`)
+      else showError(cur.permanent ? `Borrados ${done} de ${cur.paths.length}` : `A la Papelera ${done} de ${cur.paths.length} (${cur.paths.length - done} con error)`)
+    } else if (done === 1) {
+      showNotice(cur.permanent ? "Borrado definitivo" : `A la Papelera: ${baseName(cur.paths[0]!)}`)
+    } else {
+      showError(cur.permanent ? "No se pudo borrar" : "No se pudo mover a la Papelera")
+    }
+    if (cur.pane === "second") {
       selSecond.clear()
       if (secondPane.cwd) secondPane.load(secondPane.cwd)
     } else {
       selFirst.clear()
       if (cwd) load(cwd)
     }
-  }, [confirm, t, showNotice, cwd, load, secondPane, selFirst, selSecond])
+  }, [pendingDelete, showNotice, showError, cwd, load, secondPane, selFirst, selSecond])
+
+  const cancelExecFile = useCallback(() => setExecConfirm(null), [])
+
+  const confirmExecFile = useCallback(async () => {
+    const cur = execConfirm
+    if (!cur) return
+    setExecConfirm(null)
+    try {
+      const r = await shell.fs.execFile(cur.path)
+      if (r.ok) showNotice(`Ejecutando: ${cur.name}`)
+      else showError("Error al ejecutar")
+    } catch (e: any) {
+      showError(`Error: ${e?.message || String(e)}`)
+    }
+  }, [execConfirm, showNotice, showError])
+
+  // Cajas inline del panel indicado (borrado + ejecutar): en flujo sobre el
+  // árbol, no modales.
+  const renderPaneConfirms = (pane: "first" | "second") => (
+    <>
+      {pendingDelete?.pane === pane && (
+        <PcfInlineConfirm
+          variant="danger"
+          title={pendingDelete.permanent
+            ? (pendingDelete.paths.length > 1 ? `Borrar ${pendingDelete.paths.length} para siempre (sin Papelera)` : "Borrar para siempre (sin Papelera)")
+            : (pendingDelete.paths.length > 1 ? `Mover ${pendingDelete.paths.length} elementos a la Papelera` : "Mover a la Papelera")}
+          detail={pendingDelete.paths.length > 1
+            ? pendingDelete.paths.map(baseName).slice(0, 3).join(", ") + (pendingDelete.paths.length > 3 ? ` +${pendingDelete.paths.length - 3} más` : "")
+            : `“${baseName(pendingDelete.paths[0]!)}”`}
+          detailTitle={pendingDelete.paths.join("\n")}
+          confirmLabel={pendingDelete.permanent ? "Borrar" : "Mover"}
+          onCancel={cancelPendingDelete}
+          onConfirm={() => void confirmPendingDelete()}
+        />
+      )}
+      {execConfirm?.pane === pane && (
+        <PcfInlineConfirm
+          variant="exec"
+          title="Ejecutar script"
+          detail={execConfirm.name}
+          detailTitle={execConfirm.path}
+          confirmLabel="Ejecutar"
+          onCancel={cancelExecFile}
+          onConfirm={() => void confirmExecFile()}
+        />
+      )}
+    </>
+  )
 
   // Targets con selección: si la fila está dentro de la selección del panel,
   // la operación aplica a toda la selección; si no, solo a la fila.
@@ -769,7 +900,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       const out = (r as { path?: string })?.path
       showNotice(`Comprimido: ${out ? out.split(/[/\\]/).pop() : name}`)
     } catch {
-      showNotice("Error al comprimir")
+      showError("Error al comprimir")
     }
     if (pane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
     else if (cwd) load(cwd)
@@ -783,7 +914,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       const out = (r as { path?: string })?.path
       showNotice(`Extraído en: ${out ? out.split(/[/\\]/).pop() : entry.name}`)
     } catch {
-      showNotice("Error al extraer")
+      showError("Error al extraer")
     }
     if (pane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
     else if (cwd) load(cwd)
@@ -838,7 +969,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       if (pane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
       else if (cwd) load(cwd)
     } catch (e: any) {
-      showNotice(`Error al renombrar: ${e?.message || String(e)}`)
+      showError(`Error al renombrar: ${e?.message || String(e)}`)
     }
   }, [renamingValue, cwd, secondPane, contextMenuPane, renamingPane, showNotice, load])
 
@@ -887,10 +1018,40 @@ export const PCFilesPanel = memo(function PCFilesPanel({
         if (showSecondPane && secondPane.cwd && (srcs.some((s) => s.startsWith(secondPane.cwd!)) || destDir === secondPane.cwd))
           secondPane.load(secondPane.cwd)
       } catch (err) {
-        showNotice(`Error al mover: ${err instanceof Error ? err.message : String(err)}`)
+        showError(`Error al mover: ${err instanceof Error ? err.message : String(err)}`)
       }
     },
     [cwd, showSecondPane, secondPane, load, showNotice, selFirst, selSecond],
+  )
+
+  // Vista previa HTML en ventana del navegador: sirve el directorio del
+  // archivo y abre la URL con token en un browser tab (desktop) o pestaña
+  // nueva (móvil/web). Si el serve falla, cae al visor inline.
+  const handlePreviewInBrowser = useCallback(
+    async (entry: FsEntry) => {
+      setContextMenu(null)
+      const dir = entry.path.includes("\\")
+        ? entry.path.slice(0, entry.path.lastIndexOf("\\"))
+        : entry.path.slice(0, entry.path.lastIndexOf("/"))
+      try {
+        const proj = await shell.project.serve(dir || entry.path)
+        const token = (proj as unknown as Record<string, unknown>)?.token as string | undefined
+        const preview = (proj as unknown as Record<string, unknown>)?.previewUrl as string | undefined
+        const url = token
+          ? `${window.location.origin}/shell/preview/${token}/${encodeURIComponent(entry.name)}`
+          : preview ?? null
+        if (url) {
+          if (onOpenBrowser) onOpenBrowser(url)
+          else window.open(url, "_blank")
+          showNotice(`Abierto en navegador: ${entry.name}`)
+          return
+        }
+      } catch {
+        // cae al visor inline
+      }
+      setHtmlPreview({ path: entry.path })
+    },
+    [onOpenBrowser, showNotice]
   )
 
   // Abrir en editor/visor — click primario NO descarga
@@ -939,7 +1100,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
         }
         showNotice(`Abierto en línea ${line}: ${path.split(/[/\\]/).pop()}`)
       } catch (e) {
-        showNotice(`Error al abrir: ${e instanceof Error ? e.message : String(e)}`)
+        showError(`Error al abrir: ${e instanceof Error ? e.message : String(e)}`)
       }
     },
     [showNotice]
@@ -1267,8 +1428,6 @@ export const PCFilesPanel = memo(function PCFilesPanel({
         </>
       )}
 
-      {notice && <div className="pcf-notice">{notice}</div>}
-
       {showDrives && (
         <div className="pcf-drives">
           {drives.map((d) => (
@@ -1485,6 +1644,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
               onDragOver={handleDragOver}
               onDrop={(e) => cwd && handleFileDrop(e, cwd, "first")}
             >
+              {renderPaneConfirms("first")}
               {creatingType && (
                 <div className="pcf-row pcf-inline-create" onClick={(e) => e.stopPropagation()}>
                   <span className="pcf-chevron" />
@@ -1523,7 +1683,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                           }
                           load(cwd)
                         } catch {
-                          showNotice(`Error al crear ${creatingType === "folder" ? "carpeta" : "archivo"}`)
+                          showError(`Error al crear ${creatingType === "folder" ? "carpeta" : "archivo"}`)
                         }
                       } else if (e.key === "Escape") {
                         setCreatingType(null)
@@ -1538,9 +1698,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
               )}
 
               {loading && <div className="pcf-loading">Cargando…</div>}
-              {error && !loading && <div className="pcf-error">{error}</div>}
 
-              {!loading && !error && (
+              {!loading && (
                 <>
                   {sortedDirs.map((d) => (
                     <div
@@ -1577,6 +1736,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         onSelect={handleRowClickFirst}
                         getDragPayload={dragPayloadFirst}
                         cutPaths={cutPaths}
+                        deletingPaths={deletingPaths}
                       />
                     </div>
                   ))}
@@ -1608,6 +1768,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         onSelect={handleRowClickFirst}
                         getDragPayload={dragPayloadFirst}
                         cut={cutPaths.includes(f.path)}
+                        deleting={deletingPaths.includes(f.path)}
                       />
                     ))}
                     {sortedFiles.length === 0 && sortedDirs.length === 0 && !qLower && (
@@ -1736,6 +1897,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                 }}
               />
               <div className="pcf-tree" role="tree" aria-label="Archivos (2)" aria-multiselectable="true" onClick={() => selSecond.clear()} onKeyDown={(e) => onTreeKeyDown(e, "second")} onContextMenu={(e) => handleContextMenuSecond(e, null, true)} onDragOver={handleDragOver} onDrop={(e) => secondPane.cwd && handleFileDrop(e, secondPane.cwd, "second")}>
+                {renderPaneConfirms("second")}
                 {selSecondPaths.length > 1 && (
                   <div className="pcf-selbar" role="status">
                     <span>{selSecondPaths.length} seleccionados</span>
@@ -1758,8 +1920,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   </div>
                 )}
                 {secondPane.loading && <div className="pcf-loading">Cargando…</div>}
-                {secondPane.error && !secondPane.loading && <div className="pcf-error">{secondPane.error}</div>}
-                {!secondPane.loading && !secondPane.error && (
+                {!secondPane.loading && (
                   <>
                     {sortedSecondDirs.map((d) => (
                       <div
@@ -1796,6 +1957,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                           onSelect={handleRowClickSecond}
                           getDragPayload={dragPayloadSecond}
                           cutPaths={cutPaths}
+                          deletingPaths={deletingPaths}
                         />
                       </div>
                     ))}
@@ -1825,6 +1987,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                           onSelect={handleRowClickSecond}
                           getDragPayload={dragPayloadSecond}
                           cut={cutPaths.includes(f.path)}
+                          deleting={deletingPaths.includes(f.path)}
                         />
                       ))}
                       {sortedSecondFiles.length === 0 && sortedSecondDirs.length === 0 && !qLower && (
@@ -1909,7 +2072,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                     onClick={() => {
                       const e = contextMenu.entry!
                       setContextMenu(null)
-                      setExecConfirm({ path: e.path, name: e.name })
+                      setExecConfirm({ path: e.path, name: e.name, pane: contextMenuPane })
                     }}
                   >
                     <span>
@@ -1944,7 +2107,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         shell.fs
                           .openDefault(target.path)
                           .then(() => showNotice(`Abierto con programa predeterminado: ${target.name}`))
-                          .catch(() => showNotice("No se pudo abrir"))
+                          .catch(() => showError("No se pudo abrir"))
                       }}
                     >
                       <span>
@@ -1971,10 +2134,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   <button
                     type="button"
                     className="overflow-item"
-                    onClick={() => {
-                      setHtmlPreview({ path: contextMenu.entry!.path })
-                      setContextMenu(null)
-                    }}
+                    onClick={() => handlePreviewInBrowser(contextMenu.entry!)}
                   >
                     <span>
                       <EyeIcon size={14} />
@@ -2121,8 +2281,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                     setContextMenu(null)
                     shell.fs
                       .reveal(p)
-                      .then((r) => showNotice(r.ok ? "Abierto en el Explorador" : "No se pudo abrir"))
-                      .catch(() => showNotice("No se pudo abrir"))
+                      .then((r) => (r.ok ? showNotice("Abierto en el Explorador") : showError("No se pudo abrir")))
+                      .catch(() => showError("No se pudo abrir"))
                   }}
                 >
                   <span>
@@ -2140,6 +2300,22 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                       <TerminalIcon size={14} />
                     </span>{" "}
                     Abrir terminal aquí
+                  </button>
+                )}
+                {onOpenSessionDir && contextMenu.isDir && (
+                  <button
+                    type="button"
+                    className="overflow-item"
+                    onClick={() => {
+                      const p = contextMenu.entry!.path
+                      setContextMenu(null)
+                      onOpenSessionDir(p)
+                    }}
+                  >
+                    <span>
+                      <ChatIcon size={14} />
+                    </span>{" "}
+                    Nueva sesión de chat aquí
                   </button>
                 )}
                 <button
@@ -2218,6 +2394,24 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   </span>{" "}
                   Abrir terminal aquí
                 </button>
+                {onOpenSessionDir && (() => {
+                  const dir = (contextMenuPane === "second" ? secondPane.cwd : cwd) || ""
+                  return dir ? (
+                    <button
+                      type="button"
+                      className="overflow-item"
+                      onClick={() => {
+                        setContextMenu(null)
+                        onOpenSessionDir(dir)
+                      }}
+                    >
+                      <span>
+                        <ChatIcon size={14} />
+                      </span>{" "}
+                      Nueva sesión de chat aquí
+                    </button>
+                  ) : null
+                })()}
               </>
             )}
             {(copiedPaths.length > 0 || cutPaths.length > 0) && (
@@ -2245,75 +2439,6 @@ export const PCFilesPanel = memo(function PCFilesPanel({
           </div>,
           document.body
         )}
-
-      {execConfirm && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 100001,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(0,0,0,0.5)",
-          }}
-          onClick={() => setExecConfirm(null)}
-        >
-          <div
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-md)",
-              padding: 16,
-              minWidth: 320,
-              maxWidth: 420,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ margin: 0, fontSize: "0.95rem", display: "flex", alignItems: "center", gap: 8 }}>
-              <TerminalIcon size={16} /> Ejecutar archivo
-            </h3>
-            <p style={{ margin: "12px 0 6px", fontSize: "0.85rem" }}>
-              ¿Ejecutar <strong>{execConfirm.name}</strong>?
-            </p>
-            <p
-              style={{
-                wordBreak: "break-all",
-                fontSize: "0.75rem",
-                color: "var(--muted)",
-                margin: "0 0 14px",
-              }}
-            >
-              {execConfirm.path}
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                type="button"
-                className="btn-secondary compact"
-                onClick={() => setExecConfirm(null)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn-primary compact"
-                onClick={async () => {
-                  const t = execConfirm
-                  setExecConfirm(null)
-                  try {
-                    const r = await shell.fs.execFile(t.path)
-                    showNotice(r.ok ? `Ejecutando: ${t.name}` : "Error al ejecutar")
-                  } catch (e: any) {
-                    showNotice(`Error: ${e?.message || String(e)}`)
-                  }
-                }}
-              >
-                <TerminalIcon size={14} /> Ejecutar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {openWithFile && (
         <OpenWithDialog

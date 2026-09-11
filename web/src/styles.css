@@ -20,9 +20,11 @@
 @import "./styles/stats.css";
 @import "./styles/settings.css";
 @import "./styles/chat.css";
+@import "./styles/filepath.css";
 @import "./styles/composer.css";
 @import "./styles/notes.css";
 @import "./styles/modals.css";
+@import "./styles/toasts.css";
 @import "./styles/desktop.css";
 @import "./styles/titlebar.css";
 @import "./styles/shell.css";
@@ -34,3 +36,7 @@
 @import "./styles/utilities.css";
 @import "./styles/learning.css";
 @import "./styles/responsive.css";
+/* Último: proyección del layout desktop para html[data-desktop="true"] a
+   cualquier ancho (generado desde layout.css por scripts/gen-desktop-css.mjs).
+   Va al final para ganar la cascada sobre responsive.css. */
+@import "./styles/desktop-narrow.css";

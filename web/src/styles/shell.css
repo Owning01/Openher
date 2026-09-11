@@ -175,137 +175,6 @@
 
 /* ===== Explorador ===== */
 
-.shell-explorer {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-subtle);
-}
-
-.shell-explorer-top {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.shell-path {
-  font-size: 0.75rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell-drives {
-  display: flex;
-  gap: 4px;
-  padding: 6px 8px;
-  flex-wrap: wrap;
-}
-
-.shell-drive {
-  font-size: 0.75rem;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.shell-drive.active {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.shell-tree {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px 6px;
-}
-
-/* Confirmaciones inline del explorador (eliminar / ejecutar script):
-   sustituyen al modal overlay para no tapar el árbol. */
-.explorer-confirm {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  flex-shrink: 0;
-}
-
-.explorer-confirm.is-danger {
-  border: 2px solid var(--danger);
-  border-radius: var(--radius-sm);
-  margin: 6px 8px;
-  padding: 10px 12px;
-  background: var(--danger-soft, rgba(239, 68, 68, 0.08));
-}
-
-.explorer-confirm.is-exec {
-  border: 1px solid var(--primary);
-  border-left-width: 4px;
-  background: var(--surface);
-}
-
-.explorer-confirm-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.explorer-confirm.is-danger .explorer-confirm-icon {
-  color: var(--danger);
-}
-
-.explorer-confirm.is-exec .explorer-confirm-icon {
-  color: var(--primary);
-}
-
-.explorer-confirm-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1 1 auto;
-  font-size: 0.82rem;
-}
-
-.explorer-confirm-path {
-  color: var(--muted);
-  font-size: 0.75rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.explorer-confirm-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.shell-tree-group {
-  margin-bottom: 4px;
-}
-
-.shell-tree-title {
-  font-size: 0.875rem;
-  color: var(--muted);
-  padding: 4px 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
 .shell-row {
   display: flex;
   align-items: center;
@@ -319,10 +188,6 @@
 
 .shell-row:hover {
   background: var(--surface-strong);
-}
-
-.shell-dir {
-  cursor: pointer;
 }
 
 .shell-file {
@@ -348,60 +213,11 @@
   min-width: 0;
 }
 
-.shell-size {
-  font-size: 0.875rem;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
-.shell-star {
-  opacity: 0.5;
-}
-
 .shell-empty {
   padding: 16px;
   text-align: center;
   color: var(--muted);
   font-size: 0.85rem;
-}
-
-.shell-preview {
-  flex-shrink: 0;
-  max-height: 45%;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--surface);
-}
-
-.shell-preview-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.shell-preview-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.shell-preview-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  margin: 0;
-  padding: 8px;
-  font-size: 0.75rem;
-  font-family: var(--font-mono);
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text);
 }
 
 /* ===== Kanban — Premium (Soft UI Evolution) ===== */
@@ -558,9 +374,8 @@
 .shell-kanban-cols::-webkit-scrollbar-track { background: transparent; }
 
 .shell-kanban-col {
-  flex: 0 0 300px;
+  flex: 1 1 0;
   min-width: 280px;
-  max-width: 360px;
   max-height: 100%;
   display: flex;
   flex-direction: column;
@@ -1473,13 +1288,4 @@
   overflow: hidden;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
   border: 1px solid var(--border);
-}
-
-
-/* Drop target al arrastrar un archivo/carpeta sobre una carpeta (move). */
-.shell-row.shell-dir.is-drop-target {
-  outline: 1px dashed var(--text);
-  outline-offset: -1px;
-  background: var(--hover-bg);
-  border-radius: var(--radius-sm);
 }

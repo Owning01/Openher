@@ -1,5 +1,6 @@
 import type { QuickChatMessage, QuickChatProvider, QuickChatResult } from "./types"
 import { shell } from "../shell"
+import { buildAnthropicPayload, buildOpenAIPayload, isAnthropicUrl, QC_SYSTEM_PROMPT } from "../utils/promptCache"
 
 async function proxyAwareFetch(url: string, init: RequestInit): Promise<Response> {
   try {
@@ -48,20 +49,68 @@ export function createCustomProvider(apiKey: string, baseUrl?: string): QuickCha
         { id: "custom-model", label: "Modelo Personalizado" },
       ]
     },
-    async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void }): Promise<QuickChatResult> {
+    async chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void; systemPrompt?: string }): Promise<QuickChatResult> {
+      // Anthropic branch: usa cache_control explícito (harness-style)
+      const anthropic = isAnthropicUrl(cleanBase)
+      const model = opts.model || "gpt-4o-mini"
+      const useStream = typeof opts.onChunk === "function"
+      const sysPrompt = opts.systemPrompt ?? QC_SYSTEM_PROMPT
+
+      if (anthropic) {
+        const payload = buildAnthropicPayload(messages, {
+          model,
+          systemPrompt: sysPrompt,
+          maxTokens: 500,
+          temperature: 0.4,
+          stream: useStream,
+        })
+        const headers: Record<string, string> = { "Content-Type": "application/json", "anthropic-version": "2023-06-01" }
+        if (apiKey?.trim()) headers["x-api-key"] = apiKey.trim()
+        const res = await proxyAwareFetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+          signal: opts.signal,
+        })
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "")
+          throw new Error(txt || `Error HTTP ${res.status}`)
+        }
+        if (!useStream || !res.body) {
+          const data = await res.json() as any
+          const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? ""
+          const u = data?.usage as any
+          const usage = u
+            ? { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, total: (u.input_tokens ?? 0) + (u.output_tokens ?? 0), cached: u.cache_read_input_tokens ?? 0 }
+            : undefined
+          return { text: String(text).trim(), usage: usage as any }
+        }
+        // Anthropic streaming (messages stream) — simplificado a no-stream fallback si no hay body reader
+        const data = await res.json().catch(() => null) as any
+        const text = data?.content?.[0]?.text ?? ""
+        return { text: String(text).trim() }
+      }
+
       const headers: Record<string, string> = { "Content-Type": "application/json" }
       if (apiKey?.trim()) headers.Authorization = `Bearer ${apiKey.trim()}`
 
-      const sys: QuickChatMessage = { role: "system", content: "Sos asistente breve y directo. Respondé conciso, sin rodeos." }
-      const trimmed = [sys, ...messages.slice(-8)]
-      const model = opts.model || "gpt-4o-mini"
-      const useStream = typeof opts.onChunk === "function"
-
-      const body: any = {
+      // OpenAI-compatible: prompt_cache_key + prefix estable (system + historial) para cache automático
+      const openaiPayload = buildOpenAIPayload(messages, {
         model,
-        messages: trimmed.map(m => ({ role: m.role, content: m.content })),
+        systemPrompt: sysPrompt,
         temperature: 0.4,
+        maxTokens: 500,
         stream: useStream,
+        cacheKey: `quickchat:custom:${model}`,
+      })
+      const body: any = {
+        model: openaiPayload.model,
+        messages: openaiPayload.messages,
+        temperature: openaiPayload.temperature,
+        stream: useStream,
+        prompt_cache_key: openaiPayload.prompt_cache_key,
+        ...(useStream ? {} : { max_tokens: openaiPayload.max_tokens }),
+        ...(useStream ? { max_completion_tokens: openaiPayload.max_completion_tokens } : {}),
       }
 
       const res = await proxyAwareFetch(endpoint, {

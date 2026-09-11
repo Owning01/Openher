@@ -4,7 +4,7 @@ import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { MessageBubble } from "./MessageBubble"
 import { GridSpinner } from "./GridSpinner"
-import { useFollowTail } from "../shared/lib/useFollowTail"
+import { useFollowTail, resolveSessionEntry, anchorScrollToSaved } from "../shared/lib/useFollowTail"
 
 type MessageListProps = {
   messages: RenderedMessage[]
@@ -50,7 +50,18 @@ export const MessageList = memo(function MessageList({
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
-  const { isAtBottom, setIsAtBottom, scrollToBottom, isNearBottom } = useFollowTail(messagesRef)
+  // Frescura ANTES del hook: la memoria de scroll solo puede escribirse cuando
+  // la lista muestra mensajes de la sesión seleccionada. El primer render tras
+  // cambiar de chat trae mensajes STALE de la sesión anterior; guardar su
+  // geometría bajo la sesión nueva envenenaba la memoria y la próxima entrada
+  // clavaba arriba (dist guardada mayor que el contenido cargado).
+  const msgsSessionID: string | null = messages.length > 0 ? messages[0]!.info.sessionID : null
+  const isFresh = messages.length === 0 || msgsSessionID === selectedID
+  const settledRef = useRef(false)
+  const touchedRef = useRef(false)
+  // Puerta: false hasta asentarse (incluye el tramo stale y el velo).
+  const persistGateRef = useRef(false)
+  const { isAtBottom, setIsAtBottom, scrollToBottom, isNearBottom, resetSavedPosition } = useFollowTail(messagesRef, { persistKey: selectedID, canPersistRef: persistGateRef })
   // ui-regression anchor: scrollTo({ top: container.scrollHeight — logic lives in useFollowTail
 
   const INITIAL_PAGE_SIZE = 40
@@ -104,7 +115,9 @@ export const MessageList = memo(function MessageList({
     void (el as HTMLElement).offsetWidth
     el.classList.add("msg-flash")
     window.setTimeout(() => el.classList.remove("msg-flash"), 1800)
-  })
+    // Deps explícitas (antes corría en CADA render y re-disparaba el smooth
+    // en pleno streaming): reintenta al expandirse la ventana o crecer el chat.
+  }, [revealMessageID, revealNonce, visibleCount, messages.length])
 
   const visibleMessages = useMemo(() => {
     if (messages.length <= visibleCount) return messages
@@ -154,20 +167,62 @@ export const MessageList = memo(function MessageList({
   // al cambiar de chat y el primer render trae mensajes STALE de la sesión
   // anterior. Solo se ancla con mensajes FRESCOS y por identidad de
   // contenido, no por longitud (un swap con igual longitud no re-disparaba).
+  // (msgsSessionID/isFresh se calculan antes de useFollowTail.)
   const firstID = messages.length > 0 ? messages[0]!.info.id : ""
   const lastID = messages.length > 0 ? messages[messages.length - 1]!.info.id : ""
-  const msgsSessionID: string | null = messages.length > 0 ? messages[0]!.info.sessionID : null
-  const isFresh = messages.length === 0 || msgsSessionID === selectedID
   const needsAnchorRef = useRef(true)
   // Asentamiento (igual que la virtual): el velo se levanta solo con el scroll
   // clavado al fondo y scrollHeight estable 3 frames (o timeout ~750ms), para
   // que imágenes/fuentes tardías y etapas caché→fetch no produzcan el "scroll
   // rápido desde arriba" visible. Los auto-scrolls esperan a settledRef.
-  const settledRef = useRef(false)
-  const touchedRef = useRef(false)
   const atBottomMirrorRef = useRef(true)
   useEffect(() => { atBottomMirrorRef.current = isAtBottom }, [isAtBottom])
   const [revealed, setRevealed] = useState(false)
+  const isFreshRef = useRef(isFresh)
+  isFreshRef.current = isFresh
+  // Objetivo de entrada (una sola resolución por montaje): fondo, o retorno
+  // al punto guardado por mensaje/distancia.
+  const entryTargetRef = useRef<{ mode: "bottom" } | { mode: "at"; dist: number; mid?: string; moff?: number } | null>(null)
+
+  // Cap duro anti "chat negro": el loop de asentamiento se reinicia con cada
+  // tanda de merges de mensajes (el fetch llega en ráfagas) y su presupuesto
+  // de frames se resetea, dejando el velo opaco hasta que el chat se aquieta.
+  // Este deadline es por montaje y NO depende de re-renders: pasado el plazo,
+  // el contenido fresco se muestra sí o sí (con su ancla aplicada).
+  const REVEAL_HARD_CAP_MS = 1200
+  useEffect(() => {
+    let timer = 0
+    const tryReveal = () => {
+      if (settledRef.current) return
+      if (!isFreshRef.current) {
+        // Datos stale: no mostrar el chat equivocado; reintentar el cap.
+        timer = window.setTimeout(tryReveal, REVEAL_HARD_CAP_MS)
+        return
+      }
+      settledRef.current = true
+      persistGateRef.current = true
+      const el = messagesRef.current
+      const target = entryTargetRef.current
+      if (el) {
+        if (!target || target.mode === "bottom") {
+          try {
+            el.scrollTop = el.scrollHeight
+          } catch {
+            /* detached */
+          }
+        } else if (!anchorScrollToSaved(el, target)) {
+          try {
+            el.scrollTop = el.scrollHeight
+          } catch {
+            /* detached */
+          }
+        }
+      }
+      setRevealed(true)
+    }
+    timer = window.setTimeout(tryReveal, REVEAL_HARD_CAP_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   // Interrupción del usuario: aborta el clavado, nunca pelear con la mano.
   useEffect(() => {
@@ -203,30 +258,99 @@ export const MessageList = memo(function MessageList({
   }, [])
 
   // Scroll síncrono al entrar con mensajes frescos, antes del paint (sin animación ni saltos visibles)
+  // Retorno donde lo dejaste (por mensaje, inmune a streaming entre medias) si
+  // te habías quedado a mitad; si estabas al fondo, siempre abajo — válido
+  // incluso tras cambiar de conversación y volver (per-sesión, <2h).
   useLayoutEffect(() => {
     if (view !== "detail" || !selectedID || messages.length === 0) return
     // Rama del spinner: sin DOM de mensajes; anclar acá deja el scroll arriba
     // al montar la lista real.
     if (loadingSessionID === selectedID) return
     if (!isFresh || !needsAnchorRef.current) return
+    if (!entryTargetRef.current) {
+      const r = resolveSessionEntry(selectedID)
+      entryTargetRef.current = r.kind === "return" ? { mode: "at", dist: r.dist, mid: r.mid, moff: r.moff } : { mode: "bottom" }
+    }
+    const target = entryTargetRef.current
+    // Ancla por mensaje: debe existir en los datos cargados. Si no está (p.
+    // ej. memoria envenenada de un montaje stale o historial más viejo que la
+    // ventana), degradar a entrada por FONDO — jamás clavar arriba.
+    if (target.mode === "at" && target.mid) {
+      const idx = messages.findIndex((m) => m.info.id === target.mid)
+      if (idx < 0) {
+        entryTargetRef.current = { mode: "bottom" }
+      } else {
+        // Fuera de la ventana paginada (visibleCount=40): expandir antes de
+        // anclar; el nodo no existe en DOM y el fallback por distancia sería
+        // impreciso tras crecimiento del chat.
+        const needed = messages.length - idx
+        if (needed > visibleCount) {
+          setVisibleCount((prev) => Math.max(prev, needed))
+          // Dejar que la ventana se expanda y reintentar ancla en el próximo frame
+          // (needsAnchor sigue false, pero el veil se encargará del ancla con ventana ya expandida).
+          // Marcar atBottom falso para que el botón no parpadee.
+          setIsAtBottom(false)
+          return
+        }
+      }
+    }
     needsAnchorRef.current = false
     const el = messagesRef.current
-    if (el) {
-      el.scrollTop = el.scrollHeight
+    if (entryTargetRef.current.mode === "at" && el) {
+      // Ancla por mensaje (inmune al streaming que creció abajo en ausencia).
+      const t2 = entryTargetRef.current as { mode: "at"; dist: number; mid?: string; moff?: number }
+      if (!anchorScrollToSaved(el, t2)) {
+        // Distancia guardada irrepresentable (memoria vieja): fondo.
+        entryTargetRef.current = { mode: "bottom" }
+        el.scrollTop = el.scrollHeight
+        setIsAtBottom(true)
+        resetSavedPosition()
+      } else {
+        const d = el.scrollHeight - el.scrollTop - el.clientHeight
+        setIsAtBottom(d <= 2)
+      }
+    } else {
+      if (el) {
+        el.scrollTop = el.scrollHeight
+      }
+      setIsAtBottom(true)
+      resetSavedPosition()
+      scrollToBottom("auto")
     }
-    setIsAtBottom(true)
-    scrollToBottom("auto")
-  }, [view, selectedID, loadingSessionID, firstID, lastID, isFresh, scrollToBottom, setIsAtBottom])
+  }, [view, selectedID, loadingSessionID, firstID, lastID, isFresh, scrollToBottom, setIsAtBottom, resetSavedPosition, visibleCount, messages])
 
-  // Velo anti-parpadeo con asentamiento (ver MessageVirtualList): revela solo
-  // clavado al fondo + scrollHeight estable, o por timeout. Re-corre si los
-  // mensajes cambian a mitad (fetch tras preload), todavía oculto.
+  // Fusión que antepone historial (fetch/poll tras preload, confirmación de
+  // envío): firstID cambia con lastID igual y el scrollHeight crece hacia
+  // ARRIBA. Si el usuario está al fondo, re-clavar en LAYOUT (antes del
+  // paint): el follow-effect corre en useEffect y pintaba 1 frame a mitad del
+  // chat antes de volver abajo ("salto a un mensaje donde yo no estaba").
+  const prevFirstIDRef = useRef(firstID)
+  useLayoutEffect(() => {
+    if (prevFirstIDRef.current === firstID) return
+    prevFirstIDRef.current = firstID
+    if (!settledRef.current || touchedRef.current) return
+    if (view !== "detail" || loadingSessionID === selectedID) return
+    if (messages.length === 0) return
+    const el = messagesRef.current
+    if (el && atBottomMirrorRef.current) {
+      try {
+        el.scrollTop = el.scrollHeight
+      } catch {
+        /* detached */
+      }
+    }
+  }, [firstID, view, loadingSessionID, selectedID, messages.length])
+
+  // Velo anti-parpadeo con asentamiento: revela solo clavado al fondo (o
+  // ancla a mitad estable) + scrollHeight estable, o por timeout. Re-corre si
+  // los mensajes cambian a mitad (fetch tras preload), todavía oculto.
   useEffect(() => {
     if (revealed || view !== "detail" || !selectedID) return
     if (!isFresh) return
     if (loadingSessionID === selectedID) return
     if (messages.length === 0) {
       settledRef.current = true
+      persistGateRef.current = true
       setRevealed(true)
       return
     }
@@ -237,15 +361,43 @@ export const MessageList = memo(function MessageList({
     const step = () => {
       if (touchedRef.current) {
         settledRef.current = true
+        persistGateRef.current = true
         setRevealed(true)
         return
       }
       const el = messagesRef.current
+      const target = entryTargetRef.current
       if (el) {
-        try {
-          el.scrollTop = el.scrollHeight
-        } catch {
-          /* detached */
+        if (!target || target.mode === "bottom") {
+          try {
+            el.scrollTop = el.scrollHeight
+          } catch {
+            /* detached */
+          }
+        } else {
+          // Si el mensaje ancla quedó fuera de la ventana paginada, expandir
+          // antes de anclar; si no, fallback por distancia sería impreciso.
+          if (target.mid) {
+            const idx = messages.findIndex((m) => m.info.id === target.mid)
+            if (idx < 0) {
+              // Ancla irresoluble (memoria vieja): fondo, nunca arriba.
+              entryTargetRef.current = { mode: "bottom" }
+              raf = requestAnimationFrame(step)
+              return
+            }
+            const needed = messages.length - idx
+            if (needed > visibleCount) {
+              setVisibleCount((prev) => Math.max(prev, needed))
+              // Reintentar tras expandir (el efecto re-corre al cambiar visibleCount)
+              raf = requestAnimationFrame(step)
+              return
+            }
+          }
+          if (!anchorScrollToSaved(el, target)) {
+            entryTargetRef.current = { mode: "bottom" }
+            el.scrollTop = el.scrollHeight
+            resetSavedPosition()
+          }
         }
       }
       const h = el?.scrollHeight ?? 0
@@ -256,8 +408,11 @@ export const MessageList = memo(function MessageList({
       }
       const dist = el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0
       frames++
-      if ((stable >= 3 && dist <= 2) || frames >= 45) {
+      const cur = entryTargetRef.current
+      const onTarget = !cur || cur.mode === "bottom" ? dist <= 2 : true
+      if ((stable >= 3 && onTarget) || frames >= 45) {
         settledRef.current = true
+        persistGateRef.current = true
         setRevealed(true)
         return
       }
@@ -265,7 +420,7 @@ export const MessageList = memo(function MessageList({
     }
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [revealed, view, selectedID, loadingSessionID, isFresh, firstID, lastID, messages.length])
+  }, [revealed, view, selectedID, loadingSessionID, isFresh, firstID, lastID, messages.length, visibleCount, messages, resetSavedPosition])
 
   useEffect(() => {
     if (view !== "detail") return
@@ -310,10 +465,17 @@ export const MessageList = memo(function MessageList({
     }
   }, [messageScrollSignature, isWorking, showTypingBubble, view, isAtBottom, isNearBottom, scrollToBottom, messages.length])
 
+  // Carga visible: spinner de la sesión (loading activo) o datos stale de otra
+  // sesión todavía montados. Antes ese tramo quedaba con el velo (opacity 0)
+  // y se veía "chat vacío en negro" durante segundos al cambiar de chat.
+  const showSessionLoading =
+    (loadingSessionID !== null && loadingSessionID === selectedID) ||
+    (!isFresh && messages.length > 0)
+
   return (
     <div className="message-list-root">
-      <div className="messages" ref={messagesRef} style={{ opacity: revealed || (loadingSessionID !== null && loadingSessionID === selectedID) ? 1 : 0 }}>
-        {loadingSessionID && loadingSessionID === selectedID ? (
+      <div className="messages" ref={messagesRef} style={{ opacity: revealed || showSessionLoading ? 1 : 0 }}>
+        {showSessionLoading ? (
           <div className="empty-state compact">
             <GridSpinner label={t('detail.loading')} />
             <p aria-hidden="true">{t('detail.loading')}</p>

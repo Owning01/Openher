@@ -34,6 +34,7 @@ export type TreeFolderProps = {
   onSelect?: (e: React.MouseEvent, entry: FsEntry) => void
   getDragPayload?: (path: string) => string[]
   cutPaths?: string[]
+  deletingPaths?: string[]
 }
 
 export const TreeFolder = memo(function TreeFolder({
@@ -62,6 +63,7 @@ export const TreeFolder = memo(function TreeFolder({
   onSelect,
   getDragPayload,
   cutPaths,
+  deletingPaths,
 }: TreeFolderProps) {
   const [expanded, setExpanded] = useState(false)
   const [subDirs, setSubDirs] = useState<FsEntry[]>([])
@@ -105,7 +107,7 @@ export const TreeFolder = memo(function TreeFolder({
   return (
     <div className="pcf-folder-group">
       <div
-        className={`pcf-row pcf-dir ${expanded ? "is-expanded" : ""} ${isRenaming ? "is-renaming" : ""} ${selectedPaths?.includes(entry.path) ? "is-selected" : ""} ${cutPaths?.includes(entry.path) ? "is-cut" : ""}`}
+        className={`pcf-row pcf-dir ${expanded ? "is-expanded" : ""} ${isRenaming ? "is-renaming" : ""} ${selectedPaths?.includes(entry.path) ? "is-selected" : ""} ${cutPaths?.includes(entry.path) ? "is-cut" : ""} ${deletingPaths?.includes(entry.path) ? "is-deleting" : ""}`}
         style={{ paddingLeft: `${depth * 14 + 6}px` }}
         onClick={(e) => {
           e.stopPropagation()
@@ -206,6 +208,7 @@ export const TreeFolder = memo(function TreeFolder({
                 onSelect={onSelect}
                 getDragPayload={getDragPayload}
                 cutPaths={cutPaths}
+                deletingPaths={deletingPaths}
               />
             ))}
           {!loading &&
@@ -233,6 +236,7 @@ export const TreeFolder = memo(function TreeFolder({
                 onSelect={onSelect}
                 getDragPayload={getDragPayload}
                 cut={cutPaths?.includes(f.path) ?? false}
+                deleting={deletingPaths?.includes(f.path) ?? false}
               />
             ))}
           {!loading && filteredDirs.length === 0 && filteredFiles.length === 0 && (

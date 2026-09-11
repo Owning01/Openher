@@ -20,6 +20,6 @@ export type QuickChatResult = {
 export interface QuickChatProvider {
   id: QuickChatProviderId
   labelKey: string
-  chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void }): Promise<QuickChatResult>
+  chat(messages: QuickChatMessage[], opts: { model: string; signal?: AbortSignal; onChunk?: (chunk: string) => void; systemPrompt?: string }): Promise<QuickChatResult>
   listModels(): Promise<{ id: string; label: string }[]>
 }

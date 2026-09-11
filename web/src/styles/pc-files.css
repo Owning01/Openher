@@ -436,15 +436,10 @@
 }
 
 .pcf-loading,
-.pcf-empty,
-.pcf-error {
+.pcf-empty {
   padding: 6px 8px 6px 18px;
   font-size: 0.78rem;
   color: var(--muted);
-}
-
-.pcf-error {
-  color: var(--danger);
 }
 
 .pcf-files {
@@ -1157,4 +1152,104 @@
   background: #ffffff;
   display: flex;
   flex-direction: column;
+}
+
+/* Confirmación inline en flujo (borrar / ejecutar): nace sobre el árbol con
+   Aceptar/Cancelar y borde notorio. Chrome monocromo (DESIGN.md): lo notorio
+   sale del grosor + doble marco, sin saturados ni glows. */
+.pcf-inline-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 8px 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+}
+
+.pcf-inline-confirm.is-danger {
+  border: 2px solid var(--danger);
+  outline: 1px dashed var(--danger);
+  outline-offset: 2px;
+  background: var(--danger-soft);
+}
+
+.pcf-inline-confirm.is-exec {
+  border: 2px solid var(--primary);
+  border-left-width: 6px;
+  outline: 1px solid var(--border-strong);
+  outline-offset: 2px;
+  background: var(--primary-soft);
+}
+
+.pcf-inline-confirm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pcf-inline-confirm.is-danger .pcf-inline-confirm-icon {
+  color: var(--danger);
+}
+
+.pcf-inline-confirm.is-exec .pcf-inline-confirm-icon {
+  color: var(--primary);
+}
+
+.pcf-inline-confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 13px;
+}
+
+.pcf-inline-confirm-path {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcf-inline-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Animación de eliminado: arrastre lateral + desvanecido con tinte rojo
+   antes del borrado real. El rojo vive solo en este keyframe (scope local,
+   como los --danger semánticos del chat): el resto del chrome sigue mono. */
+.pcf-row.is-deleting {
+  --del: #e11d48;
+  --del-soft: rgba(225, 29, 72, 0.12);
+  border-radius: var(--radius-md);
+  animation: pcf-delete-out 280ms ease-in forwards;
+}
+
+:root[data-theme="dark"] .pcf-row.is-deleting {
+  --del: #fb7185;
+  --del-soft: rgba(251, 113, 133, 0.14);
+}
+
+@keyframes pcf-delete-out {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+    background: var(--del-soft);
+    outline: 2px solid var(--del);
+    outline-offset: -2px;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(48px);
+    background: var(--del-soft);
+    outline: 2px solid var(--del);
+    outline-offset: -2px;
+  }
 }

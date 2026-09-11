@@ -30,6 +30,8 @@ export type FileRowProps = {
   getDragPayload?: (path: string) => string[]
   // Cortado (Ctrl+X pendiente de pegar): se atenúa hasta pegar/copiar.
   cut?: boolean
+  // En animación de eliminado (slide-out rojo antes del borrado real).
+  deleting?: boolean
 }
 
 export function formatFileSize(size: number | null): string {
@@ -61,6 +63,7 @@ export const FileRow = memo(function FileRow({
   onSelect,
   getDragPayload,
   cut = false,
+  deleting = false,
 }: FileRowProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -70,7 +73,7 @@ export const FileRow = memo(function FileRow({
 
   return (
     <div
-      className={`pcf-row pcf-file ${gitStatus ? `git-${gitStatus.status.toLowerCase()}` : ""} ${isRenaming ? "is-renaming" : ""} ${selected ? "is-selected" : ""} ${cut ? "is-cut" : ""}`}
+      className={`pcf-row pcf-file ${gitStatus ? `git-${gitStatus.status.toLowerCase()}` : ""} ${isRenaming ? "is-renaming" : ""} ${selected ? "is-selected" : ""} ${cut ? "is-cut" : ""} ${deleting ? "is-deleting" : ""}`}
       style={{ paddingLeft: `${depth * 14 + 18}px` }}
       title={f.path}
       onClick={(e) => {

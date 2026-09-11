@@ -1,10 +1,14 @@
-import type { MessageEnvelope, RenderedMessage, DataMode, FileDiff } from "../types"
+import type { MessageEnvelope, RenderedMessage, DataMode, FileDiff, TurnChanges } from "../types"
 import { isImagePart } from "../utils.ts"
+import { toolPartFileDiff } from "./toolFileDiff"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
 const MAX_TOOL_OUTPUT_CHARS = 1500
 const PRESERVE_TOOL_HEAD_CHARS = 800
+
+/** Prefijo estable del aviso de catálogo que inyecta el server (system). */
+export const TOOL_CATALOG_MARKER = "The Code Mode tool catalog"
 
 function pruneToolState(state: MessageEnvelope["parts"][number]["state"]): MessageEnvelope["parts"][number]["state"] {
   if (!state || typeof state !== "object") return state
@@ -132,7 +136,7 @@ export function computeRenderedMessages(
     if (text.includes("<pty_exited>") || text.includes("Use pty_read to check")) continue
     const hasImages = message.parts.some((p) => isImagePart(p as any))
     if (text || thinkingParts.length > 0 || toolParts.length > 0 || hasImages || message.info.error) {
-      const rendered: RenderedMessage = { ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffs, dataMode, turnMode }
+      const rendered: RenderedMessage = { ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffs, dataMode, turnMode, isToolCatalog: message.info.role === "system" && text.startsWith(TOOL_CATALOG_MARKER) }
       out.push(rendered)
       nextCache.set(message.info.id, { src: message, rendered, diffs, turnMode, dataMode })
     }
@@ -141,4 +145,54 @@ export function computeRenderedMessages(
   // descarta todo y se reconstruye en el próximo cálculo.
   if (nextCache.size > out.length * 3) nextCache.clear()
   return { out, cache: nextCache }
+}
+
+// Agrupa los diffs por turno (prompt user + respuestas siguientes).
+// Fuente: summaryDiffs del server si vienen; si no (opencode v2 no los
+// manda), se derivan de los tool parts de archivo del turno.
+// Solo turnos con archivos; archivos repetidos se fusionan (suma stats,
+// queda el último patch). Orden cronológico.
+export function groupTurnDiffs(messages: RenderedMessage[]): TurnChanges[] {
+  const turns: TurnChanges[] = []
+  let current: TurnChanges | null = null
+  const flush = () => {
+    if (current && current.files.length > 0) turns.push(current)
+    current = null
+  }
+  const merge = (target: TurnChanges, d: { file?: string; additions: number; deletions: number; patch?: string }) => {
+    const key = d.file || ""
+    const prev = target.files.find((f) => (f.file || "") === key)
+    if (prev) {
+      prev.additions = (prev.additions ?? 0) + (d.additions ?? 0)
+      prev.deletions = (prev.deletions ?? 0) + (d.deletions ?? 0)
+      if (d.patch) prev.patch = d.patch
+    } else {
+      target.files.push({ ...d })
+    }
+  }
+  const ensureCurrent = (id: string) => {
+    if (!current) current = { id, label: "", files: [] }
+    return current
+  }
+  for (const m of messages) {
+    if (m.info.role === "user" && m.text.trim()) {
+      flush()
+      const label = m.text.trim().split("\n")[0] ?? ""
+      current = { id: m.info.id, label: label.length > 80 ? label.slice(0, 80) + "…" : label, files: [] }
+    }
+    const diffs = m.summaryDiffs
+    if (diffs && diffs.length > 0) {
+      const target = ensureCurrent(m.info.id)
+      for (const d of diffs) merge(target, d)
+      continue
+    }
+    if (!m.toolParts || m.toolParts.length === 0) continue
+    const target = ensureCurrent(m.info.id)
+    for (const tp of m.toolParts) {
+      const fd = toolPartFileDiff({ tool: tp.tool, state: tp.state })
+      if (fd) merge(target, fd)
+    }
+  }
+  flush()
+  return turns
 }

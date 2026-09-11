@@ -153,10 +153,10 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     const isVirtual = sid.startsWith("__")
     if (isVirtual) {
       let vComp: React.ReactNode = null
-      if (sid === "__kanban__") vComp = <KanbanPanel />
+      if (sid === "__kanban__") vComp = <KanbanPanel onClose={onClose} />
       else if (sid === "__stats__") vComp = <StatsPanel />
       else if (sid === "__learning__") vComp = <LearningPage />
-      else if (sid === "__pcFiles__") vComp = <PCFilesPanel onOpenFile={props.onOpenFile} />
+      else if (sid === "__pcFiles__") vComp = <PCFilesPanel onOpenFile={props.onOpenFile} onOpenBrowser={props.onOpenBrowser} />
       else if (sid === "__design__") vComp = <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><ExternalIframePanel name="opendesign" title="Open Design" url="http://127.0.0.1:3000" /></Suspense>
       else if (sid === "__reports__") vComp = <LearningPage />
       else if (sid === "__screenshots__") vComp = <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><ExternalIframePanel name="screenshots" title="Screenshots" url="http://127.0.0.1:3002" /></Suspense>

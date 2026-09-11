@@ -13,12 +13,14 @@ function loadExplorerRecent(): string[] {
   }
 }
 
-export function usePaneState(initialCwd: string | null = null) {
+export function usePaneState(
+  initialCwd: string | null = null,
+  opts?: { onError?: (msg: string) => void },
+) {
   const [cwd, setCwd] = useState<string | null>(initialCwd)
   const [dirs, setDirs] = useState<FsEntry[]>([])
   const [files, setFiles] = useState<FsEntry[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const { refreshGit } = useGitStatus(cwd)
 
   const load = useCallback(
@@ -26,7 +28,6 @@ export function usePaneState(initialCwd: string | null = null) {
       if (!path) return
       setCwd(path)
       setLoading(true)
-      setError(null)
       try {
         const r = await shell.fs.list(path)
         setDirs(r.dirs || [])
@@ -38,14 +39,14 @@ export function usePaneState(initialCwd: string | null = null) {
         } catch {}
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
-        setError(msg || "No se pudo leer el directorio")
+        opts?.onError?.(msg || "No se pudo leer el directorio")
       } finally {
         setLoading(false)
         refreshGit()
       }
     },
-    [refreshGit],
+    [refreshGit, opts?.onError],
   )
 
-  return { cwd, setCwd, dirs, files, loading, error, load }
+  return { cwd, setCwd, dirs, files, loading, load }
 }

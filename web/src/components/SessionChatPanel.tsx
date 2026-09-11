@@ -80,7 +80,17 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const { getCachedMessages, cacheMessages } = useOfflineCache(baseProps.flags)
   const [localRevertID, setLocalRevertID] = useState<string | null>(null)
   const [stopGenerationRef] = useState(() => ({ current: false }))
+  // Guarda anti-deltas tardíos: mientras sigue activo se dropean los deltas
+  // en vuelo del stream abortado y se ignora el doble-clic. NO entra en
+  // isWorking: la burbuja/ring de "respondiendo" deben apagarse en cuanto el
+  // abort se confirma (awaiting=false + sesión idle), no 10s después.
+  const [stopping, setStopping] = useState(false)
   const [showStats, setShowStats] = useState(false)
+  // Carga visible por panel (igual que loadingSessionID móvil): mientras está
+  // activo la lista muestra spinner y el velo anti-salto cubre las etapas
+  // vacío→caché→fetch. Antes era null siempre y la entrada pintaba 3 etapas
+  // visibles (vacío, estimado, fresco) con saltos.
+  const [panelLoadingID, setPanelLoadingID] = useState<string | null>(null)
 
   // Sincroniza caché offline tras cada reconciliación exitosa — evita que un revert
   // borrado en el server quede en IndexedDB y se reinyecte vía preload al recargar
@@ -92,6 +102,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
 
   useEffect(() => {
     let cancelled = false
+    setPanelLoadingID(session.id)
     msgs.clearSession()
     // Cache-first en desktop igual que móvil: pinta historial local de inmediato.
     if (baseProps.flags.offlineCache) {
@@ -101,7 +112,9 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         }
       }).catch(() => {})
     }
-    msgs.loadSelected(session.id, session.directory).catch(() => undefined)
+    msgs.loadSelected(session.id, session.directory).catch(() => undefined).finally(() => {
+      if (!cancelled) setPanelLoadingID((c) => (c === session.id ? null : c))
+    })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id, session.directory])
@@ -252,7 +265,10 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID, onOpenConnect, visualPromptContext, onClearVisualSelection])
 
   const handleAbort = useCallback(async () => {
+    // Doble clic: el flag se pone sincrónico abajo, el segundo llamado sale acá.
+    if (stopGenerationRef.current) return
     stopGenerationRef.current = true
+    setStopping(true)
     msgs.setAwaitingAssistantReply(false)
     msgs.completionShouldPlayRef.current = false
     msgs.setMessages((prev) => {
@@ -263,11 +279,21 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         return m
       })
     })
-    try { await msgs.abortSession(session.id, session.directory) } catch { /* ignore */ }
+    try {
+      await msgs.abortSession(session.id, session.directory)
+    } catch (e) {
+      // Antes se tragaba en silencio y el server seguía generando ("no para").
+      msgs.setRuntimeError(`No se pudo detener la generación: ${(e as Error)?.message ?? String(e)}`)
+    }
     msgs.loadSelected(session.id, session.directory).catch(() => undefined)
     onSettled(session.id, session.directory)
     refresh().catch(() => undefined)
-    setTimeout(() => { stopGenerationRef.current = false }, 2000)
+    // El flag se apaga al confirmar idle (efecto abajo); timeout de seguridad
+    // por si el server nunca reporta (antes: 2s fijos que reabrían el stream).
+    setTimeout(() => {
+      stopGenerationRef.current = false
+      setStopping(false)
+    }, 10000)
   }, [msgs, session, refresh, onSettled])
 
   const handleRevertToMessage = useCallback(async (messageID: string) => {
@@ -362,9 +388,13 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     })
   })
 
+  // Higiene del flag visual: stopping ya no entra en isWorking (ver arriba),
+  // así que se apaga en cuanto no hay trabajo. El guard stopGenerationRef NO
+  // se toca acá: debe sobrevivir unos segundos para dropear deltas tardíos
+  // en vuelo; lo apaga el timeout de handleAbort o el próximo handleSend.
   useEffect(() => {
-    if (!isWorking && stopGenerationRef.current) stopGenerationRef.current = false
-  }, [isWorking])
+    if (!isWorking && stopping) setStopping(false)
+  }, [isWorking, stopping])
 
   // Polling desktop: reconciliación periódica incluso con SSE vivo (reconnect perdido sin replay).
   // Antes hacía `if(isStreamingActive) return` → con SSE vivo nunca hacía fetch y el pull
@@ -404,7 +434,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     isSending: msgs.isSending,
     isWorking,
     showTypingBubble: isWorking,
-    loadingSessionID: null,
+    loadingSessionID: panelLoadingID,
     selectedID: session.id,
     activeModelOption: panelModelOption,
     activeModelVariants: panelModelVariants,
@@ -444,7 +474,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     handleRedo, handleCompact, handleRevertToMessage, handleEditMessage,
     handleQuestionReply, handleQuestionReject, handleDismissQuestion,
     handlePermissionApprove, handlePermissionReject, handleDismissPermission, onShellExecute,
-    onChangeAgentGlobal, onOpenInThisPanel, onOpenBrowser, outboxActions,
+    onChangeAgentGlobal, onOpenInThisPanel, onOpenBrowser, outboxActions, panelLoadingID,
   ])
 
   const [dropZone, setDropZone] = useState<"left" | "right" | "top" | "bottom" | "center" | null>(null)
@@ -490,8 +520,9 @@ export const SessionChatPanel = memo(function SessionChatPanel({
             // abrir el editor con un nombre pelado crea tabs basura que 404ean
             // en /shell/fs/read en cada carga. Solo abrir si es absoluta; si
             // no, la ruta cae al composer como texto (igual que payload file).
-            if (isAbsoluteFsPath(filePath)) {
-              onOpenFile?.(filePath, panelIndex, zone)
+            // Zona baja → al chat; resto → a la par (split con editor).
+            if (isAbsoluteFsPath(filePath) && zone !== "bottom" && onOpenFile) {
+              onOpenFile(filePath, panelIndex, zone)
             } else {
               window.dispatchEvent(new CustomEvent("plugin:insert-text", { detail: filePath }))
             }
@@ -516,10 +547,14 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           } else if (payload.kind === "tab") {
             // Ignorar tab suelto
           } else if (payload.kind === "file") {
-            // Drop to agent: la ruta aparece en el chat (mismo canal que el
-            // drop directo sobre el composer). El Composer lo agrega a su
-            // valor local sin pisar lo ya tipeado.
-            window.dispatchEvent(new CustomEvent("plugin:insert-text", { detail: payload.path }))
+            // Drop de archivo sobre el chat: solo los archivos usan zonas.
+            // Zona baja → la ruta va al chat (agente); resto de zonas →
+            // el archivo se abre a la par (split con editor en esa zona).
+            if (zone === "bottom" || !onOpenFile) {
+              window.dispatchEvent(new CustomEvent("plugin:insert-text", { detail: payload.path }))
+            } else {
+              onOpenFile(payload.path, panelIndex, zone)
+            }
           } else if (payload.kind === "unknown" && raw) {
             // Texto plano sin forma de payload (p. ej. desde el explorador
             // externo): también va al agente en vez de perderse.

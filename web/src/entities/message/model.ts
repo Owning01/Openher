@@ -99,6 +99,16 @@ export type RenderedMessage = {
   turnMode?: string
   tokens?: MessageTokens
   cost?: number
+  /** Aviso largo del server (catálogo Code Mode): se renderiza colapsado. */
+  isToolCatalog?: boolean
+}
+
+/** Resumen de archivos cambiados en un turno (prompt user + respuestas). */
+export type TurnChanges = {
+  id: string
+  /** Primeros ~80 chars del prompt que abrió el turno. */
+  label: string
+  files: FileDiff[]
 }
 
 export type StreamingPart = {

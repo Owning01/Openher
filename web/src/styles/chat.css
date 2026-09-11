@@ -531,6 +531,40 @@
   background-image: var(--chat-bg-image, none);
 }
 
+/* Chat virtualizado (Virtuoso, estilo Cursor): el scroller propio rellena el
+   root flexible. Sin anclaje nativo — el follow/output y el ancla por mensaje
+   son manuales; el nativo pelearía y produciría el salto doble al restaurar. */
+.messages-virtuoso {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--chat-bg-color, var(--surface));
+  background-image: var(--chat-bg-image, none);
+}
+
+:root[data-theme="dark"] .messages-virtuoso {
+  background-color: var(--chat-bg-color, #000);
+  background-image: var(--chat-bg-image, none);
+}
+
+/* Anclaje nativo del navegador: compensa gratis el crecimiento ENCIMA del
+   viewport (imágenes tardías, highlight, fuentes, merge caché→fetch) sin el
+   que la lectura a mitad se desplaza sola. Solo el scroller virtualizado lo
+   apaga: sus items absolutos romperían la heurística del ancla y ahí el
+   follow/output + ancla por mensaje son manuales. */
+.messages {
+  overflow-anchor: auto;
+}
+[data-virtuoso-scroller] {
+  overflow-anchor: none;
+}
+
+[data-virtuoso-scroller] {
+  overscroll-behavior-y: contain;
+  flex: 1;
+}
+
 .scroll-to-bottom {
   position: absolute;
   bottom: 20px;
@@ -1745,6 +1779,28 @@
   max-width: 100%;
 }
 
+/* Aviso de catálogo Code Mode: tarjeta compacta colapsada; al expandir,
+   altura fija con scroll en vez de estirar el chat. */
+.tool-catalog-card {
+  margin: 2px 0;
+}
+
+.tool-catalog-card .collapsible-toggle {
+  font-size: 0.8rem;
+}
+
+.tool-catalog-body {
+  margin: 4px 0 8px 0;
+  padding: 8px 12px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-width: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .tool-part-pre {
   margin: 0;
   padding: 0;
@@ -2912,6 +2968,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .rename-input {
@@ -2923,7 +2981,7 @@
   background: var(--surface);
   color: var(--text);
   width: 100%;
-  min-width: 140px;
+  min-width: 0;
   outline: none;
 }
 
