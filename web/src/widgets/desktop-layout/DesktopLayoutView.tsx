@@ -36,7 +36,6 @@ export type DesktopLayoutViewProps = {
   }
   openBrowserAsTab: (url: string, targetPanel?: number) => void
   handleOpenKanban: () => void
-  handleOpenDebate: () => void
   rightSidebarCollapsed: boolean
   setRightSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>
   setShowPluginsModal: (s: boolean) => void
@@ -169,7 +168,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     desktopLayout,
     openBrowserAsTab,
     handleOpenKanban,
-    handleOpenDebate,
     rightSidebarCollapsed,
     setRightSidebarCollapsed,
     setShowPluginsModal,
@@ -333,7 +331,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         desktopLayout={desktopLayout}
         openBrowserAsTab={openBrowserAsTab}
         handleOpenKanban={handleOpenKanban}
-        handleOpenDebate={handleOpenDebate}
         setShowPluginsModal={setShowPluginsModal}
         memInfo={memInfo}
         formatBytes={formatBytes}

@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, type ReactNode } from "react"
-import { SettingsIcon, SunIcon, MoonIcon, FolderIcon, GraduationCapIcon, LayersIcon } from "../Icons"
+import { SettingsIcon, SunIcon, MoonIcon, FolderIcon, GraduationCapIcon } from "../Icons"
 import { WeatherChip } from "./WeatherChip"
 import { useT } from "../i18n-context"
 import type { ViewType } from "../types"
@@ -18,7 +18,6 @@ type NavBarProps = {
 const navItems: Array<{ view: ViewType; icon: ReactNode; label: string }> = [
   { view: "pcFiles", icon: <FolderIcon size={18} />, label: "Archivos" },
   { view: "learning", icon: <GraduationCapIcon size={18} />, label: "learning.title" },
-  { view: "debate", icon: <LayersIcon size={18} />, label: "Debate" },
   { view: "settings", icon: <SettingsIcon size={18} />, label: "nav.settings" }
 ]
 

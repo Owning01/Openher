@@ -19,6 +19,8 @@ import type { ServerConfig, DataMode, SessionView, CommandInfo } from "../types"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { formatSelectionForPrompt } from "../hooks/useVisualSelection"
 import { keepMessagesBefore, keepMessagesThrough } from "../features/chat/domain/message-order"
+import { DebateRoom } from "../features/debate/DebateRoom"
+import { DEBATE_OPEN_EVENT } from "../features/debate/debateStore"
 
 type Props = {
   session: SessionView
@@ -89,6 +91,18 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   // vacío→caché→fetch. Antes era null siempre y la entrada pintaba 3 etapas
   // visibles (vacío, estimado, fresco) con saltos.
   const [panelLoadingID, setPanelLoadingID] = useState<string | null>(null)
+  // Sala de debate por sesión (drawer): la abre el DebateChip del header vía
+  // evento `debate:open` solo cuando el origen es esta sesión.
+  const [debateOpen, setDebateOpen] = useState(false)
+  useEffect(() => { setDebateOpen(false) }, [session.id])
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ originSessionID?: string }>).detail?.originSessionID
+      if (id && id === session.id) setDebateOpen(true)
+    }
+    window.addEventListener(DEBATE_OPEN_EVENT, onOpen)
+    return () => window.removeEventListener(DEBATE_OPEN_EVENT, onOpen)
+  }, [session.id])
 
   // Sincroniza caché offline tras cada reconciliación exitosa — evita que un revert
   // borrado en el server quede en IndexedDB y se reinyecte vía preload al recargar
@@ -638,6 +652,11 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           franja superior del panel (DesktopPanelRenderer/DesktopGrid). Un
           segundo div.tab-bar aquí duplicaba el header al abrir archivos. */}
       <ChatView {...chatProps} />
+      {debateOpen && (
+        <div className="debate-drawer" role="complementary" aria-label="Debate">
+          <DebateRoom config={config} originSessionID={session.id} onClose={() => setDebateOpen(false)} />
+        </div>
+      )}
       {msgs.runtimeError && <ErrorModal message={msgs.runtimeError} onClose={() => msgs.setRuntimeError(null)} />}
     </div>
   )

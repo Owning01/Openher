@@ -23,7 +23,6 @@ export interface ActivityBarProps {
   desktopLayout: DesktopLayout
   openBrowserAsTab: (url: string) => void
   handleOpenKanban: () => void
-  handleOpenDebate: () => void
   setShowPluginsModal: (v: boolean) => void
   memInfo: MemoryInfo | null
   formatBytes: (bytes: number) => string
@@ -41,7 +40,6 @@ export const ActivityBar = memo(function ActivityBar({
   desktopLayout,
   openBrowserAsTab,
   handleOpenKanban,
-  handleOpenDebate,
   setShowPluginsModal,
   memInfo,
   formatBytes,
@@ -124,28 +122,6 @@ export const ActivityBar = memo(function ActivityBar({
             e.dataTransfer.effectAllowed = "move"
           }}
           onClick={handleOpenKanban}
-        >
-          <LayersIcon size={18} />
-        </button>
-
-        <button
-          type="button"
-          data-item="debate"
-          className={`activity-btn${
-            tabStacks?.some((s) => s.includes("plugin:debate:room")) ||
-            desktopLayout.sessions.includes("plugin:debate:room")
-              ? " active"
-              : ""
-          }`}
-          title="Debate"
-          aria-label="Debate"
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData("application/x-opencode-path", "plugin:debate:room")
-            e.dataTransfer.setData("text/plain", "plugin:debate:room")
-            e.dataTransfer.effectAllowed = "move"
-          }}
-          onClick={handleOpenDebate}
         >
           <LayersIcon size={18} />
         </button>

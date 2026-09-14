@@ -69,8 +69,15 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       return
     }
 
-    // Reemitir eventos hacia el bus de plugins
-    pluginBus.emit(type, { ...p, sessionID: deps.sessionID, directory: deps.directory })
+    // Reemitir eventos hacia el bus de plugins. Precedencia de atribución
+    // (debate Fase 2): no pisar el origen del evento con la sesión visible;
+    // el fallback a deps.sessionID mantiene heartbeat/status viejos.
+    const _d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+    pluginBus.emit(type, {
+      ...p,
+      sessionID: (p.sessionID as string | undefined) ?? (_d.sessionID as string | undefined) ?? (_d.originSessionID as string | undefined) ?? deps.sessionID,
+      directory: (p.directory as string | undefined) ?? (_d.directory as string | undefined) ?? deps.directory,
+    })
     pluginBus.emit("session.updated", { sessionID: deps.sessionID, directory: deps.directory, type })
 
     if (type === "message.part.updated") {

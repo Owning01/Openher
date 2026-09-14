@@ -16,7 +16,7 @@ import type {
 import { DEFAULT_SIGNALING_URL } from "./model"
 
 // Helpers
-const allViewTypes: ViewType[] = ["settings", "sessions", "detail", "help", "learning", "pcFiles", "studio", "debate"]
+const allViewTypes: ViewType[] = ["settings", "sessions", "detail", "help", "learning", "pcFiles", "studio"]
 const allHelpPages: HelpPage[] = ["overview", "server", "network", "troubleshooting", "commands"]
 const allConnectionStates: ConnectionState[] = ["idle", "connecting", "connected", "reconnecting", "offline"]
 const allDataModes: DataMode[] = ["full", "saver", "ultra", "miser"]
@@ -128,9 +128,9 @@ describe("FeatureFlags", () => {
 // ViewType / HelpPage
 // ---------------------------------------------------------------------------
 describe("ViewType", () => {
-  it("contiene 8 valores esperados", () => {
-    expect(allViewTypes).toHaveLength(8)
-    expect(allViewTypes).toEqual(expect.arrayContaining(["settings", "sessions", "detail", "help", "learning", "pcFiles", "studio", "debate"]))
+  it("contiene 7 valores esperados", () => {
+    expect(allViewTypes).toHaveLength(7)
+    expect(allViewTypes).toEqual(expect.arrayContaining(["settings", "sessions", "detail", "help", "learning", "pcFiles", "studio"]))
   })
 
   it("cada ViewType es string no vacío", () => {

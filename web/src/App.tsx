@@ -119,7 +119,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           desktopLayout={c.desktopLayout}
           openBrowserAsTab={c.openBrowserAsTab}
           handleOpenKanban={c.handleOpenKanban}
-          handleOpenDebate={c.handleOpenDebate}
           rightSidebarCollapsed={c.rightSidebarCollapsed}
           setRightSidebarCollapsed={c.setRightSidebarCollapsed}
           setShowPluginsModal={c.setShowPluginsModal}

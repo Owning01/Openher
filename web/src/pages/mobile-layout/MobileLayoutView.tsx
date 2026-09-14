@@ -1,7 +1,9 @@
-import React, { Suspense, memo, useEffect, useRef } from "react"
+import React, { Suspense, memo, useEffect, useRef, useState } from "react"
 import type { ViewType, ServerConfig, FeatureFlags, ChatSettings, AgentOption, PromptSnippet, ServerProfile, ProviderInfo } from "../../types"
 import type { LanguageCode } from "../../i18n"
 import { NavBar } from "../../components/NavBar"
+import { DebateRoom } from "../../features/debate/DebateRoom"
+import { DEBATE_OPEN_EVENT } from "../../features/debate/debateStore"
 import { SessionsPage } from "../sessions/SessionsPage"
 import { DetailPage } from "../detail/DetailPage"
 import { lazyRetry } from "../../utils/lazyRetry"
@@ -10,7 +12,6 @@ const SettingsPanel = lazyRetry(() => import("../../components/SettingsPanel").t
 const HelpPage = lazyRetry(() => import("../../components/HelpPage").then((m) => ({ default: m.HelpPage })))
 const LearningPage = lazyRetry(() => import("../../features/learning/LearningPage").then((m) => ({ default: m.default })))
 const PCFilesPanel = lazyRetry(() => import("../../features/pc-files/PCFilesPanel").then((m) => ({ default: m.PCFilesPanel })))
-const DebatePanel = lazyRetry(() => import("../../features/debate/DebatePanel").then((m) => ({ default: m.DebatePanel })))
 
 export type MobileLayoutViewProps = {
   view: ViewType
@@ -165,6 +166,18 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
     config,
     activeSessionDir,
   } = props
+
+  // Sala de debate por sesión (bottom sheet): la abre el DebateChip del header
+  // vía evento `debate:open`. Reutiliza .sheet-backdrop/.bottom-sheet.
+  const [debateSessionID, setDebateSessionID] = useState<string | null>(null)
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ originSessionID?: string }>).detail?.originSessionID
+      if (id) setDebateSessionID(id)
+    }
+    window.addEventListener(DEBATE_OPEN_EVENT, onOpen)
+    return () => window.removeEventListener(DEBATE_OPEN_EVENT, onOpen)
+  }, [])
 
   // Teclado en pantalla: sin plugin nativo, visualViewport avisa y la UI
   // compacta (la barra inferior se oculta para no tapar el composer).
@@ -321,16 +334,23 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
           </div>
         )}
 
-        {view === "debate" && (
-          <div className="debate-view" style={{ height: "calc(100dvh - 56px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando debate…</div>}>
-              <DebatePanel config={config} />
-            </Suspense>
-          </div>
-        )}
       </main>
       {view !== "detail" && (
         <NavBar variant="bottom" view={view} onNavigate={onNavigate} onToggleLightMode={onToggleLightMode} />
+      )}
+      {debateSessionID && (
+        <div className="sheet-backdrop" onClick={() => setDebateSessionID(null)}>
+          <section
+            className="bottom-sheet debate-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Debate"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sheet-handle" aria-hidden="true" />
+            <DebateRoom config={config ?? null} originSessionID={debateSessionID} onClose={() => setDebateSessionID(null)} />
+          </section>
+        </div>
       )}
     </div>
   )

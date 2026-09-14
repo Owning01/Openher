@@ -1,0 +1,143 @@
+[
+  {
+    "id": "D01",
+    "category": "arquitectura",
+    "topic": "Monorepo web+desktop vs repos separados para OpenHer",
+    "context": "web/ (React+Capacitor) y desktop-app/ (Rust) comparten tipos y protocolo debate. El build desktop empaqueta web/dist.",
+    "goodOutcome": "Mantener monorepo con contratos versionados (schema + eventos) y builds independientes por carpeta."
+  },
+  {
+    "id": "D02",
+    "category": "arquitectura",
+    "topic": "Store de debate keyed por sesión vs store global",
+    "context": "El debate pertenece a la sesión que lo invocó; hay riesgo de mezclar actas entre chats si el store es global.",
+    "goodOutcome": "Store keyed por originSessionID, dedupe por (debateID, seq), filtro por sesión en todos los selectores."
+  },
+  {
+    "id": "D03",
+    "category": "arquitectura",
+    "topic": "Canal append-only vs historial reescribible en debates",
+    "context": "Reescribir el pasado rompería KV-cache y la auditoría; el canal crece sin cota si no se resume.",
+    "goodOutcome": "Canal append-only + resumen rodante cada N turnos con puntero, nunca reescritura."
+  },
+  {
+    "id": "D04",
+    "category": "arquitectura",
+    "topic": "Aislado (sesión por rol) vs compartido (un canal) como default",
+    "context": "Aislado cuesta más tokens pero evita contaminación; compartido reusa KV-cache pero acopla contextos.",
+    "goodOutcome": "Default isolated; shared solo opt-in explícito por debate barato o con poco contexto."
+  },
+  {
+    "id": "D05",
+    "category": "arquitectura",
+    "topic": "Polling vs WebSocket para eventos en vivo del debate",
+    "context": "El plugin emite rpc.debate.* en vivo; el cliente debe pintar turnos sin recargar y rehidratar tras crash.",
+    "goodOutcome": "Eventos push en vivo + snapshot debate/state para rehidratar; polling solo como fallback."
+  },
+  {
+    "id": "D06",
+    "category": "arquitectura",
+    "topic": "Zustand vs Context para el estado de debates por sesión",
+    "context": "Múltiples paneles montados (desktop drawer + mobile sheet) pueden duplicar eventos sin idempotencia.",
+    "goodOutcome": "Zustand con update idempotente por seq y test de 2 paneles → 1 entrada."
+  },
+  {
+    "id": "D07",
+    "category": "arquitectura",
+    "topic": "Rust sin Tauri (wry+tiny_http) vs Tauri para la app desktop",
+    "context": "Se necesita servir web/dist en :4848, WS PTY y proxy stats con binario chico y sin runtime extra.",
+    "goodOutcome": "Mantener Rust directo (wry+tiny_http+hyper) mientras el binario y el mantenimiento sigan acotados."
+  },
+  {
+    "id": "D08",
+    "category": "arquitectura",
+    "topic": "OpenTelemetry GenAI en debates: spans por rol vs un span global",
+    "context": "Sin spans por turno no se puede atribuir tokens/latencia por rol ni detectar loops.",
+    "goodOutcome": "Span invoke_agent por debate, hijo chat por turno de rol, nieto execute_tool por lectura de adjunto."
+  },
+  {
+    "id": "D09",
+    "category": "bugs",
+    "topic": "Trailer JSON final se rompe cuando el rol usa code fence",
+    "context": "El parseo posicional busca el último {\"sender\"; con fence o JSON partido el turno queda UNKNOWN y no hay consenso.",
+    "goodOutcome": "Parseo tolerante + instrucción 'JSON en una línea al final, sin fence' + reintento de un turno ante UNKNOWN."
+  },
+  {
+    "id": "D10",
+    "category": "bugs",
+    "topic": "Carrera entre intervene y el turno en curso pierde la intervención",
+    "context": "El humano interviene mientras un rol genera; sin cola con seq propio el mensaje puede no ser leído.",
+    "goodOutcome": "Cola de intervención con seq propio que cada rol consume desde su cursor antes de generar."
+  },
+  {
+    "id": "D11",
+    "category": "bugs",
+    "topic": "Evento duplicado pinta el turno dos veces en dos paneles",
+    "context": "Heartbeat y status reenvían eventos; sin dedupe por seq el drawer duplica burbujas.",
+    "goodOutcome": "Dedupe por (debateID, seq) en el store + precedencia de sessionID documentada."
+  },
+  {
+    "id": "D12",
+    "category": "bugs",
+    "topic": "Adjunto on-demand nunca entregado deja consenso falso",
+    "context": "Un rol pide attachments que no se pueden leer; el debate cierra en consenso aunque falta evidencia.",
+    "goodOutcome": "Consenso condicionado si hay degradación de adjuntos; advertencia explícita en el acta."
+  },
+  {
+    "id": "D13",
+    "category": "bugs",
+    "topic": "Debate colgado por wait() que nunca resuelve tras cerrar la vista",
+    "context": "Cerrar el drawer no debe matar el debate, pero tampoco dejar prompts colgados sin deadline.",
+    "goodOutcome": "Deadline duro maxMinutes + stop siempre vivo + state rehidratable al reabrir."
+  },
+  {
+    "id": "D14",
+    "category": "bugs",
+    "topic": "Cascada de conformidad: todos pasan a CONSENSUS sin evidencia nueva",
+    "context": "Un rol cede porque los demás cedieron, sin resolver sus blockingIssues; el acta esconde el disenso.",
+    "goodOutcome": "Detector de conformidad: cambio de postura sin evidencia nueva = voto débil, se pide justificar y se registra minoría."
+  },
+  {
+    "id": "D15",
+    "category": "producto",
+    "topic": "Corte por estabilidad vs corte por rondas fijas",
+    "context": "Rondas fijas cortan debates buenos o alargan debates estancados; estabilidad necesita detector fiable.",
+    "goodOutcome": "Corte por estabilidad (firma novelty + Progress Ledger, stallLimit 3) con maxTurns solo como tope de seguridad."
+  },
+  {
+    "id": "D16",
+    "category": "producto",
+    "topic": "Confianza 0-100 por turno: ¿ruido o señal para el árbitro?",
+    "context": "Sin confianza el árbitro no pondera; con confianza mal calibrada el acta sobre-pesa al verborrágico.",
+    "goodOutcome": "Confianza obligatoria agregada por evidencia (blockingIssues resueltos), disensos siempre registrados."
+  },
+  {
+    "id": "D17",
+    "category": "producto",
+    "topic": "Filtro de redundancia por similitud (C5): ¿ahorra o censura?",
+    "context": "Publicar todo gasta tokens; filtrar de más puede silenciar una objeción reformulada.",
+    "goodOutcome": "C5 experimental (default all); entra al default solo con ahorro ≥30% sin degradar calidad >2% en eval ciega."
+  },
+  {
+    "id": "D18",
+    "category": "producto",
+    "topic": "Intervención humana: publicar en canal vs susurrar a un rol",
+    "context": "Susurrar fragmenta el contexto; publicar interrumpe pero mantiene canal único auditable.",
+    "goodOutcome": "interveneMode publish fijo: mensaje kind:user visible para todos, con marca de lectura por rol."
+  },
+  {
+    "id": "D19",
+    "category": "producto",
+    "topic": "Enrutado de modelos: roles baratos + árbitro fuerte",
+    "context": "Usar el modelo fuerte en todos los roles es caro; usar barato en todos degrada el acta.",
+    "goodOutcome": "No adoptar por defecto hasta el eval: requiere ahorro ≥30% sin degradar >2% en revisión ciega."
+  },
+  {
+    "id": "D20",
+    "category": "producto",
+    "topic": "Guardrails de costo con loop-kill en debates largos con adjuntos pesados",
+    "context": "Un debate con adjuntos de 24k chars y loops puede quemar presupuesto; por defecto los guardrails están apagados.",
+    "goodOutcome": "Activar guards solo en este caso (opt-in explícito): aviso al 80%, acta condicionada al 100%, labMode solo-log primero.",
+    "wantsGuards": true
+  }
+]
