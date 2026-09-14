@@ -1,4 +1,4 @@
-//! OpenCode Desktop - shell portable que embebe la web app de OpenHer.
+//! OpenHer Desktop - shell portable que embebe la web app de OpenHer.
 //!
 //! F0-F4: ventana wry (WebView2) + server local (hyper+tokio) que sirve
 //! web/dist y la API /shell/* (explorador, terminales, kanban, updates,
@@ -9,6 +9,7 @@
 #![windows_subsystem = "windows"]
 
 mod api;
+mod app_update;
 mod browser_view;
 mod common;
 mod docsx;
@@ -69,13 +70,13 @@ const DEFAULT_H: f64 = 800.0;
 /// Carpeta con los estáticos de la web app: data/web-dist (release) o rutas
 /// relativas al exe para desarrollo (target/.../web/dist).
 fn web_dist_dir() -> Option<PathBuf> {
-    if let Ok(env) = std::env::var("OPENCODE_DESKTOP_DIST") {
+    if let Ok(env) = std::env::var("OPENHER_DESKTOP_DIST") {
         let p = PathBuf::from(env);
         if p.join("index.html").exists() {
             return Some(p);
         }
     }
-    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("opencode-desktop.exe"));
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("openher-desktop.exe"));
     let dir = exe.parent().unwrap_or(Path::new("."));
     let mut candidates = vec![dir.join("data").join("web-dist"), dir.join("web").join("dist")];
     for up in 1..=3 {
@@ -110,6 +111,10 @@ struct App {
     /// arrancar; si cambia en configuración rige tras reiniciar.
     minimize_to_tray: bool,
     app_state: Option<Arc<AppState>>,
+    /// Carpeta pedida con `--open-dir` en el arranque; se inyecta al WebView
+    /// como `window.__OPENHER_OPEN_DIR__` (y como `?openDir=` para el modo
+    /// navegador cuando falta WebView2).
+    open_dir: Option<String>,
 }
 
 fn kill_all_external(state: &AppState) {
@@ -128,7 +133,7 @@ fn kill_all_external(state: &AppState) {
             .and_then(|mut c| c.wait());
         let _ = child.kill();
         let _ = child.wait();
-        eprintln!("opencode-desktop: external {} pid {} killed on exit", name, pid);
+        eprintln!("openher-desktop: external {} pid {} killed on exit", name, pid);
     }
     // Por si quedaron huérfanos (prewarm viejo, namespace default), matar por CommandLine
     // No bloqueante: best-effort
@@ -162,6 +167,8 @@ enum AppEvent {
     /// y app idle, el request quedaba colgado hasta un evento del OS).
     BrowserWork,
     WindowAction(crate::state::WindowAction),
+    /// Abrir una sesión en la carpeta dada (menú contextual / segunda instancia).
+    OpenDir(String),
 }
 
 #[cfg(windows)]
@@ -355,6 +362,32 @@ fn open_browser_mode(url: &str) {
     let _ = c.spawn();
 }
 
+/// Envía `--open-dir` a una instancia ya viva vía su HTTP local. El handler
+/// `/shell/open-dir` despierta el UI thread y evalúa JS en el WebView.
+fn forward_open_dir(port: u16, dir: &str) -> Result<(), String> {
+    let url = format!("http://127.0.0.1:{port}/shell/open-dir");
+    let body = serde_json::json!({ "dir": dir }).to_string();
+    ureq::post(&url)
+        .timeout(Duration::from_millis(1500))
+        .set("Content-Type", "application/json")
+        .send_string(&body)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Percent-encode mínimo para `?openDir=` (deja separadores de path legibles).
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/'
+            | b':' | b'\\' => out.push(*b as char),
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
+}
+
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() || self.browser_mode {
@@ -414,7 +447,7 @@ impl ApplicationHandler<AppEvent> for App {
                 };
                 if g.maximized || footprint {
                     if footprint && !g.maximized {
-                        eprintln!("opencode-desktop: huella de maximizado vieja ({},{} {}x{}), reabriendo maximizado", g.x, g.y, g.width, g.height);
+                        eprintln!("openher-desktop: huella de maximizado vieja ({},{} {}x{}), reabriendo maximizado", g.x, g.y, g.width, g.height);
                     }
                     restore_maximized = true;
                     if visible && !footprint {
@@ -427,7 +460,7 @@ impl ApplicationHandler<AppEvent> for App {
                     attributes.inner_size = Some(LogicalSize::new(g.width, g.height).into());
                     use_saved_geometry = true;
                 } else {
-                    eprintln!("opencode-desktop: geometría guardada fuera de pantalla ({},{} {}x{}), usando default", g.x, g.y, g.width, g.height);
+                    eprintln!("openher-desktop: geometría guardada fuera de pantalla ({},{} {}x{}), usando default", g.x, g.y, g.width, g.height);
                 }
             }
         }
@@ -474,10 +507,29 @@ impl ApplicationHandler<AppEvent> for App {
         let _ = std::fs::create_dir_all(data.join("webview"));
         let context = WebContext::new(Some(data.join("webview")));
         let ctx: &mut WebContext = self.web_context.get_or_insert(context);
+        // Carpeta pedida con --open-dir (llega antes de que React monte).
+        let open_dir_script = match &self.open_dir {
+            Some(d) => format!(
+                "window.__OPENHER_OPEN_DIR__ = {};",
+                serde_json::to_string(d).unwrap_or_else(|_| "null".into())
+            ),
+            None => String::new(),
+        };
         let builder = WebViewBuilder::with_web_context(ctx)
             .with_url(&self.url)
             .with_devtools(true)
-            .with_initialization_script("window.__OPENCODE_DESKTOP__ = true; document.documentElement.setAttribute('data-frameless','true');")
+            // Document-start: <html> aún no existe (documentElement=null) y el
+            // setAttribute directo lanzaba "Cannot read properties of null" en
+            // consola. Se aplica en cuanto aparece la raíz (antes del paint).
+            .with_initialization_script(
+                "window.__OPENHER_DESKTOP__ = true;\
+                 (function(){var e=document.documentElement;\
+                 if(e){e.setAttribute('data-frameless','true');return}\
+                 var o=new MutationObserver(function(){var r=document.documentElement;\
+                 if(r){r.setAttribute('data-frameless','true');o.disconnect()}});\
+                 o.observe(document,{childList:true,subtree:true})})();",
+            )
+            .with_initialization_script(&open_dir_script)
             // GPU + autoplay. DEBE ser idéntico al del sub-WebView del browser
             // (browser_view::WEBVIEW_BROWSER_ARGS): comparten WebContext y un
             // mismatch de argumentos cuelga la creación del WebView hijo.
@@ -486,7 +538,7 @@ impl ApplicationHandler<AppEvent> for App {
             Ok(wv) => {
                 if self.start_minimized {
                     window.set_visible(false);
-                    eprintln!("opencode-desktop: iniciado minimizado (--autostart/start_minimized) en bandeja");
+                    eprintln!("openher-desktop: iniciado minimizado (--autostart/start_minimized) en bandeja");
                 } else {
                     window.set_visible(true);
                     window.focus_window();
@@ -506,11 +558,11 @@ impl ApplicationHandler<AppEvent> for App {
                 }
             }
             Err(e) => {
-                eprintln!("opencode-desktop: webview error: {e}");
+                eprintln!("openher-desktop: webview error: {e}");
                 // Windows 10 sin runtime WebView2: instalar en background y
                 // abrir en el navegador por defecto mientras tanto.
                 if !webview2_runtime_installed() {
-                    eprintln!("opencode-desktop: WebView2 runtime no encontrado; instalando...");
+                    eprintln!("openher-desktop: WebView2 runtime no encontrado; instalando...");
                     install_webview2_runtime_bg();
                 }
                 // En modo minimizado no abrir navegador automáticamente
@@ -622,6 +674,24 @@ impl ApplicationHandler<AppEvent> for App {
                     window.focus_window();
                 }
             }
+            AppEvent::OpenDir(dir) => {
+                if let Some(window) = &self.window {
+                    if window.is_minimized().unwrap_or(false) {
+                        window.set_minimized(false);
+                    }
+                    window.set_visible(true);
+                    window.focus_window();
+                }
+                if let Some(wv) = &self.webview {
+                    let d = serde_json::to_string(&dir).unwrap_or_else(|_| "null".into());
+                    let js = format!(
+                        "if (window.__openherOpenDir) {{ window.__openherOpenDir({d}); }} else {{ window.__OPENHER_OPEN_DIR__ = {d}; }}"
+                    );
+                    let _ = wv.evaluate_script(&js);
+                } else {
+                    eprintln!("openher-desktop: --open-dir sin WebView listo: {dir}");
+                }
+            }
             AppEvent::WindowAction(action) => {
                 if let Some(window) = &self.window {
                     match action {
@@ -661,7 +731,7 @@ impl ApplicationHandler<AppEvent> for App {
                         }
                     }
                 } else {
-                    eprintln!("opencode-desktop: window action before window created: {:?}", action);
+                    eprintln!("openher-desktop: window action before window created: {:?}", action);
                 }
             }
         }
@@ -727,7 +797,7 @@ impl App {
     }
 }
 
-/// Icono embebido del logo de opencode (resources/icon.ico, 32x32 BMP).
+/// Icono embebido del logo de OpenHer (resources/icon.ico, 32x32 BMP).
 /// Decodificado en runtime: ventana + tray, sin sección de recursos.
 fn icon_rgba32() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let bytes = include_bytes!("../resources/icon.ico");
@@ -836,7 +906,7 @@ fn main() {
     std::panic::set_hook(Box::new(|info| {
         let msg = format!("Error crítico en OpenHer Desktop:\n\n{}", info);
         eprintln!("{}", msg);
-        let _ = std::fs::write("opencode-desktop-error.log", &msg);
+        let _ = std::fs::write("openher-desktop-error.log", &msg);
         #[cfg(windows)]
         unsafe {
             use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
@@ -848,7 +918,9 @@ fn main() {
 
     let config = state::load_config();
     let persisted = state::load_persisted();
-    // Modo headless para autostart de Windows (HKCU\Run OpenCode2Server):
+    // Renombre de identidad: migra el autostart viejo (OpenCodeDesktop) al nuevo.
+    state::migrate_legacy_autostart();
+    // Modo headless para autostart de Windows (HKCU\Run OpenHer2Server):
     // asegura el server :4098 sin abrir UI ni consola (el exe es
     // windows_subsystem="windows") y sale. Lo usa el logon de Windows para
     // que el server levante solo tras reiniciar, en background.
@@ -857,7 +929,7 @@ fn main() {
     let ensure_bg = args.iter().any(|a| a == "--ensure-opencode2");
     if ensure_only || ensure_bg {
         let up = state::ensure_opencode2_running(&config);
-        eprintln!("opencode-desktop: ensure-opencode2 headless up={up}");
+        eprintln!("openher-desktop: ensure-opencode2 headless up={up}");
         if ensure_only {
             std::process::exit(if up { 0 } else { 1 });
         }
@@ -866,7 +938,60 @@ fn main() {
     let args_min = std::env::args().any(|a| a == "--autostart" || a == "--minimized" || a == "--start-minimized");
     let start_minimized = args_min || config.start_minimized;
     if start_minimized {
-        eprintln!("opencode-desktop: flag minimizado detectado (args_min={args_min} config={})", config.start_minimized);
+        eprintln!("openher-desktop: flag minimizado detectado (args_min={args_min} config={})", config.start_minimized);
+    }
+
+    // ============ Menú contextual de Windows + "abrir sesión aquí" ============
+    // Instalación/desinstalación manual sin abrir UI.
+    let want_install = args.iter().any(|a| a == "--install-context-menu");
+    let want_uninstall = args.iter().any(|a| a == "--uninstall-context-menu");
+    if want_install || want_uninstall {
+        let res = state::set_context_menu(want_install);
+        match &res {
+            Ok(()) => eprintln!(
+                "openher-desktop: menú contextual {}",
+                if want_install { "instalado" } else { "desinstalado" }
+            ),
+            Err(e) => eprintln!("openher-desktop: menú contextual falló: {e}"),
+        }
+        std::process::exit(if res.is_ok() { 0 } else { 1 });
+    }
+
+    // --open-dir "<carpeta|archivo>": si ya hay una instancia viva se reenvía
+    // por HTTP y este proceso sale (no abre una segunda ventana); si no, se
+    // inyecta en el WebView al montar.
+    let open_dir: Option<String> = {
+        let mut it = args.iter();
+        let mut raw: Option<String> = None;
+        while let Some(a) = it.next() {
+            if a == "--open-dir" {
+                raw = it.next().cloned();
+                break;
+            }
+        }
+        raw.map(|p| state::open_dir_target(&p).to_string_lossy().to_string())
+    };
+    if let Some(dir) = &open_dir {
+        if let Some(port) = (config.port..(config.port + 24))
+            .find(|p| crate::common::probe_http(*p, "/shell/health", Duration::from_millis(150), &[200]))
+        {
+            match forward_open_dir(port, dir) {
+                Ok(()) => {
+                    eprintln!("openher-desktop: --open-dir reenviado a la instancia :{port}");
+                    std::process::exit(0);
+                }
+                Err(e) => eprintln!("openher-desktop: no se pudo reenviar --open-dir: {e}"),
+            }
+        }
+    }
+
+    // Self-heal del menú contextual (respeta el toggle de config).
+    if config.context_menu {
+        if let Err(e) = state::set_context_menu(true) {
+            eprintln!("openher-desktop: no se pudo registrar el menú contextual: {e}");
+        }
+    } else if state::context_menu_installed() {
+        let _ = state::set_context_menu(false);
     }
 
     // Server HTTP local (Plan 1): hyper+tokio en el puerto principal (estáticos
@@ -877,7 +1002,7 @@ fn main() {
     let std_listener = (port..(port + 200))
         .find_map(|p| std::net::TcpListener::bind(("0.0.0.0", p)).ok())
         .unwrap_or_else(|| {
-            eprintln!("opencode-desktop: no se encontró puerto libre");
+            eprintln!("openher-desktop: no se encontró puerto libre");
             std::process::exit(1);
         });
     let chosen = std_listener.local_addr().map(|a| a.port()).unwrap_or(port);
@@ -907,8 +1032,8 @@ fn main() {
     }
 
     match &app_state.dist {
-        Some(d) => println!("opencode-desktop: sirviendo {} en http://0.0.0.0:{chosen} (Tailscale directo)", d.display()),
-        None => println!("opencode-desktop: AVISO - web/dist no encontrado; la app estará vacía"),
+        Some(d) => println!("openher-desktop: sirviendo {} en http://0.0.0.0:{chosen} (Tailscale directo)", d.display()),
+        None => println!("openher-desktop: AVISO - web/dist no encontrado; la app estará vacía"),
     }
 
     // hyper principal (mmap+br + /shell/*): runtime tokio propio en thread dedicado.
@@ -922,7 +1047,7 @@ fn main() {
                     Ok(listener) => {
                         crate::http_server::serve_listener(hyper_state, listener).await;
                     }
-                    Err(e) => eprintln!("opencode-desktop: hyper no iniciado: {e}"),
+                    Err(e) => eprintln!("openher-desktop: hyper no iniciado: {e}"),
                 }
             });
         }).ok();
@@ -938,23 +1063,23 @@ fn main() {
     // opencode2: headless en background. Si está habilitado (default true) y
     // no responde :4098, lanzarlo detached sin consola. El cmd vacío de
     // configs viejas se auto-descubre (npm-global, no el shim bun corrupto).
-    // Además self-heal del Run OpenCode2Server para que Windows lo levante
+    // Además self-heal del Run OpenHer2Server para que Windows lo levante
     // solo al iniciar sesión aunque el usuario solo haya activado el toggle.
     {
         let cfg_clone = config.clone();
         if cfg_clone.opencode2_enabled {
             if !state::opencode2_autostart_enabled() {
                 if let Err(e) = state::set_opencode2_autostart(true) {
-                    eprintln!("opencode-desktop: no se pudo registrar autostart opencode2: {e}");
+                    eprintln!("openher-desktop: no se pudo registrar autostart opencode2: {e}");
                 } else {
-                    eprintln!("opencode-desktop: autostart opencode2 registrado (HKCU Run OpenCode2Server)");
+                    eprintln!("openher-desktop: autostart opencode2 registrado (HKCU Run OpenHer2Server)");
                 }
             }
             std::thread::Builder::new()
                 .name("opencode2-ensure".into())
                 .spawn(move || {
                     let up = state::ensure_opencode2_running(&cfg_clone);
-                    eprintln!("opencode-desktop: opencode2-ensure headless up={up}");
+                    eprintln!("openher-desktop: opencode2-ensure headless up={up}");
                 })
                 .ok();
         }
@@ -980,18 +1105,18 @@ fn main() {
                     std::thread::sleep(Duration::from_millis(delay - if idx>0 { 2500 + ((idx as u64)-1)*2200 } else {0}));
                     // Vite embed: si dist/index.html existe, no spawnear Node, usar mmap 0ms
                     if p.name == "vioeditor" && PathBuf::from(p.dir).join("dist").join("index.html").exists() {
-                        eprintln!("opencode-desktop: prewarm {} embed static (mmap, sin Node) :{}", p.name, p.port);
+                        eprintln!("openher-desktop: prewarm {} embed static (mmap, sin Node) :{}", p.name, p.port);
                         app_state_clone.external.urls.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), format!("http://127.0.0.1:{}/shell/external/{}/embed/", app_state_clone.port, p.name));
                         continue;
                     }
                     if crate::infrastructure::http::external_router::probe_external(p.name) {
-                        eprintln!("opencode-desktop: prewarm {} ya corriendo :{}", p.name, p.port);
+                        eprintln!("openher-desktop: prewarm {} ya corriendo :{}", p.name, p.port);
                         continue;
                     }
                     let effective = if let (Some(prod), Some(check)) = (p.prod_cmd, p.prod_check) {
                         if PathBuf::from(p.dir).join(check).exists() { prod } else { p.dev_cmd }
                     } else { p.dev_cmd };
-                    eprintln!("opencode-desktop: prewarm {} → {} (prod={})", p.name, effective, p.prod_check.map(|c| PathBuf::from(p.dir).join(c).exists()).unwrap_or(false));
+                    eprintln!("openher-desktop: prewarm {} → {} (prod={})", p.name, effective, p.prod_check.map(|c| PathBuf::from(p.dir).join(c).exists()).unwrap_or(false));
                     let _ = std::fs::create_dir_all(crate::state::data_dir());
                     let log_path = crate::state::data_dir().join(format!("external-{}.log", p.name));
                     let log_file = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
@@ -1035,12 +1160,12 @@ fn main() {
                     match c.spawn() {
                         Ok(child) => {
                             let pid = child.id();
-                            eprintln!("opencode-desktop: prewarm {} pid={pid} :{}", p.name, p.port);
+                            eprintln!("openher-desktop: prewarm {} pid={pid} :{}", p.name, p.port);
                             app_state_clone.external.procs.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), child);
                             app_state_clone.external.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), std::time::Instant::now());
                             app_state_clone.external.urls.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), format!("http://127.0.0.1:{}", p.port));
                         }
-                        Err(e) => eprintln!("opencode-desktop: prewarm {} fallo {e}", p.name),
+                        Err(e) => eprintln!("openher-desktop: prewarm {} fallo {e}", p.name),
                     }
                 }
             })
@@ -1049,7 +1174,7 @@ fn main() {
 
     // WebSocket para terminales en tiempo real (puerto del shell + 1).
     if let Err(e) = ptyx::start_ws_server(app_state.pty.clone(), chosen + 1) {
-        eprintln!("opencode-desktop: ws pty no disponible: {e}");
+        eprintln!("openher-desktop: ws pty no disponible: {e}");
     }
 
     // (El HTTP local lo sirve hyper en el thread "hyper-main"; sin thread por request.)
@@ -1066,6 +1191,23 @@ fn main() {
         }));
     }
 
+    // Open dir: /shell/open-dir desde el HTTP thread → evalúa JS en el WebView.
+    {
+        let od_proxy = proxy.clone();
+        crate::state::set_open_dir_handler(std::sync::Arc::new(move |dir| {
+            let _ = od_proxy.send_event(AppEvent::OpenDir(dir));
+        }));
+    }
+
+    // Self-update: /shell/app-update/apply cierra la app desde el HTTP thread
+    // para que el helper .cmd pueda reemplazar el .exe y relanzarla.
+    {
+        let quit_proxy = proxy.clone();
+        crate::state::set_app_quit_handler(std::sync::Arc::new(move || {
+            let _ = quit_proxy.send_event(AppEvent::Quit);
+        }));
+    }
+
     // Waker: los comandos browser que lleguen por HTTP despiertan el loop
     // (antes, con app idle en Wait, el request colgaba hasta un evento del OS).
     {
@@ -1076,14 +1218,20 @@ fn main() {
     }
 
     if let Err(e) = setup_tray(proxy) {
-        eprintln!("opencode-desktop: tray no disponible: {e}");
+        eprintln!("openher-desktop: tray no disponible: {e}");
+    }
+
+    // Cache-busting + OpenDir para el modo navegador (cuando falta WebView2).
+    let mut app_url = format!("http://127.0.0.1:{chosen}/?v={}", env!("OPENHER_BUILD_ID"));
+    if let Some(d) = &open_dir {
+        app_url.push_str(&format!("&openDir={}", percent_encode(d)));
     }
 
     let mut app = App {
         // ?v=BUILD_ID: cache-busting ante cachés del WebView2 envenenadas.
         // El query cambia la clave de caché sin cambiar el origen (mismo
         // localStorage) y sin tocar el perfil en disco.
-        url: format!("http://127.0.0.1:{chosen}/?v={}", env!("OPENHER_BUILD_ID")),
+        url: app_url,
         window: None,
         webview: None,
         web_context: None,
@@ -1102,6 +1250,7 @@ fn main() {
         start_minimized,
         minimize_to_tray: config.minimize_to_tray,
         app_state: Some(app_state.clone()),
+        open_dir: open_dir.clone(),
     };
     event_loop.run_app(&mut app).unwrap();
 }

@@ -14,7 +14,6 @@ describe("isInternalPayload", () => {
       "plugin:canvas",
       "plugin:external:m3e-canvas",
       "__kanban__",
-      "__stats__",
       "terminal:abc",
       "terminal-tab:a:b",
       "editor:/x/y.ts",

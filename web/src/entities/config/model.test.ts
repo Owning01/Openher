@@ -16,7 +16,7 @@ import type {
 import { DEFAULT_SIGNALING_URL } from "./model"
 
 // Helpers
-const allViewTypes: ViewType[] = ["settings", "sessions", "detail", "help", "stats", "quickchat"]
+const allViewTypes: ViewType[] = ["settings", "sessions", "detail", "help", "learning", "pcFiles", "studio", "debate"]
 const allHelpPages: HelpPage[] = ["overview", "server", "network", "troubleshooting", "commands"]
 const allConnectionStates: ConnectionState[] = ["idle", "connecting", "connected", "reconnecting", "offline"]
 const allDataModes: DataMode[] = ["full", "saver", "ultra", "miser"]
@@ -85,7 +85,7 @@ describe("FeatureFlags", () => {
       fileBrowser: true, inlineDiff: true, contextMenu: true, planBreakdown: true,
       gitOps: true, mcpConfig: true, sessionArchive: true, streamingFull: true,
       offlineCache: true, questionAuto: true, permissionUI: true,
-      autoOpencode2: true, virtualChat: true,
+      autoOpencode2: true,
     }
     for (const v of Object.values(f)) expect(v).toBe(true)
   })
@@ -95,19 +95,19 @@ describe("FeatureFlags", () => {
       fileBrowser: false, inlineDiff: false, contextMenu: false, planBreakdown: false,
       gitOps: false, mcpConfig: false, sessionArchive: false, streamingFull: false,
       offlineCache: false, questionAuto: false, permissionUI: false,
-      autoOpencode2: false, virtualChat: false,
+      autoOpencode2: false,
     }
     for (const v of Object.values(f)) expect(v).toBe(false)
   })
 
-  it("tiene exactamente 13 claves booleanas", () => {
+  it("tiene exactamente 12 claves booleanas", () => {
     const f: FeatureFlags = {
       fileBrowser: true, inlineDiff: false, contextMenu: true, planBreakdown: false,
       gitOps: true, mcpConfig: false, sessionArchive: true, streamingFull: false,
       offlineCache: true, questionAuto: false, permissionUI: true,
-      autoOpencode2: false, virtualChat: true,
+      autoOpencode2: false,
     }
-    expect(Object.keys(f)).toHaveLength(13)
+    expect(Object.keys(f)).toHaveLength(12)
     for (const v of Object.values(f)) expect(typeof v).toBe("boolean")
   })
 
@@ -116,7 +116,7 @@ describe("FeatureFlags", () => {
       fileBrowser: true, inlineDiff: false, contextMenu: true, planBreakdown: true,
       gitOps: false, mcpConfig: true, sessionArchive: false, streamingFull: true,
       offlineCache: false, questionAuto: true, permissionUI: false,
-      autoOpencode2: true, virtualChat: false,
+      autoOpencode2: true,
     }
     expect(f.fileBrowser).toBe(true)
     expect(f.gitOps).toBe(false)
@@ -128,9 +128,9 @@ describe("FeatureFlags", () => {
 // ViewType / HelpPage
 // ---------------------------------------------------------------------------
 describe("ViewType", () => {
-  it("contiene 6 valores esperados", () => {
-    expect(allViewTypes).toHaveLength(6)
-    expect(allViewTypes).toEqual(expect.arrayContaining(["settings", "sessions", "detail", "help", "stats", "quickchat"]))
+  it("contiene 8 valores esperados", () => {
+    expect(allViewTypes).toHaveLength(8)
+    expect(allViewTypes).toEqual(expect.arrayContaining(["settings", "sessions", "detail", "help", "learning", "pcFiles", "studio", "debate"]))
   })
 
   it("cada ViewType es string no vacío", () => {

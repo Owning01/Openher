@@ -102,7 +102,7 @@ html[data-desktop="true"] .activity-ram-wv {
 font-size: 0.75rem;
     opacity: 0.8;
 }
-html[data-desktop="true"] .desktop-sidebar-body > .shell-explorer, html[data-desktop="true"] .desktop-sidebar-body > .shell-kanban, html[data-desktop="true"] .desktop-sidebar-body > .shell-docs, html[data-desktop="true"] .desktop-sidebar-body > .shell-updates, html[data-desktop="true"] .desktop-sidebar-body > .shell-stats, html[data-desktop="true"] .desktop-sidebar-body > .shell-labs, html[data-desktop="true"] .desktop-sidebar-body > .shell-config {
+html[data-desktop="true"] .desktop-sidebar-body > .shell-explorer, html[data-desktop="true"] .desktop-sidebar-body > .shell-kanban, html[data-desktop="true"] .desktop-sidebar-body > .shell-docs, html[data-desktop="true"] .desktop-sidebar-body > .shell-updates, html[data-desktop="true"] .desktop-sidebar-body > .shell-labs, html[data-desktop="true"] .desktop-sidebar-body > .shell-config {
 height: 100%;
 }
 html[data-desktop="true"] .app-desktop-content {
@@ -699,7 +699,7 @@ html[data-desktop="true"] .app-shell[data-sidebarpos="top"] > .ade-diff-panel {
 grid-column: 4;
     grid-row: 2;
 }
-html[data-desktop="true"] .app-shell[data-sbhide~="sessions"] .activity-btn[data-item="sessions"], html[data-desktop="true"] .app-shell[data-sbhide~="explorer"] .activity-btn[data-item="explorer"], html[data-desktop="true"] .app-shell[data-sbhide~="terminal"] .activity-btn[data-item="terminal"], html[data-desktop="true"] .app-shell[data-sbhide~="stats"] .activity-btn[data-item="stats"], html[data-desktop="true"] .app-shell[data-sbhide~="browser"] .activity-btn[data-item="browser"], html[data-desktop="true"] .app-shell[data-sbhide~="kanban"] .activity-btn[data-item="kanban"], html[data-desktop="true"] .app-shell[data-sbhide~="quickchat"] .activity-btn[data-item="quickchat"], html[data-desktop="true"] .app-shell[data-sbhide~="scm"] .activity-btn[data-item="scm"], html[data-desktop="true"] .app-shell[data-sbhide~="design"] .activity-btn[data-item="design"], html[data-desktop="true"] .app-shell[data-sbhide~="learning"] .activity-btn[data-item="learning"], html[data-desktop="true"] .app-shell[data-sbhide~="settings"] .activity-btn[data-item="settings"] {
+html[data-desktop="true"] .app-shell[data-sbhide~="sessions"] .activity-btn[data-item="sessions"], html[data-desktop="true"] .app-shell[data-sbhide~="explorer"] .activity-btn[data-item="explorer"], html[data-desktop="true"] .app-shell[data-sbhide~="terminal"] .activity-btn[data-item="terminal"], html[data-desktop="true"] .app-shell[data-sbhide~="browser"] .activity-btn[data-item="browser"], html[data-desktop="true"] .app-shell[data-sbhide~="kanban"] .activity-btn[data-item="kanban"], html[data-desktop="true"] .app-shell[data-sbhide~="scm"] .activity-btn[data-item="scm"], html[data-desktop="true"] .app-shell[data-sbhide~="design"] .activity-btn[data-item="design"], html[data-desktop="true"] .app-shell[data-sbhide~="studio"] .activity-btn[data-item="studio"], html[data-desktop="true"] .app-shell[data-sbhide~="learning"] .activity-btn[data-item="learning"], html[data-desktop="true"] .app-shell[data-sbhide~="settings"] .activity-btn[data-item="settings"] {
 display: none;
 }
 

@@ -58,6 +58,14 @@ fn effective_cmd(def: &ExternalDef) -> &str {
     def.dev_cmd
 }
 
+/// Plugin vite con `dist/` buildado: el shell lo sirve por mmap en
+/// /shell/external/<name>/embed/ sin levantar Node. Genérico para cualquier
+/// def cuyo `prod_check` apunte a un `dist/` presente.
+fn is_static_embed(def: &ExternalDef) -> bool {
+    def.prod_check.map(|c| c.contains("dist")).unwrap_or(false)
+        && PathBuf::from(def.dir).join("dist").join("index.html").is_file()
+}
+
 fn file_mtime_ms(path: &PathBuf) -> u128 {
     std::fs::metadata(path)
         .and_then(|m| m.modified())
@@ -162,6 +170,15 @@ fn defs() -> HashMap<&'static str, ExternalDef> {
         prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\m3e-canvas\node_modules\next\dist\bin\next" start -p 3005 -H 127.0.0.1"#),
         prod_check: Some(r".next\BUILD_ID"),
     });
+    m.insert("anim-lab", ExternalDef {
+        dir: r"G:\Proyectos\anim-lab",
+        port: Some(3060),
+        url: Some("http://127.0.0.1:3060"),
+        dev_cmd: "pnpm exec vite --port 3060 --host 127.0.0.1 --strictPort false",
+        // Con dist/ presente se sirve por mmap (embed) sin levantar Node.
+        prod_cmd: None,
+        prod_check: Some(r"dist\index.html"),
+    });
     m
 }
 
@@ -238,7 +255,7 @@ pub fn handle(
         for (name, def) in defs_map.iter() {
             // evitar duplicado alias
             let running = if def.port.is_some() {
-                let is_vite_embed = *name == "vioeditor" && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
+                let is_vite_embed = is_static_embed(def);
                 if is_vite_embed {
                     true
                 } else {
@@ -250,7 +267,7 @@ pub fn handle(
             };
             let url = def.url.map(|s| s.to_string()).unwrap_or_default();
             let mut stored_url = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(*name).cloned().unwrap_or(url.clone());
-            if *name == "vioeditor" && PathBuf::from(def.dir).join("dist").join("index.html").is_file() {
+            if is_static_embed(def) {
                 let embed_url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
                 if stored_url == url || stored_url.is_empty() {
                     stored_url = embed_url;
@@ -262,6 +279,7 @@ pub fn handle(
                     "opendesign" => "Open Design",
                     "screenshots" => "Screenshots",
                     "vioeditor" => "VioEditor",
+                    "anim-lab" => "Anim Lab",
                     "widgetnotas" => "Widget Notas",
                     _ => name,
                 },
@@ -354,7 +372,7 @@ pub fn handle(
 
     if action == "status" && method == "GET" {
         let running = if def.port.is_some() {
-            let is_vite_embed = (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
+            let is_vite_embed = is_static_embed(&def);
             if is_vite_embed {
                 true
             } else {
@@ -366,7 +384,7 @@ pub fn handle(
         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
         let mut stored = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned().unwrap_or(url.clone());
         // Si es vite embed y no hay URL guardada, usar embed URL
-        if (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file() {
+        if is_static_embed(&def) {
             let embed_url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
             if stored == url || stored.is_empty() {
                 stored = embed_url;
@@ -408,7 +426,7 @@ pub fn handle(
             } else { None }
         };
         if let Some(url) = already_running {
-            let is_vite_embed = (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
+            let is_vite_embed = is_static_embed(&def);
             let need_probe = !is_vite_embed && def.port.is_some();
             let boot_elapsed = mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).get(&name).map(|t| t.elapsed());
             // Sin timestamp (prewarm viejo) → tratar como reciente, no evictar.
@@ -426,7 +444,7 @@ pub fn handle(
         }
         // probe si ya está corriendo externamente (usuario lo lanzó manual) — skip para vite embed, sin lock
         {
-            let is_vite_embed = (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
+            let is_vite_embed = is_static_embed(&def);
             if !is_vite_embed && def.port.is_some() && probe(&def) {
                 mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
                 let url = def.url.map(|s| s.to_string()).unwrap_or_default();
@@ -434,7 +452,7 @@ pub fn handle(
             }
         }
         // Nunca permitir que dos plugins compartan el mismo puerto — skip para vite embed (mmap, sin Node)
-        let is_vite_embed_check = (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
+        let is_vite_embed_check = is_static_embed(&def);
         if !is_vite_embed_check {
             if let Some(port) = def.port {
                 for (other_name, other_def) in defs_map.iter() {
@@ -456,18 +474,15 @@ pub fn handle(
             }
         }
         // Embed static 0ms para vite plugins con dist (sin Node) — vite preview reemplazado por mmap
-        if name == "vioeditor"  {
-            let embed_dist = PathBuf::from(def.dir).join("dist").join("index.html");
-            if embed_dist.is_file() {
-                let url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
-                {
-                    let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner());
-                    urls.insert(name.clone(), url.clone());
-                }
-                mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
-                eprintln!("external: {} embed static → {} (sin spawn)", name, url);
-                return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "url": url, "embed": true })));
+        if is_static_embed(&def) {
+            let url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
+            {
+                let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner());
+                urls.insert(name.clone(), url.clone());
             }
+            mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
+            eprintln!("external: {} embed static → {} (sin spawn)", name, url);
+            return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "url": url, "embed": true })));
         }
         let dir = PathBuf::from(def.dir);
         if !dir.exists() {
@@ -639,7 +654,7 @@ pub fn handle(
 
     if action == "restart" && method == "POST" {
         // Embed estático: no hay proceso, solo invalidar probe y devolver ok para que el frontend recargue con cache-bust
-        let is_vite_embed_restart = (name == "vioeditor" ) && PathBuf::from(def.dir).join("dist").join("index.html").is_file();
+        let is_vite_embed_restart = is_static_embed(&def);
         if is_vite_embed_restart {
             if let Some(port) = def.port { invalidate_probe(port); }
             let url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);

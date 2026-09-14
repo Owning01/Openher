@@ -6,7 +6,7 @@
  * temporalmente en `entities/session` y `entities/ui`. La deduplicación se
  * resolverá en la fase de unificación del barrel `types.ts`.
  * Este archivo es la fuente canónica para AgentOption / ModelOption /
- * Question / Permission / Stats desde el punto de vista de agent.
+ * Question / Permission desde el punto de vista de agent.
  * Solo tipos puros, sin React/fetch/api.
  */
 
@@ -53,6 +53,10 @@ export type ProviderInfo = {
 // ---------------------------------------------------------------------------
 // ServerProvider — proveedor tal como lo devuelve el servidor opencode
 // ---------------------------------------------------------------------------
+export type ServerProviderConnection =
+  | { type: "credential"; id: string; label: string }
+  | { type: "env"; name: string }
+
 export type ServerProvider = {
   id: string
   name: string
@@ -60,6 +64,8 @@ export type ServerProvider = {
   env: string[]
   key?: string
   models: Record<string, unknown>
+  /** v2: cada conexión es una cuenta (credential con label) o una env var. */
+  connections?: ServerProviderConnection[]
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +100,8 @@ export type QuestionInfo = {
   options: QuestionOption[]
   multiple?: boolean
   custom?: boolean
+  /** Clave del form field (v2): q0, q1… Necesaria para mapear la respuesta. */
+  key?: string
 }
 
 export type Question = {
@@ -116,79 +124,4 @@ export type PermissionRequest = {
   sessionID?: string
 }
 
-// ---------------------------------------------------------------------------
-// Stats — métricas y agregaciones del servidor
-// ---------------------------------------------------------------------------
-export type StatsMeta = {
-  sessions: number
-  models: number
-  since: string
-  until: string
-  avg_cost: number
-  db: string
-  filtered: boolean
-}
 
-export type StatsTotals = {
-  input: number
-  output: number
-  reasoning: number
-  cache_read: number
-  cache_write: number
-}
-
-export type StatsRow = {
-  key?: string
-  model?: string
-  id?: string
-  title?: string
-  start?: string
-  sessions: number
-  requests?: number
-  input: number
-  output: number
-  reasoning: number
-  cache_read: number
-  cache_write: number
-  cost: number
-  est?: number
-}
-
-export type StatsLimitRow = {
-  model: string
-  u5h: number
-  u7d: number
-  u30d: number
-  l5h: number | null
-  l7d: number | null
-  l30d: number | null
-}
-
-export type StatsPriceRow = {
-  model: string
-  in: number
-  out: number
-  cr: number
-  cw: number
-}
-
-export type StatsPayload = {
-  meta: StatsMeta
-  totals: StatsTotals
-  cost: number
-  est_total: number
-  stats: {
-    mas_cara: { cost: number; title: string; model: string }
-    mas_tokens: { title: string; model: string }
-    input_medio: number
-  }
-  days: Array<{ day: string; cost: number }>
-  models_chart: Array<{ model: string; cost: number }>
-  by_model: StatsRow[]
-  by_project: StatsRow[]
-  by_day: StatsRow[]
-  by_month: StatsRow[]
-  sessions: StatsRow[]
-  limits: StatsLimitRow[]
-  prices: StatsPriceRow[]
-}

@@ -6,7 +6,7 @@ export const toolMeta: Record<string, { icon: string; label: string }> = {
   edit: { icon: "△", label: "edit" },
   apply_patch: { icon: "△", label: "patch" },
   glob: { icon: "✱", label: "glob" },
-  grep: { icon: "🔍", label: "grep" },
+  grep: { icon: "◎", label: "grep" },
   webfetch: { icon: "%", label: "web" },
   websearch: { icon: "◈", label: "search" },
   todowrite: { icon: "✓", label: "todo" },

@@ -29,7 +29,7 @@ export function useRemoteDesktop(config: DesktopConfig | null, params: StreamPar
   statusRef.current = status
   imageUrlRef.current = imageUrl
 
-  const resetStats = useCallback(() => {
+  const resetCounters = useCallback(() => {
     framesRef.current = 0
     bytesRef.current = 0
     setFps(0)
@@ -48,14 +48,14 @@ export function useRemoteDesktop(config: DesktopConfig | null, params: StreamPar
       setImageUrl(null)
       setInfo(null)
       infoRef.current = null
-      resetStats()
+      resetCounters()
       return
     }
     let cancelled = false
     const controller = new AbortController()
     let fpsTimer: ReturnType<typeof setInterval> | null = null
 
-    resetStats()
+    resetCounters()
     setStatus("connecting")
 
     fpsTimer = setInterval(() => {
@@ -116,7 +116,7 @@ export function useRemoteDesktop(config: DesktopConfig | null, params: StreamPar
         imageUrlRef.current = null
       }
     }
-  }, [config, enabled, params.mode, params.hwnd, params.monitor, params.w, params.q, params.fps, resetStats, retryNonce])
+  }, [config, enabled, params.mode, params.hwnd, params.monitor, params.w, params.q, params.fps, resetCounters, retryNonce])
 
   const refreshInfo = useCallback(async () => {
     if (!config) return null

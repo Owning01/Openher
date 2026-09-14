@@ -87,7 +87,6 @@ describe("parseDockPayload", () => {
   it("parses panel with legacy shell kind", () => {
     expect(parseDockPayload("panel:0:explorer")).toMatchObject({ targetKind: "explorer", targetSessionId: null, fromIndex: 0 })
     expect(parseDockPayload("panel:2:kanban")).toMatchObject({ targetKind: "kanban", targetSessionId: null, fromIndex: 2 })
-    expect(parseDockPayload("panel:0:stats")).toMatchObject({ targetKind: "stats", targetSessionId: null, fromIndex: 0 })
     expect(parseDockPayload("panel:0:terminal")).toMatchObject({ targetKind: "session", targetSessionId: "terminal", fromIndex: 0 })
   })
 

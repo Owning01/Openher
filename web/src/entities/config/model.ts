@@ -3,9 +3,9 @@
  *
  * Extraído de `web/src/types.ts` (Fase 2).
  * Nota de coordinación: `HealthResponse` también existe temporalmente en
- * `entities/session/model.ts`; `ViewType`/`HelpPage` también en
- * `entities/ui/model.ts`. La deduplicación se resolverá en la fase de
- * unificación del barrel `types.ts`.
+ * `entities/session/model.ts`. `ViewType`/`HelpPage` viven SOLO acá: el
+ * comentario anterior que los ubicaba en `entities/ui/model.ts` era falso y
+ * contradecía el invariante de `entities/barrel.test.ts`.
  * Solo tipos puros, sin React/fetch/api. TunnelConfig usa RTCIceServer
  * (lib DOM) sin importar nada extra.
  */
@@ -46,14 +46,13 @@ export type FeatureFlags = {
   questionAuto: boolean
   permissionUI: boolean
   autoOpencode2: boolean
-  virtualChat: boolean
 }
 
 // ---------------------------------------------------------------------------
 // ViewType / HelpPage — navegación de alto nivel de la SPA
 // Duplicado con entities/ui/model.ts — se deduplicará en merge.
 // ---------------------------------------------------------------------------
-export type ViewType = "settings" | "sessions" | "detail" | "help" | "stats" | "quickchat" | "learning" | "pcFiles"
+export type ViewType = "settings" | "sessions" | "detail" | "help" | "learning" | "pcFiles" | "studio" | "debate"
 
 export type HelpPage = "overview" | "server" | "network" | "troubleshooting" | "commands"
 
@@ -73,6 +72,17 @@ export type SSEEvent = {
   id: string
   type: string
   properties: Record<string, unknown>
+}
+
+// ---------------------------------------------------------------------------
+// MCPServerInfo — v2: server MCP con estado (GET /api/mcp)
+// ---------------------------------------------------------------------------
+export type MCPServerStatus = "connected" | "pending" | "disabled" | "failed" | "needs_auth"
+
+export type MCPServerInfo = {
+  name: string
+  status: MCPServerStatus
+  error?: string
 }
 
 // ---------------------------------------------------------------------------

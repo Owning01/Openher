@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { shell, type FsEntry } from "../../shell"
 import { useGitStatus } from "./useGitStatus"
 
@@ -23,13 +23,17 @@ export function usePaneState(
   const [loading, setLoading] = useState(false)
   const { refreshGit } = useGitStatus(cwd)
 
+  const loadSeqRef = useRef(0)
+
   const load = useCallback(
     async (path: string) => {
       if (!path) return
+      const seq = ++loadSeqRef.current
       setCwd(path)
       setLoading(true)
       try {
         const r = await shell.fs.list(path)
+        if (seq !== loadSeqRef.current) return
         setDirs(r.dirs || [])
         setFiles(r.files || [])
         const cur = loadExplorerRecent().filter((p) => p !== path)
@@ -38,11 +42,14 @@ export function usePaneState(
           localStorage.setItem(EXPLORER_RECENT_KEY, JSON.stringify(cur.slice(0, 20)))
         } catch {}
       } catch (e: unknown) {
+        if (seq !== loadSeqRef.current) return
         const msg = e instanceof Error ? e.message : String(e)
         opts?.onError?.(msg || "No se pudo leer el directorio")
       } finally {
-        setLoading(false)
-        refreshGit()
+        if (seq === loadSeqRef.current) {
+          setLoading(false)
+          refreshGit()
+        }
       }
     },
     [refreshGit, opts?.onError],

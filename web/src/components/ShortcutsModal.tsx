@@ -126,7 +126,7 @@ export const ShortcutsModal = memo(function ShortcutsModal({ onClose, desktop: _
                           justifyContent: "space-between",
                           padding: "8px 12px",
                           borderRadius: "var(--radius-sm)",
-                          background: s.enabled ? "var(--surface-2)" : "rgba(255, 255, 255, 0.02)",
+                          background: s.enabled ? "var(--surface-strong)" : "rgba(255, 255, 255, 0.02)",
                           border: "1px solid var(--border)",
                           opacity: s.enabled ? 1 : 0.6,
                         }}

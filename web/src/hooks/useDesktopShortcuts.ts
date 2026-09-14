@@ -123,7 +123,7 @@ export function useDesktopShortcuts({
             closePanel(activePanel)
           }
         } else {
-          // Panel sin tabs (explorer/editor vacío, quickchat, etc.) → cierra el split
+          // Panel sin tabs (explorer/editor vacío, etc.) → cierra el split
           if (desktopLayout.cols > 1 || desktopLayout.rows > 1 || desktopLayout.sessions.some((s: string | null) => s !== null)) {
             closePanel(activePanel)
           }

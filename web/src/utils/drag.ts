@@ -21,7 +21,7 @@ export function parseDragPayload(raw: string): DragPayload {
     return { kind: "kind", value: raw.slice("kind:".length), raw }
   }
   // Ids de tab arrastrados sin prefijo panel:/session: (rail de plugins,
-  // botones de actividad, virtuals __kanban__/__stats__): son tabs, no texto.
+  // botones de actividad, virtuals __kanban__): son tabs, no texto.
   if (
     raw.startsWith("plugin:") ||
     raw.startsWith("editor:") ||
@@ -58,7 +58,7 @@ export type DockTarget = {
   isSingleTab?: boolean
 }
 
-const LEGACY_SHELL_KINDS = new Set(["terminal", "explorer", "kanban", "stats", "browser", "editor", "design"])
+const LEGACY_SHELL_KINDS = new Set(["terminal", "explorer", "kanban", "browser", "editor", "design"])
 
 export function parseDockPayload(raw: string): DockTarget {
   let targetKind = "session"

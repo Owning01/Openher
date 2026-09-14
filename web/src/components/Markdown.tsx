@@ -3,9 +3,10 @@ import ReactMarkdown, { defaultUrlTransform } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Capacitor } from "@capacitor/core"
 import { lowlight } from "../utils/highlight"
-import { cleanInlineCodePath, pathFromOpenherHref } from "../shared/lib/filePaths"
+import { cleanInlineCodePath, localFsPathFromImageSrc, pathFromOpenherHref } from "../shared/lib/filePaths"
 import { remarkFilePaths } from "../shared/lib/remarkFilePaths"
 import { FilePathButton } from "./FilePathButton"
+import { MarkdownImage } from "./MarkdownImage"
 
 // Reemplazo de rehype-highlight: ese paquete embebe lowlight/lib/common
 // (37 lenguajes) de forma inseparable. Este plugin usa solo los registrados.
@@ -72,10 +73,12 @@ function Link({ href, children, ...rest }: ComponentProps<"a">) {
   )
 }
 
-// react-markdown sanitiza URLs con esquema desconocido; el nuestro se preserva
-// para que <Link> lo reconozca.
+// react-markdown sanitiza URLs con esquema desconocido; el nuestro y las rutas
+// locales de imagen se preservan para que <Link>/<MarkdownImage> las manejen.
 function filePathUrlTransform(url: string): string {
-  return pathFromOpenherHref(url) !== null ? url : defaultUrlTransform(url)
+  if (pathFromOpenherHref(url) !== null) return url
+  if (localFsPathFromImageSrc(url)) return url
+  return defaultUrlTransform(url)
 }
 
 // Envuelve cada ocurrencia case-insensitive del query en <mark>.
@@ -204,7 +207,7 @@ function InlineCode({ className, children, ...props }: ComponentProps<"code">) {
   )
 }
 
-const baseComponents = { table: Table, a: Link, code: InlineCode, pre: CodeBlock }
+const baseComponents = { table: Table, a: Link, code: InlineCode, pre: CodeBlock, img: MarkdownImage }
 
 // Caché del árbol renderizado por (texto, highlight): reusar el elemento evita
 // re-parsear react-markdown + lowlight en re-renders sin cambio de texto

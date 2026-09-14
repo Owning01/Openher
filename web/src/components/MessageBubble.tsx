@@ -129,7 +129,7 @@ const TranslationOriginal = memo(function TranslationOriginal({ messageId }: { m
   )
 })
 
-export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, onContextMenu, showTodoButton: _showTodoButton, onToggleTodos: _onToggleTodos, todosOpen: _todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", onRegenerate, onOpenADEDiff, outbox }: {
+export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, busySessionIds, onContextMenu, showTodoButton: _showTodoButton, onToggleTodos: _onToggleTodos, todosOpen: _todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", onRegenerate, onOpenADEDiff, outbox }: {
   message: RenderedMessage
   queued?: boolean
   revert?: SessionView["revert"]
@@ -142,6 +142,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   config?: ServerConfig
   directory?: string
   onViewSubagents?: (subagentID?: string) => void
+  busySessionIds?: ReadonlySet<string>
   onContextMenu?: (x: number, y: number, messageID: string) => void
   showTodoButton?: boolean
   onToggleTodos?: () => void
@@ -234,6 +235,38 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
     onRegenerate?.()
   }, [onRegenerate])
 
+  // Intercalado real de parts: si hay segments, el texto y los tools se
+  // renderizan en su orden original en el cuerpo (y no en el bloque de
+  // actividad). El catálogo y la compactación conservan su layout propio.
+  const hasSegments = !isCompaction && !message.isToolCatalog && (message.segments?.length ?? 0) > 0
+  const shouldFoldTools = !isWorkingTurn && message.toolParts.length > 3
+  // Con segments, el plegado oculta los tools posteriores a los 2 primeros
+  // (los textos siguen visibles), en lugar de reordenarlos dentro del bloque.
+  const hiddenToolIds = hasSegments && shouldFoldTools && toolsFolded
+    ? new Set(message.segments!.filter((s) => s.kind === "tool").slice(2).map((s) => s.id))
+    : null
+  const toolsFoldButton = shouldFoldTools ? (
+    <button
+      type="button"
+      className="tools-fold-btn"
+      onClick={() => setToolsFolded((v) => !v)}
+      aria-expanded={!toolsFolded}
+    >
+      <ChevronDownIcon
+        size={13}
+        style={{
+          transform: toolsFolded ? "rotate(0deg)" : "rotate(180deg)",
+          transition: "transform 0.15s ease",
+        }}
+      />
+      <span>
+        {toolsFolded
+          ? `${message.toolParts.length - 2} ${t('detail.moreTools') || "herramientas más"}`
+          : (t('common.collapse') || "Contraer herramientas")}
+      </span>
+    </button>
+  ) : null
+
   return (
     <>
       {isRevertPoint && (
@@ -317,12 +350,13 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             </div>
           ) : null
 
-          const shouldFoldTools = !isWorkingTurn && message.toolParts.length > 3
           const visibleToolParts = shouldFoldTools && toolsFolded
             ? message.toolParts.slice(0, 2)
             : message.toolParts
 
-          const toolsEl = hasTools ? (
+          // Con segments los tools viven en el cuerpo intercalado: no se
+          // duplican dentro del bloque de actividad.
+          const toolsEl = hasTools && !hasSegments ? (
             <div className="tool-parts">
               {visibleToolParts.map((tp) => (
                 <ToolPart
@@ -332,30 +366,11 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
                   directory={directory}
                   sessionID={message.info.sessionID}
                   onViewSubagents={onViewSubagents}
+                  busySessionIds={busySessionIds}
                   compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
                 />
               ))}
-              {shouldFoldTools && (
-                <button
-                  type="button"
-                  className="tools-fold-btn"
-                  onClick={() => setToolsFolded((v) => !v)}
-                  aria-expanded={!toolsFolded}
-                >
-                  <ChevronDownIcon
-                    size={13}
-                    style={{
-                      transform: toolsFolded ? "rotate(0deg)" : "rotate(180deg)",
-                      transition: "transform 0.15s ease",
-                    }}
-                  />
-                  <span>
-                    {toolsFolded
-                      ? `${message.toolParts.length - 2} ${t('detail.moreTools') || "herramientas más"}`
-                      : (t('common.collapse') || "Contraer herramientas")}
-                  </span>
-                </button>
-              )}
+              {toolsFoldButton}
             </div>
           ) : null
 
@@ -460,6 +475,31 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
                 <MarkdownWithEmbeds text={message.text} highlight={highlight} />
               </div>
             )}
+          </div>
+        ) : hasSegments ? (
+          <div className="message-segments">
+            {message.segments!.map((seg) => seg.kind === "text" ? (
+              <div key={seg.id} className="message-content">
+                {!message.info.time.completed && seg.text.length > 800 ? (
+                  <pre className="md-plain-stream">{seg.text}</pre>
+                ) : (
+                  <MarkdownWithEmbeds text={seg.text} highlight={highlight} />
+                )}
+              </div>
+            ) : hiddenToolIds?.has(seg.id) ? null : (
+              <div key={seg.id} className="tool-parts">
+                <ToolPart
+                  part={seg.tool}
+                  config={config}
+                  directory={directory}
+                  sessionID={message.info.sessionID}
+                  onViewSubagents={onViewSubagents}
+                  busySessionIds={busySessionIds}
+                  compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
+                />
+              </div>
+            ))}
+            {toolsFoldButton && <div className="tool-parts">{toolsFoldButton}</div>}
           </div>
         ) : message.text && (
           <div className="message-content">

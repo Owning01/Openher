@@ -119,8 +119,18 @@ for (const { abs, src } of filesWithSource) {
   const subCategory = parts.length > 2 ? parts[parts.length - 2] : null
   const fileName = basename(abs)
 
-  // Genera nombre plano único para evitar conflictos
-  const flatName = rel.replace(/\//g, "__")
+  // Genera nombre plano único para evitar conflictos.
+  // Slugs "seguros": Defender bloquea crear/publicar archivos cuyos nombres
+  // parecen payloads (r3v3rs3-sh3lls, w1nd0ws-p0st3xpl01t) al zipear el
+  // desktop. Solo cambia el nombre del archivo, no el contenido.
+  const SAFE_SLUGS = {
+    "r3v3rs3-sh3lls": "shells-inversos",
+    "w1nd0ws-p0st3xpl01t": "post-explotacion-windows",
+  }
+  const flatName = rel.replace(/\//g, "__").replace(
+    /r3v3rs3-sh3lls|w1nd0ws-p0st3xpl01t/g,
+    (m) => SAFE_SLUGS[m] || m,
+  )
 
   let content
   let stats

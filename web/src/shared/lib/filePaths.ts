@@ -20,6 +20,36 @@ export function basenameFsPath(p: string): string {
   return parts[parts.length - 1] ?? p
 }
 
+/** Separa una ruta en carpeta (con separador final) y nombre del archivo. */
+export function splitFsPath(p: string): { dir: string; name: string } {
+  const idx = Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/"))
+  if (idx < 0) return { dir: "", name: p }
+  return { dir: p.slice(0, idx + 1), name: p.slice(idx + 1) }
+}
+
+// Punto de color por tipo de archivo (estilo "Ruta viva" A).
+const EXT_COLORS: Record<string, string> = {
+  tsx: "#7dd3fc", jsx: "#7dd3fc", ts: "#60a5fa", mts: "#60a5fa", cts: "#60a5fa",
+  js: "#fcd34d", mjs: "#fcd34d", cjs: "#fcd34d",
+  css: "#f0abfc", scss: "#f0abfc", less: "#f0abfc",
+  md: "#c4b5fd", mdx: "#c4b5fd", txt: "#a1a1aa", log: "#a1a1aa",
+  json: "#fcd34d", yml: "#f0abfc", yaml: "#f0abfc", toml: "#fdba74", xml: "#fdba74", ini: "#a1a1aa",
+  html: "#fdba74", htm: "#fdba74", vue: "#86efac", svelte: "#fdba74", astro: "#fdba74",
+  py: "#86efac", rb: "#fb7185", go: "#7dd3fc", rs: "#fdba74", java: "#fb7185", kt: "#c4b5fd",
+  swift: "#fdba74", php: "#c4b5fd", c: "#7dd3fc", h: "#7dd3fc", cpp: "#7dd3fc", hpp: "#7dd3fc",
+  sh: "#86efac", bash: "#86efac", ps1: "#7dd3fc", bat: "#a1a1aa", cmd: "#a1a1aa", sql: "#7dd3fc",
+  png: "#f0abfc", jpg: "#f0abfc", jpeg: "#f0abfc", gif: "#f0abfc", webp: "#f0abfc", avif: "#f0abfc",
+  svg: "#fcd34d", ico: "#fcd34d", pdf: "#fb7185", zip: "#fcd34d",
+  exe: "#a1a1aa", dll: "#a1a1aa", lnk: "#a1a1aa",
+}
+
+/** Color del punto según la extensión (gris muted si no se conoce). */
+export function extColor(fileName: string): string {
+  const m = /\.([A-Za-z0-9]+)$/.exec(fileName)
+  const ext = m?.[1]?.toLowerCase() ?? ""
+  return EXT_COLORS[ext] ?? "#a1a1aa"
+}
+
 /** Resuelve una ruta relativa contra el directorio de la sesión. */
 export function resolveFsPath(p: string, directory?: string): string {
   if (isAbsoluteFsPath(p)) return p
@@ -44,6 +74,42 @@ export function pathFromOpenherHref(href: string): string | null {
   } catch {
     return null
   }
+}
+
+// Raíces POSIX que sí tratamos como FS local en un src de imagen (una ruta web
+// tipo /img/x.png NO es FS).
+const POSIX_FS_ROOT = /^\/(?:home|Users|tmp|var|etc|opt|usr|mnt|media|root|srv|dev|proc|Volumes)\//
+
+/**
+ * Si el src de una imagen es una ruta del FS local (Windows `C:\`, UNC,
+ * `file://` o una raíz POSIX conocida), devuelve la ruta; si no, null.
+ * Se usa para cargarla por el shell (/shell/fs/download) en vez de un <img>
+ * directo, que en el webview no puede leer el disco.
+ */
+export function localFsPathFromImageSrc(src: string): string | null {
+  if (!src) return null
+  // micromark normaliza destinos y percent-encodea backslashes
+  // (C:%5CUsers%5C...): decodificar para reconocer la ruta real.
+  let candidate = src
+  if (/%5C|%2F/i.test(candidate)) {
+    try {
+      candidate = decodeURIComponent(candidate)
+    } catch {
+      /* se evalúa el original */
+    }
+  }
+  if (candidate.startsWith("file://")) {
+    try {
+      const p = decodeURIComponent(new URL(candidate).pathname)
+      return p.replace(/^\/([A-Za-z]:)/, "$1")
+    } catch {
+      return null
+    }
+  }
+  if (candidate.startsWith("data:") || candidate.startsWith("blob:") || /^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) return null
+  if (/^[A-Za-z]:[\\/]/.test(candidate) || candidate.startsWith("\\\\")) return candidate
+  if (POSIX_FS_ROOT.test(candidate)) return candidate
+  return null
 }
 
 const POSIX_ROOT = /^\/(?:home|Users|tmp|var|etc|opt|usr|mnt|media|root|srv|dev|proc|Volumes)(?:\/|$)/

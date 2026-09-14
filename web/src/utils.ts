@@ -121,6 +121,20 @@ export function countImageParts(parts: Array<{ type: string; mimeType?: string; 
   return parts.filter(isImagePart).length
 }
 
+/** Blob → base64 puro (sin prefijo data:), para Filesystem/Capacitor. */
+export function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const idx = dataUrl.indexOf(",")
+      resolve(idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)

@@ -3,6 +3,35 @@ import { api } from "../../api"
 import * as clientModule from "./client"
 import * as versionModule from "./version"
 import type { ServerConfig } from "../../types"
+import { clearQuestionSettled, isQuestionSettled } from "../../utils/questionStore"
+
+// Contrato real v2: Form.Info {id:"frm_*", metadata.tool:{messageID,id:callID},
+// fields:[{key,title(header),description(pregunta)}]}.
+const formInfo = (overrides: Record<string, unknown> = {}) => ({
+  id: "frm_123",
+  sessionID: "sess_456",
+  title: "Select options",
+  metadata: { kind: "question", tool: { messageID: "msg_1", id: "call_abc" } },
+  fields: [
+    {
+      key: "q0",
+      title: "Preference",
+      description: "What is your preference?",
+      type: "string",
+      options: [{ label: "Option 1", value: "opt1", description: "First" }],
+      custom: true,
+    },
+    {
+      key: "q1",
+      title: "Multiple",
+      description: "Select multiple",
+      type: "multiselect",
+      options: [{ label: "Choice A", value: "a" }],
+      custom: false,
+    },
+  ],
+  ...overrides,
+})
 
 describe("api question and form handling", () => {
   const configV2: ServerConfig = {
@@ -24,6 +53,7 @@ describe("api question and form handling", () => {
   beforeEach(() => {
     versionModule.rememberApiVersion(configV2, "v2")
     versionModule.rememberApiVersion(configV1, "v1")
+    clearQuestionSettled()
     requestSpy = vi.spyOn(clientModule, "request")
   })
 
@@ -32,74 +62,45 @@ describe("api question and form handling", () => {
   })
 
   describe("listPendingQuestions", () => {
-    it("parses v2 form fields correctly into QuestionInfo", async () => {
-      requestSpy.mockResolvedValueOnce([
-        {
-          id: "form_123",
-          sessionID: "sess_456",
-          title: "Select options",
-          fields: [
-            {
-              key: "field_a",
-              title: "What is your preference?",
-              type: "string",
-              options: [{ label: "Option 1", value: "opt1", description: "First" }],
-              custom: true,
-            },
-            {
-              key: "field_b",
-              title: "Select multiple",
-              type: "multiselect",
-              options: [{ label: "Choice A", value: "a" }],
-              custom: false,
-            },
-          ],
-        },
-      ])
+    it("parses the real v2 form contract (description=pregunta, title=header, metadata.tool)", async () => {
+      requestSpy.mockResolvedValueOnce([formInfo()])
 
       const list = await api.listPendingQuestions(configV2, "/workspace")
       expect(list).toHaveLength(1)
-      expect(list[0].id).toBe("form_123")
+      expect(list[0].id).toBe("frm_123")
       expect(list[0].sessionID).toBe("sess_456")
+      expect(list[0].tool).toEqual({ messageID: "msg_1", callID: "call_abc" })
       expect(list[0].questions).toHaveLength(2)
-      expect(list[0].questions[0]).toEqual({
+      expect(list[0].questions![0]).toEqual({
         question: "What is your preference?",
-        header: "field_a",
+        header: "Preference",
         options: [{ label: "Option 1", description: "First" }],
         multiple: false,
         custom: true,
+        key: "q0",
       })
-      expect(list[0].questions[1]).toEqual({
+      expect(list[0].questions![1]).toEqual({
         question: "Select multiple",
-        header: "field_b",
+        header: "Multiple",
         options: [{ label: "Choice A", description: undefined }],
         multiple: true,
         custom: false,
+        key: "q1",
       })
     })
   })
 
   describe("questionReply", () => {
-    it("calls v2 form reply endpoint with answer mapping and answers fallback", async () => {
-      // Mock form get to return field keys
+    it("resolves the callID to the real frm_* form and maps answers by field key", async () => {
       requestSpy.mockImplementation(async (_cfg: any, path: string) => {
-        if (path.includes("/form/form_123") && !path.includes("/reply")) {
-          return {
-            fields: [
-              { key: "q_text", type: "string" },
-              { key: "q_multi", type: "multiselect" },
-            ],
-          }
-        }
-        if (path.includes("/form/form_123/reply")) {
-          return true
-        }
+        if (path.includes("/form/request")) return [formInfo()]
+        if (path.includes("/form/frm_123/reply")) return true
         return true
       })
 
       const res = await api.questionReply(
         configV2,
-        "form_123",
+        "call_abc",
         [["Single answer"], ["A", "B"]],
         "/workspace",
         "sess_456",
@@ -107,53 +108,77 @@ describe("api question and form handling", () => {
 
       expect(res).toBe(true)
       const replyCall = requestSpy.mock.calls.find(([_, path]: [any, string]) =>
-        path.includes("/form/form_123/reply"),
+        path.includes("/form/frm_123/reply"),
       )
       expect(replyCall).toBeDefined()
+      expect(replyCall[1]).toContain("/session/sess_456/form/frm_123/reply")
       expect(replyCall[2].body.answer).toEqual({
-        q_text: "Single answer",
-        q_multi: ["A", "B"],
+        q0: "Single answer",
+        q1: ["A", "B"],
       })
-      expect(replyCall[2].body.answers).toEqual([["Single answer"], ["A", "B"]])
+      // Sticky: se marcan settled formID y callID (inline y flotante se enteran).
+      expect(isQuestionSettled("frm_123")).toBe(true)
+      expect(isQuestionSettled("call_abc")).toBe(true)
     })
 
-    it("falls back to global if sessionID is not passed in v2", async () => {
+    it("accepts a real frm_* id directly (floating prompt) and settles both keys", async () => {
       requestSpy.mockImplementation(async (_cfg: any, path: string) => {
-        if (path.includes("/form/request")) {
-          return []
-        }
-        if (path.includes("/reply")) {
-          return true
-        }
-        return {}
+        if (path.includes("/form/request")) return [formInfo()]
+        if (path.includes("/form/frm_123/reply")) return true
+        return true
       })
 
-      const res = await api.questionReply(configV2, "form_999", [["OK"]])
+      const res = await api.questionReply(configV2, "frm_123", [["OK"]], "/workspace", "sess_456")
       expect(res).toBe(true)
       const replyCall = requestSpy.mock.calls.find(([_, path]: [any, string]) =>
-        path.includes("/form/form_999/reply"),
+        path.includes("/form/frm_123/reply"),
       )
       expect(replyCall).toBeDefined()
-      expect(replyCall[1]).toContain("/session/global/form/form_999/reply")
+      expect(isQuestionSettled("frm_123")).toBe(true)
+      expect(isQuestionSettled("call_abc")).toBe(true)
     })
 
-    it("falls back to legacy question endpoint if form endpoint 404s", async () => {
+    it("400 (Unknown form field) rejects con el detalle y NO cierra en falso", async () => {
+      const badRequest = Object.assign(new Error("Unknown form field: q0"), { cause: { status: 400 } })
       requestSpy.mockImplementation(async (_cfg: any, path: string) => {
-        if (path.includes("/form/")) {
-          const err = new Error("Not Found")
-          err.cause = { status: 404 }
-          throw err
-        }
-        if (path.includes("/question/form_legacy/reply")) {
-          return true
-        }
-        return {}
+        if (path.includes("/form/request")) return [formInfo()]
+        if (path.includes("/reply")) throw badRequest
+        return true
       })
 
-      const res = await api.questionReply(configV2, "form_legacy", [["Ans"]], undefined, "sess_1")
+      await expect(
+        api.questionReply(configV2, "call_abc", [["x"]], "/workspace", "sess_456"),
+      ).rejects.toThrow("Unknown form field: q0")
+      expect(isQuestionSettled("frm_123")).toBe(false)
+      expect(isQuestionSettled("call_abc")).toBe(false)
+    })
+
+    it("409 (form ya respondido) resuelve true y marca settled", async () => {
+      const conflict = Object.assign(new Error("Conflict"), { cause: { status: 409 } })
+      requestSpy.mockImplementation(async (_cfg: any, path: string) => {
+        if (path.includes("/form/request")) return [formInfo()]
+        if (path.includes("/reply")) throw conflict
+        return true
+      })
+
+      const res = await api.questionReply(configV2, "call_abc", [["x"]], "/workspace", "sess_456")
+      expect(res).toBe(true)
+      expect(isQuestionSettled("frm_123")).toBe(true)
+      expect(isQuestionSettled("call_abc")).toBe(true)
+    })
+
+    it("server v2 sin /form/request cae al endpoint legacy de sesión", async () => {
+      const notFound = Object.assign(new Error("Not Found"), { cause: { status: 404 } })
+      requestSpy.mockImplementation(async (_cfg: any, path: string) => {
+        if (path.includes("/form/request")) throw notFound
+        if (path.includes("/session/sess_1/question/call_x/reply")) return true
+        return true
+      })
+
+      const res = await api.questionReply(configV2, "call_x", [["Ans"]], undefined, "sess_1")
       expect(res).toBe(true)
       const legacyCall = requestSpy.mock.calls.find(([_, path]: [any, string]) =>
-        path.includes("/session/sess_1/question/form_legacy/reply"),
+        path.includes("/session/sess_1/question/call_x/reply"),
       )
       expect(legacyCall).toBeDefined()
     })
@@ -168,30 +193,35 @@ describe("api question and form handling", () => {
   })
 
   describe("questionReject", () => {
-    it("calls v2 form cancel endpoint", async () => {
-      requestSpy.mockResolvedValueOnce(true)
-
-      const res = await api.questionReject(configV2, "form_123", "/workspace", "sess_456")
-      expect(res).toBe(true)
-      expect(requestSpy.mock.calls[0][1]).toContain("/session/sess_456/form/form_123/cancel")
-    })
-
-    it("falls back to legacy question reject on 404", async () => {
+    it("resolves the callID and cancels the real frm_* form", async () => {
       requestSpy.mockImplementation(async (_cfg: any, path: string) => {
-        if (path.includes("/form/")) {
-          const err = new Error("Not Found")
-          err.cause = { status: 404 }
-          throw err
-        }
-        if (path.includes("/question/form_123/reject")) {
-          return true
-        }
-        return {}
+        if (path.includes("/form/request")) return [formInfo()]
+        if (path.includes("/form/frm_123/cancel")) return true
+        return true
       })
 
-      const res = await api.questionReject(configV2, "form_123", "/workspace", "sess_456")
+      const res = await api.questionReject(configV2, "call_abc", "/workspace", "sess_456")
       expect(res).toBe(true)
-      expect(requestSpy.mock.calls[1][1]).toContain("/session/sess_456/question/form_123/reject")
+      const cancelCall = requestSpy.mock.calls.find(([_, path]: [any, string]) =>
+        path.includes("/form/frm_123/cancel"),
+      )
+      expect(cancelCall).toBeDefined()
+      expect(cancelCall[1]).toContain("/session/sess_456/form/frm_123/cancel")
+      expect(isQuestionSettled("frm_123")).toBe(true)
+      expect(isQuestionSettled("call_abc")).toBe(true)
+    })
+
+    it("409 al cancelar (ya resuelto) resuelve true y marca settled", async () => {
+      const conflict = Object.assign(new Error("Conflict"), { cause: { status: 409 } })
+      requestSpy.mockImplementation(async (_cfg: any, path: string) => {
+        if (path.includes("/form/request")) return [formInfo()]
+        if (path.includes("/cancel")) throw conflict
+        return true
+      })
+
+      const res = await api.questionReject(configV2, "frm_123", "/workspace", "sess_456")
+      expect(res).toBe(true)
+      expect(isQuestionSettled("frm_123")).toBe(true)
     })
 
     it("calls v1 question reject on v1", async () => {

@@ -228,18 +228,6 @@ fn merge_config(cfg: &mut crate::state::ShellConfig, patch: &serde_json::Value) 
             .filter_map(|x| serde_json::from_value(x.clone()).ok())
             .collect();
     }
-    if let Some(s) = patch.get("cerebras_api_key").and_then(|v| v.as_str()) {
-        cfg.cerebras_api_key = s.to_string();
-    }
-    if let Some(s) = patch.get("groq_api_key").and_then(|v| v.as_str()) {
-        cfg.groq_api_key = s.to_string();
-    }
-    if let Some(s) = patch.get("quickchat_provider").and_then(|v| v.as_str()) {
-        cfg.quickchat_provider = s.to_string();
-    }
-    if let Some(s) = patch.get("quickchat_model").and_then(|v| v.as_str()) {
-        cfg.quickchat_model = s.to_string();
-    }
     if let Some(b) = patch.get("auto_opencode2").and_then(|v| v.as_bool()) {
         cfg.auto_opencode2 = b;
     }
@@ -251,5 +239,8 @@ fn merge_config(cfg: &mut crate::state::ShellConfig, patch: &serde_json::Value) 
     }
     if let Some(s) = patch.get("opencode2_command").and_then(|v| v.as_str()) {
         cfg.opencode2_command = s.to_string();
+    }
+    if let Some(b) = patch.get("context_menu").and_then(|v| v.as_bool()) {
+        cfg.context_menu = b;
     }
 }

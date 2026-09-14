@@ -246,7 +246,7 @@
   white-space: nowrap;
 }
 
-.desktop-stats-chip {
+.desktop-data-chip {
   position: absolute;
   bottom: var(--space-2);
   left: 50%;

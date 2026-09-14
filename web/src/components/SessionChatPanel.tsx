@@ -1,10 +1,10 @@
-import { memo, useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react"
+import { memo, useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { ChatView } from "./ChatView"
 import { ErrorModal } from "./ErrorModal"
 // Lazy: rompe el borde estático con shellPanels (que arrastra @xterm) para que
 // el bundle inicial móvil no descargue terminal/kanban/browser del desktop.
-import { SessionStatsPanel, isAbsoluteFsPath } from "./shellPanels"
-import { useMessages } from "../hooks/useMessages"
+import { isAbsoluteFsPath } from "./shellPanels"
+import { useMessages, claimSharedOutbox, releaseSharedOutbox, holdSharedOutbox, resumeSharedOutbox, isSharedOutboxHeld } from "../hooks/useMessages"
 import { useSSE } from "../hooks/useSSE"
 import { useSSEHandler } from "../hooks/useSSEHandler"
 import { useQuestions } from "../hooks/useQuestions"
@@ -36,7 +36,6 @@ type Props = {
   onSettled: (sessionID: string, directory: string) => void
   onRefreshSessions: () => Promise<void> | void
   onSetCommands: (commands: CommandInfo[]) => void
-  onRecordPrompt: (text: string) => void
   onQueueAction: (action: { type: "command" | "shell" | "prompt"; sessionID: string; directory: string; payload: string; model?: { providerID: string; modelID: string; variant?: string }; agentID?: string; images?: Array<{ base64: string; mime: string }>; options?: { translate?: boolean } }) => Promise<void> | void
   onShellExecute: (cmd: string, sessionID: string, directory: string) => void
   onChangeAgentGlobal: (agentID: string, directory?: string) => void
@@ -62,7 +61,7 @@ type Props = {
 export const SessionChatPanel = memo(function SessionChatPanel({
   session, config, dataMode, baseProps, active, connectionState, panelIndex,
   onActivate, onClose: _onClose, onSplitSession, onSettled,
-  onRefreshSessions, onSetCommands, onRecordPrompt, onQueueAction,
+  onRefreshSessions, onSetCommands, onQueueAction,
   onShellExecute, onChangeAgentGlobal, onOpenInThisPanel, onSwapPanels,
   onOpenFile, onOpenConnect, onOpenBrowser,
   busySessionIds,
@@ -85,7 +84,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   // isWorking: la burbuja/ring de "respondiendo" deben apagarse en cuanto el
   // abort se confirma (awaiting=false + sesión idle), no 10s después.
   const [stopping, setStopping] = useState(false)
-  const [showStats, setShowStats] = useState(false)
   // Carga visible por panel (igual que loadingSessionID móvil): mientras está
   // activo la lista muestra spinner y el velo anti-salto cubre las etapas
   // vacío→caché→fetch. Antes era null siempre y la entrada pintaba 3 etapas
@@ -97,7 +95,10 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   useEffect(() => {
     if (!baseProps.flags.offlineCache) return
     if (msgs.messages.length === 0) return
-    cacheMessages(session.id, msgs.messages).catch(() => {})
+    // Solo la sesión del panel: nunca cachear mensajes ajenos (races) bajo este id.
+    const scoped = msgs.messages.filter((m) => !m.info.sessionID || m.info.sessionID === session.id)
+    if (scoped.length === 0) return
+    cacheMessages(session.id, scoped).catch(() => {})
   }, [msgs.messages, session.id, baseProps.flags.offlineCache, cacheMessages])
 
   useEffect(() => {
@@ -132,6 +133,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     setCompacting: msgs.setCompacting,
     setRuntimeError: msgs.setRuntimeError,
     awaitingRef: () => awaitingReplyRef.current,
+    awaitingBaselineIDRef: msgs.getAwaitingBaselineID,
     onSettled,
   })
 
@@ -156,6 +158,8 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     handleQuestionReply,
     handleQuestionReject,
     handleDismissQuestion,
+    clearDismissedQuestions,
+    dismissSessionQuestions,
     handlePermissionApprove,
     handlePermissionReject,
     handleDismissPermission,
@@ -182,6 +186,8 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const handleSend = useCallback(async (images?: Array<{ base64: string; mime: string }>, options?: { translate?: boolean }, text?: string, force?: boolean) => {
     if (!config) return
     if (!session) return
+    // Un envío manual reanuda el auto-flush (p. ej. después de un Stop).
+    if (!force) resumeSharedOutbox(session.id)
     const rawComposer = (typeof text === "string" ? text : composerRef.current).trim() ? (typeof text === "string" ? text : composerRef.current) : ""
     const hasVisual = Boolean(visualPromptContext)
     const currentComposer = hasVisual ? formatSelectionForPrompt(rawComposer, visualPromptContext!) : rawComposer
@@ -189,7 +195,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     if (!force && (msgs.awaitingAssistantReply || isSessionActive(session))) {
       // Ocupado: a la cola visible en vez de rechazar. Aparece en el chat
       // como pendiente con eliminar / editar / enviar-ahora.
-      onRecordPrompt(currentComposer)
       msgs.enqueueOutbox(session.id, currentComposer, images)
       msgs.setComposer("")
       composerRef.current = ""
@@ -234,7 +239,6 @@ export const SessionChatPanel = memo(function SessionChatPanel({
         return false
       }
     }
-    onRecordPrompt(currentComposer)
     stopGenerationRef.current = false
     const revertMsgId = localRevertID ?? session?.revert?.messageID
     let prevMessagesSnapshot: typeof msgs.messages | null = null
@@ -250,6 +254,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       onSetCommands, msgs.setRuntimeError, images,
       sendText, undefined, originalText ?? undefined)
     if (res === "connect") onOpenConnect?.()
+    if (res === "newSession") baseProps.onOpenNewSession?.(session.directory)
     if (res === "history" || res === "timeline") openPromptHistory()
     if (res === false) {
       // Rollback de pruning y restaurar composer original si hubo traducción
@@ -262,7 +267,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     // Limpiar selección visual siempre para evitar contexto stale duplicado en reintentos
     if (hasVisual) onClearVisualSelection?.()
     return typeof res === "boolean" ? res : true
-  }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, onRecordPrompt, localRevertID, onOpenConnect, visualPromptContext, onClearVisualSelection])
+  }, [msgs, session, config, connectionState, onQueueAction, panelModelOption, baseProps.activeAgentID, baseProps.commands, onRefreshSessions, onSetCommands, localRevertID, onOpenConnect, visualPromptContext, onClearVisualSelection])
 
   const handleAbort = useCallback(async () => {
     // Doble clic: el flag se pone sincrónico abajo, el segundo llamado sale acá.
@@ -271,6 +276,11 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     setStopping(true)
     msgs.setAwaitingAssistantReply(false)
     msgs.completionShouldPlayRef.current = false
+    // Stop explícito: la cola pendiente NO se auto-envía al quedar libre.
+    holdSharedOutbox(session.id)
+    // Preguntas del turno abortado: cierre local (sin cancel server-side) para
+    // que el modal flotante no reaparezca cuando el poll las reintente.
+    dismissSessionQuestions(session.id)
     msgs.setMessages((prev) => {
       return prev.map((m) => {
         if (m.info.sessionID === session.id && m.info.role === "assistant" && !m.info.time.completed) {
@@ -294,7 +304,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       stopGenerationRef.current = false
       setStopping(false)
     }, 10000)
-  }, [msgs, session, refresh, onSettled])
+  }, [msgs, session, refresh, onSettled, dismissSessionQuestions])
 
   const handleRevertToMessage = useCallback(async (messageID: string) => {
     try {
@@ -363,7 +373,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
           msgs.removeOutbox(o.id)
         },
         onSendNow: () => {
+          // Claim: el flush automático (este panel u otra vista de la misma
+          // sesión) puede estar enviando este mismo item; sin claim salía doble.
+          if (!claimSharedOutbox(o.id)) return
           msgs.removeOutbox(o.id)
+          // Acción explícita del usuario: reanuda el auto-flush (si estaba en hold por Stop).
+          resumeSharedOutbox(o.sessionID)
           void handleSend(o.images, undefined, o.text, true).then((res) => {
             // Si no pudo salir (otro envío en curso), vuelve a la cola.
             if (res === false) msgs.enqueueOutbox(o.sessionID, o.text, o.images)
@@ -375,15 +390,27 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   }, [msgs.outbox, msgs.removeOutbox, msgs.setComposer, msgs.enqueueOutbox, session.id, handleSend])
 
   // Auto-flush: al quedar libre, sale el pendiente más antiguo.
+  // Claim compartido: la cola es por sesión entre todas las instancias, así
+  // que otro panel/vista de la misma sesión pudo tomar el item primero.
+  //
+  // Reglas anti-bucle: no correr con la sesión ocupada (si no `handleSend`
+  // re-encola en vez de enviar y cada render duplica), `force=true` para no
+  // re-encolar el item que ya salió de la cola, cooldown para fallos repetidos
+  // y hold tras Stop explícito.
   const flushingRef = useRef(false)
+  const flushLastTryRef = useRef(0)
   useEffect(() => {
     if (isWorking || flushingRef.current) return
+    if (isSharedOutboxHeld(session.id)) return
+    if (Date.now() - flushLastTryRef.current < 4_000) return
     const next = msgs.outbox.find((o) => o.sessionID === session.id)
-    if (!next) return
+    if (!next || !claimSharedOutbox(next.id)) return
+    flushLastTryRef.current = Date.now()
     flushingRef.current = true
-    void handleSend(next.images, undefined, next.text).then((res) => {
+    void handleSend(next.images, undefined, next.text, true).then((res) => {
       if (res !== false) msgs.removeOutbox(next.id)
-    }).catch(() => {}).finally(() => {
+      else releaseSharedOutbox(next.id)
+    }).catch(() => releaseSharedOutbox(next.id)).finally(() => {
       flushingRef.current = false
     })
   })
@@ -411,17 +438,37 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   const isStreamingActive = streamState === "streaming"
   const baseInterval = isWorking ? 3000 : dataMode === "full" ? 5000 : dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : 15000
   const pollInterval = isStreamingActive ? Math.max(baseInterval, 15000) : baseInterval
+  // Última `updated` reconciliada: evita refetchear el historial completo en
+  // cada tick. En sesiones grandes el payload llega a varios MB y recargarlo
+  // cada 5s (o cada 3s durante el stream) saturaba la lectura de mensajes.
+  const lastMsgsUpdatedRef = useRef(0)
+  const lastMsgsFetchAtRef = useRef(0)
+  useEffect(() => { lastMsgsUpdatedRef.current = 0; lastMsgsFetchAtRef.current = 0 }, [session.id])
   usePolling(async () => {
-    await msgs.loadSelected(session.id, session.directory).catch(() => undefined)
-    // Solo cuando localmente parece trabajando: en idle no hay nada que reconciliar.
-    if (!isSessionActive(session) && !msgs.awaitingAssistantReply) return
+    // Status real del server primero: es barato (mapa de sesiones activas).
     const st = await api.listStatuses(config, session.directory).catch(() => undefined)
     const real = st?.[session.id]
-    if (real && real.type !== "busy" && real.type !== "retry") {
+    const idle = !!real && real.type !== "busy" && real.type !== "retry"
+    const updated = session.updated ?? 0
+    const updatedAdvanced = lastMsgsUpdatedRef.current === 0 || updated > lastMsgsUpdatedRef.current
+    // Red de tiempo: reconcilia aunque `updated` no cambie (SSE perdido sin replay).
+    const stale = Date.now() - lastMsgsFetchAtRef.current >= 20000
+    // Refetch del historial cuando el server reporta un cambio real o pasó la
+    // red de tiempo. Ya NO se salta con stream activo: si el SSE pierde un
+    // evento sin replay, el poll es la única recuperación (antes el chat
+    // quedaba congelado hasta salir y volver a entrar). El intervalo durante
+    // stream es ≥15s y el umbral de tiempo 20s, así que el costo es acotado.
+    if (updatedAdvanced || stale) {
+      lastMsgsUpdatedRef.current = updated
+      lastMsgsFetchAtRef.current = Date.now()
+      await msgs.loadSelected(session.id, session.directory).catch(() => undefined)
+    }
+    // Solo cuando localmente parece trabajando: en idle no hay nada que reconciliar.
+    if (idle && (isSessionActive(session) || msgs.awaitingAssistantReply)) {
       msgs.setAwaitingAssistantReply(false)
       onSettled(session.id, session.directory)
     }
-  }, pollInterval, [session.id, session.directory, session.status, dataMode, isWorking, isStreamingActive, msgs.awaitingAssistantReply], false)
+  }, pollInterval, [session.id, session.directory, session.status, session.updated, dataMode, isWorking, isStreamingActive, msgs.awaitingAssistantReply], false)
 
   const chatProps: ChatViewProps = useMemo(() => ({
     ...baseProps,
@@ -455,6 +502,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     onQuestionReply: handleQuestionReply,
     onQuestionReject: handleQuestionReject,
     onDismissQuestion: handleDismissQuestion,
+    onReopenQuestions: clearDismissedQuestions,
     onPermissionApprove: handlePermissionApprove,
     onPermissionReject: handlePermissionReject,
     onDismissPermission: handleDismissPermission,
@@ -473,6 +521,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     permissionRequest, handleSend, handleAbort, handleUndo,
     handleRedo, handleCompact, handleRevertToMessage, handleEditMessage,
     handleQuestionReply, handleQuestionReject, handleDismissQuestion,
+    clearDismissedQuestions, dismissSessionQuestions,
     handlePermissionApprove, handlePermissionReject, handleDismissPermission, onShellExecute,
     onChangeAgentGlobal, onOpenInThisPanel, onOpenBrowser, outboxActions, panelLoadingID,
   ])
@@ -588,16 +637,7 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       {/* Sin TabBar interno: las pestañas (sesiones + terminales) viven en la
           franja superior del panel (DesktopPanelRenderer/DesktopGrid). Un
           segundo div.tab-bar aquí duplicaba el header al abrir archivos. */}
-      {showStats && (
-        <div className="session-stats-overlay" onClick={() => setShowStats(false)}>
-          <div onClick={(e) => e.stopPropagation()}>
-            <Suspense fallback={null}>
-              <SessionStatsPanel sessionID={session.id} onClose={() => setShowStats(false)} />
-            </Suspense>
-          </div>
-        </div>
-      )}
-      <ChatView {...chatProps} onOpenSessionStats={() => setShowStats(true)} />
+      <ChatView {...chatProps} />
       {msgs.runtimeError && <ErrorModal message={msgs.runtimeError} onClose={() => msgs.setRuntimeError(null)} />}
     </div>
   )

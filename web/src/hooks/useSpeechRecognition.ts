@@ -44,6 +44,10 @@ export function useSpeechRecognition(language?: LanguageCode) {
   const pendingInterimRef = useRef("")
   // Nativo: longitud del buffer al empezar la utterance (solo se reescribe la cola).
   const utteranceBaseRef = useRef(0)
+  // Nativo: "stopped" (onEndOfSpeech) llega ANTES del resultado final
+  // (onResults). La base se avanza recién cuando llega el final (o al rearmar
+  // sin final), no en "stopped".
+  const speechEndedRef = useRef(false)
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isNative = Capacitor.isNativePlatform()
@@ -59,6 +63,7 @@ export function useSpeechRecognition(language?: LanguageCode) {
       clearTimeout(restartTimerRef.current)
       restartTimerRef.current = null
     }
+    speechEndedRef.current = false
     try {
       cleanupListenersRef.current?.()
     } catch {
@@ -189,6 +194,7 @@ export function useSpeechRecognition(language?: LanguageCode) {
     committedFinalsRef.current = 0
     pendingInterimRef.current = ""
     utteranceBaseRef.current = 0
+    speechEndedRef.current = false
 
     if (isNative) {
       if (availableRef.current === false) {
@@ -203,10 +209,20 @@ export function useSpeechRecognition(language?: LanguageCode) {
           // tras una pausa llegaba un parcial corto y vaciaba todo).
           if (!text) return
           const prev = finalBufferRef.current
+          const wasEnded = speechEndedRef.current
           const next = mergeNativePartial(prev, utteranceBaseRef.current, text)
-          if (next === prev) return
-          finalBufferRef.current = next
-          emit(next)
+          if (next !== prev) {
+            finalBufferRef.current = next
+            emit(next)
+          }
+          // onEndOfSpeech ("stopped") llega ANTES del resultado final
+          // (onResults), que este plugin emite por este mismo evento. Recién
+          // acá se cierra la utterance: avanzar la base en "stopped" hacía que
+          // el final se agregara de nuevo (palabras duplicadas).
+          if (wasEnded) {
+            speechEndedRef.current = false
+            utteranceBaseRef.current = finalBufferRef.current.length
+          }
         })
         const stateHandler = await CapSpeechRecognition.addListener("listeningState", (data) => {
           if (data.status === "started") {
@@ -218,11 +234,19 @@ export function useSpeechRecognition(language?: LanguageCode) {
             return
           }
           // El servicio corta solo tras una pausa: rearmar para dictado
-          // continuo sin perder lo acumulado (nueva utterance = nueva cola).
-          utteranceBaseRef.current = finalBufferRef.current.length
+          // continuo sin perder lo acumulado. NO avanzar la base acá: el
+          // resultado final puede llegar después de "stopped" y debe
+          // integrarse como cierre de la utterance actual (ver partialHandler).
+          speechEndedRef.current = true
           if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
           restartTimerRef.current = setTimeout(() => {
             if (manuallyStoppedRef.current) return
+            if (speechEndedRef.current) {
+              // Sin resultado final (error o demora): cerrar la utterance
+              // igual, así la próxima frase no reescribe el texto consolidado.
+              speechEndedRef.current = false
+              utteranceBaseRef.current = finalBufferRef.current.length
+            }
             CapSpeechRecognition.start({
               language: getLanguage(language),
               partialResults: true,
@@ -233,7 +257,7 @@ export function useSpeechRecognition(language?: LanguageCode) {
               setIsListening(false)
               onErrorRef.current?.((e as Error)?.message ?? "unavailable")
             })
-          }, 250)
+          }, 400)
         })
         cleanupListenersRef.current = () => {
           partialHandler.remove()

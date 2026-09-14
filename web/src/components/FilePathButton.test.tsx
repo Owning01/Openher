@@ -31,6 +31,24 @@ describe("chips de rutas en el chat", () => {
     expect(onOpenFile).toHaveBeenCalledWith("G:\\Proyectos\\app\\src\\utils\\b.ts")
   })
 
+  it("muestra la ruta completa al abrir el menú de una referencia relativa", () => {
+    render(
+      <FilePathProvider onOpenFile={() => {}} directory={"G:\\Proyectos\\app"}>
+        <Markdown text={"ver src/utils/b.ts"} />
+      </FilePathProvider>
+    )
+    fireEvent.click(screen.getByRole("button", { name: "src/utils/b.ts" }))
+    // Bloque informativo del menú: visible también en móvil (sin hover).
+    expect(screen.getByText("Ruta completa")).toBeInTheDocument()
+    expect(screen.getByText("G:\\Proyectos\\app\\src\\utils\\b.ts")).toBeInTheDocument()
+    expect(screen.getByRole("menuitem", { name: /Copiar ruta completa/i })).toBeInTheDocument()
+    // El title del chip también resuelve la ruta relativa.
+    expect(screen.getByRole("button", { name: "src/utils/b.ts" })).toHaveAttribute(
+      "title",
+      "src/utils/b.ts → G:\\Proyectos\\app\\src\\utils\\b.ts"
+    )
+  })
+
   it("sin onOpenFile no ofrece editor pero sí las apps del shell", () => {
     render(
       <FilePathProvider directory={"G:\\Proyectos\\app"}>

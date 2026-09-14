@@ -76,6 +76,7 @@ od-web/
 desktop-app/target/
 desktop-app/data/
 desktop-app/opencode-desktop.exe
+desktop-app/openher-desktop.exe
 
 # Build artifacts desktop (regenerables con build-desktop.ps1)
 dist-desktop/
@@ -84,3 +85,12 @@ web/dist-locked2/
 
 # Artefactos de build Rust (raíz del repo; desktop-app/target ya está arriba)
 target/
+
+# Contenido de aprendizaje personal (forense/papers): NO se sube a GitHub.
+# Queda en disco (web/dist lo copia al build), solo se destrackea del repo.
+web/public/learning/
+web/learning-raw/
+
+# Documentación personal de gestión (scrum): NO se sube a GitHub.
+docs/scrum/
+docs/scrum-copia/

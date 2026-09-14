@@ -21,7 +21,6 @@ import type {
   ServerProvider,
   CommandInfo,
   Question,
-  StatsPayload,
   FileDiff,
   DiffFile,
   DiffContent,
@@ -244,7 +243,6 @@ describe("barrel re-exports via ../types", () => {
       questionAuto: true,
       permissionUI: false,
       autoOpencode2: false,
-      virtualChat: false,
     }
     expect(obj).toBeDefined()
     expect(obj.fileBrowser).toBe(true)
@@ -291,27 +289,6 @@ describe("barrel re-exports via ../types", () => {
   it("NoticeType dummy is assignable", () => {
     const obj: NoticeType = "success"
     expect(obj).toBe("success")
-  })
-
-  it("StatsPayload dummy has expected fields", () => {
-    const obj: StatsPayload = {
-      meta: { sessions: 1, models: 2, since: "2024-01-01", until: "2024-01-02", avg_cost: 0.1, db: "db", filtered: false },
-      totals: { input: 10, output: 20, reasoning: 5, cache_read: 1, cache_write: 2 },
-      cost: 0.5,
-      est_total: 0.6,
-      stats: { mas_cara: { cost: 1, title: "t", model: "m" }, mas_tokens: { title: "t", model: "m" }, input_medio: 10 },
-      days: [],
-      models_chart: [],
-      by_model: [],
-      by_project: [],
-      by_day: [],
-      by_month: [],
-      sessions: [],
-      limits: [],
-      prices: [],
-    }
-    expect(obj).toBeDefined()
-    expect(obj.cost).toBe(0.5)
   })
 
   it("barrel namespace re-exports all domain keys at type level (runtime barrel object exists)", () => {

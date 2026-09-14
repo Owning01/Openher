@@ -8,9 +8,9 @@ import { lazyRetry } from "../../utils/lazyRetry"
 
 const SettingsPanel = lazyRetry(() => import("../../components/SettingsPanel").then((m) => ({ default: m.SettingsPanel })))
 const HelpPage = lazyRetry(() => import("../../components/HelpPage").then((m) => ({ default: m.HelpPage })))
-const QuickChatPanel = lazyRetry(() => import("../../components/QuickChatPanel").then((m) => ({ default: m.QuickChatPanel })))
 const LearningPage = lazyRetry(() => import("../../features/learning/LearningPage").then((m) => ({ default: m.default })))
 const PCFilesPanel = lazyRetry(() => import("../../features/pc-files/PCFilesPanel").then((m) => ({ default: m.PCFilesPanel })))
+const DebatePanel = lazyRetry(() => import("../../features/debate/DebatePanel").then((m) => ({ default: m.DebatePanel })))
 
 export type MobileLayoutViewProps = {
   view: ViewType
@@ -42,8 +42,6 @@ export type MobileLayoutViewProps = {
   allPrimaryAgents: AgentOption[]
   disabledAgents: Record<string, boolean>
   toggleAgentEnabled: (agentId: string) => void
-  stats: any
-  resetStats: () => void
   activeModelOption: any
   blockedModels: any
   setShowThemePicker: (s: boolean) => void
@@ -87,9 +85,9 @@ export type MobileLayoutViewProps = {
   commands: any[]
   commandFilter: any
   setCommandFilter: (f: any) => void
-  // QuickChat props
-  quickChatKeys: { cerebras: string; groq: string; go: string; custom: string; customUrl: string }
   config: any
+  /** Carpeta del proyecto activo: el explorador móvil arranca ahí (no en C:). */
+  activeSessionDir?: string | null
 }
 
 export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayoutViewProps) {
@@ -122,8 +120,6 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
     allPrimaryAgents,
     disabledAgents,
     toggleAgentEnabled,
-    stats,
-    resetStats,
     activeModelOption,
     blockedModels,
     setShowThemePicker,
@@ -166,8 +162,8 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
     commands,
     commandFilter,
     setCommandFilter,
-    quickChatKeys,
     config,
+    activeSessionDir,
   } = props
 
   // Teclado en pantalla: sin plugin nativo, visualViewport avisa y la UI
@@ -234,8 +230,6 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
                 allPrimaryAgents={allPrimaryAgents}
                 disabledAgents={disabledAgents}
                 onToggleAgentEnabled={toggleAgentEnabled}
-                stats={stats}
-                onResetStats={resetStats}
                 activeModelOption={activeModelOption}
                 blockedModels={blockedModels}
                 onOpenThemePicker={() => setShowThemePicker(true)}
@@ -311,24 +305,6 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
           </div>
         )}
 
-        {view === "quickchat" && (
-          <div className="quickchat-view" style={{ height: "calc(100dvh - 56px)", display: "flex", flexDirection: "column" }}>
-            <Suspense fallback={null}>
-              <QuickChatPanel
-                cerebrasKey={quickChatKeys.cerebras}
-                groqKey={quickChatKeys.groq}
-                goKey={quickChatKeys.go}
-                customKey={quickChatKeys.custom}
-                customUrl={quickChatKeys.customUrl}
-                config={config}
-                modelOptions={modelOptions}
-                providers={providerList}
-                onOpenSettings={() => onNavigate("settings")}
-              />
-            </Suspense>
-          </div>
-        )}
-
         {view === "learning" && (
           <div className="learning-view" style={{ height: "calc(100dvh - 56px)", display: "flex", flexDirection: "column" }}>
             <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando aprendizaje…</div>}>
@@ -340,7 +316,15 @@ export const MobileLayoutView = memo(function MobileLayoutView(props: MobileLayo
         {view === "pcFiles" && (
           <div className="pcf-view" style={{ height: "calc(100dvh - 56px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando archivos…</div>}>
-              <PCFilesPanel />
+              <PCFilesPanel initialCwd={activeSessionDir ?? undefined} />
+            </Suspense>
+          </div>
+        )}
+
+        {view === "debate" && (
+          <div className="debate-view" style={{ height: "calc(100dvh - 56px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando debate…</div>}>
+              <DebatePanel config={config} />
             </Suspense>
           </div>
         )}

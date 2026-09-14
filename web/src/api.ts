@@ -11,9 +11,12 @@ import type {
   Question,
   QuestionOption,
   ServerConfig,
+  ServerProviderConnection,
   ServerProviderList,
   Session,
   SessionStatus,
+  MCPServerInfo,
+  MCPServerStatus,
   VcsStatus
 } from "./types"
 type TodoItem = any
@@ -26,6 +29,8 @@ import {
   requestWithHeaders,
   toServerRelative,
   withDirectory,
+  withLimit,
+  withProject,
   withLocationDirectory
 } from "./shared/api/client"
 import { getApiVersion, rememberApiVersion, resolveApiVersion, setHealthProbe, apiPath } from "./shared/api/version"
@@ -34,6 +39,7 @@ import {
   modelWireName,
   toAgentOption,
   toCreateSessionModel,
+  toFileEntryV2,
   toMessageEnvelopeV1,
   toModelBody,
   toSessionV1
@@ -46,6 +52,143 @@ function errorStatus(error: unknown): number | undefined {
   if (!(error instanceof Error)) return undefined
   const cause = error.cause as { status?: unknown } | undefined
   return typeof cause?.status === "number" ? cause.status : undefined
+}
+
+// ---------------------------------------------------------------------------
+// Formularios de pregunta (server v2)
+// Contrato real: GET /form/request → Form.Info[] con id "frm_*",
+// metadata.tool {messageID,id:<toolCallID>} y fields[{key,title,description}].
+// El callID del tool NO es el formID: hay que resolverlo por metadata.tool.id.
+// ---------------------------------------------------------------------------
+type RawFormField = {
+  key?: string
+  title?: string
+  description?: string
+  type?: string
+  options?: unknown
+  custom?: boolean
+}
+type RawFormInfo = {
+  id?: string
+  sessionID?: string
+  title?: string
+  questions?: unknown
+  metadata?: { kind?: string; tool?: { messageID?: string; id?: string; callID?: string } }
+  tool?: { messageID?: string; id?: string; callID?: string }
+  fields?: RawFormField[]
+}
+type ResolvedQuestionForm = {
+  formID: string
+  sessionID?: string
+  fields?: RawFormField[]
+  callID?: string
+}
+
+async function fetchQuestionForms(config: ServerConfig, directory?: string): Promise<RawFormInfo[]> {
+  const raw = await request<unknown>(config, withLocationDirectory("/form/request", directory))
+  const items = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object" && Array.isArray((raw as { data?: unknown }).data)
+      ? ((raw as { data: unknown[] }).data)
+      : []
+  return items as RawFormInfo[]
+}
+
+function formToolCallID(form: RawFormInfo): string | undefined {
+  const tool = form.metadata?.tool ?? form.tool
+  return tool?.id ?? tool?.callID
+}
+
+function isFormID(id?: string): boolean {
+  return typeof id === "string" && id.startsWith("frm_")
+}
+
+/**
+ * Resuelve el formID real para un requestID que puede ser un callID de tool
+ * (QuestionPrompt inline pasa el callID) o ya un formID (prompt flotante).
+ * Devuelve también el callID para marcar settled ambas claves y que tanto el
+ * prompt inline como el flotante se enteren del cierre.
+ */
+async function resolveQuestionForm(
+  config: ServerConfig,
+  requestID: string,
+  directory?: string,
+  sessionID?: string,
+): Promise<ResolvedQuestionForm | null> {
+  try {
+    const forms = await fetchQuestionForms(config, directory)
+    const match = forms.find((f) => f.id === requestID || formToolCallID(f) === requestID)
+    if (match?.id) {
+      return {
+        formID: match.id,
+        sessionID: match.sessionID ?? sessionID,
+        fields: Array.isArray(match.fields) ? match.fields : undefined,
+        callID: formToolCallID(match),
+      }
+    }
+  } catch (err) {
+    // Sin listado no se puede resolver un callID; un frm_ directo aún sirve.
+    if (!isFormID(requestID)) throw err
+  }
+  return isFormID(requestID) ? { formID: requestID, sessionID } : null
+}
+
+function buildQuestionAnswer(arr: string[][], fields?: RawFormField[]): Record<string, unknown> {
+  const answer: Record<string, unknown> = {}
+  if (fields && fields.length > 0) {
+    fields.forEach((f, i) => {
+      const ans = arr[i] ?? []
+      const key = f.key ?? String(i)
+      answer[key] = f.type === "multiselect" ? ans : ans.length > 0 ? (ans.length === 1 ? ans[0] : ans) : ""
+    })
+    return answer
+  }
+  arr.forEach((ans, i) => {
+    answer[String(i)] = ans.length === 1 ? ans[0] : ans
+  })
+  return answer
+}
+
+async function fetchFormFields(
+  config: ServerConfig,
+  sessionID: string,
+  formID: string,
+  directory?: string,
+): Promise<RawFormField[] | undefined> {
+  try {
+    const form = await request<{ fields?: RawFormField[] }>(
+      config,
+      withLocationDirectory(`/session/${encodeURIComponent(sessionID)}/form/${encodeURIComponent(formID)}`, directory),
+    )
+    if (Array.isArray(form?.fields)) return form.fields
+  } catch { /* sigue el fallback global */ }
+  if (sessionID !== "global") {
+    try {
+      const form = await request<{ fields?: RawFormField[] }>(
+        config,
+        withLocationDirectory(`/session/global/form/${encodeURIComponent(formID)}`, directory),
+      )
+      if (Array.isArray(form?.fields)) return form.fields
+    } catch { /* ignore */ }
+  }
+  return undefined
+}
+
+/** Marca settled el requestID, el formID y el callID conocidos. */
+function settleQuestion(
+  target: ResolvedQuestionForm | null,
+  requestID: string,
+  status: "answered" | "rejected",
+  answers?: string[][] | Record<string, unknown>,
+): void {
+  const ids = new Set<string>([requestID, target?.formID, target?.callID].filter((x): x is string => !!x))
+  for (const id of ids) recordQuestionSettled(id, status, answers)
+}
+
+/** 404/409: el form ya no existe (respondido/cancelado) → cierre local válido. */
+function isResolvedFormError(error: unknown): boolean {
+  const status = errorStatus(error)
+  return status === 404 || status === 409
 }
 
 async function syncV2SessionContext(
@@ -72,7 +215,7 @@ export type { ApiVersion } from "./shared/api/version"
 export { resolveApiVersion, getApiVersion, rememberApiVersion, onApiVersionChange, apiPath, unwrapData, detectedVersionCache, detectionPromises, versionKey, versionListeners, ensureVersionDetected, setHealthProbe } from "./shared/api/version"
 export type { ConfigProvidersResponse, AgentResponse, V2Session, V2Message } from "./shared/api/mappers"
 export { mapProviderModels, toAgentOption, toModelBody, toCreateSessionModel, modelWireName, toSessionV1, toMessageEnvelopeV1 } from "./shared/api/mappers"
-export { normalizeSlashes, toServerRelative, withDirectory, withLocationDirectory, fetchFileBytes, arrayBufferToBase64, responseDetail, normalizeHeaders, serializedSize, requestWithHeaders, requestRaw, request } from "./shared/api/client"
+export { normalizeSlashes, toServerRelative, withDirectory, withLimit, withProject, withLocationDirectory, fetchFileBytes, arrayBufferToBase64, responseDetail, normalizeHeaders, serializedSize, requestWithHeaders, requestRaw, request } from "./shared/api/client"
 export type { RequestOptions, ResponseWithHeaders } from "./shared/api/client"
 
 // Variante del SDK que resolvió message.list por host (ver loadMessages):
@@ -104,17 +247,34 @@ export const api = {
     }
   },
 
-  async listSessions(config: ServerConfig, directory?: string) {
-    const raw = await request<Session[] | V2Session[]>(config, withDirectory("/session", directory))
-    if ((await getApiVersion(config)) === "v2") {
+  async listSessions(config: ServerConfig, directory?: string, limit?: number, project?: string) {
+    // Límite y filtro por proyecto solo aplican a v2 (v1 pagina con
+    // /experimental/session y filtra por directory).
+    const version = await getApiVersion(config)
+    let path = withDirectory("/session", directory)
+    if (version === "v2") path = withProject(withLimit(path, limit), project)
+    const raw = await request<Session[] | V2Session[]>(config, path)
+    if (version === "v2") {
       return (raw as V2Session[]).map(toSessionV1)
     }
     return raw as Session[]
   },
 
-  async listGlobalSessions(config: ServerConfig) {
+  // v2 EXPLÍCITO (path /api/...): no depende de la versión detectada. Un
+  // perfil con apiVersion v1 forzada contra un server v2 igual lista todas
+  // las sesiones del proyecto, sin la respuesta gigante del global.
+  async listSessionsByProject(config: ServerConfig, project: string, limit?: number) {
+    const path = `/api${withProject(withLimit("/session", limit), project)}`
+    const raw = await request<V2Session[]>(config, path, { rawPath: true })
+    return (raw as V2Session[]).map(toSessionV1)
+  },
+
+  async listGlobalSessions(config: ServerConfig, limit?: number) {
     if ((await getApiVersion(config)) === "v2") {
-      return api.listSessions(config)
+      // v2: /session sin directory devuelve SOLO 50 por defecto. Con limit
+      // alto el snapshot es completo (la paginación por cursor de v2 no está
+      // disponible: InvalidCursorError).
+      return api.listSessions(config, undefined, limit)
     }
     const sessions: Session[] = []
     let cursor: string | undefined
@@ -132,27 +292,35 @@ export const api = {
   },
 
   async listProjects(config: ServerConfig): Promise<Array<{ id: string; directory: string; name?: string }>> {
+    // v2 devuelve `canonical` (no directory/worktree): sin este fallback el
+    // backfill por-dir no tenía proyectos que consultar y el sidebar podía
+    // quedarse con un solo proyecto.
+    const parse = (raw: unknown) => {
+      if (!Array.isArray(raw)) return []
+      return (raw as Array<{ id?: string; directory?: string; name?: string; worktree?: string; canonical?: string }>)
+        .map((p) => {
+          const directory = p.directory || p.worktree || p.canonical || ""
+          return {
+            id: p.id || directory,
+            directory,
+            name: p.name || (directory ? directory.split(/[\/\\]/).filter(Boolean).pop() : undefined),
+          }
+        })
+        .filter((p) => Boolean(p.directory))
+    }
     try {
-      if ((await getApiVersion(config)) === "v2") {
-        const raw = await request<Array<{ id?: string; directory?: string; name?: string; worktree?: string }>>(config, "/project")
-        if (Array.isArray(raw)) {
-          return raw.map((p) => ({
-            id: p.id || p.directory || p.worktree || "",
-            directory: p.directory || p.worktree || "",
-            name: p.name || (p.directory ? p.directory.split(/[\/\\]/).filter(Boolean).pop() : undefined),
-          })).filter((p) => Boolean(p.directory))
-        }
-        return []
-      }
-      const raw = await request<Array<{ id?: string; directory?: string; name?: string; worktree?: string }>>(config, "/project")
-      if (Array.isArray(raw)) {
-        return raw.map((p) => ({
-          id: p.id || p.directory || p.worktree || "",
-          directory: p.directory || p.worktree || "",
-          name: p.name || (p.worktree ? p.worktree.split(/[\/\\]/).filter(Boolean).pop() : undefined),
-        })).filter((p) => Boolean(p.directory))
-      }
-      return []
+      const out = parse(await request(config, "/project"))
+      if (out.length > 0) return out
+    } catch {
+      /* sigue el fallback v2 explícito */
+    }
+    try {
+      // Perfil con apiVersion v1 forzada: el path v1 puede ser el fallback
+      // SPA. Se prueba el endpoint v2 explícito y, si responde, se corrige
+      // la versión recordada para el resto de la app.
+      const out = parse(await request(config, "/api/project", { rawPath: true }))
+      if (out.length > 0) rememberApiVersion(config, "v2")
+      return out
     } catch {
       return []
     }
@@ -169,6 +337,18 @@ export const api = {
       return out
     }
     return request<Record<string, SessionStatus>>(config, withDirectory("/session/status", directory))
+  },
+
+  // v2 experimental: desacopla los subagentes sincrónicos que bloquean la
+  // sesión y los continúa en background (equivalente a Ctrl+B de la TUI).
+  // Devuelve true si promovió alguno; el server luego emite
+  // `metadata.background` en los parts vía SSE y el chat pinta los chips.
+  async promoteSessionBackground(config: ServerConfig, sessionID: string, directory?: string) {
+    return request<boolean>(
+      config,
+      withDirectory(`/experimental/session/${encodeURIComponent(sessionID)}/background`, directory),
+      { method: "POST", body: {}, retryable: false }
+    )
   },
 
   async loadPath(config: ServerConfig, directory?: string) {
@@ -189,12 +369,7 @@ export const api = {
       const basePath = withLocationDirectory("/fs/list", directory)
       const sep = basePath.includes("?") ? "&" : "?"
       const raw = await request<Array<{ path?: string; type?: string }>>(config, `${basePath}${rel ? `${sep}path=${encodeURIComponent(rel)}` : ""}`)
-      return raw.map((e) => ({
-        name: (e.path ?? "").split("/").pop() ?? "",
-        path: e.path ?? "",
-        absolute: e.path ?? "",
-        type: (e.type === "directory" ? "directory" : "file") as "file" | "directory",
-      }))
+      return raw.map((e) => toFileEntryV2(directory, e))
     }
     const rel = path.replace(/\\/g, "/").replace(/^[A-Za-z]:\/?/, "").replace(/^\/+/, "")
     return request<FileEntry[]>(config, withDirectory(`/file?path=${encodeURIComponent(rel)}`, directory))
@@ -263,27 +438,51 @@ export const api = {
     const v2 = (await getApiVersion(config)) === "v2"
     if (v2) {
       const raw = await request<unknown>(config, withLocationDirectory("/integration", directory))
-      const list = Array.isArray(raw) ? (raw as Array<{ id?: string; name?: string; authMethods?: unknown }>) : []
-      return {
-        all: list.map((p) => ({
+      const list = Array.isArray(raw)
+        ? (raw as Array<{
+            id?: string
+            name?: string
+            authMethods?: unknown
+            connections?: Array<{ type?: string; id?: string; label?: string; name?: string }>
+          }>)
+        : []
+      // v2 modela CADA cuenta como una conexión: `credential` (con id+label) o
+      // `env`. Se conservan todas para poder listar y quitar cuentas sueltas
+      // de un mismo proveedor (antes se aplanaba a una lista de ids).
+      const all = list.map((p) => {
+        const connections: ServerProviderConnection[] = (p.connections ?? [])
+          .map((c) =>
+            c.type === "env"
+              ? ({ type: "env" as const, name: c.name ?? "" } satisfies ServerProviderConnection)
+              : ({ type: "credential" as const, id: c.id ?? "", label: c.label ?? "" } satisfies ServerProviderConnection),
+          )
+          .filter((c) => (c.type === "env" ? !!c.name : !!c.id))
+        return {
           id: p.id ?? "",
           name: p.name ?? p.id ?? "",
           source: "config" as const,
-          env: [],
-          models: {},
-        })),
+          env: [] as string[],
+          models: {} as Record<string, unknown>,
+          connections,
+        }
+      })
+      return {
+        all,
         default: {} as Record<string, string>,
-        connected: [] as string[],
+        connected: all.filter((p) => p.connections && p.connections.length > 0).map((p) => p.id),
       }
     }
     return request<ServerProviderList>(config, withDirectory("/provider", directory))
   },
 
-  async setProviderAuth(config: ServerConfig, providerID: string, key: string, directory?: string) {
+  async setProviderAuth(config: ServerConfig, providerID: string, key: string, directory?: string, label?: string) {
     if ((await getApiVersion(config)) === "v2") {
+      const body: Record<string, unknown> = { key }
+      const clean = label?.trim()
+      if (clean) body.label = clean
       return request<boolean>(config, withLocationDirectory(`/integration/${providerID}/connect/key`, directory), {
         method: "POST",
-        body: { key },
+        body,
       })
     }
     return request<boolean>(config, withDirectory(`/auth/${providerID}`, directory), {
@@ -294,9 +493,33 @@ export const api = {
 
   async removeProviderAuth(config: ServerConfig, providerID: string, directory?: string) {
     if ((await getApiVersion(config)) === "v2") {
-      return request<boolean>(config, withLocationDirectory(`/integration/${providerID}/disconnect`, directory), { method: "DELETE" })
+      // No existe un endpoint `integration/disconnect`: se quitan una por una
+      // todas las credenciales del proveedor (DELETE /api/credential/:id).
+      const raw = await request<unknown>(config, withLocationDirectory(`/integration/${providerID}`, directory))
+      const conns = (raw as { connections?: Array<{ type?: string; id?: string }> } | null)?.connections ?? []
+      let removed = false
+      for (const c of conns) {
+        if (c.type !== "credential" || !c.id) continue
+        await request(config, withLocationDirectory(`/credential/${encodeURIComponent(c.id)}`, directory), { method: "DELETE" })
+        removed = true
+      }
+      return removed
     }
     return request<boolean>(config, withDirectory(`/auth/${providerID}`, directory), { method: "DELETE" })
+  },
+
+  /** v2: quita una cuenta concreta (credencial) de un proveedor. */
+  async removeProviderCredential(config: ServerConfig, credentialID: string, directory?: string) {
+    return request<boolean>(config, withLocationDirectory(`/credential/${encodeURIComponent(credentialID)}`, directory), {
+      method: "DELETE",
+    })
+  },
+
+  /** v2: marca una cuenta concreta como la activa del proveedor. */
+  async activateProviderCredential(config: ServerConfig, credentialID: string, directory?: string) {
+    return request<boolean>(config, withLocationDirectory(`/credential/${encodeURIComponent(credentialID)}/activate`, directory), {
+      method: "POST",
+    })
   },
 
   async addCustomProvider(config: ServerConfig, providerID: string, name: string, baseURL: string, models: string[]) {
@@ -748,141 +971,116 @@ export const api = {
   ) {
     const version = await getApiVersion(config)
     if (version === "v2") {
-      let sid = sessionID
-      if (!sid) {
-        try {
-          const list = await api.listPendingQuestions(config, directory)
-          const found = list.find((q) => q.id === requestID)
-          if (found?.sessionID) sid = found.sessionID
-        } catch { /* ignore */ }
-      }
-      if (!sid) sid = "global"
-
-      let answerRecord: Record<string, unknown> = {}
-      if (!Array.isArray(answers) && typeof answers === "object" && answers !== null) {
-        answerRecord = answers as Record<string, unknown>
-      } else {
-        const arr = Array.isArray(answers) ? answers : []
-        let formFields: Array<{ key: string; type?: string }> | null = null
-        try {
-          const form = await request<{ fields?: Array<{ key: string; type?: string }> }>(
-            config,
-            withLocationDirectory(`/session/${encodeURIComponent(sid)}/form/${encodeURIComponent(requestID)}`, directory),
-          )
-          if (form && Array.isArray(form.fields)) {
-            formFields = form.fields
-          }
-        } catch {
-          if (sid !== "global") {
-            try {
-              const form = await request<{ fields?: Array<{ key: string; type?: string }> }>(
-                config,
-                withLocationDirectory(`/session/global/form/${encodeURIComponent(requestID)}`, directory),
-              )
-              if (form && Array.isArray(form.fields)) {
-                formFields = form.fields
-                sid = "global"
-              }
-            } catch { /* ignore */ }
-          }
-        }
-
-        if (formFields && formFields.length > 0) {
-          formFields.forEach((f, i) => {
-            const ans = arr[i] ?? []
-            if (f.type === "multiselect") {
-              answerRecord[f.key] = ans
-            } else {
-              answerRecord[f.key] = ans.length > 0 ? (ans.length === 1 ? ans[0] : ans) : ""
-            }
-          })
-        } else {
-          arr.forEach((ans, i) => {
-            const val = ans.length === 1 ? ans[0] : ans
-            answerRecord[String(i)] = val
-          })
-        }
-      }
-
-      // 1. Intentar endpoint oficial de formulario v2 (/session/:id/form/:id/reply)
+      let form: ResolvedQuestionForm | null = null
       try {
-        const res = await request<boolean>(
-          config,
-          withLocationDirectory(`/session/${encodeURIComponent(sid)}/form/${encodeURIComponent(requestID)}/reply`, directory),
-          {
-            method: "POST",
-            body: { answer: answerRecord, answers: Array.isArray(answers) ? answers : undefined },
-            retryable: false,
-          },
-        )
-        recordQuestionSettled(requestID, "answered", answers)
-        return res
+        form = await resolveQuestionForm(config, requestID, directory, sessionID)
       } catch (err) {
-        const status = errorStatus(err)
-        if (status !== 404 && !/404|not found/i.test(String(err))) throw err
+        // Server v2 sin /form/request (híbrido viejo): probar endpoint legacy.
+        if (!isResolvedFormError(err)) throw err
+        form = null
       }
 
-      // 2. Fallback a endpoint de sesión (/session/:id/question/:id/reply)
+      if (form) {
+        const sid = form.sessionID ?? sessionID ?? "global"
+        let answerRecord: Record<string, unknown>
+        if (!Array.isArray(answers) && typeof answers === "object" && answers !== null) {
+          answerRecord = answers as Record<string, unknown>
+        } else {
+          const arr = Array.isArray(answers) ? answers : []
+          const fields = form.fields && form.fields.length > 0
+            ? form.fields
+            : await fetchFormFields(config, sid, form.formID, directory)
+          answerRecord = buildQuestionAnswer(arr, fields)
+        }
+        try {
+          const res = await request<boolean>(
+            config,
+            withLocationDirectory(`/session/${encodeURIComponent(sid)}/form/${encodeURIComponent(form.formID)}/reply`, directory),
+            {
+              method: "POST",
+              body: { answer: answerRecord },
+              retryable: false,
+            },
+          )
+          settleQuestion(form, requestID, "answered", answers)
+          return res
+        } catch (err) {
+          if (isResolvedFormError(err)) {
+            settleQuestion(form, requestID, "answered", answers)
+            return true
+          }
+          // 400 (p. ej. Unknown form field): propaga el detalle para feedback.
+          throw err
+        }
+      }
+
+      // Sin form resoluble: compat con endpoint de sesión del shape viejo.
+      const sid = sessionID ?? "global"
       try {
         const res = await request<boolean>(
           config,
           withDirectory(`/session/${encodeURIComponent(sid)}/question/${encodeURIComponent(requestID)}/reply`, directory),
           {
             method: "POST",
-            body: { answers: Array.isArray(answers) ? answers : Object.values(answerRecord).map((v) => Array.isArray(v) ? v : [String(v)]) },
+            body: { answers: Array.isArray(answers) ? answers : [] },
             retryable: false,
           },
         )
-        recordQuestionSettled(requestID, "answered", answers)
+        settleQuestion(null, requestID, "answered", answers)
         return res
       } catch (err) {
-        const status = errorStatus(err)
-        if (status !== 404 && !/404|not found/i.test(String(err))) throw err
+        if (!isResolvedFormError(err) && !/404|not found/i.test(String(err))) throw err
+        // La pregunta ya no existe: cerrar localmente en vez de botón muerto.
+        settleQuestion(null, requestID, "answered", answers)
+        return true
       }
     }
 
-    // 3. Fallback a endpoint global v1 (/question/:id/reply)
+    // v1: endpoint global existente.
     const res = await request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reply`, directory), {
       method: "POST",
       body: { answers: Array.isArray(answers) ? answers : [] },
       retryable: false,
     })
-    recordQuestionSettled(requestID, "answered", answers)
+    settleQuestion(null, requestID, "answered", answers)
     return res
   },
 
   async questionReject(config: ServerConfig, requestID: string, directory?: string, sessionID?: string) {
     const version = await getApiVersion(config)
     if (version === "v2") {
-      let sid = sessionID
-      if (!sid) {
-        try {
-          const list = await api.listPendingQuestions(config, directory)
-          const found = list.find((q) => q.id === requestID)
-          if (found?.sessionID) sid = found.sessionID
-        } catch { /* ignore */ }
-      }
-      if (!sid) sid = "global"
-
-      // 1. Intentar endpoint oficial de cancelación de formulario v2 (/session/:id/form/:id/cancel)
+      let form: ResolvedQuestionForm | null = null
       try {
-        const res = await request<boolean>(
-          config,
-          withLocationDirectory(`/session/${encodeURIComponent(sid)}/form/${encodeURIComponent(requestID)}/cancel`, directory),
-          {
-            method: "POST",
-            body: {},
-            retryable: false,
-          },
-        )
-        recordQuestionSettled(requestID, "rejected")
-        return res
+        form = await resolveQuestionForm(config, requestID, directory, sessionID)
       } catch (err) {
-        const status = errorStatus(err)
-        if (status !== 404 && !/404|not found/i.test(String(err))) throw err
+        if (!isResolvedFormError(err)) throw err
+        form = null
       }
 
-      // 2. Fallback a endpoint de sesión (/session/:id/question/:id/reject)
+      if (form) {
+        const sid = form.sessionID ?? sessionID ?? "global"
+        try {
+          const res = await request<boolean>(
+            config,
+            withLocationDirectory(`/session/${encodeURIComponent(sid)}/form/${encodeURIComponent(form.formID)}/cancel`, directory),
+            {
+              method: "POST",
+              body: {},
+              retryable: false,
+            },
+          )
+          settleQuestion(form, requestID, "rejected")
+          return res
+        } catch (err) {
+          if (isResolvedFormError(err)) {
+            settleQuestion(form, requestID, "rejected")
+            return true
+          }
+          throw err
+        }
+      }
+
+      const sid = sessionID ?? "global"
       try {
         const res = await request<boolean>(
           config,
@@ -893,21 +1091,22 @@ export const api = {
             retryable: false,
           },
         )
-        recordQuestionSettled(requestID, "rejected")
+        settleQuestion(null, requestID, "rejected")
         return res
       } catch (err) {
-        const status = errorStatus(err)
-        if (status !== 404 && !/404|not found/i.test(String(err))) throw err
+        if (!isResolvedFormError(err) && !/404|not found/i.test(String(err))) throw err
+        settleQuestion(null, requestID, "rejected")
+        return true
       }
     }
 
-    // 3. Fallback a endpoint global v1 (/question/:id/reject)
+    // v1: endpoint global existente.
     const res = await request<boolean>(config, withDirectory(`/question/${encodeURIComponent(requestID)}/reject`, directory), {
       method: "POST",
       body: {},
       retryable: false,
     })
-    recordQuestionSettled(requestID, "rejected")
+    settleQuestion(null, requestID, "rejected")
     return res
   },
 
@@ -965,6 +1164,37 @@ export const api = {
     })
   },
 
+  /**
+   * v2: servidores MCP con estado real (connected / disabled / failed / …).
+   * El endpoint es GET /api/mcp; en v1 no existe (devuelve []).
+   */
+  async listMCPServers(config: ServerConfig, directory?: string): Promise<MCPServerInfo[]> {
+    if ((await getApiVersion(config)) !== "v2") return []
+    const raw = await request<unknown>(config, withLocationDirectory("/mcp", directory))
+    if (!Array.isArray(raw)) return []
+    const valid: MCPServerStatus[] = ["connected", "pending", "disabled", "failed", "needs_auth"]
+    const out: MCPServerInfo[] = []
+    for (const item of raw) {
+      if (!item || typeof item !== "object") continue
+      const o = item as { name?: unknown; status?: unknown }
+      if (typeof o.name !== "string" || !o.name) continue
+      const st = (o.status && typeof o.status === "object" ? o.status : {}) as { status?: unknown; error?: unknown }
+      const status = valid.includes(st.status as MCPServerStatus) ? (st.status as MCPServerStatus) : "disabled"
+      out.push({ name: o.name, status, error: typeof st.error === "string" ? st.error : undefined })
+    }
+    return out
+  },
+
+  /** v2: activa/conecta un server MCP (POST /api/mcp/:name/connect, 204). */
+  async connectMCPServer(config: ServerConfig, name: string, directory?: string): Promise<void> {
+    await request(config, withLocationDirectory(`/mcp/${encodeURIComponent(name)}/connect`, directory), { method: "POST" })
+  },
+
+  /** v2: desactiva/desconecta un server MCP (POST /api/mcp/:name/disconnect, 204). */
+  async disconnectMCPServer(config: ServerConfig, name: string, directory?: string): Promise<void> {
+    await request(config, withLocationDirectory(`/mcp/${encodeURIComponent(name)}/disconnect`, directory), { method: "POST" })
+  },
+
   async listSkills(config: ServerConfig, directory?: string) {
     if ((await getApiVersion(config)) === "v2") {
       return request<{ id: string; name: string; description?: string }[]>(config, withLocationDirectory("/skill", directory))
@@ -975,20 +1205,16 @@ export const api = {
   async listPendingQuestions(config: ServerConfig, directory?: string): Promise<Question[]> {
     if ((await getApiVersion(config)) === "v2") {
       try {
-        const raw = await request<unknown>(config, withLocationDirectory("/form/request", directory))
-        const items = Array.isArray(raw)
-          ? raw
-          : raw && typeof raw === "object" && Array.isArray((raw as any).data)
-            ? (raw as any).data
-            : []
-        return items.map((q: any) => {
-          let questions: { question: string; header?: string; options: QuestionOption[]; multiple?: boolean; custom?: boolean }[] = []
+        return (await fetchQuestionForms(config, directory)).map((q) => {
+          const tool = q.metadata?.tool ?? q.tool
+          let questions: { question: string; header?: string; options: QuestionOption[]; multiple?: boolean; custom?: boolean; key?: string }[] = []
           if (Array.isArray(q.questions)) {
             questions = q.questions as typeof questions
           } else if (Array.isArray(q.fields)) {
-            questions = q.fields.map((f: any) => ({
-              question: f.title || f.key || "",
-              header: f.key,
+            questions = q.fields.map((f) => ({
+              // Contrato real: description = pregunta completa, title = header corto.
+              question: f.description || f.title || f.key || "",
+              header: f.title || f.key || "",
               options: Array.isArray(f.options)
                 ? f.options.map((opt: any) => ({
                     label: opt.label || opt.value || "",
@@ -997,13 +1223,16 @@ export const api = {
                 : [],
               multiple: f.type === "multiselect",
               custom: f.custom !== false,
+              key: f.key,
             }))
           }
           return {
-            id: q.id,
+            id: q.id ?? "",
             sessionID: q.sessionID,
             questions,
-            tool: q.tool ? { messageID: q.tool.messageID, callID: q.tool.id } : undefined,
+            tool: tool
+              ? { messageID: tool.messageID ?? "", callID: tool.id ?? tool.callID ?? "" }
+              : undefined,
           }
         })
       } catch {
@@ -1126,65 +1355,6 @@ export const api = {
       method: "POST",
       body: { path: toServerRelative(path, directory), content },
     })
-  },
-
-  async fetchStats(config: ServerConfig, statsPort: number, since = "", until = "", model = "", scope = "summary") {
-    const params = new URLSearchParams({ raw: "1" })
-    if (since) params.set("since", since)
-    if (until) params.set("until", until)
-    if (model) params.set("model", model)
-    if (scope) params.set("scope", scope)
-    const qs = params.toString()
-    // Local primero (desktop shell proxy) — rápido, sin CORS, lee opencode.db local.
-    // El proxy Rust en desktop-app/src/api.rs:544 → http://127.0.0.1:8765/api/{rest}
-    const tryLocal = async (): Promise<import("./types").StatsPayload> => {
-      // Asegurar que el server de stats esté levantado (idempotente) — no bloquea, el proxy espera 15s
-      try { await fetch("/shell/stats/start", { method: "POST", cache: "no-store" }) } catch {}
-      const url = `/shell/stats/proxy/data?${qs}`
-      // Reintento corto para el arranque del thread de stats (primer hit puede ser 502 mientras levanta)
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const ctl = new AbortController()
-        const t = setTimeout(() => ctl.abort(), 12000)
-        try {
-          const res = await fetch(url, { cache: "no-store", signal: ctl.signal })
-          if (!res.ok) throw new Error(`Stats HTTP ${res.status}`)
-          const data = await res.json()
-          if ((data as any)?.error) throw new Error((data as any).error)
-          return data as import("./types").StatsPayload
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e)
-          const isRetryable = /502|AbortError|Failed to fetch|NetworkError/i.test(msg) && attempt === 0
-          if (isRetryable) {
-            await new Promise((r) => setTimeout(r, 600))
-            continue
-          }
-          throw e
-        } finally { clearTimeout(t) }
-      }
-      throw new Error("Stats local no disponible")
-    }
-    const tryRemote = async (): Promise<import("./types").StatsPayload> => {
-      const host = config.host.replace(/^https?:\/\//, "").replace(/\/+$/, "")
-      const url = `http://${host}:${statsPort}/api/data?${qs}`
-      const res = await fetch(url, { cache: "no-store" })
-      if (!res.ok) throw new Error(`Stats HTTP ${res.status}`)
-      const data = await res.json()
-      if ((data as any)?.error) throw new Error((data as any).error)
-      return data as import("./types").StatsPayload
-    }
-    // Intentar local (mismo origen) — si estamos en desktop (127.0.0.1:4848) funciona; en mobile falla rápido y cae a remote.
-    try {
-      return await tryLocal()
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      // Si es 404 (no hay proxy, no estamos en desktop) → fallback remoto
-      // Si es 502 stats unavailable → también fallback
-      const isLocalNotAvailable = /404|502|Failed to fetch|Load failed|NetworkError|AbortError/i.test(msg)
-      if (isLocalNotAvailable) {
-        return await tryRemote()
-      }
-      throw e
-    }
   },
 }
 

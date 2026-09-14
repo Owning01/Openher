@@ -79,9 +79,9 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
           const pretty = JSON.stringify(liveCfg, null, 2)
           setRawConfig(pretty)
           setGlobalData({
-            configPath: "Servidor OpenCode (en vivo /config)",
+            configPath: "Servidor OpenHer (en vivo /config)",
             configContent: pretty,
-            configFiles: [{ path: "/config", name: "Servidor OpenCode (en vivo)", content: pretty }],
+            configFiles: [{ path: "/config", name: "Servidor OpenHer (en vivo)", content: pretty }],
             instructionsFiles: [],
             skills: [],
             scannedRoots: [],
@@ -234,7 +234,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
             <span style={{ display: "inline-flex", color: "var(--primary)" }}><BrainIcon size={20} /></span>
             <div>
               <div style={{ fontWeight: 600, fontSize: "15px", color: "var(--text)" }}>
-                OpenCode Hub (Agentes, Skills & Configuración)
+                OpenHer Hub (Agentes, Skills & Configuración)
               </div>
               <div style={{ fontSize: "12px", color: "var(--muted)" }}>
                 Inspecciona prompts de sistema, modelos asignados, catálogo de skills y archivos de configuración
@@ -361,7 +361,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
           {loading ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: "8px", color: "var(--muted)" }}>
               <LoadingIcon size={18} />
-              <span>Cargando configuración de OpenCode...</span>
+              <span>Cargando configuración de OpenHer...</span>
             </div>
           ) : activeTab === "agents" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -619,7 +619,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
                   </span>
                 </div>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  {jsonError && <span style={{ fontSize: "12px", color: "var(--danger)" }}>️ {jsonError}</span>}
+                  {jsonError && <span style={{ fontSize: "12px", color: "var(--danger)" }}>{jsonError}</span>}
                   {saveStatus && <span style={{ fontSize: "12px", color: saveStatus.includes("Error") ? "var(--danger)" : "var(--success)" }}>{saveStatus}</span>}
                   <button
                     type="button"

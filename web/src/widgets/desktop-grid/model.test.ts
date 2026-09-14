@@ -56,7 +56,7 @@ describe("desktop-grid model", () => {
     })
   })
 
-  it("buildGridTemplate con rightOverlay no reserva columna del QuickChat (<=1100px)", () => {
+  it("buildGridTemplate con rightOverlay no reserva columna de la sidebar derecha (<=1100px)", () => {
     const res = buildGridTemplate({
       position: "left",
       sidebarCollapsed: false,

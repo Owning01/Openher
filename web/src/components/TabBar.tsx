@@ -86,7 +86,6 @@ export const TabBar = memo(function TabBar({
   }
   if (id.startsWith("terminal")) return " Terminal"
   if (id === "explorer") return " Explorador"
-  if (id === "stats" || id === "__stats__") return " Estadísticas"
   if (id.startsWith("plugin:")) {
    const rest = id.slice(7)
    const label = rest.split(":").pop() || rest

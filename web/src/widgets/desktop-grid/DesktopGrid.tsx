@@ -21,9 +21,6 @@ export type DesktopGridProps = {
   activeSessionDir?: string
   selectedSessionDir?: string
   fileEditorPath: string | null
-  quickChatKeys: { cerebras: string; groq: string; go: string; custom: string; customUrl: string }
-  modelOptions: any[]
-  providerList: any[]
   vs: any
   onSetDesktopLayout: React.Dispatch<React.SetStateAction<any>>
   setActivePanel: (idx: number) => void
@@ -37,7 +34,6 @@ export type DesktopGridProps = {
   onSettleSession: (id: string, dir: string) => Promise<void> | void
   onRefreshSessions: () => void
   onSetCommands: (cmds: any) => void
-  onRecordPrompt: (_text: string) => void
   onQueueAction: (action: any) => void
   onShellExecute: (cmd: string, sid?: string, dir?: string) => void
   onChangeAgent: (agentId: string) => void
@@ -47,7 +43,6 @@ export type DesktopGridProps = {
   onOpenConnect: () => void
   onOpenBrowser: (url: string, targetPanel?: number) => void
   onOpenSessionDir: (dir: string) => void
-  onNavigateSettings: () => void
   onToggleInspectTool: (tool: "picker" | "pod") => void
   onBrowserVisualPick: (url: string, el: any) => void
   onSwitchTab: (panelIdx: number, tabIdx: number) => void
@@ -66,9 +61,6 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
     connectionState,
     baseChatProps,
     fileEditorPath,
-    quickChatKeys,
-    modelOptions,
-    providerList,
     vs,
     onSetDesktopLayout,
     setActivePanel,
@@ -82,7 +74,6 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
     onSettleSession,
     onRefreshSessions,
     onSetCommands,
-    onRecordPrompt,
     onQueueAction,
     onShellExecute,
     onChangeAgent,
@@ -92,7 +83,6 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
     onOpenConnect,
     onOpenBrowser,
     onOpenSessionDir,
-    onNavigateSettings,
     onToggleInspectTool,
     onBrowserVisualPick,
     onSwitchTab,
@@ -352,9 +342,6 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
           editorTabs={editorTabs}
           editorActive={editorActive}
           desktopLayout={desktopLayout}
-          quickChatKeys={quickChatKeys}
-          modelOptions={modelOptions}
-          providerList={providerList}
           vs={vs}
           onActivate={() => setActivePanel(i)}
           onClose={() => {
@@ -366,7 +353,6 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
           onSettleSession={onSettleSession}
           onRefreshSessions={onRefreshSessions}
           onSetCommands={onSetCommands}
-          onRecordPrompt={onRecordPrompt}
           onQueueAction={onQueueAction}
           onShellExecute={onShellExecute}
           onChangeAgent={onChangeAgent}
@@ -376,7 +362,6 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
           onOpenConnect={onOpenConnect}
           onOpenBrowser={(url) => onOpenBrowser(url, i)}
           onOpenSessionDir={onOpenSessionDir}
-          onNavigateSettings={onNavigateSettings}
           onToggleInspectTool={onToggleInspectTool}
           onBrowserVisualPick={onBrowserVisualPick}
           onSetDesktopLayout={onSetDesktopLayout}
@@ -436,7 +421,6 @@ export const DesktopGrid = memo(function DesktopGrid(props: DesktopGridProps) {
             onSettled={onSettleSession}
             onRefreshSessions={onRefreshSessions}
             onSetCommands={onSetCommands}
-            onRecordPrompt={onRecordPrompt}
             onQueueAction={onQueueAction}
             onShellExecute={onShellExecute}
             onChangeAgentGlobal={onChangeAgent}

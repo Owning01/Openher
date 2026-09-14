@@ -10,14 +10,12 @@ import { EXTERNAL_PROJECTS } from "../../features/external-plugins/config"
 import { tabRegistry } from "../../plugins"
 import {
   SingleTerminal,
-  StatsPanel,
   KanbanPanel,
   FileEditorPanel,
 } from "../../components/shellPanels"
 const BrowserPanel = React.lazy(() => import("../../components/BrowserPanel").then((m) => ({ default: m.BrowserPanel })))
 const LearningPage = React.lazy(() => import("../../features/learning/LearningPage"))
 const PCFilesPanel = React.lazy(() => import("../../features/pc-files/PCFilesPanel").then((m) => ({ default: m.PCFilesPanel })))
-const QuickChatPanel = React.lazy(() => import("../../components/QuickChatPanel").then((m) => ({ default: m.QuickChatPanel })))
 
 export const PANEL_SUSPENSE_FALLBACK = (
   <div className="panel-loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>Cargando…</div>
@@ -46,9 +44,6 @@ export type DesktopPanelRendererProps = {
   editorTabs?: string[]
   editorActive?: number
   desktopLayout?: import("../../types").DesktopLayout
-  quickChatKeys: { cerebras: string; groq: string; go: string; custom: string; customUrl: string }
-  modelOptions: any[]
-  providerList: any[]
   vs: any
   onActivate: () => void
   onClose: () => void
@@ -57,7 +52,6 @@ export type DesktopPanelRendererProps = {
   onSettleSession: (id: string, dir: string) => Promise<void> | void
   onRefreshSessions: () => void
   onSetCommands: (cmds: any) => void
-  onRecordPrompt: (_text: string) => void
   onQueueAction: (action: any) => void
   onShellExecute: (cmd: string, sid?: string, dir?: string) => void
   onChangeAgent: (agentId: string) => void
@@ -67,7 +61,6 @@ export type DesktopPanelRendererProps = {
   onOpenConnect: () => void
   onOpenBrowser: (url: string, panelIndex?: number) => void
   onOpenSessionDir: (dir: string) => void
-  onNavigateSettings: () => void
   onToggleInspectTool: (tool: "picker" | "pod") => void
   onBrowserVisualPick: (url: string, el: any) => void
   onSetDesktopLayout?: React.Dispatch<React.SetStateAction<any>>
@@ -92,9 +85,6 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     fileEditorPath,
     editorTabs,
     editorActive,
-    quickChatKeys,
-    modelOptions,
-    providerList,
     vs,
     onActivate,
     onClose,
@@ -103,7 +93,6 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     onSettleSession,
     onRefreshSessions,
     onSetCommands,
-    onRecordPrompt,
     onQueueAction,
     onShellExecute,
     onChangeAgent,
@@ -113,7 +102,6 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     onOpenConnect,
     onOpenBrowser,
     onOpenSessionDir,
-    onNavigateSettings,
     onToggleInspectTool,
     onBrowserVisualPick,
   } = props
@@ -149,19 +137,18 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       )
     }
 
-    // Virtual tabs (__kanban__, __stats__, __learning__, __pcFiles__) — legacy __design__/__reports__/__screenshots__ kept for migration
+    // Virtual tabs (__kanban__, __learning__, __pcFiles__) — legacy __design__/__reports__/__screenshots__ kept for migration
     const isVirtual = sid.startsWith("__")
     if (isVirtual) {
       let vComp: React.ReactNode = null
       if (sid === "__kanban__") vComp = <KanbanPanel onClose={onClose} />
-      else if (sid === "__stats__") vComp = <StatsPanel />
       else if (sid === "__learning__") vComp = <LearningPage />
       else if (sid === "__pcFiles__") vComp = <PCFilesPanel onOpenFile={props.onOpenFile} onOpenBrowser={props.onOpenBrowser} />
       else if (sid === "__design__") vComp = <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><ExternalIframePanel name="opendesign" title="Open Design" url="http://127.0.0.1:3000" /></Suspense>
       else if (sid === "__reports__") vComp = <LearningPage />
       else if (sid === "__screenshots__") vComp = <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><ExternalIframePanel name="screenshots" title="Screenshots" url="http://127.0.0.1:3002" /></Suspense>
 
-      const isScrollableVirtual = sid === "__pcFiles__" || sid === "__kanban__" || sid === "__stats__"
+      const isScrollableVirtual = sid === "__pcFiles__" || sid === "__kanban__"
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div style={{ flex: 1, minHeight: 0, overflow: isScrollableVirtual ? "hidden" : "auto", display: isScrollableVirtual ? "flex" : undefined, flexDirection: isScrollableVirtual ? "column" as const : undefined }}>
@@ -275,7 +262,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
               {(() => {
                 try {
                   const d = tabRegistry.get(pluginKey)
-                  return d ? d.render({}) : <div style={{ color: "var(--muted)" }}>Plugin no encontrado: {pluginKey}</div>
+                  return d ? d.render({ config }) : <div style={{ color: "var(--muted)" }}>Plugin no encontrado: {pluginKey}</div>
                 } catch {
                   return <div style={{ color: "var(--muted)" }}>Plugin: {pluginKey}</div>
                 }
@@ -322,7 +309,6 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
             onSettled={onSettleSession}
             onRefreshSessions={onRefreshSessions}
             onSetCommands={onSetCommands}
-            onRecordPrompt={onRecordPrompt}
             onQueueAction={onQueueAction}
             onShellExecute={onShellExecute}
             onChangeAgentGlobal={onChangeAgent}
@@ -399,33 +385,7 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
     )
   }
 
-  if (kind === "quickchat") {
-    return (
-      <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
-          <span>QuickChat</span>
-          <button className="btn-icon compact" onClick={onClose} aria-label="Cerrar panel">×</button>
-        </div>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <Suspense fallback={PANEL_SUSPENSE_FALLBACK}>
-            <QuickChatPanel
-              cerebrasKey={quickChatKeys.cerebras}
-              groqKey={quickChatKeys.groq}
-              goKey={quickChatKeys.go}
-              customKey={quickChatKeys.custom}
-              customUrl={quickChatKeys.customUrl}
-              config={config}
-              modelOptions={modelOptions}
-              providers={providerList}
-              onOpenSettings={onNavigateSettings}
-            />
-          </Suspense>
-        </div>
-      </div>
-    )
-  }
-
-  // Shell panel cell (terminal, explorador, kanban, stats, etc.)
+  // Shell panel cell (terminal, explorador, kanban, etc.)
   return (
     <ShellPanelCell
       index={i}

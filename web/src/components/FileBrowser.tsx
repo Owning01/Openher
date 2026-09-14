@@ -64,7 +64,7 @@ function FileTreeItem({
       setLoading(true)
       setError(null)
       try {
-        if (typeof window !== "undefined" && (window as any).__OPENCODE_DESKTOP__) {
+        if (typeof window !== "undefined" && (window as any).__OPENHER_DESKTOP__) {
           try {
             const res = await shell.fs.list(item.absolute)
             const entries: FileEntry[] = [
@@ -167,7 +167,7 @@ function FileTreeItem({
             </div>
           )}
           {error && (
-            <div style={{ padding: "4px 8px 4px 18px", color: "var(--color-error)", fontSize: "0.75rem" }}>
+            <div style={{ padding: "4px 8px 4px 18px", color: "var(--danger)", fontSize: "0.75rem" }}>
               {error}
             </div>
           )}
@@ -259,7 +259,7 @@ export const FileBrowser = memo(function FileBrowser({
         {loading ? (
           <div className="empty-state compact"><LoadingIcon size={28} /><p>{t('sessions.folderPickerLoading')}</p></div>
         ) : error ? (
-          <p className="subtle" style={{ color: "var(--color-error)", padding: "12px" }}>{error}</p>
+          <p className="subtle" style={{ color: "var(--danger)", padding: "12px" }}>{error}</p>
         ) : filteredItems.length === 0 ? (
           <p className="subtle" style={{ padding: "12px" }}>{filter ? "No se encontraron coincidencias" : t('sessions.folderPickerEmpty')}</p>
         ) : (

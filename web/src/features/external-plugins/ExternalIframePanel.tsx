@@ -117,6 +117,14 @@ export function ExternalIframePanel({ name, title, url: defaultUrl, isWidget }: 
   // poll hasta ready
   await pollReady(target)
   } catch (e: any) {
+  try {
+   await fetch(defaultUrl, { mode: "no-cors", cache: "no-store" })
+   if (!cancelled) {
+    setUrl(defaultUrl)
+    setStatus("ready")
+    return
+   }
+  } catch {}
   if (!cancelled) {
    setError(e?.message || String(e))
    setStatus("error")

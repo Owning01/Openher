@@ -66,8 +66,6 @@ export const GlobeIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Web"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></Svg>)
 export const ToolIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Tool"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></Svg>)
-export const StatsIcon = (p: { className?: string; size?: number }) => (
-  <Svg {...p} label="Stats"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></Svg>)
 export const ArrowLeftIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Back"><path d="M19 12H5M12 19l-7-7 7-7"/></Svg>)
 
@@ -135,6 +133,21 @@ export const CameraIcon = (p: { className?: string; size?: number }) => (
 
 export const CopyIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Copy"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Svg>)
+
+export const VolumeIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Listen"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></Svg>)
+
+export const ZapIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Quick"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></Svg>)
+
+export const FlaskIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Research"><path d="M10 2v7.31"/><path d="M14 9.3V2"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></Svg>)
+
+export const KanbanIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Kanban"><path d="M6 5v11"/><path d="M12 5v6"/><path d="M18 5v14"/></Svg>)
+
+export const ClockIcon = (p: { className?: string; size?: number }) => (
+  <Svg {...p} label="Background"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></Svg>)
 
 export const CutIcon = (p: { className?: string; size?: number }) => (
   <Svg {...p} label="Cut"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88"/><path d="M14.74 14.74 20 20"/><path d="M8.12 8.12 12 12"/></Svg>)

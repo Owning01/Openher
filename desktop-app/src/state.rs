@@ -45,6 +45,20 @@ pub fn request_window_action(a: WindowAction) -> bool {
     }
 }
 
+// Quit handler: lo usa el self-update del desktop para cerrar la app después
+// de dejar el helper lanzado (el helper copia los archivos y la relanza).
+static APP_QUIT_FN: std::sync::OnceLock<Arc<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();
+
+pub fn set_app_quit_handler(f: Arc<dyn Fn() + Send + Sync>) {
+    let _ = APP_QUIT_FN.set(f);
+}
+
+pub fn request_app_quit() {
+    if let Some(f) = APP_QUIT_FN.get() {
+        f();
+    }
+}
+
 #[cfg(windows)]
 pub fn window_is_maximized() -> bool {
     let h = WINDOW_HWND.load(Ordering::Relaxed);
@@ -212,12 +226,7 @@ pub struct ShellConfig {
     pub desktop_agent_path: String,
     /// Cuentas GitHub (repo/repo) para el feed de updates.
     pub github_repos: Vec<String>,
-    /// API key Cerebras para Quick Chat
-    pub cerebras_api_key: String,
-    pub groq_api_key: String,
-    pub quickchat_provider: String,
-    pub quickchat_model: String,
-    /// Auto-abrir `opencode2` en una terminal al iniciar la app.
+    /// Arrancar el servidor `opencode2` headless al iniciar la app.
     pub auto_opencode2: bool,
     #[serde(default)]
     pub opencode2_enabled: bool,
@@ -225,10 +234,18 @@ pub struct ShellConfig {
     pub opencode2_port: u16,
     #[serde(default)]
     pub opencode2_command: String,
+    /// Registra "Abrir sesión en OpenHer aquí" en el menú contextual de Windows
+    /// (HKCU\Software\Classes, sin admin). Se auto-repara en cada arranque.
+    #[serde(default = "default_true")]
+    pub context_menu: bool,
 }
 
 fn default_opencode2_port() -> u16 {
     4098
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -263,14 +280,11 @@ impl Default for ShellConfig {
             labs_apps: Vec::new(),
             desktop_agent_path: String::new(),
             github_repos: vec!["sst/opencode".into()],
-            cerebras_api_key: String::new(),
-            groq_api_key: String::new(),
-            quickchat_provider: String::new(),
-            quickchat_model: String::new(),
             auto_opencode2: false,
             opencode2_enabled: true,
             opencode2_port: 4098,
             opencode2_command: String::new(),
+            context_menu: true,
         }
     }
 }
@@ -331,7 +345,7 @@ pub struct AppState {
 
 /// data/ vive al lado del exe (portable, cero escrituras en C:).
 pub fn data_dir() -> PathBuf {
-    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("opencode-desktop.exe"));
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("openher-desktop.exe"));
     let dir = exe.parent().unwrap_or(Path::new("."));
     dir.join("data")
 }
@@ -535,7 +549,9 @@ pub fn autostart_enabled() -> bool {
     use winreg::RegKey;
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     if let Ok(run) = hkcu.open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run") {
-        return run.get_value::<String, _>("OpenCodeDesktop").is_ok();
+        // Migración: el valor viejo se llamaba OpenCodeDesktop.
+        return run.get_value::<String, _>("OpenHerDesktop").is_ok()
+            || run.get_value::<String, _>("OpenCodeDesktop").is_ok();
     }
     false
 }
@@ -553,26 +569,58 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
     if enabled {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         let cmd = format!("\"{}\" --autostart", exe.display());
-        run.set_value("OpenCodeDesktop", &cmd).map_err(|e| e.to_string())?;
+        run.set_value("OpenHerDesktop", &cmd).map_err(|e| e.to_string())?;
+        let _ = run.delete_value("OpenCodeDesktop");
     } else {
+        let _ = run.delete_value("OpenHerDesktop");
         let _ = run.delete_value("OpenCodeDesktop");
     }
     Ok(())
 }
 
+/// Migración de identidad: si el autostart quedó con el valor viejo
+/// (`OpenCodeDesktop`) apuntando al exe viejo, se reescribe con el actual.
+#[cfg(windows)]
+pub fn migrate_legacy_autostart() {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE};
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let Ok(run) = hkcu.open_subkey_with_flags(
+        r"Software\Microsoft\Windows\CurrentVersion\Run",
+        KEY_SET_VALUE | KEY_READ,
+    ) else {
+        return;
+    };
+    if run.get_value::<String, _>("OpenCodeDesktop").is_err() {
+        return;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let cmd = format!("\"{}\" --autostart", exe.display());
+        let _ = run.set_value("OpenHerDesktop", &cmd);
+    }
+    let _ = run.delete_value("OpenCodeDesktop");
+    eprintln!("openher-desktop: autostart migrado (OpenCodeDesktop -> OpenHerDesktop)");
+}
+
+#[cfg(not(windows))]
+pub fn migrate_legacy_autostart() {}
+
 /// Autostart dedicado del servidor opencode2 (headless, sin UI).
-/// Entrada HKCU\Run `OpenCode2Server` -> `"exe" --ensure-opencode2-and-exit`.
+/// Entrada HKCU\Run `OpenHer2Server` -> `"exe" --ensure-opencode2-and-exit`.
 /// El exe es `windows_subsystem="windows"`: no hay flash de consola en logon.
 /// Sin esto, tras reiniciar Windows solo abría el desktop minimizado pero el
 /// `:4098` nunca levantaba (config con `opencode2_enabled=false` + cmd vacío).
-pub const OPENCODE2_RUN_VALUE: &str = "OpenCode2Server";
+pub const OPENHER2_RUN_VALUE: &str = "OpenHer2Server";
+/// Valor de registro viejo (migración): se borra al escribir el nuevo.
+pub const LEGACY_OPENCODE2_RUN_VALUE: &str = "OpenCode2Server";
 
 pub fn opencode2_autostart_enabled() -> bool {
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     if let Ok(run) = hkcu.open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run") {
-        return run.get_value::<String, _>(OPENCODE2_RUN_VALUE).is_ok();
+        return run.get_value::<String, _>(OPENHER2_RUN_VALUE).is_ok()
+            || run.get_value::<String, _>(LEGACY_OPENCODE2_RUN_VALUE).is_ok();
     }
     false
 }
@@ -590,71 +638,99 @@ pub fn set_opencode2_autostart(enabled: bool) -> Result<(), String> {
     if enabled {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         let cmd = format!("\"{}\" --ensure-opencode2-and-exit", exe.display());
-        run.set_value(OPENCODE2_RUN_VALUE, &cmd)
+        run.set_value(OPENHER2_RUN_VALUE, &cmd)
             .map_err(|e| e.to_string())?;
+        let _ = run.delete_value(LEGACY_OPENCODE2_RUN_VALUE);
     } else {
-        let _ = run.delete_value(OPENCODE2_RUN_VALUE);
+        let _ = run.delete_value(OPENHER2_RUN_VALUE);
+        let _ = run.delete_value(LEGACY_OPENCODE2_RUN_VALUE);
     }
     Ok(())
 }
 
-/// Localiza el binario funcional de opencode2. `X:\Dev\bun\bin\opencode2.exe`
-/// está corrupto (remap bun roto); el que sirve `:4098` es el de npm-global.
-/// Orden: PATH (where.exe) -> candidatos conocidos -> fallback PATH genérico.
+/// Localiza el binario funcional de opencode/opencode2.
+///
+/// El bin real de npm-global es `opencode.exe` (el alias `opencode2` es el
+/// mismo ejecutable). `G:\Dev\bun\bin\opencode*.exe` son shims de 8KB
+/// corruptos (remap bun roto): se evitan cuando hay un bin sano.
+/// Orden: npm-global -> `where.exe opencode/opencode2` (.exe) -> HOME/.bun/bin
+/// -> shims `.cmd`/`.ps1` como último recurso.
 pub fn discover_opencode2_exe() -> Option<String> {
-    // 1. where.exe (evita alias `where` de PowerShell)
-    if let Ok(out) = std::process::Command::new("where.exe")
-        .arg("opencode2")
-        .output()
+    // Dev vivió en X:\Dev y se migró a G:\Dev; probar ambos.
+    const NPM_GLOBAL_BINS: &[&str] = &[
+        r"G:\Dev\npm-global\node_modules\@opencode\cli\bin",
+        r"X:\Dev\npm-global\node_modules\@opencode\cli\bin",
+    ];
+    let mut preferred: Vec<String> = Vec::new();
+    for bin in NPM_GLOBAL_BINS {
+        preferred.push(format!(r"{bin}\opencode.exe"));
+        preferred.push(format!(r"{bin}\opencode2.exe"));
+    }
+    // 1. Bin real de npm-global: es el que sirve el server.
+    for p in &preferred {
+        if std::path::Path::new(p).exists() {
+            return Some(p.clone());
+        }
+    }
+    // 2. where.exe (evita alias `where` de PowerShell), separando .exe de shims.
+    let mut where_exes: Vec<String> = Vec::new();
+    let mut where_shims: Vec<String> = Vec::new();
+    for name in ["opencode", "opencode2"] {
+        if let Ok(out) = std::process::Command::new("where.exe").arg(name).output() {
+            if out.status.success() {
+                for line in String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .map(str::trim)
+                    .filter(|l| !l.is_empty())
+                {
+                    let low = line.to_ascii_lowercase();
+                    if low.ends_with(".exe") {
+                        if !where_exes.iter().any(|e| e.eq_ignore_ascii_case(line)) {
+                            where_exes.push(line.to_string());
+                        }
+                    } else if !where_shims.iter().any(|e| e.eq_ignore_ascii_case(line)) {
+                        where_shims.push(line.to_string());
+                    }
+                }
+            }
+        }
+    }
+    // 3. Cualquier .exe del PATH dentro de @opencode\cli\bin.
+    if let Some(exe) = where_exes
+        .iter()
+        .find(|e| e.to_ascii_lowercase().contains(r"@opencode\cli\bin"))
     {
-        if out.status.success() {
-            let txt = String::from_utf8_lossy(&out.stdout);
-            // Preferir .exe real sobre .cmd/.ps1 (el .exe hace serve --service daemon)
-            let mut fallback: Option<String> = None;
-            for line in txt.lines().map(str::trim).filter(|l| !l.is_empty()) {
-                let low = line.to_ascii_lowercase();
-                if low.ends_with("opencode2.exe") {
-                    // Evitar el shim bun corrupto si hay alternativa sana
-                    if line.contains(r"npm-global\node_modules\@opencode\cli\bin") {
-                        return Some(line.to_string());
-                    }
-                    if fallback.is_none() {
-                        fallback = Some(line.to_string());
-                    }
-                }
-            }
-            if let Some(f) = fallback {
-                // Verificar que no sea el bun corrupto si existe el sano
-                let healthy = r"X:\Dev\npm-global\node_modules\@opencode\cli\bin\opencode2.exe";
-                if f.contains(r"bun\bin\opencode2.exe") && std::path::Path::new(healthy).exists() {
-                    return Some(healthy.to_string());
-                }
-                return Some(f);
-            }
-        }
+        return Some(exe.clone());
     }
-    // 2. Candidatos conocidos
-    for cand in [
-        r"X:\Dev\npm-global\node_modules\@opencode\cli\bin\opencode2.exe",
-        r"G:\Dev\bun\bin\opencode2.exe",
-    ] {
-        if std::path::Path::new(cand).exists() {
-            return Some(cand.to_string());
-        }
+    // 4. Primer .exe del PATH que no sea el shim bun corrupto.
+    if let Some(exe) = where_exes
+        .iter()
+        .find(|e| !e.to_ascii_lowercase().contains(r"bun\bin"))
+    {
+        return Some(exe.clone());
     }
-    // 3. HOME/.bun/bin
+    // 5. HOME/.bun/bin
     if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
-        let p = PathBuf::from(home).join(".bun").join("bin").join("opencode2.exe");
-        if p.exists() {
-            return Some(p.to_string_lossy().to_string());
+        for name in ["opencode.exe", "opencode2.exe"] {
+            let p = PathBuf::from(&home).join(".bun").join("bin").join(name);
+            if p.exists() {
+                return Some(p.to_string_lossy().to_string());
+            }
         }
     }
-    None
+    // 6. Shims `.cmd`/`.ps1` (spawn_detached los lanza ocultos vía `cmd /c`).
+    where_shims.into_iter().next()
 }
 
-/// Comando efectivo para levantar el server headless (`serve --service`
-/// daemoniza en `:4098` según service.json). Si la config trae comando lo
-/// respeta; si está vacío (bug actual) auto-descubre el binario sano.
+/// Comando efectivo para levantar el server headless. Si la config trae comando
+/// lo respeta; si está vacío auto-descubre el binario sano.
+///
+/// Se usa `serve --service`: es el único modo que lee `service.json`
+/// (hostname 0.0.0.0, puerto 4098 y el password conocido `octavio`). Un
+/// `serve --port <p>` en foreground arranca con password aleatorio y el cliente
+/// queda en 401. El binario sano de npm-global (opencode.exe) evita el shim
+/// bun corrupto que abría consola; para el re-spawn del daemon ver el parche en
+/// opencode (`packages/cli/src/services/daemon.ts`, `windowsHide: true`).
 pub fn resolve_opencode2_cmd(cfg: &ShellConfig) -> Option<String> {
     let custom = cfg.opencode2_command.trim();
     if !custom.is_empty() {
@@ -665,7 +741,9 @@ pub fn resolve_opencode2_cmd(cfg: &ShellConfig) -> Option<String> {
 
 /// Asegura el server opencode2 headless (sin consola): si el puerto ya
 /// responde no hace nada; si no, lanza `resolve_opencode2_cmd` detached
-/// (CREATE_NO_WINDOW) y re-sondea hasta ~8s. Retorna true si quedó UP.
+/// (CREATE_NO_WINDOW | DETACHED_PROCESS) y re-sondea hasta ~8s. Retorna true
+/// si quedó UP. El server en foreground queda oculto y desprendido, así que
+/// sigue vivo al cerrar OpenHer.
 pub fn ensure_opencode2_running(cfg: &ShellConfig) -> bool {
     let port = if cfg.opencode2_port == 0 { 4098 } else { cfg.opencode2_port };
     if crate::common::probe_http(port, "/session", std::time::Duration::from_millis(900), &[200, 401]) {
@@ -688,7 +766,7 @@ pub fn ensure_opencode2_running(cfg: &ShellConfig) -> bool {
             return false;
         }
     }
-    // `serve --service` daemoniza y el child sale rápido: sondear hasta 8s
+    // El server tarda en abrir el puerto: sondear hasta 8s
     for _ in 0..16 {
         std::thread::sleep(std::time::Duration::from_millis(500));
         if crate::common::probe_http(port, "/session", std::time::Duration::from_millis(600), &[200, 401])
@@ -745,4 +823,132 @@ pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
         }
     }
     Ok(out)
+}
+
+// ===========================================================================
+// Menú contextual de Windows: "Abrir sesión en OpenHer aquí"
+// ===========================================================================
+
+/// Escenarios donde se registra el verbo. El `%V` que Windows expande apunta a
+/// la carpeta elegida (`Directory`), al fondo de la carpeta actual
+/// (`Directory\Background`), a la raíz de una unidad (`Drive`) o al archivo
+/// (`*`, y el binario usa su carpeta padre).
+pub const CONTEXT_MENU_SCOPES: [&str; 4] = [
+    r"Directory\shell\OpenHerHere",
+    r"Directory\Background\shell\OpenHerHere",
+    r"Drive\shell\OpenHerHere",
+    r"*\shell\OpenHerHere",
+];
+
+pub fn context_menu_label() -> &'static str {
+    "Abrir sesión en OpenHer aquí"
+}
+
+#[cfg(windows)]
+pub fn context_menu_installed() -> bool {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(r"Software\Classes\Directory\shell\OpenHerHere\command")
+        .is_ok()
+}
+
+#[cfg(not(windows))]
+pub fn context_menu_installed() -> bool {
+    false
+}
+
+/// Instala/borra el verbo en HKCU\Software\Classes (sin admin). Idempotente:
+/// el comando siempre apunta al `.exe` que corre ahora, así que re-ejecutar
+/// desde otra ruta lo corrige.
+#[cfg(windows)]
+pub fn set_context_menu(enabled: bool) -> Result<(), String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    for scope in CONTEXT_MENU_SCOPES {
+        let full = format!(r"Software\Classes\{scope}");
+        if enabled {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            let exe_s = exe.display().to_string();
+            let (key, _) = hkcu.create_subkey(&full).map_err(|e| e.to_string())?;
+            key.set_value("", &context_menu_label().to_string())
+                .map_err(|e| e.to_string())?;
+            key.set_value("Icon", &format!("\"{exe_s}\""))
+                .map_err(|e| e.to_string())?;
+            let (cmd, _) = hkcu
+                .create_subkey(format!("{full}\\command"))
+                .map_err(|e| e.to_string())?;
+            cmd.set_value("", &format!("\"{exe_s}\" --open-dir \"%V\""))
+                .map_err(|e| e.to_string())?;
+        } else {
+            let _ = hkcu.delete_subkey_all(&full);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn set_context_menu(_enabled: bool) -> Result<(), String> {
+    Ok(())
+}
+
+/// `%V` puede ser un archivo: la sesión debe abrirse en su carpeta padre.
+pub fn open_dir_target(raw: &str) -> PathBuf {
+    let p = PathBuf::from(raw);
+    if p.is_file() {
+        p.parent().map(|x| x.to_path_buf()).unwrap_or(p)
+    } else {
+        p
+    }
+}
+
+/// Handler del UI thread para abrir una sesión en un directorio (lo setea
+/// `main` una vez y lo invoca el router HTTP desde el thread del server).
+static OPEN_DIR_FN: std::sync::OnceLock<Arc<dyn Fn(String) + Send + Sync>> =
+    std::sync::OnceLock::new();
+
+pub fn set_open_dir_handler(f: Arc<dyn Fn(String) + Send + Sync>) {
+    let _ = OPEN_DIR_FN.set(f);
+}
+
+pub fn request_open_dir(dir: String) -> bool {
+    if let Some(f) = OPEN_DIR_FN.get() {
+        f(dir);
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(test)]
+mod context_menu_tests {
+    use super::*;
+
+    #[test]
+    fn scopes_cubren_carpeta_fondo_drive_y_archivos() {
+        assert_eq!(CONTEXT_MENU_SCOPES.len(), 4);
+        assert!(CONTEXT_MENU_SCOPES.iter().any(|s| s.contains("Background")));
+        assert!(CONTEXT_MENU_SCOPES.iter().any(|s| s.starts_with("Drive")));
+        assert!(CONTEXT_MENU_SCOPES.iter().any(|s| s.starts_with('*')));
+        assert!(context_menu_label().contains("OpenHer"));
+    }
+
+    #[test]
+    fn open_dir_target_usa_el_padre_si_es_archivo() {
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let file = manifest.join("Cargo.toml");
+        let target = open_dir_target(&file.to_string_lossy());
+        assert!(target.is_dir(), "debe apuntar al directorio, no al archivo");
+        assert_eq!(target, manifest);
+
+        // Ruta inexistente: se usa tal cual (no hay padre confiable).
+        let raw = r"Z:\no\existe\carpeta";
+        assert_eq!(open_dir_target(raw), PathBuf::from(raw));
+    }
+
+    #[test]
+    fn request_open_dir_sin_handler_falla() {
+        assert!(!request_open_dir("C:\\tmp".into()));
+    }
 }

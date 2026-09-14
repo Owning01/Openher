@@ -32,8 +32,25 @@ export function mergeNativePartial(prev: string, baseLen: number, text: string):
   const withHead = (x: string) => (head ? `${head} ${x}` : x)
   if (!tail) return withHead(t)
   if (t === tail) return prev
+  // Comparación tolerante a casing/puntuación: el resultado final suele
+  // llegar como "Hola mundo." sobre el parcial "hola mundo" y no debe
+  // agregarse como frase nueva.
+  const nt = normHypothesis(t)
+  const ntail = normHypothesis(tail)
+  if (nt && nt === ntail) return withHead(t)
+  if (nt && ntail && nt.startsWith(ntail)) return withHead(t)
+  if (nt && ntail && ntail.startsWith(nt)) return prev
   if (t.startsWith(tail)) return withHead(t)
   if (tail.startsWith(t)) return prev
   if (!prev.includes(t)) return `${prev.trim()} ${t}`
   return prev
+}
+
+/** Normaliza una hipótesis para comparar: sin casing ni puntuación de borde. */
+function normHypothesis(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/^[¡¿"'«]+/, "")
+    .replace(/[.,!?;:"'»]+$/, "")
+    .trim()
 }

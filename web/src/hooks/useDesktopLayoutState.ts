@@ -91,11 +91,9 @@ export function loadDesktopState(fallbackSessionID: string | null): DesktopState
               k === "terminal" ||
               k === "explorer" ||
               k === "kanban" ||
-              k === "stats" ||
               k === "config" ||
               k === "browser" ||
-              k === "doc" ||
-              k === "quickchat"
+              k === "doc"
                 ? k
                 : "session"
             )
@@ -151,34 +149,17 @@ export function loadDesktopState(fallbackSessionID: string | null): DesktopState
         }
       }
 
-      // Migrar browserTabUrls + stats activity → tab
+      // Migrar browserTabUrls → tabs
       const rawBrowserTabUrls = (layout as any).browserTabUrls as Record<string, string> | undefined
       const browserTabUrls: Record<string, string> =
         rawBrowserTabUrls && typeof rawBrowserTabUrls === "object" ? { ...rawBrowserTabUrls } : {}
 
-      let migratedTabStacks = finalTabStacks
+      const migratedTabStacks = finalTabStacks
       const rawActivity = (raw as any)?.activity as string | undefined
-      if (rawActivity === "stats" || rawActivity === "quickchat") {
-        if (rawActivity === "stats") {
-          const hasStats = migratedTabStacks.some((s) => s.includes("__stats__"))
-          if (!hasStats) {
-            migratedTabStacks = migratedTabStacks.map((s, idx) => (idx === 0 ? [...s, "__stats__"] : [...s]))
-            if (migratedTabStacks[0] && !migratedTabStacks[0].includes("__stats__"))
-              migratedTabStacks[0].push("__stats__")
-          }
-        }
-      }
 
       let migratedSessions = layout.sessions.map((s: any) => (typeof s === "string" ? s : null)) as Array<string | null>
       let migratedKinds = [...kinds] as Array<ShellPanelKind | "editor">
       for (let idx = 0; idx < total; idx++) {
-        if ((migratedKinds[idx] as any) === "stats") {
-          if (!migratedTabStacks[idx]?.includes("__stats__")) {
-            migratedTabStacks[idx] = [...(migratedTabStacks[idx] ?? []), "__stats__"]
-          }
-          migratedKinds[idx] = "session"
-          if (!migratedSessions[idx]) migratedSessions[idx] = "__stats__"
-        }
         if ((migratedKinds[idx] as any) === "browser") {
           const legacyUrl =
             (layout as any).panelBrowserUrls?.[String(idx)] ??
@@ -222,12 +203,8 @@ export function loadDesktopState(fallbackSessionID: string | null): DesktopState
         sidebarCollapsed: !!raw?.sidebarCollapsed,
         rightSidebarWidth: Math.max(250, Math.min(480, (raw as any)?.rightSidebarWidth ?? 340)),
         rightSidebarCollapsed: (raw as any)?.rightSidebarCollapsed !== false,
-        activity: (["sessions", "explorer", "kanban", "config", "design"].includes(
-          rawActivity === "quickchat" || rawActivity === "stats" ? "sessions" : rawActivity ?? ""
-        )
-          ? rawActivity === "quickchat" || rawActivity === "stats"
-            ? ("sessions" as DesktopActivity)
-            : (raw!.activity! as DesktopActivity)
+        activity: (["sessions", "explorer", "kanban", "config", "design"].includes(rawActivity ?? "")
+          ? (raw!.activity! as DesktopActivity)
           : "sessions") as DesktopActivity,
         activePanel: typeof raw?.activePanel === "number" ? raw.activePanel : 0,
         desktopDiffOpen: !!raw?.desktopDiffOpen,

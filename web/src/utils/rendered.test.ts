@@ -145,6 +145,28 @@ describe("computeRenderedMessages", () => {
     expect(out[0]!.toolParts[0]!.tool).toBe("bash")
   })
 
+  it("interleaves text and tool parts in segments preserving part order (texto→tool→texto)", () => {
+    const msg = makeEnvelope({
+      info: baseInfo("m1"),
+      parts: [textPart("p1", "antes"), toolPart("tp1", "question"), textPart("p2", "después")],
+    })
+    const { out } = computeRenderedMessages([msg], undefined, new Map())
+    expect(out[0]!.segments?.map((s) => `${s.kind}:${s.id}`)).toEqual(["text:p1", "tool:tp1", "text:p2"])
+    expect(out[0]!.segments?.[0]).toMatchObject({ kind: "text", text: "antes" })
+    expect(out[0]!.segments?.[2]).toMatchObject({ kind: "text", text: "después" })
+    // Los toolParts siguen existiendo para el resto del pipeline (diffs, etc.).
+    expect(out[0]!.toolParts).toHaveLength(1)
+  })
+
+  it("segments excluyen tools de sesión hija filtrados", () => {
+    const msg = makeEnvelope({
+      info: baseInfo("m1", "assistant", "sess-1"),
+      parts: [textPart("p1", "a"), toolPart("tp1", "bash", "sess-2"), textPart("p2", "b")],
+    })
+    const { out } = computeRenderedMessages([msg], undefined, new Map())
+    expect(out[0]!.segments?.map((s) => s.id)).toEqual(["p1", "p2"])
+  })
+
   it("filters tool parts from different sessionID unless is task card", () => {
     const msg = makeEnvelope({
       info: baseInfo("m1", "assistant", "sess-1"),

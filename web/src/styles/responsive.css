@@ -5,12 +5,23 @@
    var()):
      400px — menús compactos (header-model-menu)
      430px — shell móvil compacto (tipografía, brand)
-     480px — grillas a 1 columna (form-grid, data-mode, stats-filters)
+     480px - grillas a 1 columna (form-grid, data-mode)
      780px — mobile-first: shell, panel, chat, composer, bottom-nav
      781px — desktop: sidebar + grid de splits (layout.css) + bottom-nav flotante
      900px — quick-access con scroll propio (solo pointer: fine)
      1024px — tablet (máx. 781-1024)
    El MQ coarse (pointer: coarse) suma targets táctiles sin importar el ancho. */
+
+/* Contenedor de página del shell móvil (SessionsPage/DetailPage): DEBE ser
+   columna flex. Sin esto sus hijos (.panel.sessions, .panel.detail) son
+   bloques dentro de un block con overflow:hidden: el panel crece con el
+   contenido (height auto), su overflow-y:auto nunca actúa y la lista de
+   chats/proyectos queda recortada sin scroll. */
+.app-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 
 /* ===== Responsive: max-width 780px ===== */
 @media (max-width: 780px) {
@@ -44,14 +55,12 @@
 
   /* Móvil: solo ruedita de configuración + toggle día/noche. Nada más. */
   .desktop-nav button[data-view="pcFiles"],
-  .desktop-nav button[data-view="quickchat"],
   .desktop-nav button[data-view="learning"] {
     display: none;
   }
 
   /* Bottom-nav real (NavBar variant=bottom): las vistas de altura fija
      reservan su espacio para que la barra flotante no tape el final. */
-  .quickchat-view,
   .learning-view,
   .pcf-view {
     height: calc(100dvh - 56px - 76px - env(safe-area-inset-bottom)) !important;
@@ -66,7 +75,6 @@
   body.kb-open .bottom-nav {
     display: none;
   }
-  body.kb-open .quickchat-view,
   body.kb-open .learning-view,
   body.kb-open .pcf-view {
     height: calc(100dvh - 56px) !important;
@@ -277,7 +285,6 @@
   .bottom-nav button {
     min-height: 40px;
   }
-  .quickchat-view,
   .learning-view,
   .pcf-view {
     height: calc(100dvh - 44px - 52px) !important;

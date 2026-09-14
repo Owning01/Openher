@@ -1,12 +1,51 @@
 // Cliente de la API de la shell (/shell/*) + utilidades del explorador.
 // Originalmente solo mismo origen (:4848); ahora también Tailscale directo
 // (móvil deriva http://<tailscale-ip>:4848 del host de opencode).
+// En el APK TODAS las llamadas van por el puente nativo (CapacitorHttp): el
+// WebView vive en https://localhost y un fetch plano a http://<pc>:4848 es
+// contenido mixto + CORS, por lo que el explorador quedaba vacío en el celular.
+import { Capacitor, CapacitorHttp } from "@capacitor/core"
 
-export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "stats" | "session-stats" | "labs" | "config" | "editor" | "browser" | "doc" | "design" | "quickchat"
+export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "labs" | "config" | "editor" | "browser" | "doc" | "design"
 
-export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["session", "editor", "terminal", "explorer", "kanban", "docs", "updates", "stats", "labs", "browser", "doc", "design", "quickchat", "session-stats", "config"]
+export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["session", "editor", "terminal", "explorer", "kanban", "docs", "updates", "labs", "browser", "doc", "design", "config"]
 
 export type FsEntry = { name: string; path: string; is_dir: boolean; size: number | null; modified: number | null }
+
+/** Última versión publicada en el shell (openher-version.json) para el auto-update. */
+export type AppVersionInfo = {
+  name: string
+  version: string
+  versionCode: number
+  file: string
+  sha256: string
+  size: number
+  builtAt: string
+  notes: string
+  /** Desktop: zip publicado (exe + web-dist) para actualizar la app de escritorio. */
+  desktop?: {
+    file: string
+    sha256: string
+    size: number
+    version: string
+    versionCode: number
+  }
+}
+
+/** Versión instalada del desktop (data/web-dist/build-info.json). */
+export type DesktopVersionInfo = {
+  version: string
+  versionCode: number
+  builtAt?: string | null
+  exe?: string
+}
+
+export type DesktopUpdateStatus = {
+  state: "idle" | "downloading" | "verifying" | "extracting" | "ready" | "error"
+  error?: string | null
+  received?: number
+  total?: number
+}
 
 export type KanbanBoard = { id: string; name: string; columns: { id: string; title: string }[]; cards: KanbanCard[] }
 export type KanbanCard = { id: string; board: string; column: string; title: string; notes: string; color: string }
@@ -92,10 +131,6 @@ export type ShellConfig = {
   github_repos: string[]
   desktop_agent_path: string
   labs_apps: { id: string; title: string; path: string }[]
-  cerebras_api_key: string
-  groq_api_key: string
-  quickchat_provider: string
-  quickchat_model: string
   auto_opencode2?: boolean
   opencode2_enabled?: boolean
   opencode2_port?: number
@@ -110,6 +145,66 @@ function toBase64(input: string): string {
   const bytes = new TextEncoder().encode(input)
   const binary = Array.from(bytes).map((b) => String.fromCodePoint(b)).join("")
   return btoa(binary)
+}
+
+// ===== Transporte del shell =====
+// Interfaz mínima compatible con lo que usa este módulo (ok/status/json/blob)
+// sobre dos transportes: CapacitorHttp en APK (sin CORS ni mixed-content) y
+// fetch en desktop/web (mismo origen o Tailscale con CORS habilitado).
+type ShellResponse = {
+  ok: boolean
+  status: number
+  json: () => Promise<unknown>
+  blob: () => Promise<Blob>
+}
+
+type ShellInit = {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+  timeoutMs?: number
+  binary?: boolean
+}
+
+function isNativePlatform(): boolean {
+  try { return Capacitor.isNativePlatform() } catch { return false }
+}
+
+async function shellFetch(url: string, init: ShellInit = {}): Promise<ShellResponse> {
+  const method = init.method ?? "GET"
+  const timeoutMs = init.timeoutMs ?? 30_000
+  if (isNativePlatform()) {
+    const res = await CapacitorHttp.request({
+      url,
+      method,
+      headers: init.headers,
+      data: init.body,
+      responseType: init.binary ? "blob" : undefined,
+      connectTimeout: Math.min(12_000, timeoutMs),
+      readTimeout: timeoutMs,
+    })
+    const data = res.data
+    return {
+      ok: res.status >= 200 && res.status < 300,
+      status: res.status,
+      json: async () => (typeof data === "string" ? JSON.parse(data) : data),
+      blob: async () => {
+        const b64 = String(data ?? "").split(",").pop() ?? ""
+        const bin = atob(b64)
+        const bytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+        return new Blob([bytes])
+      },
+    }
+  }
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { method, headers: init.headers, body: init.body, signal: ctrl.signal })
+    return { ok: res.ok, status: res.status, json: () => res.json(), blob: () => res.blob() }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export function shellAuthHeader(): Record<string, string> {
@@ -140,31 +235,76 @@ function shellRemoteOverride(): string | null {
   return null
 }
 
-function deriveShellBaseFromServer(): string | null {
+function normalizeShellHost(rawHost: unknown): { host: string; scheme: string } | null {
+  if (!rawHost) return null
+  let host = String(rawHost).trim()
+  if (!host) return null
+  const schemeMatch = host.match(/^(https?):\/\//)
+  const scheme = schemeMatch ? schemeMatch[1]! : "http"
+  if (schemeMatch) host = host.slice(schemeMatch[0].length)
+  host = host.split("/")[0]!.split(":")[0]!
+  if (!host || host === "localhost" || host === "127.0.0.1" || host === "::1") return null
+  return { host, scheme }
+}
+
+// Candidatos de host del PC: primero la config activa, después los perfiles
+// guardados (el APK puede tener el server en un perfil y no en SERVER directo).
+function serverConfigCandidates(): Array<{ host?: string }> {
+  const out: Array<{ host?: string }> = []
   try {
     const raw = localStorage.getItem("opencode.remote.server")
-    if (!raw) return null
-    const cfg = JSON.parse(raw) as { host?: string; port?: number }
-    if (!cfg.host) return null
-    let host = String(cfg.host).trim()
-    const schemeMatch = host.match(/^(https?):\/\//)
-    const scheme = schemeMatch ? schemeMatch[1] : "http"
-    if (schemeMatch) host = host.slice(schemeMatch[0].length)
-    host = host.split("/")[0]!.split(":")[0]!
-    if (!host || host === "localhost" || host === "127.0.0.1" || host === "::1") return null
-    return `${scheme}://${host}:4848`
-  } catch {
-    return null
+    if (raw) out.push(JSON.parse(raw))
+  } catch {}
+  try {
+    const rawAll = localStorage.getItem("openher.servers")
+    if (rawAll) {
+      const all = JSON.parse(rawAll) as Array<{ id?: string; config?: { host?: string } }>
+      if (Array.isArray(all)) {
+        const active = localStorage.getItem("openher.activeServer")
+        const ordered = active
+          ? [...all.filter((p) => p?.id === active), ...all.filter((p) => p?.id !== active)]
+          : all
+        for (const p of ordered) if (p?.config?.host) out.push(p.config)
+      }
+    }
+  } catch {}
+  return out
+}
+
+export function deriveShellBaseFromServer(): string | null {
+  for (const cfg of serverConfigCandidates()) {
+    const norm = normalizeShellHost(cfg.host)
+    if (norm) return `${norm.scheme}://${norm.host}:4848`
   }
+  return null
+}
+
+function isLoopbackShellBase(base: string): boolean {
+  try {
+    const h = new URL(base).hostname.toLowerCase()
+    return h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "0.0.0.0"
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Base del shell REMOTO (la máquina que compila/publica). En la notebook es el
+ * host del server opencode no-loopback en :4848. Devuelve null si el server es
+ * local (ahí el update no aplica: la build ya está en esta máquina).
+ */
+export function remoteShellBase(): string | null {
+  const override = shellRemoteOverride()
+  if (override && !isLoopbackShellBase(override)) return override
+  return deriveShellBaseFromServer()
 }
 
 async function probeShellBase(base: string, timeoutMs = 2000): Promise<boolean> {
   try {
-    const ctrl = new AbortController()
-    const t = setTimeout(() => ctrl.abort(), timeoutMs)
-    const headers = withShellAuth({}, base)
-    const res = await fetch(`${base}/shell/health`, { cache: "no-store", signal: ctrl.signal, headers })
-    clearTimeout(t)
+    const res = await shellFetch(`${base}/shell/health`, {
+      headers: withShellAuth({}, base),
+      timeoutMs,
+    })
     return res.ok
   } catch {
     return false
@@ -180,6 +320,19 @@ export async function resolveShellBase(): Promise<string> {
       resolvedBaseAt = Date.now()
       return resolvedBase
     }
+  }
+  // APK: mismo-origen (https://localhost) y loopback no son el PC; el puente
+  // es el host del server opencode (Tailscale/LAN) en :4848.
+  if (isNativePlatform()) {
+    const derived = deriveShellBaseFromServer()
+    if (derived && (await probeShellBase(derived))) {
+      resolvedBase = derived
+      resolvedBaseAt = Date.now()
+      return resolvedBase
+    }
+    resolvedBase = ""
+    resolvedBaseAt = Date.now()
+    return ""
   }
   if (await probeShellBase("")) {
     resolvedBase = ""
@@ -213,6 +366,7 @@ export async function shellAvailable(): Promise<boolean> {
   try {
     const base = await resolveShellBase()
     if (base === "") {
+      if (isNativePlatform()) return false
       try {
         const r = await fetch("/shell/health", { cache: "no-store" })
         if (r.ok) return true
@@ -227,22 +381,24 @@ export async function shellAvailable(): Promise<boolean> {
   }
 }
 
-async function j<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error((await res.json().catch(() => ({ error: res.status }))).error ?? String(res.status))
+async function j<T>(res: ShellResponse): Promise<T> {
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({ error: res.status }))) as { error?: unknown }
+    throw new Error(String(body?.error ?? res.status))
+  }
   return res.json() as Promise<T>
 }
 
 const get = async <T>(url: string) => {
   const base = await resolveShellBase()
   const headers = withShellAuth({}, base)
-  const h: Record<string, string> = { ...headers }
-  return fetch(`${base}${url}`, { headers: h }).then(j<T>)
+  return shellFetch(`${base}${url}`, { headers }).then(j<T>)
 }
 
 const post = async <T>(url: string, body?: unknown) => {
   const base = await resolveShellBase()
   const headers: Record<string, string> = { "Content-Type": "application/json", ...withShellAuth({}, base) }
-  return fetch(`${base}${url}`, {
+  return shellFetch(`${base}${url}`, {
     method: "POST",
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -265,6 +421,75 @@ export type CodeSearchResult = {
 }
 
 export const shell = {
+  /** Última versión publicada (openher-version.json): alimenta el auto-update. */
+  appVersion: async (): Promise<AppVersionInfo | null> => {
+    try {
+      const base = await resolveShellBase()
+      if (!base && isNativePlatform()) return null
+      const res = await shellFetch(`${base}/openher-version.json?ts=${Date.now()}`, { timeoutMs: 8000 })
+      if (!res.ok) return null
+      const data = (await res.json()) as AppVersionInfo
+      if (!data || typeof data.versionCode !== "number" || !data.version) return null
+      return data
+    } catch {
+      return null
+    }
+  },
+  /** Igual que appVersion pero contra una base explícita (shell remoto). */
+  appVersionFrom: async (base: string): Promise<AppVersionInfo | null> => {
+    try {
+      const res = await shellFetch(`${base}/openher-version.json?ts=${Date.now()}`, { timeoutMs: 8000 })
+      if (!res.ok) return null
+      const data = (await res.json()) as AppVersionInfo
+      if (!data || typeof data.versionCode !== "number" || !data.version) return null
+      return data
+    } catch {
+      return null
+    }
+  },
+  /** Versión instalada del desktop (shell local). */
+  desktopVersion: async (): Promise<DesktopVersionInfo | null> => {
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : ""
+      const res = await shellFetch(`${origin}/shell/app-version?ts=${Date.now()}`, { timeoutMs: 5000 })
+      if (!res.ok) return null
+      return (await res.json()) as DesktopVersionInfo
+    } catch {
+      return null
+    }
+  },
+  /** Lanza el self-update del desktop: descarga remota + reemplazo + relanzado. */
+  desktopUpdate: async (url: string, sha256: string): Promise<void> => {
+    const origin = typeof window !== "undefined" ? window.location.origin : ""
+    const res = await shellFetch(`${origin}/shell/app-update/apply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, sha256 }),
+      timeoutMs: 30_000,
+    })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: unknown } | null
+      throw new Error(String(body?.error ?? `HTTP ${res.status}`))
+    }
+  },
+  /** Estado del self-update (polling mientras descarga/extrae). */
+  desktopUpdateStatus: async (): Promise<DesktopUpdateStatus | null> => {
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : ""
+      const res = await shellFetch(`${origin}/shell/app-update/status?ts=${Date.now()}`, { timeoutMs: 5000 })
+      if (!res.ok) return null
+      return (await res.json()) as DesktopUpdateStatus
+    } catch {
+      return null
+    }
+  },
+  /** Descarga la APK publicada en el link corto (/openher.apk). */
+  downloadApk: async (): Promise<Blob> => {
+    const base = await resolveShellBase()
+    const res = await shellFetch(`${base}/openher.apk?ts=${Date.now()}`, { binary: true, timeoutMs: 300_000 })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.blob()
+  },
   fs: {
     drives: () => get<{ drives: string[] }>("/shell/fs/drives"),
     list: (path: string) => get<{ path: string; dirs: FsEntry[]; files: FsEntry[] }>(`/shell/fs/list?path=${encodeURIComponent(path)}`),
@@ -295,10 +520,14 @@ export const shell = {
     download: async (path: string): Promise<Blob> => {
       const base = await resolveShellBase()
       const headers: Record<string, string> = { ...withShellAuth({}, base) }
-      const res = await fetch(`${base}/shell/fs/download?path=${encodeURIComponent(path)}`, { headers })
+      const res = await shellFetch(`${base}/shell/fs/download?path=${encodeURIComponent(path)}`, {
+        headers,
+        binary: true,
+        timeoutMs: 120_000,
+      })
       if (!res.ok) {
-        const msg = (await res.json().catch(() => ({ error: res.statusText }))).error ?? res.statusText
-        throw new Error(String(msg))
+        const body = (await res.json().catch(() => null)) as { error?: unknown } | null
+        throw new Error(String(body?.error ?? res.status))
       }
       return res.blob()
     },
@@ -364,7 +593,7 @@ export const shell = {
     kill: async (id: string) => {
       const base = await resolveShellBase()
       const headers = withShellAuth({}, base)
-      const res = await fetch(`${base}/shell/pty/${id}`, { method: "DELETE", headers })
+      const res = await shellFetch(`${base}/shell/pty/${id}`, { method: "DELETE", headers })
       if (!res.ok) throw new Error(String(res.status))
     },
     poll: (id: string, since: number) => get<{ len: number; done: boolean; data?: string; error?: string }>(`/shell/pty/${id}/buffer?since=${since}`),
@@ -375,20 +604,20 @@ export const shell = {
     delBoard: async (id: string) => {
       const base = await resolveShellBase()
       const headers = withShellAuth({}, base)
-      const res = await fetch(`${base}/shell/kanban/board?id=${encodeURIComponent(id)}`, { method: "DELETE", headers })
+      const res = await shellFetch(`${base}/shell/kanban/board?id=${encodeURIComponent(id)}`, { method: "DELETE", headers })
       return j(await res) as Promise<unknown>
     },
     addCard: (board: string, column: string, title: string, notes: string, color: string) => post("/shell/kanban/card", { board, column, title, notes, color }),
     updateCard: async (id: string, patch: Partial<{ column: string; title: string; notes: string; color: string }>) => {
       const base = await resolveShellBase()
       const headers: Record<string, string> = { "Content-Type": "application/json", ...withShellAuth({}, base) }
-      const res = await fetch(`${base}/shell/kanban/card`, { method: "PATCH", headers, body: JSON.stringify({ id, ...patch }) })
+      const res = await shellFetch(`${base}/shell/kanban/card`, { method: "PATCH", headers, body: JSON.stringify({ id, ...patch }) })
       return j(await res) as Promise<unknown>
     },
     delCard: async (id: string) => {
       const base = await resolveShellBase()
       const headers = withShellAuth({}, base)
-      const res = await fetch(`${base}/shell/kanban/card?id=${encodeURIComponent(id)}`, { method: "DELETE", headers })
+      const res = await shellFetch(`${base}/shell/kanban/card?id=${encodeURIComponent(id)}`, { method: "DELETE", headers })
       return j(await res) as Promise<unknown>
     },
   },
@@ -398,13 +627,6 @@ export const shell = {
   docs: {
     list: () => get<{ root: string; files: { name: string; path: string; size: number }[] }>("/shell/docs"),
     read: (path: string) => get<{ path: string; content: string; size: number; root: string }>(`/shell/docs/read?path=${encodeURIComponent(path)}`),
-  },
-  stats: {
-    status: () => get<{ running: boolean; port: number; url: string }>("/shell/stats"),
-    start: () => post("/shell/stats/start"),
-    // Vía get(): resuelve la base (local/remota/Tailscale) + auth + chequeo res.ok.
-    // El fetch relativo anterior fallaba en APK y nunca levantaba el thread de stats.
-    proxy: <T = any>(path: string) => get<T>(`/shell/stats/proxy/${path}`),
   },
   plugins: {
     list: () => get<{ ok?: boolean; plugins: ShellPlugin[] }>("/shell/plugins"),

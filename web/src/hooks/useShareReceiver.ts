@@ -19,7 +19,7 @@ export type PendingShare = SharedPayload & { present: boolean }
 
 const EMPTY: PendingShare = { text: "", uri: "", type: "", present: false }
 
-// Expone el texto/imagen recibido vía "Compartir a OpenCode" de Android.
+// Expone el texto/imagen recibido vía "Compartir a OpenHer" de Android.
 // `onShared` se invoca cuando la app llega al frente con un share nuevo.
 export function useShareReceiver(onShared?: (payload: PendingShare) => void) {
   const [pending, setPending] = useState<PendingShare>(EMPTY)

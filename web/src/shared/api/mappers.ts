@@ -1,4 +1,5 @@
-import type { AgentOption, ModelOption, ModelSelection, Session, MessageEnvelope } from "../../types"
+import type { AgentOption, ModelOption, ModelSelection, Session, MessageEnvelope, FileEntry } from "../../types"
+import { normalizeAssistantError } from "../errors/assistantError"
 
 export type ConfigProvidersResponse = {
   providers: Array<{
@@ -133,6 +134,8 @@ export type V2Message = {
   status?: string
   reason?: string
   description?: string
+  /** Error del assistant (union discriminado por `name`, detalle en `data`). */
+  error?: unknown
   content?: Array<{
     id?: string
     type?: string
@@ -228,7 +231,35 @@ export function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
       finish: raw.finish,
       tokens: raw.tokens,
       cost: raw.cost,
+      error: normalizeAssistantError(raw.error) ?? undefined,
     },
     parts,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// fs/list (v2) — el server devuelve paths RELATIVOS al directorio listado y con
+// separador final en directorios ("sub\"). El FolderPicker necesita el path
+// ABSOLUTO para navegar y crear la sesión en la carpeta elegida; sin esto todo
+// queda relativo al cwd del server (la sesión siempre cae en la misma carpeta).
+// ---------------------------------------------------------------------------
+export function joinFsPath(base: string | undefined, rel: string): string {
+  const clean = String(rel ?? "").replace(/[\\/]+$/, "")
+  if (!clean) return base ? base.replace(/[\\/]+$/, "") : ""
+  if (/^[A-Za-z]:[\\/]/.test(clean) || clean.startsWith("/") || clean.startsWith("\\")) return clean
+  if (!base) return clean
+  const sep = base.includes("\\") ? "\\" : "/"
+  const b = base.replace(/[\\/]+$/, "")
+  return `${b}${sep}${clean.replace(/[\\/]/g, sep).replace(/^[\\/]+/, "")}`
+}
+
+export function toFileEntryV2(directory: string | undefined, entry: { path?: string; type?: string }): FileEntry {
+  const rel = String(entry.path ?? "").replace(/[\\/]+$/, "")
+  const name = rel.split(/[\\/]/).pop() ?? ""
+  return {
+    name,
+    path: rel,
+    absolute: joinFsPath(directory, rel),
+    type: entry.type === "directory" ? "directory" : "file",
   }
 }

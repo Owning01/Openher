@@ -51,6 +51,22 @@ export function withDirectory(path: string, directory?: string): string {
   return `${path}${separator}directory=${encodeURIComponent(normalizeSlashes(directory))}`
 }
 
+// v2 limita /session a 50 por defecto: sin esto el global solo cubre el
+// proyecto más reciente y el resto de proyectos desaparece del sidebar.
+export function withLimit(path: string, limit?: number): string {
+  if (!limit || limit <= 0) return path
+  const separator = path.includes("?") ? "&" : "?"
+  return `${path}${separator}limit=${Math.floor(limit)}`
+}
+
+// v2 permite listar por proyecto (id de /project): trae TODAS las sesiones del
+// proyecto aunque vivan en subdirs, sin la respuesta gigante del global.
+export function withProject(path: string, project?: string): string {
+  if (!project) return path
+  const separator = path.includes("?") ? "&" : "?"
+  return `${path}${separator}project=${encodeURIComponent(project)}`
+}
+
 export function withLocationDirectory(path: string, directory?: string): string {
   if (!directory) return path
   const separator = path.includes("?") ? "&" : "?"
@@ -220,7 +236,7 @@ export async function requestRaw<T>(config: ServerConfig, target: string, option
             signal: controller.signal,
           })
         } catch (netErr) {
-          const isDesktop = typeof window !== "undefined" && !!(window as unknown as { __OPENCODE_DESKTOP__?: boolean }).__OPENCODE_DESKTOP__
+          const isDesktop = typeof window !== "undefined" && !!(window as unknown as { __OPENHER_DESKTOP__?: boolean }).__OPENHER_DESKTOP__
           const msg = String((netErr as { message?: unknown })?.message ?? netErr)
           const isCorsLike =
             isDesktop &&

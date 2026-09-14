@@ -75,7 +75,6 @@ export function useDesktopGridActions({
       if (
         id.startsWith("terminal") ||
         id.startsWith("browser:") ||
-        id === "__stats__" ||
         id.startsWith("plugin:")
       ) {
         setDesktopLayout((prev: DesktopLayout) => {
@@ -370,7 +369,6 @@ export function useDesktopGridActions({
   const addPanel = useCallback(
     (kind: ShellPanelKind) => {
       setDesktopLayout((prev: DesktopLayout) => {
-        if (kind === "stats" && prev.panelKinds.includes("stats")) return prev
         const total = prev.cols * prev.rows
         const emptySlot = prev.sessions.findIndex(
           (s: string | null, i: number) => s === null && prev.panelKinds[i] === "session"

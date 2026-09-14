@@ -474,12 +474,19 @@ button.compact {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
+  border: none;
   border-radius: 999px;
   background: var(--danger);
   color: var(--bg);
+  font-family: inherit;
   font-size: 0.875rem;
   font-weight: 800;
   line-height: 1;
+  cursor: pointer;
+}
+
+.pending-badge:disabled {
+  cursor: default;
 }
 
 .queued-badge {
@@ -544,6 +551,36 @@ button.compact {
 .mcp-item.clickable:hover { background: var(--surface-strong); }
 .mcp-id { font-size: 0.875rem; color: var(--muted); }
 
+/* Sección de servidores MCP (estado + activar/desactivar). */
+.mcp-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.mcp-section + .mcp-section { margin-top: var(--space-4); border-top: 1px solid var(--border); padding-top: var(--space-3); }
+.mcp-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.mcp-section-head h4 { margin: 0; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted-strong); }
+.mcp-refresh { padding: 4px 8px; font-size: 0.75rem; background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--muted); cursor: pointer; }
+.mcp-refresh:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+.mcp-refresh:disabled { opacity: 0.5; cursor: default; }
+.mcp-server { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: var(--radius-sm); }
+.mcp-server-info { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.mcp-server-name { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.mcp-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.mcp-dot-connected { background: var(--success); }
+.mcp-dot-pending { background: var(--warning); }
+.mcp-dot-needs_auth { background: var(--warning); }
+.mcp-dot-failed { background: var(--danger); }
+.mcp-dot-disabled { background: var(--muted); opacity: 0.45; }
+.mcp-status { font-size: 0.75rem; color: var(--muted); }
+.mcp-status-connected { color: var(--success); }
+.mcp-status-pending { color: var(--warning); }
+.mcp-status-needs_auth { color: var(--warning); }
+.mcp-status-failed { color: var(--danger); }
+.mcp-server-error { margin: 0; font-size: 0.75rem; color: var(--danger); word-break: break-word; }
+.mcp-toggle { flex: none; padding: 6px 10px; font-size: 0.75rem; font-weight: 600; border-radius: var(--radius-sm); border: 1px solid var(--accent); background: var(--accent); color: var(--accent-contrast, #fff); cursor: pointer; }
+.mcp-toggle-off { background: none; color: var(--muted-strong); border-color: var(--border); }
+.mcp-toggle-off:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+.mcp-toggle:disabled { opacity: 0.55; cursor: default; }
+.mcp-action-error { margin: var(--space-1) 0 0; }
+
+
 /* ===== Skill Browser ===== */
 .skill-browser { max-width: 560px; max-height: 80vh; display: flex; flex-direction: column; }
 .skill-browser-detail { max-width: 640px; }
@@ -567,7 +604,7 @@ button.compact {
 
 .skill-card {
   display: flex; align-items: flex-start; gap: 0.82rem;
-  padding: 0.82rem 0.8rem; border: none; border-radius: var(--radius-md);
+  padding: 0.82rem 0.8rem; border-radius: var(--radius-md);
   background: var(--surface); color: var(--text);
   cursor: pointer; text-align: left; width: 100%;
   transition: background 0.12s, box-shadow 0.12s;

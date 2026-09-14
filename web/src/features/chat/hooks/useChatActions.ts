@@ -6,6 +6,7 @@ import { api } from "../../../api"
 import type { SessionView, ServerConfig, ConnectionState, ModelOption } from "../../../types"
 import { formatSelectionForPrompt } from "../../../hooks/useVisualSelection"
 import { keepMessagesBefore, keepMessagesThrough } from "../domain/message-order"
+import { claimSharedOutbox, holdSharedOutbox, resumeSharedOutbox } from "../../../hooks/useMessages"
 import { isSessionActive } from "../../../utils"
 import { openPromptHistory } from "../../../utils/promptHistory"
 
@@ -20,7 +21,6 @@ export type UseChatActionsParams = {
   setComposer: (val: string) => void
   setRuntimeError: (err: string | null) => void
   queueAction: (action: any) => void
-  recordPrompt: (text: string) => void
   stopGenerationRef: React.MutableRefObject<boolean>
   localRevertID: string | null
   setLocalRevertID: (id: string | null) => void
@@ -35,6 +35,8 @@ export type UseChatActionsParams = {
   setHelpPage: (p: any) => void
   setShowThemePicker: (show: boolean) => void
   setShowConnectSheet: (show: boolean) => void
+  /** Abre el selector de carpeta para crear sesión (idealmente en `directory`). */
+  onNewSession: (directory?: string) => void
   renderedMessages: any[]
   awaitingAssistantReply: boolean
   setAwaitingAssistantReply: (b: boolean) => void
@@ -49,6 +51,8 @@ export type UseChatActionsParams = {
   redoMessage: (...args: any[]) => void
   compactSession: (...args: any[]) => Promise<void>
   setCompacting: (compacting: boolean, sid?: string) => void
+  /** Cierra localmente las preguntas pendientes de la sesión al abortar. */
+  dismissSessionQuestions?: (sessionID?: string) => void
 }
 
 export function useChatActions(params: UseChatActionsParams) {
@@ -63,7 +67,6 @@ export function useChatActions(params: UseChatActionsParams) {
     setComposer,
     setRuntimeError,
     queueAction,
-    recordPrompt,
     stopGenerationRef,
     localRevertID,
     setLocalRevertID,
@@ -78,6 +81,7 @@ export function useChatActions(params: UseChatActionsParams) {
     setHelpPage,
     setShowThemePicker,
     setShowConnectSheet,
+    onNewSession,
     renderedMessages,
     awaitingAssistantReply,
     setAwaitingAssistantReply,
@@ -91,6 +95,7 @@ export function useChatActions(params: UseChatActionsParams) {
     redoMessage,
     compactSession,
     setCompacting,
+    dismissSessionQuestions,
   } = params
 
   const buildMarkdown = useCallback(() => {
@@ -152,7 +157,7 @@ export function useChatActions(params: UseChatActionsParams) {
           return true
         }
         // En desktop vía shell / save-file o fallback download web
-        const isDesktop = typeof window !== "undefined" && (window as any).__OPENCODE_DESKTOP__
+        const isDesktop = typeof window !== "undefined" && (window as any).__OPENHER_DESKTOP__
         if (isDesktop && (window as any).desktopApi?.writeFile) {
           await (window as any).desktopApi.writeFile(targetPath, full)
           return true
@@ -204,12 +209,13 @@ export function useChatActions(params: UseChatActionsParams) {
       force?: boolean
     ) => {
       if (!selectedSession) return
+      // Un envío manual reanuda el auto-flush (p. ej. después de un Stop).
+      if (!force) resumeSharedOutbox(selectedSession.id)
       if (awaitingAssistantReply || isSessionActive(selectedSession)) {
         if (!force) {
           // Ocupado: a la cola visible en vez de rechazar.
           const composerText = text ?? composerRef.current
           if (!composerText.trim() && (!images || images.length === 0)) return false
-          recordPrompt(composerText)
           enqueueOutbox(selectedSession.id, composerText, images)
           setComposer("")
           composerRef.current = ""
@@ -264,7 +270,6 @@ export function useChatActions(params: UseChatActionsParams) {
       if (hadVisualSelection) {
         textToSend = formatSelectionForPrompt(textToSend, vs.promptContext)
       }
-      recordPrompt(textToSend)
       stopGenerationRef.current = false
       const revertMsgId = localRevertID ?? selectedSession?.revert?.messageID
       let prevMessagesSnapshot: any[] | null = null
@@ -311,6 +316,12 @@ export function useChatActions(params: UseChatActionsParams) {
         setSessions((prev) =>
           prev.map((s) => (s.id === selectedSession.id ? { ...s, status: "idle" as const } : s))
         )
+      } else if (typeof result === "string") {
+        // Comando local (help/themes/connect/new/history...): no corrió el
+        // agente, así que el busy optimista de arriba no debe quedar pegado.
+        setSessions((prev) =>
+          prev.map((s) => (s.id === selectedSession.id ? { ...s, status: "idle" as const } : s))
+        )
       }
       // Limpiar selección visual siempre para evitar contexto stale duplicado en reintentos
       if (hadVisualSelection) {
@@ -326,6 +337,7 @@ export function useChatActions(params: UseChatActionsParams) {
         setShowThemePicker(true)
       }
       if (result === "connect") setShowConnectSheet(true)
+      if (result === "newSession") onNewSession(selectedSession.directory)
       if (result === "history" || result === "timeline") openPromptHistory()
       if (result === "export") handleExportMarkdown()
       return typeof result === "boolean" ? result : true
@@ -349,10 +361,10 @@ export function useChatActions(params: UseChatActionsParams) {
       setHelpPage,
       setShowThemePicker,
       setShowConnectSheet,
+      onNewSession,
       vs.hasSelection,
       vs.promptContext,
       vs.clear,
-      recordPrompt,
       enqueueOutbox,
       stopGenerationRef,
       setLocalRevertID,
@@ -484,6 +496,12 @@ export function useChatActions(params: UseChatActionsParams) {
     setStopping(true)
     setAwaitingAssistantReply(false)
     completionShouldPlayRef.current = false
+    // Stop explícito: la cola pendiente NO se auto-envía al quedar libre.
+    // Si no, el abort arrancaba otro turno al instante y parecía no parar.
+    holdSharedOutbox(selectedSession.id)
+    // Preguntas del turno abortado: cerrarlas localmente para que el modal no
+    // reaparezca cuando el server las siga reportando como pendientes.
+    dismissSessionQuestions?.(selectedSession.id)
     setSessions((prev) =>
       prev.map((s) => (s.id === selectedSession.id ? { ...s, status: "idle" as const } : s))
     )
@@ -527,6 +545,7 @@ export function useChatActions(params: UseChatActionsParams) {
     setRuntimeError,
     stopGenerationRef,
     completionShouldPlayRef,
+    dismissSessionQuestions,
   ])
 
   // Sin apagado temprano por idle: handleAbort pone la sesión en idle de
@@ -669,7 +688,10 @@ export function useChatActions(params: UseChatActionsParams) {
           removeOutbox(o.id)
         },
         onSendNow: () => {
+          if (!claimSharedOutbox(o.id)) return
           removeOutbox(o.id)
+          // Acción explícita del usuario: reanuda el auto-flush (si estaba en hold por Stop).
+          resumeSharedOutbox(o.sessionID)
           void handleSend(o.images, undefined, o.text, true).then((res) => {
             if (res === false) enqueueOutbox(o.sessionID, o.text, o.images)
           })

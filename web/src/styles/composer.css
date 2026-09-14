@@ -939,7 +939,7 @@
 .model-selector-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 11000;
+  z-index: var(--z-fullscreen-top);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1242,7 +1242,7 @@
 .model-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: var(--z-fullscreen);
   display: flex;
   align-items: center;
   justify-content: center;

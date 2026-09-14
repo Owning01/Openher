@@ -69,12 +69,94 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
     if path == "/shell/health" {
         let body = serde_json::json!({
             "ok": true,
-            "app": "opencode-desktop",
+            "app": "openher-desktop",
             "version": env!("CARGO_PKG_VERSION"),
             "dist": state.dist.is_some(),
             "ws_port": state.port + 1,
         });
         return ShellResponse::ok_json(&body);
+    }
+
+    // ============================== Self-update del desktop
+    // GET  /shell/app-version        -> versión instalada (build-info.json del web-dist)
+    // GET  /shell/app-update/status  -> estado del update en curso
+    // POST /shell/app-update/apply   { url, sha256 } -> descarga en background y
+    //                                  cierra/relanza la app al terminar.
+    if path == "/shell/app-version" && method == "GET" {
+        return ShellResponse::ok_json(&crate::app_update::version_json());
+    }
+    if path == "/shell/app-update/status" && method == "GET" {
+        return ShellResponse::ok_json(&crate::app_update::status_json());
+    }
+    if path == "/shell/app-update/apply" && method == "POST" {
+        return match sreq.json_body() {
+            Ok(b) => {
+                let url = b["url"].as_str().unwrap_or("").trim().to_string();
+                let sha = b["sha256"].as_str().unwrap_or("").trim().to_string();
+                if url.is_empty() {
+                    return ShellResponse::err_json(400, "url requerida");
+                }
+                std::thread::spawn(move || crate::app_update::run(url, sha));
+                ShellResponse::ok_json(&serde_json::json!({ "ok": true, "started": true }))
+            }
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
+        };
+    }
+
+    // ============================== Menú contextual de Windows + abrir sesión
+    // GET  /shell/context-menu  -> { installed, enabled }
+    // POST /shell/context-menu  { enabled } -> instala/borra el verbo en HKCU
+    if path == "/shell/context-menu" {
+        if method == "GET" {
+            let enabled = state.config.read().unwrap_or_else(|e| e.into_inner()).context_menu;
+            return ShellResponse::ok_json(&serde_json::json!({
+                "installed": crate::state::context_menu_installed(),
+                "enabled": enabled,
+            }));
+        }
+        if method == "POST" {
+            return match sreq.json_body() {
+                Ok(b) => {
+                    let want = b["enabled"].as_bool().unwrap_or(true);
+                    match crate::state::set_context_menu(want) {
+                        Ok(()) => {
+                            let mut cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+                            cfg.context_menu = want;
+                            crate::state::save_config(&cfg);
+                            *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg;
+                            ShellResponse::ok_json(&serde_json::json!({
+                                "ok": true,
+                                "enabled": want,
+                                "installed": crate::state::context_menu_installed(),
+                            }))
+                        }
+                        Err(e) => ShellResponse::err_json(500, &e),
+                    }
+                }
+                Err(e) => ShellResponse::err_json(400, &e.to_string()),
+            };
+        }
+    }
+
+    // POST /shell/open-dir { dir }: el menú contextual pide abrir una sesión en
+    // una carpeta. Se delega al UI thread (evalúa JS en el WebView principal).
+    if path == "/shell/open-dir" && method == "POST" {
+        return match sreq.json_body() {
+            Ok(b) => {
+                let dir = b["dir"].as_str().unwrap_or("").trim().to_string();
+                if dir.is_empty() {
+                    ShellResponse::err_json(400, "dir requerido")
+                } else {
+                    let target = crate::state::open_dir_target(&dir).to_string_lossy().to_string();
+                    if crate::state::request_open_dir(target.clone()) {
+                        ShellResponse::ok_json(&serde_json::json!({ "ok": true, "dir": target }))
+                    } else {
+                        ShellResponse::err_json(503, "UI no disponible")
+                    }
+                }
+            }
+            Err(e) => ShellResponse::err_json(400, &e.to_string()),
+        };
     }
 
     // RAM nativa: proceso app + WebViews propios (msedgewebview2 hijas).
@@ -143,7 +225,9 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
     }
 
     // ============================== Conversor y Editor de Documentos (Rust ultra-ligero) (extraído)
-    if path.starts_with("/shell/doc") {
+    // `/shell/docs` (plural) NO debe caer aquí: antes hacía shadowing sobre el
+    // panel de Docs (devolvía 404 "ruta doc desconocida").
+    if path.starts_with("/shell/doc") && !path.starts_with("/shell/docs") {
         if let Some(resp) =
             crate::infrastructure::http::doc_router::handle(sreq, state.clone(), &path, method, &q)
         {
@@ -168,8 +252,6 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
             return resp;
         }
     }
-
-    // (computer routes migrados a infrastructure/http/computer_router.rs — delegado arriba)
 
     // ============================== Stats / Design (extraído)
     if path.starts_with("/shell/stats") || path.starts_with("/shell/design") {
@@ -207,7 +289,7 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
         }
     }
 
-    // ============================== QuickChat web search (DDG lite, token-min) (extraído)
+    // ============================== Búsqueda web (DDG lite, token-min) (extraído)
     if path == "/shell/search" {
         if let Some(resp) =
             crate::infrastructure::http::search_router::handle(sreq, state.clone(), &path, method, &q)

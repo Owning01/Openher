@@ -27,7 +27,7 @@
   flex-shrink: 0;
 }
 .liteed-btn:hover { color: var(--text); background: var(--surface-hover); }
-.liteed-btn.active { color: var(--primary); border-color: var(--primary-soft); background: var(--primary-ghost); }
+.liteed-btn.active { color: var(--primary); border-color: var(--primary-soft); background: var(--primary-soft); }
 .liteed-plain {
   margin-left: auto;
   font-size: 0.68rem;

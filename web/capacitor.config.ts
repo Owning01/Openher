@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli"
 
 const config: CapacitorConfig = {
-  appId: "com.gbro.opencode",
+  appId: "com.gbro.openher",
   appName: "OpenHer",
   webDir: "dist",
   server: {

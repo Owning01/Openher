@@ -22,6 +22,7 @@ type MessageListProps = {
   config?: ServerConfig
   directory?: string
   onViewSubagents?: (subagentID?: string) => void
+  busySessionIds?: ReadonlySet<string>
   onContextMenu?: (x: number, y: number, messageID: string) => void
   onEditMessage?: (messageID: string, text: string) => void
   showTodoButton?: boolean
@@ -45,7 +46,7 @@ type MessageListProps = {
 
 export const MessageList = memo(function MessageList({
   messages, pendingIndex, loadingSessionID, selectedID, showTypingBubble, compacting, isWorking, messageScrollSignature, view,
-  revert, onRevertToMessage, agents, config, directory, onViewSubagents, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen,   highlight, scrollToMessageID, revealMessageID, revealNonce, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff, outboxActions
+  revert, onRevertToMessage, agents, config, directory, onViewSubagents, busySessionIds, onContextMenu, onEditMessage, showTodoButton, onToggleTodos, todosOpen,   highlight, scrollToMessageID, revealMessageID, revealNonce, compactTools, minimalistMode, thinkingDefault, onRegenerate, onOpenADEDiff, outboxActions
 }: MessageListProps) {
   const t = useT()
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -517,6 +518,7 @@ export const MessageList = memo(function MessageList({
                     config={config}
                     directory={directory}
                     onViewSubagents={onViewSubagents}
+                    busySessionIds={busySessionIds}
                     onContextMenu={onContextMenu}
                     onEditMessage={onEditMessage}
                     showTodoButton={showTodoButton}

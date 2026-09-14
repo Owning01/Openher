@@ -111,20 +111,13 @@ export function useAppLifecycle({
 
   const pollControl = usePolling(
     async () => {
-      const sseLive = streamState === "streaming"
       const isActive = selectedSession ? isSessionActive(selectedSession) : false
       const active = Boolean(isActive || awaitingAssistantReply)
       // Refresh de sesiones: antes solo cuando !sseLive; ahora también periódico aunque SSE vivo
       // para detectar nuevos mensajes de otros clientes y updated que alimenta el skip.
-      if (dataMode === "full") {
-        if (!sseLive) await refreshSessions(true)
-        else {
-          const lastAtForRefresh = lastFetchAtRef.current[selectedSession?.id ?? ""] ?? 0
-          if (Date.now() - lastAtForRefresh > 20000) await refreshSessions(true).catch(() => {})
-        }
-      } else {
-        await refreshSessions(false)
-      }
+      // Poll liviano (limit default + merge): el snapshot completo se reserva
+      // para la carga inicial, el refresh manual y delete/rename.
+      await refreshSessions(false)
       if (connectionStateRef.current === "offline") {
         throw new Error("offline")
       }
@@ -137,17 +130,19 @@ export function useAppLifecycle({
       const now = Date.now()
       const lastAt = lastFetchAtRef.current[selectedSession.id] ?? 0
       const timeSince = now - lastAt
-      const threshold = dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : active ? 3000 : 15000
+      const threshold = dataMode === "ultra" ? 30000 : dataMode === "miser" ? 60000 : active ? 8000 : 20000
       const prevUpdated = lastMsgFetchUpdatedRef.current[selectedSession.id]
       const updatedChanged = prevUpdated === undefined || selectedSession.updated > prevUpdated
-      const shouldPull = dataMode === "full" || dataMode === "saver" || active || updatedChanged || timeSince >= threshold
+      // Refetch del historial cuando el server reportó cambios o pasó el umbral
+      // como red de reconciliación. Ya NO se salta con SSE vivo: si el stream
+      // pierde un evento sin replay, el poll es la única recuperación (antes el
+      // chat quedaba congelado hasta salir y volver a entrar). Acotado por
+      // umbral (8s activo / 20s idle) y payload chico (limit 35).
+      const shouldPull = updatedChanged || timeSince >= threshold
       if (shouldPull) {
-        const skip = !active && sseLive && !updatedChanged && timeSince < threshold
-        if (!skip) {
-          await loadSelected(selectedSession.id, selectedSession.directory)
-          lastMsgFetchUpdatedRef.current[selectedSession.id] = selectedSession.updated
-          lastFetchAtRef.current[selectedSession.id] = now
-        }
+        await loadSelected(selectedSession.id, selectedSession.directory)
+        lastMsgFetchUpdatedRef.current[selectedSession.id] = selectedSession.updated
+        lastFetchAtRef.current[selectedSession.id] = now
       }
       // No apagar awaiting solo porque la sesión no está busy localmente:
       // el server puede estar aún procesando y el status local va atrasado.
@@ -194,7 +189,9 @@ export function useAppLifecycle({
     () => {
       if (selectedSession && dataMode !== "ultra" && dataMode !== "miser") {
         loadSelected(selectedSession.id, selectedSession.directory)
-        refreshSessions(true)
+        // Merge liviano: la sesión recién terminada es la más reciente y
+        // entra en el top-50 del global; no hace falta el snapshot completo.
+        refreshSessions(false)
       }
     }
   )
@@ -235,6 +232,16 @@ export function useAppLifecycle({
       cancelled = true
     }
   }, [config.host, config.port, config.username, config.password, dataMode])
+
+  // Reintento al quedar conectado: en autostart el server (:4098) puede tardar
+  // más que el primer intento del mount, que corría una sola vez y dejaba la
+  // lista de modelos vacía hasta cerrar/abrir. Al pasar a "connected"
+  // (useSessions) reintentamos modelos y agentes.
+  useEffect(() => {
+    if (connectionState !== "connected") return
+    loadModels()
+    loadAgents()
+  }, [connectionState, loadModels, loadAgents])
 
   useMemoryCleanup(selectedSession?.id ?? null, setMessages)
   const memInfo = useMemoryUsage(5000)

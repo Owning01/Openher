@@ -14,8 +14,8 @@ const EVT = "opencode:sidebar-prefs-change"
 
 /** Botones personalizables del rail de actividades (orden de aparición). */
 export const SIDEBAR_ITEM_IDS = [
-  "sessions", "explorer", "terminal", "stats", "browser", "kanban",
-  "quickchat", "scm", "design", "learning", "settings",
+  "sessions", "explorer", "terminal", "browser", "kanban",
+  "scm", "design", "studio", "learning", "settings",
 ] as const
 export type SidebarItemId = (typeof SIDEBAR_ITEM_IDS)[number]
 

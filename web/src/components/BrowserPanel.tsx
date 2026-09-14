@@ -16,7 +16,7 @@ import { buildWheelScript } from "./browserWheelScript"
 import { extractUrlFromDataTransfer, setUrlDragData } from "../utils/urlDrag"
 import { parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, BROWSER_STACK_PREFIX, loadBrowserStack, saveBrowserStack, buildFindCountScript, parseFindCount, domainOf, zoomForDomain, withZoomForDomain, BROWSER_ZOOM_MAP_KEY, type PageShortcutAction } from "./browserSync"
 
-const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
+const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENHER_DESKTOP__
 export const BROWSER_HOME = "https://www.google.com"
 const BROWSER_BOOKMARKS_KEY = "opencode.browser.bookmarks"
 const BROWSER_HISTORY_KEY = "opencode.browser.history"

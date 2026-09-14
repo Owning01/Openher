@@ -72,12 +72,6 @@
   transition: height 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Mensajes: desactivar animación pesada cuando virtualizado usa position:absolute */
-.messages [data-index] .message,
-.messages .message[data-virtualized] {
-  animation: none !important;
-}
-
 /* Respeto a reduced motion (WCAG 2.3.3) */
 @media (prefers-reduced-motion: reduce) {
   .app-shell,

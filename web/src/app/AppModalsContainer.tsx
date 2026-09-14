@@ -38,8 +38,10 @@ export type AppModalsContainerProps = {
   setShowThemeCreator: (s: boolean) => void
   showConnectSheet: boolean
   setShowConnectSheet: (s: boolean) => void
-  connectProvider: (pid: string, key: string) => Promise<boolean>
+  connectProvider: (pid: string, key: string, label?: string) => Promise<boolean>
   disconnectProvider: (pid: string) => Promise<void>
+  removeProviderCredential: (credentialID: string) => Promise<void>
+  activateProviderCredential: (credentialID: string) => Promise<void>
   addCustomProvider: (providerID: string, name: string, baseURL: string, models: string[]) => Promise<boolean>
   showMCPBrowser: boolean
   setShowMCPBrowser: (s: boolean) => void
@@ -124,6 +126,8 @@ export const AppModalsContainer = memo(function AppModalsContainer(props: AppMod
     connectProvider,
     disconnectProvider,
     addCustomProvider,
+    removeProviderCredential,
+    activateProviderCredential,
     showMCPBrowser,
     setShowMCPBrowser,
     showArchivedView,
@@ -210,6 +214,8 @@ export const AppModalsContainer = memo(function AppModalsContainer(props: AppMod
         connectProvider={connectProvider}
         disconnectProvider={disconnectProvider}
         addCustomProvider={addCustomProvider}
+        removeProviderCredential={removeProviderCredential}
+        activateProviderCredential={activateProviderCredential}
         showMCPBrowser={showMCPBrowser}
         onCloseMCPBrowser={() => setShowMCPBrowser(false)}
         showArchivedView={showArchivedView}

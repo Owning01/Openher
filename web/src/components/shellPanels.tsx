@@ -1,5 +1,5 @@
 // Paneles de la shell para el grid de escritorio: terminal, explorador,
-// kanban, docs, updates, stats, labs y config. Todos hablan con /shell/*.
+// kanban, docs, updates, labs y config. Todos hablan con /shell/*.
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react"
 import { useScheduled } from "../hooks/useScheduled"
@@ -19,7 +19,7 @@ import { Opencode2Button } from "../features/opencode2/Opencode2Button"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { useDevServer } from "../hooks/useDevServer"
 
-import { terminalStore, terminalPtyStore, rememberTerminalPty, killTerminalPty, transferTerminalTab, getTerminalFontSize, setTerminalFontSize, TERMINAL_FONT_MIN, TERMINAL_FONT_MAX, consumePendingAutoOpencode2 } from "../utils/terminalStore"
+import { terminalStore, terminalPtyStore, rememberTerminalPty, killTerminalPty, transferTerminalTab, getTerminalFontSize, setTerminalFontSize, TERMINAL_FONT_MIN, TERMINAL_FONT_MAX } from "../utils/terminalStore"
 export { killTerminalPty, transferTerminalTab }
 import { useT } from "../i18n-context"
 import { useDialog } from "./DialogProvider"
@@ -489,31 +489,6 @@ export const SingleTerminal = memo(function SingleTerminal({ cwd, shellName, tab
         wsPort = res.ws_port
         rememberTerminalPty(tabId, { ptyId: res.id, wsPort: res.ws_port })
         connectWs(wsPort, ptyId)
-        // Auto opencode2: solo la primera terminal de la sesión si el flag está pendiente (evita que cada nueva pestaña ejecute opencode2)
-        try {
-          const pending = consumePendingAutoOpencode2()
-          if (pending) {
-            // Resolver exe real desde shell config (evita PATH no encontrado con instalación bun global)
-            let cmd = "opencode2"
-            try {
-              const cfg = await shell.config.get().catch(() => null) as any
-              const raw: string = cfg?.opencode2_command ?? ""
-              if (raw.trim()) {
-                const exe = raw.trim().split(/\s+/)[0] ?? ""
-                if (exe) cmd = exe.includes(" ") ? `"${exe}"` : exe
-              }
-            } catch {}
-            console.info("[auto-opencode2] PTY listo, enviando", cmd, "a", ptyId)
-            const payload = cmd + "\r"
-            const send = () => {
-              try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ cmd: "write", data: payload })) } catch {}
-              if (ptyId) shell.pty.write(ptyId, payload).then(() => console.info("[auto-opencode2] write OK", ptyId)).catch((e) => console.warn("[auto-opencode2] write fail", e))
-            }
-            setTimeout(send, 500)
-            setTimeout(send, 1100)
-            setTimeout(send, 1800)
-          }
-        } catch {}
       }).catch(() => {
         term.writeln("\r\n\x1b[31m[Terminal] No se pudo iniciar el proceso ConPTY. Verifique que el ejecutable de escritorio esté en ejecución.\x1b[0m\r\n")
       })
@@ -1736,51 +1711,6 @@ export const UpdatesPanel = memo(function UpdatesPanel() {
   )
 })
 
-// ============================================================== Stats
-
-export const StatsPanel = memo(function StatsPanel() {
-  const t = useT()
-  const [status, setStatus] = useState<{ running: boolean; port: number; url: string } | null>(null)
-  const [starting, setStarting] = useState(false)
-
-  const load = useCallback(() => {
-    shell.stats.status()
-      .then((s) => {
-        setStatus(s)
-        if (!s.running && !starting) {
-          setStarting(true)
-          shell.stats.start()
-            .then(() => shell.stats.status().then(setStatus))
-            .catch(() => {})
-            .finally(() => setStarting(false))
-        }
-      })
-      .catch(() => {
-        fetch("http://localhost:8765/api/data?raw=1", { mode: "no-cors" })
-          .then(() => setStatus({ running: true, port: 8765, url: "http://localhost:8765" }))
-          .catch(() => setStatus({ running: false, port: 8765, url: "http://localhost:8765" }))
-      })
-  }, [starting])
-
-  // Reloj central (Plan 3) con load inmediato.
-  useScheduled("stats-panel", 5000, load, { runOnRegister: true })
-
-  return (
-    <div className="shell-stats">
-      {status?.running ? (
-        <iframe src={status.url || "http://localhost:8765"} className="shell-stats-frame" title="OpenCode Stats" />
-      ) : (
-        <div className="shell-empty">
-          <p>{t('shell.statsOff')}</p>
-          <button className="btn-primary" disabled={starting} onClick={() => { setStarting(true); shell.stats.start().then(load).finally(() => setStarting(false)) }}>
-            {starting ? "…" : t('shell.startStats')}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-})
-
 // ============================================================== Labs + Config
 
 export const LabsPanel = memo(function LabsPanel() {
@@ -1817,7 +1747,7 @@ export const LabsPanel = memo(function LabsPanel() {
         <button className="btn-secondary compact" onClick={load} title="refresh"><RefreshIcon size={12} /></button>
       </div>
       <div className="shell-labs-section">
-        <div className="shell-updates-title">Server opencode</div>
+        <div className="shell-updates-title">Server OpenHer</div>
         <div className="shell-labs-row">
           <span>{server?.running ? "● " + t('shell.running') : "○ " + t('shell.stopped')}</span>
           <button className="btn-primary compact" disabled={!server?.running && !server} onClick={() => shell.server.start().then(load)}>{t('shell.start')}</button>
@@ -2139,118 +2069,6 @@ export type ShellPanelProps = {
   panelId?: string
 }
 
-// ============================================================== Session Stats (compacto)
-
-type SessionDetail = {
-  id: string
-  title: string
-  model: string
-  directory: string
-  created: number
-  updated: number
-  tokens?: { tokens_input?: number; tokens_output?: number; tokens_reasoning?: number; tokens_cache_read?: number; tokens_cache_write?: number }
-  cost: number
-  events: number
-  events_mb: number
-}
-
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
-}
-
-function fmtCost(n: number): string {
-  if (n >= 1) return `$${n.toFixed(2)}`
-  if (n >= 0.01) return `$${n.toFixed(3)}`
-  return `$${n.toFixed(4)}`
-}
-
-function timeAgo(ts: number): string {
-  const diff = Date.now() / 1000 - ts
-  if (diff < 60) return "ahora"
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`
-  return `${Math.floor(diff / 86400)}d`
-}
-
-export const SessionStatsPanel = memo(function SessionStatsPanel({ sessionID, onClose }: { sessionID?: string | null; onClose?: () => void }) {
-  const t = useT()
-  const [detail, setDetail] = useState<SessionDetail | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    if (!sessionID) return
-    setLoading(true)
-    setError(null)
-    try {
-      // El thread de stats puede no estar levantado (abrir stats sin pasar
-      // por StatsView): start es idempotente, si ya corre no hace nada.
-      await shell.stats.start().catch(() => undefined)
-      const r = await shell.stats.proxy<any>(`admin/session/${sessionID}`)
-      if (r && r.error) {
-        setError(r.error)
-        setDetail(null)
-      } else if (r && r.id) {
-        setDetail(r)
-        setError(null)
-      } else {
-        setError("Sesión no encontrada en stats")
-        setDetail(null)
-      }
-    } catch {
-      setError("No se pudo conectar con opencode-stats")
-    } finally {
-      setLoading(false)
-    }
-  }, [sessionID])
-
-  // Reloj central (Plan 3) con load inmediato; re-registra al cambiar de sesión.
-  useScheduled(`session-stats:${sessionID}`, 15_000, load, { runOnRegister: true })
-
-  return (
-    <div className="session-stats-modal">
-      <div className="session-stats-modal-header">
-        <span className="session-stats-modal-title">Stats de sesión</span>
-        <div className="session-stats-modal-actions">
-          <button className="btn-icon compact" onClick={load} title="Actualizar">↻</button>
-          {onClose && <button className="btn-icon compact" onClick={onClose} title="Cerrar">×</button>}
-        </div>
-      </div>
-      <div className="session-stats-modal-body">
-        {!sessionID && <div className="shell-empty"><p>{t('shell.noSession')}</p></div>}
-        {loading && !detail && <div className="shell-empty"><p>Cargando stats...</p></div>}
-        {error && <div className="shell-empty"><p className="ss-error">{error}</p><button className="btn-secondary" onClick={load}>Reintentar</button></div>}
-        {detail && (() => {
-          const t = detail.tokens
-          const input = t?.tokens_input ?? 0
-          const output = t?.tokens_output ?? 0
-          const reasoning = t?.tokens_reasoning ?? 0
-          const cacheRead = t?.tokens_cache_read ?? 0
-          const totalTokens = input + output + reasoning
-          const cacheHit = cacheRead > 0 ? ((cacheRead / (cacheRead + input)) * 100).toFixed(0) : "0"
-          return (
-            <>
-              <div className="session-stats-grid">
-                <div className="session-stats-card"><span className="ss-label">Costo</span><span className="ss-value">{fmtCost(detail.cost)}</span></div>
-                <div className="session-stats-card"><span className="ss-label">Tokens</span><span className="ss-value">{fmtTokens(totalTokens)}</span></div>
-                <div className="session-stats-card"><span className="ss-label">Input</span><span className="ss-value">{fmtTokens(input)}</span></div>
-                <div className="session-stats-card"><span className="ss-label">Output</span><span className="ss-value">{fmtTokens(output)}</span></div>
-                <div className="session-stats-card"><span className="ss-label">Reasoning</span><span className="ss-value">{fmtTokens(reasoning)}</span></div>
-                <div className="session-stats-card"><span className="ss-label">Cache HIT</span><span className="ss-value">{cacheHit}%</span></div>
-                <div className="session-stats-card"><span className="ss-label">Eventos</span><span className="ss-value">{detail.events}</span></div>
-                <div className="session-stats-card"><span className="ss-label">Última vez</span><span className="ss-value">{timeAgo(detail.updated)}</span></div>
-              </div>
-              {detail.model && <div className="session-stats-footer"><span className="ss-model">{detail.model}</span></div>}
-            </>
-          )
-        })()}
-      </div>
-    </div>
-  )
-})
-
 export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir, sessionID: _sessionID, onOpenFile, panelIndex, panelId }: ShellPanelProps) {
   switch (kind) {
     case "terminal":
@@ -2263,8 +2081,6 @@ export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir
       return <DocsPanel />
     case "updates":
       return <UpdatesPanel />
-    case "stats":
-      return <StatsPanel />
     case "labs":
       return <LabsPanel />
     case "config":

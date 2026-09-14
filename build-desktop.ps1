@@ -44,7 +44,7 @@ function Write-Phase([string]$msg) {
 }
 
 function Get-RunningDesktop {
-  return @(Get-Process "opencode-desktop" -ErrorAction SilentlyContinue)
+  return @(Get-Process "openher-desktop" -ErrorAction SilentlyContinue)
 }
 
 function Test-LaunchedFromExplorer {
@@ -59,7 +59,7 @@ function Stop-RunningDesktop {
   $running = Get-RunningDesktop
   if ($running.Count -eq 0) { return }
   $pids = ($running | ForEach-Object { $_.Id }) -join ", "
-  Write-Host "opencode-desktop.exe en ejecución (PID $pids): se cierra solo para compilar..." -ForegroundColor Yellow
+  Write-Host "openher-desktop.exe en ejecución (PID $pids): se cierra solo para compilar..." -ForegroundColor Yellow
   foreach ($p in $running) {
     try { $p.CloseMainWindow() | Out-Null } catch { }
   }
@@ -74,7 +74,7 @@ function Stop-RunningDesktop {
   Start-Sleep -Milliseconds 500
   $still = Get-RunningDesktop
   if ($still.Count -gt 0) {
-    throw "No se pudo cerrar opencode-desktop.exe (PID $(($still | ForEach-Object { $_.Id }) -join ', ')). Ciérrelo a mano y recompile."
+    throw "No se pudo cerrar openher-desktop.exe (PID $(($still | ForEach-Object { $_.Id }) -join ', ')). Ciérrelo a mano y recompile."
   }
 }
 
@@ -83,7 +83,7 @@ function Copy-Verified([string]$src, [string]$dst) {
   $a = (Get-FileHash -Path $src -Algorithm SHA256).Hash
   $b = (Get-FileHash -Path $dst -Algorithm SHA256).Hash
   if ($a -ne $b) {
-    throw "Verificación fallida al copiar a $dst (hash distinto al origen). Cierre opencode-desktop.exe y recompile."
+    throw "Verificación fallida al copiar a $dst (hash distinto al origen). Cierre openher-desktop.exe y recompile."
   }
   Write-Host "  -> Copiado y verificado: $dst" -ForegroundColor Green
 }
@@ -152,20 +152,70 @@ try {
   try {
     $headFull = (git -C $rootDir rev-parse --short HEAD 2>$null)
   } catch { $headFull = $null }
-  $buildInfo = [ordered]@{
-    builtAt  = (Get-Date).ToString("o")
-    gitHead  = $headFull
-    source   = "build-desktop.ps1"
+  # Versión publicable (la misma de la APK): la usa el shell remoto para
+  # comparar `versionCode` en el self-update del desktop.
+  $appVersion = ""
+  $appVersionCode = 0
+  $gradlePath = Join-Path $webDir "android\app\build.gradle"
+  if (Test-Path $gradlePath) {
+    $gradleRaw = Get-Content $gradlePath -Raw
+    $mName = [regex]::Match($gradleRaw, 'versionName\s+"([^"]+)"')
+    $mCode = [regex]::Match($gradleRaw, 'versionCode\s+(\d+)')
+    if ($mName.Success) { $appVersion = $mName.Groups[1].Value }
+    if ($mCode.Success) { $appVersionCode = [int]$mCode.Groups[1].Value }
   }
-  ($buildInfo | ConvertTo-Json) | Out-File -FilePath (Join-Path $webDist "build-info.json") -Encoding utf8
+  $buildInfo = [ordered]@{
+    builtAt     = (Get-Date).ToString("o")
+    gitHead     = $headFull
+    source      = "build-desktop.ps1"
+    version     = $appVersion
+    versionCode = $appVersionCode
+  }
+  # UTF-8 sin BOM: serde_json (desktop) rechaza el BOM que agrega Out-File.
+  [System.IO.File]::WriteAllText(
+    (Join-Path $webDist "build-info.json"),
+    ($buildInfo | ConvertTo-Json),
+    (New-Object System.Text.UTF8Encoding($false))
+  )
 
   # 2. Compilar binario de Rust en Release
   $t2 = Get-Date
   Write-Phase "[2/2] Compilando binario Rust en Release (cargo build --release)..."
+
+  # MSVC: si el shell no trae el entorno de VS, armarlo con las rutas conocidas
+  # (sin LIB de kernel32, cargo falla con LNK1181). No pisa un entorno sano.
+  try {
+    $hasCl = $null -ne (Get-Command cl.exe -ErrorAction SilentlyContinue)
+    $hasLib = [bool]$env:LIB
+    if (-not $hasCl -or -not $hasLib) {
+      $vcRoot = Get-ChildItem "G:\Dev\MSVC\Install\VC\Tools\MSVC" -Directory -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending | Select-Object -First 1
+      $sdkRoot = "C:\Program Files (x86)\Windows Kits\10"
+      if ($vcRoot -and (Test-Path $sdkRoot)) {
+        $sdkVer = Get-ChildItem "$sdkRoot\Lib" -Directory -ErrorAction SilentlyContinue |
+          Sort-Object Name -Descending | Select-Object -First 1
+        if ($sdkVer) {
+          $vcBin = Join-Path $vcRoot.FullName "bin\Hostx64\x64"
+          $env:PATH = "$vcBin;$env:PATH"
+          $env:LIB = "$($vcRoot.FullName)\lib\x64;$sdkRoot\Lib\$($sdkVer.Name)\um\x64;$sdkRoot\Lib\$($sdkVer.Name)\ucrt\x64"
+          $env:INCLUDE = "$($vcRoot.FullName)\include;$sdkRoot\Include\$($sdkVer.Name)\um;$sdkRoot\Include\$($sdkVer.Name)\ucrt;$sdkRoot\Include\$($sdkVer.Name)\shared"
+          Write-Host "  (MSVC env armado: $($vcRoot.Name) / SDK $($sdkVer.Name))" -ForegroundColor DarkGray
+        }
+      }
+    }
+  } catch { }
+
   Push-Location $desktopAppDir
   try {
-    cargo build --release
-    if ($LASTEXITCODE -ne 0) { throw "Error al compilar el proyecto Rust." }
+    # Igual que en el paso web: cargo escribe el progreso ("Compiling ...")
+    # por stderr y con $ErrorActionPreference=Stop PowerShell lo trata como
+    # error fatal. Se baja a Continue y decide el exit code real.
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    cargo build --release 2>&1 | ForEach-Object { "$_" }
+    $rustCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+    if ($rustCode -ne 0) { throw "Error al compilar el proyecto Rust (cargo exit $rustCode)." }
 
     # Detectar dinámicamente el directorio target de cargo
     $targetDir = $null
@@ -182,10 +232,10 @@ try {
 
   # Localizar el .exe compilado
   $candidates = @(
-    $(if ($targetDir) { Join-Path $targetDir "release\opencode-desktop.exe" }),
-    (Join-Path $desktopAppDir "target\release\opencode-desktop.exe"),
-    "G:\.cargo-target\release\opencode-desktop.exe",
-    (Join-Path $desktopAppDir "opencode-desktop.exe")
+    $(if ($targetDir) { Join-Path $targetDir "release\openher-desktop.exe" }),
+    (Join-Path $desktopAppDir "target\release\openher-desktop.exe"),
+    "G:\.cargo-target\release\openher-desktop.exe",
+    (Join-Path $desktopAppDir "openher-desktop.exe")
   )
 
   $targetExe = $null
@@ -220,11 +270,11 @@ try {
   }
 
   # Copiar ejecutable al OutputDir (error fatal si falla o no verifica)
-  $destExe = Join-Path $OutputDir "opencode-desktop.exe"
+  $destExe = Join-Path $OutputDir "openher-desktop.exe"
   Copy-Verified $targetExe $destExe
 
   # Copiar ejecutable también a desktop-app/ (mismo criterio)
-  $devExe = Join-Path $desktopAppDir "opencode-desktop.exe"
+  $devExe = Join-Path $desktopAppDir "openher-desktop.exe"
   if ($devExe -ne $targetExe) {
     Copy-Verified $targetExe $devExe
   }

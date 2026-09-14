@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react"
+import { useState, useCallback, useMemo, useRef, useEffect, useSyncExternalStore } from "react"
 import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
 import { api } from "../api"
 import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage, buildNoticeMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "../utils/parseCommand"
@@ -55,12 +55,80 @@ function stripNonEssential(msg: MessageEnvelope, dataMode?: DataMode): MessageEn
 // Cola visible de salida: mensajes enviados mientras el agente está ocupado.
 // Aparecen en el chat como usuario pendiente (sin enviar) con acciones
 // eliminar / editar / enviar-ahora. Por sesión; se filtran al renderizar.
+//
+// La cola pertenece a la SESIÓN, no a la instancia del hook: cada panel del
+// desktop y la vista detalle/móvil tienen su propio useMessages, y con un
+// useState por instancia el mensaje encolado quedaba huérfano al cambiar de
+// pestaña (invisible en su sesión pero auto-enviándose igual) o se perdía al
+// desmontar. El store de módulo lo comparte todo; `claimSharedOutbox`
+// evita que el flush del panel y el global envíen el mismo item dos veces.
 export type OutboxItem = {
   id: string
   sessionID: string
   text: string
   images?: Array<{ base64: string; mime: string; name?: string }>
   createdAt: number
+}
+
+type OutboxListener = () => void
+let sharedOutbox: OutboxItem[] = []
+const sharedOutboxListeners = new Set<OutboxListener>()
+const sharedOutboxSending = new Set<string>()
+function emitSharedOutbox() {
+  for (const l of [...sharedOutboxListeners]) {
+    try { l() } catch { /* un listener roto no tumba a los demás */ }
+  }
+}
+function subscribeSharedOutbox(fn: OutboxListener): () => void {
+  sharedOutboxListeners.add(fn)
+  return () => { sharedOutboxListeners.delete(fn) }
+}
+function getSharedOutbox(): OutboxItem[] {
+  return sharedOutbox
+}
+export function enqueueSharedOutbox(sessionID: string, text: string, images?: OutboxItem["images"]): OutboxItem {
+  const item: OutboxItem = {
+    id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    sessionID,
+    text,
+    images: images && images.length > 0 ? images : undefined,
+    createdAt: Date.now(),
+  }
+  sharedOutbox = [...sharedOutbox, item]
+  emitSharedOutbox()
+  return item
+}
+export function removeSharedOutbox(id: string): void {
+  sharedOutboxSending.delete(id)
+  if (sharedOutbox.some((o) => o.id === id)) {
+    sharedOutbox = sharedOutbox.filter((o) => o.id !== id)
+    emitSharedOutbox()
+  }
+}
+/** Reserva un item para enviarlo; false si otro flush/botón ya lo tomó. */
+export function claimSharedOutbox(id: string): boolean {
+  if (sharedOutboxSending.has(id)) return false
+  if (!sharedOutbox.some((o) => o.id === id)) return false
+  sharedOutboxSending.add(id)
+  return true
+}
+export function releaseSharedOutbox(id: string): void {
+  sharedOutboxSending.delete(id)
+}
+
+// Hold del auto-flush: tras un Stop explícito NO se auto-envían los pendientes
+// (el usuario cortó a propósito; si no, el abort parecía "no hacer nada"
+// porque el flush arrancaba otro turno al instante). Se reanuda al mandar algo
+// manualmente o al tocar "Enviar ahora".
+const sharedOutboxHold = new Set<string>()
+export function holdSharedOutbox(sessionID: string): void {
+  sharedOutboxHold.add(sessionID)
+}
+export function resumeSharedOutbox(sessionID: string): void {
+  sharedOutboxHold.delete(sessionID)
+}
+export function isSharedOutboxHeld(sessionID: string): boolean {
+  return sharedOutboxHold.has(sessionID)
 }
 
 export type OutboxActions = {
@@ -84,28 +152,18 @@ function buildOutboxMessage(item: OutboxItem): MessageEnvelope {
 }
 
 const INITIAL_PAGE_LIMIT = 35
-const PAGE_SIZE = 35
 
 export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKey = COMPOSER_STORAGE_KEY) {
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<MessageEnvelope[]>([])
-  const [outbox, setOutbox] = useState<OutboxItem[]>([])
+  // Cola compartida por sesión entre todas las instancias (ver store de módulo arriba).
+  const outbox = useSyncExternalStore(subscribeSharedOutbox, getSharedOutbox, getSharedOutbox)
   const [messageLimit, setMessageLimit] = useState(INITIAL_PAGE_LIMIT)
-  const [hasMoreMessages, setHasMoreMessages] = useState(false)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const enqueueOutbox = useCallback((sessionID: string, text: string, images?: OutboxItem["images"]) => {
-    const item: OutboxItem = {
-      id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      sessionID,
-      text,
-      images: images && images.length > 0 ? images : undefined,
-      createdAt: Date.now(),
-    }
-    setOutbox((prev) => [...prev, item])
-    return item
+    return enqueueSharedOutbox(sessionID, text, images)
   }, [])
   const removeOutbox = useCallback((id: string) => {
-    setOutbox((prev) => (prev.some((o) => o.id === id) ? prev.filter((o) => o.id !== id) : prev))
+    removeSharedOutbox(id)
   }, [])
   const [composer, setComposer] = useState(() => localStorage.getItem(storageKey) ?? "")
   const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false)
@@ -136,7 +194,11 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // vieja pisaría el draft de otra sesión al cambiar de chat.
 
   const loadSelectedRequestRef = useRef(0)
-  const awaitingAssistantBaselineRef = useRef("")
+  // ID del último assistant ANTES del envío. Al completarse el turno nuevo, el
+  // assistant tiene otro id → recién ahí se apaga el spinner. Comparar por id
+  // (no por firma) evita que un revert/poda cambie la firma y apague el spinner
+  // antes de tiempo, y que un `message.updated` de un assistant viejo lo apague.
+  const awaitingBaselineIDRef = useRef("")
   const completionShouldPlayRef = useRef(false)
   const isSendingRef = useRef(false)
   const [isSending, setIsSending] = useState(false)
@@ -225,24 +287,32 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   }, [])
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
+    // Aísla la conversación: mensajes de OTRAS sesiones (races de transición,
+    // SSE tardío, caché) nunca deben renderizarse acá. El merge de loadSelected
+    // los descarta, pero si alguno entra por otra vía la vista mostraba p. ej.
+    // el compaction de otro chat hasta el próximo fetch.
+    const loaded = loadedSessionIDRef.current
+    const scoped = loaded
+      ? messages.filter((m) => !m.info.sessionID || m.info.sessionID === loaded)
+      : messages
     // Optimización: si no hay optimistas ni outbox pendientes, skip el trabajo pesado
     let merged: MessageEnvelope[]
     if (optimisticUserMessages.length === 0 && outbox.length === 0) {
-      merged = messages
+      merged = scoped
     } else {
       // Fix: no filtrar optimistas por texto contra todo el historial — eso
       // ocultaba "hola" x2 cuando ya existía un "hola" antiguo y el nuevo
       // parecía duplicado. Solo filtrar por id (nunca coincide, id local vs
       // server) y dejar que loadSelected haga el dedupe por texto al confirmar.
       // Así el mensaje se ve al instante incluso si el texto ya existe.
-      const existingIds = new Set(messages.map((m) => m.info.id))
+      const existingIds = new Set(scoped.map((m) => m.info.id))
       const pendingOptimistic = optimisticUserMessages.filter((opt) => !existingIds.has(opt.info.id))
       // Outbox: solo la sesión cargada (los de otras sesiones esperan su panel).
-      const loaded = loadedSessionIDRef.current ?? messages[0]?.info.sessionID
+      const target = loaded ?? scoped[0]?.info.sessionID
       const pendingOutbox = outbox
-        .filter((o) => o.sessionID === loaded && !existingIds.has(o.id))
+        .filter((o) => o.sessionID === target && !existingIds.has(o.id))
         .map(buildOutboxMessage)
-      merged = [...messages, ...pendingOptimistic, ...pendingOutbox]
+      merged = [...scoped, ...pendingOptimistic, ...pendingOutbox]
     }
     const { out, cache } = computeRenderedMessages(merged, dataMode, renderedCacheRef.current)
     renderedCacheRef.current = cache
@@ -308,8 +378,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     setCurrentSessionId(null)
     subagentAnchorRef.current.clear()
     setMessageLimit(INITIAL_PAGE_LIMIT)
-    setHasMoreMessages(false)
-    setIsLoadingMore(false)
     setMessages([])
     setOptimisticUserMessages([])
     setAwaitingAssistantReply(false)
@@ -328,7 +396,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     })
   }, [])
 
-  const loadSelected = useCallback(async (sessionID: string, directory: string) => {
+  const loadSelectedInner = useCallback(async (sessionID: string, directory: string) => {
     const requestID = ++loadSelectedRequestRef.current
     // Seteo ANTES del await: los deltas que lleguen durante el fetch de esta
     // sesión ya se aplican (el merge por id conserva lo streamed local).
@@ -345,7 +413,6 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     // Defensivo: un item null/corrupto del server no debe tumbar el render
     // (msg.map(m => m.info.id) con m undefined = TypeError).
     const safe = msg.filter((m): m is MessageEnvelope => !!m && !!m.info?.id)
-    setHasMoreMessages(safe.length >= limit)
     // Eco sin bytes: reinyectar los dataURL locales en el mensaje confirmado
     // (el server puede podarlos por tamaño). Sin esto la imagen "aparece y se
     // borra": el optimista se elimina por conteo y el eco queda sin src.
@@ -499,63 +566,29 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     if (safe.length > 0) {
       const last = safe[safe.length - 1]
       if (last.info.role === "assistant" && (last.info.time.completed || last.info.finish)) {
-        // Solo apagar si hay algo NUEVO desde que se empezó a esperar: si la
-        // firma no cambió, el completed es viejo (poll entre turnos) y el
+        // Solo apagar si hay un assistant NUEVO: si el id coincide con el
+        // capturado al enviar, el completed es viejo (poll entre turnos) y el
         // agente puede seguir trabajando → no robar el botón stop.
-        if (lastSigRef.current.assistantSignature !== awaitingAssistantBaselineRef.current) {
+        if (last.info.id !== awaitingBaselineIDRef.current) {
           setAwaitingAssistantReply(false)
         }
       }
     }
   }, [config, dataMode, messageLimit])
 
-  const loadMoreMessages = useCallback(async () => {
-    if (isLoadingMore) return
-    const sid = loadedSessionIDRef.current ?? currentSessionId
-    if (!sid) return
-    setIsLoadingMore(true)
-    const nextLimit = messageLimit + PAGE_SIZE
-    setMessageLimit(nextLimit)
+  // Dedupe de fetch en vuelo por sesión: el poll, el settle y la reconciliación
+  // de status pueden pedir el mismo historial a la vez; en sesiones grandes el
+  // payload es de varios MB y recargarlo en paralelo satura.
+  const loadingSessionsRef = useRef<Set<string>>(new Set())
+  const loadSelected = useCallback(async (sessionID: string, directory: string) => {
+    if (loadingSessionsRef.current.has(sessionID)) return
+    loadingSessionsRef.current.add(sessionID)
     try {
-      const raw = await api.loadMessages(config, sid, undefined, nextLimit)
-      const msg = dataMode === "full" || dataMode === "saver" ? raw : raw.map((m) => stripNonEssential(m, dataMode))
-      const safe = msg.filter((m): m is MessageEnvelope => !!m && !!m.info?.id)
-      setHasMoreMessages(safe.length >= nextLimit)
-      setMessages((prev) => {
-        const seen = new Set<string>()
-        let changed = prev.some((m) => m.info.sessionID !== sid)
-        const msgMap = new Map(safe.map((m) => [m.info.id, m]))
-        const merged: MessageEnvelope[] = []
-        for (const m of prev) {
-          if (m.info.sessionID !== sid) continue
-          if (seen.has(m.info.id)) { changed = true; continue }
-          seen.add(m.info.id)
-          const updated = msgMap.get(m.info.id)
-          if (updated) {
-            const remoteIDs = new Set(updated.parts.map((p) => p.id))
-            const extraLocal = m.parts.filter((p) => !remoteIDs.has(p.id))
-            merged.push(extraLocal.length > 0 ? { ...updated, parts: [...updated.parts, ...extraLocal] } : updated)
-          } else {
-            merged.push(m)
-          }
-        }
-        for (const m of safe) {
-          if (!seen.has(m.info.id)) {
-            changed = true
-            seen.add(m.info.id)
-            merged.push(m)
-          }
-        }
-        if (!changed && merged.length === prev.length) return prev
-        merged.sort((a, b) => (a.info.time.created ?? 0) - (b.info.time.created ?? 0))
-        return merged
-      })
-    } catch {
-      // ignore
+      await loadSelectedInner(sessionID, directory)
     } finally {
-      setIsLoadingMore(false)
+      loadingSessionsRef.current.delete(sessionID)
     }
-  }, [isLoadingMore, currentSessionId, messageLimit, config, dataMode])
+  }, [loadSelectedInner])
 
   const removeOptimistic = useCallback((id: string) => {
     setOptimisticUserMessages((current) => current.filter((m) => m.info.id !== id))
@@ -679,7 +712,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     try {
       setComposer("")
       setAwaitingAssistantReply(true)
-      awaitingAssistantBaselineRef.current = lastSigRef.current.assistantSignature
+      awaitingBaselineIDRef.current = lastSigRef.current.assistantLastID
       await api.sendShell(config, sessionID, text, directory)
     } catch (err) {
       setAwaitingAssistantReply(false)
@@ -697,7 +730,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   ) => {
     setCompacting(true, sessionID)
     setAwaitingAssistantReply(true)
-    awaitingAssistantBaselineRef.current = lastSigRef.current.assistantSignature
+    awaitingBaselineIDRef.current = lastSigRef.current.assistantLastID
     try {
       const ok = await api.summarize(config, sessionID, providerID, modelID, directory, false)
       if (!ok) { setRuntimeError("Compact returned false from server"); return }
@@ -910,7 +943,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
         optimisticIDsRef.current = new Set([...optimisticIDsRef.current, optimisticMessage.info.id])
         const t = extractText(optimisticMessage).trim()
         if (t) optimisticTextsRef.current = new Set([...optimisticTextsRef.current, t])
-        awaitingAssistantBaselineRef.current = assistantResponseSignature
+        awaitingBaselineIDRef.current = lastSigRef.current.assistantLastID
         completionShouldPlayRef.current = true
         setAwaitingAssistantReply(true)
         onSetRuntimeError(null)
@@ -993,6 +1026,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       setComposer("")
       return "timeline"
     }
+    if (parsed?.type === "newSession") {
+      setComposer("")
+      return "newSession"
+    }
     if (parsed?.type === "connect") {
       setComposer("")
       // /connect <providerID> <apiKey> → setea la credencial directo.
@@ -1069,9 +1106,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     compacting, setCompacting,
     renderedMessages, messageScrollSignature, assistantResponseSignature, pendingIndex,
     completionShouldPlayRef,
+    getAwaitingBaselineID: () => awaitingBaselineIDRef.current,
     clearSession, preloadMessages, loadSelected, send: updateSend, abortSession,
     undoMessage, redoMessage, compactSession, sendShell: sendShellCallback,
-    applyDelta, applyPart,
-    hasMoreMessages, isLoadingMore, loadMoreMessages
+    applyDelta, applyPart
   }
 }

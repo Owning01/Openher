@@ -1,6 +1,10 @@
 import { useCallback } from "react"
 import type { ShellPanelKind } from "../shell"
 import type { DesktopLayout, ViewType } from "../types"
+import { DEBATE_TAB_ID, registerDebateTab } from "../features/debate/register"
+
+// Registra la tab "Debate" una sola vez (idempotente) al cargar el shell.
+registerDebateTab()
 
 export type VirtualTabId = "__kanban__" | "__learning__" | (string & {})
 
@@ -30,6 +34,7 @@ export function useVirtualTabs({
   openVirtualTab: (id: VirtualTabId) => void
   handleOpenKanban: () => void
   handleOpenLearning: () => void
+  handleOpenDebate: () => void
 } {
   const openVirtualTab = useCallback(
     (id: VirtualTabId): void => {
@@ -103,8 +108,9 @@ export function useVirtualTabs({
 
   const handleOpenKanban = useCallback(() => openVirtualTab("__kanban__"), [openVirtualTab])
   const handleOpenLearning = useCallback(() => openVirtualTab("__learning__"), [openVirtualTab])
+  const handleOpenDebate = useCallback(() => openVirtualTab(DEBATE_TAB_ID), [openVirtualTab])
 
   void _addPanel
 
-  return { openVirtualTab, handleOpenKanban, handleOpenLearning }
+  return { openVirtualTab, handleOpenKanban, handleOpenLearning, handleOpenDebate }
 }

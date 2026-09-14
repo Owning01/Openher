@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react"
 import type { SSEEvent } from "../types"
 import type { MessageEnvelope } from "../types"
 import { pluginBus } from "../plugins/bus"
+import { normalizeAssistantError } from "../shared/errors/assistantError"
 
 // Diagnóstico del streaming de reasoning: inactivo por defecto (spam por
 // delta). Activación: localStorage.setItem("opencode.debug.sse", "1").
@@ -16,6 +17,8 @@ type SSEHandlerDeps = {
   setAwaitingAssistantReply: (v: boolean) => void
   setRuntimeError: (e: string | null) => void
   awaitingRef: () => boolean
+  /** ID del último assistant ANTES del envío: solo un assistant con OTRO id es la respuesta esperada. */
+  awaitingBaselineIDRef?: () => string
   onSettled: (sessionID: string, directory: string) => void
   /** Limpia el bubble "Compacting" al llegar `compaction.ended` (corta el poll de 15s). Opcional por compat con callers viejos. */
   setCompacting?: (v: boolean, sessionID?: string) => void
@@ -213,8 +216,14 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
             }
           }
           if (rawMsg?.info?.role === "assistant" && (rawMsg?.info?.time?.completed || rawMsg?.info?.finish) && deps.awaitingRef()) {
-            deps.setAwaitingAssistantReply(false)
-            deps.onSettled(sessionID, deps.directory ?? "")
+            // Solo el assistant NUEVO cierra el turno: un `message.updated` de
+            // un assistant viejo (p. ej. el reemitido tras un revert) no debe
+            // apagar el spinner ni disparar el settled del turno en curso.
+            const baselineID = deps.awaitingBaselineIDRef?.() ?? ""
+            if (updatedMessageID && updatedMessageID !== baselineID) {
+              deps.setAwaitingAssistantReply(false)
+              deps.onSettled(sessionID, deps.directory ?? "")
+            }
           }
         }
       }
@@ -253,7 +262,11 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       if (sessionID && sessionID !== deps.sessionID) return
-      const msg = (d.message ?? d.text ?? p.message ?? p.text ?? "") as string
+      // El server manda { error: { name, data: { message, ref? } } }; además
+      // algunos emisores mandan message/text plano. Normalizar ambos.
+      const norm = normalizeAssistantError(d.error ?? p.error)
+      const plain = (d.message ?? d.text ?? p.message ?? p.text) as string | undefined
+      const msg = norm?.message || plain || norm?.name
       if (msg) deps.setRuntimeError(msg)
       deps.setAwaitingAssistantReply(false)
     }

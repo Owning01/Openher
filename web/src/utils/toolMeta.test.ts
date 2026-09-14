@@ -23,7 +23,7 @@ describe("toolMeta", () => {
     expect(toolMeta.edit).toEqual({ icon: "△", label: "edit" })
     expect(toolMeta.apply_patch).toEqual({ icon: "△", label: "patch" })
     expect(toolMeta.glob).toEqual({ icon: "✱", label: "glob" })
-    expect(toolMeta.grep).toEqual({ icon: "🔍", label: "grep" })
+    expect(toolMeta.grep).toEqual({ icon: "◎", label: "grep" })
     expect(toolMeta.webfetch).toEqual({ icon: "%", label: "web" })
     expect(toolMeta.websearch).toEqual({ icon: "◈", label: "search" })
     expect(toolMeta.todowrite).toEqual({ icon: "✓", label: "todo" })

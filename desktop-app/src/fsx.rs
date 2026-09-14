@@ -177,14 +177,18 @@ pub fn favorites() -> Vec<String> {
 
 pub fn toggle_favorite(path: &str, add: bool) -> Result<(), String> {
     let fav = app_state();
-    let mut list = fav.paths.write().unwrap_or_else(|e| e.into_inner());
-    if add {
-        if !list.contains(&path.to_string()) {
-            list.push(path.to_string());
+    {
+        let mut list = fav.paths.write().unwrap_or_else(|e| e.into_inner());
+        if add {
+            if !list.contains(&path.to_string()) {
+                list.push(path.to_string());
+            }
+        } else {
+            list.retain(|p| p != path);
         }
-    } else {
-        list.retain(|p| p != path);
     }
+    // El guard de escritura se libera antes de `save()`: `save()` toma
+    // `paths.read()` y mantenerlo aquí producía un deadlock (write→read).
     fav.save();
     Ok(())
 }
@@ -558,7 +562,7 @@ pub fn execute_file(path: &str) -> Result<serde_json::Value, String> {
         let mut cmd = match ext.as_str() {
             "bat" | "cmd" => {
                 let mut c = Command::new("cmd.exe");
-                c.args(["/c", "start", "OpenCode Script", "cmd.exe", "/k", path]);
+                c.args(["/c", "start", "OpenHer Script", "cmd.exe", "/k", path]);
                 c
             }
             "vbs" => {
@@ -568,7 +572,7 @@ pub fn execute_file(path: &str) -> Result<serde_json::Value, String> {
             }
             "ps1" => {
                 let mut c = Command::new("cmd.exe");
-                c.args(["/c", "start", "OpenCode PowerShell", "powershell.exe", "-NoExit", "-ExecutionPolicy", "Bypass", "-File", path]);
+                c.args(["/c", "start", "OpenHer PowerShell", "powershell.exe", "-NoExit", "-ExecutionPolicy", "Bypass", "-File", path]);
                 c
             }
             "exe" => {
@@ -577,7 +581,7 @@ pub fn execute_file(path: &str) -> Result<serde_json::Value, String> {
             }
             _ => {
                 let mut c = Command::new("cmd.exe");
-                c.args(["/c", "start", "OpenCode Script", "cmd.exe", "/k", path]);
+                c.args(["/c", "start", "OpenHer Script", "cmd.exe", "/k", path]);
                 c
             }
         };
@@ -603,76 +607,139 @@ pub fn pick_folder() -> Result<Option<String>, String> {
     Ok(path.map(|p| p.to_string_lossy().to_string()))
 }
 
+/// Quita espacios y comillas envolventes: "Copy as path" de Windows y los
+/// atajos pegados a mano suelen llegar como `"C:\...\app.exe"`.
+fn clean_arg(s: &str) -> &str {
+    s.trim().trim_matches('"').trim()
+}
+
+#[cfg(windows)]
+const ALLOWED_APP_EXT: &[&str] = &["exe", "bat", "cmd", "com", "ps1", "lnk"];
+
+/// Valida/normaliza el programa elegido para "Abrir con".
+/// `app` puede ser ruta completa o solo el nombre (`code`, `notepad.exe`):
+/// los nombres sueltos los resuelve el shell vía PATH / App Paths.
+/// Devuelve `(programa_limpio, lanzar_con_powershell)`.
+fn normalize_app(app: &str) -> Result<(String, bool), String> {
+    let clean = clean_arg(app);
+    if clean.is_empty() {
+        return Err("Falta el programa".into());
+    }
+    let path = Path::new(clean);
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let has_sep = clean.contains(['\\', '/']);
+    #[cfg(windows)]
+    {
+        if has_sep {
+            if !path.exists() || !path.is_file() {
+                return Err("El programa no existe".into());
+            }
+            if !ALLOWED_APP_EXT.contains(&ext.as_str()) {
+                return Err(format!(
+                    "extensión .{ext} no válida como programa — usa un .exe/.bat/.cmd/.lnk/.ps1"
+                ));
+            }
+        } else if !ext.is_empty() && !ALLOWED_APP_EXT.contains(&ext.as_str()) {
+            return Err(format!("extensión .{ext} no válida como programa"));
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if !path.exists() || !path.is_file() {
+            return Err("El programa no existe".into());
+        }
+    }
+    Ok((clean.to_string(), ext == "ps1"))
+}
+
+/// Lanza `app` con ShellExecuteW (verb open). Es lo que hace el Explorador:
+/// resuelve nombres sueltos por PATH/App Paths, respeta asociaciones y ejecuta
+/// .lnk/.bat/.cmd — `Command::new` falla con os error 193 en esos casos.
+#[cfg(windows)]
+fn shell_execute(app: &str, params: Option<&str>, dir: Option<&Path>) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let wide = |s: &str| -> Vec<u16> {
+        std::ffi::OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+    };
+    let file = wide(app);
+    let oper = wide("open");
+    let par = params.map(wide);
+    let dirw = dir.map(|d| wide(&d.to_string_lossy()));
+    let rc = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            oper.as_ptr(),
+            file.as_ptr(),
+            par.as_ref().map_or(std::ptr::null(), |v| v.as_ptr()),
+            dirw.as_ref().map_or(std::ptr::null(), |v| v.as_ptr()),
+            SW_SHOWNORMAL,
+        )
+    };
+    let code = rc as isize;
+    if code <= 32 {
+        return Err(format!("Windows no pudo ejecutar \"{app}\" (código {code})"));
+    }
+    Ok(())
+}
+
 /// Abre un archivo con su programa predeterminado (asociación del SO).
-/// Best-effort: valida existencia; el spawn desacoplado no bloquea el server.
+/// Best-effort: valida existencia; ShellExecuteW no bloquea el server.
 pub fn open_default(path: &str) -> Result<serde_json::Value, String> {
-    let p = Path::new(path);
+    let clean = clean_arg(path).to_string();
+    let p = Path::new(&clean);
     if !p.exists() {
         return Err("El archivo no existe".into());
     }
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        // `start "" <path>` usa la asociación registrada (verb open).
-        // CREATE_NO_WINDOW evita flashear una consola.
-        let mut cmd = std::process::Command::new("cmd.exe");
-        cmd.args(["/c", "start", "", path]);
-        cmd.creation_flags(0x08000000);
-        if let Some(parent) = p.parent() {
-            cmd.current_dir(parent);
-        }
-        cmd.spawn().map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({ "ok": true, "path": path }))
+        shell_execute(&clean, None, p.parent())?;
+        Ok(serde_json::json!({ "ok": true, "path": clean }))
     }
     #[cfg(not(target_os = "windows"))]
     {
         let mut cmd = std::process::Command::new("xdg-open");
-        cmd.arg(path);
+        cmd.arg(&clean);
         if let Some(parent) = p.parent() {
             cmd.current_dir(parent);
         }
         cmd.spawn().map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({ "ok": true, "path": path }))
+        Ok(serde_json::json!({ "ok": true, "path": clean }))
     }
 }
 
-/// Abre un archivo con un programa explícito (`app` es la ruta del ejecutable).
-/// Solo Windows valida extensión del programa; el archivo puede ser cualquiera.
+/// Abre un archivo con un programa explícito (`app`: ruta o nombre suelto).
+/// En Windows todo pasa por ShellExecuteW; .ps1 se lanza con PowerShell.
 pub fn open_with(path: &str, app: &str) -> Result<serde_json::Value, String> {
-    let p = Path::new(path);
+    let file = clean_arg(path).to_string();
+    let p = Path::new(&file);
     if !p.exists() {
         return Err("El archivo no existe".into());
     }
-    let a = Path::new(app);
-    if !a.exists() || !a.is_file() {
-        return Err("El programa no existe".into());
-    }
+    let (program, via_powershell) = normalize_app(app)?;
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        let ext = a.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-        const ALLOWED: &[&str] = &["exe", "bat", "cmd", "com", "ps1", "lnk"];
-        if !ALLOWED.contains(&ext.as_str()) {
-            return Err(format!("extensión .{ext} no válida como programa — usa un .exe/.bat/.cmd/.lnk"));
+        if via_powershell {
+            let par = format!("-NoProfile -ExecutionPolicy Bypass -File \"{program}\" \"{file}\"");
+            shell_execute("powershell.exe", Some(&par), p.parent())?;
+        } else {
+            let par = format!("\"{file}\"");
+            shell_execute(&program, Some(&par), p.parent())?;
         }
-        let mut cmd = std::process::Command::new(a);
-        cmd.arg(path);
-        cmd.creation_flags(0x08000000);
-        if let Some(parent) = p.parent() {
-            cmd.current_dir(parent);
-        }
-        cmd.spawn().map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({ "ok": true, "path": path, "app": app }))
+        Ok(serde_json::json!({ "ok": true, "path": file, "app": program }))
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let mut cmd = std::process::Command::new(a);
-        cmd.arg(path);
+        let _ = via_powershell;
+        let mut cmd = std::process::Command::new(&program);
+        cmd.arg(&file);
         if let Some(parent) = p.parent() {
             cmd.current_dir(parent);
         }
         cmd.spawn().map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({ "ok": true, "path": path, "app": app }))
+        Ok(serde_json::json!({ "ok": true, "path": file, "app": program }))
     }
 }
 
@@ -680,7 +747,7 @@ pub fn open_with(path: &str, app: &str) -> Result<serde_json::Value, String> {
 pub fn pick_app() -> Result<Option<String>, String> {
     let dialog = rfd::FileDialog::new()
         .set_title("Elegir programa para abrir el archivo")
-        .add_filter("Programas", &["exe", "bat", "cmd", "lnk"]);
+        .add_filter("Programas", &["exe", "bat", "cmd", "com", "lnk", "ps1"]);
     let path = dialog.pick_file();
     Ok(path.map(|p| p.to_string_lossy().to_string()))
 }
@@ -875,6 +942,36 @@ mod tests {
         )
         .is_err());
         assert!(zip_extract(root.join("no.zip").to_str().unwrap()).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn clean_arg_strips_quotes_and_spaces() {
+        assert_eq!(clean_arg("  \"C:\\a\\b.exe\"  "), "C:\\a\\b.exe");
+        assert_eq!(clean_arg("C:\\a\\b.exe"), "C:\\a\\b.exe");
+        assert_eq!(clean_arg("   "), "");
+    }
+
+    #[test]
+    fn normalize_app_acepta_comillas_y_rechaza_ext_ajena() {
+        let root = tmpdir("openwith");
+        let exe = root.join("app.bat");
+        std::fs::write(&exe, b"@echo off").unwrap();
+        let quoted = format!("  \"{}\"  ", exe.display());
+        let (clean, ps) = normalize_app(&quoted).unwrap();
+        assert_eq!(clean, exe.to_string_lossy());
+        assert!(!ps);
+        // .ps1 se marca para lanzar con PowerShell
+        let ps1 = root.join("task.ps1");
+        std::fs::write(&ps1, b"Write-Host ok").unwrap();
+        assert!(normalize_app(ps1.to_str().unwrap()).unwrap().1);
+        // programa inexistente / extensión no ejecutable
+        assert!(normalize_app(root.join("nope.exe").to_str().unwrap()).is_err());
+        assert!(normalize_app("notas.txt").is_err());
+        assert!(normalize_app("").is_err());
+        // nombre suelto: lo resuelve el shell (PATH / App Paths)
+        #[cfg(windows)]
+        assert_eq!(normalize_app(" notepad.exe ").unwrap().0, "notepad.exe");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

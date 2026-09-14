@@ -3,7 +3,7 @@ import { Network } from "@capacitor/network"
 import type { DataMode } from "../types"
 
 const isDesktopShell = () =>
-  typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
+  typeof window !== "undefined" && !!(window as any).__OPENHER_DESKTOP__
 
 // Red "sólida": wifi o ethernet (nunca cellular) → full, trayendo todo sin demora.
 function isSolidConnection(type: string): boolean {

@@ -1,10 +1,9 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, StatsIcon, EyeIcon, NoteIcon, CopyIcon } from "../Icons"
+import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, EyeIcon, NoteIcon, CopyIcon, ClockIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { FilePathProvider } from "./FilePathButton"
-import { ChatVirtuosoList } from "../widgets/message-list/ChatVirtuosoList"
 import { Composer } from "./Composer"
 import { PromptPresetSheet } from "./PromptPresetSheet"
 export { ThinkingLevels } from "./ThinkingLevels"
@@ -23,11 +22,13 @@ import { PROMPT_HISTORY_OPEN_EVENT, extractUserPrompts } from "../utils/promptHi
 import { SelectionBar } from "./SelectionBar"
 import { ExportMarkdownDialog } from "./ExportMarkdownDialog"
 import type { VisualSelection } from "../hooks/useVisualSelection"
-import { isQuestionTool } from "../utils/toolMeta"
+import { setQuestionFloatingMode } from "../utils/questionStore"
 
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { killTerminalPty } from "../utils/terminalStore"
 import { groupTurnDiffs } from "../utils/rendered"
+import { api } from "../api"
+import { subagentBackground, isForegroundRunningSubagent } from "../utils/subagentBackground"
 import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, AgentOption, ModelOption, DataMode, CommandInfo,
   ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, ChatSettings, TokenUsage } from "../types"
@@ -83,6 +84,7 @@ export type ChatViewProps = {
   onSheetOpen: (sheet: "ai" | "details") => void
   recentSessions: SessionView[]
   sessions: SessionView[]
+  busySessionIds?: ReadonlySet<string>
   onOpenSession: (id: string, dir: string) => void
   readingMode: boolean
   onToggleReadingMode: () => void
@@ -96,7 +98,6 @@ export type ChatViewProps = {
   agents?: AgentOption[]
   config?: ServerConfig
   onOpenSettings?: () => void
-  onOpenSessionStats?: () => void
   onShellSend?: (command: string) => void
   onThemeCommand?: () => void
   flags: FeatureFlags
@@ -106,13 +107,17 @@ export type ChatViewProps = {
   projectDashboard: ProjectDashboard | null
   pendingQuestions?: Question[]
   permissionRequest?: PermissionRequest | null
-  onQuestionReply?: (requestID: string, answers: string[][]) => void
-  onQuestionReject?: (requestID: string) => void
+  onQuestionReply?: (requestID: string, answers: string[][]) => Promise<void> | void
+  onQuestionReject?: (requestID: string) => Promise<void> | void
   onPermissionApprove?: (requestID: string) => void
   onPermissionReject?: (requestID: string) => void
-  onDismissQuestion?: () => void
+  onDismissQuestion?: (requestID?: string) => void
+  /** Reabrir preguntas dismissadas (click en el badge de pendientes). */
+  onReopenQuestions?: () => void
   onDismissPermission?: () => void
   onForkSession?: () => void
+  /** Abre el selector de carpeta para una sesión nueva (idealmente en `directory`). */
+  onOpenNewSession?: (directory?: string) => void
   onOpenTerminal?: () => void
   onOpenMCPBrowser?: () => void
   onOpenRemoteDesktop?: () => void
@@ -136,9 +141,6 @@ export type ChatViewProps = {
   onFocusVisualFile?: (path: string) => void
   // Cola visible: acciones por id de mensaje pendiente (eliminar/editar/enviar).
   outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
-  hasMoreMessages?: boolean
-  isLoadingMore?: boolean
-  onLoadMoreMessages?: () => void
 }
 
 export const ChatView = memo(function ChatView({
@@ -152,20 +154,19 @@ export const ChatView = memo(function ChatView({
   onStartRename, onRenameChange, onRenameConfirm, onRenameCancel,
   commands, onComposerChange, onSend, onAbort, onUndo, onRedo, onCompact, onRevertToMessage, onEditMessage, onBackToSessions,
   onSheetOpen: _onSheetOpen, readingMode, onOpenFileBrowser, fileBrowserPath: _fileBrowserPath,
-  agents, config, sessions, onOpenSession, onOpenSettings, onOpenSessionStats, onShellSend, onThemeCommand,
+  agents, config, sessions, busySessionIds, onOpenSession, onOpenSettings, onShellSend, onThemeCommand,
   onOpenRemoteDesktop, onOpenBrowser: _onOpenBrowser, onOpenOpenCodeHub,
   onToggleReadingMode,
   flags, onToggleFlag: _onToggleFlag, diffFiles, projectDashboard,
   pendingQuestions, permissionRequest,
   onQuestionReply, onQuestionReject, onPermissionApprove, onPermissionReject,
-  onDismissQuestion, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser,
+  onDismissQuestion, onReopenQuestions, onDismissPermission, onForkSession, onOpenTerminal, onOpenMCPBrowser,
   todos, todosExpanded, onTodosToggle, showTodoButton,
   compacting, revertID,
   onExportMarkdownTo, exportDefaultPath, onEditFile,
   charLimit, compactTools, minimalistMode, thinkingDefault, onRegenerate, onInsertPrompt, onSendPrompt,
   chatSettings, onChatSettingChange, onResetChatSettings, onOpenADEDiff,
-  visualSelection, onClearVisualSelection, onFocusVisualFile, outboxActions,
-  hasMoreMessages, isLoadingMore, onLoadMoreMessages
+  visualSelection, onClearVisualSelection, onFocusVisualFile, outboxActions
 }: ChatViewProps) {
   const t = useT()
   const turnChanges = useMemo(() => groupTurnDiffs(messages), [messages])
@@ -222,34 +223,11 @@ export const ChatView = memo(function ChatView({
   const prevModelRef = useRef(activeModelOption)
   useEffect(() => { if (activeModelOption) prevModelRef.current = activeModelOption }, [activeModelOption])
 
-  // Si la pregunta pendiente ya está renderizada inline en los mensajes del chat,
-  // no duplicarla mostrando también el modal overlay flotante.
-  const isQuestionInCurrentMessages = useMemo(() => {
-    if (!pendingQuestions || pendingQuestions.length === 0) return false
-    const activeQ = pendingQuestions[0]
-    const qId = activeQ.id
-    const callId = activeQ.tool?.callID
-    const firstPromptText = (activeQ.questions?.[0]?.question || activeQ.question || "").trim()
-
-    return messages.some((m) =>
-      m.toolParts?.some((tp) => {
-        if (tp.id === qId || tp.callID === qId) return true
-        if (callId && (tp.id === callId || tp.callID === callId)) return true
-        // Chequeo por contenido de pregunta o coincidencia de tool/input
-        const isQTool = tp.tool === "question" || isQuestionTool(tp.text ?? "") || (Array.isArray((tp.state?.input as any)?.questions))
-        if (isQTool) {
-          if (firstPromptText && (tp.text?.includes(firstPromptText) || (tp.state?.input as any)?.questions?.[0]?.question === firstPromptText)) {
-            return true
-          }
-          // Si hay una pregunta activa y este toolPart está pendiente/en curso en esta sesión
-          if (!tp.state?.status || tp.state.status === "pending" || tp.state.status === "running") {
-            return true
-          }
-        }
-        return false
-      })
-    )
-  }, [pendingQuestions, messages])
+  // Modo flotante compartido con ToolPart: con questionAuto ON el modal es la
+  // única superficie interactiva y el prompt inline se vuelve chip compacto.
+  useEffect(() => {
+    setQuestionFloatingMode(!!flags.questionAuto)
+  }, [flags.questionAuto])
   const displayModelOption = activeModelOption ?? prevModelRef.current
 
   // Copiar selección: aparece solo cuando hay texto seleccionado dentro del chat;
@@ -319,6 +297,56 @@ export const ChatView = memo(function ChatView({
       : sessions.find((s) => s.parentID === parent)
     if (subagentSession) onOpenSession(subagentSession.id, subagentSession.directory)
   }, [sessions, selectedSession?.id, onOpenSession])
+
+  // Subagentes en background aún vivos (sesión hija activa en el server). El
+  // chip del header evita perderlos de vista con scroll o al cambiar de chat.
+  const backgroundSubagents = useMemo(() => {
+    const out: Array<{ id: string; childSessionID: string; title: string }> = []
+    for (const m of messages) {
+      for (const tp of m.toolParts ?? []) {
+        const info = subagentBackground(tp)
+        if (!info.isBackground || !info.childSessionID || !busySessionIds?.has(info.childSessionID)) continue
+        const input = tp.state?.input as { description?: string } | undefined
+        const meta = tp.state?.metadata as { description?: string } | undefined
+        out.push({
+          id: tp.id,
+          childSessionID: info.childSessionID,
+          title: input?.description ?? meta?.description ?? t('toolpart.subagent'),
+        })
+      }
+    }
+    return out
+  }, [messages, busySessionIds, t])
+
+  // Subagentes que corren en primer plano (bloqueando el turno). El server
+  // puede desacoplarlos a background (Ctrl+B en la TUI): el botón del header
+  // dispara experimental.session.background y luego el SSE marca
+  // metadata.background en los parts.
+  const foregroundSubagents = useMemo(() => {
+    let count = 0
+    for (const m of messages) {
+      for (const tp of m.toolParts ?? []) {
+        if (isForegroundRunningSubagent(tp)) count++
+      }
+    }
+    return count
+  }, [messages])
+  const [promotingBg, setPromotingBg] = useState(false)
+  const [bgActionSupported, setBgActionSupported] = useState(true)
+  const promoteToBackground = useCallback(async () => {
+    if (!config || !selectedSession || promotingBg) return
+    setPromotingBg(true)
+    try {
+      const ok = await api.promoteSessionBackground(config, selectedSession.id, selectedSession.directory)
+      // false = el server no tiene la feature (o no había nada que promover).
+      if (ok === false) setBgActionSupported(false)
+    } catch {
+      // Endpoint experimental ausente (server viejo) o red: no insistir.
+      setBgActionSupported(false)
+    } finally {
+      setPromotingBg(false)
+    }
+  }, [config, selectedSession, promotingBg])
 
   useOutsideClick(overflowRef, () => setShowOverflow(false), showOverflow)
   // El badge de preguntas pendientes usa el poll de App.tsx (pendingQuestions
@@ -424,7 +452,40 @@ export const ChatView = memo(function ChatView({
         </h2>
         {selectedSession && (
           <div className="detail-header-actions">
-            {pendingCount > 0 && <span className="pending-badge" title={t('session.pendingCount', { count: pendingCount })}>{pendingCount}</span>}
+            {foregroundSubagents > 0 && bgActionSupported && selectedSession && (
+              <button
+                type="button"
+                className="header-bg-pill action"
+                disabled={promotingBg}
+                onClick={promoteToBackground}
+                title={t('chat.moveToBackgroundHint')}
+              >
+                <ClockIcon size={12} />
+                <span>{t('chat.moveToBackground')}</span>
+              </button>
+            )}
+            {backgroundSubagents.length > 0 && (
+              <button
+                type="button"
+                className="header-bg-pill"
+                title={backgroundSubagents.map((s) => s.title).join("\n")}
+                onClick={() => handleViewSubagents(backgroundSubagents[0]!.childSessionID)}
+              >
+                <ClockIcon size={12} />
+                <span>{t('chat.backgroundActive', { count: backgroundSubagents.length })}</span>
+              </button>
+            )}
+            {pendingCount > 0 && (
+              <button
+                type="button"
+                className="pending-badge"
+                title={t('session.pendingCount', { count: pendingCount })}
+                onClick={onReopenQuestions}
+                disabled={!onReopenQuestions}
+              >
+                {pendingCount}
+              </button>
+            )}
             <span style={{ display: "none" }} aria-hidden="true">{t('detail.changeModel')}</span>
             {diffFiles && diffFiles.length > 0 && onOpenADEDiff && (
               <button
@@ -512,11 +573,6 @@ export const ChatView = memo(function ChatView({
                       <SettingsIcon size={14} /> {t('nav.settings')}
                     </button>
                   )}
-                  {onOpenSessionStats && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenSessionStats() }}>
-                      <StatsIcon size={14} /> {t('shell.kindSessionStats')}
-                    </button>
-                  )}
                   <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSearch((v) => !v) }}>
                     <SearchIcon size={14} />
                     {t('session.searchMessages')}
@@ -565,7 +621,7 @@ export const ChatView = memo(function ChatView({
                   {onOpenMCPBrowser && (
                     <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenMCPBrowser() }}>
                       <GlobeIcon size={14} />
-                      {t('session.mcpResources')}
+                      {t('mcp.title')}
                     </button>
                   )}
                   {onInsertPrompt && (
@@ -634,44 +690,6 @@ export const ChatView = memo(function ChatView({
         )}
         <div className="messages-wrap" ref={messagesWrapRef}>
         <FilePathProvider onOpenFile={onEditFile} directory={selectedSession?.directory}>
-        {flags.virtualChat ? (
-        <ChatVirtuosoList
-          key={selectedID ?? "empty"}
-          messages={messages}
-          pendingIndex={pendingIndex}
-          loadingSessionID={loadingSessionID}
-          selectedID={selectedID}
-          showTypingBubble={showTypingBubble}
-          compacting={compacting}
-          isWorking={isWorking}
-          messageScrollSignature={messageScrollSignature}
-          view={view}
-          revert={revertObj}
-          onRevertToMessage={onRevertToMessage}
-          onEditMessage={onEditMessage}
-          agents={agents}
-          config={config}
-          directory={selectedSession?.directory}
-          onViewSubagents={handleViewSubagents}
-          onContextMenu={flags.contextMenu ? handleContextMenu : undefined}
-          showTodoButton={showTodoButton ?? false}
-          onToggleTodos={onTodosToggle}
-          todosOpen={todosExpanded}
-          highlight={deferredQuery.trim() || undefined}
-          scrollToMessageID={scrollToMessageID}
-          revealMessageID={jumpTarget?.id ?? null}
-          revealNonce={jumpTarget?.n ?? 0}
-          compactTools={compactTools}
-          minimalistMode={minimalistMode}
-          thinkingDefault={thinkingDefault}
-          onRegenerate={onRegenerate}
-          onOpenADEDiff={onOpenADEDiff}
-          outboxActions={outboxActions}
-          hasMoreMessages={hasMoreMessages}
-          isLoadingMore={isLoadingMore}
-          onLoadMoreMessages={onLoadMoreMessages}
-        />
-        ) : (
         <MessageList
           key={selectedID ?? "empty"}
           messages={messages}
@@ -690,6 +708,7 @@ export const ChatView = memo(function ChatView({
           config={config}
           directory={selectedSession?.directory}
           onViewSubagents={handleViewSubagents}
+          busySessionIds={busySessionIds}
           onContextMenu={flags.contextMenu ? handleContextMenu : undefined}
           showTodoButton={showTodoButton ?? false}
           onToggleTodos={onTodosToggle}
@@ -705,7 +724,6 @@ export const ChatView = memo(function ChatView({
           onOpenADEDiff={onOpenADEDiff}
           outboxActions={outboxActions}
         />
-        )}
         </FilePathProvider>
         </div>
         {showHistory && historyLayout.layout.placement === "right" && (
@@ -885,13 +903,18 @@ export const ChatView = memo(function ChatView({
         document.body
       )}
 
-      {flags.questionAuto && pendingQuestions && pendingQuestions.length > 0 && !isQuestionInCurrentMessages && onQuestionReply && onDismissQuestion && (
+      {/* Pregunta flotante (portal a body: siempre fixed, no scrollea con el
+          chat). Es la ÚNICA superficie interactiva con questionAuto ON; el
+          prompt inline queda como chip. Solo con la sesión trabajando: tras
+          Stop/abort no reaparece (además se dismissan al abortar). */}
+      {isWorking && flags.questionAuto && pendingQuestions && pendingQuestions.length > 0 && onQuestionReply && onDismissQuestion && createPortal(
         <AutoQuestionPrompt
           question={pendingQuestions[0]}
           onReply={onQuestionReply}
           onReject={onQuestionReject ?? (() => {})}
-          onDismiss={onDismissQuestion}
-        />
+          onDismiss={() => onDismissQuestion()}
+        />,
+        document.body,
       )}
 
       {flags.permissionUI && permissionRequest && onPermissionApprove && onDismissPermission && (

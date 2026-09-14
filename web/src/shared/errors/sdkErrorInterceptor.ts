@@ -23,7 +23,7 @@ export function wrapClientError(
     return new Error(error, { cause: { body: error, status } })
   }
   const reason = status ? "(empty response body)" : "network error (no response)"
-  return new Error(`opencode server ${describe(target, method, status)}: ${reason}`, {
+  return new Error(`OpenHer server ${describe(target, method, status)}: ${reason}`, {
     cause: { body: error, status },
   })
 }

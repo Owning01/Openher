@@ -7,11 +7,11 @@ type DeepLinkHandler = (action: DeepLinkAction) => void
 function parseDeepLink(url: string): DeepLinkAction | null {
   try {
     const parsed = new URL(url)
-    if (parsed.protocol !== "opencode:") return null
+    if (parsed.protocol !== "openher:") return null
 
     const hostname = parsed.hostname
 
-    // opencode://session/<id>?directory=... — abrir sesión directa
+    // openher://session/<id>?directory=... — abrir sesión directa
     if (hostname === "session") {
       const sessionID = parsed.pathname.replace(/^\//, "").split("/")[0] ?? ""
       if (!sessionID) return null
@@ -22,7 +22,7 @@ function parseDeepLink(url: string): DeepLinkAction | null {
       }
     }
 
-    // opencode://connect?host=...&port=...&username=...
+    // openher://connect?host=...&port=...&username=...
     const host = parsed.searchParams.get("host")
     if (host) {
       const port = parsed.searchParams.get("port")

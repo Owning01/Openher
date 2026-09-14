@@ -8,8 +8,8 @@ import { ContextMenu, type ContextAction } from "./ContextMenu"
 import { OpenWithDialog } from "../features/pc-files/OpenWithDialog"
 import { useToast } from "./Toasts"
 import { shell, type FsEntry } from "../shell"
-import { basenameFsPath, isAbsoluteFsPath, resolveFsPath } from "../shared/lib/filePaths"
-import { CodeIcon, CopyIcon, FileIcon, FolderIcon, MonitorIcon, PlayIcon } from "../Icons"
+import { basenameFsPath, extColor, isAbsoluteFsPath, resolveFsPath, splitFsPath } from "../shared/lib/filePaths"
+import { CodeIcon, CopyIcon, FolderIcon, MonitorIcon, PlayIcon } from "../Icons"
 
 export type FilePathActions = {
   /** Abre la ruta en el editor (modal en móvil, panel en desktop). */
@@ -34,6 +34,8 @@ export const FilePathButton = memo(function FilePathButton({ path, label }: { pa
   const resolved = useMemo(() => resolveFsPath(path, directory), [path, directory])
   const relativeUnresolved = !isAbsoluteFsPath(path) && !directory
   const shown = label ?? path
+  const { dir, name } = useMemo(() => splitFsPath(shown), [shown])
+  const dot = useMemo(() => extColor(name), [name])
 
   const run = useCallback(
     (fn: () => Promise<unknown>, okMsg: string) => {
@@ -70,7 +72,7 @@ export const FilePathButton = memo(function FilePathButton({ path, label }: { pa
     })
     list.push({
       id: "copy",
-      label: "Copiar ruta",
+      label: "Copiar ruta completa",
       icon: <CopyIcon size={14} />,
       onAction: () => {
         navigator.clipboard
@@ -89,12 +91,21 @@ export const FilePathButton = memo(function FilePathButton({ path, label }: { pa
     ? { name: basenameFsPath(openWith), path: openWith, is_dir: false, size: null, modified: null }
     : null
 
+  // Al abrir el menú (también en móvil, sin hover) se ve la ruta absoluta a la
+  // que resuelve una referencia relativa; en el chip queda además en el title.
+  const info = (
+    <div className="menu-info-path" title={resolved}>
+      <span className="menu-info-label">Ruta completa</span>
+      <code>{resolved}</code>
+    </div>
+  )
+
   return (
     <>
       <button
         type="button"
         className="filepath-chip"
-        title={resolved}
+        title={resolved === path ? resolved : `${shown} → ${resolved}`}
         aria-haspopup="menu"
         aria-expanded={menu !== null}
         onClick={(e) => {
@@ -103,14 +114,17 @@ export const FilePathButton = memo(function FilePathButton({ path, label }: { pa
           setMenu({ x: e.clientX, y: e.clientY })
         }}
       >
-        <span aria-hidden="true"><FileIcon size={11} /></span>
-        <span className="filepath-chip-label">{shown}</span>
+        <span className="fp-dot" style={{ background: dot }} aria-hidden="true" />
+        {dir && <span className="fp-dir">{dir}</span>}
+        <span className="fp-name">{name}</span>
+        <span className="fp-go" aria-hidden="true">↗</span>
       </button>
       {menu && (
         <ContextMenu
           x={menu.x}
           y={menu.y}
           actions={actions}
+          info={info}
           onClose={() => setMenu(null)}
         />
       )}

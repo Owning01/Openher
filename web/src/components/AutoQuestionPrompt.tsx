@@ -5,8 +5,8 @@ import type { Question, QuestionInfo } from "../types"
 
 type Props = {
   question: Question
-  onReply: (requestID: string, answers: string[][]) => void
-  onReject: (requestID: string) => void
+  onReply: (requestID: string, answers: string[][]) => Promise<void> | void
+  onReject: (requestID: string) => Promise<void> | void
   onDismiss: () => void
 }
 
@@ -17,6 +17,8 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
     : (question.question ? [{ question: question.question, header: "", options: [], custom: true }] : [])
   const [selected, setSelected] = useState<Record<number, string[]>>({})
   const [customs, setCustoms] = useState<Record<number, string>>({})
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const posRef = useRef({ x: 0, y: 0 })
 
@@ -66,20 +68,36 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
     })
   }, [infos])
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
+    if (sending) return
     const answers: string[][] = infos.map((_, i) => {
       const sel = selected[i] ?? []
       const custom = customs[i] ?? ""
       return custom ? [...sel, custom] : sel
     })
-    onReply(question.id, answers)
-    onDismiss()
-  }, [infos, selected, customs, question.id, onReply, onDismiss])
+    setSending(true)
+    setError(null)
+    try {
+      await onReply(question.id, answers)
+      // El hook quita la pregunta de pending; no llamar onDismiss acá: si ya
+      // se cerró, dismissaría la SIGUIENTE pendiente por error.
+    } catch (err) {
+      setError((err as Error)?.message || t('settings.questionError'))
+      setSending(false)
+    }
+  }, [infos, selected, customs, question.id, onReply, sending, t])
 
-  const handleReject = useCallback(() => {
-    onReject(question.id)
-    onDismiss()
-  }, [question.id, onReject, onDismiss])
+  const handleReject = useCallback(async () => {
+    if (sending) return
+    setSending(true)
+    setError(null)
+    try {
+      await onReject(question.id)
+    } catch (err) {
+      setError((err as Error)?.message || t('settings.questionError'))
+      setSending(false)
+    }
+  }, [question.id, onReject, sending, t])
 
   if (infos.length === 0) return null
 
@@ -130,11 +148,12 @@ export const AutoQuestionPrompt = memo(function AutoQuestionPrompt({ question, o
             </div>
           ))}
         </div>
+        {error && <div className="question-error" role="alert">{error}</div>}
         <div className="question-actions">
-          <button className="btn btn-secondary" onClick={handleReject}>
+          <button className="btn btn-secondary" onClick={handleReject} disabled={sending}>
             {t('settings.questionSkip')}
           </button>
-          <button className="btn btn-primary" onClick={handleSubmit}>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={sending}>
             {t('settings.questionSend')}
           </button>
         </div>

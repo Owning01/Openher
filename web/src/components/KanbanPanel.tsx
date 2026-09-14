@@ -10,7 +10,7 @@ import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
 import type { Session } from "../entities/session/model"
 import type { ServerConfig } from "../types"
-import { SendIcon, CloseIcon, TrashIcon } from "../Icons"
+import { SendIcon, CloseIcon, TrashIcon, KanbanIcon } from "../Icons"
 
 export const KanbanPanel = memo(function KanbanPanel({ onClose }: { onClose?: () => void }) {
   const t = useT()
@@ -203,7 +203,7 @@ export const KanbanPanel = memo(function KanbanPanel({ onClose }: { onClose?: ()
   if (!board) {
     return (
       <div className="shell-kanban-empty">
-        <div style={{ width: 64, height: 64, borderRadius: 16, background: "var(--primary-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>️</div>
+        <div style={{ width: 64, height: 64, borderRadius: 16, background: "var(--primary-soft)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)" }}><KanbanIcon size={28} /></div>
         <p style={{ fontWeight: 600 }}>{t('shell.noBoards')}</p>
         <p style={{ fontSize: "0.82rem", color: "var(--muted)", textAlign: "center", maxWidth: 300 }}>Crea tu primer tablero para organizar tareas con columnas y tarjetas arrastrables.</p>
         <button className="btn-primary" onClick={() => setShowAddBoard(true)}>{t('shell.newBoard')}</button>

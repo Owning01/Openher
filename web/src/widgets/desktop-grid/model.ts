@@ -14,7 +14,7 @@ export interface BuildGridTemplateOptions {
   /** Ventana <600px: el shell desktop deja solo el rail de actividad + contenido
       (las sidebars quedan con columna 0, clipeadas por su overflow:hidden). */
   narrow?: boolean
-  /** Ventana <=1100px: el QuickChat pasa a overlay por CSS (position:absolute)
+  /** Ventana <=1100px: la sidebar derecha pasa a overlay por CSS (position:absolute)
       y no debe reservar columna en el grid o el contenido queda encajonado. */
   rightOverlay?: boolean
 }

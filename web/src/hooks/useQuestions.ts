@@ -40,6 +40,24 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
     })
   }, [])
 
+  // Claves estables de una pregunta: formID + callID del tool. Cerrar por
+  // cualquiera de las dos debe ocultar tanto el prompt inline como el modal.
+  const questionKeys = useCallback((q: Question | undefined): string[] => {
+    if (!q) return []
+    return [q.id, q.tool?.callID, q.tool?.messageID].filter((k): k is string => !!k)
+  }, [])
+
+  const dismissQuestion = useCallback((q: Question | undefined) => {
+    const keys = questionKeys(q)
+    if (keys.length === 0) return
+    setDismissedQuestions((prev) => {
+      const next = new Set(prev)
+      keys.forEach((k) => next.add(k))
+      return next
+    })
+    setPendingQuestions((prev) => prev.filter((p) => p.id !== q!.id))
+  }, [questionKeys])
+
   // Reloj central (Plan 3): sin setInterval propio. El scheduler aporta pausa
   // en hidden + anti-solapamiento; el key con fingerprint re-dispara el poll
   // inmediato cuando cambian los parámetros (igual que el effect anterior).
@@ -49,6 +67,18 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
     if (!config) return
     try {
       const qs = await api.listPendingQuestions(config, directory)
+      // Limpieza: las claves dismissed de forms que ya no existen no deben
+      // crecer sin límite (y así un form nuevo con el mismo rol no queda oculto).
+      const liveFormIDs = new Set(qs.map((q) => q.id))
+      setDismissedQuestions((prev) => {
+        let changed = false
+        const next = new Set<string>()
+        for (const key of prev) {
+          if (liveFormIDs.has(key) || !key.startsWith("frm_")) next.add(key)
+          else changed = true
+        }
+        return changed ? next : prev
+      })
       const fresh = qs.filter((q) =>
         (!fallbackSessionID || !q.sessionID || q.sessionID === fallbackSessionID) &&
         !dismissedQuestions.has(q.id) &&
@@ -108,25 +138,54 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
 
   const handleQuestionReply = useCallback(async (requestID: string, answers: string[][]) => {
     if (!config) return
-    try {
-      await api.questionReply(config, requestID, answers, directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID ?? fallbackSessionID)
-      setDismissedQuestions((prev) => new Set(prev).add(requestID))
-      setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
-    } catch { /* ignore */ }
-  }, [config, directory, pendingQuestions, fallbackSessionID])
+    // Sin catch: el error (400/404/409) sube al componente para feedback
+    // visible; no se cierra el prompt en falso.
+    await api.questionReply(
+      config,
+      requestID,
+      answers,
+      directory,
+      pendingQuestions.find((q) => q.id === requestID)?.sessionID ?? fallbackSessionID,
+    )
+    dismissQuestion(pendingQuestions.find((q) => q.id === requestID))
+  }, [config, directory, pendingQuestions, fallbackSessionID, dismissQuestion])
 
   const handleQuestionReject = useCallback(async (requestID: string) => {
     if (!config) return
-    try {
-      await api.questionReject(config, requestID, directory, pendingQuestions.find((q) => q.id === requestID)?.sessionID ?? fallbackSessionID)
-      setDismissedQuestions((prev) => new Set(prev).add(requestID))
-      setPendingQuestions((prev) => prev.filter((q) => q.id !== requestID))
-    } catch { /* ignore */ }
-  }, [config, directory, pendingQuestions, fallbackSessionID])
+    await api.questionReject(
+      config,
+      requestID,
+      directory,
+      pendingQuestions.find((q) => q.id === requestID)?.sessionID ?? fallbackSessionID,
+    )
+    dismissQuestion(pendingQuestions.find((q) => q.id === requestID))
+  }, [config, directory, pendingQuestions, fallbackSessionID, dismissQuestion])
 
-  const handleDismissQuestion = useCallback(() => {
-    setPendingQuestions((prev) => prev.slice(1))
+  // Cierre sticky: la pregunta queda en dismissedQuestions para que el poll
+  // no la reinyecte a los 15s. Sin requestID cierra la primera pendiente.
+  const handleDismissQuestion = useCallback((requestID?: string) => {
+    const target = requestID
+      ? pendingQuestions.find((q) => q.id === requestID)
+      : pendingQuestions[0]
+    dismissQuestion(target)
+  }, [pendingQuestions, dismissQuestion])
+
+  // Reabrir: limpiar el set dismissed (click en el badge de pendientes).
+  const clearDismissedQuestions = useCallback(() => {
+    setDismissedQuestions(new Set())
   }, [])
+
+  // Al abortar la generación: cerrar localmente TODAS las preguntas de la
+  // sesión (sin cancelar server-side: el tool sigue visible para el modelo).
+  const dismissSessionQuestions = useCallback((sessionID?: string) => {
+    if (!sessionID) return
+    const targets = pendingQuestions.filter((q) => !q.sessionID || q.sessionID === sessionID)
+    if (targets.length === 0) return
+    const keys = targets.flatMap((q) => questionKeys(q))
+    setDismissedQuestions((prev) => new Set([...prev, ...keys]))
+    const ids = new Set(targets.map((q) => q.id))
+    setPendingQuestions((prev) => prev.filter((q) => !ids.has(q.id)))
+  }, [pendingQuestions, questionKeys])
 
   const handlePermissionApprove = useCallback(async (requestID: string) => {
     if (!config) return
@@ -155,6 +214,8 @@ export function useQuestions({ config, directory, enabled, enabledQuestions, ena
     handleQuestionReply,
     handleQuestionReject,
     handleDismissQuestion,
+    clearDismissedQuestions,
+    dismissSessionQuestions,
     handlePermissionApprove,
     handlePermissionReject,
     handleDismissPermission,

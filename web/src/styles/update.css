@@ -1,0 +1,81 @@
+/* Banner de actualización de la APK (auto-update). */
+.app-update-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-banner);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(94vw, 560px);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 45%);
+}
+
+.aub-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.aub-text strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.aub-notes {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 42vw;
+}
+
+.aub-btn {
+  flex: none;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.aub-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.aub-close {
+  flex: none;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+@media (max-width: 430px) {
+  .app-update-banner {
+    top: calc(env(safe-area-inset-top, 0px) + 6px);
+    left: 8px;
+    right: 8px;
+    transform: none;
+    max-width: none;
+  }
+
+  .aub-notes {
+    max-width: none;
+  }
+}

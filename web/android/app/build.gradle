@@ -7,14 +7,14 @@ def ksKeyPass = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
 def hasSigning = ksPass != "" && ksAlias != "" && ksKeyPass != ""
 
 android {
-    namespace = "com.gbro.opencode"
+    namespace = "com.gbro.openher"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.gbro.opencode"
+        applicationId "com.gbro.openher"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-versionCode 10004
-versionName "1.0.4"
+versionCode 10019
+versionName "1.0.19"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'

@@ -41,7 +41,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
 
     const load = async () => {
       // Si la ruta es absoluta o estamos en desktop, probamos leer vía shell nativo primero
-      if (typeof window !== "undefined" && (window as any).__OPENCODE_DESKTOP__) {
+      if (typeof window !== "undefined" && (window as any).__OPENHER_DESKTOP__) {
         try {
           const r = await shell.fs.read(path)
           if (!cancelled) {
@@ -93,7 +93,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
     if (saving) return
     setSaving(true)
     try {
-      if (typeof window !== "undefined" && (window as any).__OPENCODE_DESKTOP__) {
+      if (typeof window !== "undefined" && (window as any).__OPENHER_DESKTOP__) {
         const b64 = btoa(unescape(encodeURIComponent(textToSave)))
         await shell.fs.write(path, b64)
       } else {

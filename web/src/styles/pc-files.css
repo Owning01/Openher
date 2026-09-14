@@ -16,6 +16,7 @@
   flex-direction: column;
   background: var(--surface);
   overflow: hidden;
+  position: relative;
 }
 
 .pcf-header {
@@ -79,13 +80,13 @@
   max-width: min(420px, calc(100vw - 16px));
   max-height: min(420px, 70vh);
   overflow-y: auto;
-  z-index: 100000;
+  z-index: var(--z-portal);
 }
 .pcf-dropdown {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
-  z-index: 1000;
+  z-index: var(--z-lightbox);
   width: 260px;
   max-width: 90vw;
   background: var(--surface, #1e1e1e);
@@ -381,6 +382,21 @@
   color: var(--muted, #858585);
 }
 
+/* Chevron táctil: botón real para expandir/contraer sin entrar a la carpeta. */
+.pcf-chevron-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--muted, #858585);
+  cursor: pointer;
+}
+
+.pcf-chevron-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
 .pcf-icon-wrap {
   width: 16px;
   height: 16px;
@@ -525,7 +541,7 @@
   position: absolute;
   right: 0;
   top: calc(100% + 2px);
-  z-index: 1000;
+  z-index: var(--z-lightbox);
   min-width: 140px;
   background: var(--surface-subtle);
   border: 1px solid var(--border);
@@ -576,7 +592,7 @@
     min-height: 32px;
   }
   .pcf-row {
-    min-height: 34px;
+    min-height: 40px;
     padding: 4px 8px;
     font-size: 13px;
   }
@@ -587,6 +603,19 @@
   .pcf-dots-btn {
     width: 32px;
     height: 32px;
+  }
+  .pcf-crumb {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  .pcf-back-btn,
+  .pcf-action-btn {
+    min-width: 32px;
+    min-height: 32px;
+  }
+  .pcf-chevron-btn {
+    min-width: 40px;
+    min-height: 40px;
   }
   .pcf-file-menu {
     min-width: 160px;
@@ -799,8 +828,8 @@
   margin: 0;
   padding: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: var(--pcf-code-font-size, 11px);
+  line-height: calc(var(--pcf-code-font-size, 11px) * 1.45);
   color: var(--code-text);
 }
 
@@ -861,6 +890,70 @@
 .pcf-code-line-text .hljs-attribute,
 .pcf-code-line-text .hljs-variable { color: var(--code-attr); }
 
+/* Visor móvil: ocupa el panel completo (por encima del árbol) con lectura
+   cómoda; en desktop conserva el layout embebido de siempre. */
+.pcf-code-viewer.is-mobile {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  max-height: none;
+  min-height: 0;
+  border-top: none;
+}
+
+.pcf-code-font-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pcf-code-font-btn:active {
+  background: var(--surface-hover);
+}
+
+.pcf-viewer-error {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--text);
+}
+
+.pcf-code-viewer.is-mobile .pcf-viewer-error {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pcf-code-viewer.is-mobile .pcf-code-close {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+/* Lectura móvil: las líneas largas se envuelven en vez de cortarse con
+   elipsis (en pantalla chica no hay forma de ver el resto de la línea). */
+.pcf-code-viewer.is-mobile .pcf-code-line-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.pcf-code-viewer.is-mobile .pcf-code-viewer-body {
+  overflow-x: hidden;
+}
+
 .pcf-action-btn.active {
   background: var(--primary, #3b82f6);
   color: var(--on-primary);
@@ -920,6 +1013,12 @@
   display: flex;
   gap: 6px;
   align-items: center;
+}
+.openwith-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
 }
 .openwith-input {
   flex: 1;

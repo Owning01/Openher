@@ -18,13 +18,15 @@ type Props = {
   x: number
   y: number
   actions: ContextAction[]
+  /** Bloque informativo no interactivo arriba de las acciones (ej: ruta completa). */
+  info?: ReactNode
   onClose: () => void
 }
 
 const enabledButtons = (root: HTMLElement | null): HTMLButtonElement[] =>
   root ? Array.from(root.querySelectorAll<HTMLButtonElement>(".context-menu-item:not(:disabled)")) : []
 
-export const ContextMenu = function ContextMenu({ x, y, actions, onClose }: Props) {
+export const ContextMenu = function ContextMenu({ x, y, actions, info, onClose }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
 
   useOutsideClick(ref, onClose)
@@ -75,6 +77,11 @@ export const ContextMenu = function ContextMenu({ x, y, actions, onClose }: Prop
       style={{ left: x, top: y, position: "fixed", zIndex: 99999 }}
       onKeyDown={handleKeyDown}
     >
+      {info && (
+        <div className="context-menu-info" role="presentation">
+          {info}
+        </div>
+      )}
       {actions.map((a) => (
         <Fragment key={a.id}>
           {a.dividerBefore && <div className="menu-separator" role="separator" />}

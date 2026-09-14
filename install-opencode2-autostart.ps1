@@ -2,8 +2,8 @@
 .SYNOPSIS
   Registra el arranque automático headless de opencode2 (:4098) con Windows.
 .DESCRIPTION
-  - Crea HKCU\Software\Microsoft\Windows\CurrentVersion\Run\OpenCode2Server
-    apuntando al desktop headless ("opencode-desktop.exe" --ensure-opencode2-and-exit).
+  - Crea HKCU\Software\Microsoft\Windows\CurrentVersion\Run\OpenHer2Server
+    apuntando al desktop headless ("openher-desktop.exe" --ensure-opencode2-and-exit).
     El exe es windows_subsystem=windows: sin consola ni flash en logon.
   - Fallback inmediato (antes del rebuild): si el exe aún no soporta el flag,
     registra un lanzador PowerShell oculto directo al binario sano de npm-global.
@@ -15,11 +15,11 @@ $ErrorActionPreference = "Stop"
 $rootDir = $PSScriptRoot
 $desktopAppDir = Join-Path $rootDir "desktop-app"
 $exeCandidates = @(
-  (Join-Path $rootDir "dist-desktop\opencode-desktop.exe"),
-  (Join-Path $desktopAppDir "opencode-desktop.exe")
+  (Join-Path $rootDir "dist-desktop\openher-desktop.exe"),
+  (Join-Path $desktopAppDir "openher-desktop.exe")
 )
 $exe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $exe) { throw "No se encontró opencode-desktop.exe (dist-desktop\ o desktop-app\). Compile con .\build-desktop.ps1 primero." }
+if (-not $exe) { throw "No se encontró openher-desktop.exe (dist-desktop\ o desktop-app\). Compile con .\build-desktop.ps1 primero." }
 
 function Get-Opencode2Exe {
   $found = $null
@@ -46,8 +46,8 @@ if (-not $op2) { Write-Warning "No se encontró opencode2.exe; el ensure lo desc
 # 1. Registro principal: desktop headless (sin consola). Funciona tras rebuild con --ensure-opencode2-and-exit.
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $headlessCmd = "`"$exe`" --ensure-opencode2-and-exit"
-Set-ItemProperty -Path $runKey -Name "OpenCode2Server" -Value $headlessCmd
-Write-Host "  -> HKCU Run OpenCode2Server = $headlessCmd" -ForegroundColor Green
+Set-ItemProperty -Path $runKey -Name "OpenHer2Server" -Value $headlessCmd
+Write-Host "  -> HKCU Run OpenHer2Server = $headlessCmd" -ForegroundColor Green
 
 # 2. Corrige configs (desktop-app/data + dist-desktop/data si existen)
 $cfgPaths = @(
@@ -103,5 +103,5 @@ if (Test-Port 4098) {
 }
 
 Write-Host ""
-Write-Host "Listo. Al reiniciar Windows, OpenCode2Server levanta :4098 en background sin consola." -ForegroundColor Cyan
-Write-Host "Verificar: reg query HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v OpenCode2Server" -ForegroundColor DarkGray
+Write-Host "Listo. Al reiniciar Windows, OpenHer2Server levanta :4098 en background sin consola." -ForegroundColor Cyan
+Write-Host "Verificar: reg query HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v OpenHer2Server" -ForegroundColor DarkGray

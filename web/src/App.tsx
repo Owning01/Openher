@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { api } from "./api"
-import { I18nProvider, normalizeLanguage } from "./i18n-context"
+import { I18nProvider, normalizeLanguage, useT } from "./i18n-context"
 import { languageOptions } from "./i18n"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import { ChatView } from "./components/ChatView"
@@ -13,11 +13,29 @@ import { ToastProvider } from "./components/Toasts"
 import { DesktopLayoutView } from "./widgets/desktop-layout/DesktopLayoutView"
 import { MobileLayoutView } from "./pages/mobile-layout/MobileLayoutView"
 import { AppModalsContainer } from "./app/AppModalsContainer"
+import { AppUpdateBanner } from "./components/AppUpdateBanner"
 import { SessionsViewContainer } from "./features/session/ui/SessionsViewContainer"
 import { useAppController } from "./app/useAppController"
+import { useToast } from "./components/Toasts"
+import { useDesktopOpenDir } from "./hooks/useDesktopOpenDir"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const c = useAppController({ language, setLanguage })
+  const { toast } = useToast()
+  const t = useT()
+
+  // "Abrir sesión en OpenHer aquí" (menú contextual de Windows): crea una
+  // sesión de agente en la carpeta pedida y navega a ella.
+  const handleDesktopOpenDir = useCallback(
+    (dir: string) => {
+      void c.handleCreateSession(dir).catch((err: unknown) => {
+        const reason = err instanceof Error ? err.message : String(err)
+        toast(`${t("desktop.openDirError")}: ${reason}`, "error")
+      })
+    },
+    [c.handleCreateSession, t, toast]
+  )
+  useDesktopOpenDir(handleDesktopOpenDir)
 
   const sessionsView = (
     <SessionsViewContainer
@@ -87,6 +105,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
 
   return (
     <>
+      <AppUpdateBanner />
       {c.isDesktop ? (
         <DesktopLayoutView
           shellRef={c.shellRef}
@@ -98,14 +117,12 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           setSidebarCollapsed={c.setSidebarCollapsed}
           tabStacks={c.tabStacks ?? []}
           desktopLayout={c.desktopLayout}
-          openStatsAsTab={c.openStatsAsTab}
           openBrowserAsTab={c.openBrowserAsTab}
           handleOpenKanban={c.handleOpenKanban}
+          handleOpenDebate={c.handleOpenDebate}
           rightSidebarCollapsed={c.rightSidebarCollapsed}
           setRightSidebarCollapsed={c.setRightSidebarCollapsed}
           setShowPluginsModal={c.setShowPluginsModal}
-          pluginTabs={c.pluginTabs}
-          openPluginAsTab={c.openPluginAsTab}
           memInfo={c.memInfo}
           formatBytes={c.formatBytes}
           handleOpenLearning={c.handleOpenLearning}
@@ -129,13 +146,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           baseChatProps={{ ...c.baseChatProps, composer: c.composer, onComposerChange: c.handleComposerChange }}
           fileEditorPath={c.fileEditorPath}
           setFileEditorPath={c.setFileEditorPath}
-          quickChatKeys={{
-            cerebras: c.quickChatKey,
-            groq: c.quickChatGroqKey,
-            go: c.quickChatGoKey,
-            custom: c.quickChatCustomKey,
-            customUrl: c.quickChatCustomUrl,
-          }}
           modelOptions={c.modelOptions}
           providerList={c.providerList}
           vs={c.vs}
@@ -155,7 +165,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onSettleSession={c.settleSession}
           onRefreshSessions={c.refreshSessions}
           onSetCommands={c.setCommands}
-          onRecordPrompt={c.recordPrompt}
           onQueueAction={c.queueAction}
           onShellExecute={(cmd, sid, dir) => { c.shellExecute(cmd, sid || "", dir) }}
           onChangeAgent={c.changeAgent}
@@ -164,9 +173,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           onOpenFile={c.handleOpenFile}
           onOpenConnect={() => c.setShowConnectSheet(true)}
           onOpenSessionDir={c.openSessionInDir}
-          onNavigateSettings={() => c.handleNavigate("settings")}
           onToggleInspectTool={c.handleToggleInspectTool}
           onBrowserVisualPick={c.handleBrowserVisualPick}
+          onEnsureProjectSession={c.ensureStudioSession}
           onSwitchTab={c.switchTab}
           desktopDiffOpen={c.desktopDiffOpen}
           setDesktopDiffOpen={c.setDesktopDiffOpen}
@@ -194,8 +203,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           allPrimaryAgents={c.allPrimaryAgents}
           disabledAgents={c.disabledAgents}
           toggleAgentEnabled={c.toggleAgentEnabled}
-          stats={c.stats}
-          resetStats={c.resetStats}
           activeModelOption={c.activeModelOption}
           blockedModels={c.blockedModels}
           setShowThemePicker={c.setShowThemePicker}
@@ -260,8 +267,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           allPrimaryAgents={c.allPrimaryAgents}
           disabledAgents={c.disabledAgents}
           toggleAgentEnabled={c.toggleAgentEnabled}
-          stats={c.stats}
-          resetStats={c.resetStats}
           activeModelOption={c.activeModelOption}
           blockedModels={c.blockedModels}
           setShowThemePicker={c.setShowThemePicker}
@@ -304,14 +309,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           commands={c.commands}
           commandFilter={c.commandFilter}
           setCommandFilter={c.setCommandFilter}
-          quickChatKeys={{
-            cerebras: c.quickChatKey,
-            groq: c.quickChatGroqKey,
-            go: c.quickChatGoKey,
-            custom: c.quickChatCustomKey,
-            customUrl: c.quickChatCustomUrl,
-          }}
           config={c.config}
+          activeSessionDir={c.selectedSession?.directory ?? c.activeSessionDir}
         />
       )}
 
@@ -351,6 +350,8 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         connectProvider={c.connectProvider}
         disconnectProvider={c.disconnectProvider}
         addCustomProvider={c.addCustomProvider}
+        removeProviderCredential={c.removeCredential}
+        activateProviderCredential={c.activateCredential}
         showMCPBrowser={c.showMCPBrowser}
         setShowMCPBrowser={c.setShowMCPBrowser}
         showArchivedView={c.showArchivedView}

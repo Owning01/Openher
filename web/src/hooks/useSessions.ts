@@ -9,10 +9,38 @@ import { buildDirPlan, dirKey, keepUncoveredSessions } from "../utils/sessionDir
 
 const FAVORITES_KEY = STORAGE_KEYS.FAVORITES
 
-// Unión persistente de directorios vistos por servidor: si el global viene
-// parcial (server con scope) o /project falla, los proyectos viejos NO
-// desaparecen. Con ámbito por servidor para no contaminar entre perfiles.
-// Lo fresco (global + UI visible) siempre tiene prioridad sobre el historial.
+// v2 /session devuelve 50 por defecto. El refresh COMPLETO (carga inicial,
+// refresh manual, borrar/renombrar) reconstruye el estado con backfill por
+// directorio: N respuestas chicas (una por proyecto) en vez de una sola
+// gigante, que en el puente nativo (CapacitorHttp) es frágil.
+const BACKFILL_SESSION_LIMIT = 1000
+
+// Unión de directorios vistos por servidor: si el global viene parcial (scope
+// del server, límite del API) o /project falla, los proyectos viejos NO
+// desaparecen. Persistida en localStorage: antes vivía solo en memoria y un
+// reload la perdía, dejando visible únicamente el proyecto del global.
+const KNOWN_DIRS_KEY = "opencode.knownSessionDirs"
+
+function loadKnownDirs(serverKey: string): string[] {
+  try {
+    const all = JSON.parse(localStorage.getItem(KNOWN_DIRS_KEY) || "{}") as Record<string, unknown>
+    const arr = all?.[serverKey]
+    return Array.isArray(arr) ? arr.filter((d): d is string => typeof d === "string" && !!d) : []
+  } catch {
+    return []
+  }
+}
+
+function saveKnownDirs(serverKey: string, dirs: string[]) {
+  try {
+    const all = JSON.parse(localStorage.getItem(KNOWN_DIRS_KEY) || "{}") as Record<string, unknown>
+    all[serverKey] = dirs
+    localStorage.setItem(KNOWN_DIRS_KEY, JSON.stringify(all))
+  } catch {
+    /* storage lleno o bloqueado: el historial en memoria sigue */
+  }
+}
+
 const knownDirsHistoryRef: { current: { key: string; dirs: string[] } } = {
   current: { key: "", dirs: [] },
 }
@@ -33,6 +61,20 @@ function toSessionView(session: Session, status?: SessionStatus): SessionView {
     parentID: session.parentID,
     revert: session.revert ? { messageID: session.revert.messageID, partID: session.revert.partID } : undefined,
     model: session.model ? { providerID: session.model.providerID, modelID: session.model.id, variant: session.model.variant } : undefined
+  }
+}
+
+/**
+ * Merge de un poll liviano: pisa lo que vino del server y conserva el status
+ * local cuando el dir de la sesión no fue consultado en este ciclo. Sin esto,
+ * el poll liviano (sin statuses) pisaba busy→idle y el indicador de "activo"
+ * del chat y la lista se apagaba solo aunque la sesión siguiera trabajando.
+ */
+export function mergeSessionPoll(existing: SessionView | undefined, incoming: SessionView, statusFresh: boolean): SessionView {
+  return {
+    ...existing,
+    ...incoming,
+    status: statusFresh ? incoming.status : existing?.status ?? incoming.status,
   }
 }
 
@@ -140,7 +182,9 @@ export function useSessions(
       }
       const [items, projects] = await Promise.all([
         tryTypedList(),
-        api.listProjects(config).catch(() => []),
+        // Los dirs de /project solo alimentan el plan de backfill, que corre
+        // en full: en polls sería un request extra por intervalo.
+        full ? api.listProjects(config).catch(() => []) : Promise.resolve([]),
       ])
 
       const MAX_KNOWN_DIRS = 150
@@ -148,7 +192,7 @@ export function useSessions(
       // solo ocuparía slots del cap y ocultaría proyectos locales.
       const serverKey = `${config.host}:${config.port}:${config.username ?? ""}`
       if (knownDirsHistoryRef.current.key !== serverKey) {
-        knownDirsHistoryRef.current = { key: serverKey, dirs: [] }
+        knownDirsHistoryRef.current = { key: serverKey, dirs: loadKnownDirs(serverKey) }
       }
       // Nunca olvidar lo visible: si el global viene parcial, los dirs de la
       // UI actual alimentan el backfill por-dir.
@@ -162,11 +206,11 @@ export function useSessions(
         cap: MAX_KNOWN_DIRS,
       })
       knownDirsHistoryRef.current = { key: serverKey, dirs: nextHistory }
-      const coveredKeys = new Set(items.map((s) => dirKey(s.directory)))
-      // Dirs verificados con éxito: el global + cada backfill por-dir que
-      // respondió. Un dir que FALLÓ queda fuera: en el reemplazo full sus
-      // sesiones se conservan (ausencia no prueba borrado).
-      const verifiedKeys = new Set(coveredKeys)
+      saveKnownDirs(serverKey, nextHistory)
+      // Dirs verificados con éxito: cada backfill por-dir que respondió
+      // completo. Un dir que FALLÓ (o vino truncado) queda fuera: en el
+      // reemplazo full sus sesiones se conservan (ausencia no prueba borrado).
+      const verifiedKeys = new Set<string>()
 
       const directories = nextHistory
       const chunk = <T>(arr: T[], size: number) => {
@@ -174,31 +218,68 @@ export function useSessions(
         for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
         return chunks
       }
-      const dirChunks = chunk(directories, 10)
       const allSessionLists: Session[][] = []
       const allStatusLists: Record<string, SessionStatus>[] = []
-      for (const c of dirChunks) {
-        // Sesiones: solo backfill de lo NO cubierto por el global (el resto
-        // ya está en `items`). Statuses: siempre por-dir en full, porque el
-        // global no trae busy y el merge pisaría el estado con "idle".
-        const needSessions = c.filter((d) => !coveredKeys.has(dirKey(d)))
-        const [sl, st] = await Promise.all([
-          Promise.all(needSessions.map(async (d) => {
+      // Reconstrucción COMPLETA solo en full (carga inicial, refresh manual,
+      // borrar/renombrar): el global viene recortado a 50 y una respuesta
+      // gigante (limit=5000) es frágil en el puente nativo de Android.
+      //   1) sesiones por proyecto (v2) → cubre todas, en respuestas acotadas
+      //   2) dirs huérfanos del plan → sesiones sin proyecto o de scope raro
+      //   3) statuses busy/retry por dir con sesiones
+      if (full) {
+        const projectIds = [...new Set(projects.map((p) => p.id).filter(Boolean))]
+        for (const c of chunk(projectIds, 10)) {
+          const lists = await Promise.all(c.map(async (pid) => {
             try {
-              const list = await api.listSessions(config, d)
-              verifiedKeys.add(dirKey(d))
+              const list = await api.listSessionsByProject(config, pid, BACKFILL_SESSION_LIMIT)
+              // Truncado por el límite: no verificar, para no descartar las
+              // sesiones viejas que ya estaban en la UI.
+              if (list.length < BACKFILL_SESSION_LIMIT) {
+                for (const s of list) verifiedKeys.add(dirKey(s.directory))
+              }
               return list
             } catch {
-              // Fallo parcial: el dir queda NO verificado y sus sesiones se
-              // conservan en el reemplazo full (ver keepUncoveredSessions).
+              // Fallo parcial: sus dirs quedan NO verificados y las sesiones
+              // actuales se conservan (ver keepUncoveredSessions).
               return null
             }
-          })),
-          full ? Promise.all(c.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>)))) : Promise.resolve([]),
-        ])
-        for (const list of sl) if (list) allSessionLists.push(list)
-        if (full) allStatusLists.push(...st)
+          }))
+          for (const list of lists) if (list) allSessionLists.push(list)
+        }
+        const coveredByProjects = new Set(allSessionLists.flat().map((s) => dirKey(s.directory)))
+        const orphanDirs = directories.filter((d) => !coveredByProjects.has(dirKey(d)))
+        for (const c of chunk(orphanDirs, 10)) {
+          const lists = await Promise.all(c.map(async (d) => {
+            try {
+              const list = await api.listSessions(config, d, BACKFILL_SESSION_LIMIT)
+              if (list.length < BACKFILL_SESSION_LIMIT) verifiedKeys.add(dirKey(d))
+              return list
+            } catch {
+              return null
+            }
+          }))
+          for (const list of lists) if (list) allSessionLists.push(list)
+        }
       }
+
+      // Status busy/retry por dir: en full, todos los dirs conocidos; en el
+      // poll liviano, los visibles (cap 8, priorizando la sesión abierta).
+      // Antes el poll liviano no traía statuses y el merge los pisaba con
+      // "idle": el "activo" del chat/lista se apagaba solo aunque el server
+      // siguiera trabajando.
+      const selectedDir = sessionsRef.current.find((s) => s.id === selectedID)?.directory
+      const statusDirs: string[] = full
+        ? [...new Set([
+            ...directories,
+            ...items.map((s) => s.directory),
+            ...allSessionLists.flat().map((s) => s.directory),
+          ].filter((d): d is string => Boolean(d)))]
+        : [...new Set([selectedDir, ...stateDirs].filter((d): d is string => Boolean(d)))].slice(0, 8)
+      for (const c of chunk(statusDirs, 10)) {
+        const st = await Promise.all(c.map((d) => api.listStatuses(config, d).catch(() => ({} as Record<string, SessionStatus>))))
+        allStatusLists.push(...st)
+      }
+      const fetchedStatusDirs = new Set(statusDirs.map((d) => dirKey(d)))
 
       const allSessionsMap = new Map<string, Session>()
       for (const s of items) if (s.id) allSessionsMap.set(s.id, s as Session)
@@ -219,7 +300,7 @@ export function useSessions(
       if (typeof localStorage !== "undefined" && localStorage.getItem("debug.sessions") === "1") {
         const dirCounts = new Map<string, number>()
         for (const s of mapped) if (s.directory) dirCounts.set(s.directory, (dirCounts.get(s.directory) ?? 0) + 1)
-        console.info(`[sessions] raw=${items.length} projects=${projects.length} dirsCandidatas=${directories.length} backfill=${backfillDirs.length} total=${mapped.length}`, [...dirCounts.entries()].slice(0, 20))
+        console.info(`[sessions] full=${full} raw=${items.length} projects=${projects.length} dirsCandidatas=${directories.length} backfill=${backfillDirs.length} total=${mapped.length}`, [...dirCounts.entries()].slice(0, 20))
       }
 
       setSessions((current) => {
@@ -242,11 +323,7 @@ export function useSessions(
         const currentMap = new Map(current.map((s) => [s.id, s]))
         for (const m of mapped) {
           const existing = currentMap.get(m.id)
-          currentMap.set(m.id, {
-            ...existing,
-            ...m,
-            status: m.status,
-          })
+          currentMap.set(m.id, mergeSessionPoll(existing, m, fetchedStatusDirs.has(dirKey(m.directory))))
         }
         const result = [...currentMap.values()].sort((a, b) => b.updated - a.updated)
         const selected = selectedID ? result.find((s) => s.id === selectedID) : null
@@ -296,7 +373,7 @@ export function useSessions(
       if (directory) {
         const pathInfo = await api.loadPath(config, directory)
         if (!isProjectDirectory(pathInfo)) {
-          throw new Error(`${directory} is not an OpenCode project folder.`)
+          throw new Error(`${directory} is not an OpenHer project folder.`)
         }
       }
       const created = await api.createSession(config, "Mobile session", model, directory)

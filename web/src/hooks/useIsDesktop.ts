@@ -8,8 +8,8 @@ function syncDesktopAttr(v: boolean) {
 
 function getIsDesktopSync(): boolean {
   if (typeof window === "undefined") return false
-  // desktop-app (wry) inyecta window.__OPENCODE_DESKTOP__ = true (main.rs:297)
-  if ((window as unknown as Record<string, unknown>).__OPENCODE_DESKTOP__) return true
+  // desktop-app (wry) inyecta window.__OPENHER_DESKTOP__ = true (main.rs:297)
+  if ((window as unknown as Record<string, unknown>).__OPENHER_DESKTOP__) return true
   // APK nativo siempre mobile, aunque el WebView reporte ancho grande en tablets
   try { if (Capacitor.isNativePlatform()) return false } catch {}
   // fallback: por ancho (web dev / preview)
@@ -23,7 +23,7 @@ export function useIsDesktop(): boolean {
 
   useEffect(() => {
     syncDesktopAttr(getIsDesktopSync())
-    if ((window as unknown as Record<string, unknown>).__OPENCODE_DESKTOP__) {
+    if ((window as unknown as Record<string, unknown>).__OPENHER_DESKTOP__) {
       setIsDesktop(true)
       syncDesktopAttr(true)
       return

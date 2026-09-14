@@ -72,8 +72,10 @@ export interface AppModalsProps {
 
   showConnectSheet: boolean
   onCloseConnectSheet: () => void
-  connectProvider: (pid: string, key: string) => Promise<boolean>
+  connectProvider: (pid: string, key: string, label?: string) => Promise<boolean>
   disconnectProvider: (pid: string) => Promise<void>
+  removeProviderCredential: (credentialID: string) => Promise<void>
+  activateProviderCredential: (credentialID: string) => Promise<void>
   addCustomProvider: (providerID: string, name: string, baseURL: string, models: string[]) => Promise<boolean>
 
   showMCPBrowser: boolean
@@ -147,6 +149,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
     sessionToDelete, onConfirmDeleteSession, onCancelDeleteSession,
     showThemePicker, onCloseThemePicker, showThemeCreator, onCloseThemeCreator,
     showConnectSheet, onCloseConnectSheet, connectProvider, disconnectProvider, addCustomProvider,
+    removeProviderCredential, activateProviderCredential,
     showMCPBrowser, onCloseMCPBrowser,
     showArchivedView, onCloseArchivedView, sessions, onRestoreArchivedSession, onOpenSession,
     fileEditorPath, onCloseFileEditor, currentActiveSession, activeSessionDir,
@@ -208,6 +211,8 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
             onClose={onCloseConnectSheet}
             onConnect={connectProvider}
             onDisconnect={disconnectProvider}
+            onRemoveCredential={removeProviderCredential}
+            onActivateCredential={activateProviderCredential}
             onAddCustom={addCustomProvider}
             onConnected={() => loadModels().catch(() => undefined)}
           />

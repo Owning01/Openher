@@ -1,45 +1,101 @@
-/* styles/filepath.css — chip de rutas de archivo detectadas en el chat.
-   Reemplaza al inline-code cuando el contenido ES una ruta: click → menú para
-   abrir en el editor, con la app predeterminada, elegir app o copiar. */
+/* styles/filepath.css — chip "Ruta viva" (estilo A) para rutas detectadas en
+   el chat. Sin caja: carpeta atenuada, archivo en foco, punto de color por
+   tipo, subrayado punteado y flecha al hover. */
 
 .filepath-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: min(100%, 560px);
-  margin: 0 1px;
-  padding: 0 6px;
-  vertical-align: baseline;
-  border: 1px solid var(--border, #222226);
-  border-radius: var(--radius-sm, 4px);
-  background: color-mix(in srgb, var(--primary, #6366f1) 9%, transparent);
-  color: var(--md-code, var(--success, #4ade80));
-  font-family: var(--font-mono, monospace);
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
   font-size: 0.86em;
-  line-height: 1.9;
+  font-weight: 500;
+  line-height: inherit;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  overflow-wrap: anywhere;
+  border-bottom: 1px dotted color-mix(in srgb, var(--text, #f4f4f5) 28%, transparent);
+  transition: border-color 0.14s ease, color 0.14s ease;
 }
 
 .filepath-chip:hover {
-  background: color-mix(in srgb, var(--primary, #6366f1) 18%, transparent);
-  border-color: var(--primary, #6366f1);
-  color: var(--text, #f4f4f5);
+  border-bottom-style: solid;
+  border-bottom-color: var(--primary, #6366f1);
+}
+
+.filepath-chip:hover .fp-name {
+  color: var(--primary, #6366f1);
 }
 
 .filepath-chip:focus-visible {
   outline: 2px solid var(--focus-ring, var(--primary, #6366f1));
-  outline-offset: 1px;
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
-.filepath-chip > svg {
-  flex: 0 0 auto;
-  opacity: 0.75;
+.fp-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: 1px;
 }
 
-.filepath-chip-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
+.fp-dir {
+  color: color-mix(in srgb, var(--muted, #a1a1aa) 88%, transparent);
+}
+
+.fp-name {
+  color: var(--text, #f4f4f5);
+  transition: color 0.14s ease;
+}
+
+.fp-go {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 0.82em;
+  color: var(--primary, #6366f1);
+  opacity: 0;
+  transform: translate(-3px, 0);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.filepath-chip:hover .fp-go,
+.filepath-chip:focus-visible .fp-go {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+/* ===== Imágenes de markdown (MarkdownImage) ===== */
+.md-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0;
+  border: 1px solid var(--border, #222226);
+  border-radius: var(--radius-md, 8px);
+  cursor: zoom-in;
+  background: var(--surface, #121215);
+}
+
+.md-image-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.md-image-error {
+  display: inline-block;
+  margin: 2px 0;
+  padding: 1px 8px;
+  border: 1px dashed color-mix(in srgb, var(--danger, #fb7185) 45%, transparent);
+  border-radius: var(--radius-sm, 4px);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85em;
+  color: var(--danger, #fb7185);
 }

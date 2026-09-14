@@ -82,3 +82,37 @@ export function useQuestionSettled(id?: string | (string | undefined | null)[]):
   return info
 }
 
+// ---- Modo flotante (questionAuto) ----------------------------------------
+// Cuando questionAuto está ON, el modal de ChatView es la ÚNICA superficie
+// interactiva y ToolPart renderiza un chip compacto (evita duplicados). El
+// default true acompaña al default de feature flags.
+let floatingMode = true
+const floatingListeners = new Set<() => void>()
+
+export function setQuestionFloatingMode(enabled: boolean): void {
+  if (floatingMode === enabled) return
+  floatingMode = enabled
+  floatingListeners.forEach((fn) => {
+    try {
+      fn()
+    } catch { /* ignore */ }
+  })
+}
+
+export function isQuestionFloatingMode(): boolean {
+  return floatingMode
+}
+
+export function useQuestionFloatingMode(): boolean {
+  const [enabled, setEnabled] = useState<boolean>(() => floatingMode)
+  useEffect(() => {
+    setEnabled(floatingMode)
+    const listener = () => setEnabled(floatingMode)
+    floatingListeners.add(listener)
+    return () => {
+      floatingListeners.delete(listener)
+    }
+  }, [])
+  return enabled
+}
+

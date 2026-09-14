@@ -621,4 +621,34 @@ describe("toMessageEnvelopeV1", () => {
   it("content vacío array produce parts vacío", () => {
     expect(toMessageEnvelopeV1({ id: "m1", content: [] }).parts).toEqual([])
   })
+
+  it("mapea el error del assistant (v2 name+data) a la forma plana", () => {
+    const raw: V2Message = {
+      id: "m1",
+      type: "assistant",
+      error: { name: "ProviderAuthError", data: { providerID: "anthropic", message: "invalid api key" } },
+    }
+    expect(toMessageEnvelopeV1(raw).info.error).toEqual({
+      name: "ProviderAuthError",
+      message: "invalid api key",
+      ref: undefined,
+    })
+  })
+
+  it("conserva el ref de un error de servidor", () => {
+    const raw: V2Message = {
+      id: "m2",
+      type: "assistant",
+      error: { name: "UnknownError", data: { message: "Unexpected server error.", ref: "err_1234abcd" } },
+    }
+    expect(toMessageEnvelopeV1(raw).info.error).toEqual({
+      name: "UnknownError",
+      message: "Unexpected server error.",
+      ref: "err_1234abcd",
+    })
+  })
+
+  it("sin error el info.error queda undefined", () => {
+    expect(toMessageEnvelopeV1({ id: "m1" }).info.error).toBeUndefined()
+  })
 })

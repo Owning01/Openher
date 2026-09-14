@@ -1,106 +1,72 @@
-# Teamwork Brief — OpenHer Studio
+# Teamwork Brief — OpenHer Móvil: Archivos + Aprendizaje
 
-> Fase 1 (Sentinel) · "Especificá Qué, no Cómo". Un solo artefacto revisable.
-> Confirmación única del usuario antes de desplegar el swarm (Fase 2).
-
-## 0. Identificación
-
-| Campo | Valor |
-|---|---|
-| Proyecto | OpenHer Studio (sección de diseño visual dentro de OpenHer) |
-| Repo | `G:\Proyectos\opencode-remote-android` (feature in-repo, FSD) |
-| Modo de integridad | **`development`** (default) |
-| Plataforma objetivo | Desktop primero (WebView nativo + dev server local) |
-| Estado | Awaiting single approval |
+> Fase 1 (Sentinel). Estado: **pendiente de aprobación del usuario** (1 confirmación).
 
 ## 1. Objetivo & Audiencia
+Producción real (APK Android + desktop). El usuario usa la app desde el celular vía
+Tailscale contra el server del PC. Objetivo:
 
-Construir una **sección propia de primer nivel ("Estudio")** dentro de OpenHer donde el
-usuario puede: (a) empezar un proyecto web (generándolo con Open Design embebido o abriendo
-una carpeta existente), (b) verlo renderizado en un canvas con un overlay de selección visual,
-y (c) pedir cambios al agente de OpenCode sobre las zonas seleccionadas, atadas a
-`archivo:línea` cuando el build es dev. Uso: el propio desarrollador (Octavio) en su desktop.
-
-**Diferencial respecto a Stitch/OpenDesign**: OpenHer ata la selección al **código fuente real**
-del proyecto y edita el repo con el agente + hot-reload; OpenDesign solo genera.
+- **A. Archivos (PC Files) en el celular**: poder ver los archivos del PC, **entrar y
+  navegar carpetas** con el dedo, **descargar cualquier archivo**, y **leer** archivos
+  de texto en un **visor in-app cómodo para pantalla chica** (hoy los archivos terminan
+  abriéndose en VSCode del PC o muestran errores crudos).
+- **B. Aprendizaje en el celular**: el CSS está roto (diagrama de ruta y tarjetas se
+  desbordan horizontalmente; layout no responsive).
+- **C. Barrido móvil**: revisar el resto de las vistas principales por desbordes/scroll
+  roto y corregir lo crítico.
 
 ## 2. Bloques de Requerimientos
+### A. PC Files (móvil)
+1. **Navegación táctil**: tap en carpeta = entrar; botón subir/atrás + breadcrumbs
+   táctiles; el despliegue inline (árbol) queda como acción secundaria (long-press o
+   chevron). Estado de carpeta se conserva al volver del visor.
+2. **Visor móvil**: overlay/pantalla completa con tipografía legible (≥13px) y control
+   de tamaño (A-/A+), números de línea, wrap horizontal o scroll-x contenido, cierre
+   claro y navegación entre archivos (abrir otro sin perder la carpeta).
+3. **Lectura de archivos**: hasta 64KB vía `shell.fs.read` con aviso de truncado;
+   binarios/no legibles → mensaje explícito (nunca `os error 32` crudo) + ofrecer
+   descarga.
+4. **Descargar cualquier archivo**: en APK guardar/share con feedback claro (spinner +
+   toast con nombre y destino); en web, descarga directa. Archivos bloqueados por el SO
+   → error claro y accionable.
+5. **"Abrir con…"**: se mantiene como opción avanzada (abre en la PC), pero deja de ser
+   el camino principal en móvil.
 
-- **R1 — Sección de primer nivel.** Entrada "Estudio" en el rail de actividades (desktop),
-  respetando `useSidebarPrefs` (id personalizable, ocultable). No visible en móvil.
-- **R2 — Estado del proyecto activo persistido.** `{ directory, name, kind, entryPoint, devServerUrl }`
-  sobrevive a recargas. El proyecto del Estudio se apoya en una sesión/carpeta, sin duplicar estado.
-- **R3 — Abrir proyecto existente.** Elegir carpeta → servir (dev server preferente vía
-  `useDevServer`; fallback estático vía `shell.project.serve` → `/shell/preview/<token>`) → canvas.
-- **R4 — Canvas con inspección.** Preview + toolbar (picker / pod / reload). Reutiliza
-  `browserOverlayScript` (WebView nativo) o `BrowserVisualOverlay` (iframe same-origin).
-- **R5 — Selección → anotaciones.** Cada zona guarda `file:line` (dev), selector, HTML, rect.
-  Reutiliza `useVisualSelection` + `formatAnnotationZone`.
-- **R6 — Chat scoped.** Panel de agente dentro del Estudio; el prompt incluye el bloque
-  `SELECTED ZONES` (`formatSelectionForPrompt`) y queda scopeado al `directory` del proyecto.
-- **R7 — Nuevo con Open Design.** Embebe OpenDesign como generador; detecta su working
-  directory y ofrece "Abrir en el Estudio".
-- **R8 — Reconciliación tras HMR.** Al recargar la página, las anotaciones no se duplican ni
-  crashean; los badges se re-anclan por selector y se limpian los huérfanos.
+### B. Aprendizaje (móvil ≤430px)
+1. Cero overflow horizontal de página; diagrama de ruta reacomodado (1 columna /
+   scroll-x contenido con señal visual) y tarjetas sin desbordar su contenedor.
+2. Lección legible: tipografía, márgenes y diagramas (SVG) al 100% del ancho.
+3. Navegación sidebar→lección usable en táctil.
 
-## 3. Mecanismo de Verificación Independiente
+### C. Barrido móvil
+Vistas: Sesiones, Chat, Ajustes, Aprendizaje, Archivos, Chat Rápido. Detectar y
+arreglar desbordes/clipping/scroll roto; no rediseños.
 
-- **Tests (vitest, reales, sin mocks de la lógica bajo prueba):** hooks y componentes nuevos
-  (`useStudio`, `StudioView`, parseo/handoff de OpenDesign) + regresión de la inspección
-  existente en `BrowserPanel`.
-- **Typecheck:** `pnpm --dir web exec tsc --noEmit -p tsconfig.app.json`.
-- **Prueba real E2E (desktop):** levantar `pnpm dev` en `web/`, abrir un proyecto de ejemplo,
-  activar picker, clicar un elemento, verificar que la anotación muestra `archivo:línea`, enviar
-  un prompt y confirmar que el mensaje contiene `SELECTED ZONES`.
-- **Integridad:** el Auditor inspecciona salida real de terminal (exit code 0 y logs genuinos);
-  prohíbe tests mockeados/fabricados y placeholders.
+## 3. Verificación Independiente
+- `pnpm exec tsc -b` + suite `pnpm test` (Vitest) en verde.
+- Script de auditoría en viewport 390×844 contra el bundle servido en `:4848`:
+  detectar `scrollWidth > clientWidth + 2`, elementos clipados y scroll muerto.
+- Prueba funcional móvil (Playwright, 390×844):
+  - tap carpeta → breadcrumb cambia de nivel; subir → vuelve;
+  - tap archivo de texto → visor abre, cambia tamaño, cierra;
+  - descarga → feedback y archivo generado (web path);
+  - archivo bloqueado → mensaje claro, sin excepción cruda.
+- Aprendizaje: 0 overflowers horizontales; diagrama usable.
+- Cierre: APK `1.0.7` compilada, hash verificado, link de descarga directa.
 
 ## 4. Criterios de Aceptación (DoD)
+1. En 390×844: PC Files permite entrar/salir de carpetas y abrir/leer/cerrar archivos
+   de texto; descarga con feedback; errores claros en binarios/bloqueados.
+2. Aprendizaje: 0 elementos con overflow horizontal no intencional; ruta y lecciones
+   legibles.
+3. `tsc` + tests en verde (sin modificar tests para "hacerlos pasar").
+4. Desbordes críticos del barrido corregidos o documentados como no críticos.
+5. APK 1.0.7 publicada con link directo y verificación de hash.
 
-1. La sección "Estudio" es alcanzable desde el rail y **no rompe** navegación, layout ni atajos existentes.
-2. Abrir una carpeta de proyecto muestra su preview en el canvas.
-3. Clic en un elemento crea una anotación; en build dev incluye `archivo:línea`.
-4. Enviar un prompt al agente incluye el bloque `SELECTED ZONES` con las zonas marcadas.
-5. "Nuevo con Open Design" permite generar y detectar la carpeta, con "Abrir en el Estudio".
-6. `tsc` sin errores y suite de tests en verde (sin tests preexistentes borrados/modificados para pasar).
-7. Flujo feliz sin errores de consola.
-
-## 5. No-Objetivos (fuera de alcance de esta iteración)
-
-- Paridad en Android/móvil (solo se oculta la sección).
-- Instrumentación `data-oc-src` en el build del proyecto objetivo (mapeo 100% fiable). Fase futura.
-- Write-back automático de estilos al código fuente (el agente edita; no hay autopatch).
-- Reemplazar o modificar la UI interna de OpenDesign.
-
-## 6. Riesgos Conocidos
-
-| Riesgo | Mitigación |
-|---|---|
-| `ViewType` está duplicado (`entities/config/model.ts` y `entities/ui/model.ts`) | Explorers confirman ambos antes de editar; actualizar los dos |
-| Routing de desktop es denso (`DesktopLayoutView`, `DesktopPanelRenderer`, `shellPanels`) | M1 primero: shell mínima y verificación de no-regresión |
-| Overlay nativo (`/shell/browser/eval`) solo existe en desktop | Diseñar con fallback a iframe same-origin (ya existe `BrowserVisualOverlay`) |
-| API del working directory de OpenDesign desconocida | R7 con handoff manual asistido si no hay API; se investiga en M4 |
-| Dev server es desktop-only (`shell.pty`) | M2 con fallback estático para preview |
-
-## 7. Hitos Propuestos (DAG)
-
-- **M1** — Shell de la sección + entrada en el rail (R1, R2).
-- **M2** — Abrir proyecto + servir + canvas (R3).
-- **M3** — Inspección + anotaciones + chat scoped (R4, R5, R6, R8).
-- **M4** — Handoff Open Design (R7).
-
-Dependencias: M1 → M2 → M3; M4 depende de M2 (canvas) y puede correr en paralelo con M3.
-
-## 8. Propiedad de Archivos (a detallar por el Orchestrator en Fase 2)
-
-Carpeta nueva: `web/src/features/studio/` (exclusiva de los Workers del Estudio).
-Puntos de integración compartidos (edición secuencial, nunca concurrente):
-`web/src/entities/config/model.ts`, `web/src/entities/ui/model.ts`,
-`web/src/widgets/activity-bar/ActivityBar.tsx`, `web/src/hooks/useSidebarPrefs.ts`,
-`web/src/app/useAppController.ts`, `web/src/widgets/*`, `web/src/i18n/*`.
-
-## 9. Directiva de Integridad
-
-Modo `development`: se permite reutilizar componentes, hooks y librerías existentes.
-**Prohibido**: salidas fabricadas, implementaciones fachada, placeholders que digan "TODO",
-o marcar tareas como completas sin salida real de comando que lo respalde.
+## 5. Directorio & Integridad
+- Trabajo **in-place** en el repo actual (el APK necesita los cambios en `web/`).
+- Artefactos de coordinación en `.agents/` (`teamwork_plan.md`, `teamwork_progress.md`).
+- **Modo de integridad: `development`** (default): sin fabricaciones ni placeholders;
+  salidas de comandos reales.
+- Propiedad exclusiva de archivos por Worker; 2 Workers nunca tocan el mismo archivo a
+  la vez.

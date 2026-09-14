@@ -1,7 +1,5 @@
 import { useCallback } from "react"
 import { api } from "../../../api"
-import { prefetchServerStats } from "../../../hooks/useServerStats"
-import { DEFAULT_STATS_PORT } from "../../../constants"
 import type { ServerConfig, SessionView } from "../../../types"
 
 export type UseHostActionsParams = {
@@ -16,15 +14,12 @@ export type UseHostActionsParams = {
   /** Limpia mensajes/sidecar de la vista móvil al borrar/archivar la abierta. */
   onClearSelected?: () => void
   refreshSessions: (force?: boolean) => Promise<any>
-  recordSessionCreated: () => void
   navigate: (view: any) => void
   setRuntimeError: (err: string | null) => void
   activePanel: number
   desktopLayout: any
   setDesktopLayout: (updater: any) => void
-  tabStacks: string[][]
   setTabStacks: (updater: any) => void
-  switchTab: (pIdx: number, tIdx: number) => void
   setActivePanel: (idx: number | ((prev: number) => number)) => void
   isDesktop: boolean
 }
@@ -40,15 +35,12 @@ export function useHostActions({
   setSelectedID,
   onClearSelected,
   refreshSessions,
-  recordSessionCreated,
   navigate,
   setRuntimeError,
   activePanel,
   desktopLayout,
   setDesktopLayout,
-  tabStacks,
   setTabStacks,
-  switchTab,
   setActivePanel,
   isDesktop,
 }: UseHostActionsParams) {
@@ -137,56 +129,13 @@ export function useHostActions({
         const s = await api.createSession(config, dir)
         if (s) {
           setSessions((prev) => [s as unknown as SessionView, ...prev.filter((x) => x.id !== s.id)])
-          recordSessionCreated()
           navigate("detail")
         }
       } catch (err) {
         setRuntimeError((err as Error).message)
       }
     },
-    [config, recordSessionCreated, navigate, setRuntimeError, setSessions]
-  )
-
-  const openStatsAsTab = useCallback(
-    (targetPanel?: number) => {
-      if (!config) return
-      navigate("detail")
-      const idx =
-        targetPanel ?? Math.min(activePanel, Math.max(0, desktopLayout.sessions.length - 1))
-      const existingPanel = tabStacks?.findIndex((s) => s.includes("__stats__"))
-      if (existingPanel !== undefined && existingPanel >= 0) {
-        const tabIdx = tabStacks[existingPanel]!.indexOf("__stats__")
-        if (tabIdx >= 0) {
-          switchTab(existingPanel, tabIdx)
-          setActivePanel(existingPanel)
-          return
-        }
-      }
-      prefetchServerStats(config, DEFAULT_STATS_PORT)
-      setTabStacks((prev: string[][]) => {
-        const next = (prev ?? []).map((s) => [...s])
-        while (next.length <= idx) next.push([])
-        if (!next[idx]!.includes("__stats__")) next[idx]!.push("__stats__")
-        return next
-      })
-      setDesktopLayout((prev: any) => {
-        const sessions = [...prev.sessions]
-        sessions[idx] = "__stats__"
-        return { ...prev, sessions }
-      })
-      setActivePanel(idx)
-    },
-    [
-      activePanel,
-      desktopLayout.sessions.length,
-      tabStacks,
-      switchTab,
-      setActivePanel,
-      setTabStacks,
-      setDesktopLayout,
-      config,
-      navigate,
-    ]
+    [config, navigate, setRuntimeError, setSessions]
   )
 
   const openBrowserAsTab = useCallback(
@@ -229,7 +178,6 @@ export function useHostActions({
     handleDeleteMany,
     handleArchiveMany,
     openSessionInDir,
-    openStatsAsTab,
     openBrowserAsTab,
     handleOpenBrowser,
   }

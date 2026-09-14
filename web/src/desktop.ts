@@ -1,4 +1,4 @@
-// Cliente HTTP del agente de escritorio remoto (OpenCode Desktop Agent).
+// Cliente HTTP del agente de escritorio remoto (OpenHer Desktop Agent).
 // El agente corre en la PC (desktop-agent/, puerto default 5901) y expone
 // /health, /info, /stream (MJPEG) y /input con Basic auth — mismo modelo de
 // conexión que el server opencode (Tailscale/LAN).

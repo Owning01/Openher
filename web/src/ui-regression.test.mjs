@@ -120,7 +120,7 @@ assert.ok(api.includes('withDirectory("/session", directory)'), 'new session cre
 assert.ok(api.includes('loadTodo(config: ServerConfig, sessionID: string, directory?: string)'), 'todo requests should be directory-aware')
 assert.ok(api.includes('loadDiff(config: ServerConfig, sessionID: string, directory?: string)'), 'diff requests should be directory-aware')
 assert.ok(api.includes('abort(config: ServerConfig, sessionID: string, directory?: string)'), 'abort requests should be directory-aware')
-assert.ok(api.includes('listGlobalSessions(config: ServerConfig)'), 'sessions view should use global session discovery when available')
+assert.ok(api.includes('listGlobalSessions(config: ServerConfig, limit?: number)'), 'sessions view should use global session discovery when available')
 assert.ok(api.includes('x-next-cursor'), 'global session discovery should page through all experimental session results')
 assert.ok(useSessions.includes('api.listGlobalSessions(config).catch(() => api.listSessions(config)'), 'sessions loaded via global discovery with fallback')
 assert.ok(useSessions.includes('api.loadLatestMessage') === false, 'latest-message N+1 removed for speed')
@@ -233,9 +233,38 @@ assert.ok(useSSESource.includes('resolveApiVersion'), 'SSE should use sync resol
 assert.ok(settingsPanel.includes('settings.apiVersion'), 'Settings should expose the API version selector')
 assert.ok(useConfig.includes('apiVersion: "auto"'), 'default config should auto-detect API version')
 
-// Polling: en no-full el fetch de mensajes NO se saltea si el SSE está caído
-// (túnel móvil) — si no, la respuesta del modelo nunca llega hasta el final.
-assert.ok((app + lifecycle).includes('const sseLive = streamState === "streaming"'), 'message fetch skip should require a live SSE stream')
-assert.ok((app + lifecycle).includes('!skip)'), 'message fetch should still run when the SSE is down')
+// Polling: el fetch de mensajes NUNCA se saltea por tener SSE vivo. Si el
+// stream pierde un evento sin replay (túnel móvil, revert), el poll es la
+// única recuperación; antes el chat quedaba congelado hasta salir y volver.
+assert.ok(!lifecycle.includes('shouldPull && !sseLive'), 'message fetch must not be gated by a live SSE stream')
+assert.ok(lifecycle.includes('if (shouldPull)'), 'lifecycle poll should pull messages whenever the server reports changes')
+const sessionPanel = readFileSync(new URL('./components/SessionChatPanel.tsx', import.meta.url), 'utf8')
+assert.ok(sessionPanel.includes('if (updatedAdvanced || stale)'), 'desktop panel poll should refetch even while the stream is active')
+
+// Learning responsive: en <=430px el SVG del roadmap se reemplaza por una
+// lista táctil (targets 44px) y los diagramas de lección/lightbox dejan de
+// forzar scroll horizontal; el buscador del sidebar puede encogerse.
+const learningCss = readFileSync(new URL('./styles/learning.css', import.meta.url), 'utf8')
+const learningMobile430 = learningCss.match(/@media \(max-width: 430px\) \{([\s\S]*?)\n\}/)
+assert.ok(learningMobile430, 'learning.css debe declarar un bloque móvil @media (max-width: 430px)')
+assert.ok(/\.learning-roadmap-diagram \{ display: none; \}/.test(learningMobile430[1]), 'a <=430px el SVG del roadmap se oculta y deja lugar a la lista táctil')
+assert.ok(/\.learning-roadmap-list \{ display: grid;/.test(learningMobile430[1]), 'a <=430px la lista táctil del roadmap se muestra como grid')
+assert.ok(/\.learning-lesson-diagram \.learning-diagram-wrap svg \{ min-width: 0;/.test(learningMobile430[1]), 'a <=430px el SVG de la lección no debe forzar scroll horizontal')
+assert.ok(/\.learning-brand-text \{ display: none; \}/.test(learningMobile430[1]), 'a <=430px el texto del topbar se oculta (queda el icono)')
+assert.ok(learningCss.includes('.learning-roadmap-list'), 'learning.css debe definir .learning-roadmap-list (base oculta en desktop)')
+assert.ok(/\.learning-search-input \{[\s\S]*?min-width: 0;/.test(learningCss), 'el buscador del sidebar debe poder encogerse (min-width: 0)')
+
+// Auto-flush de la cola visible: NO debe re-encolar el item mientras la sesión
+// está ocupada (cada render duplicaba el pendiente en bucle infinito) y debe
+// forzar el envío del item que YA salió de la cola. El Stop explícito deja la
+// cola en hold para que el abort no arranque otro turno al instante.
+assert.ok(controller.includes('isSharedOutboxHeld(selectedSession.id)'), 'auto-flush debe saltear la cola en hold tras Stop')
+assert.ok(controller.includes('if (isSessionActive(selectedSession)) return'), 'auto-flush no debe correr con la sesión ocupada')
+assert.ok(controller.includes('handleSend(next.images, undefined, next.text, true)'), 'auto-flush debe forzar el envío (sin re-encolar)')
+const chatActions = readFileSync(new URL('./features/chat/hooks/useChatActions.ts', import.meta.url), 'utf8')
+assert.ok(chatActions.includes('holdSharedOutbox(selectedSession.id)'), 'el Stop (móvil) debe dejar la cola en hold')
+assert.ok(chatActions.includes('resumeSharedOutbox'), 'el envío manual / Enviar ahora debe reanudar la cola')
+assert.ok(sessionPanel.includes('handleSend(next.images, undefined, next.text, true)'), 'auto-flush del desktop debe forzar el envío')
+assert.ok(sessionPanel.includes('holdSharedOutbox(session.id)'), 'el Stop (desktop) debe dejar la cola en hold')
 
 console.log('ui regression tests passed')

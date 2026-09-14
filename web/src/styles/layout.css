@@ -384,7 +384,6 @@
   .desktop-sidebar-body > .shell-kanban,
   .desktop-sidebar-body > .shell-docs,
   .desktop-sidebar-body > .shell-updates,
-  .desktop-sidebar-body > .shell-stats,
   .desktop-sidebar-body > .shell-labs,
   .desktop-sidebar-body > .shell-config {
     height: 100%;
@@ -914,7 +913,7 @@
     background: var(--primary);
   }
 
-  /* ===== Right sidebar (QuickChat + plugins) — espejo de la izquierda ===== */
+  /* ===== Right sidebar (plugins) - espejo de la izquierda ===== */
   .app-desktop-sidebar--right {
     position: relative;
     min-height: 0;
@@ -1128,12 +1127,11 @@
   .app-shell[data-sbhide~="sessions"] .activity-btn[data-item="sessions"],
   .app-shell[data-sbhide~="explorer"] .activity-btn[data-item="explorer"],
   .app-shell[data-sbhide~="terminal"] .activity-btn[data-item="terminal"],
-  .app-shell[data-sbhide~="stats"] .activity-btn[data-item="stats"],
   .app-shell[data-sbhide~="browser"] .activity-btn[data-item="browser"],
   .app-shell[data-sbhide~="kanban"] .activity-btn[data-item="kanban"],
-  .app-shell[data-sbhide~="quickchat"] .activity-btn[data-item="quickchat"],
   .app-shell[data-sbhide~="scm"] .activity-btn[data-item="scm"],
   .app-shell[data-sbhide~="design"] .activity-btn[data-item="design"],
+  .app-shell[data-sbhide~="studio"] .activity-btn[data-item="studio"],
   .app-shell[data-sbhide~="learning"] .activity-btn[data-item="learning"],
   .app-shell[data-sbhide~="settings"] .activity-btn[data-item="settings"] {
     display: none;

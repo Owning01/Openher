@@ -26,6 +26,7 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
   const [selected, setSelected] = useState<Record<number, string[]>>({})
   const [customs, setCustoms] = useState<Record<number, string>>({})
   const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleToggle = useCallback((qIdx: number, label: string) => {
     setSelected((prev) => {
@@ -46,6 +47,7 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
 
   const handleSend = useCallback(async () => {
     setSending(true)
+    setError(null)
     const answers: string[][] = questions.map((_, i) => {
       const sel = selected[i] ?? []
       const custom = customs[i] ?? ""
@@ -55,21 +57,23 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
       await api.questionReply(config, requestID, answers, directory, sessionID)
       onDone("answered", answers)
     } catch (err) {
-      console.error("[QuestionPrompt] Failed to reply to question:", err)
+      // 400/404/409/red: feedback visible y el prompt NO se cierra en falso.
+      setError((err as Error)?.message || t('settings.questionError'))
       setSending(false)
     }
-  }, [questions, selected, customs, config, requestID, directory, sessionID, onDone])
+  }, [questions, selected, customs, config, requestID, directory, sessionID, onDone, t])
 
   const handleSkip = useCallback(async () => {
     setSending(true)
+    setError(null)
     try {
       await api.questionReject(config, requestID, directory, sessionID)
       onDone("rejected")
     } catch (err) {
-      console.error("[QuestionPrompt] Failed to reject/skip question:", err)
+      setError((err as Error)?.message || t('settings.questionError'))
       setSending(false)
     }
-  }, [config, requestID, directory, sessionID, onDone])
+  }, [config, requestID, directory, sessionID, onDone, t])
 
   return (
     <div className="question-inline">
@@ -112,6 +116,7 @@ export const QuestionPrompt = memo(function QuestionPrompt({ questions, requestI
           </div>
         ))}
         </div>
+        {error && <div className="question-error" role="alert">{error}</div>}
         <div className="question-actions">
           <button className="btn btn-secondary" onClick={handleSkip} disabled={sending}>
             {t('settings.questionSkip')}

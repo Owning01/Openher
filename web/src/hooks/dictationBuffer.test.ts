@@ -54,4 +54,10 @@ describe("mergeNativePartial (regresión: pausar y retomar no borra)", () => {
     const step2 = mergeNativePartial(step1, base, "cómo estás bien")
     expect(step2).toBe("hola cómo estás bien")
   })
+  it("final con distinto casing/puntuación reemplaza la cola, no duplica", () => {
+    expect(mergeNativePartial("hola mundo", 0, "Hola mundo.")).toBe("Hola mundo.")
+  })
+  it("extensión con casing distinto reescribe la cola", () => {
+    expect(mergeNativePartial("hola mun", 0, "Hola mundo")).toBe("Hola mundo")
+  })
 })

@@ -165,6 +165,6 @@ function transportMessage(translate?: Translator): string {
   return tr(
     t,
     "error.transport",
-    "Could not reach the server. Check that Tailscale is connected on both devices, the host and port in Settings are correct, and opencode is still running.",
+    "Could not reach the server. Check that Tailscale is connected on both devices, the host and port in Settings are correct, and OpenHer is still running.",
   )
 }

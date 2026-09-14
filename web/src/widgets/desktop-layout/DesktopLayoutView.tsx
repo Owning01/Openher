@@ -1,10 +1,9 @@
 import React, { memo } from "react"
 import type { SessionView, ServerConfig, ConnectionState, DataMode, ViewType, ModelOption, ServerProfile, PromptSnippet, AgentOption, NoticeType, FeatureFlags, ChatSettings } from "../../types"
-import type { UsageStats } from "../../hooks/useStats"
 import type { ShellPanelKind } from "../../shell"
 import type { ChatViewProps } from "../../components/ChatView"
 import type { LanguageCode } from "../../i18n"
-import { ActivityBar, type DesktopActivity, type PluginTabItem } from "../activity-bar/ActivityBar"
+import { ActivityBar, type DesktopActivity } from "../activity-bar/ActivityBar"
 import { DesktopSidebar } from "../sidebar/DesktopSidebar"
 import { DesktopGrid } from "../desktop-grid/DesktopGrid"
 import { ADEDiffPanel } from "../../components/ADEDiffPanel"
@@ -13,8 +12,8 @@ import { PluginSlot } from "../../plugins"
 import { useT } from "../../i18n-context"
 import { TitleBar } from "../titlebar/TitleBar"
 
-const QuickChatPanel = React.lazy(() => import("../../components/QuickChatPanel").then((m) => ({ default: m.QuickChatPanel })))
 const SettingsPanel = React.lazy(() => import("../../components/SettingsPanel").then((m) => ({ default: m.SettingsPanel })))
+const StudioView = React.lazy(() => import("../../features/studio/StudioView").then((m) => ({ default: m.StudioView })))
 
 export type DesktopLayoutViewProps = {
   shellRef: React.RefObject<HTMLDivElement | null>
@@ -35,14 +34,12 @@ export type DesktopLayoutViewProps = {
     sessions: Array<string | null>
     browserTabUrls?: Record<string, string>
   }
-  openStatsAsTab: (targetPanel?: number) => void
   openBrowserAsTab: (url: string, targetPanel?: number) => void
   handleOpenKanban: () => void
+  handleOpenDebate: () => void
   rightSidebarCollapsed: boolean
   setRightSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>
   setShowPluginsModal: (s: boolean) => void
-  pluginTabs: PluginTabItem[]
-  openPluginAsTab: (key: string, targetPanel?: number) => void
   memInfo: any
   formatBytes: (bytes: number) => string
   handleOpenLearning: () => void
@@ -66,7 +63,6 @@ export type DesktopLayoutViewProps = {
   baseChatProps: ChatViewProps
   fileEditorPath: string | null
   setFileEditorPath: (p: string | null) => void
-  quickChatKeys: { cerebras: string; groq: string; go: string; custom: string; customUrl: string }
   modelOptions: any[]
   providerList: any[]
   vs: any
@@ -86,7 +82,6 @@ export type DesktopLayoutViewProps = {
   onSettleSession: (id: string, dir: string) => Promise<void> | void
   onRefreshSessions: () => void
   onSetCommands: (cmds: any) => void
-  onRecordPrompt: (_text: string) => void
   onQueueAction: (action: any) => void
   onShellExecute: (cmd: string, sid?: string, dir?: string) => void
   onChangeAgent: (agentId: string) => void
@@ -95,9 +90,9 @@ export type DesktopLayoutViewProps = {
   onOpenFile: (file: string) => void
   onOpenConnect: () => void
   onOpenSessionDir: (dir: string) => void
-  onNavigateSettings: () => void
   onToggleInspectTool: (tool: "picker" | "pod") => void
   onBrowserVisualPick: (url: string, el: any) => void
+  onEnsureProjectSession: (directory: string) => Promise<SessionView | null>
   onSwitchTab: (panelIdx: number, tabIdx: number) => void
   desktopDiffOpen: boolean
   setDesktopDiffOpen: (o: boolean) => void
@@ -125,8 +120,6 @@ export type DesktopLayoutViewProps = {
   allPrimaryAgents?: AgentOption[]
   disabledAgents?: Record<string, boolean>
   toggleAgentEnabled?: (agentId: string) => void
-  stats?: UsageStats
-  resetStats?: () => void
   activeModelOption?: ModelOption | null
   blockedModels?: any
   setShowThemePicker?: (s: boolean) => void
@@ -174,14 +167,12 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     setSidebarCollapsed,
     tabStacks,
     desktopLayout,
-    openStatsAsTab,
     openBrowserAsTab,
     handleOpenKanban,
+    handleOpenDebate,
     rightSidebarCollapsed,
     setRightSidebarCollapsed,
     setShowPluginsModal,
-    pluginTabs,
-    openPluginAsTab,
     memInfo,
     formatBytes,
     handleOpenLearning,
@@ -205,7 +196,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     baseChatProps,
     fileEditorPath,
     setFileEditorPath,
-    quickChatKeys,
     modelOptions,
     providerList,
     vs,
@@ -225,7 +215,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     onSettleSession,
     onRefreshSessions,
     onSetCommands,
-    onRecordPrompt,
     onQueueAction,
     onShellExecute,
     onChangeAgent,
@@ -234,9 +223,9 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     onOpenFile,
     onOpenConnect,
     onOpenSessionDir,
-    onNavigateSettings,
     onToggleInspectTool,
     onBrowserVisualPick,
+    onEnsureProjectSession,
     onSwitchTab,
     desktopDiffOpen,
     setDesktopDiffOpen,
@@ -264,8 +253,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
     allPrimaryAgents,
     disabledAgents,
     toggleAgentEnabled,
-    stats,
-    resetStats,
     activeModelOption,
     blockedModels,
     setShowThemePicker,
@@ -344,14 +331,10 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         setSidebarCollapsed={setSidebarCollapsed}
         tabStacks={tabStacks}
         desktopLayout={desktopLayout}
-        openStatsAsTab={openStatsAsTab}
         openBrowserAsTab={openBrowserAsTab}
         handleOpenKanban={handleOpenKanban}
-        rightSidebarCollapsed={rightSidebarCollapsed}
-        setRightSidebarCollapsed={setRightSidebarCollapsed}
+        handleOpenDebate={handleOpenDebate}
         setShowPluginsModal={setShowPluginsModal}
-        pluginTabs={pluginTabs}
-        openPluginAsTab={openPluginAsTab}
         memInfo={memInfo}
         formatBytes={formatBytes}
         handleOpenLearning={handleOpenLearning}
@@ -376,7 +359,32 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
       />
 
       <main className="app-desktop-content">
-        {view === "settings" && draftConfig && setDraftConfig ? (
+        {view === "studio" ? (
+          <React.Suspense fallback={<div className="panel-loading" style={{ padding: 24, color: "var(--muted)" }}>{t("studio.loading")}</div>}>
+            <StudioView
+              config={config}
+              dataMode={dataMode}
+              connectionState={connectionState}
+              busySessions={busySessions}
+              baseChatProps={baseChatProps}
+              vs={vs}
+              onEnsureProjectSession={onEnsureProjectSession}
+              onRefreshSessions={onRefreshSessions}
+              onSetCommands={onSetCommands}
+              onQueueAction={onQueueAction}
+              onShellExecute={onShellExecute}
+              onChangeAgent={onChangeAgent}
+              onOpenInThisPanel={onOpenInThisPanel}
+              onSwapPanels={onSwapPanels}
+              onSettleSession={onSettleSession}
+              onOpenFile={onOpenFile}
+              onOpenConnect={onOpenConnect}
+              onOpenBrowser={openBrowserAsTab}
+              onToggleInspectTool={onToggleInspectTool}
+              onBrowserVisualPick={onBrowserVisualPick}
+            />
+          </React.Suspense>
+        ) : view === "settings" && draftConfig && setDraftConfig ? (
           <div className="settings-view" style={{ height: "100%", overflowY: "auto" }}>
             <React.Suspense fallback={<div className="panel-loading" style={{ padding: 24, color: "var(--muted)" }}>Cargando ajustes…</div>}>
               <SettingsPanel
@@ -404,8 +412,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
                 allPrimaryAgents={allPrimaryAgents}
                 disabledAgents={disabledAgents}
                 onToggleAgentEnabled={toggleAgentEnabled}
-                stats={stats ?? { promptsSent: 0, sessionsCreated: 0, firstUsed: Date.now() }}
-                onResetStats={resetStats ?? (() => {})}
                 activeModelOption={activeModelOption ?? null}
                 blockedModels={blockedModels}
                 onOpenThemePicker={() => setShowThemePicker?.(true)}
@@ -478,9 +484,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
             activeSessionDir={activeSessionDir}
             selectedSessionDir={selectedSession?.directory}
             fileEditorPath={fileEditorPath}
-            quickChatKeys={quickChatKeys}
-            modelOptions={modelOptions}
-            providerList={providerList}
             vs={vs}
             onSetDesktopLayout={onSetDesktopLayout}
             setActivePanel={setActivePanel}
@@ -494,7 +497,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
             onSettleSession={onSettleSession}
             onRefreshSessions={onRefreshSessions}
             onSetCommands={onSetCommands}
-            onRecordPrompt={onRecordPrompt}
             onQueueAction={onQueueAction}
             onShellExecute={onShellExecute}
             onChangeAgent={onChangeAgent}
@@ -504,7 +506,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
             onOpenConnect={onOpenConnect}
             onOpenBrowser={openBrowserAsTab}
             onOpenSessionDir={onOpenSessionDir}
-            onNavigateSettings={onNavigateSettings}
             onToggleInspectTool={onToggleInspectTool}
             onBrowserVisualPick={onBrowserVisualPick}
             onSwitchTab={onSwitchTab}
@@ -518,8 +519,8 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
             <button
               type="button"
               className="btn-icon compact"
-              title={t("quickchat.title")}
-              aria-label={t("quickchat.title")}
+              title={t("settings.sidebar")}
+              aria-label={t("settings.sidebar")}
               onClick={() => setRightSidebarCollapsed(false)}
             >
               <BrainIcon size={14} />
@@ -528,7 +529,7 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         ) : (
           <>
             <div className="desktop-sidebar-header">
-              <span className="desktop-sidebar-title">{t("quickchat.title")}</span>
+              <span className="desktop-sidebar-title">{t("settings.sidebar")}</span>
               <span className="desktop-sidebar-actions">
                 <button
                   type="button"
@@ -542,19 +543,6 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
               </span>
             </div>
             <div className="desktop-sidebar-body">
-              <React.Suspense fallback={<div className="panel-loading" style={{ padding: 12, color: "var(--muted)" }}>Cargando QuickChat…</div>}>
-                <QuickChatPanel
-                  cerebrasKey={quickChatKeys.cerebras}
-                  groqKey={quickChatKeys.groq}
-                  goKey={quickChatKeys.go}
-                  customKey={quickChatKeys.custom}
-                  customUrl={quickChatKeys.customUrl}
-                  config={config}
-                  modelOptions={modelOptions}
-                  providers={providerList}
-                  onOpenSettings={onNavigateSettings}
-                />
-              </React.Suspense>
               <PluginSlot id="sidebar.right" />
             </div>
             <div

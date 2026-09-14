@@ -16,6 +16,12 @@
 .\build-desktop.ps1
 ```
 
+### Actualizar la app (web + APK + link corto)
+```powershell
+.\scripts\update-app.ps1 -Notes "que cambio en esta version"
+```
+Sube la version (patch + versionCode), buildea la web, deploya a los `web-dist`, compila la APK y publica en `http://100.77.237.102:4848/openher.apk` + `openher-version.json`. La APK instalada detecta la version nueva sola (al abrir o volver a primer plano) y ofrece Actualizar; Android solo pide confirmar la instalacion.
+
 ### Frontend (`web/`)
 ```powershell
 pnpm dev; pnpm test; pnpm run test:i18n ; pnpm run test:ui; pnpm run test:settings; pnpm run test:model; pnpm run build ; python scripts/copy-dist.py

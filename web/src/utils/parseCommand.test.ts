@@ -114,6 +114,13 @@ describe("parseCommand", () => {
     expect(parseCommand("/EXPORT")).toEqual({ type: "export" })
   })
 
+  it("parses /new (y alias en español) al selector de carpeta", () => {
+    expect(parseCommand("/new")).toEqual({ type: "newSession" })
+    expect(parseCommand("/NEW")).toEqual({ type: "newSession" })
+    expect(parseCommand("/nueva")).toEqual({ type: "newSession" })
+    expect(parseCommand("/nuevo")).toEqual({ type: "newSession" })
+  })
+
   it("parses /history and /timeline to panel types", () => {
     expect(parseCommand("/history")).toEqual({ type: "history" })
     expect(parseCommand("/timeline")).toEqual({ type: "timeline" })

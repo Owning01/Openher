@@ -7,25 +7,25 @@ afterEach(() => {
   localStorage.clear()
 })
 
-describe("useFeatureFlags virtualChat", () => {
-  it("default ON (chat virtualizado)", () => {
+describe("useFeatureFlags", () => {
+  it("aplica los defaults", () => {
     const { result } = renderHook(() => useFeatureFlags())
-    expect(result.current.flags.virtualChat).toBe(true)
+    expect(result.current.flags.contextMenu).toBe(true)
   })
 
   it("toggle enciende y apaga", () => {
     const { result } = renderHook(() => useFeatureFlags())
-    act(() => result.current.toggleFlag("virtualChat"))
-    expect(result.current.flags.virtualChat).toBe(false)
-    act(() => result.current.toggleFlag("virtualChat"))
-    expect(result.current.flags.virtualChat).toBe(true)
+    act(() => result.current.toggleFlag("contextMenu"))
+    expect(result.current.flags.contextMenu).toBe(false)
+    act(() => result.current.toggleFlag("contextMenu"))
+    expect(result.current.flags.contextMenu).toBe(true)
   })
 
   it("persiste en localStorage", () => {
     const { result, unmount } = renderHook(() => useFeatureFlags())
-    act(() => result.current.setFlag("virtualChat", true))
+    act(() => result.current.setFlag("contextMenu", false))
     unmount()
     const { result: r2 } = renderHook(() => useFeatureFlags())
-    expect(r2.current.flags.virtualChat).toBe(true)
+    expect(r2.current.flags.contextMenu).toBe(false)
   })
 })

@@ -20,7 +20,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
-$AppId = "com.gbro.opencode"
+$AppId = "com.gbro.openher"
 
 function Find-Exe($names, $fallbacks) {
   foreach ($n in $names) {

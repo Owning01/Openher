@@ -1,18 +1,19 @@
-import { useEffect, useMemo, useState, useCallback, useRef, useSyncExternalStore } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { api } from "../api"
 import { useT } from "../i18n-context"
 import { useConfig } from "../hooks/useConfig"
 import { useTheme } from "../hooks/useTheme"
 import { useSessions } from "../hooks/useSessions"
 import { modelKey } from "../utils/model-utils"
 import { useAI } from "../hooks/useAI"
-import { useMessages } from "../hooks/useMessages"
+import { useMessages, claimSharedOutbox, releaseSharedOutbox, isSharedOutboxHeld } from "../hooks/useMessages"
 import { useSessionSidecar } from "../hooks/useSessionSidecar"
 import { useFolderPicker } from "../hooks/useFolderPicker"
-import { useStats } from "../hooks/useStats"
 import { useSSE } from "../hooks/useSSE"
 import { useOfflineCache } from "../hooks/useOfflineCache"
 import { loadShortcutsConfig, type ShortcutItem } from "../shortcuts"
-import type { ViewType, HelpPage as HelpPageType, ServerProfile, FileDiff } from "../types"
+import { dirKey } from "../utils/sessionDirs"
+import type { ViewType, HelpPage as HelpPageType, ServerProfile, FileDiff, SessionView } from "../types"
 import type { LanguageCode } from "../i18n"
 import { isSessionActive } from "../utils"
 import { STORAGE_KEYS } from "../constants"
@@ -31,11 +32,12 @@ import { useShellViewport } from "../hooks/useShellViewport"
 import { useDesktopShortcuts } from "../hooks/useDesktopShortcuts"
 import { useQuestions } from "../hooks/useQuestions"
 import { useSSEHandler } from "../hooks/useSSEHandler"
+import { useResumeResync } from "../hooks/useResumeResync"
 import { useServers } from "../hooks/useServers"
 import { loadDesktopConfig } from "../desktop"
-import { loadGoAccounts } from "../goUsage"
 import { useVisualSelection } from "../hooks/useVisualSelection"
-import { pluginHost, tabRegistry } from "../plugins"
+import { invalidateShellBase } from "../shell"
+import { pluginHost } from "../plugins"
 import { ensureCanvasRegistered } from "../features/canvas/register"
 import { useVirtualTabs } from "../hooks/useVirtualTabs"
 import { useSidebarPrefs } from "../hooks/useSidebarPrefs"
@@ -86,53 +88,10 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
   const { narrow: shellNarrow, rightOverlay } = useShellViewport()
   useUIZoom()
 
-  const pluginTabs = useSyncExternalStore(
-    tabRegistry.subscribe,
-    tabRegistry.getSnapshot,
-    tabRegistry.getSnapshot
-  )
   const handleToggleLightMode = useCallback(() => {
     const isLight = document.documentElement.getAttribute("data-theme") === "light"
     setTheme(isLight ? "dark" : "light")
   }, [setTheme])
-
-  const [quickChatKey, setQuickChatKey] = useState(
-    () => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS) || ""
-  )
-  const [quickChatGroqKey, setQuickChatGroqKey] = useState(
-    () => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ) || ""
-  )
-  const [quickChatGoKey, setQuickChatGoKey] = useState("")
-  const [quickChatCustomKey, setQuickChatCustomKey] = useState(
-    () => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM) || ""
-  )
-  const [quickChatCustomUrl, setQuickChatCustomUrl] = useState(
-    () => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL) || "https://api.openai.com/v1"
-  )
-
-  useEffect(() => {
-    loadGoAccounts()
-      .then((keys) => setQuickChatGoKey(keys[0] ?? ""))
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    const reloadKeys = () => {
-      try {
-        setQuickChatKey(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CEREBRAS) || "")
-        setQuickChatGroqKey(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_GROQ) || "")
-        setQuickChatCustomKey(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_KEY_CUSTOM) || "")
-        setQuickChatCustomUrl(localStorage.getItem(STORAGE_KEYS.QUICKCHAT_CUSTOM_URL) || "https://api.openai.com/v1")
-        loadGoAccounts().then((keys) => setQuickChatGoKey(keys[0] ?? "")).catch(() => {})
-      } catch {}
-    }
-    window.addEventListener("quickchat:key-saved", reloadKeys as EventListener)
-    window.addEventListener("storage", reloadKeys)
-    return () => {
-      window.removeEventListener("quickchat:key-saved", reloadKeys as EventListener)
-      window.removeEventListener("storage", reloadKeys)
-    }
-  }, [])
 
   const { prefs: sidebarPrefs } = useSidebarPrefs()
 
@@ -164,9 +123,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     applyPart,
     compacting,
     setCompacting,
-    hasMoreMessages,
-    isLoadingMore,
-    loadMoreMessages,
+    getAwaitingBaselineID,
   } = useMessages(config)
 
   const composerRef = useRef(composer)
@@ -328,7 +285,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     }
   }, [variantGroups, blockedModels.blocked])
 
-  const { stats, recordPrompt, recordSessionCreated, resetStats } = useStats()
   const {
     settings: chatSettings,
     setSetting: setChatSetting,
@@ -468,7 +424,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     cacheMessages(selectedSession.id, filtered).catch(() => {})
   }, [messages, selectedSession?.id, flags.offlineCache, cacheMessages])
 
-  // auto_opencode2 now handled via terminal tab pty injection (see SingleTerminal); no bottom dock
+  // auto_opencode2 lo maneja el server headless del escritorio; sin dock inferior
 
   const {
     switchTab,
@@ -508,7 +464,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handleDeleteMany,
     handleArchiveMany,
     openSessionInDir,
-    openStatsAsTab,
     openBrowserAsTab,
     handleOpenBrowser,
   } = useHostActions({
@@ -522,21 +477,24 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setSelectedID,
     onClearSelected: clearSelectedChat,
     refreshSessions,
-    recordSessionCreated,
     navigate,
     setRuntimeError,
     activePanel,
     desktopLayout,
     setDesktopLayout,
-    tabStacks: tabStacks ?? [],
     setTabStacks,
-    switchTab,
     setActivePanel,
     isDesktop,
   })
 
   const openPluginAsTab = useCallback(
     (key: string, targetPanel?: number) => {
+      // Herramientas integradas que no son tabs de plugin: se abren por su vía.
+      if (key === "openher:studio") {
+        if (view === "studio") navigate(desktopLayout.sessions.some(Boolean) ? "detail" : "sessions")
+        else navigate("studio")
+        return
+      }
       navigate("detail")
       const idx = targetPanel ?? Math.min(activePanel, Math.max(0, desktopLayout.sessions.length - 1))
       const tabId = `plugin:${key}`
@@ -565,12 +523,16 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     [
       activePanel,
       desktopLayout.sessions.length,
+      desktopLayout.sessions,
       tabStacks,
       switchTab,
       setActivePanel,
       setTabStacks,
       setDesktopLayout,
       navigate,
+      view,
+      isDesktop,
+      setRightSidebarCollapsed,
     ]
   )
 
@@ -583,8 +545,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
   )
 
   const handleOpenNewSession = useCallback(() => {
-    void openNewSessionPicker()
-  }, [openNewSessionPicker])
+    // Abre en el proyecto actual (si hay sesión); si no, cursor guardado/server.
+    void openNewSessionPicker(selectedSession?.directory)
+  }, [openNewSessionPicker, selectedSession?.directory])
 
   const handleCreateSession = useCallback(
     async (dir?: string) => {
@@ -592,11 +555,26 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
       const s = await createSession(dir)
       setShowNewSessionPicker(false)
       if (s) {
-        recordSessionCreated()
         navigate("detail")
       }
     },
-    [createSession, recordSessionCreated, navigate, setShowNewSessionPicker, persistDirectory]
+    [createSession, navigate, setShowNewSessionPicker, persistDirectory]
+  )
+
+  // El Estudio necesita una sesión de agente atada al directorio del proyecto,
+  // sin navegar fuera de la vista (a diferencia de handleCreateSession).
+  const ensureStudioSession = useCallback(
+    async (directory: string): Promise<SessionView | null> => {
+      const target = dirKey(directory)
+      try {
+        const existing = sessions.find((s) => dirKey(s.directory ?? "") === target)
+        if (existing) return existing
+        return await createSession(directory)
+      } catch {
+        return null
+      }
+    },
+    [sessions, createSession]
   )
 
   const fb = useFileBrowser(config, selectedSession?.directory)
@@ -613,6 +591,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     connectProvider,
     disconnectProvider,
     addCustomProvider,
+    removeCredential,
+    activateCredential,
   } = useProviderManager(modelOptions, config)
 
   const {
@@ -632,6 +612,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
       localStorage.setItem("openher.activeServer", profile.id)
       setDraftConfig(profile.config)
       saveConfig(t)
+      invalidateShellBase()
     },
     [setDraftConfig, saveConfig, t]
   )
@@ -647,6 +628,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handlePermissionApprove,
     handlePermissionReject,
     handleDismissQuestion,
+    clearDismissedQuestions,
+    dismissSessionQuestions,
     handleDismissPermission,
   } = useQuestions({ config, directory: selectedSession?.directory, fallbackSessionID: selectedSession?.id, enabled: true, notify, t })
 
@@ -683,6 +666,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setCompacting,
     setRuntimeError,
     awaitingRef: () => awaitingAssistantReply,
+    awaitingBaselineIDRef: getAwaitingBaselineID,
     onSettled: (sid, dir) => {
       setSessions((prev) => prev.map((s) => (s.id === sid ? { ...s, status: "idle" as const } : s)))
       loadSelected(sid, dir)
@@ -702,7 +686,28 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     sseHandler(event)
   }, [sseHandler])
 
-  const { streamState } = useSSE(config, sseHandlerGuarded, selectedSession?.directory, selectedSession?.id)
+  const { streamState, reconnect } = useSSE(config, sseHandlerGuarded, selectedSession?.directory, selectedSession?.id)
+
+  // Al volver de segundo plano (Android suspende el WebView), el stream SSE
+  // puede quedar medio-abierto: sin error, sin eventos, y el chat se ve
+  // "parado" aunque el poll traiga mensajes. Reconectar y reconciliar contra
+  // el server (status real de la sesión) al volver a primer plano.
+  const resumeSessionRef = useRef(selectedSession)
+  resumeSessionRef.current = selectedSession
+  useResumeResync(() => {
+    reconnect()
+    refreshSessions(true).catch(() => undefined)
+    const s = resumeSessionRef.current
+    if (!s) return
+    loadSelected(s.id, s.directory).catch(() => undefined)
+    api
+      .listStatuses(config, s.directory)
+      .then((st) => {
+        const real = st?.[s.id]
+        if (real && (real.type === "busy" || real.type === "retry")) setAwaitingAssistantReply(true)
+      })
+      .catch(() => undefined)
+  })
 
   const { memInfo } = useAppLifecycle({
     config,
@@ -835,7 +840,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setComposer,
     setRuntimeError,
     queueAction,
-    recordPrompt,
     stopGenerationRef,
     localRevertID,
     setLocalRevertID,
@@ -850,6 +854,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setHelpPage,
     setShowThemePicker,
     setShowConnectSheet,
+    onNewSession: handleOpenNewSession,
     renderedMessages,
     awaitingAssistantReply,
     setAwaitingAssistantReply,
@@ -863,20 +868,36 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     redoMessage,
     compactSession,
     setCompacting,
+    dismissSessionQuestions,
   })
 
   // Auto-flush de la cola visible (móvil/detalle): al quedar libre, sale el
-  // pendiente más antiguo de la sesión seleccionada.
+  // pendiente más antiguo de la sesión seleccionada. Claim compartido: la
+  // cola es por sesión entre todas las instancias (un panel desktop puede
+  // estar mostrando la misma sesión).
+  //
+  // Reglas anti-bucle:
+  // - no correr con la sesión ocupada (si no `handleSend` RE-ENCOLA en vez de
+  //   enviar y cada render duplica el pendiente — el bucle infinito reportado);
+  // - `force=true`: el item ya está en la cola, no debe volver a encolarse;
+  // - cooldown de 4s para fallos repetidos (no reintentar en cada render);
+  // - hold tras Stop explícito (ver `holdSharedOutbox`).
   const outboxFlushingRef = useRef(false)
+  const outboxLastTryRef = useRef(0)
   useEffect(() => {
     if (!selectedSession || isSending || awaitingAssistantReply) return
+    if (isSessionActive(selectedSession)) return
+    if (isSharedOutboxHeld(selectedSession.id)) return
     if (outboxFlushingRef.current) return
+    if (Date.now() - outboxLastTryRef.current < 4_000) return
     const next = outbox.find((o) => o.sessionID === selectedSession.id)
-    if (!next) return
+    if (!next || !claimSharedOutbox(next.id)) return
+    outboxLastTryRef.current = Date.now()
     outboxFlushingRef.current = true
-    void (handleSend(next.images, undefined, next.text) as Promise<unknown>).then((res) => {
+    void (handleSend(next.images, undefined, next.text, true) as Promise<unknown>).then((res) => {
       if (res !== false) removeOutbox(next.id)
-    }).catch(() => {}).finally(() => {
+      else releaseSharedOutbox(next.id)
+    }).catch(() => releaseSharedOutbox(next.id)).finally(() => {
       outboxFlushingRef.current = false
     })
   })
@@ -1040,9 +1061,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     loadingSessionID,
     selectedID,
     messageScrollSignature,
-    hasMoreMessages,
-    isLoadingMore,
-    loadMoreMessages,
     view,
     dataMode,
     renamingSessionID,
@@ -1101,6 +1119,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handlePermissionApprove,
     handlePermissionReject,
     handleDismissQuestion,
+    handleReopenQuestions: clearDismissedQuestions,
     handleDismissPermission,
     handleRevertToMessage,
     handleEditMessage,
@@ -1108,6 +1127,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handleRedo,
     handleCompact,
     handleCreateSession,
+    handleOpenNewSession,
     fb,
     setShowMCPBrowser,
     setShowOpenCodeHub,
@@ -1141,7 +1161,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     sessions[0]?.directory ??
     undefined
 
-  const { handleOpenKanban, handleOpenLearning } = useVirtualTabs({
+  const { handleOpenKanban, handleOpenLearning, handleOpenDebate } = useVirtualTabs({
     isDesktop,
     desktopLayout,
     activePanel,
@@ -1215,8 +1235,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     allPrimaryAgents,
     disabledAgents,
     toggleAgentEnabled,
-    stats,
-    resetStats,
     activeModelOption,
     blockedModels,
     setShowThemePicker,
@@ -1230,6 +1248,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     connectProvider,
     disconnectProvider,
     addCustomProvider,
+    removeCredential,
+    activateCredential,
     loadModels,
     serverProfiles,
     addProfile,
@@ -1260,11 +1280,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setCommands,
     commandFilter,
     setCommandFilter,
-    quickChatKey,
-    quickChatGroqKey,
-    quickChatGoKey,
-    quickChatCustomKey,
-    quickChatCustomUrl,
     shellRef,
     sidebarPrefs,
     shellGridStyle,
@@ -1274,15 +1289,14 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     setSidebarCollapsed,
     tabStacks,
     desktopLayout,
-    openStatsAsTab,
     openBrowserAsTab,
     handleOpenBrowser,
     handleOpenKanban,
+    handleOpenDebate,
     rightSidebarCollapsed,
     setRightSidebarCollapsed,
     setShowPluginsModal,
     showPluginsModal,
-    pluginTabs,
     openPluginAsTab,
     openExternalProject,
     memInfo,
@@ -1322,7 +1336,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     handleDockSession,
     settleSession,
     refreshSessions,
-    recordPrompt,
     queueAction,
     shellExecute,
     changeAgent,
@@ -1366,6 +1379,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     deleteSession: handleDeleteSession,
     dismissRecent,
     handleCreateSession,
+    ensureStudioSession,
     handleOpenExplorer,
     handleSessionDragStart,
     handleDeleteMany,

@@ -1,4 +1,4 @@
-import type { MessageEnvelope, RenderedMessage, DataMode, FileDiff, TurnChanges } from "../types"
+import type { MessageEnvelope, RenderedMessage, RenderedSegment, DataMode, FileDiff, TurnChanges } from "../types"
 import { isImagePart } from "../utils.ts"
 import { toolPartFileDiff } from "./toolFileDiff"
 
@@ -96,6 +96,9 @@ export function computeRenderedMessages(
     const thinkingParts: Array<{ id: string; text: string; time?: { start?: number; end?: number } }> = []
     const toolParts: Array<{ id: string; type: string; sessionID?: string; text?: string; callID?: string; tool?: string; state?: MessageEnvelope["parts"][number]["state"] }> = []
     const textBlocks: string[] = []
+    // Orden real de los parts para render intercalado (texto→tool→texto).
+    // Los segmentos comparten las mismas referencias que toolParts/textBlocks.
+    const segments: RenderedSegment[] = []
     for (const part of message.parts) {
       if (part.type === "tool" || toolPartTypes.has(part.type)) {
         const isTaskCard = part.tool === "task" || part.tool === "subagent" ||
@@ -110,7 +113,7 @@ export function computeRenderedMessages(
           toolText = toolText.slice(0, PRESERVE_TOOL_HEAD_CHARS) + `\n... [text pruned for RAM: ${toolText.length} chars]`
         }
 
-        toolParts.push({
+        const tool = {
           id: part.id,
           type: part.type,
           sessionID: part.sessionID ?? message.info.sessionID,
@@ -118,13 +121,16 @@ export function computeRenderedMessages(
           callID: part.callID,
           tool: part.tool,
           state: pruneToolState(part.state),
-        })
+        }
+        toolParts.push(tool)
+        segments.push({ kind: "tool", id: part.id, tool })
         continue
       }
       const t = part.text
       if (t) {
         if (part.type === "text" || part.type === "compaction") {
           textBlocks.push(t)
+          segments.push({ kind: "text", id: part.id, text: t })
           if (part.type === "compaction") hasCompaction = true
         } else if (part.type === "reasoning" || part.type === "thinking") {
           thinkingParts.push({ id: part.id, text: t, time: part.time })
@@ -136,7 +142,7 @@ export function computeRenderedMessages(
     if (text.includes("<pty_exited>") || text.includes("Use pty_read to check")) continue
     const hasImages = message.parts.some((p) => isImagePart(p as any))
     if (text || thinkingParts.length > 0 || toolParts.length > 0 || hasImages || message.info.error) {
-      const rendered: RenderedMessage = { ...message, text, hasCompaction, thinkingParts, toolParts, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffs, dataMode, turnMode, isToolCatalog: message.info.role === "system" && text.startsWith(TOOL_CATALOG_MARKER) }
+      const rendered: RenderedMessage = { ...message, text, hasCompaction, thinkingParts, toolParts, segments, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffs, dataMode, turnMode, isToolCatalog: message.info.role === "system" && text.startsWith(TOOL_CATALOG_MARKER) }
       out.push(rendered)
       nextCache.set(message.info.id, { src: message, rendered, diffs, turnMode, dataMode })
     }

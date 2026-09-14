@@ -83,6 +83,44 @@
   position: relative;
 }
 
+/* Chip de subagentes en background (header del chat): visible con scroll o
+   cambio de chat, para no perder de vista lo que sigue corriendo aparte. */
+.header-bg-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.header-bg-pill:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.header-bg-pill svg { flex-shrink: 0; }
+.header-bg-pill.action {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+.header-bg-pill.action:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.header-bg-pill:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .detail-header h2 {
   font-size: 0.88rem;
   font-weight: 600;
@@ -531,23 +569,6 @@
   background-image: var(--chat-bg-image, none);
 }
 
-/* Chat virtualizado (Virtuoso, estilo Cursor): el scroller propio rellena el
-   root flexible. Sin anclaje nativo — el follow/output y el ancla por mensaje
-   son manuales; el nativo pelearía y produciría el salto doble al restaurar. */
-.messages-virtuoso {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--chat-bg-color, var(--surface));
-  background-image: var(--chat-bg-image, none);
-}
-
-:root[data-theme="dark"] .messages-virtuoso {
-  background-color: var(--chat-bg-color, #000);
-  background-image: var(--chat-bg-image, none);
-}
-
 /* Anclaje nativo del navegador: compensa gratis el crecimiento ENCIMA del
    viewport (imágenes tardías, highlight, fuentes, merge caché→fetch) sin el
    que la lectura a mitad se desplaza sola. Solo el scroller virtualizado lo
@@ -555,14 +576,6 @@
    follow/output + ancla por mensaje son manuales. */
 .messages {
   overflow-anchor: auto;
-}
-[data-virtuoso-scroller] {
-  overflow-anchor: none;
-}
-
-[data-virtuoso-scroller] {
-  overscroll-behavior-y: contain;
-  flex: 1;
 }
 
 .scroll-to-bottom {
@@ -1315,17 +1328,17 @@
 }
 
 .message-content strong {
-  color: var(--md-strong);
+  color: var(--md-strong, var(--text));
   font-weight: 700;
 }
 
 .message-content em {
-  color: var(--md-emph);
+  color: var(--md-emph, var(--warning));
   font-style: italic;
 }
 
 .message-content a {
-  color: var(--md-link);
+  color: var(--md-link, var(--primary));
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -1340,7 +1353,7 @@
 .message-content h4,
 .message-content h5,
 .message-content h6 {
-  color: var(--md-heading);
+  color: var(--md-heading, var(--text));
   font-weight: 700;
   line-height: 1.3;
   margin: var(--space-3) 0 var(--space-1);
@@ -1352,8 +1365,8 @@
 .message-content h4, .message-content h5, .message-content h6 { font-size: 0.88rem; }
 
 .message-content blockquote {
-  color: var(--md-quote);
-  border-left: 2px solid var(--md-quote);
+  color: var(--md-quote, var(--muted));
+  border-left: 2px solid var(--md-quote, var(--muted));
   padding-left: var(--space-3);
   margin: var(--space-2) 0;
   opacity: 0.85;
@@ -1361,7 +1374,7 @@
 
 .message-content hr {
   border: none;
-  border-top: 1px solid var(--md-hr);
+  border-top: 1px solid var(--md-hr, var(--border));
   margin: var(--space-3) 0;
   opacity: 0.4;
 }
@@ -1377,11 +1390,11 @@
 }
 
 .message-content ul li::marker {
-  color: var(--md-list-item);
+  color: var(--md-list-item, var(--primary));
 }
 
 .message-content ol li::marker {
-  color: var(--md-list-num);
+  color: var(--md-list-num, var(--info));
 }
 
 .message-content img {
@@ -1630,6 +1643,14 @@
   max-width: 100%;
   min-width: 0;
   align-items: flex-start;
+}
+
+.message-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
 }
 
 /* ===== Tool Parts / Tool Calls (Antigravity ADE Minimal Rows) ===== */
@@ -2282,6 +2303,29 @@
   flex-shrink: 0;
 }
 
+/* Chip "background" del subagente que corre aparte (metadata.background). */
+.subagent-task-bg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 999px !important;
+  background: var(--surface-subtle) !important;
+  color: var(--muted-strong) !important;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+/* Mientras la sesión hija sigue activa, el chip marca el pulso. */
+.subagent-task-card.is-background.working .subagent-task-bg {
+  border-color: var(--accent, var(--primary)) !important;
+  color: var(--accent, var(--primary)) !important;
+}
+.subagent-task-card.is-background .subagent-task-bg svg { flex-shrink: 0; }
+
 .subagent-task-title {
   font-size: 0.875rem;
   font-weight: 600;
@@ -2606,7 +2650,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   background: transparent;
   pointer-events: none;
 }
@@ -2626,6 +2670,7 @@
   width: min(100%, 480px);
   max-height: 70dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -3379,6 +3424,35 @@
   gap: 0;
   animation: ctx-menu-in 0.12s ease-out;
 }
+/* Bloque informativo del menú (ej: ruta completa del chip de archivo). Visible
+   también en táctil, donde no hay hover para el title nativo. */
+.context-menu-info {
+  padding: 6px 8px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.menu-info-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.menu-info-path code {
+  display: block;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  max-height: 3.6em;
+  overflow-y: auto;
+  user-select: text;
+  cursor: text;
+}
 .context-menu-item {
   display: flex;
   align-items: center;
@@ -3661,7 +3735,7 @@ mark {
 /* Flotante: ventana arrastrable desde el header (igual que TerminalView). */
 .chat-terminal-dock.floating {
   position: fixed;
-  z-index: 1000;
+  z-index: var(--z-lightbox);
   width: min(680px, 92vw);
   margin: 0;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
@@ -3968,7 +4042,7 @@ mark {
   padding: 6px 14px;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--muted);
   background: var(--surface-raised, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--border);
   border-radius: var(--radius-full, 9999px);
@@ -3998,7 +4072,7 @@ mark {
   padding: 4px 10px;
   font-size: 0.775rem;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--muted);
   background: transparent;
   border: 1px dashed var(--border);
   border-radius: var(--radius-md, 6px);

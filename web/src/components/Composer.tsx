@@ -226,11 +226,11 @@ export const Composer = memo(function Composer({
   // En móvil (táctil) Enter = nueva línea; en desktop Enter envía.
   // En wry desktop (WebView2) forzamos desktop aunque el device reporte pointer:coarse (laptop táctil)
   const [isMobileInput, setIsMobileInput] = useState(
-    () => typeof window !== "undefined" && !(window as any).__OPENCODE_DESKTOP__ && window.matchMedia("(pointer: coarse)").matches,
+    () => typeof window !== "undefined" && !(window as any).__OPENHER_DESKTOP__ && window.matchMedia("(pointer: coarse)").matches,
   )
   useEffect(() => {
     const mql = window.matchMedia("(pointer: coarse)")
-    const onChange = () => setIsMobileInput(!(window as any).__OPENCODE_DESKTOP__ && mql.matches)
+    const onChange = () => setIsMobileInput(!(window as any).__OPENHER_DESKTOP__ && mql.matches)
     mql.addEventListener?.("change", onChange)
     return () => mql.removeEventListener?.("change", onChange)
   }, [])

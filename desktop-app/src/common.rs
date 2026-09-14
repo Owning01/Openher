@@ -8,14 +8,36 @@ use std::time::Duration;
 /// Retorna true si el status está en `ok_statuses`.
 pub fn probe_http(port: u16, path: &str, timeout: Duration, ok_statuses: &[u16]) -> bool {
     let url = format!("http://127.0.0.1:{port}{path}");
-    ureq::get(&url)
-        .timeout(timeout)
-        .call()
-        .map(|r| ok_statuses.contains(&r.status()))
-        .unwrap_or(false)
+    // ureq entrega 4xx/5xx como `Err(Error::Status)`; hay que mirar el código
+    // ahí también o los probes que aceptan 401 (opencode2 con Basic auth)
+    // siempre darían false.
+    match ureq::get(&url).timeout(timeout).call() {
+        Ok(r) => ok_statuses.contains(&r.status()),
+        Err(ureq::Error::Status(code, _)) => ok_statuses.contains(&code),
+        Err(_) => false,
+    }
 }
 
-/// Spawn detached: maneja `.bat` vía `cmd /c` vs binario con args. Siempre oculto (sin consola).
+/// Separa el programa (respetando un programa entre comillas) de sus argumentos.
+fn split_program_args(cmd: &str) -> (String, Vec<String>) {
+    let cmd = cmd.trim();
+    if let Some(rest) = cmd.strip_prefix('"') {
+        if let Some(end) = rest.find('"') {
+            let program = rest[..end].to_string();
+            let args = rest[end + 1..].split_whitespace().map(str::to_string).collect();
+            return (program, args);
+        }
+    }
+    let mut it = cmd.split_whitespace();
+    let program = it.next().unwrap_or("").to_string();
+    let args = it.map(str::to_string).collect();
+    (program, args)
+}
+
+/// Spawn detached: shims (`.bat`/`.cmd`/`.ps1` o sin extensión) van por
+/// `cmd /c`; los `.exe` se lanzan directo. Siempre oculto y desprendido
+/// (CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP), así el
+/// proceso sobrevive al cierre de OpenHer y no abre su propia consola.
 /// `cwd` opcional para `current_dir`.
 pub fn spawn_detached(cmd: &str, cwd: Option<&Path>) -> Result<Child, String> {
     use std::os::windows::process::CommandExt;
@@ -24,31 +46,34 @@ pub fn spawn_detached(cmd: &str, cwd: Option<&Path>) -> Result<Child, String> {
     if trimmed.is_empty() {
         return Err("comando vacío".into());
     }
-    if trimmed.to_lowercase().ends_with(".bat") {
+    let (program, args) = split_program_args(trimmed);
+    if program.is_empty() {
+        return Err("comando vacío".into());
+    }
+    let ext = Path::new(&program)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase());
+    // Sin extensión (shim POSIX) o shim de shell: `cmd /c` lo resuelve igual
+    // que la consola, pero con las flags ocultas que ya aplicamos al hijo.
+    let via_cmd = ext.is_none() || matches!(ext.as_deref(), Some("bat" | "cmd" | "ps1"));
+    let mut c = if via_cmd {
         let mut c = std::process::Command::new("cmd");
         c.args(["/c", trimmed]);
-        c.creation_flags(HIDE);
-        c.stdin(std::process::Stdio::null());
-        c.stdout(std::process::Stdio::null());
-        c.stderr(std::process::Stdio::null());
-        if let Some(dir) = cwd { c.current_dir(dir); }
-        c.spawn().map_err(|e| e.to_string())
+        c
     } else {
-        let parts: Vec<&str> = trimmed.split_whitespace().collect();
-        if parts.is_empty() {
-            return Err("comando vacío".into());
-        }
-        let mut c = std::process::Command::new(parts[0]);
-        c.args(&parts[1..]);
-        if let Some(dir) = cwd {
-            c.current_dir(dir);
-        }
-        c.creation_flags(HIDE);
-        c.stdin(std::process::Stdio::null());
-        c.stdout(std::process::Stdio::null());
-        c.stderr(std::process::Stdio::null());
-        c.spawn().map_err(|e| e.to_string())
+        let mut c = std::process::Command::new(&program);
+        c.args(&args);
+        c
+    };
+    if let Some(dir) = cwd {
+        c.current_dir(dir);
     }
+    c.creation_flags(HIDE);
+    c.stdin(std::process::Stdio::null());
+    c.stdout(std::process::Stdio::null());
+    c.stderr(std::process::Stdio::null());
+    c.spawn().map_err(|e| e.to_string())
 }
 
 /// Spawn visible: abre una consola (CREATE_NEW_CONSOLE) para procesos interactivos como `opencode2`.

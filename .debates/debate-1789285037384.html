@@ -1,0 +1,109 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Debate — ¿Conviene que el debate-room use una sola sesión (shared) o sesiones privadas (isolated) para 3 agentes en OpenCode?</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#0b0d12;color:#e7e9ee;font:15px/1.5 ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
+.wrap{max-width:820px;margin:0 auto;padding:28px 18px 60px}
+h1{font-size:20px;margin:0 0 6px}
+.sub{color:#8b93a7;font-size:13px;margin-bottom:22px;display:flex;gap:10px;flex-wrap:wrap}
+.pill{border:1px solid #232838;background:#12151d;border-radius:999px;padding:2px 10px}
+.msg{display:flex;gap:12px;margin:16px 0}
+.avatar{width:40px;height:40px;border-radius:50%;flex:0 0 40px;display:grid;place-items:center;font-weight:700;color:#0b0d12;font-size:13px}
+.col{flex:1;min-width:0}
+.meta{display:flex;align-items:center;gap:8px;font-size:13px;color:#aeb6c8;margin-bottom:4px}
+.badge{font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:999px;border:1px solid #2a3040;color:#8b93a7}
+.badge.ok{color:#59d4a0;border-color:#1f5a44;background:#0e2a20}
+.badge.no{color:#f2777a;border-color:#5a2325;background:#2a1214}
+.reply{font-size:12px;color:#8b93a7;margin:2px 0 4px}
+.bubble{border:1px solid #232838;border-left:3px solid #2a3040;background:#12151d;border-radius:12px;padding:12px 14px}
+.text{white-space:normal}
+.issues{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.issue{font-size:11.5px;color:#f2b8b8;background:#2a1416;border:1px solid #5a2325;border-radius:999px;padding:2px 9px}
+h2{font-size:15px;margin:34px 0 10px;color:#cdd3e0}
+.acta{border:1px solid #2a3040;border-radius:12px;padding:16px 18px;background:#101319;white-space:pre-wrap}
+</style></head><body><div class="wrap">
+<h1>Debate — ¿Conviene que el debate-room use una sola sesión (shared) o sesiones privadas (isolated) para 3 agentes en OpenCode?</h1>
+<div class="sub">
+  <span class="pill">caché: shared</span>
+  <span class="pill">sin consenso (estancamiento/tope)</span>
+  <span class="pill">3 turnos</span>
+</div>
+<div class="msg">
+  <div class="avatar" style="background:#6ea8fe">AR</div>
+  <div class="col">
+    <div class="meta"><b>architect</b><span class="badge na">—</span></div>
+    
+    <div class="bubble" style="border-color:#6ea8fe33">
+      <div class="text">- **Contrato antes que topología**: el SSOT debe ser un `DebateLog` append-only de envelopes tipados `</div>
+      
+    </div>
+  </div>
+</div>
+<div class="msg">
+  <div class="avatar" style="background:#59d4a0">PR</div>
+  <div class="col">
+    <div class="meta"><b>pragmatist</b><span class="badge no">DISIENTE</span></div>
+    <div class="reply">↳ en respuesta a <b>architect</b></div>
+    <div class="bubble" style="border-color:#59d4a033">
+      <div class="text">- **Lo más fuerte del architect**: &quot;el SSOT debe ser un `DebateLog` append-only de envelopes tipados y las sesiones son transporte reemplazable&quot;. Lo ataco de frente: ya hay dos fuentes — el transcript de la sesión (`shared`) y el array `channel` (`isolated`). Meter un **tercer** log tipado en un plugin de 496 líneas, un solo archivo y cero imports estáticos es exactamente **un segundo SSOT**, el pecado que el propio architect dice evitar en isolated. YAGNI: no hay consumidor para esa capa; `parseTurn` (L95-118) ya devuelve la forma.<br>- **Concedo**: `shared` como default es correcto y los bugs de isolated son reales (charter sólo al primer hablante, `parsed.attachments` nunca leído). **Sostengo** que eso no valida una capa nueva: valida *borrar* código que no cumple. Un modo roto expuesto en el enum `cache` es peor que no tener modo.<br>- **Lo mínimo que funciona** (3 cambios, no un refactor): (a) dejar el default `shared` — ya lo es, L33; (b) arreglar el parser con **un carácter**, quitar el `?` lazy de la regex (L97) para que sea greedy y no corte el trailer en el primer `}` de un attachment anidado; (c) decisión binaria sobre isolated: borrarlo o marcarlo `experimental` en la descripción.<br>- **El argumento de escalabilidad del architect es un espantapájaros**: &quot;O(roles×turns) vs O(turns)&quot; con 3 roles y `maxTurns ≤ 30` (L32, L407) es ruido de microbenchmark. El criterio real no es teoría asintótica, es &quot;corre hoy sin romperse&quot;. Shared corre; isolated no.<br>- **Role bleed**: el trailer ya lleva `&quot;sender&quot;` y el request ya inyecta `[ROL: x]` cada turno (L91, L231). &quot;Hacer el `sender` autoritativo y prohibir inferir autoría por posición&quot; es un parche de prompt no verificable vendido como arquitectura. No compro una capa por un riesgo que nadie midió.<br>- **Cierro**: shared por defecto, cero abstracción nueva, regex de 1 carácter, y una decisión ejecutable sobre isolated. Si el arbiter quiere evidencia, el archivo está adjunto.</div>
+      <div class="issues"><span class="issue">No crear DebateLog/envelopes tipados: duplica SSOT (DRY) sin consumidor; parseTurn ya devuelve la forma</span><span class="issue">isolated expuesto y roto (charter solo al primer hablante, attachments descartados): borrarlo o marcarlo experimental, no refactorizar</span><span class="issue">Fix minimalista: quitar el ? lazy de parseTurn L97 (greedy) en vez de reescribir el parser</span></div>
+    </div>
+  </div>
+</div>
+<div class="msg">
+  <div class="avatar" style="background:#f2777a">AD</div>
+  <div class="col">
+    <div class="meta"><b>adversary</b><span class="badge no">DISIENTE</span></div>
+    
+    <div class="bubble" style="border-color:#f2777a33">
+      <div class="text">- **Cito lo más fuerte y lo rompo.** Architect: &quot;`shared` por defecto + `sender` autoritativo&quot;. Pragmatist: &quot;fix de 1 carácter en la regex&quot;. Ninguno toca el punto ciego: el trailer **ni se correlaciona ni se localiza** de forma confiable. `turn()` (L147/158) mide la respuesta por **delta de count** de mensajes assistant; si `ctx.session.context` pagina o trunca (sesión `shared` que crece), `before` y el conteo post son ambos N y el poll nunca dispara → timeout a los `pollMax*pollMs` = 300 s (L35). Y el `sender` no salva nada: es **auto-declarado por el modelo**, o sea no confiable — un agente puede emitir `&quot;sender&quot;:&quot;architect&quot;`.<br>- **La regex es explotable y 1 carácter no alcanza.** `parseTurn` (L97) escanea por **contenido** (`&quot;status&quot;` en cualquier parte). Un body que cite `</div>
+      
+    </div>
+  </div>
+</div>
+<h2>Acta — arbiter</h2>
+<div class="acta">**Consenso: NO alcanzado.** Los tres roles cerraron DISSENTING con objeciones bloqueantes parcialmente solapadas. Este acta es **vinculante por arbitraje**, no por convergencia.
+
+## Veredicto
+Para 3 agentes en OpenCode: **`shared` como motor único por defecto** (ya es `DEFAULTS.cache`, L33), endurecido con salvaguardas mínimas. El motor `isolated` queda **en cuarentena/experimental**: no debe exponerse en el enum hasta corregir tres fallas propias que rompen su contrato (charter sólo al primer hablante, adjuntos descartados, `status`/`blockingIssues` no propagados). No se construye ninguna capa nueva (tipo `DebateLog`, reducers, módulos): el pragmatista gana ese punto; el arquitecto gana que el `sender` debe ser **estable y no posicional**, no que deba existir un SSOT nuevo.
+
+**Falacias descartadas:**
+- *&quot;El fix de 1 carácter arregla la regex&quot;* (pragmatist): falso. Volverla greedy captura hasta el último `}` y no elimina los falsos positivos por escaneo de contenido (probado por adversary).
+- *&quot;El `sender` es autoritativo&quot;* (architect): impreciso. El `sender` es auto-declarado por el modelo; la autoridad real es la **posición del turno en el log del motor**, no el texto.
+- *&quot;Una capa tipada de envelopes&quot;* (architect): over-engineering de fase 1, sin consumidor, y crea un tercer SSOT.
+
+## Matriz de trade-offs
+
+| Criterio | `shared` | `isolated` |
+|---|---|---|
+| KV-cache / costo | Óptimo: 1 prefijo monotónico; adjuntos anclados 1 vez (L232) | Prefijo × (N+1); charter + archivos re-anclados por agente |
+| Superficie de falla | 1 sesión (menos locks y huérfanas) | N+1 sesiones; un 502 deja todo colgado |
+| Identidad de rol | `sender` no confiable + role bleed real | Identidad limpia por sesión, pero **hoy rota** (charter sólo al 1º) |
+| Propagación de estado | Transcript completo: `blockingIssues` visibles | Digest sólo `body` (L275): issues ocultos a los pares |
+| Consistencia | 1 log canónico | `channel` + cursores por rol pueden divergir |
+| Estado de exposición | Default vigente, funciona | Exige 3 fixes antes de ser usable |
+
+## Salvaguardas obligatorias (no negociables)
+1. **Parseo posicional**: extraer el trailer desde la **última** línea que abre con `{` hasta el `}` final. Prohibido escanear por contenido (reemplaza L97).
+2. **Correlación por ID**: `turn()` captura el `messageId`/timestamp del último assistant *antes* del prompt y espera estrictamente uno nuevo posterior. Nada de delta de conteo (L147/158).
+3. **Presupuesto global de adjuntos**: un acumulador único por debate (no `remaining` reseteado por turno, L177) y **delimitación/neutralización** del texto de archivo para que no pueda inyectar un envelope falso.
+4. **Resiliencia**: `try/finally` en ambos motores — retry acotado e idempotente por turno, cleanup/archivado de las sesiones creadas y deadline por debate.
+5. **Anti-corte prematuro**: `stalled` cuenta **novedad real** (no firma de estado) y no cierra antes de 2 rondas completas sin cambios.
+6. **Acta determinista**: el consenso del acta es el booleano de `consensusReached` inyectado; el LLM redacta, no decide.
+7. **Default fijo**: `cache` = shared; `isolated` marcado experimental y con sus 3 bugs corregidos antes de reinstaurarse.
+
+## Plan de acción
+1. Reemplazar `parseTurn` por parser posicional del trailer (1 función).
+2. Reescribir `turn()` para correlacionar por `messageId` en vez de conteo.
+3. Envolver `runShared`/`runIsolated` en `try/finally` con retry, cleanup y deadline.
+4. Presupuesto global + delimitación de adjuntos en `readFiles`/`charter`/`attachmentsBlock`.
+5. `stalled` por novedad de contenido.
+6. Inyectar el booleano de consenso en el prompt del árbitro.
+7. `isolated`: corregir `seen`/charter (L272-279), leer `parsed.attachments` y propagar `status`/`blockingIssues` en el digest; si no se hace ya, no exponerlo en el enum.
+8. Test de regresión: trailer con `}` en el body, body que cite un ejemplo de estado, y archivo adjunto con envelope falso.
+9. Cero módulos o abstracciones nuevas; sólo diffs quirúrgicos sobre el archivo único.
+
+{&quot;sender&quot;:&quot;arbiter&quot;,&quot;status&quot;:&quot;CONSENSUS_READY&quot;,&quot;repliesTo&quot;:null,&quot;blockingIssues&quot;:[],&quot;attachments&quot;:[&quot;C:\\Users\\perca\\.config\\opencode\\plugins\\debate-room.ts&quot;]}</div>
+</div></body></html>

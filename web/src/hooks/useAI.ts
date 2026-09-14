@@ -200,8 +200,8 @@ export function useAI(config: ServerConfig) {
         }
       }
     } catch (err) {
-      if (attempt < 1) {
-        await new Promise((r) => setTimeout(r, 600))
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 1000))
         return loadAgents(directory, attempt + 1)
       }
       setAgentLoadError((err as Error).message)
@@ -210,16 +210,20 @@ export function useAI(config: ServerConfig) {
 
   const loadModels = useCallback(async (directory?: string, attempt = 0) => {
     if (!config.host || config.port <= 0) return
+    // Reintentos con espera: en arranque automático el server puede tardar en
+    // estar listo. Antes eran 2 intentos separados 600ms; con el autostart el
+    // primer fetch caía antes de que :4098 respondiera y quedaba vacío.
+    const MAX_RETRIES = 5
     // timeout 8s para no colgar UI si opencode está lento (antes 12s + reintentos = 20s bloqueado)
-    const timeout = <T>(p: Promise<T>, ms = 8000) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Model list timeout — opencode lento")), ms))]) as Promise<T>
+    const timeout = <T>(p: Promise<T>, ms = 8000) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Model list timeout - OpenHer lento")), ms))]) as Promise<T>
     try {
       const list = await timeout(api.listModels(config, directory))
-      if (list.length === 0 && attempt < 1) {
-        await new Promise((r) => setTimeout(r, 600))
+      if (list.length === 0 && attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 1200))
         return loadModels(directory, attempt + 1)
       }
       setModelOptions(list)
-      setModelLoadError(list.length === 0 ? "Sin modelos — verifica proveedores en opencode" : null)
+      setModelLoadError(list.length === 0 ? "Sin modelos - verifica proveedores en OpenHer" : null)
       const saved = selectedModelKey ? modelFromKey(selectedModelKey) : null
       if (saved && list.some((option) => sameModel(option, saved))) {
         if (selectedVariant && !list.some((option) => sameModel(option, saved) && option.variant === selectedVariant)) {
@@ -239,8 +243,8 @@ export function useAI(config: ServerConfig) {
       }
       modelsLoadedRef.current = true
     } catch (err) {
-      if (attempt < 1) {
-        await new Promise((r) => setTimeout(r, 600))
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 1200))
         return loadModels(directory, attempt + 1)
       }
       setModelLoadError((err as Error).message)

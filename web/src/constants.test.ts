@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
   STORAGE_KEYS,
-  DEFAULT_STATS_PORT,
   STREAMING_POLL_INTERVAL_MS,
   DEFAULT_POLL_INTERVALS,
   SSE_CONNECT_TIMEOUT_MS,
@@ -16,17 +15,13 @@ import {
   DB_NAME,
   DB_VERSION,
   DB_STORES,
-  QUICKCHAT_CACHE_TTL_MS,
-  QUICKCHAT_MAX_TOKENS,
-  CEREBRAS_RPM,
-  CEREBRAS_TPM,
 } from "./constants"
 
 describe("STORAGE_KEYS", () => {
-  it("está definido y contiene 24 claves", () => {
+  it("está definido y contiene 19 claves", () => {
     expect(STORAGE_KEYS).toBeDefined()
     expect(typeof STORAGE_KEYS).toBe("object")
-    expect(Object.keys(STORAGE_KEYS).length).toBeGreaterThanOrEqual(20)
+    expect(Object.keys(STORAGE_KEYS)).toHaveLength(19)
   })
 
   it("todos los valores son strings con prefijo openher. u opencode.", () => {
@@ -42,17 +37,9 @@ describe("STORAGE_KEYS", () => {
   })
 
   it("claves de servidor/móvil están correctamente namespaced", () => {
-    expect(STORAGE_KEYS.STATS).toBe("openher.stats")
     expect(STORAGE_KEYS.RECENT_MODELS).toBe("openher.recentModels")
     expect(STORAGE_KEYS.BLOCKED_MODELS).toBe("openher.blockedModels")
     expect(STORAGE_KEYS.FEATURE_FLAGS).toBe("openher.featureFlags")
-  })
-
-  it("claves QUICKCHAT comparten prefijo", () => {
-    expect(STORAGE_KEYS.QUICKCHAT).toBe("openher.quickchat.messages")
-    expect(STORAGE_KEYS.QUICKCHAT_PROVIDER).toBe("openher.quickchat.provider")
-    expect(STORAGE_KEYS.QUICKCHAT_MODEL).toBe("openher.quickchat.model")
-    expect(STORAGE_KEYS.QUICKCHAT_SEARCH).toBe("openher.quickchat.search")
   })
 
   it("no hay valores duplicados", () => {
@@ -71,7 +58,6 @@ describe("STORAGE_KEYS", () => {
       "LANGUAGE",
       "NAVBAR",
       "SERVERS",
-      "QUICKCHAT",
     ] as const
     for (const k of expected) {
       expect(STORAGE_KEYS).toHaveProperty(k)
@@ -80,11 +66,6 @@ describe("STORAGE_KEYS", () => {
 })
 
 describe("numeric constants", () => {
-  it("DEFAULT_STATS_PORT es 8765", () => {
-    expect(DEFAULT_STATS_PORT).toBe(8765)
-    expect(typeof DEFAULT_STATS_PORT).toBe("number")
-  })
-
   it("STREAMING_POLL_INTERVAL_MS es 1000", () => {
     expect(STREAMING_POLL_INTERVAL_MS).toBe(1000)
   })
@@ -137,25 +118,10 @@ describe("numeric constants", () => {
     expect(typeof DB_VERSION).toBe("number")
     expect(DB_STORES.sessions).toBe("sessions")
     expect(DB_STORES.messages).toBe("messages")
-    expect(DB_STORES.quickchat).toBe("quickchat")
-  })
-
-  it("QUICKCHAT constants", () => {
-    expect(QUICKCHAT_CACHE_TTL_MS).toBe(24 * 60 * 60 * 1000)
-    expect(QUICKCHAT_MAX_TOKENS).toBe(500)
-    expect(QUICKCHAT_CACHE_TTL_MS).toBe(86400000)
-  })
-
-  it("CEREBRAS limits", () => {
-    expect(CEREBRAS_RPM).toBe(5)
-    expect(CEREBRAS_TPM).toBe(90000)
-    expect(CEREBRAS_RPM).toBeGreaterThan(0)
-    expect(CEREBRAS_TPM).toBeGreaterThan(CEREBRAS_RPM)
   })
 
   it("todos los numeric constants son numbers y no NaN", () => {
     const nums = [
-      DEFAULT_STATS_PORT,
       STREAMING_POLL_INTERVAL_MS,
       SSE_CONNECT_TIMEOUT_MS,
       SSE_RECONNECT_BASE_MS,
@@ -167,10 +133,6 @@ describe("numeric constants", () => {
       POLL_MAX_RETRIES,
       QUESTION_POLL_INTERVAL_MS,
       DB_VERSION,
-      QUICKCHAT_CACHE_TTL_MS,
-      QUICKCHAT_MAX_TOKENS,
-      CEREBRAS_RPM,
-      CEREBRAS_TPM,
     ]
     for (const n of nums) {
       expect(typeof n).toBe("number")

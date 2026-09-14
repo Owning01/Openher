@@ -46,12 +46,12 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
     return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [modelOptions, connectedSet])
 
-  const connectProvider = useCallback(async (providerID: string, apiKey: string) => {
+  const connectProvider = useCallback(async (providerID: string, apiKey: string, label?: string) => {
     if (!config) return false
     setConnecting(providerID)
     setError(null)
     try {
-      await api.setProviderAuth(config, providerID, apiKey)
+      await api.setProviderAuth(config, providerID, apiKey, undefined, label)
       setConnectedSet((prev) => new Set(prev).add(providerID))
       setConnecting(null)
       return true
@@ -62,6 +62,34 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
       return false
     }
   }, [config])
+
+  const removeCredential = useCallback(async (credentialID: string) => {
+    if (!config) return
+    setConnecting(credentialID)
+    setError(null)
+    try {
+      await api.removeProviderCredential(config, credentialID)
+      await refreshConnected()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error desconocido"
+      setError(msg)
+    }
+    setConnecting(null)
+  }, [config, refreshConnected])
+
+  const activateCredential = useCallback(async (credentialID: string) => {
+    if (!config) return
+    setConnecting(credentialID)
+    setError(null)
+    try {
+      await api.activateProviderCredential(config, credentialID)
+      await refreshConnected()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error desconocido"
+      setError(msg)
+    }
+    setConnecting(null)
+  }, [config, refreshConnected])
 
   const disconnectProvider = useCallback(async (providerID: string) => {
     if (!config) return
@@ -102,5 +130,5 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
     }
   }, [config])
 
-  return { providers, connecting, error, connectProvider, disconnectProvider, addCustomProvider, refreshConnected }
+  return { providers, connecting, error, connectProvider, disconnectProvider, addCustomProvider, removeCredential, activateCredential, refreshConnected }
 }

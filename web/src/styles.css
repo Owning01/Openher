@@ -2,10 +2,10 @@
    styles.css es un index: los parciales viven en styles/ y se importan en
    ORDEN DE CASCADA (las reglas posteriores ganan a igual especificidad).
    El orden NO se debe cambiar sin verificar competencias entre selectores
-   duplicados (switch-list, stat-*, MQ globales de responsive.css).
+   duplicados (switch-list, MQ globales de responsive.css).
 
    Para modificar: editar el parcial correspondiente (chat, composer,
-   settings, sessions, modals, desktop, forms, buttons, layout, stats,
+   settings, sessions, modals, desktop, forms, buttons, layout,
    tokens, base, utilities) o responsive.css para breakpoints globales.
    El bundle de Vite inlinea estos imports en el mismo orden. */
 
@@ -17,13 +17,13 @@
 @import "./styles/buttons.css";
 @import "./styles/forms.css";
 @import "./styles/sessions.css";
-@import "./styles/stats.css";
 @import "./styles/settings.css";
 @import "./styles/chat.css";
 @import "./styles/filepath.css";
 @import "./styles/composer.css";
 @import "./styles/notes.css";
 @import "./styles/modals.css";
+@import "./styles/update.css";
 @import "./styles/toasts.css";
 @import "./styles/desktop.css";
 @import "./styles/titlebar.css";

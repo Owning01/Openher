@@ -1,11 +1,9 @@
-import { memo, type ReactNode } from "react"
+import { memo } from "react"
 import {
   ChatIcon,
   FolderIcon,
-  StatsIcon,
   GlobeIcon,
   LayersIcon,
-  BrainIcon,
   BranchIcon,
   SettingsIcon,
   GraduationCapIcon,
@@ -14,13 +12,7 @@ import { useT } from "../../i18n-context"
 import type { DesktopLayout, ViewType } from "../../types"
 import type { MemoryInfo } from "../../hooks/useMemoryUsage"
 
-export type DesktopActivity = "sessions" | "explorer" | "stats" | "kanban" | "config" | "quickchat" | "scm" | "pcFiles" | "reports"
-
-export interface PluginTabItem {
-  key: string
-  title?: string
-  icon?: ReactNode
-}
+export type DesktopActivity = "sessions" | "explorer" | "kanban" | "config" | "scm" | "pcFiles" | "reports"
 
 export interface ActivityBarProps {
   activity: DesktopActivity
@@ -29,14 +21,10 @@ export interface ActivityBarProps {
   setSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   tabStacks?: string[][]
   desktopLayout: DesktopLayout
-  openStatsAsTab: () => void
   openBrowserAsTab: (url: string) => void
   handleOpenKanban: () => void
-  rightSidebarCollapsed: boolean
-  setRightSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
+  handleOpenDebate: () => void
   setShowPluginsModal: (v: boolean) => void
-  pluginTabs: PluginTabItem[]
-  openPluginAsTab: (key: string) => void
   memInfo: MemoryInfo | null
   formatBytes: (bytes: number) => string
   handleOpenLearning: () => void
@@ -51,14 +39,10 @@ export const ActivityBar = memo(function ActivityBar({
   setSidebarCollapsed,
   tabStacks,
   desktopLayout,
-  openStatsAsTab,
   openBrowserAsTab,
   handleOpenKanban,
-  rightSidebarCollapsed,
-  setRightSidebarCollapsed,
+  handleOpenDebate,
   setShowPluginsModal,
-  pluginTabs,
-  openPluginAsTab,
   memInfo,
   formatBytes,
   handleOpenLearning,
@@ -107,22 +91,6 @@ export const ActivityBar = memo(function ActivityBar({
 
         <button
           type="button"
-          data-item="stats"
-          className={`activity-btn${
-            tabStacks?.some((s) => s.includes("__stats__")) ||
-            desktopLayout.sessions.includes("__stats__")
-              ? " active"
-              : ""
-          }`}
-          title={t("shell.kindStats")}
-          aria-label={t("shell.kindStats")}
-          onClick={() => openStatsAsTab()}
-        >
-          <StatsIcon size={18} />
-        </button>
-
-        <button
-          type="button"
           data-item="browser"
           className={`activity-btn${
             tabStacks?.some((s) => s.some((id) => id.startsWith("browser:"))) ||
@@ -162,13 +130,24 @@ export const ActivityBar = memo(function ActivityBar({
 
         <button
           type="button"
-          data-item="quickchat"
-          className={`activity-btn${!rightSidebarCollapsed ? " active" : ""}`}
-          title={t("quickchat.title")}
-          aria-label={t("quickchat.title")}
-          onClick={() => setRightSidebarCollapsed((v) => !v)}
+          data-item="debate"
+          className={`activity-btn${
+            tabStacks?.some((s) => s.includes("plugin:debate:room")) ||
+            desktopLayout.sessions.includes("plugin:debate:room")
+              ? " active"
+              : ""
+          }`}
+          title="Debate"
+          aria-label="Debate"
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData("application/x-opencode-path", "plugin:debate:room")
+            e.dataTransfer.setData("text/plain", "plugin:debate:room")
+            e.dataTransfer.effectAllowed = "move"
+          }}
+          onClick={handleOpenDebate}
         >
-          <BrainIcon size={18} />
+          <LayersIcon size={18} />
         </button>
 
         <button
@@ -188,8 +167,8 @@ export const ActivityBar = memo(function ActivityBar({
           <BranchIcon size={18} />
         </button>
 
-        {/* Plugins externos (Open Design, VioEditor, Screenshots): solo desde el
-            modal de Plugins (botón globo) — el rail no los duplica. */}
+        {/* Canvas M3E, Estudio y Chat rapido viven en el modal de Plugins
+            (boton globo) — el rail no los duplica. */}
         <button
           type="button"
           data-item="plugins"
@@ -200,37 +179,6 @@ export const ActivityBar = memo(function ActivityBar({
         >
           <GlobeIcon size={18} />
         </button>
-
-        {pluginTabs.map((item) => {
-          const isActive =
-            tabStacks?.some((s) => s.includes(`plugin:${item.key}`)) ||
-            desktopLayout.sessions.includes(`plugin:${item.key}`)
-          return (
-            <button
-              key={item.key}
-              type="button"
-              className={`activity-btn${isActive ? " active" : ""}`}
-              title={item.title || item.key}
-              aria-label={item.title || item.key}
-              draggable
-              onDragStart={(e) => {
-                const payload = `plugin:${item.key}`
-                e.dataTransfer.setData("application/x-opencode-path", payload)
-                e.dataTransfer.setData("text/plain", payload)
-                e.dataTransfer.effectAllowed = "move"
-              }}
-              onClick={() => openPluginAsTab(item.key)}
-            >
-              {item.icon ? (
-                <span style={{ display: "inline-flex" }}>{item.icon}</span>
-              ) : (
-                <span style={{ fontSize: 14 }}>
-                  {(item.title || item.key).slice(0, 1).toUpperCase()}
-                </span>
-              )}
-            </button>
-          )
-        })}
       </div>
 
       <div className="app-desktop-activity-bottom">

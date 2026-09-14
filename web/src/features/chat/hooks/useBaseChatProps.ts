@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import type { ChatViewProps } from "../../../components/ChatView"
 import type { SessionView, ServerConfig, ConnectionState, ModelOption, FileDiff } from "../../../types"
+import { isSessionActive } from "../../../utils"
 
 export type UseBaseChatPropsParams = {
   selectedSession: SessionView | null
@@ -74,7 +75,8 @@ export type UseBaseChatPropsParams = {
   handleQuestionReject: (reqId: string) => Promise<void>
   handlePermissionApprove: (reqId: string) => Promise<void>
   handlePermissionReject: (reqId: string) => Promise<void>
-  handleDismissQuestion: () => void
+  handleDismissQuestion: (requestID?: string) => void
+  handleReopenQuestions?: () => void
   handleDismissPermission: () => void
   handleRevertToMessage: (id: string) => Promise<void>
   handleEditMessage: (id: string, text: string) => Promise<void>
@@ -82,6 +84,7 @@ export type UseBaseChatPropsParams = {
   handleRedo: () => void
   handleCompact: () => Promise<void>
   handleCreateSession: (dir?: string) => Promise<void>
+  handleOpenNewSession: (dir?: string) => void
   fb: any
   setShowTerminal?: (show: boolean) => void
   setShowMCPBrowser: (show: boolean) => void
@@ -97,9 +100,6 @@ export type UseBaseChatPropsParams = {
   resetChatSettings: () => void
   vs: any
   outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
-  hasMoreMessages?: boolean
-  isLoadingMore?: boolean
-  loadMoreMessages?: () => void
 }
 
 export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps {
@@ -113,6 +113,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     todosExpanded,
     setTodosExpanded,
     isSending,
+    isWorking,
     awaitingAssistantReply,
     loadingSessionID,
     selectedID,
@@ -175,6 +176,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     handlePermissionApprove,
     handlePermissionReject,
     handleDismissQuestion,
+    handleReopenQuestions,
     handleDismissPermission,
     handleRevertToMessage,
     handleEditMessage,
@@ -182,6 +184,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     handleRedo,
     handleCompact,
     handleCreateSession,
+    handleOpenNewSession,
     fb,
     setShowTerminal,
     setShowMCPBrowser,
@@ -197,10 +200,22 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     resetChatSettings,
     vs,
     outboxActions,
-    hasMoreMessages,
-    isLoadingMore,
-    loadMoreMessages,
   } = params
+
+  // El caller ya calcula isWorking = awaiting || sesión busy en el server;
+  // isSending cubre la ventana del POST. Antes se ignoraba el param y el chat
+  // no mostraba estado activo cuando la sesión venía trabajando de otro lado
+  // (o tras un resume): parecía "parado" aunque llegaran mensajes.
+  const working = Boolean(isSending || isWorking || awaitingAssistantReply)
+
+  // Sesiones con estado activo (busy/retry) en el server. El chat lo usa para
+  // saber si un subagente en background sigue vivo: su tool part queda
+  // "completed" al delegar, pero la SESIÓN HIJA es quien reporta el estado
+  // (mismo criterio que la TUI: background running mientras no esté idle).
+  const busySessionIds = useMemo(
+    () => new Set(sessions.filter((s) => isSessionActive(s)).map((s) => s.id)),
+    [sessions]
+  )
 
   return useMemo<ChatViewProps>(
     () => ({
@@ -213,8 +228,8 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       visibleMessages: renderedMessages,
       todos,
       todosExpanded,
-      isWorking: isSending || awaitingAssistantReply,
-      showTypingBubble: false,
+      isWorking: working,
+      showTypingBubble: working,
       loadingSessionID,
       selectedID,
       messageScrollSignature,
@@ -250,6 +265,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       onSheetOpen: setActiveDetailSheet,
       recentSessions,
       sessions,
+      busySessionIds,
       onOpenSession: handleOpenSession,
       readingMode,
       onToggleReadingMode: () => setReadingMode((v) => !v),
@@ -291,6 +307,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       onPermissionApprove: handlePermissionApprove,
       onPermissionReject: handlePermissionReject,
       onDismissQuestion: handleDismissQuestion,
+      onReopenQuestions: handleReopenQuestions,
       onDismissPermission: handleDismissPermission,
       onRevertToMessage: handleRevertToMessage,
       onEditMessage: handleEditMessage,
@@ -298,6 +315,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       onRedo: handleRedo,
       onCompact: handleCompact,
       onForkSession: () => selectedSession && handleCreateSession(selectedSession.directory),
+      onOpenNewSession: (directory?: string) => handleOpenNewSession(directory ?? selectedSession?.directory),
       onOpenFileBrowser: () => selectedSession && fb.open(),
       fileBrowserPath: fb.currentPath,
       onOpenTerminal: () => { try { window.dispatchEvent(new CustomEvent("opencode:new-terminal")) } catch {}; setShowTerminal?.(true) },
@@ -322,9 +340,6 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       onClearVisualSelection: vs.clear,
       onFocusVisualFile: (path: string) => handleOpenFile(path),
       outboxActions,
-      hasMoreMessages,
-      isLoadingMore,
-      onLoadMoreMessages: loadMoreMessages,
     }),
     [
       selectedSession,
@@ -333,6 +348,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       todos,
       todosExpanded,
       isSending,
+      isWorking,
       awaitingAssistantReply,
       loadingSessionID,
       selectedID,
@@ -362,6 +378,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       setActiveDetailSheet,
       recentSessions,
       sessions,
+      busySessionIds,
       handleOpenSession,
       readingMode,
       setReadingMode,
@@ -392,6 +409,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       handlePermissionApprove,
       handlePermissionReject,
       handleDismissQuestion,
+      handleReopenQuestions,
       handleDismissPermission,
       handleRevertToMessage,
       handleEditMessage,
@@ -399,6 +417,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       handleRedo,
       handleCompact,
       handleCreateSession,
+      handleOpenNewSession,
       fb,
       setShowTerminal,
       setShowMCPBrowser,
@@ -421,9 +440,6 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       setDesktopCfg,
       loadDesktopConfig,
       outboxActions,
-      hasMoreMessages,
-      isLoadingMore,
-      loadMoreMessages,
     ]
   )
 }

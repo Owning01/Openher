@@ -32,7 +32,7 @@ type BottomSheetProps = {
 }
 
 function groupLabel(providerID: string): string {
-  if (providerID === "opencode") return "OpenCode"
+  if (providerID === "opencode") return "OpenHer"
   return providerID.charAt(0).toUpperCase() + providerID.slice(1)
 }
 

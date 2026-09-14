@@ -21,6 +21,7 @@ export type ParseCommandResult =
   | { type: "connect"; text: string }
   | { type: "rename"; title: string }
   | { type: "export" }
+  | { type: "newSession" }
   | { type: "send_raw"; text: string }
   | null
 
@@ -48,6 +49,7 @@ export function parseCommand(text: string): ParseCommandResult {
   if (localCommand === "connect") return { type: "connect", text: args }
   if (localCommand === "rename") return { type: "rename", title: args }
   if (localCommand === "export") return { type: "export" }
+  if (["new", "nueva", "nuevo"].includes(localCommand)) return { type: "newSession" }
 
   return { type: "command", command, args }
 }

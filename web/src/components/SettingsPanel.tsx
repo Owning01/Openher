@@ -23,16 +23,8 @@ import { variantsOf } from "../utils/model-utils"
 import { useIsDesktop } from "../hooks/useIsDesktop"
 import { useAutoOpencode2 } from "../hooks/useAutoOpencode2"
 import { useSidebarPrefs, SIDEBAR_ITEM_IDS } from "../hooks/useSidebarPrefs"
-import { STORAGE_KEYS } from "../constants"
 import { BuildStamp } from "./BuildStamp"
 import { shell } from "../shell"
-
-type UsageStats = {
- promptsSent: number
- sessionsCreated: number
- totalTokens?: number
- firstUsed: number
-}
 
 type SettingsPanelProps = {
  draftConfig: ServerConfig
@@ -56,8 +48,6 @@ type SettingsPanelProps = {
  onChangeModel: (key: string, variant?: string | null) => void
  modelKey: (model: { providerID: string; modelID: string; variant?: string }) => string
  selectedVariant: string | null
- stats: UsageStats
- onResetStats: () => void
  activeModelOption: ModelOption | null
  blockedModels: { isBlocked: (key: string) => boolean; toggleBlocked: (key: string) => void; toggleAllForProvider: (providerID: string, block: boolean) => void; providerBlockedCount: (providerID: string) => number; blockedCount: number }
  onOpenThemePicker?: () => void
@@ -105,7 +95,6 @@ export const SettingsPanel = memo(function SettingsPanel({
  modelOptions, selectedModelKey, onChangeModel, modelKey: mk,
  selectedVariant,
  allPrimaryAgents, disabledAgents, onToggleAgentEnabled,
- stats, onResetStats,
  activeModelOption: _activeModelOption, blockedModels, onOpenThemePicker,
  onOpenThemeCreator,
  flags, onToggleFlag, onSetFlag: _onSetFlag,
@@ -135,7 +124,6 @@ export const SettingsPanel = memo(function SettingsPanel({
   }).catch(() => {})
  }, [isDesktop])
  const { prefs: sidebarPrefs, setPosition: setSidebarPosition, toggleItem: toggleSidebarItem } = useSidebarPrefs()
- const [qcProvider, setQcProvider] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.QUICKCHAT_PROVIDER) || "groq")
 
  // ===== Remote desktop (agente en la PC, puerto default 5901) =====
  const [desktopCfg, setDesktopCfg] = useState<DesktopConfig>(() =>
@@ -292,7 +280,6 @@ export const SettingsPanel = memo(function SettingsPanel({
   { key: "offlineCache" as const, label: t('settings.offlineCache'), desc: t('settings.offlineCacheDesc') },
   { key: "questionAuto" as const, label: t('settings.questionAuto'), desc: t('settings.questionAutoDesc') },
   { key: "permissionUI" as const, label: t('settings.permissionUI'), desc: t('settings.permissionUIDesc') },
-  { key: "virtualChat" as const, label: t('settings.virtualChat'), desc: t('settings.virtualChatDesc') },
  ]
 
  type CategoryKey = "servers" | "system" | "appearance" | "models" | "chat" | "remote"
@@ -303,7 +290,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   { id: "servers", label: "General", subtitle: "Configure agent execution, queued message delivery, and permissions." },
   { id: "system", label: "Application", subtitle: "Configure application startup, feature flags, sidebar layout, and system tools." },
   { id: "appearance", label: "Appearance", subtitle: "Customize interface themes, font size, language, and default model selection." },
-  { id: "models", label: "Models", subtitle: "Configure AI providers, quick chat shortcuts, primary agents, and API keys." },
+  { id: "models", label: "Models", subtitle: "Configure AI providers, primary agents, and API keys." },
   { id: "chat", label: "Customizations", subtitle: "Fine-tune chat parameters, thinking behavior, system prompts, and snippets." },
   { id: "remote", label: "Browser", subtitle: "Configure and connect to the remote host desktop agent and browser tools." },
  ]
@@ -357,7 +344,7 @@ export const SettingsPanel = memo(function SettingsPanel({
        ) : (
         <>
          <button type="button" className="settings-nav-btn" onClick={() => setActiveCategory("servers")}>
-          <span className="settings-nav-label">{draftConfig.host ? draftConfig.host : "opencode-remote-android"}</span>
+          <span className="settings-nav-label">{draftConfig.host ? draftConfig.host : "openher"}</span>
          </button>
         </>
        )}
@@ -388,7 +375,7 @@ export const SettingsPanel = memo(function SettingsPanel({
        <div
         className="settings-sidebar-user-card"
         onClick={() => setActiveCategory("servers")}
-        title={draftConfig.host ? `${draftConfig.username || "user"}@${draftConfig.host}:${draftConfig.port}` : "Usuario OpenCode"}
+        title={draftConfig.host ? `${draftConfig.username || "user"}@${draftConfig.host}:${draftConfig.port}` : "Usuario OpenHer"}
        >
         <div className="settings-sidebar-user-avatar">
          ⬡
@@ -787,7 +774,7 @@ export const SettingsPanel = memo(function SettingsPanel({
        </div>
        <div className="setting-item-row">
         <div className="setting-item-info">
-         <span className="setting-item-title">Servidor opencode2 (headless)</span>
+         <span className="setting-item-title">Servidor OpenHer (headless)</span>
          <p className="setting-item-desc">Un clic levanta :4098 en background y lo deja arrancando solo con Windows, sin consola ni ventana.</p>
         </div>
         <div className="setting-item-control" style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -834,12 +821,12 @@ export const SettingsPanel = memo(function SettingsPanel({
      )}
      <div className="setting-item-row">
       <div className="setting-item-info">
-       <span className="setting-item-title">Abrir opencode2 automáticamente</span>
-       <p className="setting-item-desc">Al iniciar la app de escritorio abre la terminal inferior ejecutando <code>opencode2</code> (visible en la app, no consola externa).</p>
+       <span className="setting-item-title">Servidor OpenHer headless automático</span>
+       <p className="setting-item-desc">Al iniciar la app de escritorio arranca el servidor <code>opencode2</code> en segundo plano: sin consola y sobrevive al cierre de la ventana.</p>
       </div>
       <div className="setting-item-control">
        <LedSwitch
-        label="Abrir opencode2 automáticamente"
+        label="Servidor OpenHer headless automático"
         checked={autoOpencode2}
         onChange={(next) => setAutoOpencode2(next)}
        />
@@ -906,10 +893,10 @@ export const SettingsPanel = memo(function SettingsPanel({
 
      {isDesktop && onOpenOpenCodeHub && (
       <>
-       <p className="settings-group-heading">OpenCode Hub</p>
+       <p className="settings-group-heading">OpenHer Hub</p>
        <div className="setting-item-row">
         <div className="setting-item-info">
-         <span className="setting-item-title">OpenCode Hub Oficial</span>
+         <span className="setting-item-title">OpenHer Hub Oficial</span>
          <p className="setting-item-desc">Visualiza los prompts de sistema de tus agentes, catálogo de skills y opencode.json global.</p>
         </div>
         <div className="setting-item-control">
@@ -956,18 +943,6 @@ export const SettingsPanel = memo(function SettingsPanel({
        <ExportCacheButton small label="Exportar .md" />
       </div>
      </div>
-
-     <div className="setting-item-row">
-      <div className="setting-item-info">
-       <span className="setting-item-title">{t('settings.stats')}</span>
-       <p className="setting-item-desc">{stats.promptsSent} prompts enviados · {stats.sessionsCreated} sesiones creadas.</p>
-      </div>
-      <div className="setting-item-control">
-       <button type="button" className="ag-btn-open" onClick={onResetStats}>
-        {t('settings.resetStats')}
-       </button>
-      </div>
-     </div>
     </>
    )}
 
@@ -983,31 +958,6 @@ export const SettingsPanel = memo(function SettingsPanel({
        onConnect={onConnectProvider}
        onDisconnect={onDisconnectProvider}
       />
-     </div>
-
-     <p className="settings-group-heading">Quick Chat</p>
-     <div className="setting-item-row">
-      <div className="setting-item-info">
-       <span className="setting-item-title">Proveedor Quick Chat</span>
-       <p className="setting-item-desc">Modelo rápido para consultas instantáneas.</p>
-      </div>
-      <div className="setting-item-control">
-       <select
-        className="ag-select"
-        value={qcProvider}
-        onChange={e => {
-         setQcProvider(e.target.value)
-         localStorage.setItem(STORAGE_KEYS.QUICKCHAT_PROVIDER, e.target.value)
-        }}
-       >
-        <option value="groq">{t('quickchat.providerGroq')} (Ultra Rápido)</option>
-        <option value="cerebras">{t('quickchat.providerCerebras')}</option>
-        <option value="custom">{t('quickchat.providerCustom')}</option>
-        {providers.filter(p => p.connected && p.id !== "groq" && p.id !== "cerebras" && p.id !== "custom").map(p => (
-         <option key={p.id} value={p.id}>{p.name}</option>
-        ))}
-       </select>
-      </div>
      </div>
 
      {allPrimaryAgents && allPrimaryAgents.length > 0 && (

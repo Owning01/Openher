@@ -146,7 +146,7 @@ export const OpenWithDialog = memo(function OpenWithDialog({
         <input
           type="text"
           className="pcf-search openwith-input"
-          placeholder="C:\...\programa.exe"
+          placeholder="code.exe o C:\ruta\programa.exe"
           value={appPath}
           onChange={(e) => setAppPath(e.target.value)}
           onKeyDown={(e) => {
@@ -165,6 +165,9 @@ export const OpenWithDialog = memo(function OpenWithDialog({
           <FolderIcon size={13} /> Examinar…
         </button>
       </div>
+      <p className="openwith-hint">
+        Basta el nombre (ej. code.exe) o la ruta completa; también sirve un acceso directo .lnk.
+      </p>
 
       <div className="openwith-actions">
         <button type="button" className="btn-secondary" onClick={onClose}>

@@ -2,10 +2,13 @@ import { describe, it, expect } from "vitest"
 import {
   basenameFsPath,
   cleanInlineCodePath,
+  extColor,
   findTextFilePaths,
   isAbsoluteFsPath,
+  localFsPathFromImageSrc,
   pathFromOpenherHref,
   resolveFsPath,
+  splitFsPath,
   toOpenherPathHref,
 } from "./filePaths"
 
@@ -100,5 +103,42 @@ describe("basenameFsPath", () => {
   it("devuelve el último segmento", () => {
     expect(basenameFsPath("C:\\a\\b\\c.md")).toBe("c.md")
     expect(basenameFsPath("/a/b/c.md")).toBe("c.md")
+  })
+})
+
+describe("splitFsPath", () => {
+  it("separa carpeta (con separador) y nombre", () => {
+    expect(splitFsPath("G:\\a\\b\\c.ts")).toEqual({ dir: "G:\\a\\b\\", name: "c.ts" })
+    expect(splitFsPath("/home/u/a.md")).toEqual({ dir: "/home/u/", name: "a.md" })
+    expect(splitFsPath("c.ts")).toEqual({ dir: "", name: "c.ts" })
+  })
+})
+
+describe("extColor", () => {
+  it("colorea por extensión con fallback muted", () => {
+    expect(extColor("a.tsx")).toBe("#7dd3fc")
+    expect(extColor("a.css")).toBe("#f0abfc")
+    expect(extColor("a.ZIP")).toBe("#fcd34d")
+    expect(extColor("a.desconocida")).toBe("#a1a1aa")
+    expect(extColor("sin-extension")).toBe("#a1a1aa")
+  })
+})
+
+describe("localFsPathFromImageSrc", () => {
+  it("detecta rutas del FS local", () => {
+    expect(localFsPathFromImageSrc("C:\\a\\b.png")).toBe("C:\\a\\b.png")
+    expect(localFsPathFromImageSrc("file:///C:/a/b.png")).toBe("C:/a/b.png")
+    expect(localFsPathFromImageSrc("\\\\nas\\share\\b.png")).toBe("\\\\nas\\share\\b.png")
+    expect(localFsPathFromImageSrc("/home/user/b.png")).toBe("/home/user/b.png")
+    expect(localFsPathFromImageSrc("/tmp/b.png")).toBe("/tmp/b.png")
+  })
+  it("decodifica backslashes percent-encodeados por micromark", () => {
+    expect(localFsPathFromImageSrc("C:%5CUsers%5Cperca%5Cshot.png")).toBe("C:\\Users\\perca\\shot.png")
+  })
+  it("no toca web, remotas ni data/blob", () => {
+    expect(localFsPathFromImageSrc("https://x.com/a.png")).toBeNull()
+    expect(localFsPathFromImageSrc("/img/logo.png")).toBeNull()
+    expect(localFsPathFromImageSrc("data:image/png;base64,AAAA")).toBeNull()
+    expect(localFsPathFromImageSrc("blob:http://x/abc")).toBeNull()
   })
 })

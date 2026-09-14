@@ -37,11 +37,15 @@ import {
 import { shell, type FsEntry, type CodeSearchResult } from "../../shell"
 import { useT } from "../../i18n-context"
 import { useToast } from "../../components/Toasts"
+import { useIsDesktop } from "../../hooks/useIsDesktop"
+import { useLocalStorage } from "../../hooks/useLocalStorage"
 import { calcMenuPos, calcMenuPosForAnchor, type MenuPos } from "../../utils/menuPos"
+import { blobToBase64 } from "../../utils"
 import { FileRow } from "./FileRow"
 import { OpenWithDialog } from "./OpenWithDialog"
 import { TreeFolder } from "./TreeFolder"
 import { CodeSearchResults } from "./CodeSearchResults"
+import { humanizeFsError, canDownloadAfterError, looksLikeBinary } from "./fileErrors"
 import { HlCodeHtml, highlightToHtml } from "../../components/HighlightedCode"
 import { useGitStatus } from "./useGitStatus"
 import { HtmlPreview } from "./HtmlPreview"
@@ -61,19 +65,6 @@ function loadExplorerRecent(): string[] {
   } catch {
     return []
   }
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      const idx = dataUrl.indexOf(",")
-      resolve(idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl)
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
 }
 
 // ArrayBuffer → base64 por chunks (evita desbordar la pila con apply).
@@ -99,6 +90,12 @@ function getParentPath(p: string | null): string | null {
   if (/^[a-zA-Z]:$/.test(parent)) return `${parent}\\`
   return parent || null
 }
+
+// Estado del visor de lectura: texto (código/archivo) o error legible con
+// acción de descarga opcional (binarios, permisos, etc.).
+type ViewerState =
+  | { kind: "text"; path: string; line: number; content: string }
+  | { kind: "error"; entry: FsEntry; message: string; canDownload: boolean }
 
 // Líneas de código con los colores del editor: un solo highlight del archivo
 // completo (mismo HighlightedCode del chat, sin duplicar lógica) repartido
@@ -220,6 +217,10 @@ export const PCFilesPanel = memo(function PCFilesPanel({
 }) {
   const t = useT()
   const { toast } = useToast()
+  // Desktop (wry) mantiene doble clic para entrar y click simple para expandir;
+  // en táctil el tap entra directo a la carpeta.
+  const isDesktop = useIsDesktop()
+  const touchNav = !isDesktop
   const [cwd, setCwd] = useState<string | null>(null)
   const [dirs, setDirs] = useState<FsEntry[]>([])
   const [files, setFiles] = useState<FsEntry[]>([])
@@ -524,13 +525,19 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     if (targetCwd !== dir) targetLoad(dir)
   }
 
+  // Cada navegación incrementa el contador: si una respuesta vieja llega
+  // después de navegar a otra carpeta, se descarta (no pisa dirs/files/loading).
+  const loadSeqRef = useRef(0)
+
   const load = useCallback(
     async (path: string) => {
       if (!path) return
+      const seq = ++loadSeqRef.current
       setCwd(path)
       setLoading(true)
       try {
         const r = await shell.fs.list(path)
+        if (seq !== loadSeqRef.current) return
         setDirs(r.dirs || [])
         setFiles(r.files || [])
 
@@ -541,10 +548,13 @@ export const PCFilesPanel = memo(function PCFilesPanel({
         } catch {}
         setExplorerRecent(cur.slice(0, 20))
       } catch (e: any) {
+        if (seq !== loadSeqRef.current) return
         showError(e?.message || "No se pudo leer el directorio")
       } finally {
-        setLoading(false)
-        refreshGit()
+        if (seq === loadSeqRef.current) {
+          setLoading(false)
+          refreshGit()
+        }
       }
     },
     [refreshGit, showError]
@@ -659,10 +669,24 @@ export const PCFilesPanel = memo(function PCFilesPanel({
             data: b64,
             directory: Directory.Cache,
           })
+          let canShare = false
+          try { canShare = (await Share.canShare()).value } catch {}
+          if (!canShare) {
+            showNotice(`Guardado en caché: ${fileName}`)
+            return
+          }
           try {
-            await Share.share({ title: fileName, url: saved.uri })
-          } catch {}
-          showNotice(`Guardado: ${fileName}`)
+            await Share.share({ title: fileName, url: saved.uri, dialogTitle: fileName })
+            // En Android el plugin resuelve también si se cancela el diálogo:
+            // no prometemos "Compartido", solo confirmamos que está listo.
+            showNotice(`Listo: ${fileName}`)
+          } catch (e) {
+            const raw = e instanceof Error ? e.message : String(e)
+            // Cancelar el diálogo de compartir no es un error: el archivo ya
+            // quedó en caché.
+            if (/cancel/i.test(raw)) showNotice(`Guardado en caché: ${fileName}`)
+            else showError(humanizeFsError(raw))
+          }
         } else {
           const url = URL.createObjectURL(blob)
           const a = document.createElement("a")
@@ -675,15 +699,24 @@ export const PCFilesPanel = memo(function PCFilesPanel({
           showNotice(`Descargando: ${fileName}`)
         }
       } catch (e) {
-        showError(`Error al descargar: ${e instanceof Error ? e.message : String(e)}`)
+        const raw = e instanceof Error ? e.message : String(e)
+        showError(humanizeFsError(raw))
       } finally {
         setDownloading(null)
       }
     },
-    [downloading, showNotice]
+    [downloading, showNotice, showError]
   )
 
-  const [codeViewer, setCodeViewer] = useState<{ path: string; line: number; content: string } | null>(null)
+  const [codeViewer, setCodeViewer] = useState<ViewerState | null>(null)
+  // El visor recorta al mismo límite en todas las aperturas (el server
+  // también trunca, pero a 64KB: el aviso debe reflejar lo que se muestra).
+  const VIEWER_MAX_CHARS = 30000
+  // Tamaño de texto del visor móvil, persistido entre sesiones (clamp 11-20).
+  const [viewerFontSize, setViewerFontSize] = useLocalStorage<number>("opencode.explorer.viewerFontSize", 13)
+  const codeFontSize = Number.isFinite(viewerFontSize)
+    ? Math.min(20, Math.max(11, viewerFontSize))
+    : 13
   const [htmlPreview, setHtmlPreview] = useState<{ path: string } | null>(null)
   const [showSecondPane, setShowSecondPane] = useState(false)
   const secondPane = usePaneState(null, { onError: showError })
@@ -1055,6 +1088,9 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   )
 
   // Abrir en editor/visor — click primario NO descarga
+  // Secuencia del visor: cualquier apertura/cierre invalida las lecturas en
+  // vuelo (una respuesta vieja no pisa el archivo nuevo ni reabre al cerrar).
+  const viewerSeqRef = useRef(0)
   const handleOpenFile = useCallback(
     async (entry: FsEntry) => {
       if (onOpenFile) {
@@ -1064,46 +1100,75 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       // HTML → visor con preview tipo navegador (CSS embebido o externo)
       if (isHtmlFile(entry.name)) {
         setHtmlPreview({ path: entry.path })
+        viewerSeqRef.current++
         setCodeViewer(null)
         showNotice(`Vista previa: ${entry.name}`)
         return
       }
       // Fallback inline (móvil / sin grid): lee como texto vía GET /shell/fs/read
-      // (misma base remota + auth que el listado, sin descargar) y muestra visor; binarios → descarga
+      // (misma base remota + auth que el listado, sin descargar) y muestra visor.
+      const seq = ++viewerSeqRef.current
       try {
         const res: any = await shell.fs.read(entry.path)
+        if (seq !== viewerSeqRef.current) return
         const text: string = res?.content ?? res?.data ?? res?.text ?? (typeof res === "string" ? res : "")
-        if (typeof text === "string" && text) {
-          setCodeViewer({ path: entry.path, line: 1, content: text.slice(0, 30000) })
-          showNotice(res?.truncated ? `Abierto (primeros 64KB): ${entry.name}` : `Abierto: ${entry.name}`)
+        if (typeof text === "string") {
+          // Binario: no mostrar basura; ofrecer descarga explícita.
+          if (looksLikeBinary(text)) {
+            setCodeViewer({
+              kind: "error",
+              entry,
+              message: "Este archivo parece binario; no hay vista previa de texto.",
+              canDownload: true,
+            })
+            return
+          }
+          // Texto vacío es un archivo legible: visor vacío, no error.
+          const clipped = text.length > VIEWER_MAX_CHARS
+          setCodeViewer({ kind: "text", path: entry.path, line: 1, content: text.slice(0, VIEWER_MAX_CHARS) })
+          showNotice(res?.truncated || clipped ? `Abierto (vista parcial): ${entry.name}` : `Abierto: ${entry.name}`)
           return
         }
-      } catch {}
-      // Si no se pudo leer como texto (binario / error) → descarga como fallback
-      void handleDownload(entry)
+      } catch (e) {
+        if (seq !== viewerSeqRef.current) return
+        const raw = e instanceof Error ? e.message : String(e)
+        setCodeViewer({
+          kind: "error",
+          entry,
+          message: humanizeFsError(raw),
+          canDownload: canDownloadAfterError(raw),
+        })
+        return
+      }
     },
-    [onOpenFile, showNotice, handleDownload]
+    [onOpenFile, showNotice]
   )
   const handleOpenAtLine = useCallback(
     async (path: string, line: number) => {
+      const seq = ++viewerSeqRef.current
       try {
         const res: any = await shell.fs.read(path)
+        if (seq !== viewerSeqRef.current) return
         const text: string = res?.content ?? res?.data ?? res?.text ?? ""
         if (!text && typeof res === "string") {
-          setCodeViewer({ path, line, content: String(res).slice(0, 30000) })
+          setCodeViewer({ kind: "text", path, line, content: String(res).slice(0, VIEWER_MAX_CHARS) })
         } else if (typeof text === "string" && text) {
-          setCodeViewer({ path, line, content: text.slice(0, 30000) })
+          setCodeViewer({ kind: "text", path, line, content: text.slice(0, VIEWER_MAX_CHARS) })
         } else {
           const blob = await shell.fs.download(path)
+          if (seq !== viewerSeqRef.current) return
           const txt = await blob.text()
-          setCodeViewer({ path, line, content: txt.slice(0, 30000) })
+          if (seq !== viewerSeqRef.current) return
+          setCodeViewer({ kind: "text", path, line, content: txt.slice(0, VIEWER_MAX_CHARS) })
         }
         showNotice(`Abierto en línea ${line}: ${path.split(/[/\\]/).pop()}`)
       } catch (e) {
-        showError(`Error al abrir: ${e instanceof Error ? e.message : String(e)}`)
+        if (seq !== viewerSeqRef.current) return
+        const raw = e instanceof Error ? e.message : String(e)
+        showError(humanizeFsError(raw))
       }
     },
-    [showNotice]
+    [showNotice, showError]
   )
 
   const workspaceName = useMemo(() => {
@@ -1713,6 +1778,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                       <TreeFolder
                         entry={d}
                         depth={0}
+                        touchNav={touchNav}
                         onEnterDir={load}
                         query={query}
                         downloading={downloading}
@@ -1934,6 +2000,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                         <TreeFolder
                           entry={d}
                           depth={0}
+                          touchNav={touchNav}
                           onEnterDir={secondPane.load}
                           query={query}
                           downloading={downloading}
@@ -2004,37 +2071,88 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       )}
 
       {codeViewer && (
-        <div className="pcf-code-viewer">
+        <div
+          className={`pcf-code-viewer ${isDesktop ? "" : "is-mobile"}`}
+          {...(isDesktop ? {} : { style: { ["--pcf-code-font-size" as string]: `${codeFontSize}px` } })}
+        >
           <div className="pcf-code-viewer-header">
             <div className="pcf-code-viewer-info">
-              <span className="pcf-code-viewer-file" title={codeViewer.path}>
-                {codeViewer.path.split(/[/\\]/).pop()} :{codeViewer.line}
+              <span
+                className="pcf-code-viewer-file"
+                title={codeViewer.kind === "text" ? codeViewer.path : codeViewer.entry.path}
+              >
+                {codeViewer.kind === "text"
+                  ? `${codeViewer.path.split(/[/\\]/).pop()} :${codeViewer.line}`
+                  : codeViewer.entry.name}
               </span>
-              <span className="pcf-code-viewer-path" title={codeViewer.path}>
-                {codeViewer.path}
+              <span
+                className="pcf-code-viewer-path"
+                title={codeViewer.kind === "text" ? codeViewer.path : codeViewer.entry.path}
+              >
+                {codeViewer.kind === "text" ? codeViewer.path : codeViewer.entry.path}
               </span>
             </div>
+            {!isDesktop && codeViewer.kind === "text" && (
+              <>
+                <button
+                  type="button"
+                  className="pcf-code-font-btn"
+                  aria-label="Reducir tamaño de texto"
+                  title="Texto más chico"
+                  onClick={() => setViewerFontSize((v) => Math.max(11, Math.min(20, (Number.isFinite(v) ? v : 13)) - 1))}
+                >
+                  A−
+                </button>
+                <button
+                  type="button"
+                  className="pcf-code-font-btn"
+                  aria-label="Aumentar tamaño de texto"
+                  title="Texto más grande"
+                  onClick={() => setViewerFontSize((v) => Math.min(20, Math.max(11, (Number.isFinite(v) ? v : 13)) + 1))}
+                >
+                  A+
+                </button>
+              </>
+            )}
             <button
               type="button"
-              className="btn-icon compact"
-              onClick={() => setCodeViewer(null)}
+              className="btn-icon compact pcf-code-close"
+              onClick={() => {
+                viewerSeqRef.current++
+                setCodeViewer(null)
+              }}
               aria-label="Cerrar visor"
               title="Cerrar"
             >
               ×
             </button>
           </div>
-          <div
-            className="pcf-code-viewer-body"
-            ref={(el) => {
-              if (el) {
-                const target = el.querySelector(`[data-line="${codeViewer.line}"]`) as HTMLElement | null
-                setTimeout(() => target?.scrollIntoView({ block: "center", behavior: "smooth" }), 50)
-              }
-            }}
-          >
-            <PcfCodeLines path={codeViewer.path} content={codeViewer.content} target={codeViewer.line} />
-          </div>
+          {codeViewer.kind === "error" ? (
+            <div className="pcf-viewer-error" role="alert">
+              <span>{codeViewer.message}</span>
+              {codeViewer.canDownload && (
+                <button
+                  type="button"
+                  className="btn-primary compact"
+                  onClick={() => void handleDownload(codeViewer.entry)}
+                >
+                  Descargar
+                </button>
+              )}
+            </div>
+          ) : (
+            <div
+              className="pcf-code-viewer-body"
+              ref={(el) => {
+                if (el) {
+                  const target = el.querySelector(`[data-line="${codeViewer.line}"]`) as HTMLElement | null
+                  setTimeout(() => target?.scrollIntoView({ block: "center", behavior: "smooth" }), 50)
+                }
+              }}
+            >
+              <PcfCodeLines path={codeViewer.path} content={codeViewer.content} target={codeViewer.line} />
+            </div>
+          )}
         </div>
       )}
 

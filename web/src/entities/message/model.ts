@@ -32,7 +32,7 @@ export type MessageEnvelope = {
     mode?: string
     finish?: string
     summary?: { diffs?: FileDiff[] }
-    error?: { name: string; message?: string }
+    error?: { name: string; message?: string; ref?: string }
     tokens?: {
       total?: number
       input: number
@@ -72,28 +72,41 @@ export type ThinkingPart = {
   time?: { start?: number; end?: number }
 }
 
+export type RenderedToolPart = {
+  id: string
+  type: string
+  text?: string
+  callID?: string
+  tool?: string
+  state?: {
+    status?: string
+    input?: unknown
+    output?: unknown
+    error?: unknown
+    duration?: number
+    title?: string
+    metadata?: Record<string, unknown>
+  }
+}
+
+/**
+ * Orden real de los parts renderizables de un mensaje (texto/tool
+ * intercalados). Sin esto, MessageBubble aplana a `text` + `toolParts` y
+ * pierde el orden: un tool entre dos textos se dibuja antes que todo.
+ */
+export type RenderedSegment =
+  | { kind: "text"; id: string; text: string }
+  | { kind: "tool"; id: string; tool: RenderedToolPart }
+
 export type RenderedMessage = {
   info: MessageEnvelope["info"]
   parts: MessageEnvelope["parts"]
   text: string
   hasCompaction: boolean
   thinkingParts: ThinkingPart[]
-  toolParts: Array<{
-    id: string
-    type: string
-    text?: string
-    callID?: string
-    tool?: string
-    state?: {
-      status?: string
-      input?: unknown
-      output?: unknown
-      error?: unknown
-      duration?: number
-      title?: string
-      metadata?: Record<string, unknown>
-    }
-  }>
+  toolParts: RenderedToolPart[]
+  /** Orden de parts (texto/tool). Si falta, usar text+toolParts (compat). */
+  segments?: RenderedSegment[]
   summaryDiffs?: FileDiff[]
   dataMode?: string
   turnMode?: string

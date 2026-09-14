@@ -123,4 +123,44 @@ describe("LearningPage", () => {
     expect(seen[0]).toContain("Lección uno")
     spy.mockRestore()
   })
+
+  it("roadmap móvil: lista de secciones en orden con progreso", async () => {
+    markDone("l1", true)
+    const scrollSpy = vi.fn()
+    Object.defineProperty(Element.prototype, "scrollIntoView", { value: scrollSpy, configurable: true, writable: true })
+    try {
+      render(<LearningPage />)
+      await waitFor(() => expect(document.querySelector(".learning-roadmap-list")).toBeTruthy())
+      // 1 li por categoría del manifest
+      const items = document.querySelectorAll(".learning-roadmap-list li")
+      expect(items).toHaveLength(1)
+      const btn = document.querySelector(".learning-roadmap-item") as HTMLButtonElement
+      expect(btn.getAttribute("aria-label")).toBe("Fundamentos: 1/2")
+      const fill = document.querySelector(".learning-roadmap-item-track > span") as HTMLElement
+      expect(fill.style.width).toBe("50%")
+      // Click navega a la tarjeta de la sección (scrollIntoView sobre #learning-cat-<id>)
+      fireEvent.click(btn)
+      await waitFor(() => expect(scrollSpy).toHaveBeenCalledWith({ behavior: "smooth", block: "start" }))
+      expect(document.querySelector("#learning-cat-cat-1")).toBeTruthy()
+    } finally {
+      Reflect.deleteProperty(Element.prototype, "scrollIntoView")
+    }
+  })
+
+  it("sidebar móvil: abre por menú y cierra con Escape/overlay", async () => {
+    render(<LearningPage />)
+    await waitFor(() => expect(document.querySelector(".learning-roadmap")).toBeTruthy())
+
+    fireEvent.click(document.querySelector(".learning-menu-btn")!)
+    await waitFor(() => expect(document.querySelector(".learning-mobile-overlay")).toBeTruthy())
+    expect(document.querySelector('.learning-mobile-panel[role="dialog"]')).toBeTruthy()
+
+    fireEvent.keyDown(window, { key: "Escape" })
+    await waitFor(() => expect(document.querySelector(".learning-mobile-overlay")).toBeFalsy())
+
+    fireEvent.click(document.querySelector(".learning-menu-btn")!)
+    await waitFor(() => expect(document.querySelector(".learning-mobile-overlay")).toBeTruthy())
+    fireEvent.click(document.querySelector(".learning-mobile-overlay")!)
+    await waitFor(() => expect(document.querySelector(".learning-mobile-overlay")).toBeFalsy())
+  })
 })

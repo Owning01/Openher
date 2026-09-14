@@ -1,5 +1,5 @@
 // useShellViewport — breakpoints del shell desktop que no coinciden con el
-// layout móvil: <600px (solo rail + contenido) y <=1100px (QuickChat overlay).
+// layout móvil: <600px (solo rail + contenido) y <=1100px (sidebar derecha en overlay).
 // buildGridTemplate los usa para no reservar columnas de sidebars que el CSS
 // ya oculta o saca del flujo; con matchMedia solo se re-renderiza al cruzar el
 // breakpoint, no en cada píxel del resize.

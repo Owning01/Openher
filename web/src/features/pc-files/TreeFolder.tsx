@@ -9,6 +9,8 @@ import type { GitFileStatus } from "./useGitStatus"
 export type TreeFolderProps = {
   entry: FsEntry
   depth?: number
+  /** Móvil: tap en la fila entra a la carpeta; el chevron expande/contrae. */
+  touchNav?: boolean
   onEnterDir: (path: string) => void
   query: string
   downloading: string | null
@@ -40,6 +42,7 @@ export type TreeFolderProps = {
 export const TreeFolder = memo(function TreeFolder({
   entry,
   depth = 0,
+  touchNav = false,
   onEnterDir,
   query,
   downloading,
@@ -115,9 +118,11 @@ export const TreeFolder = memo(function TreeFolder({
           onSelect?.(e, entry)
           // Con Ctrl/Shift solo se selecciona; el click simple expande, como antes.
           if (e.ctrlKey || e.metaKey || e.shiftKey) return
+          // Táctil: tap = entrar (el doble clic no existe en touch).
+          if (touchNav) { onEnterDir(entry.path); return }
           void toggle()
         }}
-        onDoubleClick={() => { if (!isRenaming) onEnterDir(entry.path) }}
+        onDoubleClick={touchNav ? undefined : () => { if (!isRenaming) onEnterDir(entry.path) }}
         onContextMenu={onContextMenu ? (e) => onContextMenu(e, entry, true) : undefined}
         role="treeitem"
         aria-expanded={expanded}
@@ -139,9 +144,21 @@ export const TreeFolder = memo(function TreeFolder({
         }}
         title={entry.path}
       >
-        <span className="pcf-chevron">
-          {expanded ? <ChevronDownIcon size={11} /> : <ChevronRightIcon size={11} />}
-        </span>
+        {touchNav ? (
+          <button
+            type="button"
+            className="pcf-chevron pcf-chevron-btn"
+            aria-label={expanded ? "Contraer" : "Expandir"}
+            aria-expanded={expanded}
+            onClick={(e) => { e.stopPropagation(); if (isRenaming) return; void toggle() }}
+          >
+            {expanded ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+          </button>
+        ) : (
+          <span className="pcf-chevron">
+            {expanded ? <ChevronDownIcon size={11} /> : <ChevronRightIcon size={11} />}
+          </span>
+        )}
         <span className="pcf-icon-wrap">
           <VSCodeFileIcon name={entry.name} isDir={true} isOpen={expanded} size={15} />
         </span>
@@ -185,6 +202,7 @@ export const TreeFolder = memo(function TreeFolder({
                 key={d.path}
                 entry={d}
                 depth={depth + 1}
+                touchNav={touchNav}
                 onEnterDir={onEnterDir}
                 query={query}
                 downloading={downloading}

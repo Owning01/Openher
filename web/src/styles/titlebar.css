@@ -13,7 +13,7 @@
   padding: 0 0 0 10px;
   background: var(--bg, #09090b);
   border-bottom: 1px solid var(--border, #222226);
-  z-index: 99999;
+  z-index: var(--z-titlebar);
   user-select: none;
   -webkit-user-select: none;
   box-sizing: border-box;
@@ -334,7 +334,7 @@ html[data-desktop="true"] .app-shell {
 }
 
 /* Resize frameless via web: los descendientes del WebView pueden tragar el WM_NCHITTEST antes de llegar al padre; estos handles llaman a POST /shell/window/resize que inicia drag_resize_window del SO. */
-.win-resize-container { position: fixed; inset: 0; pointer-events: none; z-index: 100000; }
+.win-resize-container { position: fixed; inset: 0; pointer-events: none; z-index: var(--z-portal); }
 html[data-window-maximized="true"] .win-resize-container { display: none; }
 .win-resize-handle { position: fixed; pointer-events: auto; touch-action: none; }
 .win-resize-top { top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }

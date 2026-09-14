@@ -6,6 +6,8 @@ import {
   normalizeSlashes,
   toServerRelative,
   withDirectory,
+  withLimit,
+  withProject,
   withLocationDirectory,
   responseDetail,
   normalizeHeaders,
@@ -163,6 +165,36 @@ describe("withDirectory", () => {
   })
   it("normalizes slashes before encoding", () => {
     expect(withDirectory("/api/file", "C:\\home\\user")).toBe("/api/file?directory=C%3A%2Fhome%2Fuser")
+  })
+})
+
+describe("withLimit", () => {
+  it("returns path unchanged without a positive limit", () => {
+    expect(withLimit("/session", undefined)).toBe("/session")
+    expect(withLimit("/session", 0)).toBe("/session")
+    expect(withLimit("/session", -5)).toBe("/session")
+  })
+  it("appends ?limit when no query", () => {
+    expect(withLimit("/session", 5000)).toBe("/session?limit=5000")
+  })
+  it("appends &limit when query exists", () => {
+    expect(withLimit("/session?directory=x", 5000)).toBe("/session?directory=x&limit=5000")
+  })
+  it("truncates decimals", () => {
+    expect(withLimit("/session", 10.9)).toBe("/session?limit=10")
+  })
+})
+
+describe("withProject", () => {
+  it("returns path unchanged without project", () => {
+    expect(withProject("/session", undefined)).toBe("/session")
+    expect(withProject("/session", "")).toBe("/session")
+  })
+  it("appends ?project when no query", () => {
+    expect(withProject("/session", "abc123")).toBe("/session?project=abc123")
+  })
+  it("appends &project when query exists", () => {
+    expect(withProject("/session?limit=1000", "a b")).toBe("/session?limit=1000&project=a%20b")
   })
 })
 

@@ -7,13 +7,14 @@ import { CollapsibleSection } from "./CollapsibleSection"
 import { GridSpinner } from "./GridSpinner"
 import { DiffView } from "./DiffView"
 import { useT } from "../i18n-context"
-import { CodeIcon, FileIcon, SearchIcon, GlobeIcon, CloseIcon, ToolIcon } from "../Icons"
+import { CodeIcon, FileIcon, SearchIcon, GlobeIcon, CloseIcon, ToolIcon, ClockIcon } from "../Icons"
 import { Markdown } from "./Markdown"
 import { HighlightedCode } from "./HighlightedCode"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { computeRenderedMessages } from "../utils/rendered"
-import { useQuestionSettled } from "../utils/questionStore"
+import { useQuestionSettled, useQuestionFloatingMode } from "../utils/questionStore"
 import { toolPartFileDiff } from "../utils/toolFileDiff"
+import { subagentBackground, isBackgroundRunning } from "../utils/subagentBackground"
 
 export type ToolPartData = {
   id: string
@@ -243,6 +244,7 @@ function SubagentTaskCard({
   onViewSubagents,
   isDone,
   isError,
+  busySessionIds,
   t,
 }: {
   part: ToolPartData
@@ -251,6 +253,7 @@ function SubagentTaskCard({
   onViewSubagents?: (subagentID?: string) => void
   isDone: boolean
   isError: boolean
+  busySessionIds?: ReadonlySet<string>
   t: (key: any, vars?: any) => string
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -269,6 +272,13 @@ function SubagentTaskCard({
 
   const title = agentType.charAt(0).toUpperCase() + agentType.slice(1)
   const subtitle = description || prompt || undefined
+
+  // ¿Corre en background? El part queda "completed" al delegar; el estado vivo
+  // lo da la sesión hija (ver utils/subagentBackground).
+  const bg = subagentBackground(part)
+  const bgRunning = isBackgroundRunning(part, busySessionIds)
+  const showWorking = !isDone || bgRunning
+  const childSessionId = bg.childSessionID ?? resolvedSessionId
 
   // Carga mensajes de la sesión del subagente al expandir
   useEffect(() => {
@@ -337,7 +347,7 @@ function SubagentTaskCard({
   }, [subMessages])
 
   return (
-    <div className={`subagent-task-card${expanded ? " is-expanded" : ""}${isDone ? "" : " working"}`}>
+    <div className={`subagent-task-card${expanded ? " is-expanded" : ""}${showWorking ? " working" : ""}${bg.isBackground ? " is-background" : ""}`}>
       <div
         className="subagent-task-header"
         onClick={() => setExpanded((v) => !v)}
@@ -350,19 +360,30 @@ function SubagentTaskCard({
             <ToolIcon size={12} />
             {title}
           </span>
+          {bg.isBackground && (
+            <span
+              className="subagent-task-bg"
+              title={t('toolpart.backgroundHint')}
+            >
+              <ClockIcon size={11} />
+              {t('toolpart.background')}
+            </span>
+          )}
           <span className="subagent-task-title" title={subtitle || title}>
             {subtitle || title}
           </span>
         </div>
         <div className="subagent-task-right">
           <span className="subagent-task-status">
-            {isDone ? (
-              isError ? <span style={{ color: "var(--danger)" }}> Error</span> : <span style={{ color: "var(--success)" }}> Completado</span>
+            {showWorking ? (
+              <><GridSpinner label={title} size={14} /><span style={{ color: "var(--accent)" }}>{bg.isBackground ? t('toolpart.backgroundRunning') : "En progreso..."}</span></>
+            ) : isError ? (
+              <span style={{ color: "var(--danger)" }}> Error</span>
             ) : (
-              <><GridSpinner label={title} size={14} /><span style={{ color: "var(--accent)" }}>En progreso...</span></>
+              <span style={{ color: "var(--success)" }}> Completado</span>
             )}
           </span>
-          <span className="subagent-expand-chevron" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: "12px", color: "var(--text-muted)" }}>
+          <span className="subagent-expand-chevron" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: "12px", color: "var(--muted)" }}>
             ▼
           </span>
         </div>
@@ -404,6 +425,7 @@ function SubagentTaskCard({
                       directory={directory}
                       sessionID={resolvedSessionId ?? undefined}
                       onViewSubagents={onViewSubagents}
+                      busySessionIds={busySessionIds}
                     />
                   ))}
                   {msg.text && (
@@ -433,14 +455,14 @@ function SubagentTaskCard({
             </div>
           )}
 
-          {resolvedSessionId && onViewSubagents && (
+          {childSessionId && onViewSubagents && (
             <div className="subagent-task-footer">
               <button
                 type="button"
                 className="btn-secondary compact"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onViewSubagents(resolvedSessionId)
+                  onViewSubagents(childSessionId)
                 }}
                 title={t('toolpart.viewSubagent') || "Abrir sesión dedicada"}
               >
@@ -464,12 +486,13 @@ export function DiffStatBadge({ add, del }: { add: number; del: number }) {
   )
 }
 
-export const ToolPart = memo(function ToolPart({ part, config, directory, sessionID, onViewSubagents, compact: _compact }: {
+export const ToolPart = memo(function ToolPart({ part, config, directory, sessionID, onViewSubagents, busySessionIds, compact: _compact }: {
   part: ToolPartData
   config?: ServerConfig
   directory?: string
   sessionID?: string
   onViewSubagents?: (subagentID?: string) => void
+  busySessionIds?: ReadonlySet<string>
   compact?: boolean
 }) {
   const t = useT()
@@ -480,6 +503,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
   const callID = useMemo(() => extractParam(text ?? "", "callID") || text?.match(/callID="([^"]+)"/)?.[1] || part.callID || part.id, [text, part.callID, part.id])
   const idCandidates = useMemo(() => [callID, part.callID, part.id, text?.match(/callID="([^"]+)"/)?.[1], extractParam(text ?? "", "callID")].filter((x): x is string => !!x), [callID, part.callID, part.id, text])
   const settledInfo = useQuestionSettled(idCandidates)
+  const questionFloating = useQuestionFloatingMode()
   const isSettled = !!settledInfo
   const [expanded, setExpanded] = useState(false)
   const meta = toolName ? toolMeta[toolName] : null
@@ -560,6 +584,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
         onViewSubagents={onViewSubagents}
         isDone={isDone}
         isError={isError}
+        busySessionIds={busySessionIds}
         t={t}
       />
     )
@@ -590,6 +615,18 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
       const effectiveSessionID = part.sessionID ?? sessionID
 
       if (questions.length > 0 && !answered) {
+        // Con questionAuto ON el modal flotante (ChatView) es la única
+        // superficie interactiva; acá va un chip compacto para no duplicar.
+        if (questionFloating) {
+          return (
+            <div className="tool-part tool-question waiting" role="status">
+              <span className="tool-part-verb">{t('settings.questionPrompt')}</span>
+              <span className="tool-part-target">
+                <span className="tool-target-text">{questions[0]?.question ?? "question"}</span>
+              </span>
+            </div>
+          )
+        }
         return (
           <QuestionPrompt
             questions={questions.map((q: any) => ({

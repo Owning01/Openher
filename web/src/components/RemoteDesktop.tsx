@@ -40,7 +40,7 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
   const [pressedMods, setPressedMods] = useState<Set<string>>(new Set())
   const [showPicker, setShowPicker] = useState(false)
   const [thumbnails, setThumbnails] = useState<Record<number, string>>({})
-  const [showStats, setShowStats] = useState(true)
+  const [showData, setShowData] = useState(true)
   const [showRotateHint, setShowRotateHint] = useState(true)
   const [stage, setStage] = useState({ w: 0, h: 0 })
 
@@ -536,12 +536,12 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
           </button>
           <button
             className="btn-secondary compact desktop-toggle"
-            onClick={() => setShowStats((v) => !v)}
-            aria-pressed={showStats}
-            aria-label={t('desktop.statsToggle')}
-            title={t('desktop.statsToggle')}
+            onClick={() => setShowData((v) => !v)}
+            aria-pressed={showData}
+            aria-label={t('desktop.dataToggle')}
+            title={t('desktop.dataToggle')}
           >
-            {showStats ? t('desktop.statsHide') : t('desktop.statsShow')}
+            {showData ? t('desktop.dataHide') : t('desktop.dataShow')}
           </button>
         </div>
 
@@ -633,8 +633,8 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
           ) : (
             status !== "error" && !needsConsent() && <div className="desktop-error"><p>{t('desktop.connecting')}</p></div>
           )}
-          {showStats && status === "streaming" && (
-            <div className="desktop-stats-chip">
+          {showData && status === "streaming" && (
+            <div className="desktop-data-chip">
               {fps} fps · {latency !== null ? `${latency} ms` : "—"} · {kbps} KB
             </div>
           )}

@@ -211,13 +211,13 @@ pub fn labs_list(state: &crate::state::AppState) -> serde_json::Value {
     let mut apps = Vec::new();
     apps.push(serde_json::json!({
         "id": "server",
-        "title": "Server opencode",
+        "title": "Server OpenHer",
         "kind": "server",
         "configured": !cfg.start_command.trim().is_empty(),
     }));
     apps.push(serde_json::json!({
         "id": "stats",
-        "title": "OpenCode Stats",
+        "title": "OpenHer Stats",
         "kind": "stats",
         "configured": true,
     }));
@@ -245,7 +245,7 @@ pub fn labs_start(state: &Arc<crate::state::AppState>, id: &str) -> Result<serde
     }
     let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
     let (title, path): (String, String) = match id {
-        "server" => ("Server opencode".to_string(), cfg.start_command.clone()),
+        "server" => ("Server OpenHer".to_string(), cfg.start_command.clone()),
         "desktop-agent" => ("Escritorio remoto".to_string(), cfg.desktop_agent_path.clone()),
         _ => cfg
             .labs_apps

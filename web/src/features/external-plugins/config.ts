@@ -42,6 +42,17 @@ export const EXTERNAL_PROJECTS: ExternalProject[] = [
     dir: "G:\\Proyectos\\m3e-canvas",
   },
   {
+    name: "anim-lab",
+    title: "Anim Lab",
+    description: "Biblioteca de animaciones: transiciones, gradientes, loaders, fondos y scroll",
+    icon: "AL",
+    iconKind: "play",
+    port: 3060,
+    url: "http://127.0.0.1:3060",
+    dir: "G:\\Proyectos\\anim-lab",
+    isWidget: false,
+  },
+  {
     name: "screenshots",
     title: "Screenshots",
     description: "App Store Screenshots — Next.js",
@@ -67,6 +78,13 @@ export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
     title: "Canvas M3E",
     description: "Boceta pantallas Material 3 y genera el prompt para el agente",
     iconKind: "paint",
+    group: "herramientas",
+  },
+  {
+    key: "openher:studio",
+    title: "Estudio",
+    description: "Abre el Estudio: preview con hot-reload y edicion con el agente",
+    iconKind: "layers",
     group: "herramientas",
   },
 ]

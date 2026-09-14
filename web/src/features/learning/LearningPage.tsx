@@ -332,7 +332,7 @@ export default function LearningPage() {
         <button type="button" onClick={() => setSidebarOpen(true)} className="btn-icon compact learning-menu-btn" aria-label={t("learning.menu")}>
           <PanelLeftIcon size={16} />
         </button>
-        <h2 className="learning-brand" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><GraduationCapIcon size={18} /> {t("learning.title")}</h2>
+        <h2 className="learning-brand" aria-label={t("learning.title")} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><GraduationCapIcon size={18} /> <span className="learning-brand-text">{t("learning.title")}</span></h2>
         <button
           type="button"
           onClick={() => setSidebarCollapsed((v) => !v)}
@@ -622,37 +622,56 @@ function RoadmapDiagram({ categories, progress, onGotoCat }: { categories: Learn
   const step = (W - pad * 2) / Math.max(1, n - 1)
   const cy = 28
   return (
-    <div className="learning-diagram learning-roadmap-diagram" style={{ padding: 10 }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="group" aria-label={t("learning.route")}>
-        {/* línea base */}
-        <line x1={pad} y1={cy} x2={W - pad} y2={cy} stroke="var(--border)" strokeWidth={2} strokeLinecap="round" />
+    <>
+      <div className="learning-diagram learning-roadmap-diagram" style={{ padding: 10 }}>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="group" aria-label={t("learning.route")}>
+          {/* línea base */}
+          <line x1={pad} y1={cy} x2={W - pad} y2={cy} stroke="var(--border)" strokeWidth={2} strokeLinecap="round" />
+          {categories.map((cat, i) => {
+            const x = pad + i * step
+            const done = cat.items.filter((it) => progress[it.id]?.done).length
+            const ratio = cat.count > 0 ? done / cat.count : 0
+            const r = 15 + ratio * 4
+            const fill = ratio === 1 ? "var(--success)" : ratio > 0 ? "var(--primary)" : "var(--surface-strong)"
+            const stroke = ratio > 0 ? "var(--primary)" : "var(--border-strong)"
+            return (
+              <g key={cat.id} role="button" tabIndex={0} aria-label={`${cat.title}: ${done}/${cat.count}`}
+                onClick={() => onGotoCat(cat.id)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onGotoCat(cat.id) } }}
+                style={{ cursor: "pointer" }}>
+                <title>{`${cat.title}: ${done}/${cat.count} completadas`}</title>
+                <circle cx={x} cy={cy} r={r} fill={fill} stroke={stroke} strokeWidth={1.4} />
+                {ratio === 1 ? (
+                  <path d={`M ${x - 5} ${cy} l 3.5 3.5 L ${x + 5} ${cy - 4}`} fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" />
+                ) : (
+                  <text x={x} y={cy + 0.35} textAnchor="middle" dominantBaseline="middle" fontSize={9} fontWeight={800} fill={ratio > 0.4 ? "#fff" : "var(--muted-strong)"} aria-hidden="true">{String(i + 1)}</text>
+                )}
+                <text x={x} y={H - 4} textAnchor="middle" fontSize={7.5} fill="var(--muted)" fontWeight={600} aria-hidden="true">{cat.title.split(" ")[0]}</text>
+              </g>
+            )
+          })}
+          {/* flecha final */}
+          <polygon points={`${W - pad + 6},${cy - 5} ${W - pad + 6},${cy + 5} ${W - pad + 12},${cy}`} fill="var(--border-strong)" aria-hidden="true" />
+        </svg>
+      </div>
+      <ol className="learning-roadmap-list" aria-label={t("learning.route")}>
         {categories.map((cat, i) => {
-          const x = pad + i * step
           const done = cat.items.filter((it) => progress[it.id]?.done).length
-          const ratio = cat.count > 0 ? done / cat.count : 0
-          const r = 15 + ratio * 4
-          const fill = ratio === 1 ? "var(--success)" : ratio > 0 ? "var(--primary)" : "var(--surface-strong)"
-          const stroke = ratio > 0 ? "var(--primary)" : "var(--border-strong)"
+          const pct = cat.count > 0 ? Math.round((done / cat.count) * 100) : 0
           return (
-            <g key={cat.id} role="button" tabIndex={0} aria-label={`${cat.title}: ${done}/${cat.count}`}
-              onClick={() => onGotoCat(cat.id)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onGotoCat(cat.id) } }}
-              style={{ cursor: "pointer" }}>
-              <title>{`${cat.title}: ${done}/${cat.count} completadas`}</title>
-              <circle cx={x} cy={cy} r={r} fill={fill} stroke={stroke} strokeWidth={1.4} />
-              {ratio === 1 ? (
-                <path d={`M ${x - 5} ${cy} l 3.5 3.5 L ${x + 5} ${cy - 4}`} fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" />
-              ) : (
-                <text x={x} y={cy + 0.35} textAnchor="middle" dominantBaseline="middle" fontSize={9} fontWeight={800} fill={ratio > 0.4 ? "#fff" : "var(--muted-strong)"} aria-hidden="true">{String(i + 1)}</text>
-              )}
-              <text x={x} y={H - 4} textAnchor="middle" fontSize={7.5} fill="var(--muted)" fontWeight={600} aria-hidden="true">{cat.title.split(" ")[0]}</text>
-            </g>
+            <li key={cat.id}>
+              <button type="button" className="learning-roadmap-item" onClick={() => onGotoCat(cat.id)}
+                aria-label={`${cat.title}: ${done}/${cat.count}`}>
+                <span className="learning-roadmap-item-index" aria-hidden="true">{i + 1}</span>
+                <span className="learning-roadmap-item-title">{cat.title}</span>
+                <span className="learning-roadmap-item-meta">{done}/{cat.count}</span>
+                <span className="learning-roadmap-item-track" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
+              </button>
+            </li>
           )
         })}
-        {/* flecha final */}
-        <polygon points={`${W - pad + 6},${cy - 5} ${W - pad + 6},${cy + 5} ${W - pad + 12},${cy}`} fill="var(--border-strong)" aria-hidden="true" />
-      </svg>
-    </div>
+      </ol>
+    </>
   )
 }
 

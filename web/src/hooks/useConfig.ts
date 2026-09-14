@@ -4,7 +4,9 @@ import { Directory, Filesystem } from "@capacitor/filesystem"
 import type { ServerConfig, ConnectionState, NoticeType, DataMode } from "../types"
 import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
+import { invalidateShellBase } from "../shell"
 import { encrypt, decrypt, isCiphertext } from "../utils/crypto"
+import { discoverServer, isLoopbackHost } from "../utils/serverDiscovery"
 
 const CONFIG_FILENAME = "openher-config.json"
 
@@ -40,7 +42,7 @@ function loadInitialConfig(): ServerConfig {
 
 function loadInitialDataMode(): DataMode {
   // Escritorio (shell wry) → SIEMPRE full, síncrono, sin esperar a la red.
-  const isDesktop = typeof window !== "undefined" && !!(window as any).__OPENCODE_DESKTOP__
+  const isDesktop = typeof window !== "undefined" && !!(window as any).__OPENHER_DESKTOP__
   if (isDesktop) return "full"
   const saved = localStorage.getItem(STORAGE_KEYS.DATA_MODE)
   return saved === "full" || saved === "saver" || saved === "ultra" || saved === "miser" ? saved : "saver"
@@ -139,6 +141,34 @@ export function useConfig() {
     })()
   }, [])
 
+  // Autodescubrimiento del server local: la config es por origen (localStorage),
+  // así que una pestaña/instancia nueva arranca vacía y el shell inyecta su
+  // config (posiblemente stale). Si no hay config o la guardada es loopback y
+  // no responde, buscamos el server en 127.0.0.1/localhost × 4096/4098/4097 con
+  // las credenciales documentadas. Solo al montar; no pisa un server remoto.
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return
+    let cancelled = false
+    void (async () => {
+      const stored = config.host ? config : null
+      if (stored && !isLoopbackHost(stored.host)) return
+      const found = await discoverServer({ stored, health: (cfg) => api.health(cfg) })
+      if (!found || cancelled) return
+      const same = config.host === found.config.host
+        && config.port === found.config.port
+        && config.username === found.config.username
+        && config.password === found.config.password
+      if (same) return
+      setConfig(found.config)
+      setDraftConfig(found.config)
+      localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(found.config))
+      invalidateShellBase()
+    })()
+    return () => { cancelled = true }
+    // Solo al montar: no re-descubrir ante cada cambio de config.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const hasConfiguredServer = Boolean(config.host && config.port > 0)
   const draftConfigKey = configKey(draftConfig)
   const savedConfigKey = configKey(config)
@@ -151,6 +181,9 @@ export function useConfig() {
     localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(draftConfig))
     writeConfigToFile(draftConfig)
     writeConfigToExternal(draftConfig)
+    // El puente del shell (/shell/*) se deriva del host del server: al cambiar
+    // la conexión hay que invalidar la base resuelta (TTL 30s) para el explorador.
+    invalidateShellBase()
     const tested = lastTestedConfigKey === configKey(draftConfig)
     setSettingsNotice({
       type: "success",
@@ -164,7 +197,7 @@ export function useConfig() {
     })
     setTimeout(() => setSettingsNotice(null), 6000)
     setConnectionState("connecting")
-    setConnectionMessage("Connecting to OpenCode...")
+    setConnectionMessage("Connecting to OpenHer...")
   }, [draftConfig, lastTestedConfigKey])
 
   const testConnection = useCallback(async (t: (key: string, params?: Record<string, string | number>) => string) => {
@@ -204,9 +237,9 @@ export function useConfig() {
       const err = lastErr as Error
       const msg = err?.message ?? "Error desconocido"
       let hint = msg === "Connection timed out"
-        ? "El servidor no respondió en 7s. Probé 4096 y 4098 (opencode2). Verificá que opencode esté corriendo. Para opencode2 usa 127.0.0.1:4098 usuario opencode pass octavio."
+        ? "El servidor no respondió en 7s. Probé 4096 y 4098 (OpenHer v2). Verificá que el servidor OpenHer esté corriendo. Para v2 usa 127.0.0.1:4098 usuario opencode pass octavio."
         : msg.includes("Failed to fetch") || msg.includes("ERR_CONNECTION_REFUSED") || msg.includes("ECONNREFUSED")
-          ? "Conexión rechazada. Probé 4096 y 4098. Iniciá opencode con: opencode serve --port 4096  o  opencode2 serve --service (usa 4098/octavio)"
+          ? "Conexión rechazada. Probé 4096 y 4098. Iniciá el servidor con: opencode serve --port 4096  o  opencode2 serve --service (usa 4098/octavio)"
           : msg.includes("ERR_NAME_NOT_RESOLVED") || msg.includes("ENOTFOUND")
             ? "No se pudo resolver el host."
             : msg.includes("401") || msg.includes("403")
@@ -221,7 +254,7 @@ export function useConfig() {
 
   const resetConnection = useCallback(() => {
     setConnectionState("connecting")
-    setConnectionMessage("Connecting to OpenCode...")
+    setConnectionMessage("Connecting to OpenHer...")
     setConnectedVersion("")
     setLastTestedConfigKey(null)
   }, [])
