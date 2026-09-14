@@ -398,13 +398,17 @@ function rpcHeaders(config: ServerConfig): Record<string, string> {
 async function postRpc(config: ServerConfig | null, name: string, body: Record<string, unknown>): Promise<unknown> {
   if (!config) return null
   try {
+    // El server unificado (opencode v2) exige Rpc.Input = { input: {...} }
+    // y responde { output: ... }. Sin el envoltorio devuelve 400 vacío
+    // (por eso el debate v1 "ni funcionaba").
     const res = await fetch(`${baseUrl(config)}/api/rpc/debate/${name}`, {
       method: "POST",
       headers: rpcHeaders(config),
-      body: JSON.stringify(body),
+      body: JSON.stringify({ input: body }),
     })
     if (!res.ok) return null
-    return (await res.json()) as unknown
+    const json = (await res.json()) as { output?: unknown }
+    return json?.output ?? null
   } catch {
     return null
   }

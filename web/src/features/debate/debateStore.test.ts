@@ -108,12 +108,20 @@ describe("debateStore: rehidratado vía RPC debate/state", () => {
 
   it("fetchDebateState pide POST a debate/state y devuelve el snapshot", async () => {
     const snap = { debateID: DEBATE, topic: "T", messages: [] }
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(snap) })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ output: snap }) })
     vi.stubGlobal("fetch", fetchMock)
     const out = await fetchDebateState({ host: "h", port: 1, username: "u", password: "p" }, DEBATE)
     expect(out).toEqual(snap)
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/rpc/debate/state")
+  })
+
+  it("el RPC se envuelve en {input} (Rpc.Input del server unificado)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ output: { ok: true } }) })
+    vi.stubGlobal("fetch", fetchMock)
+    await sendDebateControl({ host: "h", port: 1, username: "u", password: "p" }, ORIGIN, DEBATE, "stop")
+    const rawBody = (fetchMock.mock.calls[0]?.[1] as { body?: unknown })?.body
+    expect(JSON.parse(String(rawBody))).toEqual({ input: { debateID: DEBATE } })
   })
 
   it("fetchDebateState devuelve null si el plugin viejo no tiene el RPC", async () => {
@@ -125,7 +133,7 @@ describe("debateStore: rehidratado vía RPC debate/state", () => {
 
 describe("debateStore: RPC intervene / pause / resume / stop", () => {
   it("intervene publica vía RPC y el mensaje vuelve por SSE como humano", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ seq: 7 }) }))
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ output: { seq: 7 } }) }))
     ingestDebateEnvelope("rpc.debate.started", startedPayload(1))
     const ok = await sendDebateIntervene({ host: "h", port: 1, username: "u", password: "p" }, DEBATE, "alto ahí")
     expect(ok).toBe(true)
@@ -136,7 +144,7 @@ describe("debateStore: RPC intervene / pause / resume / stop", () => {
   })
 
   it("pause marca pausa local; resume la levanta", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ ok: true }) }))
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ output: { ok: true } }) }))
     const cfg = { host: "h", port: 1, username: "u", password: "p" }
     ingestDebateEnvelope("rpc.debate.started", startedPayload(1))
     expect(await sendDebateControl(cfg, ORIGIN, DEBATE, "pause")).toBe(true)

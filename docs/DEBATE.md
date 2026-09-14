@@ -234,6 +234,22 @@ Pi intercom/messenger · OTel GenAI.
 
 ### Fase 1 — Plugin protocolo v2 (plugin, 2026-09-14)
 
+### Fase 1b — Por qué v1 "ni funcionaba" + fix RPC (2026-09-14)
+
+Dos causas raíz, ambas verificadas contra el server unificado 2.0.3:
+1. **Forma del RPC**: el server exige `Rpc.Input = { input: {...} }` y
+   responde `{ output: ... }` (ver `/openapi.json`, ruta
+   `/api/rpc/{rpcID}/{method}`). El cliente mandaba el objeto pelado →
+   **400 con cuerpo vacío**. Fix centralizado en `postRpc`
+   (`debateStore.ts`): envuelve `{input}` y desenvuelve `{output}`.
+   Tests actualizados a la forma real + test nuevo que fija el contrato.
+2. **Referencia rancia**: `opencode.json` global listaba
+   `"./plugins/debate-room.ts"` (archivo inexistente → ENOENT en cada
+   carga). Cambiado a `"./plugins/debate-room"` (directorio).
+- El watcher del harness **ya hot-recargó v2** sin reiniciar: el RPC
+  `pause` (solo existe en v2) responde `200 {output:{ok:false}}`.
+  `state` con ID inexistente → `200 {output:{}}`.
+
 Archivo: `C:\Users\perca\.config\opencode\plugins\debate-room\index.ts`
 (542 → 1400 líneas; backup en `index.ts.bak`). Constructor: subagente worker
 (reporte de handoff perdido; verificado por el titular).
