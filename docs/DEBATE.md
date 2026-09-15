@@ -285,6 +285,15 @@ por ambos paths + `state` tras reinicio.
 - Tier 1 en curso: 5 casos × 3 motores × 2 corridas, maxTurns 6
   (`scripts/debate-eval/out-tier1/`).
 
+### Fase 1d — Fixes de medición Tier 1 (2026-09-14/15)
+
+- `shared` no exponía su sesión → sin tokens reales + reporte con "ahorro
+  100%" ficticio. Fix plugin (`entry.sessions={shared}`) + reporte con base
+  por-config (misma base o n/c) + `consensusPctMean` (el consenso full es
+  raro; el parcial es la norma).
+- Re-corridas las 10 celdas B (`out-tier1b/`). Harness: modo `--recompute`,
+  actas por run, `blind-set.mjs` (anonimiza actas para REVISAR.md).
+
 ### Fase 1b — Por qué v1 "ni funcionaba" + fix RPC (2026-09-14)
 
 Dos causas raíz, ambas verificadas contra el server unificado 2.0.3:

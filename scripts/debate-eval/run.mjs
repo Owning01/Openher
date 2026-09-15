@@ -57,10 +57,11 @@ let RUNS_PER_CELL = 3;
 
 // ---- CLI ----
 function parseArgs(argv) {
-  const o = { dryRun: false, limit: 0, cases: [], out: join(HERE, "out"), url: process.env.OPENCODE_URL || "http://127.0.0.1:4096", auth: process.env.OPENCODE_AUTH || "opencode:octavio", configs: [], runs: 0, maxTurns: 0, help: false };
+  const o = { dryRun: false, limit: 0, cases: [], out: join(HERE, "out"), url: process.env.OPENCODE_URL || "http://127.0.0.1:4096", auth: process.env.OPENCODE_AUTH || "opencode:octavio", configs: [], runs: 0, maxTurns: 0, recompute: "", help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--dry-run") o.dryRun = true;
+    else if (a === "--recompute") o.recompute = String(argv[++i] || "");
     else if (a === "--limit") o.limit = Math.max(0, parseInt(argv[++i] || "0", 10) || 0);
     else if (a === "--cases") o.cases = String(argv[++i] || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
     else if (a === "--configs") o.configs = String(argv[++i] || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -416,6 +417,7 @@ async function realDebate(kase, cfg, runIdx, base, auth) {
       ...base_rec, debateID,
       consensus: consensusPct === 100 || s.consensus === true,
       consensusPct,
+      acta: String(s.acta ?? "").slice(0, 4000),
       tokensTotalEst, tokensByRoleEst,
       tokensReal: realRoles ? { input: realIn, output: realOut, reasoning: realReason, total: realTotal, roles: realRoles } : null,
       cacheReal: realRoles ? { read: realRead, write: realWrite, readPct: realIn + realRead ? realRead / (realIn + realRead) : 0 } : null,
@@ -453,6 +455,7 @@ function aggregate(runs) {
     return {
       caseId, configId, n: rs.length,
       consensusRate: mean(rs.map((r) => (r.consensus ? 1 : 0))),
+      consensusPctMean: Math.round(mean(rs.map((r) => r.consensusPct || 0))),
       tokensMean: Math.round(mean(toks)), tokensStd: Math.round(std(toks)),
       tokensMin: Math.min(...toks), tokensMax: Math.max(...toks),
       tokensRealMean: rs.some((r) => r.tokensReal) ? Math.round(mean(rs.filter((r) => r.tokensReal).map((r) => r.tokensReal.total))) : null,
@@ -479,6 +482,7 @@ function aggregate(runs) {
     cells: cs.length,
     runs: cs.reduce((a, c) => a + c.n, 0),
     consensusRate: +mean(cs.map((c) => c.consensusRate)).toFixed(3),
+    consensusPctMean: Math.round(mean(cs.map((c) => c.consensusPctMean || 0))),
     tokensMean: Math.round(mean(cs.map((c) => c.tokensMean))),
     tokensStd: Math.round(mean(cs.map((c) => c.tokensStd))),
     tokensRealMean: cs.some((c) => c.tokensRealMean != null) ? Math.round(mean(cs.filter((c) => c.tokensRealMean != null).map((c) => c.tokensRealMean))) : null,
@@ -501,6 +505,28 @@ function aggregate(runs) {
 async function main() {
   const opt = parseArgs(process.argv.slice(2));
   if (opt.help) { help(); process.exit(0); }
+  if (opt.recompute) {
+    // Re-agrega runs existentes (tras fixes de aggregate/reporte) sin re-correr.
+    const prev = JSON.parse(readFileSync(opt.recompute, "utf8"));
+    const runs = Array.isArray(prev.runs) ? prev.runs : [];
+    const { cells, configs } = aggregate(runs);
+    const results = {
+      meta: { ...(prev.meta || {}), recomputedAt: new Date().toISOString(), executed: runs.length },
+      configDefs: prev.configDefs || CONFIGS,
+      runs, cells, configs,
+    };
+    mkdirSync(opt.out, { recursive: true });
+    const resultsPath = join(opt.out, "results.json");
+    writeFileSync(resultsPath, JSON.stringify(results, null, 2));
+    console.log(`[run] recompute ${runs.length} runs → ${resultsPath}`);
+    const reportPath = join(opt.out, "report.md");
+    const child = spawnSync(process.execPath, [join(HERE, "report.mjs"), "--in", resultsPath, "--out", reportPath], { encoding: "utf8" });
+    if (child.stdout) process.stdout.write(child.stdout);
+    if (child.stderr) process.stderr.write(child.stderr);
+    if (child.status !== 0) { console.error("[run] report.mjs falló."); process.exit(child.status || 1); }
+    console.log(`[run] report → ${reportPath}`);
+    return;
+  }
   const cases = JSON.parse(readFileSync(join(HERE, "cases.json"), "utf8"));
   if (!Array.isArray(cases) || cases.length !== 20) {
     console.error(`cases.json debe tener 20 dilemas (hay ${Array.isArray(cases) ? cases.length : "?"}).`);
