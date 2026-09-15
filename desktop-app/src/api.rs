@@ -316,6 +316,15 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
         }
     }
 
+    // ============================== Relevo entre agentes (team/send)
+    if path.starts_with("/shell/team/") {
+        if let Some(resp) =
+            crate::infrastructure::http::team_router::handle(sreq, state.clone(), &path, method, &q)
+        {
+            return resp;
+        }
+    }
+
     // ============================== Estáticos (web app)
     // GUARD: las rutas /shell/* son API — jamás caer al SPA fallback.
     // (Sin esto, POST /shell/browser/open devolvía index.html y el WebView

@@ -2,6 +2,7 @@ import { memo, useCallback, useState, useMemo, useRef, useEffect } from "react"
 import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon, TrashIcon, SendIcon, ChevronDownIcon } from "../Icons"
 import { formatTime, isImagePart } from "../utils"
 import { getTranslationOriginal } from "../hooks/useMessages"
+import { messageAuthorFrom } from "../entities/message/author"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { useT } from "../i18n-context"
 import { useOutsideClick } from "../hooks/useOutsideClick"
@@ -174,6 +175,9 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   // se veía como tarjeta plana sin estilo.
   const isCompaction = message.hasCompaction || (message.info as unknown as { role?: string }).role === "compaction"
   const isAssistant = message.info.role === "assistant" || isCompaction
+  // Mensaje mandado por OTRO agente a esta sesión (viene con metadata.from):
+  // globo de otro color + etiqueta "de: <nombre>".
+  const authorFrom = message.info.role === "user" ? messageAuthorFrom(message.info) : null
   const [compactionOpen, setCompactionOpen] = useState(true)
 
   const duration = useMemo(
@@ -276,7 +280,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
         </div>
       )}
       <article
-        className={`message ${isCompaction ? "assistant compaction" : message.info.role} fade-in${isReverted ? " revert-hidden" : ""}${showConfirm ? " confirming-undo" : ""}`}
+        className={`message ${isCompaction ? "assistant compaction" : message.info.role} fade-in${isReverted ? " revert-hidden" : ""}${showConfirm ? " confirming-undo" : ""}${authorFrom ? " from-agent" : ""}`}
         data-message-id={message.info.id}
         data-mode={message.turnMode || undefined}
         onContextMenu={handleContextMenu}
@@ -305,6 +309,9 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             <span className="message-title-group">
               {queued && (
                 <span className="msg-queued-badge" data-queued>{t('session.queued')}</span>
+              )}
+              {authorFrom && (
+                <span className="msg-from-badge" title={authorFrom}>{t('chat.fromAgent', { name: authorFrom })}</span>
               )}
             </span>
             <div className="header-actions">

@@ -376,6 +376,7 @@ export default {
   'chat.scrollToBottom': 'Scroll to bottom',
   'chat.backgroundActive': '{count} in background',
   'chat.moveToBackground': 'Move to background',
+  'chat.fromAgent': 'from {name}',
   'chat.moveToBackgroundHint': 'Detach running subagents and continue them in the background',
   'shortcuts.desktop': 'Desktop',
   'shortcuts.panelFocus': 'Focus panel',

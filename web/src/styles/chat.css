@@ -1223,6 +1223,27 @@
   animation: fade-in 0.2s ease;
 }
 
+/* Mensaje mandado por OTRO agente (metadata.from): globo violeta + etiqueta. */
+.message.user.from-agent {
+  background: color-mix(in srgb, #8b7cf6 22%, var(--surface));
+  border-color: #8b7cf6;
+}
+
+.msg-from-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #8b7cf6;
+  color: #fff;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .message header .header-actions {
   display: flex;
   align-items: center;

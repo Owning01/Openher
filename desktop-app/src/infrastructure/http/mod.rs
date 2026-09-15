@@ -17,3 +17,4 @@ pub mod plugin_router;
 pub mod search_router;
 pub mod proxy_router;
 pub mod zen_router;
+pub mod team_router;

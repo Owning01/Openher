@@ -38,4 +38,23 @@ cargo check; cargo run; cargo build --release
 - **DRY y Estado**: Importante DRY y singleton en servicios, stores (Zustand) y utilidades compartidas.
 - **IconografÃ­a y Texto**: Cero emojis en la UI; solo iconografÃ­a SVG formal (Lucide).
 
+## EQUIPO — otros agentes en esta máquina (vale siempre, sin que nadie te lo pida)
+
+No trabajás solo: hay más agentes en otras sesiones. Pueden hablarse, conocerse
+y coordinarse solos con estas 3 herramientas (sin passwords ni auth):
+
+- **Descubrir y ver qué hacen**: `python3 scripts/team-who.py --actividad --anuncios`
+  (desde la raíz de este repo). Lista sesiones (id, título, última actividad) +
+  último texto + tablero de anuncios.
+- **Anunciarte** (al empezar y al cambiar de tarea):
+  `python3 scripts/team-anuncio.py "<tu-nombre>" "<tarea>" [trabajando|esperando|listo]`
+  Usá como nombre el título de tu chat o uno corto y único.
+- **Escribirle a otro agente** (le llega a su inbox y en su chat se ve de OTRO
+  COLOR con tu nombre): POST a http://127.0.0.1:4848/shell/team/send con JSON
+  {"toSession": "<id>", "text": "<corto>", "from": "<tu-nombre>", "delivery": "queue"}
+  (solo funciona en esta máquina). `delivery` default "queue" (no interrumpe).
+- **Prohibido** poner keys, passwords o tokens en archivos del equipo o en
+  mensajes. Textos cortos (1-3 líneas); si el otro no responde en 2 intentos,
+  seguí con lo tuyo. Lo urgente para el humano va por tu propio chat.
+
 

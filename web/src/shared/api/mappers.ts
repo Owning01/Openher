@@ -136,6 +136,8 @@ export type V2Message = {
   description?: string
   /** Error del assistant (union discriminado por `name`, detalle en `data`). */
   error?: unknown
+  /** Marca de origen libre (ej. {from: "otro-agente"} en prompts vía inbox). */
+  metadata?: Record<string, unknown>
   content?: Array<{
     id?: string
     type?: string
@@ -232,6 +234,7 @@ export function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
       tokens: raw.tokens,
       cost: raw.cost,
       error: normalizeAssistantError(raw.error) ?? undefined,
+      metadata: raw.metadata,
     },
     parts,
   }

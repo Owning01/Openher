@@ -376,6 +376,7 @@ export default {
   'chat.scrollToBottom': 'Ir al final',
   'chat.backgroundActive': '{count} en segundo plano',
   'chat.moveToBackground': 'Pasar a background',
+  'chat.fromAgent': 'de {name}',
   'chat.moveToBackgroundHint': 'Desacopla los subagentes que corren y los continúa en segundo plano',
   'shortcuts.desktop': 'Escritorio',
   'shortcuts.panelFocus': 'Enfocar panel',

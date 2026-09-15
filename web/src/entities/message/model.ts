@@ -41,6 +41,9 @@ export type MessageEnvelope = {
       cache: { read: number; write: number }
     }
     cost?: number
+    /** Marca de origen (ej. {from: "otro-agente", kind: "agent"}): la pone
+     * quien envía vía inbox/API. Si trae `from`, el globo se pinta distinto. */
+    metadata?: Record<string, unknown>
   }
   parts: Array<{
     id: string
