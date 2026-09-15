@@ -7,7 +7,6 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core"
 
 export type ShellPanelKind = "session" | "terminal" | "explorer" | "kanban" | "docs" | "updates" | "labs" | "config" | "editor" | "browser" | "doc" | "design"
-
 export const SHELL_PANEL_KINDS: ShellPanelKind[] = ["session", "editor", "terminal", "explorer", "kanban", "docs", "updates", "labs", "browser", "doc", "design", "config"]
 
 export type FsEntry = { name: string; path: string; is_dir: boolean; size: number | null; modified: number | null }
@@ -87,6 +86,19 @@ export type GitStatusSnapshot = {
 }
 
 export type GitPanelSnapshot = { repo: GitRepoInfo | null; status: GitStatusSnapshot | null }
+
+// ===== OpenCode Go/Zen (puente /shell/zen/go/*) =====
+
+/** Una ventana de uso Go: 5h (rolling), semanal o mensual. percent = % usado. */
+export type ZenGoWindow = { status: string; percent: number; resetsAt: string }
+
+export type ZenGoUsage = {
+  usage: { rolling: ZenGoWindow; weekly: ZenGoWindow; monthly: ZenGoWindow }
+}
+
+export type ZenGoModel = { id: string; object?: string; created?: number; owned_by?: string }
+
+export type ZenGoModels = { object: string; data: ZenGoModel[] }
 
 export type GitLogEntry = {
   sha: string
@@ -422,7 +434,6 @@ export type CodeSearchResult = {
 
 /** Releases en GitHub: el celu actualiza aunque la PC esté apagada. */
 export const GITHUB_RELEASE_BASE = "https://github.com/Owning01/Openher/releases/latest/download"
-
 /** Base que ganó el último chequeo (GitHub o shell local); la usa downloadApk. */
 let updateBase: string | null = null
 
@@ -442,8 +453,7 @@ export const shell = {
   /**
    * Última versión publicada (openher-version.json): alimenta el auto-update.
    * GitHub primero (el celu actualiza con la PC apagada), shell local después.
-   */
-  appVersion: async (): Promise<AppVersionInfo | null> => {
+   */  appVersion: async (): Promise<AppVersionInfo | null> => {
     const gh = await fetchVersionJson(`${GITHUB_RELEASE_BASE}/openher-version.json`)
     if (gh) {
       updateBase = GITHUB_RELEASE_BASE
@@ -513,6 +523,15 @@ export const shell = {
     const res = await shellFetch(`${base}/openher.apk?ts=${Date.now()}`, { binary: true, timeoutMs: 300_000 })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.blob()
+  },
+  /**
+   * OpenCode Go/Zen vía puente del desktop (`/shell/zen/go/*`): la key vive
+   * en el auth.json del PC y nunca viaja al cliente. Sin desktop nuevo o sin
+   * key, `get` lanza con el motivo (la UI lo muestra en vez de romper).
+   */
+  zenGo: {
+    usage: () => get<ZenGoUsage>("/shell/zen/go/usage"),
+    models: () => get<ZenGoModels>("/shell/zen/go/models"),
   },
   fs: {
     drives: () => get<{ drives: string[] }>("/shell/fs/drives"),

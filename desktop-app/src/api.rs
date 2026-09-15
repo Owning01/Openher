@@ -307,6 +307,15 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
         }
     }
 
+    // ============================== OpenCode Go/Zen (uso + modelos)
+    if path.starts_with("/shell/zen/go/") {
+        if let Some(resp) =
+            crate::infrastructure::http::zen_router::handle(sreq, state.clone(), &path, method, &q)
+        {
+            return resp;
+        }
+    }
+
     // ============================== Estáticos (web app)
     // GUARD: las rutas /shell/* son API — jamás caer al SPA fallback.
     // (Sin esto, POST /shell/browser/open devolvía index.html y el WebView

@@ -6,6 +6,7 @@ import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, Vie
 import type { LanguageCode } from "../i18n"
 import { describeProfile, isPairProfile } from "../hooks/useServers"
 import { ProviderManager } from "./ProviderManager"
+import { GoUsagePanel } from "./GoUsagePanel"
 import { DefaultModelPicker } from "./DefaultModelPicker"
 import { ChatCustomizer } from "./ChatCustomizer"
 import { SnippetManager } from "./SnippetManager"
@@ -959,6 +960,9 @@ export const SettingsPanel = memo(function SettingsPanel({
        onDisconnect={onDisconnectProvider}
       />
      </div>
+
+      <p className="settings-group-heading">{t('go.title')}</p>
+      <GoUsagePanel />
 
      {allPrimaryAgents && allPrimaryAgents.length > 0 && (
       <>
