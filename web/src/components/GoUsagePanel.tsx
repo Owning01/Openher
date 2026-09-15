@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useState } from "react"
 import { useT } from "../i18n-context"
-import { shell, type ZenGoUsage, type ZenGoWindow } from "../shell"
-import { RefreshIcon, ChevronDownIcon, ChevronRightIcon } from "../Icons"
+import { shell, type ZenGoKeySource, type ZenGoUsage, type ZenGoWindow } from "../shell"
+import { RefreshIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, EyeOffIcon } from "../Icons"
 import { GO_MODELS_REF, formatReset, usageTone } from "../data/goModels"
 
 type ZenGoModelLite = { id: string }
@@ -40,24 +40,33 @@ function WindowRow({ label, window }: { label: string; window: ZenGoWindow }) {
 export type GoUsageState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "ready"; usage: ZenGoUsage; models: ZenGoModelLite[] }
+  | { kind: "ready"; usage: ZenGoUsage; models: ZenGoModelLite[]; source: ZenGoKeySource | null }
 
-/** Carga uso + modelos de Go por el puente del desktop. */
+/** Carga uso + modelos + origen de key de Go por el puente del desktop. */
 export function useGoUsage() {
   const t = useT()
   const [state, setState] = useState<GoUsageState>({ kind: "loading" })
 
   const load = useCallback(() => {
     setState({ kind: "loading" })
-    Promise.all([shell.zenGo.usage(), shell.zenGo.models()])
-      .then(([usage, models]) => {
+    Promise.all([
+      shell.zenGo.usage(),
+      shell.zenGo.models(),
+      shell.zenGo.keyStatus().catch(() => null),
+    ])
+      .then(([usage, models, keyStatus]) => {
         const u = usage?.usage
         const list = Array.isArray(models?.data) ? models.data : []
         if (!u || !u.rolling || !u.weekly || !u.monthly) {
           setState({ kind: "error", message: t("go.badResponse") })
           return
         }
-        setState({ kind: "ready", usage, models: list.map((m) => ({ id: String(m.id) })) })
+        setState({
+          kind: "ready",
+          usage,
+          models: list.map((m) => ({ id: String(m.id) })),
+          source: keyStatus?.source ?? null,
+        })
       })
       .catch((e) => setState({ kind: "error", message: (e as Error)?.message || t("go.unavailable") }))
   }, [t])
@@ -73,6 +82,38 @@ export const GoUsagePanel = memo(function GoUsagePanel() {
   const t = useT()
   const { state, reload } = useGoUsage()
   const [showModels, setShowModels] = useState(false)
+  const [editingKey, setEditingKey] = useState(false)
+  const [keyDraft, setKeyDraft] = useState("")
+  const [showKey, setShowKey] = useState(false)
+  const [keyBusy, setKeyBusy] = useState(false)
+  const [keyError, setKeyError] = useState<string | null>(null)
+
+  const saveKey = useCallback(() => {
+    const value = keyDraft.trim()
+    if (!value || keyBusy) return
+    setKeyBusy(true)
+    setKeyError(null)
+    shell.zenGo
+      .setKey(value)
+      .then(() => {
+        setKeyDraft("")
+        setEditingKey(false)
+        reload()
+      })
+      .catch((e) => setKeyError((e as Error)?.message || t("go.unavailable")))
+      .finally(() => setKeyBusy(false))
+  }, [keyDraft, keyBusy, reload, t])
+
+  const clearKey = useCallback(() => {
+    if (keyBusy) return
+    setKeyBusy(true)
+    setKeyError(null)
+    shell.zenGo
+      .clearKey()
+      .then(() => reload())
+      .catch((e) => setKeyError((e as Error)?.message || t("go.unavailable")))
+      .finally(() => setKeyBusy(false))
+  }, [keyBusy, reload, t])
 
   return (
     <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
@@ -87,9 +128,45 @@ export const GoUsagePanel = memo(function GoUsagePanel() {
       </div>
 
       {state.kind === "loading" && <p className="subtle" style={{ fontSize: "0.82rem" }}>{t("go.loading")}</p>}
-      {state.kind === "error" && <div className="notice error">{state.message}</div>}
+      {state.kind === "error" && (
+        <>
+          <div className="notice error">{state.message}</div>
+          <button
+            className="setting-item-link"
+            onClick={() => { setEditingKey((v) => !v); setKeyError(null) }}
+            style={{ marginTop: 6, alignSelf: "flex-start", cursor: "pointer", background: "none", border: "none" }}
+          >
+            {t("go.changeKey")}
+          </button>
+        </>
+      )}
       {state.kind === "ready" && (
         <>
+          {state.source ? (
+            <p className="subtle" style={{ fontSize: "0.8rem", margin: "0 0 8px" }}>
+              {state.source === "custom" ? t("go.sourceCustom") : t("go.sourceAuth")}{" "}
+              <button
+                className="setting-item-link"
+                onClick={() => { setEditingKey((v) => !v); setKeyError(null) }}
+                style={{ cursor: "pointer", background: "none", border: "none", padding: 0 }}
+              >
+                {t("go.changeKey")}
+              </button>
+              {state.source === "custom" ? (
+                <>
+                  {" · "}
+                  <button
+                    className="setting-item-link"
+                    onClick={clearKey}
+                    disabled={keyBusy}
+                    style={{ cursor: "pointer", background: "none", border: "none", padding: 0 }}
+                  >
+                    {t("go.useTuiKey")}
+                  </button>
+                </>
+              ) : null}
+            </p>
+          ) : null}
           <WindowRow label={t("go.rolling")} window={state.usage.usage.rolling} />
           <WindowRow label={t("go.weekly")} window={state.usage.usage.weekly} />
           <WindowRow label={t("go.monthly")} window={state.usage.usage.monthly} />
@@ -121,6 +198,34 @@ export const GoUsagePanel = memo(function GoUsagePanel() {
           )}
         </>
       )}
+      {editingKey ? (
+        <div style={{ marginBottom: 10 }}>
+          <div className="password-wrapper">
+            <input
+              type={showKey ? "text" : "password"}
+              value={keyDraft}
+              onChange={(e) => setKeyDraft(e.target.value)}
+              placeholder={t("go.keyPlaceholder")}
+              disabled={keyBusy}
+              className="input"
+              style={{ width: "100%", boxSizing: "border-box" }}
+            />
+            <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowKey((v) => !v)} tabIndex={-1} disabled={keyBusy} aria-label="Toggle key visibility">
+              {showKey ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+            </button>
+          </div>
+          {keyError ? <div className="notice error" style={{ marginTop: 6 }}>{keyError}</div> : null}
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button className="btn-primary" onClick={saveKey} disabled={!keyDraft.trim() || keyBusy}>
+              {t("go.save")}
+            </button>
+            <button className="btn-cancel" onClick={() => { setEditingKey(false); setKeyDraft(""); setKeyError(null) }} disabled={keyBusy}>
+              {t("settings.cancel")}
+            </button>
+          </div>
+          <p className="subtle" style={{ fontSize: "0.78rem", marginTop: 6 }}>{t("go.keyDesc")}</p>
+        </div>
+      ) : null}
     </div>
   )
 })

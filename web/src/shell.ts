@@ -100,6 +100,12 @@ export type ZenGoModel = { id: string; object?: string; created?: number; owned_
 
 export type ZenGoModels = { object: string; data: ZenGoModel[] }
 
+/** Origen de la key que usa el puente: custom (configurada aquí, vale para
+ * todos) | auth (la del /connect en la TUI) | none (sin key). */
+export type ZenGoKeySource = "custom" | "auth" | "none"
+
+export type ZenGoKeyStatus = { configured: boolean; source: ZenGoKeySource }
+
 export type GitLogEntry = {
   sha: string
   shortSha: string
@@ -417,6 +423,12 @@ const post = async <T>(url: string, body?: unknown) => {
   }).then(j<T>)
 }
 
+const del = async <T>(url: string) => {
+  const base = await resolveShellBase()
+  const headers = withShellAuth({}, base)
+  return shellFetch(`${base}${url}`, { method: "DELETE", headers }).then(j<T>)
+}
+
 export type CodeSearchMatch = {
   path: string
   file_name: string
@@ -532,6 +544,9 @@ export const shell = {
   zenGo: {
     usage: () => get<ZenGoUsage>("/shell/zen/go/usage"),
     models: () => get<ZenGoModels>("/shell/zen/go/models"),
+    keyStatus: () => get<ZenGoKeyStatus>("/shell/zen/go/key-status"),
+    setKey: (key: string) => post<{ ok: boolean; source: ZenGoKeySource }>("/shell/zen/go/key", { key }),
+    clearKey: () => del<{ ok: boolean; source: ZenGoKeySource }>("/shell/zen/go/key"),
   },
   fs: {
     drives: () => get<{ drives: string[] }>("/shell/fs/drives"),

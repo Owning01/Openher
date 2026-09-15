@@ -21,12 +21,16 @@ const MODELS = { object: "list", data: [{ id: "kimi-k3" }, { id: "modelo-nuevo-x
 function stubFetch() {
   vi.stubGlobal(
     "fetch",
-    vi.fn((url: string) => {
+    vi.fn((url: string, init?: { method?: string }) => {
       const u = String(url)
+      const method = (init?.method ?? "GET").toUpperCase()
       const json = (v: unknown) => Promise.resolve(v)
       if (u.includes("/shell/health")) return Promise.resolve({ ok: true, status: 200, json: () => json({}), blob: () => Promise.resolve(new Blob()) })
       if (u.includes("/shell/zen/go/usage")) return Promise.resolve({ ok: true, status: 200, json: () => json(USAGE), blob: () => Promise.resolve(new Blob()) })
       if (u.includes("/shell/zen/go/models")) return Promise.resolve({ ok: true, status: 200, json: () => json(MODELS), blob: () => Promise.resolve(new Blob()) })
+      if (u.includes("/shell/zen/go/key-status")) return Promise.resolve({ ok: true, status: 200, json: () => json({ configured: true, source: "custom" }), blob: () => Promise.resolve(new Blob()) })
+      if (u.includes("/shell/zen/go/key") && method === "POST") return Promise.resolve({ ok: true, status: 200, json: () => json({ ok: true, source: "custom" }), blob: () => Promise.resolve(new Blob()) })
+      if (u.includes("/shell/zen/go/key") && method === "DELETE") return Promise.resolve({ ok: true, status: 200, json: () => json({ ok: true, source: "auth" }), blob: () => Promise.resolve(new Blob()) })
       return Promise.resolve({ ok: false, status: 404, json: () => json({ error: "not found" }), blob: () => Promise.resolve(new Blob()) })
     }),
   )
@@ -57,5 +61,14 @@ describe("shell.zenGo (puente OpenCode Go)", () => {
   it("sin desktop lanza con el motivo (la UI lo muestra)", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("red caída"))))
     await expect(shell.zenGo.usage()).rejects.toThrow()
+  })
+
+  it("keyStatus dice el origen sin exponer la key", async () => {
+    await expect(shell.zenGo.keyStatus()).resolves.toEqual({ configured: true, source: "custom" })
+  })
+
+  it("setKey guarda y clearKey vuelve a la TUI", async () => {
+    await expect(shell.zenGo.setKey("sk-otra-clave")).resolves.toEqual({ ok: true, source: "custom" })
+    await expect(shell.zenGo.clearKey()).resolves.toEqual({ ok: true, source: "auth" })
   })
 })

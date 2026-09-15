@@ -1,8 +1,11 @@
 //! Router /shell/zen/go/* — puente a la API de OpenCode Go/Zen.
-//! La key vive en el auth.json local del PC y NUNCA viaja al cliente: el
-//! desktop la lee y reenvía la respuesta tal cual (con CORS para el WebView).
+//! La key NUNCA viaja al cliente: el desktop la lee (configurada aquí o del
+//! auth.json del PC) y reenvía la respuesta tal cual (con CORS para el WebView).
 //! - GET /shell/zen/go/usage  → {usage:{rolling,weekly,monthly:{status,percent,resetsAt}}}
 //! - GET /shell/zen/go/models → {object:"list",data:[{id,...}]} (público: sin key igual responde)
+//! - GET /shell/zen/go/key-status → {configured, source:"custom"|"auth"|"none"} (jamás la key)
+//! - POST /shell/zen/go/key {key} → guarda la key de ESTE equipo (vale para
+//!   todos los que se conecten); DELETE la borra (vuelve al auth.json).
 //! Sin desktop nuevo (404) o sin key (404 JSON) la UI muestra el motivo.
 
 use std::sync::Arc;
@@ -14,7 +17,7 @@ use crate::state::AppState;
 const ZEN_BASE: &str = "https://opencode.ai";
 
 /// Key `opencode-go` del auth.json local (misma ubicación que usa opencode).
-fn go_api_key() -> Option<String> {
+fn auth_json_key() -> Option<String> {
     let mut cands: Vec<std::path::PathBuf> = Vec::new();
     if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
         cands.push(std::path::PathBuf::from(&home).join(".local/share/opencode/auth.json"));
@@ -42,9 +45,40 @@ fn go_api_key() -> Option<String> {
     None
 }
 
+/// Key configurada en ESTE equipo (vale para todos los que se conecten):
+/// archivo aparte del config general para que nunca se exponga por
+/// /shell/config (que vuelca todo). Si hay, manda sobre el auth.json.
+fn key_file() -> std::path::PathBuf {
+    crate::state::data_dir().join("zen_go_key")
+}
+
+fn stored_key() -> Option<String> {
+    let txt = std::fs::read_to_string(key_file()).ok()?;
+    let k = txt.trim().to_string();
+    if k.is_empty() {
+        None
+    } else {
+        Some(k)
+    }
+}
+
+fn key_source() -> &'static str {
+    if stored_key().is_some() {
+        "custom"
+    } else if auth_json_key().is_some() {
+        "auth"
+    } else {
+        "none"
+    }
+}
+
+fn go_api_key() -> Option<String> {
+    stored_key().or_else(auth_json_key)
+}
+
 fn with_cors(resp: ShellResponse) -> ShellResponse {
     resp.with_header("Access-Control-Allow-Origin", "*")
-        .with_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .with_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         .with_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
@@ -91,7 +125,7 @@ fn forward(suffix: &str, need_key: bool) -> ShellResponse {
 }
 
 pub fn handle(
-    _req: &ShellRequest,
+    req: &ShellRequest,
     _state: Arc<AppState>,
     path: &str,
     method: &str,
@@ -99,6 +133,37 @@ pub fn handle(
 ) -> Option<ShellResponse> {
     if method == "OPTIONS" && path.starts_with("/shell/zen/go/") {
         return Some(with_cors(ShellResponse::from_string(204, String::new())));
+    }
+    if path == "/shell/zen/go/key-status" && method == "GET" {
+        return Some(with_cors(ShellResponse::ok_json(&serde_json::json!({
+            "configured": key_source() != "none",
+            "source": key_source(),
+        }))));
+    }
+    if path == "/shell/zen/go/key" && method == "POST" {
+        let key = req
+            .json_body()
+            .ok()
+            .and_then(|b| b.get("key").and_then(|k| k.as_str()).map(|s| s.trim().to_string()))
+            .unwrap_or_default();
+        if key.len() < 10 {
+            return Some(with_cors(ShellResponse::err_json(400, "Key inválida (vacía o muy corta)")));
+        }
+        let file = key_file();
+        if let Some(parent) = file.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        return Some(match std::fs::write(&file, &key) {
+            Ok(()) => with_cors(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "source": "custom" }))),
+            Err(e) => with_cors(ShellResponse::err_json(500, &format!("No se pudo guardar: {e}"))),
+        });
+    }
+    if path == "/shell/zen/go/key" && method == "DELETE" {
+        let _ = std::fs::remove_file(key_file());
+        return Some(with_cors(ShellResponse::ok_json(&serde_json::json!({
+            "ok": true,
+            "source": key_source(),
+        }))));
     }
     if method != "GET" {
         return None;

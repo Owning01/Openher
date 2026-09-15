@@ -15,6 +15,9 @@ vi.mock("../shell", () => ({
         }),
       ),
       models: vi.fn(() => Promise.resolve({ object: "list", data: [{ id: "kimi-k3" }, { id: "nuevo-xyz" }] })),
+      keyStatus: vi.fn(() => Promise.resolve({ configured: true, source: "custom" })),
+      setKey: vi.fn(() => Promise.resolve({ ok: true, source: "custom" })),
+      clearKey: vi.fn(() => Promise.resolve({ ok: true, source: "auth" })),
     },
   },
 }))
@@ -35,6 +38,7 @@ describe("useGoUsage", () => {
     if (st.kind !== "ready") throw new Error("no ready")
     expect(st.usage.usage.monthly.percent).toBe(99)
     expect(st.models.map((m) => m.id)).toEqual(["kimi-k3", "nuevo-xyz"])
+    expect(st.source).toBe("custom")
   })
 
   it("falla con mensaje si el puente no responde", async () => {
