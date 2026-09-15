@@ -4,8 +4,6 @@ import { shell, type ZenGoUsage, type ZenGoWindow } from "../shell"
 import { RefreshIcon, ChevronDownIcon, ChevronRightIcon } from "../Icons"
 import { GO_MODELS_REF, formatReset, usageTone } from "../data/goModels"
 
-type State = GoUsageState
-
 type ZenGoModelLite = { id: string }
 
 const TONE_COLOR: Record<string, string> = { ok: "#59d4a0", warn: "#e0b15e", bad: "#f2777a" }
