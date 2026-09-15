@@ -87,3 +87,14 @@ if (-not $SkipDesktop) {
   Write-Host "La notebook (server remoto) se actualiza sola con openher-desktop.zip." -ForegroundColor Green
 }
 Write-Host "Link estable: http://100.77.237.102:4848/openher.apk"
+
+# 6) Espejo en GitHub Releases (el celu actualiza con la PC apagada).
+# No fatal: el canal local ya quedó publicado arriba.
+Write-Host ""
+Write-Host "Publicando espejo en GitHub Releases..." -ForegroundColor Yellow
+try {
+  & (Join-Path $root "scripts\publish-github.ps1") -Notes $notesFinal
+  if ($LASTEXITCODE -ne 0) { throw "publish-github devolvió $LASTEXITCODE" }
+} catch {
+  Write-Host "Aviso: no se pudo publicar en GitHub ($_.Exception.Message). El canal local sigue vigente." -ForegroundColor Yellow
+}

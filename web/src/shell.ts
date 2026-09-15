@@ -420,17 +420,41 @@ export type CodeSearchResult = {
   truncated: boolean
 }
 
+/** Releases en GitHub: el celu actualiza aunque la PC esté apagada. */
+export const GITHUB_RELEASE_BASE = "https://github.com/Owning01/Openher/releases/latest/download"
+
+/** Base que ganó el último chequeo (GitHub o shell local); la usa downloadApk. */
+let updateBase: string | null = null
+
+async function fetchVersionJson(url: string): Promise<AppVersionInfo | null> {
+  try {
+    const res = await shellFetch(`${url}?ts=${Date.now()}`, { timeoutMs: 8000 })
+    if (!res.ok) return null
+    const data = (await res.json()) as AppVersionInfo
+    if (!data || typeof data.versionCode !== "number" || !data.version) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
 export const shell = {
-  /** Última versión publicada (openher-version.json): alimenta el auto-update. */
+  /**
+   * Última versión publicada (openher-version.json): alimenta el auto-update.
+   * GitHub primero (el celu actualiza con la PC apagada), shell local después.
+   */
   appVersion: async (): Promise<AppVersionInfo | null> => {
+    const gh = await fetchVersionJson(`${GITHUB_RELEASE_BASE}/openher-version.json`)
+    if (gh) {
+      updateBase = GITHUB_RELEASE_BASE
+      return gh
+    }
     try {
       const base = await resolveShellBase()
       if (!base && isNativePlatform()) return null
-      const res = await shellFetch(`${base}/openher-version.json?ts=${Date.now()}`, { timeoutMs: 8000 })
-      if (!res.ok) return null
-      const data = (await res.json()) as AppVersionInfo
-      if (!data || typeof data.versionCode !== "number" || !data.version) return null
-      return data
+      const local = await fetchVersionJson(`${base}/openher-version.json`)
+      if (local) updateBase = base
+      return local
     } catch {
       return null
     }
@@ -485,7 +509,7 @@ export const shell = {
   },
   /** Descarga la APK publicada en el link corto (/openher.apk). */
   downloadApk: async (): Promise<Blob> => {
-    const base = await resolveShellBase()
+    const base = updateBase ?? (await resolveShellBase())
     const res = await shellFetch(`${base}/openher.apk?ts=${Date.now()}`, { binary: true, timeoutMs: 300_000 })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.blob()

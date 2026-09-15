@@ -50,6 +50,52 @@ describe("shellAuthHeader", () => {
   })
 })
 
+describe("shell auto-update con PC apagada (GitHub primero)", () => {
+  const VER = {
+    name: "OpenHer", version: "1.0.99", versionCode: 19999, file: "openher.apk",
+    sha256: "abc", size: 1, builtAt: "hoy", notes: "n",
+  }
+  const ghUrl = (f: string) => `https://github.com/Owning01/Openher/releases/latest/download/${f}`
+  beforeEach(() => {
+    localStorage.clear()
+    localStorage.setItem("opencode.remote.server", JSON.stringify({ host: "100.64.0.2:4098", port: 4098 }))
+  })
+
+  it("usa GitHub primero y la APK baja de ahí", async () => {
+    const calls: string[] = []
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      calls.push(String(url))
+      if (String(url).startsWith("https://github.com/")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(VER), blob: () => Promise.resolve(new Blob(["apk"])) })
+      }
+      return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}), blob: () => Promise.resolve(new Blob()) })
+    }))
+    const v = await shell.appVersion()
+    expect(v?.versionCode).toBe(19999)
+    await shell.downloadApk()
+    expect(calls[0]).toContain("github.com/Owning01/Openher/releases/latest/download/openher-version.json")
+    expect(calls.some((u) => u.startsWith(ghUrl("openher.apk")))).toBe(true)
+    expect(calls.some((u) => u.includes("100.64.0.2"))).toBe(false)
+  })
+
+  it("si GitHub falla, cae al shell local", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (String(url).startsWith("https://github.com/")) {
+        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}), blob: () => Promise.resolve(new Blob()) })
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(VER), blob: () => Promise.resolve(new Blob(["apk"])) })
+    }))
+    const v = await shell.appVersion()
+    expect(v?.versionCode).toBe(19999)
+    await shell.downloadApk()
+  })
+
+  it("null si no hay GitHub ni shell local", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}), blob: () => Promise.resolve(new Blob()) })))
+    expect(await shell.appVersion()).toBeNull()
+  })
+})
+
 describe("deriveShellBaseFromServer", () => {
   beforeEach(() => localStorage.clear())
 
