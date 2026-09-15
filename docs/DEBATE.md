@@ -71,7 +71,8 @@ Toda la configuración del debate vive en **una sola sección** (input del tool
 ```ts
 debate: {
   // Motor y roles
-  engine: "isolated" | "shared"          // default "isolated" (flip explícito desde "shared")
+  engine: "isolated" | "shared" | "hybrid" // default "isolated"; hybrid = isolated + consultas directas A→B
+  directMaxPerRole: number               // default 2, min 0, max 5 (0 = como isolated)
   cache: string                          // alias legacy de solo-lectura (compat v1), no usar en código nuevo
   roles: string[]                        // default ["architect","pragmatist","adversary"]
   arbiter: string                        // default "arbiter"
@@ -234,22 +235,6 @@ Pi intercom/messenger · OTel GenAI.
 
 ### Fase 1 — Plugin protocolo v2 (plugin, 2026-09-14)
 
-### Fase 1b — Por qué v1 "ni funcionaba" + fix RPC (2026-09-14)
-
-Dos causas raíz, ambas verificadas contra el server unificado 2.0.3:
-1. **Forma del RPC**: el server exige `Rpc.Input = { input: {...} }` y
-   responde `{ output: ... }` (ver `/openapi.json`, ruta
-   `/api/rpc/{rpcID}/{method}`). El cliente mandaba el objeto pelado →
-   **400 con cuerpo vacío**. Fix centralizado en `postRpc`
-   (`debateStore.ts`): envuelve `{input}` y desenvuelve `{output}`.
-   Tests actualizados a la forma real + test nuevo que fija el contrato.
-2. **Referencia rancia**: `opencode.json` global listaba
-   `"./plugins/debate-room.ts"` (archivo inexistente → ENOENT en cada
-   carga). Cambiado a `"./plugins/debate-room"` (directorio).
-- El watcher del harness **ya hot-recargó v2** sin reiniciar: el RPC
-  `pause` (solo existe en v2) responde `200 {output:{ok:false}}`.
-  `state` con ID inexistente → `200 {output:{}}`.
-
 Archivo: `C:\Users\perca\.config\opencode\plugins\debate-room\index.ts`
 (542 → 1400 líneas; backup en `index.ts.bak`). Constructor: subagente worker
 (reporte de handoff perdido; verificado por el titular).
@@ -280,6 +265,41 @@ Gates OK 2026-09-14: `node --check` 0, schema-check OK.
 Pendiente (requiere reiniciar el server opencode, no hacerlo en caliente):
 carga con `[debate-room] activo` en el log + `debate.start` manual por RPC
 por ambos paths + `state` tras reinicio.
+
+
+### Fase 1c — Motor hybrid + métricas reales + Tier 1 (2026-09-14)
+
+- `hybrid` en el plugin: isolated + consultas directas A→B (`directTo`/
+  `directQuestion` en el trailer, tope `directMaxPerRole` default 2, un nivel
+  sin cadenas, cuentan como turno, no rompen la ronda ciega). Respuestas con
+  `kind:"direct"`, `repliesTo`=asker (la UI existente las muestra citadas).
+- `state`/`done` exponen `sessions {rol: sessionID}`, `directQueries`,
+  `durationSec` → tokens/costo REALES por sesión vía `GET /api/session/{id}`.
+- Tier 0 hybrid: corre y cierra (4 turnos), pero **0 consultas directas** —
+  los roles leyeron la instrucción (la citaron) sin usarla. Se reforzó el
+  `directBlock` (condición concreta: "sin eso no podés cerrar tu objeción").
+- Harness: config G-hybrid, flags `--configs/--runs/--max-turns/--auth`,
+  transporte real corregido (`/api/rpc/debate/*` + `{input}` + auth),
+  métricas nuevas (tokens/costo/cache reales, leaks, unknownRate,
+  redundancia Jaccard, directas). Reporte extendido + fix crash sin baseline.
+- Tier 1 en curso: 5 casos × 3 motores × 2 corridas, maxTurns 6
+  (`scripts/debate-eval/out-tier1/`).
+
+### Fase 1b — Por qué v1 "ni funcionaba" + fix RPC (2026-09-14)
+
+Dos causas raíz, ambas verificadas contra el server unificado 2.0.3:
+1. **Forma del RPC**: el server exige `Rpc.Input = { input: {...} }` y
+   responde `{ output: ... }` (ver `/openapi.json`, ruta
+   `/api/rpc/{rpcID}/{method}`). El cliente mandaba el objeto pelado →
+   **400 con cuerpo vacío**. Fix centralizado en `postRpc`
+   (`debateStore.ts`): envuelve `{input}` y desenvuelve `{output}`.
+   Tests actualizados a la forma real + test nuevo que fija el contrato.
+2. **Referencia rancia**: `opencode.json` global listaba
+   `"./plugins/debate-room.ts"` (archivo inexistente → ENOENT en cada
+   carga). Cambiado a `"./plugins/debate-room"` (directorio).
+- El watcher del harness **ya hot-recargó v2** sin reiniciar: el RPC
+  `pause` (solo existe en v2) responde `200 {output:{ok:false}}`.
+  `state` con ID inexistente → `200 {output:{}}`.
 
 ### Fase 0 — Limpieza UI global (cliente, 2026-09-14)
 - Borrados: `web/src/features/debate/register.tsx`, `DebatePanel.tsx`,

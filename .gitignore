@@ -93,6 +93,8 @@ web/learning-raw/
 
 # Evidencia generada del harness de evals de debate (se regenera con --dry-run)
 scripts/debate-eval/out/
+scripts/debate-eval/out-tier1/
+scripts/debate-eval/out-tier1-test/
 
 # Documentación personal de gestión (scrum): NO se sube a GitHub.
 docs/scrum/

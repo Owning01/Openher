@@ -41,15 +41,22 @@ export function renderReport(results, blindScores = {}) {
   L.push(`- Revisión ciega: ${hasBlind ? "notas presentes (" + Object.keys(blindScores).join(", ") + ")" : "**PENDIENTE** — completar REVISAR.md; sin notas no se adopta nada"}`);
   L.push(``);
 
+  if (!base) {
+    L.push(`Sin baseline A-isolated en los datos: las columnas Δ vs base quedan en 0. Re-correr incluyendo A-isolated para veredicto.`);
+    L.push(``);
+  }
   // ---- Tabla comparativa por config ----
   L.push(`## Comparativa por config (vs baseline A-isolated)`);
   L.push(``);
-  L.push(`| Config | Corridas | Consenso | Tokens est. media ± std | Δ tokens vs base | Latencia media | Turnos medios | Stalls | Cascadas |`);
-  L.push(`|---|---|---|---|---|---|---|---|---|`);
+  const useReal = configs.some((c) => c.tokensRealMean != null);
+  L.push(`| Config | Corridas | Consenso | Tokens ${useReal ? "reales" : "est."} media | Δ tokens vs base | Costo real medio | Cache read | Turnos medios | Directas | Stalls | Cascadas | Leaks | Redund. |`);
+  L.push(`|---|---|---|---|---|---|---|---|---|---|---|---|---|`);
   for (const c of configs) {
-    const saving = base && base.tokensMean ? (base.tokensMean - c.tokensMean) / base.tokensMean : 0;
+    const tm = useReal ? (c.tokensRealMean ?? 0) : c.tokensMean;
+    const tb = base ? (useReal ? (base.tokensRealMean ?? 0) : base.tokensMean) : 0;
+    const saving = tb ? (tb - tm) / tb : 0;
     const savingStr = c.configId === "A-isolated" ? "—" : `${saving >= 0 ? "−" : "+"}${pct(Math.abs(saving))} ${saving >= 0.3 ? "(≥30%)" : ""}`;
-    L.push(`| ${c.configId} | ${c.runs} | ${pct(c.consensusRate)} | ${num(c.tokensMean)} ± ${num(c.tokensStd)} (est.) | ${savingStr} | ${num(c.latencyMeanMs)} ms | ${c.turnsMean} | ${c.stallsMean} | ${c.cascadesMean} |`);
+    L.push(`| ${c.configId} | ${c.runs} | ${pct(c.consensusRate)} | ${num(tm)}${useReal ? "" : " (est.)"} | ${savingStr} | ${c.costRealMean ?? "-"} | ${c.cacheReadPctMean ?? "-"} | ${c.turnsMean} | ${c.directMean} | ${c.stallsMean} | ${c.cascadesMean} | ${c.leaksSum} | ${c.redundancyMean} |`);
   }
   L.push(``);
 
@@ -73,21 +80,27 @@ export function renderReport(results, blindScores = {}) {
     L.push(`**INCONCLUSO — falta revisión ciega.** No se adopta ninguna técnica.`);
     L.push(`Comparación solo de costo/robustez (no de calidad):`);
     L.push(``);
+    const useReal = (results.configs || []).some((c) => c.tokensRealMean != null);
     for (const c of configs) {
       if (c.configId === "A-isolated") continue;
-      const saving = (base.tokensMean - c.tokensMean) / base.tokensMean;
-      L.push(`- **${c.configId}**: ahorro est. ${pct(saving)} vs base; consenso ${pct(c.consensusRate)} vs ${pct(base.consensusRate)} (base). Decisión bloqueada hasta nota ciega.`);
+      const tm = useReal ? (c.tokensRealMean ?? 0) : c.tokensMean;
+      const tb = useReal ? (base.tokensRealMean ?? 0) : base.tokensMean;
+      const saving = tb ? (tb - tm) / tb : 0;
+      L.push(`- **${c.configId}**: ahorro ${useReal ? "real" : "est."} ${pct(saving)} vs base; consenso ${pct(c.consensusRate)} vs ${pct(base.consensusRate)} (base); directas ${c.directMean}; leaks ${c.leaksSum}; redundancia ${c.redundancyMean}. Decisión bloqueada hasta nota ciega.`);
     }
     L.push(``);
     L.push(`Para cerrar: \`node report.mjs --in <results.json> --out <report.md> --blind blind.json\` con notas de REVISAR.md.`);
   } else {
     const bq = blindScores["A-isolated"];
+    const useReal = (results.configs || []).some((c) => c.tokensRealMean != null);
     L.push(`| Config | Nota ciega | Δ calidad vs base | Δ tokens vs base | Veredicto |`);
     L.push(`|---|---|---|---|---|`);
     for (const c of configs) {
       const q = blindScores[c.configId];
       const dq = bq ? (q - bq) / bq : 0;
-      const saving = base.tokensMean ? (base.tokensMean - c.tokensMean) / base.tokensMean : 0;
+      const tm = useReal ? (c.tokensRealMean ?? 0) : c.tokensMean;
+      const tb = base ? (useReal ? (base.tokensRealMean ?? 0) : base.tokensMean) : 0;
+      const saving = tb ? (tb - tm) / tb : 0;
       let v;
       if (q == null) v = "INCONCLUSO (sin nota)";
       else if (dq < -0.02) v = "RECHAZADO (degrada >2%)";
@@ -127,9 +140,12 @@ function main() {
   console.log(`[report] ${results.configs?.length ?? 0} configs, ${results.cells?.length ?? 0} celdas → ${opt.out}`);
   // Resumen stdout: veredicto corto por config vs base.
   const base = (results.configs || []).find((c) => c.configId === "A-isolated");
+  const useReal = (results.configs || []).some((c) => c.tokensRealMean != null);
   for (const c of results.configs || []) {
-    const saving = base?.tokensMean ? (((base.tokensMean - c.tokensMean) / base.tokensMean) * 100).toFixed(1) : "?";
-    console.log(`[report] ${c.configId}: consenso=${(c.consensusRate * 100).toFixed(1)}% tok_est=${c.tokensMean}±${c.tokensStd} ahorro_vs_base=${c.configId === "A-isolated" ? "—" : saving + "%"}`);
+    const tm = useReal ? (c.tokensRealMean ?? 0) : c.tokensMean;
+    const tb = useReal ? (base?.tokensRealMean ?? 0) : base?.tokensMean;
+    const saving = tb ? (((tb - tm) / tb) * 100).toFixed(1) : "?";
+    console.log(`[report] ${c.configId}: consenso=${(c.consensusRate * 100).toFixed(1)}% tok_${useReal ? "real" : "est"}=${tm} ahorro_vs_base=${c.configId === "A-isolated" ? "—" : saving + "%"}`);
   }
   if (!Object.keys(blind).length) console.log("[report] Veredicto: INCONCLUSO — falta revisión ciega (REVISAR.md).");
 }

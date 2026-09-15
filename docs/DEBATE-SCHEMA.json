@@ -68,8 +68,16 @@
     "stallLimit": 3,
     "participation": "all",
     "similarityThreshold": 0.85,
+    "directMaxPerRole": 2,
     "guards": { "enabled": false },
     "interveneMode": "publish",
     "approval": "watch"
+  },
+  "addendum_1_hybrid": {
+    "engine": "hybrid = isolated + consultas directas A→B (tope directMaxPerRole por rol, un nivel, cuentan como turno; 0 = como isolated)",
+    "message_kinds": ["agent", "user", "direct"],
+    "direct_reply": "kind:direct, repliesTo=asker, sin cadenas (la respuesta no puede pedir otra)",
+    "state_done_extra": ["sessions {rol: sessionID}", "directQueries", "durationSec"],
+    "metrics": "tokens/costo reales por sesión vía GET /api/session/{id} (cost + tokens); redundancia siempre medida (Jaccard trigramas) aun con participation:all"
   }
 }
