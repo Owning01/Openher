@@ -179,3 +179,21 @@ ciega, harness propio).
   corregidos → REJECTED (3 residuales: B2/B7/B9) → corregidos → ACCEPTED
   9/9. Listo para constructores desde Fase 0 (spikes harness).
 - Siguiente: Fase 0 spikes (`scripts/team-eval/spikes/`).
+- 2026-09-15: **Fase 0 completa, 7/7 PASS** (`scripts/team-eval/spikes/`,
+  runner `run-all.mjs`):
+  - F0.1 atomicidad O_EXCL: 20 concurrentes → 1 gana (2 ms).
+  - F0.2 liveness: el server no expone status/PID (`interrupt` no cambia
+    nada observable) → **heartbeat TEAM** confirmado.
+  - F0.3 feed: append + rehidrata con `seq` continuo tras kill.
+  - F0.4 agent-bound: `create({agent:"architect"})` aceptado + eco exacto
+    ($0.0015 el micro-turno).
+  - F0.5 delivery: 10/10 prompts cross-sesión con eco exacto, p50 3.0 s
+    (≤30 s) → **sin recorte**: `ask` bloqueante viable, no hace falta
+    polling. (Nota: el primer intento dio ROJO por bug propio — el
+    endpoint exige `{text}`, no `{message}`.)
+  - F0.6 TTL-race: `ttl=5 s`, 2 reclamos en ventana 7 ms → 1 gana;
+    `base_SHA` = git SHA disponible.
+  - F0.7 worktree: setup 544 ms (≤60 s) → capa-3 viable si Fase 2 la pide.
+- Ubicación confirmada (gate F0→F1): módulo `team/` separado en el dir del
+  plugin (`registry/claims/feed/blackboard/roles/rpc.ts`); no se toca
+  `debate-room/index.ts` salvo el import.
