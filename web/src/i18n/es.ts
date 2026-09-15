@@ -259,6 +259,8 @@ export default {
   'go.keyPlaceholder': 'Pega la API key de Go',
   'go.keyDesc': 'Se guarda solo en esta PC. Todos los que se conecten ven el uso de esa key.',
   'go.save': 'Guardar',
+  'go.openUsage': 'Ver uso de OpenCode Go',
+  'go.close': 'Cerrar',
   'settings.notConnected': 'No conectado',
   'settings.connecting': 'Conectando...',
   'settings.connectSuccess': 'Conectado exitosamente',

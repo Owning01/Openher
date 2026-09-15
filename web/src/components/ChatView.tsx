@@ -21,6 +21,7 @@ import { ChatNotesPanel } from "./ChatNotesPanel"
 import { PROMPT_HISTORY_OPEN_EVENT, extractUserPrompts } from "../utils/promptHistory"
 import { SelectionBar } from "./SelectionBar"
 import { DebateChip } from "../features/debate/DebateChip"
+import { GoChip } from "./GoChip"
 import { ExportMarkdownDialog } from "./ExportMarkdownDialog"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { setQuestionFloatingMode } from "../utils/questionStore"
@@ -454,6 +455,7 @@ export const ChatView = memo(function ChatView({
         {selectedSession && (
           <div className="detail-header-actions">
             {selectedSession && <DebateChip originSessionID={selectedSession.id} />}
+            <GoChip />
             {foregroundSubagents > 0 && bgActionSupported && selectedSession && (
               <button
                 type="button"
