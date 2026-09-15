@@ -43,9 +43,9 @@ function main() {
     process.exit(1);
   }
   const results = JSON.parse(readFileSync(opt.in, "utf8"));
-  let runs = (results.runs || []).filter((r) => !r.error && r.debateID);
+  let runs = (results.runs || []).filter((r) => !r.error && (r.debateID || r.acta));
   if (opt.cases.length) runs = runs.filter((r) => opt.cases.includes(String(r.caseId).toUpperCase()));
-  if (!runs.length) { console.error("Sin runs con debateID para anonimizar."); process.exit(1); }
+  if (!runs.length) { console.error("Sin runs con debateID o acta para anonimizar."); process.exit(1); }
   mkdirSync(opt.out, { recursive: true });
   const mapping = {};
   runs.forEach((r, i) => {

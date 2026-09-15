@@ -216,3 +216,11 @@ ciega, harness propio).
 - 2026-09-15: **Bus Pi PASS** (`pi-smoke.mjs` 11/11, namespace `pibus`).
 - 2026-09-15: **Fase 5 en curso** (`scripts/team-eval/out-t1/`, 54
   ejecuciones). Veredicto pendiente de revisión ciega (§9).
+- 2026-09-15: **Fase 5 corridas completas: 54/54, 0 errores**
+  (1.17M tokens, $0.23). Medias: S-solo 10.5k tok ($0.0021, 1 turno);
+  H-equipo 31.6k (+201%, $0.0061, 3 turnos, 18/18 colisiones evitadas);
+  F-plano 22.9k (+118%, $0.0047, 4 turnos, 18/18 evitadas).
+  **INCONCLUSO hasta nota ciega**: 18 actas anonimizadas
+  (`out-t1/blind/blind-01…18`, casos T-E1+T-E4 × 3 celdas × 3) +
+  `mapping.json` sellado. El equipo gasta 2–3× más tokens; solo se
+  adopta si tu puntuación muestra mejor calidad (§9).
