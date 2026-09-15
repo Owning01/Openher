@@ -990,5 +990,8 @@ export default {
   'debate.tlStart': 'inicio',
   'debate.tlIntervention': 'intervención',
   'debate.tlActa': 'acta del árbitro',
-  'debate.tlDone': 'fin: {reason}'
+  'debate.tlDone': 'fin: {reason}',
+  'debate.tlStall': 'turnos estancados',
+  'debate.rewind': 'rebobinar',
+  'debate.teamTimeline': 'equipo',
 }

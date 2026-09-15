@@ -453,3 +453,20 @@
     animation: none;
   }
 }
+
+.debate-rewind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+}
+
+.debate-rewind input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent, #58a6ff);
+}
+
+.debate-tl-team .debate-tl-label {
+  border-left: 2px solid var(--accent, #58a6ff);
+  padding-left: 6px;
+}

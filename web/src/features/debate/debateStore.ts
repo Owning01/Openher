@@ -54,6 +54,7 @@ export type DebateStatusBar = {
   turns: number
   consensusPct: number
   stalled: boolean
+  stalls?: number
   budgetUsedPct?: number
 }
 
@@ -341,6 +342,7 @@ export function hydrateDebate(originSessionID: string, snap: DebateSnapshot): vo
     if (typeof snap.status.turns === "number") deb.status.turns = snap.status.turns
     if (typeof snap.status.consensusPct === "number") deb.status.consensusPct = snap.status.consensusPct
     if (typeof snap.status.stalled === "boolean") deb.status.stalled = snap.status.stalled
+    if (typeof snap.status.stalls === "number") deb.status.stalls = snap.status.stalls
     if (typeof snap.status.budgetUsedPct === "number") deb.status.budgetUsedPct = snap.status.budgetUsedPct
   }
   for (const m of snap.messages ?? []) {
@@ -419,6 +421,46 @@ export async function fetchDebateState(config: ServerConfig | null, debateID: st
   const out = await postRpc(config, "state", { debateID })
   if (!out || typeof out !== "object") return null
   return out as DebateSnapshot
+}
+
+export type TeamTimelineItem = { seq: number; kind: string; label: string }
+
+async function postTeamRpc(config: ServerConfig | null, name: string, body: Record<string, unknown>): Promise<unknown> {
+  if (!config) return null
+  try {
+    const res = await fetch(`${baseUrl(config)}/api/rpc/team/${name}`, {
+      method: "POST",
+      headers: rpcHeaders(config),
+      body: JSON.stringify({ input: body }),
+    })
+    if (!res.ok) return null
+    const json = (await res.json()) as { output?: unknown }
+    return json?.output ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Timeline del equipo (solo lectura): la sala la muestra reutilizando su timeline. */
+export async function fetchTeamTimeline(
+  config: ServerConfig | null,
+  teamID: string,
+  directory?: string,
+): Promise<TeamTimelineItem[]> {
+  if (!config || !teamID) return []
+  const out = (await postTeamRpc(config, "state", { teamID, ...(directory ? { directory } : {}) })) as {
+    timeline?: unknown
+  } | null
+  const list = Array.isArray(out?.timeline) ? out.timeline : []
+  return list
+    .filter(
+      (e): e is TeamTimelineItem =>
+        !!e && typeof e === "object" && typeof (e as { seq?: unknown }).seq === "number" &&
+        typeof (e as { kind?: unknown }).kind === "string" &&
+        typeof (e as { label?: unknown }).label === "string",
+    )
+    .map((e) => ({ seq: e.seq, kind: e.kind, label: e.label }))
+    .sort((a, b) => a.seq - b.seq)
 }
 
 /** Rehidrata desde el server los debates conocidos de la sesión (best-effort). */

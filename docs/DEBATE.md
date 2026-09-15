@@ -210,10 +210,31 @@ propio (ver `docs/DEBATE-SCHEMA.json`).
 
 ## 11. Puente Pi (fase 5, diseño)
 
-Bus peer-to-peer estilo Pi (`send`/`wait`, registry file-based, `feed.jsonl`,
-liveness por PID) sobre socket local + JSON-RPC; `contact_supervisor` para
-aprobación del dueño; `cwd` como guard. Un harness externo entra como par más
-o como supervisor. No se implementa hasta que las fases 1–4 estén con evals.
+Dos piezas separadas del ecosistema Pi (verificado contra READMEs oficiales
+2026-09-15; `nicobailon/pi-intercom` 513 stars, `nicobailon/pi-messenger`):
+
+- **pi-messenger** (swarm, chat room compartido): sin daemon, todo file-based.
+  Registry/inboxes/claims en `~/.pi/agent/messenger/`; feed del proyecto en
+  `.pi/messenger/feed.jsonl`; liveness por PID con limpieza automática;
+  reservas de archivos (un agente reclama, los demás ven a quién coordinar);
+  mensajes entrantes como steering prompt que despierta al receptor.
+- **pi-intercom** (1:1 dirigido): broker local (Unix socket/named pipe,
+  JSON con length-prefix, auto-spawn, heartbeat). Primitivas `list`,
+  `send` (fire-and-forget), `ask` (bloquea ≤10 min, la respuesta vuelve como
+  tool result), `reply`, `pending`, `cancel`. `cwd` como guard, reply hints,
+  `inboundTrigger` (always/replies/never). `contact_supervisor` (vía
+  `pi-subagents`): `need_decision`, `interview_request`, `progress_update`.
+- **Pi-to-Pi (IndyDevDan)**: pool plano sin orquestador —
+  `list_agents`/`send_command`/`await_response`/`poll_response`;
+  `comms` (un dispositivo) + `comms-net` (server Bun, cross-device, caso
+  prod↔dev con redacción PII en el lado prod). Tesis: pares = flujo
+  bidireccional sin pérdida por parafraseo + contextos enfocados; costo
+  lineal-cuadrático con el chatter, 3–5 pares basta.
+
+Regla de diseño: debate-room = juicio (producto: acta con disensos);
+puente = ejecución entre pares (producto: tarea hecha). No mezclar en un
+solo protocolo. Bus: socket local + JSON-RPC; harness externo entra como
+par más o como supervisor. No se implementa hasta fases 1–4 con evals.
 
 ## 12. Anti-patrones (no hacer)
 
@@ -230,6 +251,12 @@ of Consensus (2026) · Free-MAD (ACL Findings 2026) · MultiAgentBench (ACL
 2025) · Anthropic multi-agent research · Manus context engineering ·
 Magentic-One · AG-UI · A2A · MCP Apps · AutoGen HITL · LangGraph interrupts ·
 Pi intercom/messenger · OTel GenAI.
+- Colaboración par-a-par (meta común, sin juez): A2A (Linux Foundation,
+  Agent Cards + task lifecycle; MCP para tools, A2A para agentes) ·
+  AutoGen GroupChat · CrewAI · LangGraph · ChatDev (OpenBMB) · TransAgents ·
+  awesome-a2a-hub (questflowai) · Pi-to-Pi/IndyDevDan ·
+  pi-messenger-swarm (monotykamary, canales event-sourced) · pi-chat
+  (earendil-works) · agent-intercom-pi (interop Codex/Claude/OpenCode).
 
 ## 14. Registro de implementación
 
@@ -398,3 +425,37 @@ Costo estimado: ~8k–25k tokens (est.) por debate → matriz completa
 (20×6×3=360 debates) ~3M–9M tokens y varias horas (2–6 min/debate,
 secuencial); empezar con `--limit 6–18`. Veredicto actual: INCONCLUSO
 (falta revisión ciega); C5 y enrutado de modelos requieren §9 con notas reales.
+
+### Fase 4 — Endurecer y documentar (2026-09-15)
+
+- Plugin (`index.ts`, mismo archivo, sin imports nuevos):
+  - Spans estilo OTel GenAI como evento aditivo `otel.span` (no rompe
+    compat v1/v2): `invoke_agent` raíz (trace_id=debateID) → `chat` por
+    turno (rol, status, confianza, usage est.) → `execute_tool` por
+    lectura de adjuntos (archivos, chars). Cierre con
+    `termination_reason` + totales. Sin SDK (nombres de convención,
+    listos para exportar). Verificado: spans en el JSONL del debate T-D1.
+  - Dial `approval`: `watch` default (solo mirar). `/debate` muestra el
+    acta como informativa sin directiva de aplicar. El tool con
+    `approval:"auto-apply"` explícito en el input además la aplica al
+    chat origen (nunca default).
+- Cliente (`DebateRoom.tsx`, `debateStore.ts`, `debate.css`, `en/es.ts`):
+  timeline con hitos (inicio, intervenciones, stalls, acta, fin) +
+  rebobinar por slider de `seq` (solo lectura) + sección equipo
+  (timeline de `team/state`, mismo componente, con `teamID`).
+  Tests 13→16, `tsc` 0, `test:i18n` OK, `pnpm build` OK.
+- Visual desktop/mobile: pendiente de verificación manual en app.
+
+### Fase 5 — Puente Pi (plugin, 2026-09-15)
+
+- El bus vivo es `team/pinet.ts` bajo namespace `pibus` (TCP localhost +
+  secreto, protocolo NDJSON: hello/list/send/ask/reply/supervisor/ping/
+  bye; `cwd` como guard; supervisor igual a escalado a humano). Respeta
+  registry y feed; no toca claims.
+- `pi-smoke.mjs`: 11/11 PASS (2 peers, send, ask→reply, cwd guard,
+  supervisor, secreto malo, feed+state, stop).
+- Lecciones del loader: los módulos anidados se cachean entre reloads
+  (ni `?v=` refresca) → cada cambio en `team/*` exige restart o archivo
+  nuevo. `ctx.rpc.register` exige (definición, handlers) por separado.
+- `team/pi.start|stop|status` quedan degradados (el loader no da
+  `node:net` funcional al plugin); el bus es `pibus/start|stop|status`.

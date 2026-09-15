@@ -2,8 +2,9 @@ import { memo, useEffect, useRef, useState } from "react"
 import type { ServerConfig } from "../../types"
 import { useT } from "../../i18n-context"
 import { ChatIcon, CheckIcon, CloseIcon, HistoryIcon, PlayIcon, SendIcon, StopCircleIcon } from "../../Icons"
-import type { DebateMessage, DebateState } from "./debateStore"
+import type { DebateMessage, DebateState, TeamTimelineItem } from "./debateStore"
 import {
+  fetchTeamTimeline,
   rehydrateSessionDebates,
   sendDebateControl,
   sendDebateIntervene,
@@ -116,19 +117,44 @@ export type DebateRoomProps = {
   config: ServerConfig | null
   originSessionID: string
   onClose?: () => void
+  /** Equipo a mostrar (solo lectura, reutiliza el timeline). Opcional. */
+  teamID?: string | null
 }
 
-export const DebateRoom = memo(function DebateRoom({ config, originSessionID, onClose }: DebateRoomProps) {
+export const DebateRoom = memo(function DebateRoom({ config, originSessionID, onClose, teamID }: DebateRoomProps) {
   const t = useT()
   const active = useActiveDebate(originSessionID)
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
   const [busyControl, setBusyControl] = useState(false)
+  /** Rebobinar (solo lectura): muestra el canal hasta este seq. null = en vivo. */
+  const [rewindSeq, setRewindSeq] = useState<number | null>(null)
+  const [teamTimeline, setTeamTimeline] = useState<TeamTimelineItem[]>([])
   const listRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     void rehydrateSessionDebates(config, originSessionID)
   }, [config, originSessionID])
+
+  useEffect(() => {
+    setRewindSeq(null)
+  }, [active?.debateID])
+
+  useEffect(() => {
+    let alive = true
+    if (!teamID) {
+      setTeamTimeline([])
+      return () => {
+        alive = false
+      }
+    }
+    void fetchTeamTimeline(config, teamID).then((items) => {
+      if (alive) setTeamTimeline(items)
+    })
+    return () => {
+      alive = false
+    }
+  }, [config, teamID])
 
   const msgCount = active?.messages.length ?? 0
   const actaText = active?.acta?.text ?? ""
@@ -136,6 +162,11 @@ export const DebateRoom = memo(function DebateRoom({ config, originSessionID, on
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [msgCount, actaText, active?.debateID])
+
+  const maxSeq = active?.maxSeq ?? 0
+  const live = rewindSeq === null || rewindSeq >= maxSeq
+  const visibleMessages = !active || live ? (active?.messages ?? []) : active.messages.filter((m) => m.seq <= (rewindSeq ?? 0))
+  const visibleActa = active?.acta && (live || active.acta.seq <= (rewindSeq ?? 0)) ? active.acta : null
 
   const onSend = async () => {
     const value = draft.trim()
@@ -170,15 +201,31 @@ export const DebateRoom = memo(function DebateRoom({ config, originSessionID, on
       ) : (
         <>
           <ConsensusBar debate={active} />
+          {maxSeq > 1 ? (
+            <div className="debate-rewind">
+              <input
+                type="range"
+                min={1}
+                max={maxSeq}
+                value={live ? maxSeq : (rewindSeq ?? maxSeq)}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  setRewindSeq(v >= maxSeq ? null : v)
+                }}
+                aria-label={t("debate.rewind")}
+              />
+              {!live ? <span className="debate-pill warn">{t("debate.rewind")} · seq {rewindSeq}</span> : null}
+            </div>
+          ) : null}
           <div className="debate-list" ref={listRef}>
-            {active.messages.length === 0 ? (
+            {visibleMessages.length === 0 ? (
               <div className="debate-empty">
                 <p>{t("debate.empty")}</p>
               </div>
             ) : (
-              active.messages.map((m) => <Bubble key={`${m.seq}`} msg={m} />)
+              visibleMessages.map((m) => <Bubble key={`${m.seq}`} msg={m} />)
             )}
-            {active.running && !active.paused ? (
+            {active.running && !active.paused && live ? (
               <div className="debate-typing" aria-live="polite">
                 <span className="debate-typing-dots" aria-hidden="true">
                   <i />
@@ -188,9 +235,9 @@ export const DebateRoom = memo(function DebateRoom({ config, originSessionID, on
                 <span>{t("debate.typing")}</span>
               </div>
             ) : null}
-            {active.acta ? <ActaBlock debate={active} /> : null}
+            {visibleActa ? <ActaBlock debate={{ ...active, acta: visibleActa }} /> : null}
             {active.error ? <div className="debate-error">{active.error}</div> : null}
-            <Timeline debate={active} />
+            <Timeline debate={active} team={teamTimeline} />
           </div>
           <div className="debate-footer">
             <div className="debate-controls">
@@ -317,17 +364,23 @@ const ActaBlock = memo(function ActaBlock({ debate }: { debate: DebateState }) {
   )
 })
 
-const Timeline = memo(function Timeline({ debate }: { debate: DebateState }) {
+const Timeline = memo(function Timeline({ debate, team }: { debate: DebateState; team: TeamTimelineItem[] }) {
   const t = useT()
-  const items: Array<{ key: string; label: string; ts?: number }> = [
+  const items: Array<{ key: string; label: string; ts?: number; team?: boolean }> = [
     { key: "start", label: t("debate.tlStart"), ts: debate.messages[0]?.ts },
   ]
   for (const m of debate.messages) {
     if (m.kind === "user") items.push({ key: `i-${m.seq}`, label: `${t("debate.tlIntervention")}: ${m.body.slice(0, 80)}`, ts: m.ts })
   }
+  if (typeof debate.status.stalls === "number" && debate.status.stalls > 0) {
+    items.push({ key: "stalls", label: `${t("debate.tlStall")}: ${debate.status.stalls}` })
+  }
   if (debate.acta) items.push({ key: "acta", label: t("debate.tlActa"), ts: debate.acta.ts })
   if (debate.done) items.push({ key: "done", label: t("debate.tlDone", { reason: debate.done.reason }) })
-  if (items.length <= 1) return null
+  for (const e of team) {
+    items.push({ key: `team-${e.seq}-${e.kind}`, label: `${t("debate.teamTimeline")}: ${e.label.slice(0, 100)}`, team: true })
+  }
+  if (items.length <= 1 && team.length === 0) return null
   return (
     <details className="debate-timeline">
       <summary>
@@ -338,7 +391,7 @@ const Timeline = memo(function Timeline({ debate }: { debate: DebateState }) {
       </summary>
       <ol>
         {items.map((it) => (
-          <li key={it.key}>
+          <li key={it.key} className={it.team ? "debate-tl-team" : undefined}>
             <span className="debate-tl-label">{it.label}</span>
             {it.ts !== undefined ? <span className="debate-time">{timeOf(it.ts)}</span> : null}
           </li>

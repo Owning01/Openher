@@ -197,3 +197,22 @@ ciega, harness propio).
 - Ubicación confirmada (gate F0→F1): módulo `team/` separado en el dir del
   plugin (`registry/claims/feed/blackboard/roles/rpc.ts`); no se toca
   `debate-room/index.ts` salvo el import.
+- 2026-09-15: **Fases 1–3 plugin PASS** contra server real:
+  - F1 registry (`f1-registry.mjs`): 3 registran, 1 muere, `list` limpio
+    en 32 s; topología inválida rechazada; `state` OK.
+  - F2 claims (`f2-claims.mjs`): 20 concurrentes → 1 gana/19 denegados;
+    reclaim tras `ttl=5 s` en ~6 s; `verify` bloquea con SHA cambiado;
+    contadores exactos (lock O_EXCL: 19/19, antes se perdían 18/19).
+  - F3 feed (`f3-feed.mjs`): `read` sin filtro rechazado; digest ≤2000;
+    hecho con TTL expira; timeline con claim+acta.
+  - Hallazgo: el RPC exige `directory` por input (convención debate);
+    sin él el estado cae en el cwd del server. Tests fijan el repo.
+  - Hallazgo: output RPC nunca array (el harness lo rechaza) → `board`
+    devuelve sobre `{namespace, valor}`.
+- 2026-09-15: **Fase 4 ciclo PASS** (`t-d1-cycle.mjs`, caso T-D1 real con
+  3 propuestas ciegas + crítica + sala juzgando): acta 9834 chars con
+  minorías, veto motivado bloquea, veto sin motivo rechazado, topología
+  inmutable, timeline claim+veto+acta.
+- 2026-09-15: **Bus Pi PASS** (`pi-smoke.mjs` 11/11, namespace `pibus`).
+- 2026-09-15: **Fase 5 en curso** (`scripts/team-eval/out-t1/`, 54
+  ejecuciones). Veredicto pendiente de revisión ciega (§9).

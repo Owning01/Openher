@@ -6,6 +6,7 @@ import {
   activeDebateForSession,
   debatesForSession,
   fetchDebateState,
+  fetchTeamTimeline,
   hydrateDebate,
   ingestDebateEnvelope,
   resetDebateStore,
@@ -203,5 +204,36 @@ describe("debate: 2 paneles, 1 evento → 1 entrada", () => {
       pluginBus.emit("rpc.debate.message", { ...payload })
     })
     expect(activeDebateForSession(ORIGIN)?.messages).toHaveLength(1)
+  })
+})
+
+describe("debateStore: timeline Fase 4 (stalls, rewind, equipo)", () => {
+  it("hydrateDebate mapea stalls del snapshot", () => {
+    hydrateDebate(ORIGIN, {
+      debateID: DEBATE,
+      status: { turns: 4, consensusPct: 25, stalled: true, stalls: 2 },
+    })
+    expect(activeDebateForSession(ORIGIN)?.status.stalls).toBe(2)
+  })
+
+  it("fetchTeamTimeline pide team/state y filtra entradas válidas ordenadas", async () => {
+    const timeline = [
+      { seq: 3, kind: "veto", label: "Veto: falta medir" },
+      { seq: 1, kind: "claim", label: "Claim a.ts" },
+      { seq: 2, kind: "ruido" },
+      { seq: "x", kind: "claim", label: "mal" },
+    ]
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ output: { timeline } }) })
+    vi.stubGlobal("fetch", fetchMock)
+    const out = await fetchTeamTimeline({ host: "h", port: 1, username: "u", password: "p" }, "team-1")
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/rpc/team/state")
+    expect(out.map((e) => e.seq)).toEqual([1, 3])
+    expect(out[0]).toEqual({ seq: 1, kind: "claim", label: "Claim a.ts" })
+  })
+
+  it("fetchTeamTimeline devuelve [] sin teamID o si el RPC falla", async () => {
+    expect(await fetchTeamTimeline({ host: "h", port: 1, username: "u", password: "p" }, "")).toEqual([])
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }))
+    expect(await fetchTeamTimeline({ host: "h", port: 1, username: "u", password: "p" }, "team-1")).toEqual([])
   })
 })

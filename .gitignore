@@ -95,6 +95,12 @@ web/learning-raw/
 scripts/debate-eval/out/
 scripts/debate-eval/out-*/
 
+# Evidencia del harness de evals de equipo (se regenera corriendo run.mjs)
+scripts/team-eval/out-*/
+
+# Estado runtime por proyecto (registry/claims/feed/debates): nunca a git.
+.openher/
+
 # Documentación personal de gestión (scrum): NO se sube a GitHub.
 docs/scrum/
 docs/scrum-copia/
