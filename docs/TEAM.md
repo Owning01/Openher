@@ -33,8 +33,10 @@ Relación con lo existente:
 Tres mecanismos combinados, de barato a caro:
 
 1. **Registry file-based** (estilo pi-messenger): cada agente registra
-   nombre, cwd, modelo, capacidades y latido. Sin daemon; liveness por PID.
-   Es la fuente de verdad local.
+   nombre, cwd, modelo, capacidades y latido. Sin daemon; liveness por
+   heartbeat de sesión (PID solo si el spike F0.2 lo valida en el entorno
+   local — las sesiones opencode no son PIDs del SO). Es la fuente de
+   verdad local.
 2. **Presencia viva** (estilo pi-intercom broker): `idle` / `thinking` /
    `tool:<nombre>` publicado automáticamente. Solo sesiones conectadas.
 3. **Agent Cards** (estilo A2A): ficha estructurada por agente —
@@ -89,6 +91,10 @@ reconstruir qué pasó antes de qué.
 - **Feed del equipo** (`feed.jsonl` append-only, jamas reescrito): todo lo
   relevante queda registrado con `seq`. Es la memoria auditable y la base
   de las actas.
+- **Regla de enrutado** (1 hecho → 1 store primario + links, nunca triple
+  copia): eventos y claims efímeros → feed; estado vigente y decisiones →
+  blackboard; deliberación en curso → JSONL de la sala; el acta final se
+  linkea desde el blackboard, no se triplica.
 
 Tope anti-reunionitis: 3–5 agentes, `maxTurns` acotado, corte por
 estabilidad. El chatter escala cuadrático; cada mensaje debe mover la
@@ -169,5 +175,7 @@ ciega, harness propio).
 
 - 2026-09-15: idea inicial (pedido del dueño: equipo-empresa que se
   descubre, no se pisa, propone y evalúa). Doc creado, sin implementar.
-- Siguiente: plan por fases (TEAM-PLAN.md) → evaluador → spike registry
-  + claims → A/B contra ejecución single-agent.
+- 2026-09-15: `TEAM-PLAN.md` por fases. Evaluador: REJECTED (9 bloqueos) →
+  corregidos → REJECTED (3 residuales: B2/B7/B9) → corregidos → ACCEPTED
+  9/9. Listo para constructores desde Fase 0 (spikes harness).
+- Siguiente: Fase 0 spikes (`scripts/team-eval/spikes/`).
