@@ -31,25 +31,39 @@ def data_of(blob):
 def main():
     args = set(sys.argv[1:])
     try:
-        db = sqlite3.connect("file:%s?mode=ro" % DB.replace("\\", "/"), uri=True)
+        # OJO: mode=ro NO ve el WAL y la tabla `session`/`message` es legado
+        # (congelada en 2026-08-27). La viva es session_v2/session_message.
+        db = sqlite3.connect(DB.replace("\\", "/"), timeout=10)
     except Exception as e:
         print("Sin DB (%s)" % e)
         return 1
     rows = db.execute(
-        "select id,title,directory,time_updated,parent_id from session "
+        "select id,title,directory,time_updated,parent_id,cost from session_v2 "
         "order by time_updated desc limit 15"
     ).fetchall()
-    for sid, title, directory, upd, parent in rows:
+    for sid, title, directory, upd, parent, cost in rows:
         when = time.strftime("%d %H:%M", time.localtime((upd or 0) / 1000))
         print("%s | %s | %s | %s%s" % (sid, (title or "?")[:40], when, (directory or "")[-50:], " | hijo-de:" + parent[-8:] if parent else ""))
         if "--actividad" in args:
-            p = db.execute(
-                "select data from part where session_id=? and json_extract(data,'$.type')='text' "
-                "order by time_created desc limit 1", (sid,)
-            ).fetchone()
-            if p:
-                d = data_of(p[0])
-                print("    ultimo: %s" % (str(d.get("text") or "")[:120].replace("\n", " ")))
+            shown = False
+            for mtype, blob in db.execute(
+                "select type,data from session_message where session_id=? and type in ('user','assistant') "
+                "order by time_created desc limit 4", (sid,)
+            ).fetchall():
+                d = data_of(blob)
+                txt = d.get("text") or ""
+                if not txt:
+                    for part in d.get("content") or []:
+                        if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
+                            txt = part["text"]
+                            break
+                txt = txt.replace("\n", " ").strip()
+                if txt:
+                    print("    ultimo [%s]: %s" % (mtype, txt[:120]))
+                    shown = True
+                    break
+            if not shown:
+                print("    ultimo: (solo herramientas)")
     if "--anuncios" in args:
         print("--- anuncios vigentes ---")
         latest = {}
