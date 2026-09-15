@@ -8,6 +8,11 @@ import { normalizeAssistantError } from "../shared/errors/assistantError"
 // delta). Activación: localStorage.setItem("opencode.debug.sse", "1").
 const SSE_DIAG = typeof localStorage !== "undefined" && localStorage.getItem("opencode.debug.sse") === "1"
 
+/** ID de mensaje/part del dialecto v2: solo strings no vacíos valen. */
+function asID(v: unknown): string | undefined {
+  return typeof v === "string" && v ? v : undefined
+}
+
 type SSEHandlerDeps = {
   sessionID: string | null | undefined
   directory: string | undefined
@@ -159,12 +164,13 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       return
     }
 
-    if (type === "session.next.compaction.delta" || type === "session.next.compaction.ended") {
+    if (type === "session.next.compaction.delta" || type === "session.next.compaction.ended" || type === "session.compaction.ended") {
       const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       const messageID = (d.messageID ?? p.messageID) as string | undefined
-      if (sessionID && messageID && sessionID === deps.sessionID) {
-        if (type === "session.next.compaction.delta") {
+      // session.compaction.ended trae sessionID en data (sin messageID).
+      if (sessionID && sessionID === deps.sessionID && (messageID || type === "session.compaction.ended")) {
+        if (type === "session.next.compaction.delta" && messageID) {
           const text = (d.text ?? p.text) as string | undefined
           if (text) enqueueDelta(sessionID, messageID, messageID, text, true, "compaction")
         } else {
@@ -173,6 +179,71 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
           deps.setCompacting?.(false, sessionID)
           deps.loadSelected(sessionID, deps.directory ?? "")
         }
+      }
+      return
+    }
+
+    // Dialecto v2 vigente (server 2.x): session.text.* / session.reasoning.* /
+    // session.tool.input.delta / session.execution.*. El server YA NO emite
+    // message.part.delta ni message.updated (verificado contra 2.0.3: un turno
+    // completo no trae ninguno) — sin estas ramas no hay streaming en vivo ni
+    // cierre de turno por SSE. El sobre llega como envelope {type, data} y `p`
+    // es el envelope (el parser pone todo en properties); `d` es el payload.
+    // Formas oficiales (@opencode-ai/protocol): text.delta =
+    // {assistantMessageID, ordinal, delta, sessionID}; execution.* =
+    // {sessionID} (+ error en failed, reason en interrupted).
+    if (
+      type === "session.text.delta" || type === "session.text.started" || type === "session.text.ended" ||
+      type === "session.reasoning.delta" || type === "session.reasoning.started" || type === "session.reasoning.ended" ||
+      type === "session.tool.input.delta"
+    ) {
+      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
+      if (!sessionID || sessionID !== deps.sessionID) return
+      const reasoning = type.startsWith("session.reasoning")
+      const isToolInput = type === "session.tool.input.delta"
+      const messageID = asID(d.assistantMessageID ?? d.messageID ?? p.assistantMessageID ?? p.messageID)
+      if (!messageID) return
+      // `.started` solo anuncia: el shell del mensaje se crea con el primer
+      // delta (applyDelta), igual que antes — evita burbujas vacías.
+      // `.ended` no cierra el turno (pueden seguir tools): solo los deltas pintan.
+      if (type.endsWith(".started") || type.endsWith(".ended")) return
+      const ordinal = d.ordinal
+      const defaultPartID = `${messageID}:${isToolInput ? "tool" : reasoning ? "reasoning" : "text"}${typeof ordinal === "number" ? `:${ordinal}` : ""}`
+      const partID = asID(d.partID ?? d.textID ?? d.reasoningID ?? d.id) ?? defaultPartID
+      const text = (d.delta ?? d.text ?? p.delta ?? p.text ?? "") as string
+      if (partID && typeof text === "string" && text) {
+        enqueueDelta(sessionID, messageID, partID, text, false, isToolInput ? "tool" : reasoning ? "reasoning" : "text")
+      }
+      return
+    }
+
+    if (
+      type === "session.execution.started" || type === "session.execution.succeeded" ||
+      type === "session.execution.failed" || type === "session.execution.interrupted"
+    ) {
+      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
+      if (!sessionID || sessionID !== deps.sessionID) return
+      if (type === "session.execution.started") return
+      if (type === "session.execution.failed") {
+        const err = d.error as { message?: unknown; type?: unknown } | undefined
+        const msg = typeof err?.message === "string" && err.message ? err.message : undefined
+        if (msg) deps.setRuntimeError(msg)
+        else {
+          const norm = normalizeAssistantError(d.error ?? p.error)
+          if (norm?.message) deps.setRuntimeError(norm.message)
+        }
+      }
+      // Cierre de turno: solo el turno en curso apaga el spinner (un evento
+      // tardío no debe robar el stop del turno siguiente; el dedupe por id
+      // del transporte ya frena duplicados). Sin awaiting igual se reconcilia
+      // el historial (turno iniciado desde otro cliente).
+      if (deps.awaitingRef()) {
+        deps.setAwaitingAssistantReply(false)
+        deps.onSettled(sessionID, deps.directory ?? "")
+      } else {
+        deps.loadSelected(sessionID, deps.directory ?? "")
       }
       return
     }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { renderHook } from "@testing-library/react"
 import type { SSEEvent } from "../types"
 import { useSSEHandler } from "./useSSEHandler"
@@ -60,8 +60,7 @@ describe("useSSEHandler — cierre de turno", () => {
   })
 })
 
-describe("useSSEHandler — session.error", () => {
-  function sessionError(sessionID: string, error: unknown): SSEEvent {
+describe("useSSEHandler — session.error", () => {  function sessionError(sessionID: string, error: unknown): SSEEvent {
     return {
       id: `evt-err-${sessionID}`,
       type: "session.error",
@@ -90,5 +89,104 @@ describe("useSSEHandler — session.error", () => {
     const { result } = renderHook(() => useSSEHandler(deps))
     result.current(sessionError("s1", { name: "UnknownError", message: "plano" }))
     expect(deps.setRuntimeError).toHaveBeenCalledWith("plano")
+  })
+})
+
+// Dialecto v2 vigente (server 2.x): el sobre SSE es el envelope
+// {id, created, type, data} y el parser lo deja entero en properties.
+describe("useSSEHandler — dialecto v2 (session.text/reasoning/execution)", () => {
+  // Los deltas se coalescan por requestAnimationFrame: en tests se ejecuta
+  // directo para que applyDelta corra sincrónico.
+  beforeEach(() => {
+    vi.stubGlobal("requestAnimationFrame", (cb: (t: number) => void) => { cb(0); return 1 })
+    vi.stubGlobal("cancelAnimationFrame", () => {})
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  function v2(type: string, data: Record<string, unknown>): SSEEvent {
+    return {
+      id: `evt-${type}`,
+      type,
+      properties: { id: `evt-${type}`, created: Date.now(), type, data },
+    } as unknown as SSEEvent
+  }
+
+  it("session.text.delta pinta el delta en vivo", () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.text.delta", { sessionID: "s1", assistantMessageID: "msg-1", ordinal: 0, delta: "hola" }))
+    expect(deps.applyDelta).toHaveBeenCalledWith("s1", "msg-1", "msg-1:text:0", "hola", false, "text")
+  })
+
+  it("session.text.delta sin ordinal usa part estable por mensaje", () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.text.delta", { sessionID: "s1", assistantMessageID: "msg-1", delta: "hola" }))
+    expect(deps.applyDelta).toHaveBeenCalledWith("s1", "msg-1", "msg-1:text", "hola", false, "text")
+  })
+
+  it("ignora deltas de otra sesión (nunca inyectar texto ajeno)", () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.text.delta", { sessionID: "s2", assistantMessageID: "msg-9", delta: "ajeno" }))
+    expect(deps.applyDelta).not.toHaveBeenCalled()
+  })
+
+  it("session.reasoning.delta llega tipado como reasoning", () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.reasoning.delta", { sessionID: "s1", assistantMessageID: "msg-1", ordinal: 1, delta: "pienso" }))
+    expect(deps.applyDelta).toHaveBeenCalledWith("s1", "msg-1", "msg-1:reasoning:1", "pienso", false, "reasoning")
+  })
+
+  it("session.text.started/ended no pintan ni cierran el turno", () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.text.started", { sessionID: "s1", assistantMessageID: "msg-1" }))
+    result.current(v2("session.text.ended", { sessionID: "s1", assistantMessageID: "msg-1" }))
+    expect(deps.applyDelta).not.toHaveBeenCalled()
+    expect(deps.onSettled).not.toHaveBeenCalled()
+  })
+
+  it("session.execution.succeeded cierra el turno en curso", () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.execution.succeeded", { sessionID: "s1" }))
+    expect(deps.setAwaitingAssistantReply).toHaveBeenCalledWith(false)
+    expect(deps.onSettled).toHaveBeenCalledWith("s1", "/dir")
+  })
+
+  it("sin awaiting igual reconcilia el historial (turno de otro cliente)", () => {
+    const deps = makeDeps({ awaitingRef: () => false })
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.execution.succeeded", { sessionID: "s1" }))
+    expect(deps.setAwaitingAssistantReply).not.toHaveBeenCalled()
+    expect(deps.onSettled).not.toHaveBeenCalled()
+    expect(deps.loadSelected).toHaveBeenCalledWith("s1", "/dir")
+  })
+
+  it("session.execution.failed muestra el error y cierra", () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.execution.failed", { sessionID: "s1", error: { type: "x", message: "se cayó el provider" } }))
+    expect(deps.setRuntimeError).toHaveBeenCalledWith("se cayó el provider")
+    expect(deps.setAwaitingAssistantReply).toHaveBeenCalledWith(false)
+    expect(deps.onSettled).toHaveBeenCalledWith("s1", "/dir")
+  })
+
+  it("session.execution.interrupted cierra sin error", () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.execution.interrupted", { sessionID: "s1", reason: "user" }))
+    expect(deps.setRuntimeError).not.toHaveBeenCalled()
+    expect(deps.setAwaitingAssistantReply).toHaveBeenCalledWith(false)
+    expect(deps.onSettled).toHaveBeenCalledWith("s1", "/dir")
+  })
+
+  it("session.tool.input.delta pinta input de tool", () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(v2("session.tool.input.delta", { sessionID: "s1", assistantMessageID: "msg-1", id: "call-7", delta: "{\"a\":" }))
+    expect(deps.applyDelta).toHaveBeenCalledWith("s1", "msg-1", "call-7", "{\"a\":", false, "tool")
   })
 })

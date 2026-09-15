@@ -84,6 +84,10 @@ export function useAppLifecycle({
 }: UseAppLifecycleParams) {
   const lastMsgFetchUpdatedRef = useRef<Record<string, number>>({})
   const lastFetchAtRef = useRef<Record<string, number>>({})
+  // Igual que el panel desktop: /session/active omite las sesiones que ya
+  // terminaron, así que "ausente" también es una señal de fin (con gracia de
+  // 15s para no apurar el settled justo después de enviar).
+  const absentSinceRef = useRef<Record<string, number>>({})
   const replayingQueueRef = useRef(false)
   const isStreaming = streamState === "streaming" && dataMode === "full" && flags.streamingFull
   const isStreamingActive = isStreaming && Boolean(selectedSession)
@@ -153,6 +157,19 @@ export function useAppLifecycle({
         const real = st?.[selectedSession.id]
         if (real && real.type !== "busy" && real.type !== "retry") {
           setAwaitingAssistantReply(false)
+          delete absentSinceRef.current[selectedSession.id]
+        } else if (!real) {
+          // Ausente del mapa + local idle + 15s seguidos: el cierre se perdió.
+          const since = absentSinceRef.current[selectedSession.id] || 0
+          if (!since) absentSinceRef.current[selectedSession.id] = now
+          else if (now - since >= 15000) {
+            delete absentSinceRef.current[selectedSession.id]
+            setAwaitingAssistantReply(false)
+            // Traer el texto final ya (si no, quedaba hasta el próximo pull).
+            loadSelected(selectedSession.id, selectedSession.directory).catch(() => undefined)
+          }
+        } else {
+          delete absentSinceRef.current[selectedSession.id]
         }
       }
       if (selectedSession && isSessionActive(selectedSession) && !awaitingAssistantReply) {

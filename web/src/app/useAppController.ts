@@ -681,7 +681,9 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     if (stopGenerationRef.current) {
       if (event.type === "message.part.delta" || event.type === "message.updated" || event.type === "message.part.updated"
         || event.type === "session.next.text.delta" || event.type === "session.next.reasoning.delta"
-        || event.type === "session.next.tool.input.delta") return
+        || event.type === "session.next.tool.input.delta"
+        || event.type.startsWith("session.text.") || event.type.startsWith("session.reasoning.")
+        || event.type === "session.tool.input.delta" || event.type === "session.message.content.updated") return
     }
     sseHandler(event)
   }, [sseHandler])

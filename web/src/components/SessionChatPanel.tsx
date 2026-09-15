@@ -157,7 +157,9 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       if (stopGenerationRef.current) {
         if (event.type === "message.part.delta" || event.type === "message.updated" || event.type === "message.part.updated"
           || event.type === "session.next.text.delta" || event.type === "session.next.reasoning.delta"
-          || event.type === "session.next.tool.input.delta") return
+          || event.type === "session.next.tool.input.delta"
+          || event.type.startsWith("session.text.") || event.type.startsWith("session.reasoning.")
+          || event.type === "session.tool.input.delta" || event.type === "session.message.content.updated") return
       }
       handleSSEEvent(event)
     }, [handleSSEEvent, stopGenerationRef]),
@@ -457,11 +459,20 @@ export const SessionChatPanel = memo(function SessionChatPanel({
   // cada 5s (o cada 3s durante el stream) saturaba la lectura de mensajes.
   const lastMsgsUpdatedRef = useRef(0)
   const lastMsgsFetchAtRef = useRef(0)
-  useEffect(() => { lastMsgsUpdatedRef.current = 0; lastMsgsFetchAtRef.current = 0 }, [session.id])
+  // Gracia de "ausente del mapa": /session/active solo lista sesiones
+  // corriendo; al terminar, la sesión DESAPARECE (no pasa a idle) y ningún
+  // evento lo anuncia si el SSE perdió el cierre. Sin esto el spinner quedaba
+  // para siempre: `idle` exige entrada presente. Solo cuando el estado local
+  // tampoco la ve trabajando, y tras 15s seguidos de ausencia (el server tarda
+  // ~1-2s en marcar busy tras el envío — no apurar el settled del turno nuevo).
+  const absentSinceRef = useRef(0)
+  useEffect(() => { lastMsgsUpdatedRef.current = 0; lastMsgsFetchAtRef.current = 0; absentSinceRef.current = 0 }, [session.id])
   usePolling(async () => {
     // Status real del server primero: es barato (mapa de sesiones activas).
     const st = await api.listStatuses(config, session.directory).catch(() => undefined)
     const real = st?.[session.id]
+    if (!real) absentSinceRef.current = absentSinceRef.current || Date.now()
+    else absentSinceRef.current = 0
     const idle = !!real && real.type !== "busy" && real.type !== "retry"
     const updated = session.updated ?? 0
     const updatedAdvanced = lastMsgsUpdatedRef.current === 0 || updated > lastMsgsUpdatedRef.current
@@ -479,6 +490,14 @@ export const SessionChatPanel = memo(function SessionChatPanel({
     }
     // Solo cuando localmente parece trabajando: en idle no hay nada que reconciliar.
     if (idle && (isSessionActive(session) || msgs.awaitingAssistantReply)) {
+      msgs.setAwaitingAssistantReply(false)
+      onSettled(session.id, session.directory)
+    }
+    // Ausencia prolongada del mapa + local idle + esperando respuesta =
+    // el cierre se perdió (SSE caído sin replay): reconciliar igual.
+    if (!real && !isSessionActive(session) && msgs.awaitingAssistantReply
+      && absentSinceRef.current && Date.now() - absentSinceRef.current >= 15000) {
+      absentSinceRef.current = 0
       msgs.setAwaitingAssistantReply(false)
       onSettled(session.id, session.directory)
     }
