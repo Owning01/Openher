@@ -5,6 +5,7 @@ import { WindowResizeHandles } from "./WindowResizeHandles"
 import { extractUrlFromDataTransfer, setUrlDragData } from "../../utils/urlDrag"
 import { TabBar } from "../../components/TabBar"
 import { WeatherChip } from "../../components/WeatherChip"
+import { DevbarToggleButton } from "../../features/devbar/DevbarToggleButton"
 import {
   ChatIcon,
   TerminalIcon,
@@ -205,6 +206,7 @@ export const TitleBar = memo(function TitleBar({
       if ((e as unknown as { detail?: number }).detail !== undefined && (e as unknown as { detail: number }).detail > 1) return
       if (
         (e.target as HTMLElement).closest(".win-btn") ||
+        (e.target as HTMLElement).closest(".devbar-toggle") ||
         (e.target as HTMLElement).closest(".titlebar-tab") ||
         (e.target as HTMLElement).closest(".titlebar-add-btn") ||
         (e.target as HTMLElement).closest(".tab-bar")
@@ -488,6 +490,7 @@ export const TitleBar = memo(function TitleBar({
         </div>
       )}
 
+      <DevbarToggleButton />
       <WeatherChip />
       <div className="win-controls" aria-label="Windows controls">
         <button

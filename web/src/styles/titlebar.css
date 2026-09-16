@@ -297,6 +297,36 @@
   color: var(--text) !important;
 }
 
+/* Toggle de Devbar (titlebar desktop): mismo lenguaje que los win-btn,
+   pero compacto y con estado activo visible. */
+.devbar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--muted, #a1a1aa);
+  cursor: pointer;
+  padding: 0;
+  margin-right: 4px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.devbar-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.devbar-toggle.is-on {
+  color: var(--accent, #7c6cff);
+  background: color-mix(in srgb, var(--accent, #7c6cff) 16%, transparent);
+}
+
 /* Espacio en el contenedor principal para la barra fija superior */
 html[data-frameless="true"] body,
 html[data-desktop="true"] body {

@@ -18,6 +18,7 @@ import { SessionsViewContainer } from "./features/session/ui/SessionsViewContain
 import { useAppController } from "./app/useAppController"
 import { useToast } from "./components/Toasts"
 import { useDesktopOpenDir } from "./hooks/useDesktopOpenDir"
+import { DevbarHost } from "./features/devbar/DevbarHost"
 
 function AppInner({ language, setLanguage }: { language: LanguageCode; setLanguage: (lang: LanguageCode) => void }) {
   const c = useAppController({ language, setLanguage })
@@ -106,6 +107,7 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
   return (
     <>
       <AppUpdateBanner />
+      <DevbarHost />
       {c.isDesktop ? (
         <DesktopLayoutView
           shellRef={c.shellRef}

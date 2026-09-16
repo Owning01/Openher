@@ -346,6 +346,7 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
                     let mime = mime_for(&file);
                     return ShellResponse::data(200, br_bytes, mime)
                         .with_header("content-encoding", "br")
+                        .with_header("access-control-allow-origin", "*")
                         .with_header("cache-control", "public, max-age=31536000, immutable");
                 }
             }
@@ -371,12 +372,14 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
                     }
                     return ShellResponse::from_string(200, s)
                         .with_header("content-type", mime)
+                        .with_header("access-control-allow-origin", "*")
                         .with_header("cache-control", "no-cache");
                 }
             }
             // Cache agresivo para assets hasheados, no-cache para index
             let cache = if is_index { "no-cache" } else { "public, max-age=31536000, immutable" };
             return ShellResponse::data(200, bytes, mime)
+                .with_header("access-control-allow-origin", "*")
                 .with_header("cache-control", cache);
         }
     }

@@ -446,8 +446,55 @@ export type CodeSearchResult = {
 
 /** Releases en GitHub: el celu actualiza aunque la PC esté apagada. */
 export const GITHUB_RELEASE_BASE = "https://github.com/Owning01/Openher/releases/latest/download"
+/** API de releases: 1 solo hop (sin los 2 redirects del /download) y con
+ * CORS `*`, así sirve de fallback cuando el fetch del version.json falla. */
+export const GITHUB_API_LATEST = "https://api.github.com/repos/Owning01/Openher/releases/latest"
 /** Base que ganó el último chequeo (GitHub o shell local); la usa downloadApk. */
 let updateBase: string | null = null
+
+/** Deriva version/versionCode del tag (`v1.0.28` -> 1.0.28/10028, misma
+ * convención que build.gradle: major*10000 + minor*100 + patch). */
+export function versionCodeFromTag(tag: string): { version: string; versionCode: number } | null {
+  const m = tag.trim().match(/^v?(\d+)\.(\d+)\.(\d+)$/)
+  if (!m) return null
+  const major = Number(m[1])
+  const minor = Number(m[2])
+  const patch = Number(m[3])
+  return { version: `${major}.${minor}.${patch}`, versionCode: major * 10000 + minor * 100 + patch }
+}
+
+/** Último release via API (fallback sin redirects): devuelve lo mínimo para
+ * notificar y descargar la APK desde el link estable de GitHub. */
+async function fetchLatestReleaseInfo(): Promise<AppVersionInfo | null> {
+  try {
+    const res = await shellFetch(GITHUB_API_LATEST, { timeoutMs: 8000 })
+    if (!res.ok) return null
+    const data = (await res.json()) as {
+      tag_name?: unknown
+      body?: unknown
+      published_at?: unknown
+      assets?: Array<{ name?: unknown; size?: unknown }>
+    }
+    if (!data || typeof data.tag_name !== "string") return null
+    const v = versionCodeFromTag(data.tag_name)
+    if (!v) return null
+    const assets = Array.isArray(data.assets) ? data.assets : []
+    const apk = assets.find((a) => a?.name === "openher.apk")
+    const size = typeof apk?.size === "number" ? apk.size : 0
+    return {
+      name: "OpenHer",
+      version: v.version,
+      versionCode: v.versionCode,
+      file: "openher.apk",
+      sha256: "",
+      size,
+      builtAt: typeof data.published_at === "string" ? data.published_at : "",
+      notes: typeof data.body === "string" ? data.body : "",
+    }
+  } catch {
+    return null
+  }
+}
 
 async function fetchVersionJson(url: string): Promise<AppVersionInfo | null> {
   try {
@@ -464,12 +511,18 @@ async function fetchVersionJson(url: string): Promise<AppVersionInfo | null> {
 export const shell = {
   /**
    * Última versión publicada (openher-version.json): alimenta el auto-update.
-   * GitHub primero (el celu actualiza con la PC apagada), shell local después.
+   * GitHub primero (el celu actualiza con la PC apagada), API de GitHub como
+   * fallback sin redirects, shell local después.
    */  appVersion: async (): Promise<AppVersionInfo | null> => {
     const gh = await fetchVersionJson(`${GITHUB_RELEASE_BASE}/openher-version.json`)
     if (gh) {
       updateBase = GITHUB_RELEASE_BASE
       return gh
+    }
+    const ghApi = await fetchLatestReleaseInfo()
+    if (ghApi) {
+      updateBase = GITHUB_RELEASE_BASE
+      return ghApi
     }
     try {
       const base = await resolveShellBase()

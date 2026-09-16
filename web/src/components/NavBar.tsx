@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, type ReactNode } from "react"
 import { SettingsIcon, SunIcon, MoonIcon, FolderIcon, GraduationCapIcon } from "../Icons"
 import { WeatherChip } from "./WeatherChip"
+import { DevbarToggleButton } from "../features/devbar/DevbarToggleButton"
 import { useT } from "../i18n-context"
 import type { ViewType } from "../types"
 
@@ -76,6 +77,7 @@ export const NavBar = memo(function NavBar({ variant = "top", view, onNavigate, 
           </button>
         )}
         <WeatherChip />
+        <DevbarToggleButton className="btn-icon btn-ghost theme-toggle-nav" />
       </nav>
     </header>
   )

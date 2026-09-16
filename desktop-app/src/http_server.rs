@@ -76,6 +76,9 @@ async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Re
                             .header("content-type", mime)
                             .header("content-encoding", "br")
                             .header("cache-control", static_cache_for(rel))
+                            // CORS: la notebook consulta /openher-version.json del
+                            // shell remoto cross-origin (auto-update desktop).
+                            .header("access-control-allow-origin", "*")
                             .body(Full::new(Bytes::from(bytes)))
                             .unwrap();
                         return Ok(resp);
@@ -87,6 +90,8 @@ async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Re
                     .status(StatusCode::OK)
                     .header("content-type", mime)
                     .header("cache-control", static_cache_for(rel))
+                    // CORS: ver arriba (check de versión remoto del desktop).
+                    .header("access-control-allow-origin", "*")
                     .body(Full::new(Bytes::from(bytes)))
                     .unwrap();
                 return Ok(resp);
@@ -97,6 +102,7 @@ async fn handle_hyper(req: Request<Incoming>, state: Arc<AppState>) -> Result<Re
                     .status(StatusCode::OK)
                     .header("content-type", "text/html; charset=utf-8")
                     .header("cache-control", static_cache_for("/index.html"))
+                    .header("access-control-allow-origin", "*")
                     .body(Full::new(Bytes::from(bytes)))
                     .unwrap();
                 return Ok(resp);

@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from "react"
 import type { ServerConfig } from "../../types"
 import { useT } from "../../i18n-context"
 import { ChatIcon, CheckIcon, CloseIcon, HistoryIcon, PlayIcon, SendIcon, StopCircleIcon } from "../../Icons"
+import { Markdown } from "../../components/Markdown"
 import type { DebateMessage, DebateState, TeamTimelineItem } from "./debateStore"
 import {
   fetchTeamTimeline,
@@ -97,7 +98,7 @@ const Bubble = memo(function Bubble({ msg }: { msg: DebateMessage }) {
         {msg.repliesTo ? (
           <div className="debate-reply">{t("debate.repliesTo", { role: msg.repliesTo })}</div>
         ) : null}
-        <div className="debate-body">{msg.body}</div>
+        <div className="debate-body message-content"><Markdown text={msg.body} /></div>
         {msg.blockingIssues.length > 0 ? (
           <div className="debate-issues">
             {msg.blockingIssues.map((issue, i) => (
@@ -349,13 +350,14 @@ const ActaBlock = memo(function ActaBlock({ debate }: { debate: DebateState }) {
           <span className="debate-flag dim">{t("debate.actaConfidence", { pct: String(acta.confidence) })}</span>
         ) : null}
       </div>
-      <div className="debate-body">{acta.text}</div>
+      <div className="debate-body message-content"><Markdown text={acta.text} /></div>
       {acta.minorities.length > 0 ? (
         <div className="debate-minorities">
           <span className="debate-minorities-label">{t("debate.minorities")}</span>
           {acta.minorities.map((m, i) => (
-            <div key={i} className="debate-minority">
-              {m}
+            <div key={i} className="debate-minority message-content">
+              <Markdown text={m} />
+            </div>
             </div>
           ))}
         </div>

@@ -104,3 +104,17 @@ scripts/team-eval/out-*/
 # Documentación personal de gestión (scrum): NO se sube a GitHub.
 docs/scrum/
 docs/scrum-copia/
+
+# Docs del repo (diseño, planes, marketing, notas locales): quedan en disco,
+# no se suben a GitHub.
+docs/
+
+# Evidencia HTML de debates (se regenera): queda en disco, no a git.
+/.debates/
+
+# Estado runtime del tablero teamwork (cambia solo): no a git.
+.agents/teamwork_*.json
+.agents/teamwork_*.md
+
+# Copia local bloqueada por otro proceso (original en docs/local/): no a git.
+openher-arquitectura.html

@@ -443,7 +443,20 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
           // Merge de parts por id: los parts streamed localmente (tools, etc.)
           // que el fetch acotado no traiga se conservan — nunca se borran del chat.
           const remoteIDs = new Set(updated.parts.map((p) => p.id))
-          const extraLocal = m.parts.filter((p) => !remoteIDs.has(p.id))
+          // ...pero NO los de texto ya cubiertos por el server: los parts
+          // streameados usan IDs sintetizados (msg:text[:N]) que nunca
+          // coinciden con los persistidos (prt_*), y sin este filtro el
+          // texto final se renderiza dos veces ("hola\n\nhola").
+          const remoteText = updated.parts
+            .filter((p) => p.type === "text" || p.type === "compaction" || p.type === "reasoning" || p.type === "thinking" || p.type === undefined)
+            .map((p) => p.text ?? "")
+            .join("\n\n")
+          const extraLocal = m.parts.filter((p) => {
+            if (remoteIDs.has(p.id)) return false
+            const t = (p.text ?? "").trim()
+            if (t && (p.type === "text" || p.type === "compaction" || p.type === "reasoning" || p.type === "thinking" || p.type === undefined) && remoteText.includes(t)) return false
+            return true
+          })
           const parts = extraLocal.length > 0
             ? [...updated.parts, ...extraLocal].sort((a, b) => {
                 // ids part_<hex> monotónicos: el sort restaura el orden original
