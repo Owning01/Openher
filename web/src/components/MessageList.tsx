@@ -3,6 +3,7 @@ import { ChatIcon, ScrollDownIcon, CompressIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { MessageBubble } from "./MessageBubble"
+import { buildTurnActivity } from "../utils/turnActivity"
 import { GridSpinner } from "./GridSpinner"
 import { useFollowTail, resolveSessionEntry, anchorScrollToSaved } from "../shared/lib/useFollowTail"
 
@@ -124,6 +125,13 @@ export const MessageList = memo(function MessageList({
     if (messages.length <= visibleCount) return messages
     return messages.slice(messages.length - visibleCount)
   }, [messages, visibleCount])
+
+  // Actividad por TURNO: un prompt genera varios mensajes del asistente; la
+  // caja (pensamiento + herramientas + diffs) se agrupa en el primero de ellos.
+  const turnActivity = useMemo(() => {
+    const visibleIDs = new Set(visibleMessages.map((m) => m.info.id))
+    return buildTurnActivity(messages, visibleIDs)
+  }, [messages, visibleMessages])
 
   // El footer (modo · modelo · nivel de pensamiento · duración) se muestra solo
   // en el último mensaje assistant COMPLETED, o en un mensaje donde el
@@ -473,6 +481,11 @@ export const MessageList = memo(function MessageList({
     (loadingSessionID !== null && loadingSessionID === selectedID) ||
     (!isFresh && messages.length > 0)
 
+  // La caja de actividad en marcha ya trae su propio spinner: la burbuja de
+  // "escribiendo" solo aparece cuando todavía no hay caja trabajando (turno
+  // recién arrancado sin mensajes). Sin esto había dos spinners a la vez.
+  const hasWorkingActivity = [...turnActivity.box.values()].some((a) => a.working)
+
   return (
     <div className="message-list-root">
       <div className="messages" ref={messagesRef} style={{ opacity: revealed || showSessionLoading ? 1 : 0 }}>
@@ -528,6 +541,8 @@ export const MessageList = memo(function MessageList({
                     compactTools={compactTools}
                     minimalistMode={minimalistMode}
                     thinkingDefault={thinkingDefault}
+                    turnActivity={turnActivity.box.get(message.info.id) ?? null}
+                    absorbActivity={turnActivity.absorbed.has(message.info.id)}
                     onRegenerate={onRegenerate}
                     onOpenADEDiff={onOpenADEDiff}
                   />
@@ -542,7 +557,7 @@ export const MessageList = memo(function MessageList({
                 </div>
               </article>
             )}
-            {showTypingBubble && !compacting && (
+            {showTypingBubble && !compacting && !hasWorkingActivity && (
               <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')}>
                 <GridSpinner label={t('detail.waiting')} size={20} />
               </article>

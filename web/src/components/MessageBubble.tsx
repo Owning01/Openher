@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useMemo, useRef, useEffect } from "react"
-import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon, TrashIcon, SendIcon, ChevronDownIcon } from "../Icons"
+import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon, TrashIcon, SendIcon } from "../Icons"
 import { formatTime, isImagePart } from "../utils"
 import { getTranslationOriginal } from "../hooks/useMessages"
 import { messageAuthorFrom } from "../entities/message/author"
@@ -14,6 +14,7 @@ import { Markdown } from "./Markdown"
 import { MarkdownWithEmbeds } from "./AgentEmbed"
 import { ImageLightbox } from "./ImageLightbox"
 import { ToolIcon, LoadingIcon } from "../Icons"
+import { formatDurationMs, type TurnActivity } from "../utils/turnActivity"
 
 /** Etiqueta corta para un tool (igual criterio que ToolPart.shortToolLabel). */
 function toolShortLabel(tool?: string): string {
@@ -85,13 +86,7 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): str
   if (!finish || finish === "tool-calls" || finish === "unknown") return ""
   const start = prevUserTs ?? msg.info.time.created
   const dur = msg.info.time.completed - start
-  if (dur < 0) return ""
-  if (dur < 1000) return `${dur}ms`
-  if (dur < 60000) return `${(dur / 1000).toFixed(1)}s`
-  if (dur < 3600000) return `${Math.floor(dur / 60000)}m ${Math.floor((dur % 60000) / 1000)}s`
-  const hours = Math.floor(dur / 3600000)
-  const minutes = Math.floor((dur % 3600000) / 60000)
-  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+  return formatDurationMs(dur)
 }
 
 function calcTokensPerSecond(msg: RenderedMessage): string {
@@ -130,7 +125,7 @@ const TranslationOriginal = memo(function TranslationOriginal({ messageId }: { m
   )
 })
 
-export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, busySessionIds, onContextMenu, showTodoButton: _showTodoButton, onToggleTodos: _onToggleTodos, todosOpen: _todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", onRegenerate, onOpenADEDiff, outbox }: {
+export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, busySessionIds, onContextMenu, showTodoButton: _showTodoButton, onToggleTodos: _onToggleTodos, todosOpen: _todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", turnActivity, absorbActivity, onRegenerate, onOpenADEDiff, outbox }: {
   message: RenderedMessage
   queued?: boolean
   revert?: SessionView["revert"]
@@ -152,6 +147,10 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   compactTools?: boolean
   minimalistMode?: boolean
   thinkingDefault?: "auto" | "expanded" | "collapsed"
+  /** Actividad agregada del turno: la dibuja el primer mensaje del turno. */
+  turnActivity?: TurnActivity | null
+  /** Su actividad vive en la caja del turno: este mensaje no dibuja caja. */
+  absorbActivity?: boolean
   onRegenerate?: () => void
   onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
   // Pendiente de la cola visible: el mensaje está en el chat sin enviarse.
@@ -180,10 +179,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const authorFrom = message.info.role === "user" ? messageAuthorFrom(message.info) : null
   const [compactionOpen, setCompactionOpen] = useState(true)
 
-  const duration = useMemo(
-    () => calcDuration(message, prevUserTs),
-    [message, prevUserTs],
-  )
+  const duration = useMemo(() => calcDuration(message, prevUserTs), [message, prevUserTs])
 
   const tokensPerSecond = useMemo(
     () => calcTokensPerSecond(message),
@@ -192,12 +188,37 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
 
   // Turno en curso (el agente sigue generando) vs terminado.
   const isWorkingTurn = !message.info.time.completed && !message.info.finish
-  // El box de actividad se abre solo mientras trabaja y se colapsa al terminar.
-  const [activityOpen, setActivityOpen] = useState(isWorkingTurn)
-  useEffect(() => { if (!isWorkingTurn) setActivityOpen(false) }, [isWorkingTurn])
+  // Caja de actividad: agrupa pensamiento + herramientas + diffs de TODO el
+  // turno (un prompt genera varios mensajes del asistente). El mensaje dueño
+  // recibe el agregado; los demás no dibujan caja. Sin agregado (uso suelto del
+  // componente) cae en la actividad de este mensaje.
+  const activity: TurnActivity | null = absorbActivity
+    ? null
+    : (turnActivity ?? {
+        thinkingParts: message.thinkingParts ?? [],
+        toolParts: message.toolParts,
+        summaryDiffs: message.summaryDiffs ?? [],
+        working: isWorkingTurn,
+      })
+  const activityWorking = !!activity?.working
+  // Se abre sola mientras trabaja, se acopla a una línea al terminar y se
+  // reabre con un clic. `thinkingDefault: "expanded"` la deja abierta siempre.
+  const [activityOpen, setActivityOpen] = useState(activityWorking || thinkingDefault === "expanded")
+  useEffect(() => {
+    if (!activityWorking && thinkingDefault !== "expanded") setActivityOpen(false)
+  }, [activityWorking, thinkingDefault])
 
-  // Plegado inteligente de herramientas: cuando hay muchas (>3) y el turno terminó, plegar por defecto.
-  const [toolsFolded, setToolsFolded] = useState(true)
+  const activityRef = useRef<HTMLDivElement | null>(null)
+  // Firma del contenido (pensamiento creciendo / tools apareciendo): mientras
+  // el turno está en curso, la caja baja sola al último renglón.
+  const activityTick = activity
+    ? `${activity.toolParts.length}:${activity.thinkingParts.reduce((n, p) => n + (p.text?.length ?? 0), 0)}:${activity.toolParts.filter((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending").length}`
+    : ""
+  useEffect(() => {
+    if (!activityWorking || !activityOpen) return
+    const body = activityRef.current?.querySelector(".collapsible-content")
+    if (body instanceof HTMLElement) body.scrollTop = body.scrollHeight
+  }, [activityTick, activityWorking, activityOpen])
 
   const handleConfirmUndo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -242,34 +263,26 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   // Intercalado real de parts: si hay segments, el texto y los tools se
   // renderizan en su orden original en el cuerpo (y no en el bloque de
   // actividad). El catálogo y la compactación conservan su layout propio.
+  // Texto de la tarjeta de aviso: normalmente message.text, pero si algún
+  // camino lo dejó vacío y los parts siguen intactos se reconstruye desde
+  // ellos — expandir nunca debe mostrar vacío.
+  const noticeText = message.noticeKind
+    ? (message.text ||
+      message.parts
+        .filter((p) => p.type === "text" || p.type === "compaction" || p.type === "reasoning" || p.type === "thinking" || p.type === undefined)
+        .map((p) => p.text ?? "")
+        .join("\n\n")
+        .trim())
+    : ""
   const hasSegments = !isCompaction && !message.isToolCatalog && (message.segments?.length ?? 0) > 0
-  const shouldFoldTools = !isWorkingTurn && message.toolParts.length > 3
-  // Con segments, el plegado oculta los tools posteriores a los 2 primeros
-  // (los textos siguen visibles), en lugar de reordenarlos dentro del bloque.
-  const hiddenToolIds = hasSegments && shouldFoldTools && toolsFolded
-    ? new Set(message.segments!.filter((s) => s.kind === "tool").slice(2).map((s) => s.id))
-    : null
-  const toolsFoldButton = shouldFoldTools ? (
-    <button
-      type="button"
-      className="tools-fold-btn"
-      onClick={() => setToolsFolded((v) => !v)}
-      aria-expanded={!toolsFolded}
-    >
-      <ChevronDownIcon
-        size={13}
-        style={{
-          transform: toolsFolded ? "rotate(0deg)" : "rotate(180deg)",
-          transition: "transform 0.15s ease",
-        }}
-      />
-      <span>
-        {toolsFolded
-          ? `${message.toolParts.length - 2} ${t('detail.moreTools') || "herramientas más"}`
-          : (t('common.collapse') || "Contraer herramientas")}
-      </span>
-    </button>
-  ) : null
+
+  // Absorbido por la caja del turno: si no le queda nada propio que mostrar
+  // (ni texto, ni error, ni aviso, ni imágenes, ni footer, ni punto de
+  // revert), no se monta el <article> vacío — era el hueco fantasma de ~8px +
+  // margen entre mensajes.
+  if (absorbActivity && !isRevertPoint && !showConfirm && !lightboxSrc && !outbox && !message.info.error && !message.hasCompaction && !(message.noticeKind && noticeText) && !(message.text?.trim()) && !message.parts.some((p) => !!getPartImageData(p)) && !(isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || duration || tokensPerSecond || message.info.finish === "aborted"))) {
+    return null
+  }
 
   return (
     <>
@@ -337,35 +350,30 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
         )}
 
         {(() => {
-          const hasThinking = !!message.thinkingParts && message.thinkingParts.length > 0
-          const hasTools = message.toolParts.length > 0
-          const hasDiffs = !!message.summaryDiffs && message.summaryDiffs.length > 0
-          // Compact puro (solo resumen, sin thinking/tools/diffs): no ocupa el
-          // activity-box; el resumen vive en su propia tarjeta estilada abajo.
-          if (isCompaction && !hasThinking && !hasTools && !hasDiffs) return null
-          const hasActivity = hasThinking || hasTools || hasDiffs || message.hasCompaction
-          if (!hasActivity) return null
+          if (!activity) return null
+          const hasThinking = activity.thinkingParts.length > 0
+          const hasTools = activity.toolParts.length > 0
+          const hasDiffs = activity.summaryDiffs.length > 0
+          // Sin nada que agrupar no hay caja (la compactación pura tiene su
+          // propia tarjeta estilada más abajo).
+          if (!hasThinking && !hasTools && !hasDiffs) return null
 
+          // Pensamiento acoplado adentro de la caja: una línea ("Pensó 12s" o
+          // "Pensando…") que se despliega a mano. Solo arranca abierto si el
+          // usuario lo pidió en ajustes (thinkingDefault "expanded").
           const thinkingEl = hasThinking ? (
             <div className="thinking-block">
               <ThinkingBlock
                 key={thinkingDefault}
-                parts={message.thinkingParts}
-                duration={duration}
-                defaultOpen={thinkingDefault === "expanded" || (thinkingDefault === "auto" && message.thinkingParts.some((p) => !p.time?.end))}
+                parts={activity.thinkingParts}
+                defaultOpen={thinkingDefault === "expanded"}
               />
             </div>
           ) : null
 
-          const visibleToolParts = shouldFoldTools && toolsFolded
-            ? message.toolParts.slice(0, 2)
-            : message.toolParts
-
-          // Con segments los tools viven en el cuerpo intercalado: no se
-          // duplican dentro del bloque de actividad.
-          const toolsEl = hasTools && !hasSegments ? (
+          const toolsEl = hasTools ? (
             <div className="tool-parts">
-              {visibleToolParts.map((tp) => (
+              {activity.toolParts.map((tp) => (
                 <ToolPart
                   key={tp.id}
                   part={tp}
@@ -377,90 +385,73 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
                   compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
                 />
               ))}
-              {toolsFoldButton}
             </div>
           ) : null
 
           const diffsEl = hasDiffs ? (
-            <FileDiffs diffs={message.summaryDiffs!} onOpenADEDiff={onOpenADEDiff} />
+            <FileDiffs diffs={activity.summaryDiffs} onOpenADEDiff={onOpenADEDiff} />
           ) : null
 
-          // Modo minimalista: el box agrupa thinking + tools + diffs SOLO
-          // cuando hay thinking. Si solo hay tools (sin thinking), se
-          // renderizan inline como en el modo normal — evita la repetición
-          // de una caja "tool" en cada mensaje.
-          if (minimalistMode && hasThinking) {
-            const thinkingStreaming = message.thinkingParts.some((p) => !p.time?.end)
-            const toolRunning = hasTools && message.toolParts.some((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending")
-            const isStreaming = thinkingStreaming || toolRunning
+          const runningTool = activity.toolParts.find((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending")
+          const thinkingStreaming = activity.thinkingParts.some((p) => !p.time?.end)
 
-            // --- Título en vivo mientras el agente trabaja (acción actual) ---
-            let liveTitle: string
-            if (thinkingStreaming) {
-              liveTitle = t('detail.thinking')
-            } else if (toolRunning) {
-              const running = message.toolParts.find((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending")
-              liveTitle = running ? toolRunningLabel(running.state ?? { tool: running.tool }) : t('detail.thinking')
-            } else {
-              liveTitle = t('detail.thinking')
-            }
+          // --- Título en vivo mientras el agente trabaja (acción actual) ---
+          const liveTitle = thinkingStreaming || !runningTool
+            ? t('detail.thinking')
+            : toolRunningLabel(runningTool.state ?? { tool: runningTool.tool })
 
-            // --- Título tenue para el turno completado ---
-            // Nombres reales de los tools (bash, edit, read, etc.).
-            const toolNames = message.toolParts
-              .map((tp) => toolShortLabel(tp.tool))
-              .filter(Boolean)
-            const toolSummary = toolNames.length <= 2
-              ? toolNames.join(" · ")
-              : `${toolNames.slice(0, 2).join(" · ")} +${toolNames.length - 2}`
-            const completedParts: string[] = []
-            if (hasTools && toolSummary) completedParts.push(toolSummary)
-            if (message.hasCompaction) completedParts.push(t('detail.activityCompaction'))
-            const completedTitle = completedParts.join(" · ") || t('detail.thought')
+          // --- Título tenue para el turno completado ---
+          // Nombres reales de los tools (edit, shell, read, …), sin repetir.
+          const toolNames = [...new Set(activity.toolParts.map((tp) => toolShortLabel(tp.tool)).filter(Boolean))]
+          const toolSummary = toolNames.length <= 3
+            ? toolNames.join(" · ")
+            : `${toolNames.slice(0, 3).join(" · ")} +${toolNames.length - 3}`
+          const completedParts: string[] = []
+          if (toolSummary) completedParts.push(toolSummary)
+          if (message.hasCompaction) completedParts.push(t('detail.activityCompaction'))
+          const completedTitle = completedParts.join(" · ") || t('detail.thought')
 
-            const title = isWorkingTurn ? liveTitle : completedTitle
-            const subtitle = isWorkingTurn
-              ? <span className="thinking-streaming"><LoadingIcon size={12} className="animate-spin" />{isStreaming ? (thinkingStreaming ? t('detail.thinking') : t('detail.working')) : t('detail.working')}</span>
-              : null
-
-            return (
-              <div className={`activity-box activity-box-${isWorkingTurn ? "working" : "completed"}`}>
-                <CollapsibleSection
-                  icon={isWorkingTurn ? <ToolIcon size={14} /> : undefined}
-                  title={title}
-                  subtitle={subtitle}
-                  open={activityOpen}
-                  onToggle={() => setActivityOpen((v) => !v)}
-                >
-                  {thinkingEl}
-                  {toolsEl}
-                  {diffsEl}
-                  {message.hasCompaction && <div className="compaction-checkpoint" />}
-                </CollapsibleSection>
-              </div>
-            )
-          }
+          const title = activity.working ? liveTitle : completedTitle
+          // En marcha: solo el spinner (el título ya dice qué está haciendo).
+          const subtitle = activity.working
+            ? <span className="thinking-streaming" title={t('detail.working')}><LoadingIcon size={12} className="animate-spin" /></span>
+            : null
 
           return (
-            <>
-              {thinkingEl}
-              {toolsEl}
-              {diffsEl}
-            </>
+            <div className={`activity-box activity-box-${activity.working ? "working" : "completed"}`} ref={activityRef}>
+              <CollapsibleSection
+                icon={activity.working ? <ToolIcon size={14} /> : undefined}
+                title={title}
+                subtitle={subtitle}
+                open={activityOpen}
+                onToggle={() => setActivityOpen((v) => !v)}
+                keepMounted
+              >
+                {thinkingEl}
+                {toolsEl}
+                {diffsEl}
+              </CollapsibleSection>
+            </div>
           )
         })()
         }
 
-        {message.isToolCatalog ? (
+        {(message.noticeKind && (noticeText || message.text)) ? (
           <div className="tool-catalog-card">
             <CollapsibleSection
               icon={<ToolIcon size={13} />}
-              title="Code Mode · catálogo de herramientas"
-              subtitle={`${(message.text.length / 1024).toFixed(1)} KB · clic para ver`}
+              title={
+                message.noticeKind === "skills"
+                  ? "Skills · aviso del servidor"
+                  : message.noticeKind === "shell"
+                    ? "Shell · salida del servidor"
+                    : "Code Mode · catálogo de herramientas"
+              }
+              subtitle={`${((noticeText.length || message.text.length) / 1024).toFixed(1)} KB · clic para ver`}
               defaultOpen={false}
             >
               <div className="tool-catalog-body">
-                <pre className="tool-part-pre">{message.text}</pre>
+                <pre className="tool-part-pre">{noticeText || message.text}</pre>
               </div>
             </CollapsibleSection>
           </div>
@@ -485,7 +476,8 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           </div>
         ) : hasSegments ? (
           <div className="message-segments">
-            {message.segments!.map((seg) => seg.kind === "text" ? (
+            {/* Solo textos: las herramientas viven en la caja de actividad. */}
+            {message.segments!.filter((seg) => seg.kind === "text").map((seg) => (
               <div key={seg.id} className="message-content">
                 {!message.info.time.completed && seg.text.length > 800 ? (
                   <pre className="md-plain-stream">{seg.text}</pre>
@@ -493,20 +485,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
                   <MarkdownWithEmbeds text={seg.text} highlight={highlight} />
                 )}
               </div>
-            ) : hiddenToolIds?.has(seg.id) ? null : (
-              <div key={seg.id} className="tool-parts">
-                <ToolPart
-                  part={seg.tool}
-                  config={config}
-                  directory={directory}
-                  sessionID={message.info.sessionID}
-                  onViewSubagents={onViewSubagents}
-                  busySessionIds={busySessionIds}
-                  compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
-                />
-              </div>
             ))}
-            {toolsFoldButton && <div className="tool-parts">{toolsFoldButton}</div>}
           </div>
         ) : message.text && (
           <div className="message-content">
@@ -602,6 +581,8 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           </div>
         )}
 
+        {/* La caja de actividad ya trae el marcador adentro; esto solo aplica a
+            mensajes sin nada que agrupar (compactación suelta). */}
         {!minimalistMode && message.hasCompaction && !isCompaction && <div className="compaction-checkpoint" />}
       </article>
 

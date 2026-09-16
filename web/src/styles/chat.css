@@ -819,51 +819,127 @@
 .thinking-block {
   display: var(--chat-thinking-vis, block);
 }
+/* ===== Caja de actividad (pensamiento + herramientas + comandos) =====
+   Un solo bloque por turno, entre el mensaje y la respuesta final. No tiene
+   borde, fondo ni sombra: es el mismo lienzo del chat y lo único que la
+   delimita es el alto fijo con scroll propio (la señal de "hay más abajo").
+   En marcha queda abierta y con acento; al terminar se acopla a una línea. */
 .activity-box {
-  margin-top: 0.5rem;
-}
-/* En modo minimalista el box es el mecanismo de visibilidad: el thinking y
-   los tools se muestran adentro sin importar los toggles globales. */
-.activity-box .thinking-block {
-  display: block;
-}
-.activity-box .tool-parts {
-  display: flex;
+  margin: 0 0 var(--space-2);
 }
 
-/* Turno en trabajo: el box se abre solo y resalta con el color de acento
-   para señalar que el agente está activo. */
-.activity-box-working .collapsible-toggle {
-  color: var(--chat-accent, var(--primary));
+.activity-box .collapsible-toggle {
+  min-height: 0;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 2px 4px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
 }
-.activity-box-working .collapsible-title {
-  color: var(--chat-accent, var(--primary));
-  font-weight: 600;
+
+.activity-box .collapsible-toggle:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: transparent;
+  color: var(--muted-strong);
 }
+
+.activity-box .collapsible-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/* Meta del turno terminado (duración), pegada a la derecha. */
+.activity-box .collapsible-subtitle {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+.activity-box .collapsible-chevron {
+  margin-left: 0;
+}
+
+/* Cuerpo: alto fijo + scroll visible. `display: block` anula el acordeón
+   0fr→1fr de motion.css (acá el alto lo manda max-height) y deja el scroll
+   en este nodo, así el bloque nunca estira el chat. */
+.activity-box .collapsible-content {
+  display: block;
+  opacity: 1;
+  grid-template-rows: none;
+  max-height: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  padding: 2px 2px 0;
+}
+
+.activity-box .collapsible-content::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+/* Acoplada: el contenido queda montado (no se remonta al reabrir) pero oculto. */
+.activity-box .collapsible-content:not(.open) {
+  display: none;
+}
+
+.activity-box .collapsible-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.activity-box .collapsible-content::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  border-radius: var(--radius-full);
+  background-clip: padding-box;
+}
+
+.activity-box .collapsible-content::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+/* El pensamiento, en cursiva tenue y sin caja propia. */
+.activity-box .thinking-block {
+  margin-bottom: var(--space-2);
+}
+
+.activity-box .thinking-text {
+  padding: 2px 4px 0;
+}
+
+/* Turno en trabajo: acento para señalar que el agente está activo. */
+.activity-box-working .collapsible-toggle,
+.activity-box-working .collapsible-title,
 .activity-box-working .collapsible-icon {
   color: var(--chat-accent, var(--primary));
 }
 
-/* Turno completado: resumen tenue y pequeño, sin repetir "Actividad". */
-.activity-box-completed {
-  margin-top: 0.35rem;
+.activity-box-working .collapsible-title {
+  font-weight: 600;
 }
-.activity-box-completed .collapsible-toggle {
-  color: var(--muted);
-  font-size: 0.75rem;
-  opacity: 0.85;
-  padding-top: 0.12rem;
-  padding-bottom: 0.12rem;
-}
-.activity-box-completed .collapsible-title {
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: normal;
-  color: var(--muted);
-}
-.activity-box-completed .collapsible-icon {
-  opacity: 0.7;
+
+.activity-box-working .collapsible-subtitle {
+  opacity: 1;
 }
 .message-footer .msg-footer-duration,
 .message-footer .msg-footer-model,
