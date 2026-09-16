@@ -5,11 +5,16 @@ import { ChatIcon, CheckIcon, CloseIcon, HistoryIcon, PlayIcon, SendIcon, StopCi
 import { Markdown } from "../../components/Markdown"
 import type { DebateMessage, DebateState, TeamTimelineItem } from "./debateStore"
 import {
+  fetchDebateHistory,
   fetchTeamTimeline,
+  getDebate,
+  hydrateDebateFromFile,
   rehydrateSessionDebates,
   sendDebateControl,
   sendDebateIntervene,
   useActiveDebate,
+  useDebatesForSession,
+  type DebateHistoryItem,
 } from "./debateStore"
 import "../../styles/debate.css"
 
@@ -125,11 +130,17 @@ export type DebateRoomProps = {
 export const DebateRoom = memo(function DebateRoom({ config, originSessionID, onClose, teamID }: DebateRoomProps) {
   const t = useT()
   const active = useActiveDebate(originSessionID)
+  const all = useDebatesForSession(originSessionID)
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
   const [busyControl, setBusyControl] = useState(false)
   /** Rebobinar (solo lectura): muestra el canal hasta este seq. null = en vivo. */
   const [rewindSeq, setRewindSeq] = useState<number | null>(null)
+  /** Ver un debate pasado del historial (origen + id reales, no se falsifica). */
+  const [viewed, setViewed] = useState<{ origin: string; id: string } | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyItems, setHistoryItems] = useState<DebateHistoryItem[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [teamTimeline, setTeamTimeline] = useState<TeamTimelineItem[]>([])
   const listRef = useRef<HTMLDivElement | null>(null)
 
@@ -139,7 +150,15 @@ export const DebateRoom = memo(function DebateRoom({ config, originSessionID, on
 
   useEffect(() => {
     setRewindSeq(null)
+    setViewed(null)
   }, [active?.debateID])
+
+  const viewedDebate = viewed ? getDebate(viewed.origin, viewed.id) : null
+  // En vivo = debate activo de esta sesión; si se está viendo uno pasado,
+  // se muestra ese (solo lectura).
+  const shown = viewedDebate ?? active
+  const isPast = !!viewedDebate && viewedDebate.debateID !== active?.debateID
+  const directory = active?.directory ?? viewedDebate?.directory ?? all.find((d) => d.directory)?.directory
 
   useEffect(() => {
     let alive = true
@@ -157,17 +176,45 @@ export const DebateRoom = memo(function DebateRoom({ config, originSessionID, on
     }
   }, [config, teamID])
 
-  const msgCount = active?.messages.length ?? 0
-  const actaText = active?.acta?.text ?? ""
+  const msgCount = shown?.messages.length ?? 0
+  const actaText = shown?.acta?.text ?? ""
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [msgCount, actaText, active?.debateID])
+  }, [msgCount, actaText, shown?.debateID])
 
-  const maxSeq = active?.maxSeq ?? 0
+  const maxSeq = shown?.maxSeq ?? 0
   const live = rewindSeq === null || rewindSeq >= maxSeq
-  const visibleMessages = !active || live ? (active?.messages ?? []) : active.messages.filter((m) => m.seq <= (rewindSeq ?? 0))
-  const visibleActa = active?.acta && (live || active.acta.seq <= (rewindSeq ?? 0)) ? active.acta : null
+  const visibleMessages = !shown || live ? (shown?.messages ?? []) : shown.messages.filter((m) => m.seq <= (rewindSeq ?? 0))
+  const visibleActa = shown?.acta && (live || shown.acta.seq <= (rewindSeq ?? 0)) ? shown.acta : null
+
+  const openHistory = async () => {
+    if (historyOpen) {
+      setHistoryOpen(false)
+      return
+    }
+    setHistoryOpen(true)
+    if (!directory || historyItems.length > 0) return
+    setHistoryLoading(true)
+    try {
+      setHistoryItems(await fetchDebateHistory(directory))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const viewPast = async (item: DebateHistoryItem) => {
+    setHistoryOpen(false)
+    const known = getDebate(item.originSessionID, item.debateID)
+    if (!known && directory) {
+      await hydrateDebateFromFile(directory, item.debateID)
+    }
+    const after = getDebate(item.originSessionID, item.debateID)
+    if (after) {
+      setViewed({ origin: item.originSessionID, id: item.debateID })
+      setRewindSeq(null)
+    }
+  }
 
   const onSend = async () => {
     const value = draft.trim()
@@ -193,15 +240,29 @@ export const DebateRoom = memo(function DebateRoom({ config, originSessionID, on
 
   return (
     <div className="debate-room" role="dialog" aria-label={t("debate.title")}>
-      <RoomHeader debate={active} onClose={onClose} />
-      {!active ? (
+      <RoomHeader debate={shown} onClose={onClose} onHistory={directory ? openHistory : undefined} historyOpen={historyOpen} />
+      {isPast ? (
+        <button type="button" className="debate-backlive" onClick={() => setViewed(null)}>
+          {t("debate.viewingPast")} · {t("debate.backToLive")}
+        </button>
+      ) : null}
+      {historyOpen ? (
+        <HistoryPanel
+          loading={historyLoading}
+          items={historyItems}
+          currentID={shown?.debateID}
+          onPick={(item) => void viewPast(item)}
+          onClose={() => setHistoryOpen(false)}
+        />
+      ) : null}
+      {!shown ? (
         <div className="debate-empty">
           <ChatIcon size={22} />
           <p>{t("debate.noDebate")}</p>
         </div>
       ) : (
         <>
-          <ConsensusBar debate={active} />
+          <ConsensusBar debate={shown} />
           {maxSeq > 1 ? (
             <div className="debate-rewind">
               <input
@@ -226,7 +287,7 @@ export const DebateRoom = memo(function DebateRoom({ config, originSessionID, on
             ) : (
               visibleMessages.map((m) => <Bubble key={`${m.seq}`} msg={m} />)
             )}
-            {active.running && !active.paused && live ? (
+            {shown.running && !shown.paused && live && !isPast ? (
               <div className="debate-typing" aria-live="polite">
                 <span className="debate-typing-dots" aria-hidden="true">
                   <i />
@@ -236,22 +297,23 @@ export const DebateRoom = memo(function DebateRoom({ config, originSessionID, on
                 <span>{t("debate.typing")}</span>
               </div>
             ) : null}
-            {visibleActa ? <ActaBlock debate={{ ...active, acta: visibleActa }} /> : null}
-            {active.error ? <div className="debate-error">{active.error}</div> : null}
-            <Timeline debate={active} team={teamTimeline} />
+            {visibleActa ? <ActaBlock debate={{ ...shown, acta: visibleActa }} /> : null}
+            {shown.error ? <div className="debate-error">{shown.error}</div> : null}
+            <Timeline debate={shown} team={teamTimeline} />
           </div>
+          {isPast ? null : (
           <div className="debate-footer">
             <div className="debate-controls">
-              {active.paused ? (
+              {shown.paused ? (
                 <button type="button" className="btn-icon compact" title={t("debate.resume")} aria-label={t("debate.resume")} disabled={busyControl} onClick={() => void onControl("resume")}>
                   <PlayIcon size={14} />
                 </button>
               ) : (
-                <button type="button" className="btn-icon compact" title={t("debate.pause")} aria-label={t("debate.pause")} disabled={busyControl || !active.running} onClick={() => void onControl("pause")}>
+                <button type="button" className="btn-icon compact" title={t("debate.pause")} aria-label={t("debate.pause")} disabled={busyControl || !shown.running} onClick={() => void onControl("pause")}>
                   <PauseGlyph />
                 </button>
               )}
-              <button type="button" className="btn-icon compact" title={t("debate.stop")} aria-label={t("debate.stop")} disabled={busyControl || !active.running} onClick={() => void onControl("stop")}>
+              <button type="button" className="btn-icon compact" title={t("debate.stop")} aria-label={t("debate.stop")} disabled={busyControl || !shown.running} onClick={() => void onControl("stop")}>
                 <StopCircleIcon size={14} />
               </button>
             </div>
@@ -274,13 +336,65 @@ export const DebateRoom = memo(function DebateRoom({ config, originSessionID, on
               <span>{t("debate.send")}</span>
             </button>
           </div>
+          )}
         </>
       )}
     </div>
   )
 })
 
-const RoomHeader = memo(function RoomHeader({ debate, onClose }: { debate: DebateState | null; onClose?: () => void }) {
+const HistoryPanel = memo(function HistoryPanel({
+  loading,
+  items,
+  currentID,
+  onPick,
+  onClose,
+}: {
+  loading: boolean
+  items: DebateHistoryItem[]
+  currentID?: string
+  onPick: (item: DebateHistoryItem) => void
+  onClose: () => void
+}) {
+  const t = useT()
+  return (
+    <div className="debate-history" role="dialog" aria-label={t("debate.history")}>
+      <div className="debate-history-head">
+        <HistoryIcon size={13} />
+        <b>{t("debate.history")}</b>
+        <button type="button" className="btn-icon compact" title={t("debate.close")} aria-label={t("debate.close")} onClick={onClose}>
+          <CloseIcon size={13} />
+        </button>
+      </div>
+      {loading ? (
+        <div className="debate-typing"><span>{t("debate.typing")}</span></div>
+      ) : items.length === 0 ? (
+        <p className="debate-history-empty">{t("debate.historyEmpty")}</p>
+      ) : (
+        <ul className="debate-history-list">
+          {items.map((item) => (
+            <li key={item.debateID}>
+              <button
+                type="button"
+                className={`debate-history-item${item.debateID === currentID ? " current" : ""}`}
+                onClick={() => onPick(item)}
+              >
+                <span className="debate-history-topic">{item.topic || item.debateID}</span>
+                <span className="debate-history-meta">
+                  {item.ts > 0 ? new Date(item.ts).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                  {` · ${item.turns} turnos`}
+                  {item.consensus === true ? ` · ${t("debate.consensusYes")}` : item.consensus === false ? ` · ${t("debate.consensusNo")}` : ""}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+})
+
+const RoomHeader = memo(function RoomHeader({ debate, onClose, onHistory, historyOpen }: { debate: DebateState | null; onClose?: () => void; onHistory?: () => void; historyOpen?: boolean }) {
   const t = useT()
   const stateKey = !debate ? "" : debate.running ? (debate.paused ? "debate.paused" : "debate.live") : "debate.finished"
   return (
@@ -293,6 +407,11 @@ const RoomHeader = memo(function RoomHeader({ debate, onClose }: { debate: Debat
       <div className="debate-header-right">
         {debate ? <span className="debate-pill">{debate.engine}</span> : null}
         {stateKey ? <span className="debate-pill">{t(stateKey)}</span> : null}
+        {onHistory ? (
+          <button type="button" className={`btn-icon compact${historyOpen ? " active" : ""}`} title={t("debate.history")} aria-label={t("debate.history")} onClick={onHistory}>
+            <HistoryIcon size={14} />
+          </button>
+        ) : null}
         {onClose ? (
           <button type="button" className="btn-icon compact" title={t("debate.close")} aria-label={t("debate.close")} onClick={onClose}>
             <CloseIcon size={14} />

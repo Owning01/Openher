@@ -2,6 +2,7 @@ import { useMemo, useSyncExternalStore } from "react"
 import type { ServerConfig } from "../../types"
 import { pluginBus } from "../../plugins/bus"
 import { authHeader, baseUrl } from "../../shared/api/client"
+import { shell } from "../../shell"
 
 /**
  * Store de debates por sesión (DEBATE.md §2/§3, contrato docs/DEBATE-SCHEMA.json).
@@ -535,4 +536,164 @@ export function useActiveDebate(originSessionID: string | null | undefined): Deb
   const running = list.filter((d) => d.running)
   if (running.length > 0) return running[running.length - 1]!
   return list[list.length - 1]!
+}
+
+/** Un debate del store por id (para ver historial ya hidratado). */
+export function getDebate(originSessionID: string, debateID: string): DebateState | null {
+  return store.bySession[originSessionID]?.[debateID] ?? null
+}
+
+// ---------------------------------------------------------------------------
+// Historial de debates (lee .openher/debates/*.jsonl por el puente, sin RPC)
+// ---------------------------------------------------------------------------
+
+export type DebateHistoryItem = {
+  debateID: string
+  topic: string
+  originSessionID: string
+  ts: number
+  turns: number
+  consensus: boolean | null
+  reason: string
+  hasActa: boolean
+}
+
+type JsonlLine = {
+  seq?: unknown
+  ts?: unknown
+  debateID?: unknown
+  originSessionID?: unknown
+  directory?: unknown
+  event?: unknown
+  data?: unknown
+  v1?: { event?: unknown; data?: unknown }
+  v2?: { event?: unknown; data?: unknown }
+}
+
+function parseLine(raw: string): JsonlLine | null {
+  try {
+    const o = JSON.parse(raw) as JsonlLine
+    return o && typeof o === "object" ? o : null
+  } catch {
+    return null
+  }
+}
+
+/** Resumen puro de un .jsonl (testeable sin puente). */
+export function summarizeDebateFile(name: string, content: string): DebateHistoryItem | null {
+  const debateID = name.replace(/\.jsonl$/i, "")
+  if (!debateID) return null
+  let topic = ""
+  let originSessionID = ""
+  let ts = 0
+  let turns = 0
+  let consensus: boolean | null = null
+  let reason = ""
+  let hasActa = false
+  let sawAny = false
+  for (const raw of content.split("\n")) {
+    const line = raw.trim()
+    if (!line) continue
+    const o = parseLine(line)
+    if (!o) continue
+    sawAny = true
+    if (typeof o.debateID === "string" && o.debateID) {
+      if (o.debateID !== debateID) return null // archivo mezclado: no confiar
+    }
+    if (typeof o.originSessionID === "string" && !originSessionID) originSessionID = o.originSessionID
+    if (typeof o.ts === "number" && Number.isFinite(o.ts) && !ts) ts = o.ts
+    const ev = typeof o.event === "string" ? o.event : ""
+    const v1ev = typeof o.v1?.event === "string" ? (o.v1.event as string) : ""
+    const data = (o.data && typeof o.data === "object" ? o.data : {}) as Record<string, unknown>
+    const v1data = (o.v1?.data && typeof o.v1.data === "object" ? o.v1.data : {}) as Record<string, unknown>
+    if (ev === "registered") {
+      if (typeof data.topic === "string") topic = data.topic
+    }
+    if (ev === "started") {
+      if (typeof data.topic === "string" && !topic) topic = data.topic
+    }
+    if (v1ev === "turn") turns++
+    if (v1ev === "acta") {
+      hasActa = true
+      if (v1data.consensus === true) consensus = true
+      else if (v1data.consensus === false && consensus === null) consensus = false
+    }
+    if (ev === "done") {
+      if (data.consensus === true) consensus = true
+      else if (data.consensus === false && consensus === null) consensus = false
+      if (typeof data.reason === "string") reason = data.reason
+      if (typeof data.turns === "number" && turns === 0) turns = data.turns
+    }
+  }
+  if (!sawAny) return null
+  return { debateID, topic, originSessionID, ts, turns, consensus, reason, hasActa }
+}
+
+/** Hidrata el store desde las líneas de un .jsonl (reusa la ingesta de eventos). */
+export function hydrateDebateLines(content: string): boolean {
+  let ok = false
+  for (const raw of content.split("\n")) {
+    const line = raw.trim()
+    if (!line) continue
+    const o = parseLine(line)
+    if (!o) continue
+    try {
+      if (typeof o.event === "string" && o.event) {
+        ingestDebateEnvelope(`rpc.debate.${o.event}`, o)
+        ok = true
+      } else {
+        if (o.v1 && typeof o.v1.event === "string" && o.v1.event) {
+          ingestDebateEnvelope(`rpc.debate.${o.v1.event}`, { ...o, data: o.v1.data })
+          ok = true
+        }
+        if (o.v2 && typeof o.v2.event === "string" && o.v2.event && o.v2.event !== o.v1?.event) {
+          ingestDebateEnvelope(`rpc.debate.${o.v2.event}`, { ...o, data: o.v2.data })
+          ok = true
+        }
+      }
+    } catch {
+      /* una línea rota no tumba el resto */
+    }
+  }
+  return ok
+}
+
+const debatesDirOf = (directory: string): string => `${directory.replace(/[/\\]+$/, "")}/.openher/debates`
+
+/** Lista debates pasados de la carpeta (incluye otras sesiones). */
+export async function fetchDebateHistory(directory: string): Promise<DebateHistoryItem[]> {
+  if (!directory) return []
+  let files: Array<{ name: string }> = []
+  try {
+    const out = await shell.fs.list(debatesDirOf(directory))
+    files = (out?.files ?? []).filter((f) => f.name.toLowerCase().endsWith(".jsonl"))
+  } catch {
+    return []
+  }
+  const items: DebateHistoryItem[] = []
+  for (const f of files.slice(0, 60)) {
+    try {
+      const r = await shell.fs.read(f.path)
+      if (!r?.content) continue
+      const s = summarizeDebateFile(f.name, r.content)
+      if (s) items.push(s)
+    } catch {
+      /* un archivo ilegible no tumba la lista */
+    }
+  }
+  return items.sort((a, b) => b.ts - a.ts)
+}
+
+/** Lee un debate pasado del disco al store (para verlo en la sala). */
+export async function hydrateDebateFromFile(directory: string, debateID: string): Promise<boolean> {
+  if (!directory || !debateID || debateID.includes("..")) return false
+  try {
+    const r = await shell.fs.read(`${debatesDirOf(directory)}/${debateID}.jsonl`)
+    if (!r?.content) return false
+    const s = summarizeDebateFile(`${debateID}.jsonl`, r.content)
+    if (!s?.originSessionID) return false
+    return hydrateDebateLines(r.content)
+  } catch {
+    return false
+  }
 }

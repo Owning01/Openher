@@ -1,5 +1,95 @@
 /* Debate por sesión (DEBATE.md §8): chip + sala (drawer desktop / sheet mobile). */
 
+.debate-backlive {
+  margin: 8px 12px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--primary, #58a6ff);
+  background: transparent;
+  color: var(--fg);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.debate-backlive:hover {
+  background: color-mix(in srgb, var(--primary, #58a6ff) 12%, transparent);
+}
+
+.debate-history {
+  margin: 8px 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 8px 10px;
+  max-height: 40%;
+  overflow-y: auto;
+  flex: 0 1 auto;
+}
+
+.debate-history-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.debate-history-head b {
+  flex: 1;
+}
+
+.debate-history-empty {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 4px 0;
+}
+
+.debate-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.debate-history-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.debate-history-item:hover {
+  border-color: var(--primary, #58a6ff);
+}
+
+.debate-history-item.current {
+  border-color: var(--primary, #58a6ff);
+  opacity: 0.7;
+}
+
+.debate-history-topic {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debate-history-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .debate-chip {
   display: inline-flex;
   align-items: center;

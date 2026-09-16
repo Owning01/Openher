@@ -1017,4 +1017,8 @@ export default {
   'debate.tlStall': 'turnos estancados',
   'debate.rewind': 'rebobinar',
   'debate.teamTimeline': 'equipo',
+  'debate.history': 'Debates anteriores',
+  'debate.historyEmpty': 'No hay debates anteriores en esta carpeta.',
+  'debate.backToLive': 'Volver al actual',
+  'debate.viewingPast': 'Viendo debate anterior',
 }

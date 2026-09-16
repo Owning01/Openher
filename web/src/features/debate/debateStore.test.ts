@@ -8,10 +8,12 @@ import {
   fetchDebateState,
   fetchTeamTimeline,
   hydrateDebate,
+  hydrateDebateLines,
   ingestDebateEnvelope,
   resetDebateStore,
   sendDebateControl,
   sendDebateIntervene,
+  summarizeDebateFile,
   useDebatesForSession,
 } from "./debateStore"
 
@@ -235,5 +237,43 @@ describe("debateStore: timeline Fase 4 (stalls, rewind, equipo)", () => {
     expect(await fetchTeamTimeline({ host: "h", port: 1, username: "u", password: "p" }, "")).toEqual([])
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }))
     expect(await fetchTeamTimeline({ host: "h", port: 1, username: "u", password: "p" }, "team-1")).toEqual([])
+  })
+})
+
+describe("debateStore: historial desde .jsonl", () => {
+  const jsonl = [
+    JSON.stringify({ debateID: "deb-9", originSessionID: "ses-vieja", directory: "/proj", seq: 0, ts: 5000, event: "registered", data: { topic: "Tema viejo", engine: "isolated", roles: ["architect", "pragmatist"] } }),
+    JSON.stringify({ debateID: "deb-9", originSessionID: "ses-vieja", directory: "/proj", seq: 1, ts: 5001, event: "started", data: { topic: "Tema viejo", engine: "isolated", roles: ["architect", "pragmatist"] } }),
+    JSON.stringify({ debateID: "deb-9", originSessionID: "ses-vieja", directory: "/proj", seq: 2, ts: 5002, v1: { event: "turn", data: { role: "architect", body: "propongo X", status: "DISSENTING", index: 1, cache: "isolated", consensus: false } }, v2: { event: "message", data: { role: "architect", body: "propongo X", status: "DISSENTING" } } }),
+    JSON.stringify({ debateID: "deb-9", originSessionID: "ses-vieja", directory: "/proj", seq: 3, ts: 5003, v1: { event: "acta", data: { kind: "acta", text: "se decide X", consensus: true, minorities: [], confidence: 80 } }, v2: { event: "artifact", data: { kind: "acta", text: "se decide X", consensus: true, minorities: [], confidence: 80 } } }),
+    JSON.stringify({ debateID: "deb-9", originSessionID: "ses-vieja", directory: "/proj", seq: 4, ts: 5004, event: "done", data: { consensus: true, turns: 1, reason: "consensus" } }),
+  ].join("\n")
+
+  it("summarizeDebateFile resume tema, turnos, acta y consenso", () => {
+    const s = summarizeDebateFile("deb-9.jsonl", jsonl)
+    expect(s?.topic).toBe("Tema viejo")
+    expect(s?.originSessionID).toBe("ses-vieja")
+    expect(s?.turns).toBe(1)
+    expect(s?.hasActa).toBe(true)
+    expect(s?.consensus).toBe(true)
+    expect(s?.reason).toBe("consensus")
+  })
+
+  it("hydrateDebateLines reconstruye el debate bajo su sesión original", () => {
+    expect(hydrateDebateLines(jsonl)).toBe(true)
+    const deb = activeDebateForSession("ses-vieja")
+    expect(deb?.topic).toBe("Tema viejo")
+    expect(deb?.messages).toHaveLength(1)
+    expect(deb?.messages[0]?.body).toBe("propongo X")
+    expect(deb?.acta?.text).toBe("se decide X")
+    expect(deb?.done?.reason).toBe("consensus")
+    // No contamina la sesión actual
+    expect(activeDebateForSession(ORIGIN)).toBeNull()
+  })
+
+  it("summarizeDebateFile rechaza basura y archivos mezclados", () => {
+    expect(summarizeDebateFile("x.jsonl", "no-json\n{{{")).toBeNull()
+    const mixed = JSON.stringify({ debateID: "otro", originSessionID: "s", seq: 1, event: "started", data: {} })
+    expect(summarizeDebateFile("deb-9.jsonl", mixed)).toBeNull()
   })
 })

@@ -1017,4 +1017,8 @@ export default {
   'debate.tlStall': 'stalled turns',
   'debate.rewind': 'rewind',
   'debate.teamTimeline': 'team',
+  'debate.history': 'Past debates',
+  'debate.historyEmpty': 'No past debates in this folder.',
+  'debate.backToLive': 'Back to live',
+  'debate.viewingPast': 'Viewing past debate',
 }
