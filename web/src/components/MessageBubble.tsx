@@ -498,7 +498,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
         )}
 
         {message.info.error && (
-          <div className="message-error" role="alert">
+          <div className="message-error" role="alert" title={message.info.error.message || undefined}>
             <strong>{message.info.error.name || "Server error"}</strong>
             {message.info.error.message && <span>{message.info.error.message}</span>}
           </div>

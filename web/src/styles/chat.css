@@ -667,21 +667,32 @@
   font-size: inherit;
 }
 
+/* Error del turno: una sola línea, sin caja (ni borde ni fondo). El detalle
+   largo se recorta con ellipsis y se lee entero en el title del nodo. */
 .message-error {
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  margin-top: var(--space-2);
-  padding: 0.65rem 0.8rem;
-  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
-  border-radius: var(--radius-sm);
-  background: var(--danger-soft);
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-top: var(--space-1);
   color: var(--danger);
-  font-size: 0.86rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .message-error strong {
+  flex: 0 0 auto;
   font-weight: 650;
+}
+
+.message-error span {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
 }
 
 .message-image-wrap {
