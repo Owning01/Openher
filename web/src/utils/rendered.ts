@@ -1,4 +1,4 @@
-import type { MessageEnvelope, RenderedMessage, RenderedSegment, DataMode, FileDiff, TurnChanges } from "../types"
+import type { MessageEnvelope, RenderedMessage, RenderedSegment, DataMode, FileDiff, TurnChanges, ServerNoticeKind } from "../types"
 import { isImagePart } from "../utils.ts"
 import { toolPartFileDiff } from "./toolFileDiff"
 
@@ -9,6 +9,24 @@ const PRESERVE_TOOL_HEAD_CHARS = 800
 
 /** Prefijo estable del aviso de catálogo que inyecta el server (system). */
 export const TOOL_CATALOG_MARKER = "The Code Mode tool catalog"
+
+export type { ServerNoticeKind } from "../types"
+
+/**
+ * Clasifica un aviso del server (system/shell) para renderizarlo acoplado
+ * en tarjeta colapsada en vez de volcar el texto crudo en el chat.
+ * Solo roles system/shell: un user/assistant que mencione el marker jamás
+ * se colapsa.
+ */
+export function classifyServerNotice(role: string | undefined, text: string): ServerNoticeKind | undefined {
+  const t = (text ?? "").trim()
+  if (!t) return undefined
+  if (role === "shell") return "shell"
+  if (role !== "system") return undefined
+  if (t.includes(TOOL_CATALOG_MARKER)) return "codemode"
+  if (t.includes("<skill>") || /new skills are available/i.test(t)) return "skills"
+  return undefined
+}
 
 function pruneToolState(state: MessageEnvelope["parts"][number]["state"]): MessageEnvelope["parts"][number]["state"] {
   if (!state || typeof state !== "object") return state
@@ -142,7 +160,8 @@ export function computeRenderedMessages(
     if (text.includes("<pty_exited>") || text.includes("Use pty_read to check")) continue
     const hasImages = message.parts.some((p) => isImagePart(p as any))
     if (text || thinkingParts.length > 0 || toolParts.length > 0 || hasImages || message.info.error) {
-      const rendered: RenderedMessage = { ...message, text, hasCompaction, thinkingParts, toolParts, segments, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffs, dataMode, turnMode, isToolCatalog: message.info.role === "system" && text.startsWith(TOOL_CATALOG_MARKER) }
+      const noticeKind = classifyServerNotice(message.info.role, text)
+      const rendered: RenderedMessage = { ...message, text, hasCompaction, thinkingParts, toolParts, segments, tokens: message.info.tokens, cost: message.info.cost, summaryDiffs: diffs, dataMode, turnMode, isToolCatalog: noticeKind === "codemode", noticeKind } as RenderedMessage
       out.push(rendered)
       nextCache.set(message.info.id, { src: message, rendered, diffs, turnMode, dataMode })
     }

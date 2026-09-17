@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { renderHook, waitFor } from "@testing-library/react"
-import { useGoUsage } from "./GoUsagePanel"
+import { useGoUsage, __resetGoUsageCacheForTests } from "./GoUsagePanel"
 
 vi.mock("../shell", () => ({
   shell: {
@@ -31,6 +31,15 @@ vi.mock("../i18n-context", () => ({
 }))
 
 describe("useGoUsage", () => {
+  beforeEach(() => {
+    localStorage.clear()
+    __resetGoUsageCacheForTests()
+  })
+
+  afterEach(() => {
+    __resetGoUsageCacheForTests()
+  })
+
   it("carga uso + modelos y queda ready", async () => {
     const { result } = renderHook(() => useGoUsage())
     await waitFor(() => expect(result.current.state.kind).toBe("ready"))
@@ -58,5 +67,34 @@ describe("useGoUsage", () => {
     const calls = vi.mocked(shell.zenGo.usage).mock.calls.length
     result.current.reload()
     await waitFor(() => expect(vi.mocked(shell.zenGo.usage).mock.calls.length).toBeGreaterThan(calls))
+  })
+
+  it("el segundo montaje usa la caché: no pide de nuevo", async () => {
+    const { shell } = await import("../shell")
+    const first = renderHook(() => useGoUsage())
+    await waitFor(() => expect(first.result.current.state.kind).toBe("ready"))
+    const calls = vi.mocked(shell.zenGo.usage).mock.calls.length
+    // Simula entrar al chat / abrir el modal: otro montaje con dato fresco.
+    const second = renderHook(() => useGoUsage())
+    await waitFor(() => expect(second.result.current.state.kind).toBe("ready"))
+    expect(vi.mocked(shell.zenGo.usage).mock.calls.length).toBe(calls)
+    expect(second.result.current.updatedAt).toBe(first.result.current.updatedAt)
+    first.unmount()
+    second.unmount()
+  })
+
+  it("con caché vencida (>20 min) revalida en fondo sin parpadeo", async () => {
+    const { shell } = await import("../shell")
+    const { __ageGoUsageCacheForTests } = await import("./GoUsagePanel")
+    const first = renderHook(() => useGoUsage())
+    await waitFor(() => expect(first.result.current.state.kind).toBe("ready"))
+    const calls = vi.mocked(shell.zenGo.usage).mock.calls.length
+    first.unmount()
+    // Pasan 21 minutos: entrar a ver muestra lo guardado y pide en fondo.
+    __ageGoUsageCacheForTests(21 * 60 * 1000)
+    const second = renderHook(() => useGoUsage())
+    await waitFor(() => expect(second.result.current.state.kind).toBe("ready"))
+    await waitFor(() => expect(vi.mocked(shell.zenGo.usage).mock.calls.length).toBeGreaterThan(calls))
+    second.unmount()
   })
 })

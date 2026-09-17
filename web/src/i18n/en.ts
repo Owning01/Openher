@@ -242,6 +242,8 @@ export default {
   'go.title': 'OpenCode Go usage',
   'go.subtitle': 'Subscription limits and models offered by the Go API (via this PC).',
   'go.refresh': 'Refresh',
+  'go.updating': 'Updating…',
+  'go.updatedAt': 'Updated {time} · auto-refreshes every 20 min',
   'go.loading': 'Loading Go usage…',
   'go.unavailable': 'Go unavailable (desktop off, outdated, or key missing).',
   'go.badResponse': 'Unexpected Go response.',

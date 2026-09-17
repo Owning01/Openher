@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useReducer, useState } from "react"
 import { useT } from "../i18n-context"
 import { shell, type ZenGoKeySource, type ZenGoUsage, type ZenGoWindow } from "../shell"
 import { RefreshIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, EyeOffIcon } from "../Icons"
@@ -7,6 +7,132 @@ import { GO_MODELS_REF, formatReset, usageTone } from "../data/goModels"
 type ZenGoModelLite = { id: string }
 
 const TONE_COLOR: Record<string, string> = { ok: "#59d4a0", warn: "#e0b15e", bad: "#f2777a" }
+
+/**
+ * La API de uso de Go se pide como máximo cada 20 minutos, nunca al montar
+ * (entrar al chat, refrescar, abrir el modal). Las peticiones se comparten:
+ * si el chip y el panel están montados a la vez sale una sola request.
+ * El botón "Actualizar" del modal fuerza la petición siempre.
+ */
+const GO_USAGE_TTL_MS = 20 * 60 * 1000
+const GO_USAGE_CACHE_KEY = "opencode.go.usageCache"
+const GO_USAGE_POLL_MS = 60 * 1000
+
+type CachedGoUsage = {
+  usage: ZenGoUsage
+  models: ZenGoModelLite[]
+  source: ZenGoKeySource | null
+  fetchedAt: number
+}
+
+type GoUsageFetchError = { kind: "badResponse" } | { kind: "remote"; message: string }
+
+let memCache: CachedGoUsage | null = null
+let memHydrated = false
+let lastFetchError: GoUsageFetchError | null = null
+let usageRefreshing = false
+let usageInflight: Promise<void> | null = null
+const usageListeners = new Set<() => void>()
+
+function notifyGoUsage() {
+  usageListeners.forEach((fn) => {
+    try { fn() } catch { /* un listener roto no tumba a los demás */ }
+  })
+}
+
+function readCacheStore(): CachedGoUsage | null {
+  try {
+    const raw = localStorage.getItem(GO_USAGE_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<CachedGoUsage> | null
+    const u = parsed?.usage as { usage?: { rolling?: unknown; weekly?: unknown; monthly?: unknown } } | undefined
+    if (!parsed || typeof parsed.fetchedAt !== "number" || !u?.usage?.rolling || !u?.usage?.weekly || !u?.usage?.monthly) return null
+    return {
+      usage: parsed.usage as ZenGoUsage,
+      models: Array.isArray(parsed.models) ? (parsed.models as ZenGoModelLite[]) : [],
+      source: (parsed.source as ZenGoKeySource | null) ?? null,
+      fetchedAt: parsed.fetchedAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+function ensureGoUsageHydrated() {
+  if (memHydrated) return
+  memHydrated = true
+  memCache = readCacheStore()
+}
+
+function isGoUsageFresh(now = Date.now()): boolean {
+  return !!memCache && now - memCache.fetchedAt < GO_USAGE_TTL_MS
+}
+
+/** Solo para tests: vacía la caché en memoria y en disco entre casos. */
+export function __resetGoUsageCacheForTests() {
+  memCache = null
+  memHydrated = false
+  lastFetchError = null
+  usageRefreshing = false
+  usageInflight = null
+  try { localStorage.removeItem(GO_USAGE_CACHE_KEY) } catch { /* ignore */ }
+}
+
+function fetchAndStoreGoUsage(): Promise<void> {
+  if (usageInflight) return usageInflight
+  usageRefreshing = true
+  notifyGoUsage()
+  usageInflight = Promise.all([
+    shell.zenGo.usage(),
+    shell.zenGo.models(),
+    shell.zenGo.keyStatus().catch(() => null),
+  ])
+    .then(([usage, models, keyStatus]) => {
+      const u = usage?.usage
+      const list = Array.isArray(models?.data) ? models.data : []
+      if (!u || !u.rolling || !u.weekly || !u.monthly) {
+        lastFetchError = { kind: "badResponse" }
+        return
+      }
+      lastFetchError = null
+      memCache = {
+        usage,
+        models: list.map((m) => ({ id: String(m.id) })),
+        source: keyStatus?.source ?? null,
+        fetchedAt: Date.now(),
+      }
+      try {
+        localStorage.setItem(GO_USAGE_CACHE_KEY, JSON.stringify(memCache))
+      } catch { /* sin storage: la caché vive solo en memoria */ }
+    })
+    .catch((e) => {
+      lastFetchError = { kind: "remote", message: (e as Error)?.message || "" }
+    })
+    .then(() => {
+      usageRefreshing = false
+      usageInflight = null
+      notifyGoUsage()
+    })
+  return usageInflight
+}
+
+/** Solo para tests: envejece la caché N ms (simula que vencieron los 20 min). */
+export function __ageGoUsageCacheForTests(ms: number) {
+  if (memCache) {
+    memCache = { ...memCache, fetchedAt: memCache.fetchedAt - ms }
+    try {
+      localStorage.setItem(GO_USAGE_CACHE_KEY, JSON.stringify(memCache))
+    } catch { /* ignore */ }
+    notifyGoUsage()
+  }
+}
+/** Pide a la API solo si no hay dato guardado o si pasaron los 20 minutos. */
+function refreshGoUsageIfStale() {
+  ensureGoUsageHydrated()
+  if (usageInflight || usageRefreshing) return
+  if (isGoUsageFresh()) return
+  void fetchAndStoreGoUsage()
+}
 
 function WindowRow({ label, window }: { label: string; window: ZenGoWindow }) {
   const t = useT()
@@ -42,45 +168,55 @@ export type GoUsageState =
   | { kind: "error"; message: string }
   | { kind: "ready"; usage: ZenGoUsage; models: ZenGoModelLite[]; source: ZenGoKeySource | null }
 
-/** Carga uso + modelos + origen de key de Go por el puente del desktop. */
+/** Uso de Go compartido: lee la caché (máx. 20 min) y solo pide a la API si no
+ * hay dato o si venció el intervalo. `reload` (botón Actualizar) fuerza siempre. */
 export function useGoUsage() {
   const t = useT()
-  const [state, setState] = useState<GoUsageState>({ kind: "loading" })
-
-  const load = useCallback(() => {
-    setState({ kind: "loading" })
-    Promise.all([
-      shell.zenGo.usage(),
-      shell.zenGo.models(),
-      shell.zenGo.keyStatus().catch(() => null),
-    ])
-      .then(([usage, models, keyStatus]) => {
-        const u = usage?.usage
-        const list = Array.isArray(models?.data) ? models.data : []
-        if (!u || !u.rolling || !u.weekly || !u.monthly) {
-          setState({ kind: "error", message: t("go.badResponse") })
-          return
-        }
-        setState({
-          kind: "ready",
-          usage,
-          models: list.map((m) => ({ id: String(m.id) })),
-          source: keyStatus?.source ?? null,
-        })
-      })
-      .catch((e) => setState({ kind: "error", message: (e as Error)?.message || t("go.unavailable") }))
-  }, [t])
+  const [, bump] = useReducer((x: number) => x + 1, 0)
 
   useEffect(() => {
-    load()
-  }, [load])
+    usageListeners.add(bump)
+    return () => {
+      usageListeners.delete(bump)
+    }
+  }, [])
 
-  return { state, reload: load }
+  useEffect(() => {
+    ensureGoUsageHydrated()
+    bump()
+    // Al montar NO se pide si hay dato fresco: entrar al chat, refrescar o
+    // abrir el modal muestra lo guardado. Solo se pide si nunca hubo dato
+    // o si vencieron los 20 minutos (revalida en fondo, sin parpadeo).
+    refreshGoUsageIfStale()
+    // El intervalo de 20 min: revisa cada minuto y pide en fondo si venció.
+    const id = setInterval(refreshGoUsageIfStale, GO_USAGE_POLL_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  const reload = useCallback(() => {
+    ensureGoUsageHydrated()
+    void fetchAndStoreGoUsage()
+  }, [])
+
+  let state: GoUsageState
+  if (memCache) {
+    state = { kind: "ready", usage: memCache.usage, models: memCache.models, source: memCache.source }
+  } else if (lastFetchError) {
+    state = {
+      kind: "error",
+      message:
+        lastFetchError.kind === "badResponse" ? t("go.badResponse") : lastFetchError.message || t("go.unavailable"),
+    }
+  } else {
+    state = { kind: "loading" }
+  }
+
+  return { state, reload, updatedAt: memCache?.fetchedAt ?? null, refreshing: usageRefreshing }
 }
 
 export const GoUsagePanel = memo(function GoUsagePanel() {
   const t = useT()
-  const { state, reload } = useGoUsage()
+  const { state, reload, updatedAt, refreshing } = useGoUsage()
   const [showModels, setShowModels] = useState(false)
   const [editingKey, setEditingKey] = useState(false)
   const [keyDraft, setKeyDraft] = useState("")
@@ -121,9 +257,17 @@ export const GoUsagePanel = memo(function GoUsagePanel() {
         <div>
           <span className="setting-item-title">{t("go.title")}</span>
           <p className="setting-item-desc">{t("go.subtitle")}</p>
+          {updatedAt ? (
+            <p className="subtle" style={{ fontSize: "0.76rem", margin: "2px 0 0" }}>
+              {t("go.updatedAt", {
+                time: new Date(updatedAt).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+              })}
+              {refreshing ? ` · ${t("go.updating")}` : ""}
+            </p>
+          ) : null}
         </div>
-        <button className="ag-btn-open" onClick={reload} aria-label={t("go.refresh")}>
-          <RefreshIcon size={14} /> {t("go.refresh")}
+        <button className="ag-btn-open" onClick={reload} disabled={refreshing} aria-label={t("go.refresh")}>
+          <RefreshIcon size={14} /> {refreshing ? t("go.updating") : t("go.refresh")}
         </button>
       </div>
 

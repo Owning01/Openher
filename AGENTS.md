@@ -54,7 +54,6 @@ cortos (funcionan en cualquier carpeta, sin passwords ni auth):
 - **Prohibido** poner keys, passwords o tokens en archivos del equipo o en
   mensajes. Textos cortos (1-3 líneas); si el otro no responde en 2 intentos,
   seguí con lo tuyo. Lo urgente para el humano va por tu propio chat.
-  (Detalle técnico: `team-*` son atajos de `scripts/team-*.py` de este repo que
-  hablan con el puente del desktop en :4848.)
+  Usá siempre las formas cortas (`team-who`, `team-anuncio`, `team-send`).
 
 

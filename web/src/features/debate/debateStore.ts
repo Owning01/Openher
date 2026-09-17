@@ -663,7 +663,7 @@ const debatesDirOf = (directory: string): string => `${directory.replace(/[/\\]+
 /** Lista debates pasados de la carpeta (incluye otras sesiones). */
 export async function fetchDebateHistory(directory: string): Promise<DebateHistoryItem[]> {
   if (!directory) return []
-  let files: Array<{ name: string }> = []
+  let files: Array<{ name: string; path: string }> = []
   try {
     const out = await shell.fs.list(debatesDirOf(directory))
     files = (out?.files ?? []).filter((f) => f.name.toLowerCase().endsWith(".jsonl"))

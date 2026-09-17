@@ -344,6 +344,7 @@ export function useChatActions(params: UseChatActionsParams) {
     },
     [
       selectedSession,
+      awaitingAssistantReply,
       activeModel,
       activeAgentID,
       commands,

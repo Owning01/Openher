@@ -53,3 +53,56 @@ describe("Code Mode catalog colapsado", () => {
     expect(body.className).toContain("tool-catalog-body")
   })
 })
+
+describe("avisos del server acoplados (code mode + skills + shell)", () => {
+  // Forma real del server v2: system/shell con texto top-level (sin content).
+  const sysEnv = (text: string, extra: Record<string, unknown> = {}) =>
+    toMessageEnvelopeV1({ id: `m-${text.length}`, sessionID: "s1", type: "system", text, description: "notice", ...extra } as never)
+  const renderNotice = (env: { info: { id: string } }) => {
+    const { out } = computeRenderedMessages([env as never], undefined, new Map())
+    expect(out.length).toBe(1)
+    return out[0]
+  }
+
+  it("catalogo combinado con fecha también se acopla (includes, no startsWith)", () => {
+    const msg = renderNotice(sysEnv(`Today's date is now: Wed Aug 26 2026\n\n${TOOL_CATALOG_MARKER} v2\n\n## Search\n...`))
+    expect(msg.noticeKind).toBe("codemode")
+    expect(msg.isToolCatalog).toBe(true)
+    const { container } = render(<MessageBubble message={msg} />)
+    expect(container.querySelector(".tool-catalog-card")).not.toBeNull()
+    expect(container.querySelector(".message-content")).toBeNull()
+  })
+
+  it("aviso de skills con tags <skill> se acopla con su título", () => {
+    const msg = renderNotice(sysEnv("New skills are available:\n\n<skill>\n  <id>api-dialect</id>\n</skill>"))
+    expect(msg.noticeKind).toBe("skills")
+    expect(msg.isToolCatalog).toBe(false)
+    const { container } = render(<MessageBubble message={msg} />)
+    const toggle = container.querySelector(".tool-catalog-card .collapsible-toggle") as HTMLElement
+    expect(toggle.textContent).toContain("Skills")
+    fireEvent.click(toggle)
+    expect((container.querySelector(".tool-catalog-body") as HTMLElement).textContent).toContain("<id>api-dialect</id>")
+  })
+
+  it("salida shell del server se acopla con su título", () => {
+    const env = toMessageEnvelopeV1({ id: "msh", sessionID: "s1", type: "shell", command: "git status", output: "On branch main\nnothing to commit" } as never)
+    const { out } = computeRenderedMessages([env], undefined, new Map())
+    expect(out.length).toBe(1)
+    expect(out[0].noticeKind).toBe("shell")
+    const { container } = render(<MessageBubble message={out[0]} />)
+    const toggle = container.querySelector(".tool-catalog-card .collapsible-toggle") as HTMLElement
+    expect(toggle.textContent).toContain("Shell")
+    fireEvent.click(toggle)
+    expect((container.querySelector(".tool-catalog-body") as HTMLElement).textContent).toContain("nothing to commit")
+  })
+
+  it("la tarjeta nunca expande vacía: fallback a los parts si text vino vacío", () => {
+    const env = sysEnv(`${TOOL_CATALOG_MARKER} v2`)
+    const full = renderNotice(env)
+    // Simula un camino que dejó text vacío con parts intactos.
+    const emptied = { ...full, text: "" }
+    const { container } = render(<MessageBubble message={emptied} />)
+    fireEvent.click(container.querySelector(".tool-catalog-card .collapsible-toggle") as HTMLElement)
+    expect((container.querySelector(".tool-catalog-body") as HTMLElement).textContent).toContain(TOOL_CATALOG_MARKER)
+  })
+})

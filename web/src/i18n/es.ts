@@ -242,6 +242,8 @@ export default {
   'go.title': 'Uso de OpenCode Go',
   'go.subtitle': 'Límites de la suscripción y modelos que ofrece la API de Go (vía esta PC).',
   'go.refresh': 'Actualizar',
+  'go.updating': 'Actualizando…',
+  'go.updatedAt': 'Actualizado {time} · se actualiza solo cada 20 min',
   'go.loading': 'Cargando uso de Go…',
   'go.unavailable': 'Go no disponible (desktop apagado, desactualizado o sin key).',
   'go.badResponse': 'Respuesta inesperada de Go.',

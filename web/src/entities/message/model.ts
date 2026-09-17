@@ -92,6 +92,9 @@ export type RenderedToolPart = {
   }
 }
 
+/** Aviso del server que se muestra acoplado en tarjeta colapsada. */
+export type ServerNoticeKind = "codemode" | "skills" | "shell"
+
 /**
  * Orden real de los parts renderizables de un mensaje (texto/tool
  * intercalados). Sin esto, MessageBubble aplana a `text` + `toolParts` y
@@ -117,6 +120,8 @@ export type RenderedMessage = {
   cost?: number
   /** Aviso largo del server (catálogo Code Mode): se renderiza colapsado. */
   isToolCatalog?: boolean
+  /** Aviso del server (codemode/skills/shell): tarjeta colapsada acoplada. */
+  noticeKind?: ServerNoticeKind
 }
 
 /** Resumen de archivos cambiados en un turno (prompt user + respuestas). */

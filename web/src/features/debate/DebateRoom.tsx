@@ -477,7 +477,6 @@ const ActaBlock = memo(function ActaBlock({ debate }: { debate: DebateState }) {
             <div key={i} className="debate-minority message-content">
               <Markdown text={m} />
             </div>
-            </div>
           ))}
         </div>
       ) : null}
