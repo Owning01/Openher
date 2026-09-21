@@ -58,7 +58,7 @@ Si tu tarea es modificar o investigar una funcionalidad, ve **directamente** a e
 5. **La trampa del commit con path (y del git roto):**
    ❌ **NO ejecutes:** `git commit -- <path>` (re-stagea todo el worktree y arrastra hunks ajenos).
    ✅ **Commitea selectivo:** `git apply --cached` con patch filtrado; verifica con `git diff --cached --stat`.
-   ⚠️ El `git` del PATH (`X:\Dev\git`) puede crashear (`0xC0000005`): si `git --version` no imprime nada, usá la ruta explícita `C:\Program Files\Git\cmd\git.exe` (2.55.0.5) o `G:\Dev\Git\cmd\git.exe`.
+   ⚠️ El `git` del PATH (`X:\Dev\git`, 2.55.0.3) está **roto en esta máquina**: no solo `--version`, también crashean `add`, `hash-object`, `diff` y a veces `status` (`0xC0000005`/`0xC0000006`). Usá la ruta explícita `C:\Program Files\Git\cmd\git.exe` (2.55.0.5) o `G:\Dev\Git\cmd\git.exe` — con esas, `add`/`commit`/`push` andan. Las lecturas (`status`, `ls-files`, `rev-parse`) con el git roto a veces andan si les pasás `--no-optional-locks`; para commitear, ni lo intentes.
 
 6. **La trampa de i18n it/zh:**
    ❌ **NO agregues keys en `it.ts`/`zh.ts`.** Las keys nuevas van SOLO en `en.ts`/`es.ts` + tipo en `i18n.ts`; it/zh caen al inglés por fallback.
