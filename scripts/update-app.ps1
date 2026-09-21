@@ -161,12 +161,13 @@ function Register-Autostart {
       if ($healthy) { return $healthy }
       $first = $w | Select-Object -First 1
       if ($first) {
-        $healthyPath = "X:\Dev\npm-global\node_modules\@opencode\cli\bin\opencode2.exe"
+        # El npm-global sano (G:) es el bin real de 204 MB; los shims de bun (8 KB) estan rotos.
+        $healthyPath = "G:\Dev\npm-global\node_modules\@opencode\cli\bin\opencode.exe"
         if ($first -like "*bun\bin\opencode2.exe*" -and (Test-Path $healthyPath)) { return $healthyPath }
         return $first
       }
     } catch {}
-    foreach ($c in @("X:\Dev\npm-global\node_modules\@opencode\cli\bin\opencode2.exe")) {
+    foreach ($c in @("G:\Dev\npm-global\node_modules\@opencode\cli\bin\opencode.exe")) {
       if (Test-Path $c) { return $c }
     }
     return $null

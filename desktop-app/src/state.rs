@@ -670,10 +670,10 @@ pub fn set_opencode2_autostart(enabled: bool) -> Result<(), String> {
 /// Orden: npm-global -> `where.exe opencode/opencode2` (.exe) -> HOME/.bun/bin
 /// -> shims `.cmd`/`.ps1` como último recurso.
 pub fn discover_opencode2_exe() -> Option<String> {
-    // Dev vivió en X:\Dev y se migró a G:\Dev; probar ambos.
+    // G: es la raíz viva. X:\Dev era una copia vieja y quedó como volumen
+    // fantasma (desmontado el 2026-09-21): no se prueba más.
     const NPM_GLOBAL_BINS: &[&str] = &[
         r"G:\Dev\npm-global\node_modules\@opencode\cli\bin",
-        r"X:\Dev\npm-global\node_modules\@opencode\cli\bin",
     ];
     let mut preferred: Vec<String> = Vec::new();
     for bin in NPM_GLOBAL_BINS {
