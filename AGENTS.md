@@ -17,6 +17,7 @@ cargo check; cargo run; cargo build --release   # desktop (desktop-app/)
 ## Directivas
 
 - Skills: `taste-impecable` (estética/UX) y `ponytail` (YAGNI, stdlib antes que deps, diffs mínimos).
+- Memoria de proyecto (`PROJECT_MAP.md`, `PROJECT_MEMORY.md`): viven en disco y **no se commitean** (están en `.gitignore`).
 - DRY + singleton en servicios, stores (Zustand) y utilidades compartidas.
 - Cero emojis en la UI: solo SVG formal (Lucide).
 

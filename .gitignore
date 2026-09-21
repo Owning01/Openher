@@ -109,6 +109,10 @@ docs/scrum-copia/
 # no se suben a GitHub.
 docs/
 
+# Memoria de proyecto (mapa y bitácora): viven local, no se suben a GitHub.
+PROJECT_MAP.md
+PROJECT_MEMORY.md
+
 # Evidencia HTML de debates (se regenera): queda en disco, no a git.
 /.debates/
 
