@@ -13,9 +13,9 @@ Si tu tarea es modificar o investigar una funcionalidad, ve **directamente** a e
 | :--- | :--- | :--- |
 | **Chat: Entrada & Composer** (input, adjuntos, atajos, anillo sync, outbox) | `components/Composer.tsx` (742L; `--ring-delay`, drop inserta ruta)<br>`components/composer/*` (`ComposerBar`, `SlashMenu`, `MentionMenu`, `ImageStrip`, `TurnChangesPanel`, `useMentions`, `downscaleImage`)<br>`components/PromptPresetSheet.tsx` | — |
 | **Chat: Burbujas & Markdown** (render texto, código, thinking, reveal) | `components/MessageList.tsx` (`visibleCount`+`revealMessageID`)<br>`components/MessageBubble.tsx`<br>`components/Markdown.tsx`<br>`components/HighlightedCode.tsx` (highlight único)<br>`components/ThinkingBlock.tsx` | — |
-| **Chat: Tool Calls & Acciones** (bash, edit, read, outputs) | `components/ToolPart.tsx` (795L)<br>`utils/toolName.ts` (fuente única de etiqueta/verbo/icono) · `utils/messageShape.ts` | — |
+| **Chat: Tool Calls & Acciones** (bash, edit, read, outputs) | `components/ToolPart.tsx` (795L)<br>`utils/toolName.ts` (fuente única de etiqueta/verbo/icono) · `utils/messageShape.ts` (subagent/shell sintéticos)<br>`utils/rendered.ts` · `utils/turnActivity.ts` (el `<shell>` de 2º plano entra como tool a la caja del turno) | — |
 | **Chat: Notas & Historial** (bloc por sesión, salto a prompts) | `components/ChatNotesPanel.tsx`<br>`utils/chatNotes.ts`<br>`components/PromptHistoryPanel.tsx`<br>`utils/promptHistory.ts` | — (localStorage `openher.chatNotes.<id>`) |
-| **Chat: Estado & Streaming** (árbol mensajes, SSE, reconexión, outbox) | `hooks/useMessages.ts` (621L, compositor)<br>`hooks/useMessageSend.ts` · `hooks/useStreamPatch.ts` (batching rAF)<br>`stores/outboxStore.ts` (claim/hold/cooldown 4 s) · `stores/translationOriginals.ts`<br>`hooks/useSSE.ts` · `hooks/useSSEHandler.ts` · `hooks/useAI.ts` | OpenCode Server (`:4096`/`:4097`) |
+| **Chat: Estado & Streaming** (árbol mensajes, SSE, reconexión, outbox) | `hooks/useMessages.ts` (621L, compositor)<br>`hooks/useMessageSend.ts` · `hooks/useStreamPatch.ts` (batching rAF)<br>`stores/outboxStore.ts` (claim/hold/cooldown 4 s) · `stores/translationOriginals.ts`<br>`hooks/useSSE.ts` · `hooks/useSSEHandler.ts` · `hooks/useAI.ts` | OpenCode Server (`:4096`/`:4097`) · forma de los datos: skill `opencode-architecture` (`references/sesiones-mensajes-y-storage.md`) |
 | **Modelos & Preguntas al Usuario** (selector, permisos, asks) | `components/ModelSelectorModal.tsx`<br>`components/QuestionPrompt.tsx`<br>`hooks/useQuestions.ts` | — |
 | **Sesiones** (lista, agrupado por proyecto, `+` con FolderPicker) | `hooks/useSessions.ts` (205L)<br>`entities/session/sessionsPlan.ts` (fetch+merge puros; `toSessionView`/`mergeSessionPoll`)<br>`entities/session/model.ts` (**type-only**)<br>`utils/sessionDirs.ts` (`dirKey`/backfill)<br>`app/useAppController.ts` (506L) + `app/runtime/*` | — |
 | **IDE Desktop: Layout & Split** (docks, paneles, resize) | `components/shellPanels.tsx` (1.1KL) + `features/shell/*` (`SingleTerminal`, `useXtermSession`, `DesignPanel`)<br>`components/KanbanPanel.tsx`<br>`widgets/desktop-grid/` (+ `hooks/{usePanelLayoutOps,useTabStackOps,usePanelDock}`)<br>`widgets/titlebar/` | `desktop-app/src/main.rs` (writer thread de geometría) |
@@ -102,7 +102,7 @@ desktop-app.exe (Rust)             OpenCode Server (Go/TS)
 | `4097` | OpenCode v2 | Servidor OpenCode v2 (beta, rutas `/api/*`) |
 | `4848` | Desktop Shell (Rust) | Servidor local embebido en `desktop-app`. Sirve el frontend y la API `/shell/*` |
 | `4849` | ConPTY WebSocket | WebSocket de la terminal xterm (puerto del shell + 1) |
-| `3000`/`1420`/`3005`/`3002` | Plugins externos | opendesign / vioeditor / m3e-canvas / screenshots (on-demand) |
+| `3000`/`1420`/`3005`/`3002` | Plugins externos | opendesign / vioeditor / m3e-canvas / screenshots (prewarm al abrir la app; los de Next corren con `node_hidden.exe` para no abrir consola) |
 | `5173` | Vite Dev Server | Solo durante desarrollo activo del frontend (`pnpm dev`) |
 
 ---

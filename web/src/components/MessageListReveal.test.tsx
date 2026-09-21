@@ -93,10 +93,12 @@ describe("MessageList reveal (salto del historial)", () => {
       <MessageList {...base} selectedID="s2" messages={stale} revealMessageID={null} revealNonce={0} />
     )
     const wrap = document.querySelector(".messages") as HTMLElement
-    // Stale oculto: no se ve el chat viejo; en su lugar un spinner de carga
-    // (nunca un área negra vacía).
+    // Stale oculto: no se ve el chat viejo; en su lugar el texto de carga
+    // (nunca un área negra vacía). El spinner de 8 cuadrados se sacó a pedido
+    // del usuario: queda el texto, sin `.grid-spinner` en el medio del chat.
     expect(wrap.style.opacity).toBe("1")
-    expect(wrap.querySelector(".grid-spinner")).not.toBeNull()
+    expect(wrap.querySelector(".empty-state")).not.toBeNull()
+    expect(wrap.querySelector(".grid-spinner")).toBeNull()
     expect(wrap.querySelector('[data-message-id="s1-m59"]')).toBeNull()
     const scrollTo = window.HTMLElement.prototype.scrollTo as unknown as ReturnType<typeof vi.fn>
     scrollTo.mockClear()

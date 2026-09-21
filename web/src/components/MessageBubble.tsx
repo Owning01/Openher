@@ -15,22 +15,7 @@ import { MarkdownWithEmbeds } from "./AgentEmbed"
 import { ImageLightbox } from "./ImageLightbox"
 import { ToolIcon, LoadingIcon } from "../Icons"
 import { formatDurationMs, type TurnActivity } from "../utils/turnActivity"
-import { toolSummaryLabel } from "../utils/toolName"
 import { isAssistantMessage, isUserMessage, messageRole, getSubagentResultInfo } from "../utils/messageShape"
-
-/** Extrae el comando + args de un tool part (para el título en vivo). */
-function toolRunningLabel(state?: { input?: unknown; tool?: string }): string {
-  const inp = state?.input
-  if (inp && typeof inp === "object" && "command" in inp) {
-    const cmd = (inp as { command?: string }).command
-    const args = Array.isArray((inp as { args?: unknown[] }).args)
-      ? ((inp as { args?: unknown[] }).args as unknown[]).map(String).join(" ")
-      : ""
-    const full = args && cmd ? `${cmd} ${args}` : String(cmd ?? "")
-    if (full.trim()) return full.trim().slice(0, 60)
-  }
-  return toolSummaryLabel(state?.tool)
-}
 
 /** Extract base64 image data from a message part (handles both type:image and type:file). */
 function getPartImageData(p: { type: string; data?: string; url?: string; mimeType?: string; mime?: string }): string | null {
@@ -196,6 +181,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           thinkingParts: message.thinkingParts ?? [],
           toolParts: message.toolParts,
           summaryDiffs: message.summaryDiffs ?? [],
+          intermediateTexts: [],
           working: isWorkingTurn,
         }),
     [absorbActivity, turnActivity, message.thinkingParts, message.toolParts, message.summaryDiffs, isWorkingTurn],
@@ -209,13 +195,29 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   }, [activityWorking, thinkingDefault])
 
   const activityRef = useRef<HTMLDivElement | null>(null)
+  // Seguir el fondo de la caja solo si el usuario ya está ahí: antes cada delta
+  // la clavaba abajo y no se podía leer un tool anterior con el turno corriendo.
+  const activityFollowRef = useRef(true)
+  useEffect(() => {
+    const body = activityRef.current?.querySelector(".collapsible-content")
+    if (!(body instanceof HTMLElement)) return
+    const onScroll = () => {
+      // Margen chico: el auto-scroll deja dist=0, así que seguir sigue solo.
+      activityFollowRef.current = body.scrollHeight - body.scrollTop - body.clientHeight <= 24
+    }
+    onScroll()
+    body.addEventListener("scroll", onScroll, { passive: true })
+    return () => body.removeEventListener("scroll", onScroll)
+  }, [activityOpen])
   // Firma del contenido (pensamiento creciendo / tools apareciendo): mientras
-  // el turno está en curso, la caja baja sola al último renglón.
+  // el turno está en curso, la caja baja sola al último renglón — pero solo si
+  // el usuario no scrolleó hacia arriba (activityFollowRef).
   const activityTick = useMemo(() => activity
     ? `${activity.toolParts.length}:${activity.thinkingParts.reduce((n, p) => n + (p.text?.length ?? 0), 0)}:${activity.toolParts.filter((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending").length}`
     : "", [activity])
   useEffect(() => {
     if (!activityWorking || !activityOpen) return
+    if (!activityFollowRef.current) return
     const body = activityRef.current?.querySelector(".collapsible-content")
     if (body instanceof HTMLElement) body.scrollTop = body.scrollHeight
   }, [activityTick, activityWorking, activityOpen])
@@ -365,9 +367,10 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           const hasThinking = activity.thinkingParts.length > 0
           const hasTools = activity.toolParts.length > 0
           const hasDiffs = activity.summaryDiffs.length > 0
+          const hasTexts = activity.intermediateTexts.length > 0
           // Sin nada que agrupar no hay caja (la compactación pura tiene su
           // propia tarjeta estilada más abajo).
-          if (!hasThinking && !hasTools && !hasDiffs) return null
+          if (!hasThinking && !hasTools && !hasDiffs && !hasTexts) return null
 
           // Pensamiento acoplado adentro de la caja: una línea ("Pensó 12s" o
           // "Pensando…") que se despliega a mano. Solo arranca abierto si el
@@ -403,26 +406,10 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             <FileDiffs diffs={activity.summaryDiffs} onOpenADEDiff={onOpenADEDiff} />
           ) : null
 
-          const runningTool = activity.toolParts.find((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending")
-          const thinkingStreaming = activity.thinkingParts.some((p) => !p.time?.end)
-
-          // --- Título en vivo mientras el agente trabaja (acción actual) ---
-          const liveTitle = thinkingStreaming || !runningTool
-            ? t('detail.thinking')
-            : toolRunningLabel(runningTool.state ?? { tool: runningTool.tool })
-
-          // --- Título tenue para el turno completado ---
-          // Nombres reales de los tools (edit, shell, read, …), sin repetir.
-          const toolNames = [...new Set(activity.toolParts.map((tp) => toolSummaryLabel(tp.tool)).filter(Boolean))]
-          const toolSummary = toolNames.length <= 3
-            ? toolNames.join(" · ")
-            : `${toolNames.slice(0, 3).join(" · ")} +${toolNames.length - 3}`
-          const completedParts: string[] = []
-          if (toolSummary) completedParts.push(toolSummary)
-          if (message.hasCompaction) completedParts.push(t('detail.activityCompaction'))
-          const completedTitle = completedParts.join(" · ") || t('detail.thought')
-
-          const title = activity.working ? liveTitle : completedTitle
+          // Título fijo de la caja (pedido explícito): siempre "Working", esté
+          // el turno en curso o terminado, sin listar herramientas. Lo que
+          // cambia es el subtítulo: spinner mientras trabaja.
+          const title = "Working"
           // En marcha: solo el spinner (el título ya dice qué está haciendo).
           const subtitle = activity.working
             ? <span className="thinking-streaming" title={t('detail.working')}><LoadingIcon size={12} className="animate-spin" /></span>
@@ -440,6 +427,11 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
               >
                 {thinkingEl}
                 {toolsEl}
+                {hasTexts && activity.intermediateTexts.map((it) => (
+                  <div key={it.id} className="message-content activity-text">
+                    <MarkdownWithEmbeds text={it.text} highlight={highlight} />
+                  </div>
+                ))}
                 {diffsEl}
               </CollapsibleSection>
             </div>

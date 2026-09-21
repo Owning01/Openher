@@ -94,3 +94,59 @@ Un hilo nuevo lee solo el mapa; esta bitácora se consulta cuando hace falta his
 - **Verificación posterior**: árbol **limpio** (0 entradas) y **0 artefactos internos** dentro del commit (`.agents/`, `docs/local/`, `dist`, logs y APK quedaron fuera por `.gitignore`); los archivos clave entraron (`CONTRIBUTING.md`, `tasks/rules-budget.json`, `api/index.ts`, `stores/outboxStore.ts`, `infrastructure/http/common.rs`, `web/tsconfig.test.json`).
 - **Sin push**: `main` quedó **4 commits adelante de `origin/main`**. Publicar la **1.0.36** con este árbol verificado queda a decisión del usuario (hoy el celular sirve la 1.0.35).
 - **Pendiente técnico del plan**: la mitad de R1 no hecha (`ShellRequest.body: Bytes`; el JSON copia igual porque `simd-json` muta in-place, y el cambio toca 21 usos en 8 archivos) — reportado, no forzado.
+
+## 2026-09-21 — Fix: la ventana "next-server" al abrir OpenHer
+
+- **Síntoma**: cada vez que se abría OpenHer aparecía una ventana de Windows Terminal titulada "next-server (v15.0.3)".
+- **Causa (medida, no supuesta)**: el prewarm de `main.rs` lanzaba `screenshots` con `node.exe … next dev -p 3002`; el CLI de Next re-lanza el server como hijo heredando `execPath` y, como el padre se crea sin consola (`CREATE_NO_WINDOW|DETACHED_PROCESS`), Windows le daba al hijo una consola propia. Prueba: `conhost` 2120 con cliente `start-server.js` (PID 10828) y la ventana de `WindowsTerminal` 26400.
+- **Fix**: los 6 comandos de Next (`screenshots` y `m3e-canvas`, dev y prod, en `external_router::defs()` y en el prewarm de `main.rs`) pasan a **`node_hidden.exe`** (node con subsistema GUI, el mismo que ya usaba `opendesign`): el server hijo hereda un ejecutable sin consola.
+- **Evidencia**: prueba aislada con `m3e-canvas` (`Ready in 522ms`, 0 ventanas nuevas); `cargo check` exit 0; `build-desktop.ps1` OK (125 s, exe `DE00CB5F…` 12:41:37); OpenHer reabierto → cadena `node_hidden.exe` → `node_hidden.exe`, **0 consolas atadas** y **0 ventanas nuevas** de Windows Terminal, plugin arriba en `:3002` (LISTENING).
+- **Pendiente**: commit del fix (2 archivos) — espera el OK del usuario (regla 8).
+
+## 2026-09-21 — UI: rediseño del botón "Nueva sesión"
+
+- **Qué cambió**: `web/src/styles/sessions.css` (bloque `.session-toolbar-row .btn-new-session`) pasó de chip gris apagado (`--surface-strong`, 26px, 11.5px, radio 5px) a la **acción primaria del rail**: relleno `--primary` + `--on-primary`, 28px, radio `--radius-md`, 12.5px/600, sombra propia (antes el `btn-primary` del markup quedaba pisado por el fondo gris).
+- **Firma e interacción**: el "+" gira 90° y escala 1.12 al hover (rotarlo solo no se notaría: un "+" es simétrico), la fila sube 1px con sombra más marcada, `:active` encoge 0.985 y `:focus-visible` dibuja anillo de 2px (`--bg` + `--text`) que le gana al `box-shadow` base. Todo con `cubic-bezier(0.16, 1, 0.3, 1)`; el `prefers-reduced-motion` global de `motion.css` ya lo cubre.
+- **Bug de temas encontrado**: `resolveTheme` mapea `--primary` pero **no `--primary-strong`**, así que con un tema de `primary` violeta el hover de cualquier `.btn-primary` saltaba a **blanco** (valor de `tokens.css` dark). Este botón ahora deriva su hover con `color-mix(in srgb, var(--primary), var(--on-primary) 12%)` → robusto en cualquier tema. Queda pendiente decidir si se arregla global (`buttons.css:12`, `settings.css:1083`).
+- **Evidencia**: `ui-regression` exit 0; `SessionToolbar.test.tsx` **4/4**; `check:rules` sin subir ningún presupuesto; `build-desktop.ps1` OK y verificado en la app real (reposo violeta / hover más oscuro con el "+" más grande). Capturas antes/después en `docs/local/ui/nueva-sesion/` (gitignored).
+- **Pendiente**: commit (va con el fix de la ventana `next-server`) — espera el OK del usuario.
+
+## 2026-09-21 — Fix: la caja de actividad no baja sola si estás leyendo arriba
+
+- **Síntoma**: con un turno corriendo (pensamiento/tools creciendo), la caja de actividad (`.activity-box`, dentro del `<article class="message assistant">`) se clavaba al fondo en cada delta y no se podía leer un tool anterior.
+- **Causa (medida)**: `components/MessageBubble.tsx` hacía `body.scrollTop = body.scrollHeight` en un efecto que depende de `activityTick`, sin mirar la posición del usuario; el `.collapsible-content` de la caja es un scroll propio (`max-height: 180px; overflow-y: auto` en `chat.css:794`).
+- **Fix**: `activityFollowRef` + listener `scroll` sobre el cuerpo de la caja (sigue si `dist <= 24px`); el auto-scroll corre solo si el usuario está al fondo, y volver al fondo a mano lo re-activa.
+- **Evidencia**: `MessageBubbleActivityScroll.test.tsx` (nuevo: arriba no baja / al fondo sigue / vuelve a seguir) + `MessageBubbleImage` + `MessageListReveal` + `useFollowTail` = **35/35**; `tsc -b --force` exit 0; `ui-regression` exit 0; deploy OK y app verificada.
+- **Alcance**: NO se tocó el scroll de `MessageList` (lista NO TOCAR §2); el cambio es el scroll interno del mensaje del asistente.
+- **Pendiente**: commit (junto con el fix de `next-server` y el botón) — espera el OK del usuario.
+
+## 2026-09-21 — Chat: tamaño de letra + agrupado "Trabajado"
+
+- **Tamaño de letra (bug)**: el slider escribía `--chat-font-size`, pero (a) títulos/código/tablas estaban en `rem` fijo (no escalaban) y (b) con el React Compiler activo (`vite.config.ts` → `react({ compiler: true })`) el efecto sobre `[settings]` queda memoizado y las vars se aplicaban solo en el primer mount. Fix: `applyCSSVars` se llama **imperativamente** en `setSetting`/`resetDefaults` (`hooks/useChatSettings.ts`), la var pasa a **rem** (base 16) para que el zoom de UI escale también el chat, y los `h1-h6` del mensaje pasan a `em`. Test nuevo `hooks/useChatSettings.test.ts`.
+- **Agrupado "Trabajado"**: `utils/turnActivity.ts` ahora junta también los **textos intermedios** del asistente (`intermediateTexts`) y devuelve `swallowed` (mensajes cuyo texto se mudó a la caja). Mientras el turno trabaja no se traga nada (los textos siguen visibles en el chat); al cerrarse, `MessageList` no renderiza esos mensajes y `MessageBubble` los muestra dentro de la caja con la tipografía del mensaje. Test nuevo `utils/turnActivityTexts.test.ts`.
+- **Evidencia**: **7 archivos / 46 tests** del área en verde (incluye `SessionChatPanel.parity`), `tsc -b --force` exit 0, `ui-regression` exit 0, `build-desktop.ps1` OK y app reabierta.
+- **Pendiente**: el borrado de v1 (~266 usos en 54 archivos de producción + 226 en 25 de tests) y el commit de todo lo de hoy.
+
+## 2026-09-21 — Release 1.0.36 publicada (APK + EXE)
+
+- **Qué**: `scripts\update-app.ps1 -Notes "..."` de punta a punta: bump a **1.0.36 (10036)**, build web + deploy a los 3 `data/web-dist` (desktop-app, dist-desktop y `G:\Dev\cargo-target\release`), **APK** vía `install-apk.ps1 -Publish` y **self-update del desktop** (`openher-desktop.zip`), con espejo en GitHub Releases.
+- **Evidencia**: gradle `BUILD SUCCESSFUL in 58s`; APK `sha256 F483CB3C78C6678D…` 14.048.164 bytes; zip desktop `sha256 BEF5860D…` 12.011.088 bytes; release https://github.com/Owning01/Openher/releases/tag/v1.0.36 ; link estable `http://100.77.237.102:4848/openher.apk`.
+- **El .exe no cambió de hash** (`DE00CB5F…`): no hubo cambios Rust nuevos respecto del build de las 12:41, que ya incluía el fix de `node_hidden` (la ventana `next-server`).
+- **Ojo**: el tag `v1.0.36` apunta a `77537ac9` (HEAD): los **binarios** llevan los cambios de hoy (árbol de trabajo), pero el **commit** todavía no. Falta commitear todo (botón, scroll de la caja, tamaño de letra, "Trabajado", Rust de `next-server` y el bump de versión).
+
+## 2026-09-21 — El `<shell>` de segundo plano se pinta como tool acoplada
+
+- **Qué**: el server inyecta el resultado de un comando en background como `session_message` tipo `synthetic` con `metadata.source === "shell"` y el texto envuelto en `<shell id="…" state="…" command="…">salida</shell>`. Sin trato propio se veía la etiqueta cruda volcada como texto suelto (y suelto del turno).
+- **Fix**: `utils/messageShape.ts` (`parseShellTag`/`stripShellWrapper`/`isShellResultMessage`/`getShellResultInfo`, mismo patrón que los reportes de subagente) · `utils/rendered.ts` (ese texto se convierte en un tool part `shell` con `state.input.command`, `state.output` y `exit`) · `utils/turnActivity.ts` (el resultado entra a la caja del turno; **no la posee** —la caja sigue pegada a la respuesta final— y **no la cierra**: `working` lo decide el último mensaje del asistente, porque el sintético no trae `time.completed`/`finish`).
+- **Evidencia**: fixtures reales del server (comando con comillas y `>` adentro, comando multilínea, `cancelled`); 3 tests nuevos (`utils/shellResult.test.ts`, `utils/renderedShell.test.ts`, `utils/turnActivityShell.test.ts`); `pnpm test` = 150 archivos / 1835 tests verdes; `tsc -b --force` exit 0; `rendered.test.mjs` y `ui-regression.test.mjs` exit 0; `check:rules` sin subir presupuestos.
+- **Desplegado local**: `pnpm build` + `Sync-WebDist` del módulo `scripts/lib/webdist.psm1` a los 3 `data/web-dist`; el bundle servido es `index-SLLLscUK.js` y el `index.html` de `dist-desktop` coincide (hash `715CFD4F0B8C05DB`).
+- **Pendiente**: release 1.0.37 (APK+EXE) cuando el usuario lo pida; i18n del rótulo "Trabajado"; el commit de todo sigue sin hacerse.
+
+## 2026-09-21 — Rótulo "Working", sin spinner en el medio, tablas anchas con scroll y doc de la API v2
+
+- **Doc nuevo**: `docs/OPENCODE-V2-MENSAJES.md` con todo lo medido del server v2: storage SQLite (`opencode.db`, los dos dialectos en el mismo id de sesión), `session_message.type` (conteos), shape de `content[]` con **la salida en `state.content[0].text`** (el dialecto v1 usaba `state.output`), los mensajes `synthetic` (`shell` / `subagent` / sin source), la cadena completa de un comando en segundo plano, una muestra de eventos SSE, la receta de consulta con `node:sqlite` y **lo que no se pudo verificar** (la API cruda devolvió 401). Enlazado desde `docs/CONEXION-Y-ERRORES.md` y desde el mapa.
+- **Caja de herramientas**: el `<article>` que acopla pensamiento + tools dice ahora **"Working" fijo** (literal en los 4 idiomas; pedido explícito) en vez del tool en curso o de la lista "read · shell". Se borró el helper local `toolRunningLabel` y el import de `toolSummaryLabel` (quedaban muertos: `noUnusedLocals`).
+- **Spinner de 8 cuadrados del medio del chat**: fuera del estado de carga de sesión (`MessageList`); queda el texto, ahora con `role="status"` (lo anunciaba el spinner). El assert pineado de `MessageListReveal.test.tsx:99` se repuntó a `.empty-state` presente + `.grid-spinner` nulo, **con OK explícito del usuario**.
+- **Tablas de 4+ columnas**: `Markdown.tsx` cuenta las celdas de la primera fila y marca `.table-wrap-scroll`; `chat.css` le da `overflow-x: auto` + `width: max-content` (y `word-break: normal`). En ≤780px siguen apiladas en tarjetas: el scroll es para ventanas anchas.
+- **Evidencia**: `pnpm test` = 152 archivos / 1840 tests verdes; `tsc -b --force` 0; `rendered.test.mjs` / `ui-regression.test.mjs` / `i18n.test.mjs` 0; `check:rules` sin subir; build + `Sync-WebDist` a los 3 `data/web-dist` con el bundle servido `index-BOSW0OZX.js` (contiene `title:\`Working\`` y `table-wrap-scroll`) y `index.html` idéntico (`FA2A52E787ACEB1B`).
+- **Pendiente**: commit de todo; release 1.0.37; `detail.thought` quedó sin uso en i18n (aparece en el reporte de huérfanas, que ya tenía 212 claves).

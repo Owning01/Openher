@@ -831,6 +831,12 @@
   background-clip: padding-box;
 }
 
+/* Textos intermedios del turno dentro de la caja "Trabajado". */
+.activity-box .activity-text {
+  margin-top: var(--space-2);
+  opacity: 0.92;
+}
+
 /* El pensamiento, en cursiva tenue y sin caja propia. */
 .activity-box .thinking-block {
   margin-bottom: var(--space-2);
@@ -1424,10 +1430,12 @@
   margin: var(--space-3) 0 var(--space-1);
 }
 
-.message-content h1 { font-size: 1.15rem; }
-.message-content h2 { font-size: 1.05rem; }
-.message-content h3 { font-size: 0.95rem; }
-.message-content h4, .message-content h5, .message-content h6 { font-size: 0.88rem; }
+/* En em (relativo a --chat-font-size): si no, el slider de tamaño de letra no
+   movia los titulos (quedaban clavados en rem del root). */
+.message-content h1 { font-size: 1.31em; }
+.message-content h2 { font-size: 1.2em; }
+.message-content h3 { font-size: 1.09em; }
+.message-content h4, .message-content h5, .message-content h6 { font-size: 1em; }
 
 .message-content blockquote {
   color: var(--md-quote, var(--muted));
@@ -1587,11 +1595,41 @@
   background: var(--surface-subtle);
 }
 
+/* Tablas anchas (4+ columnas, marca `table-wrap-scroll` en Markdown.tsx): se
+   scrollean en horizontal en vez de aplastar las celdas hasta una sílaba por
+   renglón (`width: 100%` + `overflow-wrap: anywhere`). */
+.message-content .table-wrap.table-wrap-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.message-content .table-wrap.table-wrap-scroll table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.message-content .table-wrap.table-wrap-scroll th,
+.message-content .table-wrap.table-wrap-scroll td {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
 @media (max-width: 780px) {
   .message-content .table-wrap {
     overflow-x: visible;
     border: 0;
     border-radius: 0;
+  }
+
+  /* En pantalla angosta las tablas siguen apiladas en tarjetas (mejor que
+     scrollear 6 columnas en 360px): el scroll horizontal es para ventanas
+     anchas. */
+  .message-content .table-wrap.table-wrap-scroll {
+    overflow-x: visible;
+  }
+
+  .message-content .table-wrap.table-wrap-scroll table {
+    width: 100%;
   }
 
   .message-content .table-wrap table,

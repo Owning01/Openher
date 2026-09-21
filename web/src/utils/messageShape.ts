@@ -50,7 +50,8 @@ export type SubagentResultInfo = {
   tag: SubagentTag
 }
 
-type SubagentLike = {
+/** Forma mínima de un mensaje inyectado por el server (rol `synthetic`). */
+type SyntheticLike = {
   info?: { role?: string; metadata?: Record<string, unknown> | null } | null
   parts?: Array<{ text?: string; type?: string }> | null
 } | null | undefined
@@ -87,7 +88,7 @@ export function stripSubagentWrapper(text: string): string {
  * usuario): marca del server (`metadata.source`) o rol `synthetic` con la
  * etiqueta. Un user/assistant que MENCIONE `<subagent>` no matchea.
  */
-export function isSubagentResultMessage(message: SubagentLike): boolean {
+export function isSubagentResultMessage(message: SyntheticLike): boolean {
   // Blindaje: un mensaje del usuario jamás es reporte, venga con la marca
   // que venga (la invariante no depende solo del server).
   if (!message || message.info?.role === "user") return false
@@ -98,7 +99,7 @@ export function isSubagentResultMessage(message: SubagentLike): boolean {
 }
 
 /** Info para la tarjeta de resultado; null si no es reporte de subagente. */
-export function getSubagentResultInfo(message: SubagentLike): SubagentResultInfo | null {
+export function getSubagentResultInfo(message: SyntheticLike): SubagentResultInfo | null {
   if (!isSubagentResultMessage(message)) return null
   const meta = (message?.info?.metadata ?? {}) as Record<string, unknown>
   const joined = (message?.parts ?? []).map((p) => p?.text ?? "").join("\n")
@@ -110,6 +111,104 @@ export function getSubagentResultInfo(message: SubagentLike): SubagentResultInfo
     tag,
   }
 }
+// ---------------------------------------------------------------------------
+// Comando en SEGUNDO PLANO (U-shell): el server lo inyecta como mensaje
+// `synthetic` con `metadata.source === "shell"` y el texto envuelto en
+// `<shell id="..." state="..." command="...">salida</shell>`. Sin trato propio
+// la etiqueta cruda se volcaba en el chat como texto suelto; acá se separa
+// comando + salida para pintarlo como una herramienta más.
+// ---------------------------------------------------------------------------
+
+export type ShellTag = {
+  id?: string
+  state?: string
+  command?: string
+}
+
+export type ShellResultInfo = {
+  /** Id del shell en el server (`metadata.shellID`, o el de la etiqueta). */
+  shellID?: string
+  /** Job que lo originó (`metadata.jobID`), si vino. */
+  jobID?: string
+  /** `completed` | `error` | `cancelled` (lo que mande el server). */
+  state?: string
+  /** Comando ejecutado, tal cual lo mandó el server. */
+  command?: string
+  /** Salida cruda, sin la etiqueta que la envuelve. */
+  output: string
+  /** Código de salida, si el server lo informó. */
+  exit?: number
+  /** El server recortó la salida. */
+  truncated?: boolean
+}
+
+// La etiqueta la genera el server: `id` y `state` primero, `command` último y
+// con comillas y `>` adentro (redirecciones), así que el comando se toma hasta
+// el `">` que cierra el tag y no con un matcheo ingenuo de `[^"]*`.
+const SHELL_TAG_OPEN = /<shell\s+id="([^"]*)"\s+state="([^"]*)"\s+command="/i
+
+function splitShellTag(text: string): { tag: ShellTag; output: string } | null {
+  const t = text ?? ""
+  const m = t.match(SHELL_TAG_OPEN)
+  if (!m) {
+    // Etiqueta sin `command` (o con otro orden): no perder id/state ni la salida.
+    const loose = t.match(/<shell(\s[^>]*)?>/i)
+    if (!loose) return null
+    return {
+      tag: { id: tagAttr(loose[0], "id"), state: tagAttr(loose[0], "state"), command: tagAttr(loose[0], "command") },
+      output: t.slice(loose.index! + loose[0].length).replace(/<\/shell>\s*$/i, "").trim(),
+    }
+  }
+  const afterOpen = m.index! + m[0].length
+  const tagEnd = t.indexOf('">', afterOpen)
+  const command = tagEnd === -1 ? t.slice(afterOpen) : t.slice(afterOpen, tagEnd)
+  const body = tagEnd === -1 ? "" : t.slice(tagEnd + 2)
+  return { tag: { id: m[1], state: m[2], command }, output: body.replace(/<\/shell>\s*$/i, "").trim() }
+}
+
+/** Atributos de la etiqueta `<shell ...>` de apertura, o null si no hay. */
+export function parseShellTag(text: string): ShellTag | null {
+  return splitShellTag(text)?.tag ?? null
+}
+
+/** Quita el envoltorio `<shell ...>...</shell>` dejando la salida. */
+export function stripShellWrapper(text: string): string {
+  return splitShellTag(text)?.output ?? text ?? ""
+}
+
+/**
+ * `true` si el mensaje es la salida de un comando en segundo plano (nunca un
+ * mensaje del usuario): marca del server (`metadata.source`) o rol `synthetic`
+ * con la etiqueta. Un user/assistant que MENCIONE `<shell>` no matchea.
+ */
+export function isShellResultMessage(message: SyntheticLike): boolean {
+  // Blindaje: un mensaje del usuario jamás es reporte, venga con la marca que
+  // venga (la invariante no depende solo del server).
+  if (!message || message.info?.role === "user") return false
+  const meta = message.info?.metadata
+  if (meta && (meta as Record<string, unknown>).source === "shell") return true
+  if (message.info?.role !== "synthetic") return false
+  return (message.parts ?? []).some((p) => !!p?.text && /<shell(\s[^>]*)?>/i.test(p.text))
+}
+
+/** Comando + salida del shell; null si el mensaje no es un resultado de shell. */
+export function getShellResultInfo(message: SyntheticLike): ShellResultInfo | null {
+  if (!isShellResultMessage(message)) return null
+  const meta = (message?.info?.metadata ?? {}) as Record<string, unknown>
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined)
+  const joined = (message?.parts ?? []).map((p) => p?.text ?? "").join("\n")
+  const split = splitShellTag(joined)
+  return {
+    shellID: str(meta.shellID) ?? str(meta.jobID) ?? split?.tag.id,
+    jobID: str(meta.jobID),
+    state: str(meta.state) ?? split?.tag.state,
+    command: split?.tag.command || undefined,
+    output: split?.output ?? joined.trim(),
+    exit: typeof meta.exit === "number" ? meta.exit : undefined,
+    truncated: meta.truncated === true ? true : undefined,
+  }
+}
+
 /**
  * Texto visible de un mensaje: concatena los parts de texto/compaction con
  * `"\n\n"` y recorta. Un solo cuerpo para `extractText` (useMessages) y

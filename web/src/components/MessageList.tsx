@@ -490,9 +490,10 @@ export const MessageList = memo(function MessageList({
     <div className="message-list-root">
       <div className="messages" ref={messagesRef} style={{ opacity: revealed || showSessionLoading ? 1 : 0 }}>
         {showSessionLoading ? (
+          // Sin spinner (pedido explícito): queda el texto, que ahora es el
+          // que anuncia el estado a lectores de pantalla.
           <div className="empty-state compact">
-            <GridSpinner label={t('detail.loading')} />
-            <p aria-hidden="true">{t('detail.loading')}</p>
+            <p role="status">{t('detail.loading')}</p>
           </div>
         ) : messages.length === 0 && !showTypingBubble ? (
           <div className="empty-state compact">
@@ -518,7 +519,7 @@ export const MessageList = memo(function MessageList({
               const actualIndex = messages.length - visibleMessages.length + index
               return (
                 <Fragment key={message.info.id}>
-                  <MessageBubble
+                  {turnActivity.swallowed.has(message.info.id) ? null : <MessageBubble
                     message={message}
                     queued={pendingIndex !== undefined && actualIndex > pendingIndex}
                     outbox={outboxActions?.[message.info.id]}
@@ -545,7 +546,7 @@ export const MessageList = memo(function MessageList({
                     absorbActivity={turnActivity.absorbed.has(message.info.id)}
                     onRegenerate={onRegenerate}
                     onOpenADEDiff={onOpenADEDiff}
-                  />
+                  />}
                 </Fragment>
               )
             })}

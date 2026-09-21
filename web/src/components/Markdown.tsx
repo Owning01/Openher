@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, cloneElement, isValidElement, type ComponentProps, type ReactNode, type ReactElement } from "react"
+import { memo, useState, useCallback, cloneElement, isValidElement, Children, type ComponentProps, type ReactNode, type ReactElement } from "react"
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Capacitor } from "@capacitor/core"
@@ -43,9 +43,27 @@ function rehypeHighlightLocal() {
   }
 }
 
+// Umbral acordado: hasta 3 columnas entran en el ancho del chat; de 4 para
+// arriba la tabla scrollea en horizontal en vez de aplastar las celdas.
+const TABLE_SCROLL_MIN_COLUMNS = 4
+
+/** Columnas de una tabla markdown = celdas de su primera fila. */
+function tableColumns(children: ReactNode): number {
+  for (const section of Children.toArray(children)) {
+    if (!isValidElement(section)) continue
+    for (const row of Children.toArray((section.props as { children?: ReactNode }).children)) {
+      if (!isValidElement(row)) continue
+      const cells = Children.toArray((row.props as { children?: ReactNode }).children)
+      if (cells.length > 0) return cells.length
+    }
+  }
+  return 0
+}
+
 function Table({ children }: ComponentProps<"table">) {
+  const wide = tableColumns(children) >= TABLE_SCROLL_MIN_COLUMNS
   return (
-    <div className="table-wrap">
+    <div className={wide ? "table-wrap table-wrap-scroll" : "table-wrap"}>
       <table>{children}</table>
     </div>
   )

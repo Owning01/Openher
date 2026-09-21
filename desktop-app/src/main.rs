@@ -1091,6 +1091,8 @@ fn main() {
 
     // Prewarm warm-pool: arranca todos los plugins en background (staggered) para que el primer click sea 0.05s
     // Usa effective_cmd (prod si .next/dist existe, sino dev) + Node 24 oculto. Si ya está, probe 350ms y skip.
+    // Next (screenshots) va con node_hidden.exe: su server hijo hereda execPath y con node.exe
+    // se creaba una consola propia (Windows Terminal abría una ventana "next-server" al arrancar).
     // Opendesign es el más pesado (9s cold → 0.3s prod), va primero; el resto staggered para no picar CPU.
     {
         let app_state_clone = app_state.clone();
@@ -1101,7 +1103,7 @@ fn main() {
                 struct Prewarm<'a> { name: &'a str, dir: &'a str, port: u16, prod_check: Option<&'a str>, dev_cmd: &'a str, prod_cmd: Option<&'a str> }
                 let list = [
                     Prewarm { name: "opendesign", dir: r"G:\Proyectos\open-design", port: 3000, prod_check: None, dev_cmd: r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\open-design\tools\dev\bin\tools-dev.mjs" start web --web-port 3000 --daemon-port 3456"#, prod_cmd: None },
-                    Prewarm { name: "screenshots", dir: r"G:\Proyectos\0 screenshots", port: 3002, prod_check: Some(r".next\BUILD_ID"), dev_cmd: r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" dev -p 3002 -H 127.0.0.1"#, prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" start -p 3002 -H 127.0.0.1"#) },
+                    Prewarm { name: "screenshots", dir: r"G:\Proyectos\0 screenshots", port: 3002, prod_check: Some(r".next\BUILD_ID"), dev_cmd: r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" dev -p 3002 -H 127.0.0.1"#, prod_cmd: Some(r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" start -p 3002 -H 127.0.0.1"#) },
                     Prewarm { name: "vioeditor", dir: r"G:\Proyectos\17-vioeditor\aplicacion", port: 1420, prod_check: Some(r"dist\index.html"), dev_cmd: "pnpm exec vite --port 1420 --host 127.0.0.1 --strictPort false", prod_cmd: Some("pnpm exec vite preview --port 1420 --host 127.0.0.1 --strictPort") },
                 ];
                 for (idx, p) in list.iter().enumerate() {

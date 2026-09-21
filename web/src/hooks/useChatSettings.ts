@@ -51,7 +51,10 @@ function textMaxWidth(gutterPx: number): string {
 
 function applyCSSVars(s: ChatSettings) {
   const root = document.documentElement
-  root.style.setProperty("--chat-font-size", `${s.fontSize}px`)
+  // En rem (base 16) para que el zoom de UI (useUIZoom cambia el font-size del
+  // root) escale tambien el texto del chat. Con zoom 1 el resultado es identico
+  // al px anterior.
+  root.style.setProperty("--chat-font-size", `${s.fontSize / 16}rem`)
   root.style.setProperty("--chat-message-gap", SPACING_MAP[s.messageSpacing])
   root.style.setProperty("--chat-thinking-vis", s.showThinking ? "block" : "none")
   root.style.setProperty("--chat-tool-vis", s.showToolCalls ? "block" : "none")
@@ -81,11 +84,17 @@ export function useChatSettings() {
 
   useEffect(() => { applyCSSVars(settings) }, [settings])
 
+  // Las vars se aplican YA al cambiar (y no solo desde el effect): con el React
+  // Compiler activo (vite.config `react({ compiler: true })`) el efecto sobre
+  // [settings] queda memoizado y las vars se quedaban con el valor del primer
+  // mount — eso hacia que el slider de tamaño de letra "no hiciera nada".
   const setSetting = useCallback(<K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => {
+    applyCSSVars({ ...settings, [key]: value })
     setSettings((prev) => ({ ...prev, [key]: value }))
-  }, [setSettings])
+  }, [setSettings, settings])
 
   const resetDefaults = useCallback(() => {
+    applyCSSVars(DEFAULTS)
     setSettings({ ...DEFAULTS })
   }, [setSettings])
 

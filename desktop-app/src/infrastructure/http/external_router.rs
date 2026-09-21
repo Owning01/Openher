@@ -164,16 +164,20 @@ fn build_defs() -> HashMap<&'static str, ExternalDef> {
         dir: r"G:\Proyectos\0 screenshots",
         port: Some(3002),
         url: Some("http://127.0.0.1:3002"),
-        dev_cmd: r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" dev -p 3002 -H 127.0.0.1"#,
-        prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" start -p 3002 -H 127.0.0.1"#),
+        // node_hidden.exe (subsistema GUI): el CLI de Next re-lanza el server como hijo
+        // heredando execPath; si el padre es node.exe (consola) ese hijo se crea su propia
+        // consola y Windows Terminal abre una ventana "next-server" en cada arranque.
+        dev_cmd: r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" dev -p 3002 -H 127.0.0.1"#,
+        prod_cmd: Some(r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\0 screenshots\node_modules\next\dist\bin\next" start -p 3002 -H 127.0.0.1"#),
         prod_check: Some(r".next\BUILD_ID"),
     });
     m.insert("m3e-canvas", ExternalDef {
         dir: r"G:\Proyectos\m3e-canvas",
         port: Some(3005),
         url: Some("http://127.0.0.1:3005"),
-        dev_cmd: r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\m3e-canvas\node_modules\next\dist\bin\next" dev -p 3005 -H 127.0.0.1"#,
-        prod_cmd: Some(r#"G:\Dev\nodejs-24\node.exe "G:\Proyectos\m3e-canvas\node_modules\next\dist\bin\next" start -p 3005 -H 127.0.0.1"#),
+        // node_hidden.exe: mismo motivo que `screenshots` (el server hijo no debe crear consola).
+        dev_cmd: r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\m3e-canvas\node_modules\next\dist\bin\next" dev -p 3005 -H 127.0.0.1"#,
+        prod_cmd: Some(r#"G:\Dev\nodejs-24\node_hidden.exe "G:\Proyectos\m3e-canvas\node_modules\next\dist\bin\next" start -p 3005 -H 127.0.0.1"#),
         prod_check: Some(r".next\BUILD_ID"),
     });
     m.insert("anim-lab", ExternalDef {

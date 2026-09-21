@@ -1,7 +1,7 @@
 import type { MessageEnvelope, RenderedMessage, RenderedSegment, DataMode, FileDiff, TurnChanges, ServerNoticeKind } from "../types.ts"
 import { isImagePart } from "../utils.ts"
 import { toolPartFileDiff } from "./toolFileDiff.ts"
-import { isSubagentResultMessage, stripSubagentWrapper } from "./messageShape.ts"
+import { isSubagentResultMessage, stripSubagentWrapper, getShellResultInfo } from "./messageShape.ts"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
@@ -117,6 +117,10 @@ export function computeRenderedMessages(
     // tarjeta propia con el rótulo la dibuja MessageBubble).
     const subagentResult = isSubagentResultMessage(message)
     const cleanText = (t: string): string => (subagentResult ? stripSubagentWrapper(t) : t)
+    // Salida de shell en segundo plano: se acopla como una herramienta más
+    // (comando + salida) en la caja del turno, en vez de volcar la etiqueta
+    // cruda `<shell ...>` en el chat.
+    const shellResult = getShellResultInfo(message)
     const thinkingParts: Array<{ id: string; text: string; time?: { start?: number; end?: number } }> = []
     const toolParts: Array<{ id: string; type: string; sessionID?: string; text?: string; callID?: string; tool?: string; state?: MessageEnvelope["parts"][number]["state"] }> = []
     const textBlocks: string[] = []
@@ -152,6 +156,26 @@ export function computeRenderedMessages(
       }
       const t = part.text
       if (t) {
+        // El texto del resultado de shell ES la herramienta: comando + salida.
+        // No entra en `segments` (el cuerpo del mensaje no pinta tools: la caja
+        // de actividad es la que los dibuja, y un segmento acá dejaría un
+        // contenedor vacío).
+        if (shellResult && part.type === "text") {
+          toolParts.push({
+            id: `${message.info.id}:shell`,
+            type: "tool",
+            sessionID: message.info.sessionID,
+            callID: shellResult.shellID,
+            tool: "shell",
+            state: pruneToolState({
+              status: shellResult.state === "error" ? "error" : "completed",
+              input: { command: shellResult.command },
+              output: shellResult.output,
+              metadata: { exit: shellResult.exit, truncated: shellResult.truncated, shellState: shellResult.state },
+            }),
+          })
+          continue
+        }
         if (part.type === "text" || part.type === "compaction") {
           const c = cleanText(t)
           textBlocks.push(c)
