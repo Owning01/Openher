@@ -467,20 +467,7 @@
   cursor: pointer;
 }
 
-.pcf-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px;
-  border-top: 1px solid var(--border-subtle);
-  flex-shrink: 0;
-}
 
-.pcf-count {
-  font-size: 0.72rem;
-  color: var(--muted);
-}
 
 .pcf-inline-create {
   background: var(--surface-subtle) !important;
@@ -595,10 +582,6 @@
     min-height: 40px;
     padding: 4px 8px;
     font-size: 13px;
-  }
-  .pcf-glyph {
-    width: 26px;
-    font-size: 12px;
   }
   .pcf-dots-btn {
     width: 32px;

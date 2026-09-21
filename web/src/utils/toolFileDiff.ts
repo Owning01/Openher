@@ -1,5 +1,5 @@
-import type { FileDiff } from "../types"
-import { parseDiffStat, synthesizeWritePatch, synthesizeEditPatch } from "../components/DiffView"
+import type { FileDiff } from "../types.ts"
+import { parseDiffStat, synthesizeWritePatch, synthesizeEditPatch } from "./diffStat.ts"
 
 const FILE_TOOLS = new Set(["write", "edit", "apply_patch", "patch"])
 

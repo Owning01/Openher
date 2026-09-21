@@ -12,6 +12,7 @@
 // responda /health. Así cualquier pestaña/instancia se auto-conecta al mismo
 // server sin reingresar datos.
 import type { ServerConfig } from "../types"
+import { withTimeout } from "../shared/lib/async"
 
 export type ServerDiscovery = { config: ServerConfig; version: string }
 
@@ -31,13 +32,6 @@ const DEFAULT_CREDENTIALS: Array<Pick<ServerConfig, "username" | "password">> = 
 export function isLoopbackHost(host: string | undefined | null): boolean {
   const h = String(host || "").trim().toLowerCase()
   return h === "" || h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]" || h === "0.0.0.0"
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("discovery_timeout")), ms)),
-  ])
 }
 
 // Orden: config guardada primero (si responde, no cambia nada), después el host
@@ -91,7 +85,7 @@ export async function discoverServer(opts: {
   const hostname = opts.hostname ?? (typeof window !== "undefined" ? window.location.hostname : undefined)
   for (const config of discoveryCandidates(opts.stored, hostname)) {
     try {
-      const health = await withTimeout(Promise.resolve(opts.health(config)), timeoutMs)
+      const health = await withTimeout(Promise.resolve(opts.health(config)), timeoutMs, "discovery_timeout")
       return { config, version: String(health?.version ?? "") }
     } catch { /* siguiente candidato */ }
   }

@@ -1,4 +1,6 @@
 ﻿{
-  "`$schema": "https://opencode.ai/config.json",
-  "plugins": ["./.opencode/plugins/acme-shell.ts"]
+  "`$schema": "https://opencode.ai/config.json"
+  // Sin "plugins": apuntaba a ./.opencode/plugins/acme-shell.ts, que vive en
+  // .opencode/ (gitignored) y no existe en un clone limpio. Para uso local,
+  // volver a agregar: "plugins": ["./.opencode/plugins/acme-shell.ts"]
 }

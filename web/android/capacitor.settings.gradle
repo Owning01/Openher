@@ -8,12 +8,6 @@ project(':capacitor-community-speech-recognition').projectDir = new File('../nod
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../node_modules/.pnpm/@capacitor+app@8.1.1_@capacitor+core@8.5.0/node_modules/@capacitor/app/android')
 
-include ':capacitor-camera'
-project(':capacitor-camera').projectDir = new File('../node_modules/.pnpm/@capacitor+camera@8.2.2_@capacitor+core@8.5.0/node_modules/@capacitor/camera/android')
-
-include ':capacitor-dialog'
-project(':capacitor-dialog').projectDir = new File('../node_modules/.pnpm/@capacitor+dialog@8.0.1_@capacitor+core@8.5.0/node_modules/@capacitor/dialog/android')
-
 include ':capacitor-filesystem'
 project(':capacitor-filesystem').projectDir = new File('../node_modules/.pnpm/@capacitor+filesystem@8.1.2_@capacitor+core@8.5.0/node_modules/@capacitor/filesystem/android')
 

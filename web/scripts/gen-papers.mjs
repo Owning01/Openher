@@ -400,7 +400,7 @@ MCP es estándar abierto tipo LSP para **discovery y invocación bidireccional**
 ## 4. Aplica a tu app
 - Migra \\"external_router.rs\\" a MCP: cada plugin (opendesign, screenshots, vioeditor) corre como MCP server.
 - Implementa allowlist: no auto-discover todo; pide consentimiento para \\"shell.fs.delete\\".
-- Usa MCP resources para exponer \\"opencode-stats :8765\\" como data source.
+- Usa MCP resources para exponer documentación interna (docs, esquemas) como data source.
 
 ## 5. Riesgos (Hou 2503.23278)
 - Tool squatting, prompt injection vía resource, exfiltr vía tool result. Implementa validación y sandbox.
@@ -620,7 +620,7 @@ Formula ML/code como **búsqueda en árbol** donde cada nodo es una solución ej
 - Evaluación automática (tests) decide qué rama podar.
 
 ## 3. Aplica a tu terminal
-- Para \\"opencode-stats\\" o generación de informes: en vez de ReAct lineal, mantén árbol de intentos y muestra al usuario las 3 mejores ramas.
+- Para generación de informes: en vez de ReAct lineal, mantén árbol de intentos y muestra al usuario las 3 mejores ramas.
 - Útil para \\"ptyx\\" con múltiples intentos de fix.
 
 ## 4. Links
@@ -648,7 +648,7 @@ Combina **retriever denso (DPR)** + generador seq2seq entrenados end-to-end. Par
 - Entrenamiento conjunto retriever+gen mejora ambos.
 
 ## 3. Aplica a opencode-remote
-- **opencode-stats crate :8765:** no cargues toda \\"opencode.db\\" en contexto; haz RAG: query → top-k rows → prompt.
+- **Bases de datos grandes:** no cargues toda \\"opencode.db\\" en contexto; haz RAG: query → top-k rows → prompt.
 - **open-design docs / informes:** indexa con embeddings y retrievea por intent.
 
 ## 4. Ejercicio

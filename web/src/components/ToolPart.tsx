@@ -1,6 +1,17 @@
 import { memo, useMemo, useState, useEffect, type ReactNode } from "react"
 import type { ServerConfig, FileDiff } from "../types"
-import { toolMeta, detectToolName, isTaskTool, isQuestionTool } from "../utils/toolMeta"
+import { toolMeta } from "../utils/toolMeta"
+import {
+  detectToolName,
+  isQuestionTool,
+  isTaskToolPart,
+  isFileTool,
+  isShellTool,
+  toolCategory,
+  toolIconKind,
+  toolShortLabel,
+  toolVerb,
+} from "../utils/toolName"
 import { api } from "../api"
 import { QuestionPrompt } from "./QuestionPrompt"
 import { CollapsibleSection } from "./CollapsibleSection"
@@ -34,8 +45,6 @@ export type ToolPartData = {
   }
 }
 
-const FILE_TOOLS = new Set(["write", "edit", "apply_patch", "patch"])
-
 const toolLabels: Record<string, string> = {
   tool_use: "Tool call",
   tool_result: "Tool result",
@@ -48,26 +57,14 @@ const toolLabels: Record<string, string> = {
 
 function toolSvgIcon(toolName: string | null): ReactNode {
   const size = 13
-  switch (toolName) {
-    case "bash":
-    case "execute":
+  switch (toolIconKind(toolName)) {
     case "shell":
-    case "terminal":
       return <span className="tool-icon-shell">&lt;&gt;</span>
-    case "read":
-    case "readFile":
+    case "file":
       return <FileIcon size={size} />
-    case "write":
-    case "edit":
-    case "apply_patch":
-    case "patch":
-      return <CodeIcon size={size} />
-    case "grep":
-    case "glob":
     case "search":
       return <SearchIcon size={size} />
-    case "websearch":
-    case "webfetch":
+    case "web":
       return <GlobeIcon size={size} />
     default:
       return <CodeIcon size={size} />
@@ -177,18 +174,6 @@ function formatStateError(err: unknown): string {
     try { return JSON.stringify(err, null, 2) } catch { return String(err) }
   }
   return String(err)
-}
-
-function shortToolLabel(tool: string): string {
-  if (tool === "bash" || tool === "execute" || tool === "shell" || tool === "terminal") return "SHELL"
-  if (tool === "read" || tool === "readFile") return "READ"
-  if (tool === "write" || tool === "writeFile") return "WRITE"
-  if (tool === "edit" || tool === "apply_patch" || tool === "patch") return "EDIT"
-  if (tool === "grep" || tool === "glob" || tool === "search") return "SEARCH"
-  if (tool === "websearch" || tool === "webfetch" || tool === "browse") return "BROWSER"
-  const m = tool.match(/mcp__([^_]+)__(.+)/)
-  if (m) return `${m[1].toUpperCase()} · ${m[2]}`
-  return tool.toUpperCase()
 }
 
 function formatInput(input: unknown, baseDir?: string): string {
@@ -502,8 +487,16 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
   const toolName = useMemo(() => part.tool ?? detectToolName(text ?? ""), [part.tool, text])
   const callID = useMemo(() => extractParam(text ?? "", "callID") || text?.match(/callID="([^"]+)"/)?.[1] || part.callID || part.id, [text, part.callID, part.id])
   const idCandidates = useMemo(() => [callID, part.callID, part.id, text?.match(/callID="([^"]+)"/)?.[1], extractParam(text ?? "", "callID")].filter((x): x is string => !!x), [callID, part.callID, part.id, text])
-  const settledInfo = useQuestionSettled(idCandidates)
-  const questionFloating = useQuestionFloatingMode()
+  // Deteccion temprana de "tool de pregunta": solo esos se suscriben al store
+  // de preguntas (questionAuto/settled); el resto de los ToolPart ya no.
+  const questionInput = part.state?.input as { questions?: unknown; answers?: unknown } | undefined
+  const isQuestionByInput = Array.isArray(questionInput?.questions)
+  const isQuestionByTool = toolName === "question"
+  const isQuestionByXml = isQuestionTool(text ?? "")
+  const isQuestionPart = (part.type === "tool_use" || part.type === "tool" || isQuestionByTool)
+    && (isQuestionByTool || isQuestionByInput || isQuestionByXml)
+  const settledInfo = useQuestionSettled(idCandidates, isQuestionPart)
+  const questionFloating = useQuestionFloatingMode(isQuestionPart)
   const isSettled = !!settledInfo
   const [expanded, setExpanded] = useState(false)
   const meta = toolName ? toolMeta[toolName] : null
@@ -535,9 +528,9 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
 
   // Comandos de terminal: muestran el command en la línea del toggle (visible
   // sin expandir) y la salida al expandir.
-  const isShellTool = toolName === "bash" || toolName === "execute" || toolName === "terminal" || toolName === "shell"
+  const shellTool = isShellTool(toolName)
   const bashCommand = useMemo(() => {
-    if (!isShellTool) return null
+    if (!shellTool) return null
     const input = part.state?.input
     if (input && typeof input === "object" && "command" in input) {
       const obj = input as { command?: string; args?: string[] }
@@ -549,18 +542,18 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
       }
     }
     return null
-  }, [isShellTool, part.state?.input])
+  }, [shellTool, part.state?.input])
 
   // ---- Diff por tool de archivo (write/edit/apply_patch) — estilo VS Code ----
   const metadata = part.state?.metadata
-  const isFileTool = toolName ? FILE_TOOLS.has(toolName) : false
+  const fileTool = isFileTool(toolName)
   const fileDiff = useMemo(() => {
     const r = toolPartFileDiff({ tool: toolName, state: part.state })
     return r ? { add: r.additions, del: r.deletions, patch: r.patch } : null
   }, [toolName, part.state])
 
   const diffPath = useMemo(() => {
-    if (!isFileTool) return null
+    if (!fileTool) return null
     const fd = metadata?.filediff as FileDiff | undefined
     const files = metadata?.files as Array<{ filePath?: string }> | undefined
     const raw = (metadata?.filepath as string | undefined)
@@ -570,12 +563,12 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
       ?? (part.state?.input as { filePath?: string } | undefined)?.filePath
       ?? filePath
     return raw ? toRelativePath(raw, directory) : null
-  }, [isFileTool, metadata, part.state?.title, part.state?.input, filePath, directory])
+  }, [fileTool, metadata, part.state?.title, part.state?.input, filePath, directory])
 
   if (!text && !toolName && !inputText) return null
 
   // ---- Task (subagent) tool ----
-  if (isTaskTool(text ?? "") || toolName === "task") {
+  if (isTaskToolPart({ tool: toolName ?? undefined, text: text ?? undefined, state: part.state })) {
     return (
       <SubagentTaskCard
         part={part}
@@ -595,14 +588,10 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
   // como XML <invoke>/<parameter>. Soportar ambas formas; si no, el part cae
   // al render genérico y se ve el JSON crudo (bug reportado).
   {
-    const inputObj = part.state?.input as { questions?: unknown; answers?: unknown } | undefined
-    const inputQuestions = Array.isArray(inputObj?.questions) ? (inputObj.questions as any[]) : null
-    const isQuestionByTool = toolName === "question"
-    const isQuestionByInput = inputQuestions !== null
-    const isQuestionByXml = isQuestionTool(text ?? "")
-    if ((part.type === "tool_use" || part.type === "tool" || isQuestionByTool) && (isQuestionByTool || isQuestionByInput || isQuestionByXml)) {
+    const inputQuestions = isQuestionByInput ? (questionInput!.questions as any[]) : null
+    if (isQuestionPart) {
       const rawQuestions = inputQuestions ?? extractJSONParam(text ?? "", "questions")
-      const answerData = (inputObj as { answers?: unknown } | undefined)?.answers
+      const answerData = (questionInput as { answers?: unknown } | undefined)?.answers
         ?? extractJSONParam(text ?? "", "answers")
         ?? (part.state?.output != null && typeof part.state.output === "object"
           ? (part.state.output as Record<string, unknown>).answers ?? null
@@ -674,7 +663,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
   }
 
   const subtitle = bashCommand ?? meta?.label ?? null
-  const label = toolLabels[part.type] || (toolName ? shortToolLabel(toolName) : "Tool")
+  const label = toolLabels[part.type] || (toolName ? toolShortLabel(toolName) : "Tool")
 
   const headerIcon = toolSvgIcon(toolName ?? null)
   const statusIcon = isWorking
@@ -683,13 +672,14 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
     : null
 
   const antigravityInfo = useMemo(() => {
-    const norm = (toolName || "").toLowerCase()
     const inputObj = (typeof part.state?.input === "object" && part.state?.input !== null)
       ? (part.state.input as Record<string, any>)
       : null
+    // Categoria unica (toolName.ts): reemplaza los `includes()` duplicados.
+    const kind = toolCategory(toolName)
 
     // 1. Shell commands (run_command, bash, execute, shell, terminal)
-    if (isShellTool || norm.includes("command") || norm.includes("bash") || norm.includes("shell") || norm.includes("execute")) {
+    if (kind === "shell") {
       const cmd = bashCommand || inputObj?.CommandLine || inputObj?.command || inputText
       let displayCmd = typeof cmd === "string" ? cmd.replace(/[\r\n]+/g, " ").trim() : "command"
       displayCmd = truncateAtWord(displayCmd, 95)
@@ -702,7 +692,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
     }
 
     // 2. File edit/write (replace_file_content, write_to_file, edit, write, patch, apply_patch)
-    if (norm.includes("replace") || norm.includes("write") || norm.includes("edit") || norm.includes("patch")) {
+    if (kind === "edit") {
       const rawPath = inputObj?.TargetFile || inputObj?.filePath || inputObj?.file || inputObj?.path || diffPath || "file"
       const fileName = typeof rawPath === "string" ? rawPath.split(/[/\\]/).pop() || rawPath : "file"
       const add = fileDiff?.add
@@ -723,7 +713,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
     }
 
     // 3. File read/view (view_file, read, readFile)
-    if (norm.includes("view") || norm.includes("read")) {
+    if (kind === "read") {
       const rawPath = inputObj?.AbsolutePath || inputObj?.filePath || inputObj?.file || inputObj?.path || diffPath || "file"
       const fileName = typeof rawPath === "string" ? rawPath.split(/[/\\]/).pop() || rawPath : "file"
       const start = inputObj?.StartLine
@@ -744,7 +734,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
     }
 
     // 4. Search / Grep (grep_search, search_web, search)
-    if (norm.includes("search") || norm.includes("grep")) {
+    if (kind === "search") {
       const query = inputObj?.Query || inputObj?.query || inputObj?.pattern || inputText
       let resultCountTag: string | null = null
       if (typeof outputHead === "string") {
@@ -765,7 +755,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
     }
 
     // 5. Explore / Find / List (find_by_name, list_dir)
-    if (norm.includes("find") || norm.includes("list") || norm.includes("dir")) {
+    if (kind === "explore") {
       let fileCountTag = "files"
       if (typeof outputHead === "string") {
         const match = outputHead.match(/Found (\d+) results|(\d+) matches/i)
@@ -781,12 +771,12 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
 
     // Fallback
     return {
-      verb: toolName ? shortToolLabel(toolName) : "Tool",
+      verb: toolVerb(toolName),
       icon: null,
       target: <span className="tool-target-text">{subtitle || inputText || ""}</span>,
       badge: null,
     }
-  }, [toolName, isShellTool, bashCommand, inputText, outputHead, diffPath, fileDiff, subtitle, part.state?.input])
+  }, [toolName, bashCommand, inputText, outputHead, diffPath, fileDiff, subtitle, part.state?.input])
 
   // El error vive en state.error, no en state.output: si el tool falló, el
   // cuerpo debe mostrar el motivo, no el input repetido.

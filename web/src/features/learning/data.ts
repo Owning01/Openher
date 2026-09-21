@@ -25,7 +25,7 @@ export async function loadManifest(): Promise<LearningManifest> {
   const res = await fetch(`${LEARNING_BASE}manifest.json`)
   if (!res.ok) throw new Error(`No se pudo cargar manifest (${res.status})`)
   const base = (await res.json()) as LearningManifest
-  // Merge informes (reports) as category inside aprendizaje — replaces standalone ReportsPage
+  // Merge informes (reports) como categoría dentro de aprendizaje
   try {
     let reports: ReportEntry[] | null = null
     // try desktop shell.fs first

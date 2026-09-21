@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useRef, useCallback, lazy, Suspense } from "react"
 import { api } from "../api"
 import { shell } from "../shell"
+import { Modal } from "./Modal"
 import { ModalHeader } from "./ModalHeader"
 import { CheckIcon } from "../Icons"
 import { useT } from "../i18n-context"
@@ -15,6 +16,8 @@ type Props = {
   directory?: string
   onClose: () => void
 }
+
+type DesktopWindow = Window & { __OPENHER_DESKTOP__?: boolean }
 
 // Modal de edición: carga/guardado/autoguardado + cromo. El editor en sí es
 // LiteEditor (highlight con debounce, Tab/Shift-Tab, multi-cursor,
@@ -41,7 +44,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
 
     const load = async () => {
       // Si la ruta es absoluta o estamos en desktop, probamos leer vía shell nativo primero
-      if (typeof window !== "undefined" && (window as any).__OPENHER_DESKTOP__) {
+      if (typeof window !== "undefined" && (window as DesktopWindow).__OPENHER_DESKTOP__) {
         try {
           const r = await shell.fs.read(path)
           if (!cancelled) {
@@ -93,7 +96,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
     if (saving) return
     setSaving(true)
     try {
-      if (typeof window !== "undefined" && (window as any).__OPENHER_DESKTOP__) {
+      if (typeof window !== "undefined" && (window as DesktopWindow).__OPENHER_DESKTOP__) {
         const b64 = btoa(unescape(encodeURIComponent(textToSave)))
         await shell.fs.write(path, b64)
       } else {
@@ -159,8 +162,7 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
   }, [])
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content file-editor" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="File Editor">
+    <Modal onClose={onClose} variant="overlay" className="file-editor" label="File Editor">
         <ModalHeader title={basename(path)} titleTooltip={path} onClose={onClose}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem" }}>
             {saving ? (
@@ -196,7 +198,6 @@ export const FileEditor = memo(function FileEditor({ config, path, directory, on
             <span>{langFromFilename(path)}</span>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 })

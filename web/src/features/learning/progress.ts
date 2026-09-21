@@ -1,4 +1,9 @@
-// Persistencia del progreso de lectura en localStorage.
+// Persistencia del progreso de lectura en localStorage + store externo (U1).
+// `loadProgress` sigue leyendo localStorage (fuente de verdad y compat de los
+// tests); cada mutación persiste y notifica al store, que es lo que consume
+// React vía `useProgress`. Así se elimina el `setProgress(loadProgress())`
+// manual de LearningPage.
+import { createStore, useStore } from "../../shared/lib/store"
 import type { LearningProgress } from "./types.ts"
 
 const KEY = "learning.progress.v1"
@@ -21,30 +26,39 @@ export function saveProgress(progress: LearningProgress): void {
   }
 }
 
+const store = createStore<LearningProgress>(loadProgress())
+
+function commit(p: LearningProgress): LearningProgress {
+  saveProgress(p)
+  store.set(p)
+  return p
+}
+
+/** Estado de progreso suscrito (re-renderiza al mutar). */
+export function useProgress(): LearningProgress {
+  return useStore(store)
+}
+
 export function markDone(lessonId: string, done: boolean): LearningProgress {
   const p = loadProgress()
   p[lessonId] = { ...p[lessonId], done }
-  saveProgress(p)
-  return p
+  return commit(p)
 }
 
 export function markVisited(lessonId: string): LearningProgress {
   const p = loadProgress()
   p[lessonId] = { ...p[lessonId], lastVisited: Date.now() }
-  saveProgress(p)
-  return p
+  return commit(p)
 }
 
 export function resetProgress(): LearningProgress {
-  saveProgress({})
-  return {}
+  return commit({})
 }
 
 export function markCategoryDone(lessonIds: string[], done: boolean): LearningProgress {
   const p = loadProgress()
   for (const id of lessonIds) p[id] = { ...p[id], done }
-  saveProgress(p)
-  return p
+  return commit(p)
 }
 
 export function lastVisitedLesson(progress: LearningProgress): string | null {

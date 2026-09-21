@@ -1,0 +1,12 @@
+{
+  // Typechecka la config de tests (vitest.config.ts / vitest.setup.ts), que antes
+  // no estaba en ningun include. Los 136 specs quedan fuera a proposito: hoy
+  // arrastran ~50 errores de tipos preexistentes y este proyecto debe quedar
+  // verde en `tsc -b`. Se iran incorporando a medida que se tipen.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true
+  },
+  "include": ["vitest.config.ts", "vitest.setup.ts"]
+}

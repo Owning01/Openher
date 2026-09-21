@@ -12,6 +12,11 @@ use notify::{Watcher, RecursiveMode, Event, EventKind};
 /// Tope del ring de eventos recientes (suficiente para clientes con poll 2.5s)
 const RECENT_CAP: usize = 300;
 
+/// Log de fswatch con prefijo único (mismo formato de salida que antes).
+macro_rules! flog {
+    ($($arg:tt)*) => { eprintln!("fswatch: {}", format_args!($($arg)*)) };
+}
+
 pub struct FsWatcher {
     watcher: Mutex<Option<notify::RecommendedWatcher>>,
     watched: Mutex<HashMap<PathBuf, bool>>,
@@ -88,13 +93,13 @@ impl FsWatcher {
                 for path in ev.paths {
                     let _ = tx.send(FsEvent { path: path.clone(), kind: kind.to_string() });
                     // También log para diagnóstico
-                    eprintln!("fswatch: {kind} {}", path.display());
+                    flog!("{kind} {}", path.display());
                 }
             }
         });
         match watcher {
             Ok(w) => *guard = Some(w),
-            Err(e) => eprintln!("fswatch: init failed {e}"),
+            Err(e) => flog!("init failed {e}"),
         }
     }
 
@@ -111,8 +116,8 @@ impl FsWatcher {
                 RecursiveMode::Recursive
             } else { mode };
             match w.watch(dir, mode) {
-                Ok(_) => { watched.insert(dir.to_path_buf(), true); eprintln!("fswatch: watching {}", dir.display()); }
-                Err(e) => eprintln!("fswatch: watch {} failed {e}", dir.display()),
+                Ok(_) => { watched.insert(dir.to_path_buf(), true); flog!("watching {}", dir.display()); }
+                Err(e) => flog!("watch {} failed {e}", dir.display()),
             }
         }
     }

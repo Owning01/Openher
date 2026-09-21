@@ -1,6 +1,5 @@
-//! Router de la API /shell/* + estáticos de la web app (mismo origen).
+//! Router de la API /shell/* (mismo origen).
 
-use std::path::Path;
 use std::sync::Arc;
 
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
@@ -39,7 +38,7 @@ fn check_shell_auth(headers: &[(String, String)], state: &AppState) -> Option<Sh
     Some(ShellResponse::unauthorized())
 }
 
-/// Dispatch puro de `/shell/*` + estáticos (Plan 1). Agnóstico al servidor:
+/// Dispatch puro de `/shell/*` (Plan 1). Agnóstico al servidor:
 /// lo llaman el adaptador hyper (`http_server.rs`) y los tests.
 pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
     let method = sreq.method.as_str();
@@ -253,10 +252,10 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
         }
     }
 
-    // ============================== Stats / Design (extraído)
-    if path.starts_with("/shell/stats") || path.starts_with("/shell/design") {
+    // ============================== Design (extraído)
+    if path.starts_with("/shell/design") {
         if let Some(resp) =
-            crate::infrastructure::http::stats_router::handle(sreq, state.clone(), &path, method, &q)
+            crate::infrastructure::http::design_router::handle(sreq, state.clone(), &path, method, &q)
         {
             return resp;
         }
@@ -325,66 +324,6 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
         }
     }
 
-    // ============================== Estáticos (web app)
-    // GUARD: las rutas /shell/* son API — jamás caer al SPA fallback.
-    // (Sin esto, POST /shell/browser/open devolvía index.html y el WebView
-    // nativo jamás se abría: .catch(()=>{}) se tragaba el JSON parse error.)
-    if !path.starts_with("/shell/") {
-        if let Some(base) = state.dist.as_ref() {
-        let rel = path.trim_start_matches('/');
-        // brotli precomprimido: si Accept-Encoding incluye br y existe .br, servirlo
-        let accept_br = sreq.header("accept-encoding").map(|v| v.contains("br")).unwrap_or(false);
-        let mut file = base.join(rel);
-        if !file.starts_with(base) {
-            file = base.join("index.html");
-        }
-        // intentar .br primero
-        if accept_br {
-            let br_file = if rel.is_empty() { base.join("index.html.br") } else { base.join(format!("{rel}.br")) };
-            if br_file.is_file() && br_file.starts_with(base) {
-                if let Ok(br_bytes) = std::fs::read(&br_file) {
-                    let mime = mime_for(&file);
-                    return ShellResponse::data(200, br_bytes, mime)
-                        .with_header("content-encoding", "br")
-                        .with_header("access-control-allow-origin", "*")
-                        .with_header("cache-control", "public, max-age=31536000, immutable");
-                }
-            }
-        }
-        // mmap fast path (zero-copy-ish, usa page cache)
-        let mut served = crate::common::serve_file_mmap(base, rel);
-        if served.is_none() && !rel.contains('.') {
-            served = crate::common::serve_file_mmap(base, "index.html");
-            file = base.join("index.html");
-        }
-        if let Some((bytes, mime)) = served {
-            let is_index = file.file_name().and_then(|n| n.to_str()) == Some("index.html")
-                || (!rel.contains('.') && file.ends_with("index.html"));
-            // Para index.html, inyectar config script (no cache)
-            if is_index {
-                // Si fue mmap, bytes ya es Vec<u8>; intentar utf8
-                if let Ok(mut s) = String::from_utf8(bytes.clone()) {
-                    let inject = inject_config_script(&state.config.read().unwrap_or_else(|e| e.into_inner()));
-                    if let Some(pos) = s.rfind("</head>") {
-                        s.insert_str(pos, &inject);
-                    } else {
-                        s.push_str(&inject);
-                    }
-                    return ShellResponse::from_string(200, s)
-                        .with_header("content-type", mime)
-                        .with_header("access-control-allow-origin", "*")
-                        .with_header("cache-control", "no-cache");
-                }
-            }
-            // Cache agresivo para assets hasheados, no-cache para index
-            let cache = if is_index { "no-cache" } else { "public, max-age=31536000, immutable" };
-            return ShellResponse::data(200, bytes, mime)
-                .with_header("access-control-allow-origin", "*")
-                .with_header("cache-control", cache);
-        }
-    }
-    } // fin guard /shell/*
-
     // ============================== Browser (Sub-WebView2 nativo ultra-ligero) (extraído)
     if path.starts_with("/shell/browser") {
         if let Some(resp) =
@@ -398,130 +337,6 @@ pub fn dispatch(sreq: &ShellRequest, state: &Arc<AppState>) -> ShellResponse {
         .with_header("content-type", "text/plain")
 }
 
-const MIME: &[(&str, &str)] = &[
-    ("html", "text/html; charset=utf-8"),
-    ("htm", "text/html; charset=utf-8"),
-    ("js", "text/javascript; charset=utf-8"),
-    ("mjs", "text/javascript; charset=utf-8"),
-    ("css", "text/css; charset=utf-8"),
-    ("json", "application/json"),
-    ("svg", "image/svg+xml"),
-    ("png", "image/png"),
-    ("jpg", "image/jpeg"),
-    ("jpeg", "image/jpeg"),
-    ("webp", "image/webp"),
-    ("ico", "image/x-icon"),
-    ("woff", "font/woff"),
-    ("woff2", "font/woff2"),
-    ("ttf", "font/ttf"),
-    ("map", "application/json"),
-    ("txt", "text/plain; charset=utf-8"),
-    ("md", "text/markdown; charset=utf-8"),
-    ("wasm", "application/wasm"),
-];
-
-fn mime_for(path: &Path) -> &'static str {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    MIME.iter()
-        .find(|(e, _)| *e == ext)
-        .map(|(_, m)| *m)
-        .unwrap_or("application/octet-stream")
-}
-
-#[allow(dead_code)]
-fn sanitize_proxy_html(mut html: String, base_url: &str) -> String {
-    // Inyectar <base> para que recursos relativos resuelvan al origen real
-    let base_tag = format!(r#"<base href="{}">"#, base_url);
-    let lower = html.to_ascii_lowercase();
-    if let Some(pos) = lower.find("<head>") {
-        html.insert_str(pos + 6, &base_tag);
-    } else if let Some(pos) = lower.find("<head ") {
-        if let Some(end) = html[pos..].find('>') {
-            html.insert_str(pos + end + 1, &base_tag);
-        } else {
-            html.insert_str(0, &base_tag);
-        }
-    } else {
-        html.insert_str(0, &base_tag);
-    }
-    // Eliminar meta CSP / X-Frame que bloquean framing en el HTML mismo
-    let mut search_start = 0usize;
-    loop {
-        if search_start >= html.len() { break; }
-        let slice_low = html[search_start..].to_ascii_lowercase();
-        let Some(rel) = slice_low.find("<meta") else { break; };
-        let start = search_start + rel;
-        let end = html[start..].find('>').map(|i| start + i + 1).unwrap_or((start + 6).min(html.len()));
-        let tag_low = html[start..end].to_ascii_lowercase();
-        if tag_low.contains("http-equiv") && (tag_low.contains("content-security-policy") || tag_low.contains("x-frame-options")) {
-            html.replace_range(start..end, "");
-            search_start = start;
-            continue;
-        } else {
-            search_start = end;
-            continue;
-        }
-    }
-    let cleaned = html
-        .replace("top.location", "self.location")
-        .replace("parent.location", "self.location")
-        .replace("window.top", "window.self")
-        .replace("window.parent", "window.self")
-        .replace("if (top != self)", "if (false)")
-        .replace("if(top!=self)", "if(false)")
-        .replace("if (parent != self)", "if (false)");
-    cleaned
-}
-
-fn inject_config_script(cfg: &crate::state::ShellConfig) -> String {
-    let srv = &cfg.server;
-    format!(
-        r#"<script>
-try {{
-  const k = 'opencode.remote.server';
-  if (!localStorage.getItem(k)) {{
-    localStorage.setItem(k, JSON.stringify({{ host: {h:?}, port: {p}, username: {u:?}, password: {pw:?}, useSSL: {ssl} }}));
-  }}
-}} catch (e) {{}}
-</script>"#,
-        h = srv.host,
-        p = srv.port,
-        u = srv.username,
-        pw = srv.password,
-        ssl = srv.use_ssl,
-    )
-}
-
-#[allow(dead_code)]
-fn url_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() * 3);
-    for b in s.as_bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(*b as char),
-            b' ' => out.push_str("%20"),
-            _ => out.push_str(&format!("%{:02X}", b)),
-        }
-    }
-    out
-}
-#[allow(dead_code)]
-fn strip_html(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut inside = false;
-    for ch in s.chars() {
-        match ch {
-            '<' => inside = true,
-            '>' => inside = false,
-            _ if !inside => out.push(ch),
-            _ => {}
-        }
-    }
-    out.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#x27;", "'").replace("&#39;", "'")
-}
 fn url_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());

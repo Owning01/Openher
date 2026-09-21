@@ -43,10 +43,6 @@
   position: relative;
 }
 
-.shell-terminal {
-  flex: 1;
-  min-height: 0;
-}
 
 .shell-terminal .xterm {
   height: 100%;
@@ -880,17 +876,6 @@
   background: var(--surface-strong);
   padding: 1px 4px;
   border-radius: 3px;
-}
-
-.shell-md-code {
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-  background: var(--surface-strong);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 8px;
-  overflow-x: auto;
-  white-space: pre-wrap;
 }
 
 /* ===== Updates ===== */

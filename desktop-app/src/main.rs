@@ -2,7 +2,7 @@
 //!
 //! F0-F4: ventana wry (WebView2) + server local (hyper+tokio) que sirve
 //! web/dist y la API /shell/* (explorador, terminales, kanban, updates,
-//! docs, stats, plugins, labs, config, autostart, sesiones). Portable:
+//! docs, plugins, labs, config, autostart, sesiones). Portable:
 //! data/ junto al exe, sin escrituras en C:.
 
 // App GUI de Windows: sin ventana de terminal.
@@ -24,7 +24,6 @@ mod plugins;
 mod ptyx;
 mod srvman;
 mod state;
-mod statsx;
 mod updates;
 mod undecorated_resizing;
 
@@ -115,12 +114,27 @@ struct App {
     /// como `window.__OPENHER_OPEN_DIR__` (y como `?openDir=` para el modo
     /// navegador cuando falta WebView2).
     open_dir: Option<String>,
+    /// Canal al writer thread de geometría (R14): Moved/Resized encolan en vez
+    /// de spawnear un hilo + fsync+rename por evento (>100fps de arrastre).
+    geom_tx: std::sync::mpsc::Sender<GeomCmd>,
+}
+
+/// Órdenes al writer thread de geometría. `Save` persiste un rect normal;
+/// `MarkMaximized` marca el flag sin pisar el último rect normal conocido.
+enum GeomCmd {
+    Save(state::WindowGeometry),
+    MarkMaximized,
 }
 
 fn kill_all_external(state: &AppState) {
     // Mata todos los childs gestionados (screenshots, opendesign, etc.)
-    let mut procs = state.external.procs.lock().unwrap_or_else(|e| e.into_inner());
-    for (name, mut child) in procs.drain() {
+    // Drenar bajo el lock y soltarlo: taskkill+wait no deben correr con el
+    // manager bloqueado (el resto de /shell/external quedaría esperando).
+    let drained: Vec<(String, std::process::Child)> = {
+        let mut st = state.external.lock();
+        st.procs.drain().collect()
+    };
+    for (name, mut child) in drained {
         let pid = child.id();
         // tree kill sin ventana
         let _ = std::process::Command::new("taskkill")
@@ -746,9 +760,10 @@ impl App {
     /// de pantalla (imposible redimensionar/mover). El maximizado se guarda
     /// como flag (`geom_maximized`); el rect guardado es siempre el último
     /// normal conocido.
-    /// La escritura va en hilo aparte: Moved/Resized corren dentro del loop
-    /// modal de arrastre del SO y un fsync+rename en el hilo UI trababa el
-    /// movimiento (~20fps vs 100fps del resto).
+    /// La escritura la hace un writer thread único por canal (R14): Moved/
+    /// Resized corren dentro del loop modal de arrastre del SO y un
+    /// fsync+rename en el hilo UI trababa el movimiento (~20fps vs 100fps).
+    /// Antes era un `thread::spawn` por evento; ahora la UI solo encola.
     fn save_geometry(&mut self) {
         let window = match &self.window {
             Some(w) => w,
@@ -762,17 +777,7 @@ impl App {
             // El rect guardado sigue siendo el último normal conocido.
             if !self.geom_maximized {
                 self.geom_maximized = true;
-                std::thread::spawn(|| {
-                    if let Some(mut g) = state::load_window_geometry() {
-                        g.maximized = true;
-                        state::save_window_geometry(&g);
-                    } else {
-                        state::save_window_geometry(&state::WindowGeometry {
-                            maximized: true,
-                            ..Default::default()
-                        });
-                    }
-                });
+                let _ = self.geom_tx.send(GeomCmd::MarkMaximized);
             }
             return;
         }
@@ -793,7 +798,7 @@ impl App {
             scale: sf,
             maximized: false,
         };
-        std::thread::spawn(move || state::save_window_geometry(&g));
+        let _ = self.geom_tx.send(GeomCmd::Save(g));
     }
 }
 
@@ -1019,7 +1024,6 @@ fn main() {
         kanban: kanban::KanbanStore::load(),
         plugins: plugins::PluginRegistry::new(),
         servers: srvman::ServerManager::new(),
-        stats: statsx::StatsManager::new(),
         dist,
         browser: browser_mgr,
         browser_picks: std::sync::Mutex::new(Vec::new()),
@@ -1106,7 +1110,7 @@ fn main() {
                     // Vite embed: si dist/index.html existe, no spawnear Node, usar mmap 0ms
                     if p.name == "vioeditor" && PathBuf::from(p.dir).join("dist").join("index.html").exists() {
                         eprintln!("openher-desktop: prewarm {} embed static (mmap, sin Node) :{}", p.name, p.port);
-                        app_state_clone.external.urls.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), format!("http://127.0.0.1:{}/shell/external/{}/embed/", app_state_clone.port, p.name));
+                        app_state_clone.external.lock().urls.insert(p.name.to_string(), format!("http://127.0.0.1:{}/shell/external/{}/embed/", app_state_clone.port, p.name));
                         continue;
                     }
                     if crate::infrastructure::http::external_router::probe_external(p.name) {
@@ -1161,9 +1165,12 @@ fn main() {
                         Ok(child) => {
                             let pid = child.id();
                             eprintln!("openher-desktop: prewarm {} pid={pid} :{}", p.name, p.port);
-                            app_state_clone.external.procs.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), child);
-                            app_state_clone.external.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), std::time::Instant::now());
-                            app_state_clone.external.urls.lock().unwrap_or_else(|e| e.into_inner()).insert(p.name.to_string(), format!("http://127.0.0.1:{}", p.port));
+                            {
+                                let mut st = app_state_clone.external.lock();
+                                st.procs.insert(p.name.to_string(), child);
+                                st.spawned_at.insert(p.name.to_string(), std::time::Instant::now());
+                                st.urls.insert(p.name.to_string(), format!("http://127.0.0.1:{}", p.port));
+                            }
                         }
                         Err(e) => eprintln!("openher-desktop: prewarm {} fallo {e}", p.name),
                     }
@@ -1227,6 +1234,31 @@ fn main() {
         app_url.push_str(&format!("&openDir={}", percent_encode(d)));
     }
 
+    // R14: writer thread único de geometría. La UI solo encola; el hilo hace
+    // load/save (fsync+rename) fuera del loop modal de arrastre del SO.
+    let (geom_tx, geom_rx) = std::sync::mpsc::channel::<GeomCmd>();
+    std::thread::Builder::new()
+        .name("geom-writer".into())
+        .spawn(move || {
+            while let Ok(cmd) = geom_rx.recv() {
+                match cmd {
+                    GeomCmd::Save(g) => state::save_window_geometry(&g),
+                    GeomCmd::MarkMaximized => {
+                        if let Some(mut g) = state::load_window_geometry() {
+                            g.maximized = true;
+                            state::save_window_geometry(&g);
+                        } else {
+                            state::save_window_geometry(&state::WindowGeometry {
+                                maximized: true,
+                                ..Default::default()
+                            });
+                        }
+                    }
+                }
+            }
+        })
+        .ok();
+
     let mut app = App {
         // ?v=BUILD_ID: cache-busting ante cachés del WebView2 envenenadas.
         // El query cambia la clave de caché sin cambiar el origen (mismo
@@ -1251,6 +1283,7 @@ fn main() {
         minimize_to_tray: config.minimize_to_tray,
         app_state: Some(app_state.clone()),
         open_dir: open_dir.clone(),
+        geom_tx,
     };
     event_loop.run_app(&mut app).unwrap();
 }

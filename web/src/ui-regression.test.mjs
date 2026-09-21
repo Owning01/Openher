@@ -13,10 +13,10 @@ const controller = readFileSync(new URL('./app/useAppController.ts', import.meta
 const baseChatPropsSource = readFileSync(new URL('./features/chat/hooks/useBaseChatProps.ts', import.meta.url), 'utf8')
 const hostActions = readFileSync(new URL('./features/host-actions/hooks/useHostActions.ts', import.meta.url), 'utf8')
 const lifecycle = readFileSync(new URL('./features/app-lifecycle/hooks/useAppLifecycle.ts', import.meta.url), 'utf8')
-const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
-const useMessages = readFileSync(new URL('./hooks/useMessages.ts', import.meta.url), 'utf8')
+const api = [readFileSync(new URL('./api.ts', import.meta.url), 'utf8'), ...["health","sessions","messages","prompt","providers","config","fs","mcp","questions","permissions","versionDispatch","index"].map((f) => readFileSync(new URL(`./api/${f}.ts`, import.meta.url), 'utf8')), ...["client","version","mappers","opencodeClient"].map((f) => readFileSync(new URL(`./shared/api/${f}.ts`, import.meta.url), 'utf8'))].map((s) => s.replace(/const ([A-Za-z_$][\w$]*) = (async )?\(/g, '$1(')).join('\n')
+const useMessages = ["hooks/useMessages.ts","hooks/useMessageSend.ts","hooks/useStreamPatch.ts","stores/outboxStore.ts","stores/translationOriginals.ts","utils/messageShape.ts","utils/parseCommand.ts"].map((f) => readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')).join('\n')
 const useAI = readFileSync(new URL('./hooks/useAI.ts', import.meta.url), 'utf8')
-const useSessions = readFileSync(new URL('./hooks/useSessions.ts', import.meta.url), 'utf8')
+const useSessions = ["hooks/useSessions.ts","entities/session/sessionsPlan.ts","entities/session/model.ts"].map((f) => readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')).join('\n')
 const useConfig = readFileSync(new URL('./hooks/useConfig.ts', import.meta.url), 'utf8')
 const icons = readFileSync(new URL('./Icons.tsx', import.meta.url), 'utf8')
 const styles = cssBundle()
@@ -221,7 +221,7 @@ assert.ok(!chatView.includes('queuedPrompts'), 'ChatView should not render a que
 
 // Modo híbrido v1/v2: el server opencode v2 (beta) usa /api + { data } y el
 // v1 rutas raíz. Auto-detección en health + toggle forzado en Settings.
-const apiSource = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+const apiSource = [readFileSync(new URL('./api.ts', import.meta.url), 'utf8'), ...["health","sessions","messages","prompt","providers","config","fs","mcp","questions","permissions","versionDispatch","index"].map((f) => readFileSync(new URL(`./api/${f}.ts`, import.meta.url), 'utf8')), ...["client","version","mappers","opencodeClient"].map((f) => readFileSync(new URL(`./shared/api/${f}.ts`, import.meta.url), 'utf8'))].map((s) => s.replace(/const ([A-Za-z_$][\w$]*) = (async )?\(/g, '$1(')).join('\n')
 assert.ok(apiSource.includes('resolveApiVersion'), 'API should resolve v1 vs v2 dialect')
 assert.ok(apiSource.includes('rememberApiVersion'), 'API should cache the detected version per server')
 assert.ok(apiSource.includes('unwrapData'), 'v2 responses wrapped in { data } should be unwrapped')

@@ -1,20 +1,16 @@
 // Operaciones puras del mini-editor (LiteEditor): sin DOM, sin estado, 100% testeables.
 // Todo trabaja sobre offsets de string para no duplicar arrays de líneas en RAM.
 
+import { escapeHtml } from "../shared/lib/escapeHtml"
+
+export { escapeHtml }
+
 export type HastNode = {
   type?: string
   tagName?: string
   value?: string
   properties?: { className?: unknown; [k: string]: unknown }
   children?: HastNode[]
-}
-
-export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
 }
 
 function classAttr(props?: HastNode["properties"]): string {

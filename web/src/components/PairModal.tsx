@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { Modal } from "./Modal"
 import { ModalHeader } from "./ModalHeader"
 import { CameraIcon, CheckIcon, CloseIcon, ServerIcon } from "../Icons"
 import { useT } from "../i18n-context"
@@ -118,8 +119,7 @@ export const PairModal = memo(function PairModal({ onSave, onClose }: Props) {
   }, [pasted])
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content pair-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('settings.pairTitle')}>
+    <Modal onClose={onClose} variant="overlay" className="pair-modal" label={t('settings.pairTitle')}>
         <ModalHeader title={t('settings.pairTitle')} onClose={onClose} />
         <div className="modal-body">
           {!showName && (
@@ -195,8 +195,7 @@ export const PairModal = memo(function PairModal({ onSave, onClose }: Props) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 })
 

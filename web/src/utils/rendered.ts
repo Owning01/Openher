@@ -1,6 +1,7 @@
-import type { MessageEnvelope, RenderedMessage, RenderedSegment, DataMode, FileDiff, TurnChanges, ServerNoticeKind } from "../types"
+import type { MessageEnvelope, RenderedMessage, RenderedSegment, DataMode, FileDiff, TurnChanges, ServerNoticeKind } from "../types.ts"
 import { isImagePart } from "../utils.ts"
-import { toolPartFileDiff } from "./toolFileDiff"
+import { toolPartFileDiff } from "./toolFileDiff.ts"
+import { isSubagentResultMessage, stripSubagentWrapper } from "./messageShape.ts"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
@@ -10,7 +11,7 @@ const PRESERVE_TOOL_HEAD_CHARS = 800
 /** Prefijo estable del aviso de catálogo que inyecta el server (system). */
 export const TOOL_CATALOG_MARKER = "The Code Mode tool catalog"
 
-export type { ServerNoticeKind } from "../types"
+export type { ServerNoticeKind } from "../types.ts"
 
 /**
  * Clasifica un aviso del server (system/shell) para renderizarlo acoplado
@@ -111,6 +112,11 @@ export function computeRenderedMessages(
     }
     let text = ""
     let hasCompaction = false
+    // Reporte de subagente: los parts de texto llegan envueltos en
+    // `<subagent ...>...</subagent>` — se muestra el contenido limpio (la
+    // tarjeta propia con el rótulo la dibuja MessageBubble).
+    const subagentResult = isSubagentResultMessage(message)
+    const cleanText = (t: string): string => (subagentResult ? stripSubagentWrapper(t) : t)
     const thinkingParts: Array<{ id: string; text: string; time?: { start?: number; end?: number } }> = []
     const toolParts: Array<{ id: string; type: string; sessionID?: string; text?: string; callID?: string; tool?: string; state?: MessageEnvelope["parts"][number]["state"] }> = []
     const textBlocks: string[] = []
@@ -147,8 +153,9 @@ export function computeRenderedMessages(
       const t = part.text
       if (t) {
         if (part.type === "text" || part.type === "compaction") {
-          textBlocks.push(t)
-          segments.push({ kind: "text", id: part.id, text: t })
+          const c = cleanText(t)
+          textBlocks.push(c)
+          segments.push({ kind: "text", id: part.id, text: c })
           if (part.type === "compaction") hasCompaction = true
         } else if (part.type === "reasoning" || part.type === "thinking") {
           thinkingParts.push({ id: part.id, text: t, time: part.time })

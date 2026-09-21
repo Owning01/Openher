@@ -90,7 +90,7 @@ function zoneIcon(idx: number): string {
   return ZONE_ICONS[idx] ?? `${idx + 1}`
 }
 
-export function formatAnnotationZone(a: VisualAnnotation, idx: number): string {
+function formatAnnotationZone(a: VisualAnnotation, idx: number): string {
   const icon = zoneIcon(idx)
   const loc = a.source?.file
     ? `${a.source.file}${a.source.line != null ? `:${a.source.line}` : ""}`

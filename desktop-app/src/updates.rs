@@ -105,13 +105,11 @@ pub fn build(state: &AppState, force: bool) -> serde_json::Value {
     }
     let gh = github(state);
     let x = x_feed(state);
-    let mut payload = serde_json::json!({
+    let payload = serde_json::json!({
         "fetched_at": now_ms(),
         "github": gh["github"],
         "x": x["x"],
     });
-    // Merge de github multi-repo.
-    payload["github"] = gh["github"].clone();
     let _ = std::fs::create_dir_all(cache_dir());
     let _ = std::fs::write(&cache_file, payload.to_string());
     payload

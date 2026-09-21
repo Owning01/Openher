@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { shell } from "../../shell"
 import { useDevServer } from "../../hooks/useDevServer"
+import { basenameFsPath } from "../../shared/lib/filePaths.ts"
 
 /** Proyecto activo del Estudio (carpeta servida + metadatos de preview). */
 export type StudioProject = {
@@ -13,12 +14,6 @@ export type StudioProject = {
 }
 
 const STORAGE_KEY = "opencode.studio.project"
-
-function basename(p: string): string {
-  const clean = p.replace(/[\\/]+$/, "")
-  const parts = clean.split(/[\\/]/)
-  return parts[parts.length - 1] || clean
-}
 
 function readStored(): StudioProject | null {
   try {
@@ -62,7 +57,7 @@ export function useStudioProject() {
       if (!res?.ok || !res.token) throw new Error("No se pudo servir la carpeta")
       setProject({
         directory: res.directory || dir,
-        name: basename(res.directory || dir),
+        name: basenameFsPath(res.directory || dir),
         kind: res.hasPackageJson ? "node" : "static",
         token: res.token,
         entryPoint: res.entrypoint || "index.html",

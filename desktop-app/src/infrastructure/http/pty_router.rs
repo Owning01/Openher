@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::infrastructure::http::common::post;
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::state::AppState;
@@ -68,31 +69,25 @@ pub fn handle(
         return Some(ShellResponse::ok_json(&info));
     }
     if op == "write" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(b) => {
-                let data = b["data"].as_str().unwrap_or("");
-                match state.pty.write(&id, data.as_bytes()) {
-                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
-                    Err(e) => ShellResponse::err_json(404, &e),
-                }
+        return Some(post!(req, b => {
+            let data = b["data"].as_str().unwrap_or("");
+            match state.pty.write(&id, data.as_bytes()) {
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(404, &e),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        }));
     }
     if op == "resize" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(b) => {
-                let cols = b["cols"].as_u64().unwrap_or(100) as u16;
-                let rows = b["rows"].as_u64().unwrap_or(30) as u16;
-                let pw = b["pixel_width"].as_u64().unwrap_or(b["pixelWidth"].as_u64().unwrap_or(0)) as u16;
-                let ph = b["pixel_height"].as_u64().unwrap_or(b["pixelHeight"].as_u64().unwrap_or(0)) as u16;
-                match state.pty.resize_px(&id, cols, rows, pw, ph) {
-                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
-                    Err(e) => ShellResponse::err_json(404, &e),
-                }
+        return Some(post!(req, b => {
+            let cols = b["cols"].as_u64().unwrap_or(100) as u16;
+            let rows = b["rows"].as_u64().unwrap_or(30) as u16;
+            let pw = b["pixel_width"].as_u64().unwrap_or(b["pixelWidth"].as_u64().unwrap_or(0)) as u16;
+            let ph = b["pixel_height"].as_u64().unwrap_or(b["pixelHeight"].as_u64().unwrap_or(0)) as u16;
+            match state.pty.resize_px(&id, cols, rows, pw, ph) {
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(404, &e),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        }));
     }
     if op.is_empty() && method == "DELETE" {
         state.pty.kill(&id);

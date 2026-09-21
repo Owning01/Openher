@@ -1,6 +1,7 @@
-import { memo, useState, useEffect, useCallback, useMemo } from "react"
+import { memo, useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
 import { BrainIcon, CloseIcon, LayersIcon, LoadingIcon, SaveIcon, SearchIcon, SettingsIcon, ToolIcon } from "../Icons"
+import { Modal } from "./Modal"
 import { shell } from "../shell"
 import { api } from "../api"
 import type { AgentOption, ServerConfig } from "../types"
@@ -45,6 +46,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
   const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const saveStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [globalData, setGlobalData] = useState<{
     configPath: string
@@ -101,14 +104,11 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
     }
   }, [isOpen, loadGlobal])
 
-  useEffect(() => {
-    if (!isOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [isOpen, onClose])
+  // Timers de estado (saveStatus 3s / copiado 2s): limpiar al desmontar.
+  useEffect(() => () => {
+    if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+    if (copiedTimer.current) clearTimeout(copiedTimer.current)
+  }, [])
 
   const handleSelectConfigFile = (filePath: string) => {
     setSelectedConfigPath(filePath)
@@ -157,7 +157,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
       const res = await shell.opencode.saveGlobal(targetPath, rawConfig)
       if (res.ok) {
         setSaveStatus("¡Configuración guardada exitosamente!")
-        setTimeout(() => setSaveStatus(null), 3000)
+        if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+        saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 3000)
       } else {
         setSaveStatus("Error al guardar.")
       }
@@ -171,7 +172,8 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text)
     setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
+    if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    copiedTimer.current = setTimeout(() => setCopiedId(null), 2000)
   }
 
   const filteredAgents = useMemo(() => {
@@ -201,11 +203,12 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
   if (!isOpen) return null
 
   return createPortal(
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 99999 }}>
-      <div
-        className="modal-content opencode-hub-modal"
-        onClick={(e) => e.stopPropagation()}
-        style={{
+    <Modal
+      onClose={onClose}
+      variant="overlay"
+      className="opencode-hub-modal"
+      overlayStyle={{ zIndex: 99999 }}
+      style={{
           width: "90vw",
           maxWidth: "1000px",
           height: "85vh",
@@ -218,7 +221,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
           overflow: "hidden",
           boxShadow: "0 16px 48px rgba(0,0,0,0.6)",
         }}
-      >
+    >
         {/* Header */}
         <div
           style={{
@@ -682,8 +685,7 @@ export const OpenCodeHubModal = memo(function OpenCodeHubModal({
             </div>
           )}
         </div>
-      </div>
-    </div>,
+    </Modal>,
     document.body
   )
 })

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { shell } from "../shell"
+import { useT } from "../i18n-context"
 
 export type DevServerInfo = {
   hasDevServer: boolean
@@ -52,6 +53,7 @@ async function detectCmdInPkg(dir: string): Promise<{ cmd: string } | null> {
 }
 
 export function useDevServer(directory?: string | null): DevServerInfo & { devCwd: string | null } {
+  const t = useT()
   const [hasDevServer, setHasDevServer] = useState(false)
   const [devCommand, setDevCommand] = useState<string | null>(null)
   const [devCwd, setDevCwd] = useState<string | null>(null)
@@ -249,7 +251,7 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
 
   const startDevServer = useCallback(async (): Promise<string> => {
     if (!directory || !devCommand) {
-      throw new Error("No hay comando dev configurado")
+      throw new Error(t('error.noDevCommand'))
     }
 
     const existing = runningServers.get(directory)
@@ -346,7 +348,7 @@ export function useDevServer(directory?: string | null): DevServerInfo & { devCw
       setStatus("error")
       throw err
     }
-  }, [directory, devCommand, devCwd])
+  }, [directory, devCommand, devCwd, t])
 
   return {
     hasDevServer,

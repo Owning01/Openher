@@ -1,6 +1,7 @@
 import type { ServerConfig, MessageEnvelope, SessionView } from "../types"
 import { isImagePart } from "../utils"
 import { api } from "../api"
+import { buildUserMessage, messageText } from "./messageShape"
 
 let idCounter = 0
 function uniqueId(prefix: string): string {
@@ -73,17 +74,13 @@ export async function resolveCommand(
 }
 
 export function buildOptimisticMessage(selectedSession: SessionView, text: string, images?: Array<{ base64: string; mime: string }>): MessageEnvelope {
-  const now = Date.now()
-  const parts: MessageEnvelope["parts"] = text ? [{ id: uniqueId("optimistic-part"), type: "text", text }] : []
-  if (images) {
-    for (const img of images) {
-      parts.push({ id: uniqueId("img-part"), type: "image", data: img.base64, mimeType: img.mime })
-    }
-  }
-  return {
-    info: { id: uniqueId("optimistic"), role: "user", sessionID: selectedSession.id, time: { created: now } },
-    parts
-  }
+  // U9: mismo constructor que el outbox (utils/messageShape.buildUserMessage).
+  return buildUserMessage({
+    id: uniqueId("optimistic"),
+    sessionID: selectedSession.id,
+    text,
+    images,
+  })
 }
 
 // Eco sin bytes: el server confirma el texto pero puede podar los dataURL de
@@ -115,7 +112,7 @@ export function collectLocalImages(messages: MessageEnvelope[]): LocalImageEntry
     const datas = m.parts
       .filter((p) => isImagePart(p) && p.data && p.data.length > 0)
       .map((p) => ({ data: p.data as string, mime: p.mimeType ?? p.mime ?? "image/png" }))
-    if (datas.length > 0) out.push({ sessionID: m.info.sessionID, text: envelopeText(m).trim(), datas })
+    if (datas.length > 0) out.push({ sessionID: m.info.sessionID, text: messageText(m).trim(), datas })
   }
   return out
 }
@@ -132,7 +129,7 @@ export function rehydrateImages(
   const used = new Set<LocalImageEntry>()
   for (const m of list) {
     if (m.info.role !== "user" || (m.info.sessionID && m.info.sessionID !== sessionID)) continue
-    const idx = pending.findIndex((e) => !used.has(e) && normImageText(e.text) === normImageText(envelopeText(m).trim()))
+    const idx = pending.findIndex((e) => !used.has(e) && normImageText(e.text) === normImageText(messageText(m).trim()))
     if (idx < 0) continue
     const entry = pending[idx]
     let attached = false
@@ -158,15 +155,6 @@ export function rehydrateImages(
     if (attached) used.add(entry)
   }
   return used.size === 0 ? locals : locals.filter((e) => !used.has(e))
-}
-
-function envelopeText(msg: MessageEnvelope): string {
-  const blocks: string[] = []
-  for (const part of msg.parts) {
-    if (!part.text) continue
-    if (part.type === "text" || part.type === "compaction") blocks.push(part.text)
-  }
-  return blocks.join("\n\n").trim()
 }
 
 export function buildStatusMessage(selectedSession: SessionView): MessageEnvelope {

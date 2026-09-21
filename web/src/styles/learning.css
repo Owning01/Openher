@@ -686,12 +686,6 @@
   border-radius: var(--radius-sm);
 }
 .learning-diagram-toggle-main:hover { color: var(--primary-strong); background: color-mix(in srgb, var(--primary) 6%, transparent); }
-.learning-diagram-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-left: auto;
-}
 .learning-diagram-expand {
   font-size: 0.72rem;
   font-weight: 600;

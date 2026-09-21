@@ -1,350 +1,153 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react"
-import { api } from "../api"
-import { useT } from "../i18n-context"
-import { useConfig } from "../hooks/useConfig"
-import { useTheme } from "../hooks/useTheme"
-import { useSessions } from "../hooks/useSessions"
-import { modelKey } from "../utils/model-utils"
-import { useAI } from "../hooks/useAI"
-import { useMessages, claimSharedOutbox, releaseSharedOutbox, isSharedOutboxHeld } from "../hooks/useMessages"
-import { useSessionSidecar } from "../hooks/useSessionSidecar"
-import { useFolderPicker } from "../hooks/useFolderPicker"
-import { useSSE } from "../hooks/useSSE"
-import { useOfflineCache } from "../hooks/useOfflineCache"
-import { loadShortcutsConfig, type ShortcutItem } from "../shortcuts"
-import { dirKey } from "../utils/sessionDirs"
-import type { ViewType, HelpPage as HelpPageType, ServerProfile, FileDiff, SessionView } from "../types"
-import type { LanguageCode } from "../i18n"
+import { useEffect, useRef } from "react"
+import { claimSharedOutbox, releaseSharedOutbox, isSharedOutboxHeld } from "../hooks/useMessages"
 import { isSessionActive } from "../utils"
-import { STORAGE_KEYS } from "../constants"
-import { formatBytes } from "../hooks/useMemoryUsage"
-import { useBlockedModels } from "../hooks/useBlockedModels"
-import { useFeatureFlags } from "../hooks/useFeatureFlags"
-import { useProviderManager } from "../hooks/useProviderManager"
-import { useShell } from "../hooks/useShell"
-import { useChatSettings } from "../hooks/useChatSettings"
-import { usePromptSnippets } from "../hooks/usePromptSnippets"
-import { useFileBrowser } from "../hooks/useFileBrowser"
-import { useOfflineQueue } from "../hooks/useOfflineQueue"
-import { useNotifications } from "../hooks/useNotifications"
-import { useIsDesktop } from "../hooks/useIsDesktop"
-import { useShellViewport } from "../hooks/useShellViewport"
-import { useDesktopShortcuts } from "../hooks/useDesktopShortcuts"
-import { useQuestions } from "../hooks/useQuestions"
-import { useSSEHandler } from "../hooks/useSSEHandler"
-import { useResumeResync } from "../hooks/useResumeResync"
-import { useServers } from "../hooks/useServers"
-import { loadDesktopConfig } from "../desktop"
-import { useVisualSelection } from "../hooks/useVisualSelection"
-import { invalidateShellBase } from "../shell"
-import { pluginHost } from "../plugins"
-import { ensureCanvasRegistered } from "../features/canvas/register"
-import { useVirtualTabs } from "../hooks/useVirtualTabs"
-import { useSidebarPrefs } from "../hooks/useSidebarPrefs"
-import { useDesktopLayoutState } from "../hooks/useDesktopLayoutState"
-import { buildGridTemplate } from "../widgets/desktop-grid/model"
-import { useSidebarResize } from "../widgets/sidebar/hooks/useSidebarResize"
-import { useUIZoom } from "../hooks/useUIZoom"
-import { useProjectInspection } from "../features/project/hooks/useProjectInspection"
-import { useAppNavigation } from "../features/navigation/hooks/useAppNavigation"
-import { useChatActions } from "../features/chat/hooks/useChatActions"
-import { useDesktopGridActions } from "../widgets/desktop-grid/hooks/useDesktopGridActions"
+import { formatBytesMemory } from "../utils/format"
+import { modelKey } from "../utils/model-utils"
+import type { LanguageCode } from "../i18n"
 import { useBaseChatProps } from "../features/chat/hooks/useBaseChatProps"
-import { useAppModalsState } from "../features/modals/hooks/useAppModalsState"
-import { useGlobalKeyShortcuts } from "../features/shortcuts/hooks/useGlobalKeyShortcuts"
-import { useHostActions } from "../features/host-actions/hooks/useHostActions"
-import { useAppLifecycle } from "../features/app-lifecycle/hooks/useAppLifecycle"
+import { useConnectionRuntime } from "./runtime/useConnectionRuntime"
+import { useChatRuntime, useChatActionsRuntime } from "./runtime/useChatRuntime"
+import { useWorkspaceRuntime } from "./runtime/useWorkspaceRuntime"
 
 export type UseAppControllerParams = {
   language: LanguageCode
   setLanguage: (lang: LanguageCode) => void
 }
 
+/**
+ * Compositor de la app: arma los slices de los tres runtimes de dominio
+ * (`connection`, `chat`, `workspace`) y devuelve el MISMO objeto plano que
+ * consumen los llamadores (App y subcomponentes). La forma de `app` no cambia
+ * en esta onda; B4 consumirá los slices directamente.
+ */
 export function useAppController({ language, setLanguage }: UseAppControllerParams) {
-  const t = useT()
+  const conn = useConnectionRuntime({ language, setLanguage })
+  const chat = useChatRuntime({ conn })
+  const ws = useWorkspaceRuntime({ conn, chat })
+  const act = useChatActionsRuntime({ conn, chat, ws })
 
   const {
+    t,
+    isDesktop,
+    theme,
+    setTheme,
+    handleLanguageChange,
+    handleToggleLightMode,
     config,
     draftConfig,
     setDraftConfig,
-    connectedVersion,
+    handleTest,
     testingConnection,
-    connectionState,
-    settingsNotice,
-    setSettingsNotice,
-    hasConfiguredServer,
     canTestDraft,
     testAlreadyPassedForDraft,
+    connectedVersion,
+    settingsNotice,
     dataMode,
     changeDataMode,
-    saveConfig,
-    testConnection,
-    setConnectionState,
-    setConnectionMessage,
-  } = useConfig()
-
-  const { theme, setTheme } = useTheme()
-  const isDesktop = useIsDesktop()
-  const { narrow: shellNarrow, rightOverlay } = useShellViewport()
-  useUIZoom()
-
-  const handleToggleLightMode = useCallback(() => {
-    const isLight = document.documentElement.getAttribute("data-theme") === "light"
-    setTheme(isLight ? "dark" : "light")
-  }, [setTheme])
-
-  const { prefs: sidebarPrefs } = useSidebarPrefs()
-
-  const {
-    composer,
-    setComposer,
-    isSending,
-    awaitingAssistantReply,
-    setAwaitingAssistantReply,
-    runtimeError,
-    setRuntimeError,
-    renderedMessages,
-    messageScrollSignature,
-    completionShouldPlayRef,
-    outbox,
-    enqueueOutbox,
-    removeOutbox,
-    clearSession,
-    preloadMessages,
-    loadSelected,
-    send,
-    abortSession,
-    messages,
-    setMessages,
-    undoMessage,
-    redoMessage,
-    compactSession,
-    applyDelta,
-    applyPart,
-    compacting,
-    setCompacting,
-    getAwaitingBaselineID,
-  } = useMessages(config)
-
-  const composerRef = useRef(composer)
-  useEffect(() => {
-    composerRef.current = composer
-  }, [composer])
-  const handleComposerChange = useCallback(
-    (value: string) => {
-      composerRef.current = value
-      setComposer(value)
-    },
-    [setComposer]
-  )
-
-  const [localRevertID, setLocalRevertID] = useState<string | null>(null)
-
-  const {
-    todos,
-    diffFiles,
-    projectDashboard,
-    dashboardError,
-    todosExpanded,
-    setTodosExpanded,
-    activeDetailSheet,
-    setActiveDetailSheet,
-    totalDiffAdditions,
-    totalDiffDeletions,
-    loadTodos,
-    loadDiffs,
-    loadDashboard,
-    clearSidecar,
-  } = useSessionSidecar(config)
-
-  const {
-    showNewSessionPicker,
-    pickerDir,
-    pickerItems,
-    pickerLoading,
-    pickerError,
-    setPickerError,
-    browseNewSessionDirectory,
-    setShowNewSessionPicker,
-    openNewSessionPicker,
-    persistDirectory,
-  } = useFolderPicker(config)
-
-  const { view, navigate, goBack, navStackRef } = useAppNavigation({
-    config,
-    showNewSessionPicker,
-    setShowNewSessionPicker,
-    activeDetailSheet,
-    setActiveDetailSheet,
-    hasConfiguredServer,
-  })
-
-  const [commands, setCommands] = useState<
-    { name: string; description?: string; source?: "command" | "mcp" | "skill" }[]
-  >([])
-  const [commandFilter, setCommandFilter] = useState<"all" | "skill">("all")
-  const [helpPage, setHelpPage] = useState<HelpPageType>("overview")
-  const [query, setQuery] = useState("")
-
-  const backgroundFailureCountRef = useRef(0)
-  const initialSessionLoadRef = useRef(true)
-
-  const {
-    agentOptions,
+    connectionState,
     modelOptions,
     modelLoadError,
     modelQuery,
     setModelQuery,
-    primaryAgentOptions,
+    selectedModelKey,
+    changeModel,
+    changeAgent,
     allPrimaryAgents,
     disabledAgents,
     toggleAgentEnabled,
-    activeAgent,
+    agentOptions,
     activeAgentID,
-    activeModelOption: globalActiveModelOption,
-    activeModel: globalActiveModel,
-    variantGroups,
-    selectedModelKey,
-    selectedVariant: globalSelectedVariant,
-    changeVariant,
-    activeModelVariants: globalActiveModelVariants,
-    getModelForSession,
-    loadAgents,
+    blockedModels,
+    filteredVariantGroups,
+    flags,
+    toggleFlag,
+    setFlag,
+    providerList,
+    connectingProvider,
+    providerError,
+    connectProvider,
+    disconnectProvider,
+    addCustomProvider,
+    removeCredential,
+    activateCredential,
     loadModels,
-    changeModel,
-    changeAgent,
-  } = useAI(config)
-
-  const blockedModels = useBlockedModels(modelOptions)
-  const { flags, toggleFlag, setFlag } = useFeatureFlags()
-  const vs = useVisualSelection()
-
-  const [shortcuts, setShortcuts] = useState<ShortcutItem[]>(() => loadShortcutsConfig())
-
-  useEffect(() => {
-    const onChange = (e: Event) => {
-      const ce = e as CustomEvent<ShortcutItem[]>
-      if (ce.detail && Array.isArray(ce.detail)) setShortcuts(ce.detail as ShortcutItem[])
-      else setShortcuts(loadShortcutsConfig())
-    }
-    const onStorage = () => setShortcuts(loadShortcutsConfig())
-    window.addEventListener("opencode-shortcuts-changed", onChange as EventListener)
-    window.addEventListener("storage", onStorage)
-    return () => {
-      window.removeEventListener("opencode-shortcuts-changed", onChange as EventListener)
-      window.removeEventListener("storage", onStorage)
-    }
-  }, [])
+    serverProfiles,
+    addProfile,
+    updateProfile,
+    removeProfile,
+    applyServerProfile,
+    activeServerProfileID,
+    setActiveServerProfileID,
+    saveConfig,
+    queueAction,
+    handleOpenGitHub,
+    sidebarPrefs,
+  } = conn
 
   const {
-    showShortcuts,
-    setShowShortcuts,
-    readingMode,
-    setReadingMode,
-    showThemePicker,
+    composer,
+    handleComposerChange,
+    isSending,
+    awaitingAssistantReply,
+    runtimeError,
+    setRuntimeError,
+    outbox,
+    removeOutbox,
+    activeDetailSheet,
+    setActiveDetailSheet,
+    projectDashboard,
+    totalDiffAdditions,
+    totalDiffDeletions,
+    dashboardError,
+    diffFiles,
+    commands,
+    setCommands,
+    commandFilter,
+    setCommandFilter,
+    helpPage,
+    setHelpPage,
+    query,
+    setQuery,
+    chatSettings,
+    setChatSetting,
+    resetChatSettings,
+    promptSnippets,
+    addSnippet,
+    removeSnippet,
+    vs,
+  } = chat
+
+  const {
+    view,
+    goBack,
+    navStackRef,
+    handleNavigate,
     setShowThemePicker,
-    showThemeCreator,
     setShowThemeCreator,
-    showConnectSheet,
-    setShowConnectSheet,
-    showMCPBrowser,
-    setShowMCPBrowser,
-    showArchivedView,
-    setShowArchivedView,
-    showOpenCodeHub,
-    setShowOpenCodeHub,
-    showFavoritesManager,
     setShowFavoritesManager,
+    setShowArchivedView,
+    setShowShortcuts,
+    setShowOpenCodeHub,
+    setShowMCPBrowser,
+    setShowConnectSheet,
+    setShowPluginsModal,
+    showShortcuts,
+    showThemePicker,
+    showThemeCreator,
+    showConnectSheet,
+    showMCPBrowser,
+    showArchivedView,
+    showFavoritesManager,
+    showOpenCodeHub,
     showRemoteDesktop,
     setShowRemoteDesktop,
     showPluginsModal,
-    setShowPluginsModal,
     fileEditorPath,
     setFileEditorPath,
     desktopCfg,
-    setDesktopCfg,
     desktopDiffData,
-    setDesktopDiffData,
-  } = useAppModalsState()
-
-  useGlobalKeyShortcuts({ vs, shortcuts, setShowShortcuts })
-
-  useEffect(() => {
-    // Tabs builtin: registro barato (el codigo del panel carga por lazy solo al abrirse)
-    ensureCanvasRegistered()
-    if (isDesktop) {
-      pluginHost.reloadAll().catch((err) => console.error("[Plugins] Error al inicializar:", err))
-    }
-  }, [isDesktop])
-
-  const filteredVariantGroups = useMemo(() => {
-    const bs = blockedModels.blocked
-    return {
-      recentModels: variantGroups.recentModels.filter((m) => !bs.has(modelKey(m))),
-      groups: new Map(Array.from(variantGroups.groups.entries()).filter(([k]) => !bs.has(k))),
-    }
-  }, [variantGroups, blockedModels.blocked])
-
-  const {
-    settings: chatSettings,
-    setSetting: setChatSetting,
-    resetDefaults: resetChatSettings,
-  } = useChatSettings()
-  const { snippets: promptSnippets, addSnippet, removeSnippet } = usePromptSnippets()
-
-  const stopGenerationRef = useRef(false)
-  const { getCachedMessages, getCachedSessions, cacheMessages } = useOfflineCache(flags)
-
-  const loadSessionRef = useRef(0)
-
-  const onLoadSelected = useCallback(
-    async (id: string, dir: string) => {
-      const reqId = ++loadSessionRef.current
-      clearSession()
-      clearSidecar()
-      if (flags.offlineCache) {
-        try {
-          const cached = await getCachedMessages(id)
-          if (cached && cached.length > 0 && reqId === loadSessionRef.current) {
-            preloadMessages(id, cached)
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-      loadAgents(dir).catch(() => undefined)
-      loadModels(dir).catch(() => undefined)
-      try {
-        await loadSelected(id, dir)
-      } catch (e) {
-        throw e
-      }
-      if (reqId !== loadSessionRef.current) return
-      loadTodos(id, dir)
-    },
-    [
-      loadSelected,
-      loadAgents,
-      loadModels,
-      loadTodos,
-      clearSession,
-      clearSidecar,
-      preloadMessages,
-      flags.offlineCache,
-      getCachedMessages,
-    ]
-  )
-
-  useEffect(() => {
-    if (activeDetailSheet === "ai") {
-      loadModels()
-    }
-  }, [activeDetailSheet, loadModels])
-
-  const {
     sessions,
     selectedID,
-    loadingSessionID,
     refreshingSessions,
     creatingSession,
     selectedSession,
@@ -352,113 +155,41 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     renamingSessionID,
     renameValue,
     setRenameValue,
-    openSession,
     refreshSessions,
     refreshSessionsWithIndicator,
-    createSession,
-    deleteSession,
     renameSession,
     startRename,
     cancelRename,
     setSessionToDelete,
-    setSessions,
     favorites,
     toggleFavorite,
-    setSelectedID,
-  } = useSessions(
-    config,
-    onLoadSelected,
-    backgroundFailureCountRef,
-    initialSessionLoadRef,
-    setConnectionState,
-    setConnectionMessage
-  )
-
-  // Borrar/archivar la sesión abierta no debe dejar un chat huérfano
-  // (mensajes visibles sin composer): se limpia el estado de mensajes.
-  const clearSelectedChat = useCallback(() => {
-    clearSession()
-    clearSidecar()
-    setLocalRevertID(null)
-  }, [clearSession, clearSidecar])
-
-  const handleDeleteSession = useCallback(async (id: string) => {
-    const wasSelected = id === selectedID
-    await deleteSession(id)
-    if (wasSelected) clearSelectedChat()
-  }, [deleteSession, selectedID, clearSelectedChat])
-
-  const {
-    setDesktopState,
-    desktopLayout,
-    desktopLayoutRef,
+    handleDeleteSession,
     setDesktopLayout,
+    desktopLayout,
     tabStacks,
-    setTabStacks,
     activePanel,
     setActivePanel,
-    sidebarWidth,
-    sidebarCollapsed,
-    setSidebarWidth,
-    setSidebarCollapsed,
-    rightSidebarWidth,
-    rightSidebarCollapsed,
-    setRightSidebarWidth,
-    setRightSidebarCollapsed,
     activity,
     setActivity,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    rightSidebarCollapsed,
+    setRightSidebarCollapsed,
     desktopDiffOpen,
     setDesktopDiffOpen,
-    desktopDiffWidth,
     setDesktopDiffWidth,
-  } = useDesktopLayoutState(isDesktop, selectedSession?.id ?? null)
-
-  // Sincroniza caché offline tras cada reconciliación — evita que mensajes borrados vía revert
-  // queden en IndexedDB y se reinyecten en el próximo preload (causaba reenvío del borrado).
-  useEffect(() => {
-    if (!flags.offlineCache) return
-    if (!selectedSession?.id) return
-    if (messages.length === 0) return
-    const filtered = messages.filter((m: any) => m.info.sessionID === selectedSession.id)
-    if (filtered.length === 0) return
-    cacheMessages(selectedSession.id, filtered).catch(() => {})
-  }, [messages, selectedSession?.id, flags.offlineCache, cacheMessages])
-
-  // auto_opencode2 lo maneja el server headless del escritorio; sin dock inferior
-
-  const {
     switchTab,
     removeTab,
     moveTab,
     transferTab,
-    addPanel,
-    closePanel,
+    addTerminalToPanel,
+    detachTab,
     closeOthers,
     closeRight,
     closeLeft,
     closeAll,
-    splitPanel,
-    openInPanel,
-    addTerminalToPanel,
-    detachTab,
-    handleSessionDragStart,
-    handleSwapPanels,
+    closePanel,
     handleDockSession,
-    handleOpenFile,
-  } = useDesktopGridActions({
-    isDesktop,
-    desktopLayout,
-    desktopLayoutRef,
-    setDesktopLayout,
-    tabStacks: tabStacks ?? [],
-    setTabStacks: setTabStacks as any,
-    activePanel,
-    setActivePanel,
-    setFileEditorPath,
-    setDesktopState,
-  })
-
-  const {
     handleShutdownHost,
     handleRestartHost,
     handleDeleteMany,
@@ -466,412 +197,66 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     openSessionInDir,
     openBrowserAsTab,
     handleOpenBrowser,
-  } = useHostActions({
-    config,
-    selectedSession,
-    setSettingsNotice,
-    t,
-    sessions,
-    setSessions: (updater) => setSessions(updater as any),
-    selectedID,
-    setSelectedID,
-    onClearSelected: clearSelectedChat,
-    refreshSessions,
-    navigate,
-    setRuntimeError,
-    activePanel,
-    desktopLayout,
-    setDesktopLayout,
-    setTabStacks,
-    setActivePanel,
-    isDesktop,
-  })
-
-  const openPluginAsTab = useCallback(
-    (key: string, targetPanel?: number) => {
-      // Herramientas integradas que no son tabs de plugin: se abren por su vía.
-      if (key === "openher:studio") {
-        if (view === "studio") navigate(desktopLayout.sessions.some(Boolean) ? "detail" : "sessions")
-        else navigate("studio")
-        return
-      }
-      navigate("detail")
-      const idx = targetPanel ?? Math.min(activePanel, Math.max(0, desktopLayout.sessions.length - 1))
-      const tabId = `plugin:${key}`
-      const existingPanel = tabStacks?.findIndex((s) => s.includes(tabId))
-      if (existingPanel !== undefined && existingPanel >= 0) {
-        const tabIdx = tabStacks![existingPanel]!.indexOf(tabId)
-        if (tabIdx >= 0) {
-          switchTab(existingPanel, tabIdx)
-          setActivePanel(existingPanel)
-          return
-        }
-      }
-      setTabStacks((prev) => {
-        const next = (prev ?? []).map((s) => [...s])
-        while (next.length <= idx) next.push([])
-        if (!next[idx]!.includes(tabId)) next[idx]!.push(tabId)
-        return next
-      })
-      setDesktopLayout((prev) => {
-        const sessions = [...prev.sessions]
-        sessions[idx] = tabId
-        return { ...prev, sessions }
-      })
-      setActivePanel(idx)
-    },
-    [
-      activePanel,
-      desktopLayout.sessions.length,
-      desktopLayout.sessions,
-      tabStacks,
-      switchTab,
-      setActivePanel,
-      setTabStacks,
-      setDesktopLayout,
-      navigate,
-      view,
-      isDesktop,
-      setRightSidebarCollapsed,
-    ]
-  )
-
-  const openExternalProject = useCallback(
-    (name: string) => {
-      navigate("detail")
-      openPluginAsTab(`external:${name}`)
-    },
-    [openPluginAsTab, navigate]
-  )
-
-  const handleOpenNewSession = useCallback(() => {
-    // Abre en el proyecto actual (si hay sesión); si no, cursor guardado/server.
-    void openNewSessionPicker(selectedSession?.directory)
-  }, [openNewSessionPicker, selectedSession?.directory])
-
-  const handleCreateSession = useCallback(
-    async (dir?: string) => {
-      if (dir) persistDirectory(dir)
-      const s = await createSession(dir)
-      setShowNewSessionPicker(false)
-      if (s) {
-        navigate("detail")
-      }
-    },
-    [createSession, navigate, setShowNewSessionPicker, persistDirectory]
-  )
-
-  // El Estudio necesita una sesión de agente atada al directorio del proyecto,
-  // sin navegar fuera de la vista (a diferencia de handleCreateSession).
-  const ensureStudioSession = useCallback(
-    async (directory: string): Promise<SessionView | null> => {
-      const target = dirKey(directory)
-      try {
-        const existing = sessions.find((s) => dirKey(s.directory ?? "") === target)
-        if (existing) return existing
-        return await createSession(directory)
-      } catch {
-        return null
-      }
-    },
-    [sessions, createSession]
-  )
-
-  const fb = useFileBrowser(config, selectedSession?.directory)
-  const handleOpenExplorer = useCallback(() => {
-    fb.open()
-  }, [fb])
-
-  const { execute: shellExecute } = useShell(config, selectedSession?.directory)
-
-  const {
-    providers: providerList,
-    connecting: connectingProvider,
-    error: providerError,
-    connectProvider,
-    disconnectProvider,
-    addCustomProvider,
-    removeCredential,
-    activateCredential,
-  } = useProviderManager(modelOptions, config)
-
-  const {
-    profiles: serverProfiles,
-    addProfile,
-    removeProfile,
-    updateProfile,
-  } = useServers()
-
-  const [activeServerProfileID, setActiveServerProfileID] = useState<string | null>(() =>
-    localStorage.getItem("openher.activeServer")
-  )
-
-  const applyServerProfile = useCallback(
-    (profile: ServerProfile) => {
-      setActiveServerProfileID(profile.id)
-      localStorage.setItem("openher.activeServer", profile.id)
-      setDraftConfig(profile.config)
-      saveConfig(t)
-      invalidateShellBase()
-    },
-    [setDraftConfig, saveConfig, t]
-  )
-
-  const { enqueue: queueAction, listPending, ack: ackQueuedAction, markFailed: markQueuedActionFailed } = useOfflineQueue()
-  const { notify } = useNotifications()
-
-  const {
-    pendingQuestions,
-    permissionRequest,
-    handleQuestionReply,
-    handleQuestionReject,
-    handlePermissionApprove,
-    handlePermissionReject,
-    handleDismissQuestion,
-    clearDismissedQuestions,
-    dismissSessionQuestions,
-    handleDismissPermission,
-  } = useQuestions({ config, directory: selectedSession?.directory, fallbackSessionID: selectedSession?.id, enabled: true, notify, t })
-
-  const currentSessionAI = useMemo(() => {
-    return getModelForSession(selectedSession?.id)
-  }, [getModelForSession, selectedSession?.id])
-
-  const activeModelOption = currentSessionAI.activeModelOption ?? globalActiveModelOption
-  const activeModel =
-    (currentSessionAI.activeModel
-      ? {
-          providerID: currentSessionAI.activeModel.providerID,
-          modelID: currentSessionAI.activeModel.modelID,
-          variant: currentSessionAI.activeModel.variant,
-        }
-      : null) ??
-    (globalActiveModel
-      ? {
-          providerID: globalActiveModel.providerID,
-          modelID: globalActiveModel.modelID,
-          variant: globalActiveModel.variant,
-        }
-      : null)
-  const activeModelVariants = currentSessionAI.activeModelVariants ?? globalActiveModelVariants
-  const selectedVariant = currentSessionAI.selectedVariant ?? globalSelectedVariant
-
-  const sseHandler = useSSEHandler({
-    sessionID: selectedSession?.id,
-    directory: selectedSession?.directory,
-    loadSelected,
-    applyDelta,
-    applyPart,
-    setAwaitingAssistantReply,
-    setCompacting,
-    setRuntimeError,
-    awaitingRef: () => awaitingAssistantReply,
-    awaitingBaselineIDRef: getAwaitingBaselineID,
-    onSettled: (sid, dir) => {
-      setSessions((prev) => prev.map((s) => (s.id === sid ? { ...s, status: "idle" as const } : s)))
-      loadSelected(sid, dir)
-      refreshSessions(true)
-    },
-  })
-
-  // Stop real en la vista principal: mientras el flag sigue activo se dropean
-  // los deltas en vuelo (igual que SessionChatPanel); sin esto el texto
-  // seguía creciendo tras el clic aunque el server ya hubiera parado.
-  const sseHandlerGuarded = useCallback((event: Parameters<typeof sseHandler>[0]) => {
-    if (stopGenerationRef.current) {
-      if (event.type === "message.part.delta" || event.type === "message.updated" || event.type === "message.part.updated"
-        || event.type === "session.next.text.delta" || event.type === "session.next.reasoning.delta"
-        || event.type === "session.next.tool.input.delta"
-        || event.type.startsWith("session.text.") || event.type.startsWith("session.reasoning.")
-        || event.type === "session.tool.input.delta" || event.type === "session.message.content.updated") return
-    }
-    sseHandler(event)
-  }, [sseHandler])
-
-  const { streamState, reconnect } = useSSE(config, sseHandlerGuarded, selectedSession?.directory, selectedSession?.id)
-
-  // Al volver de segundo plano (Android suspende el WebView), el stream SSE
-  // puede quedar medio-abierto: sin error, sin eventos, y el chat se ve
-  // "parado" aunque el poll traiga mensajes. Reconectar y reconciliar contra
-  // el server (status real de la sesión) al volver a primer plano.
-  const resumeSessionRef = useRef(selectedSession)
-  resumeSessionRef.current = selectedSession
-  useResumeResync(() => {
-    reconnect()
-    refreshSessions(true).catch(() => undefined)
-    const s = resumeSessionRef.current
-    if (!s) return
-    loadSelected(s.id, s.directory).catch(() => undefined)
-    api
-      .listStatuses(config, s.directory)
-      .then((st) => {
-        const real = st?.[s.id]
-        if (real && (real.type === "busy" || real.type === "retry")) setAwaitingAssistantReply(true)
-      })
-      .catch(() => undefined)
-  })
-
-  const { memInfo } = useAppLifecycle({
-    config,
-    connectionState,
-    setConnectionState,
-    setConnectionMessage,
-    dataMode,
-    changeDataMode,
-    flags,
-    selectedSession,
-    sessions,
-    setSessions: (updater) => setSessions(updater as any),
-    setMessages,
-    streamState,
-    awaitingAssistantReply,
-    setAwaitingAssistantReply,
-    completionShouldPlayRef,
-    chatSettings,
-    refreshSessions,
-    loadSelected,
-    loadAgents,
-    loadModels,
-    setCommands,
-    getCachedSessions,
-    backgroundFailureCountRef,
-    initialSessionLoadRef,
-    activeDetailSheet,
-    loadDiffs,
-    loadDashboard,
-    listPending,
-    ackQueuedAction,
-    markQueuedActionFailed,
-    navigate,
-    openSession,
-    setDraftConfig,
-    t,
-  })
-
-  const settleSession = useCallback(
-    async (sessionID: string, dir: string) => {
-      try {
-        setSessions((prev) => prev.map((s) => (s.id === sessionID ? { ...s, status: "idle" as const } : s)))
-        await loadSelected(sessionID, dir)
-        await refreshSessions(true)
-      } catch {
-        /* silently fail */
-      }
-    },
-    [loadSelected, refreshSessions, setSessions]
-  )
-
-  const {
-    selectedProjectDir,
-    setSelectedProjectDir,
+    openPluginAsTab,
+    openExternalProject,
+    handleOpenNewSession,
+    handleCreateSession,
+    ensureStudioSession,
+    fb,
+    handleOpenExplorer,
+    shellExecute,
+    handleOpenSession,
     filteredProjects,
     filteredProjectSessions,
-    projectPath,
+    selectedProjectDir,
+    setSelectedProjectDir,
     projectName,
+    projectPath,
     vcsBranch,
-  } = useProjectInspection({
-    sessions,
-    query,
-    projectDashboard,
-    diffFiles,
-  })
-
-  const activeSessions = sessions.filter((s) => isSessionActive(s))
-  const busySessions = useMemo(() => new Set(activeSessions.map((s) => s.id)), [activeSessions])
-
-  const [dismissedRecentIds, setDismissedRecentIds] = useState<Set<string>>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.RECENT_DISMISS)
-      const arr: string[] = raw ? JSON.parse(raw) : []
-      return new Set(arr)
-    } catch {
-      return new Set()
-    }
-  })
-  const dismissRecent = useCallback((id: string) => {
-    setDismissedRecentIds((prev) => {
-      const next = new Set(prev)
-      next.add(id)
-      try {
-        localStorage.setItem(STORAGE_KEYS.RECENT_DISMISS, JSON.stringify([...next]))
-      } catch {}
-      return next
-    })
-  }, [])
-
-  const recentSessions = useMemo(
-    () =>
-      [...sessions]
-        .sort((a, b) => (b.updated || 0) - (a.updated || 0))
-        .filter((s) => !dismissedRecentIds.has(s.id)),
-    [sessions, dismissedRecentIds]
-  )
-
-  const handleLanguageChange = useCallback(
-    (lang: LanguageCode) => {
-      setLanguage(lang)
-      localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang)
-    },
-    [setLanguage]
-  )
+    activeSessions,
+    recentSessions,
+    busySessions,
+    dismissRecent,
+    shellRef,
+    shellGridStyle,
+    startSidebarResize,
+    startRightSidebarResize,
+    maximizedPanel,
+    setMaximizedPanel,
+    handleOpenKanban,
+    handleOpenLearning,
+    currentActiveSession,
+    activeSessionDir,
+    handleSessionDragStart,
+    openInPanel,
+    handleSwapPanels,
+    handleOpenFile,
+    showNewSessionPicker,
+    pickerDir,
+    pickerItems,
+    pickerLoading,
+    pickerError,
+    browseNewSessionDirectory,
+    setPickerError,
+    setShowNewSessionPicker,
+  } = ws
 
   const {
-    handleExportChat,
-    getExportDefaultPath,
-    exportMarkdownTo,
-    handleSnapshot,
-    handleSend,
-    handleRegenerate,
-    handleInsertPrompt,
-    handleSendPrompt,
-    handleAbort,
-    handleRevertToMessage,
-    handleEditMessage,
-    handleUndo,
-    handleRedo,
-    handleCompact,
-    outboxActions,
-  } = useChatActions({
-    selectedSession,
-    config,
-    connectionState,
-    activeModel: activeModel as any,
-    activeAgentID,
-    commands,
-    composerRef,
-    setComposer,
-    setRuntimeError,
-    queueAction,
-    stopGenerationRef,
-    localRevertID,
-    setLocalRevertID,
-    setMessages: setMessages as any,
-    setSessions: setSessions as any,
-    send,
-    refreshSessions,
-    loadSelected,
-    setCommands,
-    vs,
-    navigate,
-    setHelpPage,
-    setShowThemePicker,
-    setShowConnectSheet,
-    onNewSession: handleOpenNewSession,
-    renderedMessages,
-    awaitingAssistantReply,
-    setAwaitingAssistantReply,
-    outbox,
-    enqueueOutbox,
-    removeOutbox,
-    completionShouldPlayRef,
-    abortSession,
+    activeModelOption,
+    selectedVariant,
+    memInfo,
     settleSession,
-    undoMessage,
-    redoMessage,
-    compactSession,
-    setCompacting,
-    dismissSessionQuestions,
-  })
+    handleSend,
+    handleBrowserVisualPick,
+    handleToggleInspectTool,
+  } = act
+
+  const isSessionRunning = Boolean(selectedSession && isSessionActive(selectedSession))
+  // stopping/chatStopping NO entran acá: el guard anti-deltas vive en
+  // stopGenerationRef (fondo) y la burbuja debe caer al confirmar el stop.
+  const isWorking = awaitingAssistantReply || isSessionRunning
+
+  const baseChatProps = useBaseChatProps({ conn, chat, ws, act, isWorking })
 
   // Auto-flush de la cola visible (móvil/detalle): al quedar libre, sale el
   // pendiente más antiguo de la sesión seleccionada. Claim compartido: la
@@ -903,311 +288,6 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
       outboxFlushingRef.current = false
     })
   })
-
-  const [maximizedPanel, setMaximizedPanel] = useState<number | null>(null)
-  const shellRef = useRef<HTMLDivElement | null>(null)
-
-  const toggleMaximize = useCallback((index: number) => {
-    setMaximizedPanel((prev) => (prev === index ? null : index))
-  }, [])
-
-  const gridOptions = useMemo(
-    () => ({
-      position: sidebarPrefs.position,
-      sidebarCollapsed,
-      sidebarWidth,
-      rightSidebarCollapsed,
-      rightSidebarWidth,
-      desktopDiffOpen,
-      desktopDiffWidth,
-      narrow: shellNarrow,
-      rightOverlay,
-    }),
-    [
-      sidebarPrefs.position,
-      sidebarCollapsed,
-      sidebarWidth,
-      rightSidebarCollapsed,
-      rightSidebarWidth,
-      desktopDiffOpen,
-      desktopDiffWidth,
-      shellNarrow,
-      rightOverlay,
-    ]
-  )
-  const shellGridStyle = useMemo(
-    () => (isDesktop ? buildGridTemplate(gridOptions) : undefined),
-    [isDesktop, gridOptions]
-  )
-
-  const { startSidebarResize, startRightSidebarResize } = useSidebarResize({
-    shellRef,
-    sidebarWidth,
-    setSidebarWidth,
-    rightSidebarWidth,
-    setRightSidebarWidth,
-    gridOptions,
-  })
-
-  useDesktopShortcuts({
-    isDesktop,
-    view,
-    shortcuts,
-    activePanel,
-    tabStacks: tabStacks as any,
-    desktopLayout,
-    maximizedPanel,
-    switchTab,
-    closePanel,
-    removeTab,
-    splitPanel,
-    toggleMaximize,
-    setMaximizedPanel,
-    setSidebarCollapsed,
-    handleOpenNewSession,
-    setDesktopLayout,
-    setActivePanel,
-    onAddTerminal: addTerminalToPanel,
-  })
-
-  const handleOpenSession = useCallback(
-    async (id: string, dir: string) => {
-      navigate("detail")
-      if (isDesktop) {
-        const existing = desktopLayout.sessions.indexOf(id)
-        if (existing >= 0) {
-          setActivePanel(existing)
-          return
-        }
-        openInPanel(activePanel, id)
-        return
-      }
-      try {
-        await openSession(id, dir)
-      } catch {
-        if (flags.offlineCache) {
-          const cached = await getCachedMessages(id).catch(() => null)
-          if (cached && cached.length > 0) {
-            setMessages((prev) => [...prev.filter((m) => m.info.sessionID !== id), ...cached])
-          }
-        }
-      }
-    },
-    [
-      navigate,
-      openSession,
-      flags.offlineCache,
-      getCachedMessages,
-      setMessages,
-      isDesktop,
-      desktopLayout.sessions,
-      activePanel,
-      openInPanel,
-      setActivePanel,
-    ]
-  )
-
-  const handleTest = useCallback(() => testConnection(t), [testConnection, t])
-
-  const handleOpenGitHub = useCallback(() => {
-    window.open("https://github.com/Owning01/Openher", "_system")
-  }, [])
-
-  const handleNavigate = useCallback(
-    (target: ViewType) => {
-      if (target === "sessions") setSelectedProjectDir(null)
-      navigate(target)
-    },
-    [navigate, setSelectedProjectDir]
-  )
-
-  const handleOpenADEDiff = useCallback(
-    (diffs?: FileDiff[], file?: string) => {
-      if (isDesktop) {
-        setDesktopDiffData({
-          selectedFile: file,
-          diffs:
-            diffs ??
-            (diffFiles.length > 0
-              ? diffFiles.map((d) => ({
-                  file: d.file,
-                  patch: "",
-                  additions: d.additions,
-                  deletions: d.deletions,
-                }))
-              : []),
-        })
-        setDesktopDiffOpen(true)
-      }
-    },
-    [isDesktop, diffFiles, setDesktopDiffOpen, setDesktopDiffData]
-  )
-
-  const isSessionRunning = Boolean(selectedSession && isSessionActive(selectedSession))
-  // stopping/chatStopping NO entran acá: el guard anti-deltas vive en
-  // stopGenerationRef (fondo) y la burbuja debe caer al confirmar el stop.
-  const isWorking = awaitingAssistantReply || isSessionRunning
-
-  const baseChatProps = useBaseChatProps({
-    selectedSession,
-    composer,
-    handleComposerChange,
-    localRevertID,
-    renderedMessages,
-    todos,
-    todosExpanded,
-    setTodosExpanded,
-    isSending,
-    isWorking,
-    awaitingAssistantReply,
-    loadingSessionID,
-    selectedID,
-    messageScrollSignature,
-    view,
-    dataMode,
-    renamingSessionID,
-    renameValue,
-    commands,
-    activeAgent,
-    activeAgentID,
-    activeModelOption,
-    activeModelVariants,
-    selectedVariant,
-    changeVariant,
-    getModelForSession,
-    modelOptions,
-    changeModel,
-    filteredVariantGroups,
-    primaryAgentOptions,
-    agentOptions,
-    changeAgent,
-    projectName,
-    startRename,
-    setRenameValue,
-    renameSession,
-    cancelRename,
-    handleSend,
-    handleAbort,
-    goBack,
-    setActiveDetailSheet,
-    recentSessions,
-    sessions,
-    handleOpenSession,
-    readingMode,
-    setReadingMode,
-    handleExportChat,
-    getExportDefaultPath,
-    exportMarkdownTo,
-    handleSnapshot,
-    handleOpenFile,
-    navigate,
-    setShowThemePicker,
-    config,
-    connectionState,
-    queueAction,
-    shellExecute: (cmd, sid, dir) => shellExecute(cmd, sid || "", dir),
-    flags,
-    toggleFlag,
-    setFlag,
-    diffFiles,
-    handleOpenADEDiff,
-    projectDashboard,
-    streamState,
-    compacting,
-    pendingQuestions,
-    permissionRequest,
-    handleQuestionReply,
-    handleQuestionReject,
-    handlePermissionApprove,
-    handlePermissionReject,
-    handleDismissQuestion,
-    handleReopenQuestions: clearDismissedQuestions,
-    handleDismissPermission,
-    handleRevertToMessage,
-    handleEditMessage,
-    handleUndo,
-    handleRedo,
-    handleCompact,
-    handleCreateSession,
-    handleOpenNewSession,
-    fb,
-    setShowMCPBrowser,
-    setShowOpenCodeHub,
-    setDesktopCfg,
-    loadDesktopConfig,
-    setShowRemoteDesktop,
-    chatSettings,
-    handleRegenerate,
-    handleInsertPrompt,
-    handleSendPrompt,
-    setChatSetting,
-    resetChatSettings,
-    vs,
-    outboxActions,
-  })
-
-  const activeSessionSid = isDesktop
-    ? desktopLayout.sessions[Math.min(activePanel, desktopLayout.sessions.length - 1)]
-    : selectedSession?.id
-  const currentActiveSession =
-    (activeSessionSid ? sessions.find((s) => s.id === activeSessionSid) : null) ??
-    selectedSession ??
-    (desktopLayout.sessions.find(Boolean)
-      ? sessions.find((s) => s.id === desktopLayout.sessions.find(Boolean))
-      : null) ??
-    sessions[0] ??
-    null
-  const activeSessionDir =
-    currentActiveSession?.directory ??
-    selectedSession?.directory ??
-    sessions[0]?.directory ??
-    undefined
-
-  const { handleOpenKanban, handleOpenLearning } = useVirtualTabs({
-    isDesktop,
-    desktopLayout,
-    activePanel,
-    tabStacks,
-    setTabStacks: setTabStacks as any,
-    setDesktopLayout,
-    setActivePanel,
-    addPanel,
-    handleNavigate,
-  })
-
-  const handleBrowserVisualPick = useCallback(
-    (url: string, el: any) => {
-      const isPod = el?.mode === "pod" && Array.isArray(el.members) && el.members.length > 0
-      vs.addAnnotation({
-        id: typeof el.tmpId === "string" && el.tmpId ? el.tmpId : undefined,
-        mode: isPod ? "pod" : "picker",
-        members: isPod ? el.members : undefined,
-        tag: String(el.tag ?? "div"),
-        selector: String(el.selector ?? ""),
-        xpath: el.xpath,
-        outerHTML: String(el.outerHTML ?? ""),
-        innerText: String(el.innerText ?? ""),
-        boundingRect: el.boundingRect,
-        bx: el.bx,
-        by: el.by,
-        url,
-        source: el.source ?? null,
-      } as any)
-    },
-    [vs]
-  )
-
-  const handleToggleInspectTool = useCallback(
-    (tool: "picker" | "pod") => {
-      if (vs.inspectMode && vs.inspectTool === tool) {
-        vs.setInspectMode(false)
-        return
-      }
-      vs.setInspectTool(tool)
-      vs.setInspectMode(true)
-    },
-    [vs]
-  )
 
   return {
     t,
@@ -1301,7 +381,7 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
     openPluginAsTab,
     openExternalProject,
     memInfo,
-    formatBytes,
+    formatBytes: formatBytesMemory,
     handleOpenLearning,
     handleNavigate,
     currentActiveSession,

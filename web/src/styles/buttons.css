@@ -36,16 +36,7 @@
   color: var(--text);
 }
 
-.btn-outline {
-  background: transparent;
-  border-color: var(--border);
-  color: var(--text);
-}
 
-.btn-outline:hover:not(:disabled) {
-  background: var(--surface-subtle);
-  border-color: var(--border-strong);
-}
 
 .btn-danger {
   background: var(--danger-soft);

@@ -134,7 +134,13 @@ fn invalidate_probe(port: u16) {
     }
 }
 
-fn defs() -> HashMap<&'static str, ExternalDef> {
+static DEFS: std::sync::OnceLock<HashMap<&'static str, ExternalDef>> = std::sync::OnceLock::new();
+
+fn defs() -> &'static HashMap<&'static str, ExternalDef> {
+    DEFS.get_or_init(build_defs)
+}
+
+fn build_defs() -> HashMap<&'static str, ExternalDef> {
     let mut m = HashMap::new();
     m.insert("opendesign", ExternalDef {
         dir: r"G:\Proyectos\open-design",
@@ -228,6 +234,115 @@ fn external_manager(state: &AppState) -> Arc<crate::state::ExternalManager> {
     state.external.clone()
 }
 
+/// Lanza el proceso efectivo de `def` con el mismo binario/args/cwd/entorno/
+/// log oculto que usan `/start` y `/restart` (antes duplicado verbatim).
+fn spawn_external(def: &ExternalDef, name: &str) -> Result<std::process::Child, String> {
+    let dir = PathBuf::from(def.dir);
+    let cmd_str = effective_cmd(def);
+    let log_path = crate::state::data_dir().join(format!("external-{}.log", name));
+    let _ = std::fs::create_dir_all(crate::state::data_dir());
+    let log_file = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
+    let child = if cmd_str.starts_with("flutter") {
+        // flutter es .bat, necesita cmd pero oculto
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/c", cmd_str]);
+        c.current_dir(&dir);
+        c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+        c.stdin(std::process::Stdio::null());
+        if let Some(f) = log_file {
+            if let Ok(cloned) = f.try_clone() {
+                c.stdout(std::process::Stdio::from(cloned));
+            }
+            c.stderr(std::process::Stdio::from(f));
+        } else {
+            c.stdout(std::process::Stdio::null());
+            c.stderr(std::process::Stdio::null());
+        }
+        c.spawn().map_err(|e| e.to_string())?
+    } else if cmd_str.trim_start().starts_with("G:\\Dev\\nodejs") {
+        // Direct node (screenshots/opendesign) - evita pnpm y conhost, oculta ventana
+        let parts = split_cmd(cmd_str);
+        let mut c = std::process::Command::new(&parts[0]);
+        if parts.len() > 1 {
+            c.args(&parts[1..]);
+        }
+        c.current_dir(&dir);
+        let cur_path = std::env::var("PATH").unwrap_or_default();
+        c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
+        c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+        c.stdin(std::process::Stdio::null());
+        if let Some(f) = log_file {
+            if let Ok(cloned) = f.try_clone() {
+                c.stdout(std::process::Stdio::from(cloned));
+            }
+            c.stderr(std::process::Stdio::from(f));
+        } else {
+            c.stdout(std::process::Stdio::null());
+            c.stderr(std::process::Stdio::null());
+        }
+        c.spawn().map_err(|e| e.to_string())?
+    } else {
+        // pnpm directo oculto sin cmd visible: evita conhost S/N y WindowsTerminal. Usa binario Rust directo.
+        let pnpm_bin = r"G:\Dev\nodejs-24\node_modules\pnpm\pnpm.exe";
+        let pnpm_bin_alt = r"G:\Dev\nodejs-24\node_modules\pnpm\bin\pnpm.cjs";
+        let use_node = !std::path::Path::new(pnpm_bin).exists();
+        let args: Vec<&str> = cmd_str.split_whitespace().skip(1).collect();
+        let mut c = if use_node {
+            let mut cc = std::process::Command::new(r"G:\Dev\nodejs-24\node.exe");
+            cc.arg(pnpm_bin_alt);
+            cc
+        } else {
+            std::process::Command::new(pnpm_bin)
+        };
+        if !args.is_empty() {
+            c.args(&args);
+        }
+        c.current_dir(&dir);
+        // PATH con Node24 primero para que el binario encuentre node
+        let cur_path = std::env::var("PATH").unwrap_or_default();
+        c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
+        c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+        c.stdin(std::process::Stdio::null());
+        if let Some(f) = log_file {
+            if let Ok(cloned) = f.try_clone() {
+                c.stdout(std::process::Stdio::from(cloned));
+            }
+            c.stderr(std::process::Stdio::from(f));
+        } else {
+            c.stdout(std::process::Stdio::null());
+            c.stderr(std::process::Stdio::null());
+        }
+        c.spawn().map_err(|e| e.to_string())?
+    };
+    Ok(child)
+}
+
+/// Thread que espera a que el child termine (poll) y lo remueve de `procs`.
+fn watch_child(mgr: Arc<crate::state::ExternalManager>, name: String) {
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_secs(2));
+            let mut st = mgr.lock();
+            if let Some(ch) = st.procs.get_mut(&name) {
+                match ch.try_wait() {
+                    Ok(Some(_)) => {
+                        st.procs.remove(&name);
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(_) => {
+                        st.procs.remove(&name);
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+            drop(st);
+        }
+    });
+}
+
 pub fn handle(
     _req: &ShellRequest,
     state: Arc<AppState>,
@@ -247,10 +362,7 @@ pub fn handle(
         // lista todos con status — snapshot de procs para no mantener lock durante probe (350ms)
         let defs_map = defs();
         let mgr = external_manager(&state);
-        let procs_snapshot: std::collections::HashSet<String> = {
-            let procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
-            procs.keys().cloned().collect()
-        };
+        let procs_snapshot: std::collections::HashSet<String> = mgr.lock().procs.keys().cloned().collect();
         let mut items = Vec::new();
         for (name, def) in defs_map.iter() {
             // evitar duplicado alias
@@ -266,7 +378,7 @@ pub fn handle(
                 procs_snapshot.contains(*name)
             };
             let url = def.url.map(|s| s.to_string()).unwrap_or_default();
-            let mut stored_url = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(*name).cloned().unwrap_or(url.clone());
+            let mut stored_url = mgr.lock().urls.get(*name).cloned().unwrap_or(url.clone());
             if is_static_embed(def) {
                 let embed_url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
                 if stored_url == url || stored_url.is_empty() {
@@ -348,7 +460,7 @@ pub fn handle(
                         .with_header("Cache-Control", "no-cache")
                 } else {
                     ShellResponse::data(200, bytes, &mime)
-                        .with_header("Cache-Control", "public, max-age=31536000, immutable")
+                        .with_header("Cache-Control", crate::http_server::IMMUTABLE_CACHE)
                 };
                 return Some(resp);
             }
@@ -379,10 +491,10 @@ pub fn handle(
                 probe(&def)
             }
         } else {
-            mgr.procs.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&name)
+            mgr.lock().procs.contains_key(&name)
         };
         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
-        let mut stored = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned().unwrap_or(url.clone());
+        let mut stored = mgr.lock().urls.get(&name).cloned().unwrap_or(url.clone());
         // Si es vite embed y no hay URL guardada, usar embed URL
         if is_static_embed(&def) {
             let embed_url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
@@ -397,48 +509,47 @@ pub fn handle(
         // Anti-doble-spawn: si otro /start del mismo plugin está en curso (<20s),
         // no spawnear otro tools-dev (StrictMode / prewarm / doble instancia).
         {
-            let mut starting = mgr.starting.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(at) = starting.get(&name) {
+            let mut st = mgr.lock();
+            if let Some(at) = st.starting.get(&name) {
                 if at.elapsed() < Duration::from_secs(20) {
-                    let url = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned()
+                    let url = st.urls.get(&name).cloned()
                         .unwrap_or_else(|| def.url.map(|s| s.to_string()).unwrap_or_default());
                     return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "starting": true, "url": url })));
-                } else {
-                    starting.remove(&name);
                 }
+                st.starting.remove(&name);
             }
-            starting.insert(name.clone(), std::time::Instant::now());
+            st.starting.insert(name.clone(), std::time::Instant::now());
         }
         // si ya running, retornar ok — verificar zombie (try_wait); el puerto
         // puede tardar ~9s en abrir (opendesign cold), así que solo se evicta
         // como zombie si lleva >25s vivo sin responder (gracia de boot).
         let already_running: Option<String> = {
-            let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(child) = procs.get_mut(&name) {
+            let mut st = mgr.lock();
+            if let Some(child) = st.procs.get_mut(&name) {
                 match child.try_wait() {
-                    Ok(Some(_)) => { procs.remove(&name); None }
+                    Ok(Some(_)) => { st.procs.remove(&name); None }
                     Ok(None) => {
                         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
                         Some(url)
                     }
-                    Err(_) => { procs.remove(&name); None }
+                    Err(_) => { st.procs.remove(&name); None }
                 }
             } else { None }
         };
         if let Some(url) = already_running {
             let is_vite_embed = is_static_embed(&def);
             let need_probe = !is_vite_embed && def.port.is_some();
-            let boot_elapsed = mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).get(&name).map(|t| t.elapsed());
+            let boot_elapsed = mgr.lock().spawned_at.get(&name).map(|t| t.elapsed());
             // Sin timestamp (prewarm viejo) → tratar como reciente, no evictar.
             let in_grace = boot_elapsed.map(|e| e < Duration::from_secs(25)).unwrap_or(true);
             if need_probe && !in_grace && !probe(&def) {
                 // zombie real: vivo >25s pero puerto caído → limpiar y seguir al spawn
-                let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
-                procs.remove(&name);
+                mgr.lock().procs.remove(&name);
                 // cae al spawn (mantiene marcador starting)
             } else {
-                mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
-                let stored = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()).get(&name).cloned().unwrap_or(url.clone());
+                let mut st = mgr.lock();
+                st.starting.remove(&name);
+                let stored = st.urls.get(&name).cloned().unwrap_or(url.clone());
                 return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "url": stored })));
             }
         }
@@ -446,7 +557,7 @@ pub fn handle(
         {
             let is_vite_embed = is_static_embed(&def);
             if !is_vite_embed && def.port.is_some() && probe(&def) {
-                mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
+                mgr.lock().starting.remove(&name);
                 let url = def.url.map(|s| s.to_string()).unwrap_or_default();
                 return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "url": url, "external": true })));
             }
@@ -458,12 +569,12 @@ pub fn handle(
                 for (other_name, other_def) in defs_map.iter() {
                     if *other_name == name.as_str() || *other_name == "" { continue; }
                     if other_def.port == Some(port) {
-                        mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
+                        mgr.lock().starting.remove(&name);
                         return Some(ShellResponse::err_json(409, &format!("puerto {} ya configurado para '{}', '{}' no puede usar el mismo puerto", port, other_name, name)));
                     }
                 }
                 if probe(&def) {
-                    mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
+                    mgr.lock().starting.remove(&name);
                     let owner = defs_map
                         .iter()
                         .find(|(n, d)| *n != &name.as_str() && d.port == Some(port))
@@ -477,104 +588,24 @@ pub fn handle(
         if is_static_embed(&def) {
             let url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
             {
-                let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner());
-                urls.insert(name.clone(), url.clone());
+                let mut st = mgr.lock();
+                st.urls.insert(name.clone(), url.clone());
+                st.starting.remove(&name);
             }
-            mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
             eprintln!("external: {} embed static → {} (sin spawn)", name, url);
             return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "already": true, "url": url, "embed": true })));
         }
         let dir = PathBuf::from(def.dir);
         if !dir.exists() {
-            mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
+            mgr.lock().starting.remove(&name);
             return Some(ShellResponse::err_json(404, &format!("directorio no existe: {}", def.dir)));
         }
         let cmd_str = effective_cmd(&def);
-        // log file para debug (data/external-<name>.log)
-        let log_path = crate::state::data_dir().join(format!("external-{}.log", name));
-        let _ = std::fs::create_dir_all(crate::state::data_dir());
-        let log_file = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
-        // Spawn: sin ventana (CREATE_NO_WINDOW+DETACHED), pnpm directo sin cmd para no mostrar consola
-        let mut child: std::process::Child = if cmd_str.starts_with("flutter") {
-            // flutter es .bat, necesita cmd pero oculto
-            let mut c = std::process::Command::new("cmd");
-            c.args(["/c", cmd_str]);
-            c.current_dir(&dir);
-            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-            c.stdin(std::process::Stdio::null());
-            if let Some(f) = log_file {
-                // duplicar handle para stdout/stderr
-                if let Ok(cloned) = f.try_clone() {
-                    c.stdout(std::process::Stdio::from(cloned));
-                }
-                c.stderr(std::process::Stdio::from(f));
-            } else {
-                c.stdout(std::process::Stdio::null());
-                c.stderr(std::process::Stdio::null());
-            }
-            match c.spawn() {
-                Ok(ch) => ch,
-                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(ShellResponse::err_json(500, &e.to_string())); }
-            }
-        } else if cmd_str.trim_start().starts_with("G:\\Dev\\nodejs") {
-            // Direct node (screenshots/opendesign) - evita pnpm y conhost, oculta ventana
-            let parts = split_cmd(cmd_str);
-            let mut c = std::process::Command::new(&parts[0]);
-            if parts.len() > 1 {
-                c.args(&parts[1..]);
-            }
-            c.current_dir(&dir);
-            let cur_path = std::env::var("PATH").unwrap_or_default();
-            c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
-            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-            c.stdin(std::process::Stdio::null());
-            if let Some(f) = log_file {
-                if let Ok(cloned) = f.try_clone() {
-                    c.stdout(std::process::Stdio::from(cloned));
-                }
-                c.stderr(std::process::Stdio::from(f));
-            } else {
-                c.stdout(std::process::Stdio::null());
-                c.stderr(std::process::Stdio::null());
-            }
-            match c.spawn() {
-                Ok(ch) => ch,
-                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(ShellResponse::err_json(500, &e.to_string())); }
-            }
-        } else {
-            // pnpm directo oculto sin cmd visible: evita conhost S/N y WindowsTerminal. Usa binario Rust directo.
-            let pnpm_bin = r"G:\Dev\nodejs-24\node_modules\pnpm\pnpm.exe";
-            let pnpm_bin_alt = r"G:\Dev\nodejs-24\node_modules\pnpm\bin\pnpm.cjs";
-            let use_node = !std::path::Path::new(pnpm_bin).exists();
-            let args: Vec<&str> = cmd_str.split_whitespace().skip(1).collect();
-            let mut c = if use_node {
-                let mut cc = std::process::Command::new(r"G:\Dev\nodejs-24\node.exe");
-                cc.arg(pnpm_bin_alt);
-                cc
-            } else {
-                std::process::Command::new(pnpm_bin)
-            };
-            if !args.is_empty() {
-                c.args(&args);
-            }
-            c.current_dir(&dir);
-            // PATH con Node24 primero para que el binario encuentre node
-            let cur_path = std::env::var("PATH").unwrap_or_default();
-            c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
-            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-            c.stdin(std::process::Stdio::null());
-            if let Some(f) = log_file {
-                if let Ok(cloned) = f.try_clone() {
-                    c.stdout(std::process::Stdio::from(cloned));
-                }
-                c.stderr(std::process::Stdio::from(f));
-            } else {
-                c.stdout(std::process::Stdio::null());
-                c.stderr(std::process::Stdio::null());
-            }
-            match c.spawn() {
-                Ok(ch) => ch,
-                Err(e) => { mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name); return Some(ShellResponse::err_json(500, &e.to_string())); }
+        let mut child = match spawn_external(&def, &name) {
+            Ok(ch) => ch,
+            Err(e) => {
+                mgr.lock().starting.remove(&name);
+                return Some(ShellResponse::err_json(500, &e));
             }
         };
         let pid = child.id();
@@ -590,11 +621,11 @@ pub fn handle(
                 if probe_ok || probe(&def) {
                     let url = def.url.map(|s| s.to_string()).unwrap_or_default();
                     {
-                        let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner());
-                        urls.insert(name.clone(), url.clone());
+                        let mut st = mgr.lock();
+                        st.urls.insert(name.clone(), url.clone());
+                        st.starting.remove(&name);
+                        st.spawned_at.insert(name.clone(), std::time::Instant::now());
                     }
-                    mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
-                    mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
                     eprintln!("external: {} start con daemon already running pero web ok → pid {}", name, pid);
                     return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "daemon_already": true })));
                 }
@@ -602,47 +633,20 @@ pub fn handle(
             let code = status.code().unwrap_or(-1);
             let log_tail = std::fs::read_to_string(crate::state::data_dir().join(format!("external-{}.log", name))).unwrap_or_default();
             let tail = log_tail.chars().rev().take(800).collect::<String>().chars().rev().collect::<String>();
-            mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
+            mgr.lock().starting.remove(&name);
             return Some(ShellResponse::err_json(500, &format!("proceso salió inmediato (code {code}): {tail} | cmd: {cmd_str}")));
         }
         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
-        // guardar
+        // guardar (un solo lock, sin I/O bloqueante adentro)
         {
-            let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
-            procs.insert(name.clone(), child);
+            let mut st = mgr.lock();
+            st.procs.insert(name.clone(), child);
+            st.urls.insert(name.clone(), url.clone());
+            st.spawned_at.insert(name.clone(), std::time::Instant::now());
+            st.starting.remove(&name);
         }
-        {
-            let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner());
-            urls.insert(name.clone(), url.clone());
-        }
-        mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
-        mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
         // cleanup thread: espera y remueve al salir
-        let mgr_clone = mgr.clone();
-        let name_clone = name.clone();
-        std::thread::spawn(move || {
-            // esperar a que el child termine (poll)
-            loop {
-                std::thread::sleep(Duration::from_secs(2));
-                let mut procs = match mgr_clone.procs.lock() {
-                    Ok(g) => g,
-                    Err(_) => break,
-                };
-                if let Some(ch) = procs.get_mut(&name_clone) {
-                    match ch.try_wait() {
-                        Ok(Some(_)) => {
-                            procs.remove(&name_clone);
-                            break;
-                        }
-                        Ok(None) => {},
-                        Err(_) => { procs.remove(&name_clone); break; }
-                    }
-                } else {
-                    break;
-                }
-                drop(procs);
-            }
-        });
+        watch_child(mgr.clone(), name.clone());
 
         return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir })));
     }
@@ -660,22 +664,20 @@ pub fn handle(
             let url = format!("http://127.0.0.1:{}/shell/external/{}/embed/", state.port, name);
             return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "restarted": true, "embed": true, "url": url, "mtime": plugin_mtime(&def) })));
         }
-        // Matar proceso existente si lo hay
-        {
-            let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(mut child) = procs.remove(&name) {
-                let pid = child.id();
-                let _ = std::process::Command::new("taskkill")
-                    .args(["/F", "/T", "/PID", &pid.to_string()])
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .stdin(std::process::Stdio::null())
-                    .spawn()
-                    .and_then(|mut c| c.wait());
-                let _ = child.kill();
-                let _ = child.wait();
-            }
+        // Matar proceso existente si lo hay (fuera del lock: taskkill+wait bloquean)
+        let existing = mgr.lock().procs.remove(&name);
+        if let Some(mut child) = existing {
+            let pid = child.id();
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid.to_string()])
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .stdin(std::process::Stdio::null())
+                .spawn()
+                .and_then(|mut c| c.wait());
+            let _ = child.kill();
+            let _ = child.wait();
         }
         // Matar huérfanos por puerto (daemon) si corresponde
         if name == "opendesign" {
@@ -699,54 +701,9 @@ pub fn handle(
         }
         // Para plugins con dist y prod, tras restart preferir dev si el puerto estaba en uso? No, usar effective_cmd igual que start
         let cmd_str = effective_cmd(&def);
-        let log_path = crate::state::data_dir().join(format!("external-{}.log", name));
-        let _ = std::fs::create_dir_all(crate::state::data_dir());
-        let log_file = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
-        let mut child: std::process::Child = if cmd_str.starts_with("flutter") {
-            let mut c = std::process::Command::new("cmd");
-            c.args(["/c", cmd_str]);
-            c.current_dir(&dir);
-            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-            c.stdin(std::process::Stdio::null());
-            if let Some(f) = log_file {
-                if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
-                c.stderr(std::process::Stdio::from(f));
-            } else { c.stdout(std::process::Stdio::null()); c.stderr(std::process::Stdio::null()); }
-            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(ShellResponse::err_json(500, &e.to_string())) }
-        } else if cmd_str.trim_start().starts_with("G:\\Dev\\nodejs") {
-            let parts = split_cmd(cmd_str);
-            let mut c = std::process::Command::new(&parts[0]);
-            if parts.len() > 1 { c.args(&parts[1..]); }
-            c.current_dir(&dir);
-            let cur_path = std::env::var("PATH").unwrap_or_default();
-            c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
-            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-            c.stdin(std::process::Stdio::null());
-            if let Some(f) = log_file {
-                if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
-                c.stderr(std::process::Stdio::from(f));
-            } else { c.stdout(std::process::Stdio::null()); c.stderr(std::process::Stdio::null()); }
-            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(ShellResponse::err_json(500, &e.to_string())) }
-        } else {
-            let pnpm_bin = r"G:\Dev\nodejs-24\node_modules\pnpm\pnpm.exe";
-            let pnpm_bin_alt = r"G:\Dev\nodejs-24\node_modules\pnpm\bin\pnpm.cjs";
-            let use_node = !std::path::Path::new(pnpm_bin).exists();
-            let args: Vec<&str> = cmd_str.split_whitespace().skip(1).collect();
-            let mut c = if use_node {
-                let mut cc = std::process::Command::new(r"G:\Dev\nodejs-24\node.exe");
-                cc.arg(pnpm_bin_alt); cc
-            } else { std::process::Command::new(pnpm_bin) };
-            if !args.is_empty() { c.args(&args); }
-            c.current_dir(&dir);
-            let cur_path = std::env::var("PATH").unwrap_or_default();
-            c.env("PATH", format!(r"G:\Dev\nodejs-24;G:\Dev\nodejs-24\node_modules\.bin;{cur_path}"));
-            c.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-            c.stdin(std::process::Stdio::null());
-            if let Some(f) = log_file {
-                if let Ok(cloned) = f.try_clone() { c.stdout(std::process::Stdio::from(cloned)); }
-                c.stderr(std::process::Stdio::from(f));
-            } else { c.stdout(std::process::Stdio::null()); c.stderr(std::process::Stdio::null()); }
-            match c.spawn() { Ok(ch) => ch, Err(e) => return Some(ShellResponse::err_json(500, &e.to_string())) }
+        let mut child = match spawn_external(&def, &name) {
+            Ok(ch) => ch,
+            Err(e) => return Some(ShellResponse::err_json(500, &e)),
         };
         let pid = child.id();
         std::thread::sleep(Duration::from_millis(1200));
@@ -756,8 +713,11 @@ pub fn handle(
                 let probe_ok = crate::common::probe_http(3000, "/", Duration::from_millis(1500), &[200, 301, 302, 304]) || probe(&def);
                 if probe_ok || probe(&def) {
                     let url = def.url.map(|s| s.to_string()).unwrap_or_default();
-                    { let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()); urls.insert(name.clone(), url.clone()); }
-                    mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
+                    {
+                        let mut st = mgr.lock();
+                        st.urls.insert(name.clone(), url.clone());
+                        st.spawned_at.insert(name.clone(), std::time::Instant::now());
+                    }
                     return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "restarted": true, "daemon_already": true })));
                 }
             }
@@ -767,33 +727,22 @@ pub fn handle(
             return Some(ShellResponse::err_json(500, &format!("reinicio falló, proceso salió (code {code}): {tail} | cmd: {cmd_str}")));
         }
         let url = def.url.map(|s| s.to_string()).unwrap_or_default();
-        { let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner()); procs.insert(name.clone(), child); }
-        { let mut urls = mgr.urls.lock().unwrap_or_else(|e| e.into_inner()); urls.insert(name.clone(), url.clone()); }
-        mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), std::time::Instant::now());
-        let mgr_clone = mgr.clone();
-        let name_clone = name.clone();
-        std::thread::spawn(move || {
-            loop {
-                std::thread::sleep(Duration::from_secs(2));
-                let mut procs = match mgr_clone.procs.lock() { Ok(g) => g, Err(_) => break };
-                if let Some(ch) = procs.get_mut(&name_clone) {
-                    match ch.try_wait() {
-                        Ok(Some(_)) => { procs.remove(&name_clone); break; }
-                        Ok(None) => {},
-                        Err(_) => { procs.remove(&name_clone); break; }
-                    }
-                } else { break; }
-                drop(procs);
-            }
-        });
+        {
+            let mut st = mgr.lock();
+            st.procs.insert(name.clone(), child);
+            st.urls.insert(name.clone(), url.clone());
+            st.spawned_at.insert(name.clone(), std::time::Instant::now());
+        }
+        watch_child(mgr.clone(), name.clone());
         return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "pid": pid, "url": url, "dir": def.dir, "restarted": true })));
     }
 
     if action == "stop" && method == "POST" {
-        let mut procs = mgr.procs.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(mut child) = procs.remove(&name) {
+        let stopped = mgr.lock().procs.remove(&name);
+        if let Some(mut child) = stopped {
             let pid = child.id();
             // Matar árbol completo sin prompt S/N (cmd batch): taskkill /F /T
+            // (fuera del lock: taskkill+wait bloquean).
             let _ = std::process::Command::new("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .creation_flags(CREATE_NO_WINDOW)
@@ -815,8 +764,11 @@ pub fn handle(
                     .stderr(std::process::Stdio::null())
                     .spawn();
             }
-            mgr.spawned_at.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
-            mgr.starting.lock().unwrap_or_else(|e| e.into_inner()).remove(&name);
+            {
+                let mut st = mgr.lock();
+                st.spawned_at.remove(&name);
+                st.starting.remove(&name);
+            }
             return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "stopped": true })));
         } else {
             return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "stopped": false, "msg": "no hay proceso gestionado" })));

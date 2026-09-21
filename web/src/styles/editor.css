@@ -28,55 +28,8 @@
 }
 .liteed-btn:hover { color: var(--text); background: var(--surface-hover); }
 .liteed-btn.active { color: var(--primary); border-color: var(--primary-soft); background: var(--primary-soft); }
-.liteed-plain {
-  margin-left: auto;
-  font-size: 0.68rem;
-  color: var(--muted);
-  border: 1px dashed var(--border);
-  border-radius: 5px;
-  padding: 3px 7px;
-  white-space: nowrap;
-}
-.liteed-body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-  min-width: 0;
-  position: relative;
-  background: var(--surface);
-}
-.liteed-gutter {
-  flex-shrink: 0;
-  width: 44px;
-  overflow: hidden;
-  border-right: 1px solid var(--border-subtle);
-  background: var(--surface-subtle);
-  user-select: none;
-  position: relative;
-}
-.liteed-gutter-inner {
-  padding: 10px 6px 10px 0;
-  text-align: right;
-  font-family: Consolas, 'Cascadia Mono', monospace;
-  color: var(--muted);
-  opacity: 0.75;
-  white-space: pre;
-  will-change: transform;
-}
-.liteed-scroll {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  position: relative;
-}
 /* Stack grid: pre y textarea comparten celda; el pre (en flujo) define el
    tamaño, el textarea se estira a la celda. Sin JS de medición. */
-.liteed-stack {
-  display: grid;
-  width: max-content;
-  min-width: 100%;
-  min-height: 100%;
-}
 .liteed-stack.is-wrap { width: 100%; }
 .liteed-hl, .liteed-input {
   grid-area: 1 / 1;
@@ -92,17 +45,6 @@
   color: var(--text);
 }
 .liteed-hl code { font: inherit; background: transparent; }
-.liteed-input {
-  resize: none;
-  background: transparent;
-  color: transparent;
-  caret-color: var(--primary);
-  overflow: hidden;
-}
-.liteed-input::selection {
-  background: color-mix(in srgb, var(--primary) 28%, transparent);
-  color: transparent;
-}
 /* Sin highlight (plano o plaintext): el textarea sigue transparente; el pre
    pinta el texto base para que siempre haya tinta bajo el caret. */
 .liteed-hl:not(.has-hl) { color: var(--text); }
@@ -115,67 +57,7 @@
 .liteed-hl .hljs-built_in, .liteed-hl .hljs-type { color: var(--code-builtin); }
 .liteed-hl .hljs-attr, .liteed-hl .hljs-attribute, .liteed-hl .hljs-variable { color: var(--code-attr); }
 .liteed-hl .hljs-operator, .liteed-hl .hljs-punctuation { color: var(--text); }
-.liteed-find, .liteed-goto {
-  position: absolute;
-  top: 34px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--surface-raised, var(--surface));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 5px 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  z-index: 5;
-  max-width: min(420px, 90%);
-  flex-wrap: wrap;
-}
-.liteed-find-input {
-  background: var(--surface-subtle);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 0.78rem;
-  padding: 5px 8px;
-  outline: none;
-  min-width: 140px;
-  flex: 1;
-}
-.liteed-find-input:focus { border-color: var(--primary); }
-.liteed-count { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
-.liteed-replace-row { display: flex; align-items: center; gap: 4px; flex-basis: 100%; }
-.liteed-palette {
-  position: absolute;
-  top: 34px;
-  left: 56px;
-  width: min(420px, 90%);
-  background: var(--surface-raised, var(--surface));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  z-index: 5;
-}
-.liteed-palette-list { max-height: 260px; overflow-y: auto; margin-top: 4px; }
-.liteed-palette-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-size: 0.78rem;
-  padding: 7px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-}
 .liteed-palette-item:hover, .liteed-palette-item.active { background: var(--surface-hover); }
-.liteed-hint { font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
-.liteed-empty { padding: 10px; font-size: 0.75rem; color: var(--muted); text-align: center; }
 
 /* Banner de error de carga/guardado: no desmonta el editor (el trabajo sigue copiable) */
 .file-editor-banner {
@@ -198,116 +80,14 @@
 }
 
 /* Capa de marcas: comparte celda del stack, no altera el tamaño */
-.liteed-marks {
-  grid-area: 1 / 1;
-  position: relative;
-  pointer-events: none;
-  z-index: 2;
-}
 /* Línea actual estilo Monaco (se oculta en wrap: el mapeo 1:1 se rompe) */
-.liteed-curline {
-  position: absolute;
-  left: 0;
-  right: 0;
-  background: color-mix(in srgb, var(--text) 5%, transparent);
-  pointer-events: none;
-}
-.liteed-mark { position: absolute; width: 2px; }
-.liteed-mark-caret { background: var(--primary); opacity: 0.9; }
-.liteed-mark-bracket {
-  width: 1ch;
-  min-width: 7px;
-  background: color-mix(in srgb, var(--primary) 22%, transparent);
-  border: 1px solid var(--primary);
-  border-radius: 2px;
-  box-sizing: border-box;
-}
 /* Mirror oculto para medir offsets (misma métrica que pre/textarea) */
-.liteed-mirror {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: max-content;
-  min-height: 100%;
-  visibility: hidden;
-  pointer-events: none;
-  overflow-wrap: normal;
-  box-sizing: border-box;
-  word-break: normal;
-}
 .liteed-mirror.is-wrap { width: 100%; overflow-wrap: anywhere; }
 
 /* Autocompletado junto al caret */
-.liteed-complete {
-  position: absolute;
-  pointer-events: auto;
-  min-width: 160px;
-  max-width: 260px;
-  max-height: 180px;
-  overflow-y: auto;
-  background: var(--surface-raised, var(--surface));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  z-index: 6;
-}
-.liteed-complete-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-family: Consolas, 'Cascadia Mono', monospace;
-  font-size: 0.75rem;
-  padding: 5px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-}
 .liteed-complete-item:hover, .liteed-complete-item.active { background: var(--surface-hover); }
 
 /* Diff de cambios sin guardar */
-.liteed-diff {
-  position: absolute;
-  top: 34px;
-  right: 12px;
-  width: min(520px, 92%);
-  max-height: 70%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-raised, var(--surface));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  z-index: 5;
-}
-.liteed-diff-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px;
-  font-size: 0.75rem;
-  color: var(--muted);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.liteed-diff-body {
-  overflow: auto;
-  padding: 6px 0;
-  font-family: Consolas, 'Cascadia Mono', monospace;
-  font-size: 0.72rem;
-}
-.liteed-hunk-head {
-  padding: 4px 10px;
-  color: var(--primary);
-  font-size: 0.68rem;
-}
-.liteed-dline { display: flex; gap: 8px; padding: 1px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.liteed-dsign { flex-shrink: 0; width: 10px; user-select: none; opacity: 0.8; }
-.liteed-dline-add { background: rgba(63, 185, 80, 0.12); }
-.liteed-dline-del { background: rgba(248, 81, 73, 0.12); }
-.liteed-dline-add .liteed-dsign { color: #3fb950; }
-.liteed-dline-del .liteed-dsign { color: #f85149; }
 
 /* CodeMirrorEditor — la vista llena el contenedor (el padre define el alto). */
 .cm-mount .cm-editor { height: 100%; }

@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react"
+import { useSyncExternalStore } from "react"
 
 const STORAGE_KEY = "opencode.desktop.tabTitles.v1"
 
@@ -60,16 +60,6 @@ export function setTabTitle(id: string, title: string | null): void {
   write(next)
 }
 
-export function getTabTitle(id: string): string | null {
-  return cache[id] ?? null
-}
-
 export function useTabTitles(): TitlesMap {
   return useSyncExternalStore(subscribe, getTabTitlesSnapshot, getTabTitlesServerSnapshot)
-}
-
-export function useTabTitleActions() {
-  const set = useCallback((id: string, title: string | null) => setTabTitle(id, title), [])
-  const get = useCallback((id: string) => getTabTitle(id), [])
-  return { set, get }
 }

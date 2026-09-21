@@ -5,7 +5,7 @@
 // 2. Click → lightbox; error → aviso con la ruta (sin imagen rota).
 import { memo, useEffect, useState, type ComponentProps } from "react"
 import { shell } from "../shell"
-import { localFsPathFromImageSrc } from "../shared/lib/filePaths"
+import { localFsPathFromImageSrc } from "../shared/lib/filePaths.ts"
 import { ImageLightbox } from "./ImageLightbox"
 
 const MAX_IMAGE_BYTES = 24 * 1024 * 1024

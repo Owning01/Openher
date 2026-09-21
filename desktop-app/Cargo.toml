@@ -44,8 +44,6 @@ http-body-util = "0.1"
 bytes = "1"
 memmap2 = "0.9"
 simd-json = { version = "0.14", features = ["serde_impl"] }
-rayon = "1"
-rtrb = "0.3"
 notify = { version = "6", features = ["macos_kqueue"] }
 
 [build-dependencies]

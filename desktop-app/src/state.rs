@@ -310,16 +310,31 @@ pub struct PersistedState {
     pub last_panels: Vec<serde_json::Value>,
 }
 
-pub struct ExternalManager {
-    pub procs: std::sync::Mutex<std::collections::HashMap<String, std::process::Child>>,
-    pub urls: std::sync::Mutex<std::collections::HashMap<String, String>>,
+/// Estado del manager de procesos externos, detrás de UN solo lock (R7).
+/// Antes eran 4 Mutex separados con locks anidados; ahora toda operación
+/// toma `ExternalManager::lock()` una vez y accede a los mapas que necesite.
+#[derive(Default)]
+pub struct ExternalState {
+    pub procs: std::collections::HashMap<String, std::process::Child>,
+    pub urls: std::collections::HashMap<String, String>,
     /// POST /start en curso por plugin (anti-doble-spawn StrictMode/prewarm/click).
-    pub starting: std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
+    pub starting: std::collections::HashMap<String, std::time::Instant>,
     /// Instante del último spawn gestionado (gracia de boot: no tratar como zombie).
-    pub spawned_at: std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
+    pub spawned_at: std::collections::HashMap<String, std::time::Instant>,
+}
+
+pub struct ExternalManager {
+    pub state: std::sync::Mutex<ExternalState>,
 }
 impl ExternalManager {
-    pub fn new() -> Self { Self { procs: std::sync::Mutex::new(std::collections::HashMap::new()), urls: std::sync::Mutex::new(std::collections::HashMap::new()), starting: std::sync::Mutex::new(std::collections::HashMap::new()), spawned_at: std::sync::Mutex::new(std::collections::HashMap::new()) } }
+    pub fn new() -> Self {
+        Self { state: std::sync::Mutex::new(ExternalState::default()) }
+    }
+    /// Toma el lock único del manager (recupera poison igual que antes).
+    /// Nunca sostener el guard a través de `taskkill`/`wait`/I/O bloqueante.
+    pub fn lock(&self) -> std::sync::MutexGuard<'_, ExternalState> {
+        self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
 }
 
 pub struct AppState {
@@ -330,7 +345,6 @@ pub struct AppState {
     pub kanban: crate::kanban::KanbanStore,
     pub plugins: crate::plugins::PluginRegistry,
     pub servers: crate::srvman::ServerManager,
-    pub stats: crate::statsx::StatsManager,
     pub dist: Option<PathBuf>,
     /// Manager para enviar comandos al sub-WebView (main thread).
     pub browser: crate::browser_view::SubWebViewManager,
@@ -784,45 +798,34 @@ pub fn pstring(p: &Path) -> String {
     p.to_string_lossy().to_string()
 }
 
-/// Base64 estándar (con padding) para bytes arbitrarios.
+/// Base64 estándar (con padding) para bytes arbitrarios — crate `base64`,
+/// única implementación del módulo.
 pub fn base64_encode(data: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
-        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
-        let n = (b0 << 16) | (b1 << 8) | b2;
-        out.push(T[(n >> 18) as usize & 63] as char);
-        out.push(T[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
-    }
-    out
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(data)
 }
 
+/// Base64 estándar tolerante: ignora '=', CR/LF y espacios y acepta input sin
+/// padding, igual que la implementación previa (los callers usan base64 de
+/// data URLs o Basic auth, que puede venir sin padding).
 pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
-    let mut out = Vec::new();
-    let mut buf = 0u32;
-    let mut bits = 0;
-    for &b in input.as_bytes() {
-        let val = match b {
-            b'A'..=b'Z' => (b - b'A') as u32,
-            b'a'..=b'z' => (b - b'a' + 26) as u32,
-            b'0'..=b'9' => (b - b'0' + 52) as u32,
-            b'+' => 62,
-            b'/' => 63,
-            b'=' | b'\r' | b'\n' | b' ' => continue,
-            _ => return Err(format!("carácter base64 inválido: {}", b as char)),
-        };
-        buf = (buf << 6) | val;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((buf >> bits) as u8);
-        }
+    use base64::Engine as _;
+    let mut cleaned: Vec<u8> = input
+        .bytes()
+        .filter(|b| !matches!(b, b'=' | b'\r' | b'\n' | b' '))
+        .collect();
+    // Un resto de 1 símbolo aporta 6 bits (<8) y no completa byte: se descarta,
+    // igual que hacía el decoder anterior.
+    if cleaned.len() % 4 == 1 {
+        cleaned.pop();
     }
-    Ok(out)
+    let rem = cleaned.len() % 4;
+    if rem != 0 {
+        cleaned.extend(std::iter::repeat(b'=').take(4 - rem));
+    }
+    base64::engine::general_purpose::STANDARD
+        .decode(&cleaned)
+        .map_err(|_| "carácter base64 inválido".to_string())
 }
 
 // ===========================================================================
@@ -950,5 +953,34 @@ mod context_menu_tests {
     #[test]
     fn request_open_dir_sin_handler_falla() {
         assert!(!request_open_dir("C:\\tmp".into()));
+    }
+}
+
+#[cfg(test)]
+mod base64_tests {
+    use super::*;
+
+    #[test]
+    fn encode_matches_base64_estandar_con_padding() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"hello"), "aGVsbG8=");
+    }
+
+    #[test]
+    fn decode_acepta_padding_ausente_y_whitespace() {
+        assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
+        assert_eq!(base64_decode("aGVsbG8").unwrap(), b"hello");
+        assert_eq!(base64_decode("aGVs\nbG8=").unwrap(), b"hello");
+        assert_eq!(base64_decode("aGVs bG8=").unwrap(), b"hello");
+        // resto de 1 símbolo no completa byte (mismo criterio previo)
+        assert_eq!(base64_decode("Q").unwrap(), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn decode_rechaza_caracter_invalido() {
+        assert!(base64_decode("!!!!").is_err());
     }
 }

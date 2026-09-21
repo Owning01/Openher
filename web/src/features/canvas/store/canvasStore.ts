@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from "react"
 import type {
   CanvasDoc,
   CanvasPart,
@@ -18,6 +17,7 @@ import {
   SCREEN_MARGIN,
   uid,
 } from "../model/canvasTypes"
+import { createStore, useStore } from "../../../shared/lib/store"
 
 const DOCS_KEY = "opencode.canvas.docs.v1"
 const ACTIVE_KEY = "opencode.canvas.active.v1"
@@ -70,18 +70,18 @@ function schedulePersist(docs: CanvasDoc[], activeId: string | null) {
 const initialDocs = loadDocs()
 const initialActive = loadActiveId()
 
-let state: CanvasState = {
+const store = createStore<CanvasState>({
   docs: initialDocs,
   activeId: initialActive && initialDocs.some((d) => d.id === initialActive) ? initialActive : (initialDocs[0]?.id ?? null),
   selection: null,
-}
+})
 
-const listeners = new Set<() => void>()
 let past: Snapshot[] = []
 let future: Snapshot[] = []
 
 function snapshot(): Snapshot {
-  return { docs: state.docs, activeId: state.activeId }
+  const s = store.get()
+  return { docs: s.docs, activeId: s.activeId }
 }
 
 function pushHistory() {
@@ -92,9 +92,8 @@ function pushHistory() {
 
 function setState(next: CanvasState, opts?: { history?: boolean; persist?: boolean }) {
   if (opts?.history) pushHistory()
-  state = next
   schedulePersist(next.docs, next.activeId)
-  for (const l of listeners) l()
+  store.set(next)
 }
 
 function touch(docs: CanvasDoc[], id: string): CanvasDoc[] {
@@ -102,17 +101,19 @@ function touch(docs: CanvasDoc[], id: string): CanvasDoc[] {
 }
 
 export function getActiveDoc(): CanvasDoc | null {
-  return state.docs.find((d) => d.id === state.activeId) ?? null
+  const s = store.get()
+  return s.docs.find((d) => d.id === s.activeId) ?? null
 }
 
 function updateActiveDoc(fn: (d: CanvasDoc) => CanvasDoc, opts?: { history?: boolean }): CanvasDoc | null {
   const active = getActiveDoc()
   if (!active) return null
+  const s = store.get()
   const next = touch(
-    state.docs.map((d) => (d.id === active.id ? fn(d) : d)),
+    s.docs.map((d) => (d.id === active.id ? fn(d) : d)),
     active.id,
   )
-  setState({ ...state, docs: next }, { history: opts?.history ?? true })
+  setState({ ...s, docs: next }, { history: opts?.history ?? true })
   return next.find((d) => d.id === active.id) ?? null
 }
 
@@ -127,40 +128,38 @@ function clampPart(p: CanvasPart, sw: number, sh: number, h: number): CanvasPart
 }
 
 export const canvasStore = {
-  subscribe(cb: () => void): () => void {
-    listeners.add(cb)
-    return () => { listeners.delete(cb) }
-  },
-  getSnapshot(): CanvasState {
-    return state
-  },
+  subscribe: store.subscribe,
+  getSnapshot: store.getState,
 
   createDoc(title: string): string {
     const doc = makeDoc(title.trim() || "Sin titulo")
     pushHistory()
-    setState({ docs: [...state.docs, doc], activeId: doc.id, selection: null }, {})
+    setState({ docs: [...store.get().docs, doc], activeId: doc.id, selection: null }, {})
     return doc.id
   },
   renameDoc(id: string, title: string) {
+    const s = store.get()
     setState(
-      { ...state, docs: touch(state.docs.map((d) => (d.id === id ? { ...d, title } : d)), id) },
+      { ...s, docs: touch(s.docs.map((d) => (d.id === id ? { ...d, title } : d)), id) },
       { history: true },
     )
   },
   deleteDoc(id: string) {
-    const docs = state.docs.filter((d) => d.id !== id)
+    const s = store.get()
+    const docs = s.docs.filter((d) => d.id !== id)
     setState(
       {
         docs,
-        activeId: state.activeId === id ? (docs[0]?.id ?? null) : state.activeId,
+        activeId: s.activeId === id ? (docs[0]?.id ?? null) : s.activeId,
         selection: null,
       },
       { history: true },
     )
   },
   setActive(id: string) {
-    if (state.activeId === id) return
-    setState({ ...state, activeId: id, selection: null })
+    const s = store.get()
+    if (s.activeId === id) return
+    setState({ ...s, activeId: id, selection: null })
   },
   setBrief(brief: string) {
     updateActiveDoc((d) => ({ ...d, brief }))
@@ -207,14 +206,15 @@ export const canvasStore = {
         if (p.action?.to === screenId) delete p.action
       }
     }
+    const s = store.get()
     setState(
       {
-        ...state,
+        ...s,
         docs: touch(
-          state.docs.map((d) => (d.id === active.id ? { ...d, screens, parts } : d)),
+          s.docs.map((d) => (d.id === active.id ? { ...d, screens, parts } : d)),
           active.id,
         ),
-        selection: state.selection?.screenId === screenId ? null : state.selection,
+        selection: s.selection?.screenId === screenId ? null : s.selection,
       },
       { history: true },
     )
@@ -235,7 +235,7 @@ export const canvasStore = {
         ? { ...p, x: 0, y: topY }
         : clampPart(p, sw, sh, h)
     updateActiveDoc((d) => ({ ...d, parts: { ...d.parts, [screenId]: [...partsOf(d, screenId), placed] } }))
-    setState({ ...state, selection: { screenId, partId: placed.id } })
+    setState({ ...store.get(), selection: { screenId, partId: placed.id } })
     return placed.id
   },
   updatePart(screenId: string, partId: string, patch: Partial<CanvasPart>, opts?: { history?: boolean }) {
@@ -265,11 +265,12 @@ export const canvasStore = {
     if (commit) {
       updateActiveDoc(apply)
     } else {
+      const s = store.get()
       const next = touch(
-        state.docs.map((d) => (d.id === active.id ? apply(d) : d)),
+        s.docs.map((d) => (d.id === active.id ? apply(d) : d)),
         active.id,
       )
-      setState({ ...state, docs: next })
+      setState({ ...s, docs: next })
     }
   },
   deletePart(screenId: string, partId: string) {
@@ -277,7 +278,8 @@ export const canvasStore = {
       ...d,
       parts: { ...d.parts, [screenId]: partsOf(d, screenId).filter((p) => p.id !== partId) },
     }))
-    if (state.selection?.partId === partId) setState({ ...state, selection: null })
+    const s = store.get()
+    if (s.selection?.partId === partId) setState({ ...s, selection: null })
   },
   duplicatePart(screenId: string, partId: string) {
     const active = getActiveDoc()
@@ -285,7 +287,7 @@ export const canvasStore = {
     if (!active || !orig) return
     const copy: CanvasPart = { ...orig, id: uid(), x: orig.x + 16, y: orig.y + 16 }
     updateActiveDoc((d) => ({ ...d, parts: { ...d.parts, [screenId]: [...partsOf(d, screenId), copy] } }))
-    setState({ ...state, selection: { screenId, partId: copy.id } })
+    setState({ ...store.get(), selection: { screenId, partId: copy.id } })
   },
   reorderPart(screenId: string, partId: string, dir: "front" | "back") {
     updateActiveDoc((d) => {
@@ -322,26 +324,27 @@ export const canvasStore = {
   },
 
   select(sel: CanvasSelection) {
-    if (JSON.stringify(state.selection) === JSON.stringify(sel)) return
-    setState({ ...state, selection: sel })
+    const s = store.get()
+    if (JSON.stringify(s.selection) === JSON.stringify(sel)) return
+    setState({ ...s, selection: sel })
   },
 
   undo() {
     const prev = past.pop()
     if (!prev) return
     future.push(snapshot())
-    setState({ ...state, docs: prev.docs, activeId: prev.activeId, selection: null })
+    setState({ ...store.get(), docs: prev.docs, activeId: prev.activeId, selection: null })
   },
   redo() {
     const next = future.pop()
     if (!next) return
     past.push(snapshot())
-    setState({ ...state, docs: next.docs, activeId: next.activeId, selection: null })
+    setState({ ...store.get(), docs: next.docs, activeId: next.activeId, selection: null })
   },
 }
 
 export function useCanvasStore(): CanvasState {
-  return useSyncExternalStore(canvasStore.subscribe, canvasStore.getSnapshot)
+  return useStore(store)
 }
 
 export type { CanvasScreen }

@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from "react"
+import { createEmitter } from "../shared/lib/store"
 import type { SlotId, SlotItem, PluginDisposer } from "./types"
 
 const EMPTY_SLOT_ITEMS: SlotItem[] = []
 
 class SlotRegistry {
   private slots = new Map<SlotId, SlotItem[]>()
-  private listeners = new Set<() => void>()
+  private emitter = createEmitter()
 
   register(slotId: SlotId, item: SlotItem): PluginDisposer {
     const list = this.slots.get(slotId) ?? EMPTY_SLOT_ITEMS
@@ -29,12 +30,11 @@ class SlotRegistry {
   }
 
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
+    return this.emitter.subscribe(listener)
   }
 
   private notify() {
-    for (const l of this.listeners) l()
+    this.emitter.emit()
   }
 }
 
@@ -45,7 +45,7 @@ import type { PluginTabDefinition } from "./types"
 
 class TabRegistry {
   private tabs = new Map<string, PluginTabDefinition & { pluginName: string }>()
-  private listeners = new Set<() => void>()
+  private emitter = createEmitter()
   private cached: Array<PluginTabDefinition & { pluginName: string; key: string }> = []
   private dirty = true
   register(pluginName: string, tab: PluginTabDefinition): import("./types").PluginDisposer {
@@ -71,11 +71,10 @@ class TabRegistry {
   }
   getSnapshot = (): Array<PluginTabDefinition & { pluginName: string; key: string }> => this.getAll()
   subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
+    return this.emitter.subscribe(listener)
   }
   private notify() {
-    for (const l of this.listeners) l()
+    this.emitter.emit()
   }
 }
 

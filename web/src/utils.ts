@@ -1,5 +1,6 @@
-import type { ProjectDashboard } from "./types"
-import { STORAGE_KEYS } from "./constants"
+import type { ProjectDashboard } from "./types.ts"
+import { STORAGE_KEYS } from "./constants.ts"
+import { basenameFsPath } from "./shared/lib/filePaths.ts"
 
 export const LANGUAGE_STORAGE_KEY = STORAGE_KEYS.LANGUAGE
 
@@ -13,11 +14,8 @@ export function hasFileChanges(s: { files: number; additions: number; deletions:
   return s.files > 0 || s.additions > 0 || s.deletions > 0
 }
 
-export function formatTime(epoch: number): string {
-  if (!epoch || epoch <= 0) return "-"
-  return new Date(epoch).toLocaleString()
-}
-
+// Implementación única en ./utils/format ("full" por defecto, "clock" para horas).
+export { formatTime } from "./utils/format.ts"
 export function formatTimeCompact(epoch: number): string {
   if (!epoch || epoch <= 0 || Number.isNaN(epoch)) return ""
   const date = new Date(epoch)
@@ -86,9 +84,7 @@ export function extractPath(dashboard: ProjectDashboard | null): string | null {
 // entradas vacías/undefined devuelven "" (los sessions pueden llegar sin
 // directory y los paneles del desktop grid lo renderizan directo).
 export function basename(path: string | undefined | null): string {
-  if (!path) return ""
-  const clean = path.replace(/\\/g, "/")
-  return clean.split("/").filter(Boolean).pop() ?? path
+  return basenameFsPath(path)
 }
 
 export function extractName(dashboard: ProjectDashboard | null): string | null {

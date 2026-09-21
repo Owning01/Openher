@@ -280,6 +280,8 @@ export default {
   'desktop.resizeSidebar': '調整側邊欄大小',
   'chat.scrollToBottom': '捲動至底部',
   'chat.backgroundActive': '{count} 個背景執行',
+  'chat.activeSubagents': '使用中子代理 ({count})',
+  'chat.activeSubagentsHint': '檢視此工作階段的使用中子代理對話',
   'chat.moveToBackground': '移到背景執行',
   'chat.moveToBackgroundHint': '卸下執行中的子代理，改在背景繼續',
   'shortcuts.desktop': '桌面',

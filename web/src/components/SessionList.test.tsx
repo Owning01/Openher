@@ -198,3 +198,40 @@ describe("SessionList rename in-place estilo Windows", () => {
     expect(props.onStartRename).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("SessionList spinner de subsesión activa", () => {
+  function renderWithStatuses(children: SessionView[]) {
+    const list = renderList({
+      projects: [[dirA, [parentA, ...children, topA]]],
+      sessions: [parentA, ...children, topA],
+      recentSessions: [parentA, ...children, topA],
+    })
+    fireEvent.click(list.container.querySelectorAll(".project-card")[0]!)
+    return list
+  }
+
+  it("la hija activa muestra spinner chiquito gris, la idle no", () => {
+    const busy = session({ id: "c1", title: "Subagente vivo", directory: dirA, parentID: "p1", status: "busy" })
+    const idle = session({ id: "c2", title: "Subagente quieto", directory: dirA, parentID: "p1", status: "idle" })
+    const { container } = renderWithStatuses([busy, idle])
+    const cards = Array.from(container.querySelectorAll(".project-sessions-inline .is-child-session"))
+    const spinner = (el: Element) => el.querySelector(".session-child-spinner")
+    expect(cards).toHaveLength(2)
+    expect(spinner(cards[0]!)).toBeTruthy()
+    expect(spinner(cards[1]!)).toBeNull()
+  })
+
+  it("el padre activo no lleva spinner de hija", () => {
+    const busyParent = session({ id: "p1", title: "Chat principal A", directory: dirA, status: "busy" })
+    const idle = session({ id: "c2", title: "Subagente quieto", directory: dirA, parentID: "p1", status: "idle" })
+    const { container } = renderList({
+      projects: [[dirA, [busyParent, idle, topA]]],
+      sessions: [busyParent, idle, topA],
+      recentSessions: [busyParent, idle, topA],
+    })
+    fireEvent.click(container.querySelectorAll(".project-card")[0]!)
+    const parentCard = container.querySelector(".project-sessions-inline .session-card:not(.is-child-session)")!
+    expect(parentCard.querySelector(".session-title")?.textContent).toBe("Chat principal A")
+    expect(parentCard.querySelector(".session-child-spinner")).toBeNull()
+  })
+})

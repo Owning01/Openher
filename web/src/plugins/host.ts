@@ -1,22 +1,22 @@
 import { createPluginContext } from "./ctx"
 import { shell } from "../shell"
+import { createEmitter } from "../shared/lib/store"
 import type { PluginManifest, PluginInstance, PluginModule } from "./types"
 
 class PluginHost {
   private instances = new Map<string, PluginInstance>()
-  private listeners = new Set<() => void>()
+  private emitter = createEmitter()
 
   getPlugins(): PluginInstance[] {
     return Array.from(this.instances.values())
   }
 
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
+    return this.emitter.subscribe(listener)
   }
 
   private notify() {
-    for (const l of this.listeners) l()
+    this.emitter.emit()
   }
 
   async loadAll(manifests: PluginManifest[]) {

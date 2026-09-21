@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react"
 import { api } from "../api"
 import type { ServerConfig } from "../types"
+import { useT } from "../i18n-context"
 
 export type ShellType = "pwsh" | "powershell" | "cmd" | "bash" | "wsl" | "direct"
 
@@ -17,6 +18,7 @@ const TERMINAL_SHELL_KEY = "opencode.remote.terminal.shell"
 const TERMINAL_HISTORY_KEY = "opencode.remote.terminal.history"
 
 export function useShell(config: ServerConfig | null, initialDirectory?: string) {
+  const t = useT()
   const [lines, setLines] = useState<ShellLine[]>([])
   const [running, setRunning] = useState(false)
   const [cwd, setCwd] = useState(initialDirectory || "")
@@ -47,12 +49,12 @@ export function useShell(config: ServerConfig | null, initialDirectory?: string)
       ...prev,
       {
         id: `sys-${Date.now()}`,
-        text: `[Terminal] Shell cambiada a: ${newShell.toUpperCase()}`,
+        text: t('terminal.shellChanged', { shell: newShell.toUpperCase() }),
         type: "system",
         timestamp: Date.now()
       }
     ])
-  }, [])
+  }, [t])
 
   const pushHistory = useCallback((cmd: string) => {
     setHistory((prev) => {
@@ -140,7 +142,7 @@ export function useShell(config: ServerConfig | null, initialDirectory?: string)
         ...prev,
         {
           id: `out-${Date.now()}`,
-          text: ` [${shell.toUpperCase()}] Comando enviado a ${effectiveDir || "sesión"}`,
+          text: t('terminal.commandSent', { shell: shell.toUpperCase(), directory: effectiveDir || t('terminal.sessionFallback') }),
           type: "output",
           timestamp: Date.now()
         }
@@ -150,7 +152,7 @@ export function useShell(config: ServerConfig | null, initialDirectory?: string)
         ...prev,
         {
           id: `err-${Date.now()}`,
-          text: `Error: ${err.message}`,
+          text: t('terminal.error', { message: err.message }),
           type: "error",
           timestamp: Date.now()
         }
@@ -158,7 +160,7 @@ export function useShell(config: ServerConfig | null, initialDirectory?: string)
     } finally {
       setRunning(false)
     }
-  }, [config, cwd, initialDirectory, shell, pushHistory])
+  }, [config, cwd, initialDirectory, shell, pushHistory, t])
 
   const clear = useCallback(() => setLines([]), [])
 

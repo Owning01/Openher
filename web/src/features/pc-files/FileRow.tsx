@@ -4,6 +4,7 @@ import { VSCodeFileIcon } from "../../components/VSCodeFileIcon"
 import { joinDragPaths } from "./multiSelect"
 import type { FsEntry } from "../../shell"
 import { useOutsideClick } from "../../hooks/useOutsideClick"
+import { InlineRename } from "./InlineRename"
 import type { GitFileStatus } from "./useGitStatus"
 
 export type FileRowProps = {
@@ -34,7 +35,7 @@ export type FileRowProps = {
   deleting?: boolean
 }
 
-export function formatFileSize(size: number | null): string {
+function formatFileSize(size: number | null): string {
   if (size == null) return ""
   if (size > 1024 * 1024) return `${(size / 1048576).toFixed(1)}M`
   if (size > 1024) return `${(size / 1024).toFixed(0)}K`
@@ -110,18 +111,12 @@ export const FileRow = memo(function FileRow({
         <VSCodeFileIcon name={f.name} size={15} />
       </span>
       {isRenaming ? (
-        <input
-          className="pcf-inline-input"
+        <InlineRename
+          entry={f}
           value={renamingValue ?? ""}
-          autoFocus
-          onChange={(e) => onRenamingChange?.(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); onRenameCommit?.(f) }
-            else if (e.key === "Escape") { e.preventDefault(); onRenameCancel?.() }
-          }}
-          onBlur={() => onRenameCommit?.(f)}
-          onClick={(e) => e.stopPropagation()}
-          onFocus={(e) => e.currentTarget.select()}
+          onChange={onRenamingChange}
+          onCommit={onRenameCommit}
+          onCancel={onRenameCancel}
         />
       ) : (
         <span

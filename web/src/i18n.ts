@@ -170,6 +170,8 @@ type TranslationKey =
   | 'desktop.resizeSidebar'
   | 'chat.scrollToBottom'
   | 'chat.backgroundActive'
+  | 'chat.activeSubagents'
+  | 'chat.activeSubagentsHint'
   | 'chat.moveToBackground'
   | 'chat.moveToBackgroundHint'
   | 'shortcuts.desktop'

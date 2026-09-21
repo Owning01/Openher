@@ -30,10 +30,6 @@ export function setTerminalFontSize(tabId: string, size: number) {
   return next
 }
 
-export function adjustTerminalFontSize(tabId: string, delta: number): number {
-  return setTerminalFontSize(tabId, getTerminalFontSize(tabId) + delta)
-}
-
 export function rememberTerminalPty(tabId: string, entry: { ptyId: string; wsPort: number }) {
   terminalPtyStore.delete(tabId)
   terminalPtyStore.set(tabId, entry)

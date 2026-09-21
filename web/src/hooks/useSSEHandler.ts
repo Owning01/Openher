@@ -3,6 +3,8 @@ import type { SSEEvent } from "../types"
 import type { MessageEnvelope } from "../types"
 import { pluginBus } from "../plugins/bus"
 import { normalizeAssistantError } from "../shared/errors/assistantError"
+import { isTaskToolPart } from "../utils/toolName"
+import { isAssistantMessage } from "../utils/messageShape"
 
 // Diagnóstico del streaming de reasoning: inactivo por defecto (spam por
 // delta). Activación: localStorage.setItem("opencode.debug.sse", "1").
@@ -45,6 +47,15 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     coalesceFrameRef.current = null
     const toFlush = [...coalesceMapRef.current.values()]
     coalesceMapRef.current.clear()
+    // Re-arme: si llegan deltas en vivo de la sesión visible sin awaiting
+    // (settle prematuro por idle transitorio del server, turno solapado o
+    // turno iniciado en otro cliente), el turno está vivo → el botón Stop
+    // debe mostrarse. Solo deltas de contenido (tokens fluyendo AHORA), nunca
+    // eventos de cierre ni compaction; los checks de idle del poll apagan si
+    // el server ya terminó.
+    if (!deps.awaitingRef() && toFlush.some((v) => v.sessionID === deps.sessionID && v.partType !== "compaction")) {
+      deps.setAwaitingAssistantReply(true)
+    }
     for (const v of toFlush) deps.applyDelta(v.sessionID, v.messageID, v.partID, v.text, v.replace, v.partType)
   }, [deps])
   const enqueueDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace: boolean, partType: string) => {
@@ -109,8 +120,10 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const messageID = (p.messageID as string | undefined) ?? part?.messageID
       // Los tool parts del SUBAGENTE traen el sessionID de la sesión HIJA: su
       // tarjeta pertenece al chat del padre — applyPart los ancla al mensaje
-      // del padre (Map partID→messageID en useMessages).
-      const isSubagentToolPart = (part?.type === "tool" || part?.type === "tool_use") && sessionID !== deps.sessionID
+      // del padre (Map partID→messageID en useMessages). Criterio único
+      // (toolName.isTaskToolPart): task/subagent, subagent_type o metadata.
+      const isSubagentToolPart = (part?.type === "tool" || part?.type === "tool_use") &&
+        sessionID !== deps.sessionID && isTaskToolPart(part as unknown as Parameters<typeof isTaskToolPart>[0])
       if (part?.id && sessionID && messageID && (sessionID === deps.sessionID || isSubagentToolPart)) {
         const fullPart = p.part as { id?: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } } | undefined
         deps.applyPart(sessionID, messageID, {
@@ -293,7 +306,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
               }
             }
           }
-          if (rawMsg?.info?.role === "assistant" && (rawMsg?.info?.time?.completed || rawMsg?.info?.finish) && deps.awaitingRef()) {
+          if (isAssistantMessage(rawMsg) && (rawMsg?.info?.time?.completed || rawMsg?.info?.finish) && deps.awaitingRef()) {
             // Solo el assistant NUEVO cierra el turno: un `message.updated` de
             // un assistant viejo (p. ej. el reemitido tras un revert) no debe
             // apagar el spinner ni disparar el settled del turno en curso.

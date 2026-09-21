@@ -12,7 +12,7 @@
 
 <div align="center">
 
-**Tu asistente de código IA, en todos lados** — respuestas en streaming, tools en tiempo real, terminal, explorador, git (SCM), escritorio remoto, kanban, stats y OpenCode Hub.
+**Tu asistente de código IA, en todos lados** — respuestas en streaming, tools en tiempo real, terminal, explorador, git (SCM), escritorio remoto, kanban y OpenCode Hub.
 
 </div>
 
@@ -31,7 +31,6 @@
 │  opencode serve v1  → 0.0.0.0:4096            │
 │  opencode2        → 0.0.0.0:4097              │
 │  desktop-app.exe  → 127.0.0.1:4848 + WS 4849  │
-│  opencode-stats   → 127.0.0.1:8765            │
 └──────────────────────────────────────────────┘
 ```
 
@@ -47,7 +46,7 @@ O construíla vos mismo (ver [desarrollo](#️-desarrollo)).
 
 **iOS** (requiere macOS + Xcode 16+): cloná el repo y abrí `web/ios/App/App.xcworkspace` en Xcode, seleccioná tu team y Build & Run.
 
-**Desktop (Windows)**: `.\build-desktop.ps1` (compila `web` con `G:\Dev\nodejs-24\pnpm.cmd` + `cargo build --release` → `desktop-app/opencode-desktop.exe` portable, `data/` junto al exe). Requiere **Node ~24** (`G:\Dev\nodejs-24\node.exe` v24.20) y **pnpm 12.0.0** binario Rust + **Rust 1.98** (`CARGO_HOME=G:\Dev\cargo`). Sin Tauri, wry+WebView2.
+**Desktop (Windows)**: `.\scripts\build-desktop.ps1` (compila `web` con `G:\Dev\nodejs-24\pnpm.cmd` + `cargo build --release` → `desktop-app/openher-desktop.exe` portable, `data/` junto al exe). Requiere **Node v24.19.0** (`G:\Dev\nodejs-24\node.exe`) y **pnpm 12.3.4** (pin `packageManager: pnpm@10.32.0`, binario Rust) + **Rust 1.98** (`CARGO_HOME=G:\Dev\cargo`). Sin Tauri, wry+WebView2.
 
 ---
 
@@ -126,7 +125,7 @@ Un solo frontend (`web/`) servido por shell Rust (`desktop-app/`) en `127.0.0.1:
 
 - **Plugins externos** (`/shell/external/*`): `opendesign` 3000 + daemon 3456 (`G:\Dev\nodejs-24\node_hidden.exe "…\tools-dev.mjs" start web`), `screenshots` 3002 (Next `next start`), `vioeditor` 1420 embed, `informes` 5174 embed (mmap + `<base href="/shell/external/<name>/embed/">` para Vite `/assets/*`), `widgetnotas`. Probe TCP 250ms + `cached_probe` 1500ms, `409` si puerto ocupado. Pestañas mantienen iframes montados `visibility:hidden` (no reinicia al volver). `CloseRequested/Quit` mata todos los hijos `taskkill /F /T`.
 - **Archivos**: doble panel (`PCFilesPanel` `SplitIcon`), drag&drop `shell.fs.move`, dotfiles visibles (`.git` etc.), preview HTML `HtmlPreview` vía `/shell/preview/{token}/{file}` mmap.
-- **Build**: `.\build-desktop.ps1` arregla PATH (`G:\Dev\nodejs-24` primero, `corepack disable`), `G:\Dev\nodejs-24\pnpm.cmd run build` (~14s) + `G:\Dev\Python311\python.exe scripts/copy-dist.py` (`failures: none`, `vite emptyOutDir:false`) + `cargo build --release` (~4m `G:\cache\cargo-target\release\opencode-desktop.exe`).
+- **Build**: `.\scripts\build-desktop.ps1` arregla PATH (`G:\Dev\nodejs-24` primero, `corepack disable`), `G:\Dev\nodejs-24\pnpm.cmd run build` (~14s) + `G:\Dev\Python311\python.exe scripts/copy-dist.py` (`failures: none`, `vite emptyOutDir:false`) + `cargo build --release` (~4m `G:\cache\cargo-target\release\openher-desktop.exe`).
 
 ## 🧠 OpenCode Hub
 
@@ -170,21 +169,21 @@ Cifras estimadas sobre HTTP/2 comprimido con ~10 sesiones en el servidor.
 ```
 web/                           # EL PRODUCTO (un frontend para APK/iPA/desktop)
 ├── src/
-│   ├── app/                   # composition root (placeholder)
-│   ├── pages/ widgets/ features/ entities/ shared/  # FSD hexagonal (migrando)
-│   ├── components/            # ~80 componentes UI (ChatView, TabBar, OpenCodeHubModal…)
+│   ├── app/                   # composition root (controller + modals container)
+│   ├── pages/ widgets/ features/ entities/ shared/  # capas de UI (chat, desktop, dominio)
+│   ├── components/            # 96 componentes UI (ChatView, TabBar, OpenCodeHubModal…)
 │   ├── features/pc-files/     # explorador doble panel + HtmlPreview
 │   ├── features/external-plugins/  # ExternalIframePanel (keep-mounted)
 │   ├── shell.ts               # /shell/* cliente tipado + fileIcon
-│   ├── hooks/                 # 41 hooks (useMessages, useSSE, usePolling…)
-│   ├── styles/                # 17 archivos css (tokens, shell, pc-files…)
-│   ├── App.tsx                # ~3600L God Component (deuda)
-│   └── api.ts / types.ts      # 36 endpoints facade
-├── android/ ios/              # proyectos nativos Capacitor (com.gbro.opencode)
+│   ├── hooks/                 # 49 hooks (useMessages, useSSE, usePolling…)
+│   ├── styles/                # 28 archivos css (tokens, shell, pc-files…)
+│   ├── App.tsx                # ~412L (shell + providers)
+│   └── api.ts / types.ts      # 51 endpoints facade
+├── android/ ios/              # Capacitor nativo (Android com.gbro.openher · iOS com.gbro.opencode)
 ├── dist/                      # output Vite (web/data/web-dist en desktop)
 └── scripts/copy-dist.py       # workaround EPERM cap copy
 
-desktop-app/                   # shell Windows Rust (wry + tiny_http + hyper)
+desktop-app/                   # shell Windows Rust (wry + hyper/tokio)
 ├── src/
 │   ├── main.rs                # wry child WebView2, prewarm external, kill_all_external
 │   ├── api.rs                 # /shell/* + /shell/opencode/global + mmap
@@ -193,12 +192,10 @@ desktop-app/                   # shell Windows Rust (wry + tiny_http + hyper)
 │   ├── fsx.rs / gitx.rs / ptyx.rs / kanban.rs / state.rs
 │   └── browser_view.rs / plugins.rs
 
-opencode-stats/                # crate Rust read-only opencode.db → :8765
-
 (externo) G:/proyectos/open-design  # nexu-io/open-design on-demand
 
-Cargo.toml                     # workspace ["desktop-app","opencode-stats"]
-build-desktop.ps1/.bat · deploy-apk.ps1 · codemagic.yaml
+Cargo.toml                     # workspace ["desktop-app"]
+scripts\build-desktop.ps1/.bat · scripts\install-apk.ps1/.bat · codemagic.yaml
 ```
 
 </details>
@@ -228,24 +225,24 @@ build-desktop.ps1/.bat · deploy-apk.ps1 · codemagic.yaml
 ## 🛠️ Desarrollo
 
 ```bash
-# web (Node 24 + pnpm 12)
+# web (Node v24.19.0 + pnpm 12.3.4)
 G:\Dev\nodejs-24\pnpm.cmd install
 G:\Dev\nodejs-24\pnpm.cmd run dev       # Vite :5173
 G:\Dev\nodejs-24\pnpm.cmd run build    # tsc -b && vite build (~14s)
 G:\Dev\Python311\python.exe scripts/copy-dist.py  # → desktop-app/data/web-dist
 
 # desktop (Rust 1.98, CARGO_HOME=G:\Dev\cargo)
-cargo check && cargo build --release   # → G:\cache\cargo-target\release\opencode-desktop.exe
-.\build-desktop.ps1 [-SkipWeb] [-Run]  # web build + cargo + package
+cargo check && cargo build --release   # → G:\cache\cargo-target\release\openher-desktop.exe
+.\scripts\build-desktop.ps1 [-SkipWeb] [-Run]  # web build + cargo + package
 
 # apk
-.\deploy-apk.ps1                       # build + upload tmpfiles.org + LINK
+.\scripts\install-apk.ps1                      # web build + APK debug + install on device
 ```
 
 <details>
 <summary><b>Stack</b></summary>
 
-React 19.2 + react-compiler, TS 7.0, Vite 8, Vitest 4, pnpm 12 (binario Rust), Capacitor 8, Node 24.20, Rust 1.98 (tokio+hyper, memmap2, simd-json, notify), WebView2 vía wry/winit, portable-pty (pwsh7), crate opencode-stats.
+React 19.2 + react-compiler, TS 7.0, Vite 8, Vitest 4, pnpm 12.3.4 (pin packageManager: pnpm@10.32.0, binario Rust), Capacitor 8, Node v24.19.0, Rust 1.98 (tokio+hyper, memmap2, simd-json, notify), WebView2 vía wry/winit, portable-pty (pwsh7).
 
 </details>
 

@@ -1,6 +1,5 @@
 //! Kanban local (data/kanban.json): boards, columnas y cards.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
 
 use serde::{Deserialize, Serialize};
@@ -41,8 +40,6 @@ pub struct KanbanStore {
     /// tarjeta solo quedaba en memoria: "desaparecía" al cerrar la app).
     save_lock: Mutex<()>,
 }
-
-static SAVE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 fn path() -> std::path::PathBuf {
     crate::state::kanban_path()
@@ -131,52 +128,15 @@ impl KanbanStore {
     }
 
     fn save(&self) {
+        // El lock serializa los saves (handlers HTTP concurrentes); la
+        // escritura durable la hace state::atomic_write_json (tmp único por
+        // save + fsync + rename con reintentos + limpieza del tmp legado).
         let _guard = self.save_lock.lock().unwrap_or_else(|e| e.into_inner());
-        if let Err(e) = std::fs::create_dir_all(crate::state::data_dir()) {
-            eprintln!("[kanban] no se pudo crear data_dir: {e}");
-            return;
-        }
         let data = match self.data.read() {
             Ok(d) => serde_json::to_string_pretty(&*d).unwrap_or_default(),
             Err(_) => return,
         };
-        let p = path();
-        // Tmp único por save (pid + secuencia): dos hilos/procesos ya no chocan.
-        let seq = SAVE_SEQ.fetch_add(1, Ordering::Relaxed);
-        let tmp = p.with_extension(format!("json.{}.tmp", format!("{}-{}", std::process::id(), seq)));
-        // Legado: antes el tmp era fijo (kanban.json.tmp) y colisionaba.
-        let legacy_tmp = p.with_extension("json.tmp");
-        if std::fs::write(&tmp, &data).is_err() {
-            eprintln!("[kanban] no se pudo escribir tmp {} — intento directo", tmp.display());
-            if let Err(e) = std::fs::write(&p, &data) {
-                eprintln!("[kanban] no se pudo persistir {}: {e}", p.display());
-            }
-            return;
-        }
-        // Rename con reintentos: en Windows falla si el destino está bloqueado
-        // (otra instancia, antivirus, watcher). Antes el Err solo se logueaba y
-        // el dato quedaba solo en memoria → se perdía al cerrar.
-        let mut renamed = false;
-        for _ in 0..5 {
-            if std::fs::rename(&tmp, &p).is_ok() {
-                renamed = true;
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
-        if !renamed {
-            // Último recurso: borrar destino y renombrar, o escritura directa.
-            let _ = std::fs::remove_file(&p);
-            if std::fs::rename(&tmp, &p).is_err() {
-                eprintln!("[kanban] rename falló tras reintentos — escritura directa de {}", p.display());
-                if let Err(e) = std::fs::write(&p, &data) {
-                    eprintln!("[kanban] no se pudo persistir {}: {e}", p.display());
-                } else {
-                    let _ = std::fs::remove_file(&tmp);
-                }
-            }
-        }
-        let _ = std::fs::remove_file(&legacy_tmp);
+        crate::state::atomic_write_json(&path(), &data, "kanban");
     }
 
     pub fn all(&self) -> serde_json::Value {

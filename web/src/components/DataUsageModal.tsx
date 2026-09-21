@@ -1,6 +1,7 @@
 import { memo, useState } from "react"
 import { useT } from "../i18n-context"
-import { getDataUsage, resetDataUsage, formatBytes } from "../utils/dataUsage"
+import { getDataUsage, resetDataUsage } from "../utils/dataUsage"
+import { formatBytes } from "../utils/format"
 import type { DataPeriod, NetworkKind } from "../utils/dataUsage"
 import { Modal } from "./Modal"
 

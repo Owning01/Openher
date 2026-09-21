@@ -58,7 +58,7 @@ export type ThemePreference = "system" | "light" | "dark" | "scheduled"
 // ---------------------------------------------------------------------------
 export type NoticeType = "info" | "success" | "error"
 
-import type { ShellPanelKind } from "../../shell"
+import type { ShellPanelKind } from "../../shell.ts"
 export type { ShellPanelKind }
 
 export type DesktopLayout = {

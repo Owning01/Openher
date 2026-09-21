@@ -1,4 +1,5 @@
 import { memo, useState, useCallback } from "react"
+import { Modal } from "./Modal"
 import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import type { SessionView } from "../types"
@@ -52,8 +53,7 @@ export const FavoritesManager = memo(function FavoritesManager({ favorites, onRe
   }, [items, onReorder, onClose])
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content favorites-manager" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('favorites.manage')}>
+    <Modal onClose={onClose} variant="overlay" className="favorites-manager" label={t('favorites.manage')}>
         <ModalHeader title={t('favorites.manage')} onClose={onClose} />
         <div className="modal-body">
           {items.length === 0 ? (
@@ -87,7 +87,6 @@ export const FavoritesManager = memo(function FavoritesManager({ favorites, onRe
             <button className="btn-secondary compact" onClick={onClose}>{t('settings.cancel')}</button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 })

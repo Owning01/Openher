@@ -1,14 +1,22 @@
-import { memo, useState, useRef, useEffect, type ReactNode } from "react"
+import { memo, useState, useRef, useEffect, type CSSProperties, type ReactNode } from "react"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 
 type Props = {
-  trigger: ReactNode
+  trigger: ReactNode | ((open: boolean) => ReactNode)
   children: ReactNode
   align?: "left" | "right"
   width?: number
+  /** Clases extra del panel (permite conservar el skin del consumidor). */
+  className?: string
+  /** Clases del contenedor que delimita el "click afuera". */
+  wrapClassName?: string
+  /** Estilo del contenedor (por defecto: relative + inline-flex). */
+  wrapStyle?: CSSProperties
 }
 
-export const DropdownMenu = memo(function DropdownMenu({ trigger, children, align = "right", width = 180 }: Props) {
+export const DropdownMenu = memo(function DropdownMenu({
+  trigger, children, align = "right", width = 180, className, wrapClassName, wrapStyle
+}: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -24,15 +32,26 @@ export const DropdownMenu = memo(function DropdownMenu({ trigger, children, alig
   }, [open])
 
   return (
-    <div className="dropdown-menu-wrap" ref={ref} style={{ position: "relative", display: "inline-flex" }}>
-      <div onClick={() => setOpen((v) => !v)}>{trigger}</div>
+    <div
+      className={`dropdown-menu-wrap${wrapClassName ? ` ${wrapClassName}` : ""}`}
+      ref={ref}
+      style={wrapStyle ?? { position: "relative", display: "inline-flex" }}
+    >
+      <div onClick={() => setOpen((v) => !v)}>{typeof trigger === "function" ? trigger(open) : trigger}</div>
       {open && (
-        <div className="dropdown-menu" style={{
-          position: "absolute", top: "calc(100% + 6px)", [align]: 0, left: align === "right" ? "auto" : 0,
-          zIndex: 99999, display: "flex", flexDirection: "column", width, gap: 2, padding: 4,
-          background: "var(--surface-strong, #1a1a20)", border: "1px solid var(--border-strong, #444)",
-          borderRadius: "var(--radius-md, 8px)", boxShadow: "0 10px 30px rgba(0,0,0,0.6)"
-        }}>
+        <div
+          className={`dropdown-menu${className ? ` ${className}` : ""}`}
+          onClick={(e) => {
+            const btn = (e.target as Element).closest("button") as HTMLButtonElement | null
+            if (btn && !btn.disabled) setOpen(false)
+          }}
+          style={{
+            position: "absolute", top: "calc(100% + 6px)", [align]: 0, left: align === "right" ? "auto" : 0,
+            zIndex: 99999, display: "flex", flexDirection: "column", width, gap: 2, padding: 4,
+            background: "var(--surface-strong, #1a1a20)", border: "1px solid var(--border-strong, #444)",
+            borderRadius: "var(--radius-md, 8px)", boxShadow: "0 10px 30px rgba(0,0,0,0.6)"
+          }}
+        >
           {children}
         </div>
       )}

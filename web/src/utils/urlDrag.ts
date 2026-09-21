@@ -107,24 +107,6 @@ export function extractUrlFromDataTransfer(dt: DataTransfer): string | null {
   return null
 }
 
-export function isUrlDrag(dt: DataTransfer): boolean {
-  const types = Array.from(dt.types as unknown as string[]).map((t) => t.toLowerCase())
-  if (types.includes("text/uri-list") || types.includes("url") || types.includes("text/x-moz-url")) return true
-  // text/plain puede ser URL o internal; lo verificamos leyendo
-  if (types.includes("application/x-opencode-browser-tab")) return true
-  if (types.includes("text/plain")) {
-    try {
-      const raw = dt.getData("text/plain")
-      if (raw && cleanUrl(raw)) return true
-    } catch {}
-  }
-  try {
-    const raw = dt.getData("text/uri-list")
-    if (raw && extractUriList(raw)) return true
-  } catch {}
-  return false
-}
-
 export function setUrlDragData(dt: DataTransfer, url: string) {
   const raw = url.trim()
   if (!raw) return

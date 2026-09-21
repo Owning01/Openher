@@ -6,6 +6,10 @@
 // part NO alcanza para saber si sigue vivo: hay que mirar el estado de la
 // SESIÓN HIJA, igual que la TUI (`session_status[childSessionId] !== idle`).
 // `metadata.sessionId` trae la sesión hija; `metadata.jobId`, el BackgroundJob.
+import { isTaskToolPart } from "./toolName"
+import { isSessionActive } from "../utils"
+
+export { isTaskToolPart } from "./toolName"
 
 export type SubagentBackground = {
   /** El tool part fue lanzado con `background: true`. */
@@ -42,6 +46,25 @@ export function isBackgroundRunning(part: PartLike, busySessionIds?: ReadonlySet
   return info.isBackground && !!info.childSessionID && !!busySessionIds?.has(info.childSessionID)
 }
 
+/**
+ * Chats activos de subagentes de una sesión: hijos (`parentID`) que siguen
+ * vivos. Si hay `busySessionIds` manda ese set (mismo criterio que la TUI);
+ * si no, se usa el `status` de cada sesión (`isSessionActive`, única fuente
+ * para string u objeto `{type}`). Fuente única para el botón del header y
+ * cualquier otro listado de subagentes activos.
+ */
+export function activeSubagentSessions<T extends { id: string; parentID?: string; status?: unknown }>(
+  sessions: ReadonlyArray<T | null | undefined>,
+  parentID: string | null | undefined,
+  busySessionIds?: ReadonlySet<string> | null
+): T[] {
+  if (!parentID) return []
+  return (sessions ?? []).filter(
+    (s): s is T =>
+      !!s && s.parentID === parentID && (busySessionIds ? busySessionIds.has(s.id) : isSessionActive(s))
+  )
+}
+
 type TaskLike = {
   tool?: string
   state?: {
@@ -49,13 +72,6 @@ type TaskLike = {
     metadata?: Record<string, unknown> | null
   } | null
 } | null | undefined
-
-/** `true` si el part es la tarjeta de un subagente (tool `task`/`subagent`). */
-export function isTaskToolPart(part: TaskLike): boolean {
-  if (part?.tool === "task" || part?.tool === "subagent") return true
-  const input = part?.state?.input as { subagent_type?: unknown } | undefined
-  return Boolean(input?.subagent_type)
-}
 
 /**
  * Subagente que bloquea el turno ahora mismo (foreground, running). El server

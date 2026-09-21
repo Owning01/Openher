@@ -280,6 +280,8 @@ export default {
   'desktop.resizeSidebar': 'Ridimensiona barra laterale',
   'chat.scrollToBottom': 'Vai in fondo',
   'chat.backgroundActive': '{count} in background',
+  'chat.activeSubagents': 'Subagenti attivi ({count})',
+  'chat.activeSubagentsHint': 'Vedi le chat attive dei subagenti di questa sessione',
   'chat.moveToBackground': 'Sposta in background',
   'chat.moveToBackgroundHint': 'Scollega i subagenti in esecuzione e continua in background',
   'shortcuts.desktop': 'Desktop',

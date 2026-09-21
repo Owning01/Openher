@@ -227,16 +227,7 @@ button.compact {
 }
 
 
-.reboot-modal h3 {
-  margin: 0 0 var(--space-2);
-  font-size: 1rem;
-}
 
-.reboot-modal p {
-  margin: 0 0 var(--space-3);
-  color: var(--muted);
-  font-size: 0.85rem;
-}
 
 
 /* ===== Modal Overlay v2 ===== */
@@ -426,18 +417,6 @@ button.compact {
 
 
 /* ===== Question Prompt Modal (auto) ===== */
-.question-input {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 0.875rem;
-  resize: vertical;
-  box-sizing: border-box;
-}
 .modal-actions .btn {
   padding: 6px 16px;
   border-radius: 6px;
@@ -509,39 +488,9 @@ button.compact {
   color: var(--on-primary);
 }
 
-.queued-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  max-height: 300px;
-  overflow-y: auto;
-  contain: layout style paint;
-}
 
-.queued-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface-soft);
-  border-radius: var(--radius-md);
-}
 
-.queued-item-text {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.875rem;
-}
 
-.queued-item-actions {
-  display: flex;
-  gap: var(--space-1);
-  flex-shrink: 0;
-}
 
 /* ===== MCP Browser ===== */
 .mcp-browser { max-width: 500px; }
@@ -582,50 +531,7 @@ button.compact {
 
 
 /* ===== Skill Browser ===== */
-.skill-browser { max-width: 560px; max-height: 80vh; display: flex; flex-direction: column; }
-.skill-browser-detail { max-width: 640px; }
-.skill-search { margin: 0 0 var(--space-3); }
-.skill-search input {
-  width: 100%; padding: 0.78rem 0.9rem;
-  border-radius: var(--radius-lg); border: 1px solid var(--border);
-  background: var(--surface-strong); color: var(--text);
-  font-size: 0.88rem; transition: border-color 0.15s;
-}
-.skill-search input:focus { outline: none; border-color: var(--primary, #10b981); }
-.skill-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-3); contain: layout style paint; }
-.skill-empty { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.85rem; }
 
-.skill-group { display: flex; flex-direction: column; gap: 4px; }
-.skill-group-label {
-  font-size: 0.875rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--muted); padding: 0.2rem 0.4rem;
-  user-select: none;
-}
-
-.skill-card {
-  display: flex; align-items: flex-start; gap: 0.82rem;
-  padding: 0.82rem 0.8rem; border-radius: var(--radius-md);
-  background: var(--surface); color: var(--text);
-  cursor: pointer; text-align: left; width: 100%;
-  transition: background 0.12s, box-shadow 0.12s;
-  border: 1px solid transparent;
-}
-.skill-card:hover {
-  background: var(--surface-strong);
-  border-color: var(--border);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-.skill-card-icon {
-  color: var(--accent, #fab283); flex-shrink: 0;
-  margin-top: 0.15rem;
-  display: flex; align-items: center; justify-content: center;
-}
-.skill-card-body { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; flex: 1; }
-.skill-card-name {
-  font-size: 0.85rem; font-weight: 600;
-  color: var(--accent, #fab283);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
 .skill-card-desc {
   font-size: 0.875rem; color: var(--muted); line-height: 1.35;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -633,21 +539,6 @@ button.compact {
 }
 
 /* Skill detail view */
-.skill-detail-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: var(--space-3);
-}
-.skill-detail-back {
-  background: none; border: none; color: var(--primary, #10b981);
-  cursor: pointer; font-size: 0.875rem; padding: 0;
-  display: flex; align-items: center; gap: 0.3rem;
-}
-.skill-detail-back:hover { opacity: 0.8; }
-.skill-detail-tokens {
-  font-size: 0.875rem; color: var(--muted);
-  background: var(--surface-strong); padding: 0.2rem 0.78rem;
-  border-radius: 99px; font-variant-numeric: tabular-nums;
-}
 .skill-detail-title {
   display: flex; align-items: center; gap: 0.78rem;
   margin-bottom: var(--space-2); color: var(--accent, #fab283);
@@ -659,26 +550,6 @@ button.compact {
   font-size: 0.85rem; color: var(--muted); margin: 0 0 var(--space-3);
   line-height: 1.4;
 }
-.skill-detail-content {
-  flex: 1; overflow-y: auto; background: var(--surface-strong);
-  border: 1px solid var(--border); border-radius: var(--radius-md);
-  padding: 0.8rem 1rem;
-}
-.skill-detail-content pre {
-  margin: 0; font-family: inherit; font-size: 0.8rem;
-  color: var(--text); white-space: pre-wrap; word-break: break-word;
-  line-height: 1.5;
-}
-.skill-detail-actions {
-  display: flex; justify-content: flex-end; padding-top: var(--space-3);
-}
-.skill-use-btn {
-  background: var(--primary, #10b981); color: var(--on-primary);
-  border: none; border-radius: var(--radius-md);
-  padding: 0.5rem 1.2rem; font-size: 0.85rem; font-weight: 600;
-  cursor: pointer; transition: opacity 0.15s;
-}
-.skill-use-btn:hover { opacity: 0.9; }
 
 /* ===== Chat customizer (desde el propio chat) ===== */
 .chat-customizer-modal { max-width: 480px; max-height: 82vh; display: flex; flex-direction: column; }
@@ -687,9 +558,6 @@ button.compact {
 
 /* ===== Shortcuts Modal ===== */
 .shortcuts-modal { max-width: 420px; }
-.shortcuts-table { width: 100%; border-collapse: collapse; }
-.shortcuts-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); font-size: 0.85rem; }
-.shortcuts-table tr:last-child td { border-bottom: none; }
 .shortcut-key { display: inline-block; padding: 0.1rem 0.5rem; background: var(--surface-strong); border: 1px solid var(--border); border-radius: 4px; font-size: 0.8rem; font-family: inherit; white-space: nowrap; }
 
 /* ===== Archived List ===== */
@@ -700,27 +568,12 @@ button.compact {
 .archived-item-actions { display: flex; gap: var(--space-2); flex-shrink: 0; }
 
 /* ===== Inline Diff ===== */
-.inline-diff { margin: var(--space-2) 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-.inline-diff-lang { font-size: 0.875rem; padding: 0.15rem 0.5rem; background: var(--surface-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.inline-diff-pre { margin: 0; padding: var(--space-2); font-size: 0.875rem; line-height: 1.5; overflow-x: auto; }
-.inline-diff-line { display: block; white-space: pre; }
 .inline-diff-line.diff-add { background: rgba(76,175,125,0.15); color: var(--success); }
 .inline-diff-line.diff-del { background: rgba(229,85,69,0.15); color: var(--danger); }
 .inline-diff-line.diff-hunk { color: var(--muted); font-weight: 600; }
 
 /* ===== File Editor ===== */
 .file-editor { max-width: 800px; width: 90vw; height: 80vh; display: flex; flex-direction: column; }
-.file-editor-readonly {
-  font-size: 0.875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--muted);
-  background: var(--surface-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.2rem 0.5rem;
-}
 .file-editor-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .file-editor-status {
   display: flex;
@@ -754,24 +607,13 @@ button.compact {
 .diff-actions { display: flex; gap: var(--space-2); padding: var(--space-2); border-top: 1px solid var(--border); }
 
 /* ===== Remote Connect (WebRTC Tunnel) ===== */
-.remote-connect { max-width: 400px; width: 85vw; display: flex; flex-direction: column; gap: var(--space-3); }
-.remote-connect-header { display: flex; align-items: center; justify-content: space-between; }
-.remote-connect-header h3 { margin: 0; font-size: 1.1rem; }
-.remote-connect-status { display: flex; align-items: center; gap: var(--space-2); }
 .status-badge { font-size: 0.8rem; padding: 0.2rem 0.78rem; border-radius: 999px; }
 .status-idle, .status-disconnected { background: var(--surface); color: var(--muted); }
 .status-connecting { background: var(--warning-soft, rgba(255,193,7,0.2)); color: var(--warning); }
 .status-connected { background: var(--success-soft, rgba(76,175,80,0.2)); color: var(--success); }
 .status-error { background: rgba(229,85,69,0.2); color: var(--danger); }
-.remote-connect-error { background: rgba(229,85,69,0.15); color: var(--danger); padding: var(--space-2); border-radius: var(--radius-sm); font-size: 0.85rem; }
-.remote-connect-form { display: flex; flex-direction: column; gap: var(--space-3); }
 .remote-connect-form .field-label { display: flex; flex-direction: column; gap: 0.3rem; }
 .remote-connect-form .field-label span { font-size: 0.85rem; color: var(--muted); }
-.remote-connect-form input { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.78rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.9rem; outline: none; }
-.remote-connect-form input:focus { border-color: var(--accent); }
-.remote-connect-hint { font-size: 0.8rem; color: var(--muted); text-align: center; }
-.remote-connect-connected { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-4) 0; }
-.remote-connect-info { font-size: 0.9rem; color: var(--muted); text-align: center; }
 .remote-connect .btn-danger {
   background: var(--danger-soft);
   color: var(--danger);

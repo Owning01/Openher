@@ -6,6 +6,7 @@ import { createSSEFrameParser, type ParsedSSEFrame } from "../shared/sse/parser"
 import { recordDataUsage } from "../utils/dataUsage"
 import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS, SSE_CONNECT_TIMEOUT_MS } from "../constants"
 import { computeBackoff } from "../utils"
+import { isTaskToolPart } from "../utils/toolName"
 
 export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void, directory?: string, sessionID?: string | null) {
   const [streamState, setStreamState] = useState<StreamState>("polling")
@@ -150,12 +151,9 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
             // así que NO se filtra por sesión (el resto de eventos ajenos sí).
             // NOTA: SOLO las tarjetas 'task'/'subagent' pertenecen al padre. Las tools internas (read, bash, etc.)
             // pertenecen a la sesión hija y NO deben inyectarse en el chat del padre.
+            // Criterio único (toolName.isTaskToolPart).
             const isSubagentTaskPart = event.type === "message.part.updated" &&
-              !!partObj && (
-                partObj.tool === "task" || partObj.tool === "subagent" ||
-                !!((partObj.state as Record<string, unknown>)?.input as Record<string, unknown>)?.subagent_type ||
-                !!((partObj.state as Record<string, unknown>)?.metadata as Record<string, unknown>)?.subagent
-              )
+              !!partObj && isTaskToolPart(partObj as unknown as Parameters<typeof isTaskToolPart>[0])
             if (!isSubagentTaskPart) {
               const evtSession = (props.sessionID ?? nested?.sessionID ?? partObj?.sessionID) as string | undefined
               if (typeof evtSession === "string" && evtSession !== visible) return

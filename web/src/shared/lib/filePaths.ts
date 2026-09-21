@@ -14,10 +14,19 @@ export function isAbsoluteFsPath(p: string): boolean {
   return /^[a-zA-Z]:[\\/]/.test(p)
 }
 
-/** Último segmento de una ruta (para labels del menú). */
-export function basenameFsPath(p: string): string {
+/** Último segmento de una ruta (para labels del menú). Vacío si no hay path. */
+export function basenameFsPath(p: string | null | undefined): string {
+  if (!p) return ""
   const parts = p.split(/[/\\]/).filter(Boolean)
   return parts[parts.length - 1] ?? p
+}
+
+/** Carpeta contenedora sin separador final ("" si la ruta no tiene carpeta). */
+export function dirnameFsPath(p: string): string {
+  const normalized = p.replace(/\\/g, "/")
+  const idx = normalized.lastIndexOf("/")
+  if (idx <= 0) return ""
+  return normalized.slice(0, idx)
 }
 
 /** Separa una ruta en carpeta (con separador final) y nombre del archivo. */

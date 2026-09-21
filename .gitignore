@@ -3,6 +3,8 @@ build/
 node_modules/
 web/node_modules/
 web/dist/
+# iOS: build web copiado desde dist/ (regenerable con cap copy), solo en disco
+web/ios/App/App/public/
 web/*.tsbuildinfo
 OPENCODE-REPO.md
 # Changelogs locales por versión (no se suben a GitHub)
@@ -68,8 +70,6 @@ web/dist-stale/
 
 signaling-worker/node_modules/
 signaling-worker/.wrangler/
-"web/scripts/copy-dist.py"  
-".playwright-mcp/"  
 
 # OpenDesign externo (vendorizado eliminado, vive en G:/proyectos/open-design)
 od-web/
@@ -78,7 +78,7 @@ desktop-app/data/
 desktop-app/opencode-desktop.exe
 desktop-app/openher-desktop.exe
 
-# Build artifacts desktop (regenerables con build-desktop.ps1)
+# Build artifacts desktop (regenerables con scripts/build-desktop.ps1)
 dist-desktop/
 web/dist-locked/
 web/dist-locked2/
@@ -115,6 +115,8 @@ docs/
 # Estado runtime del tablero teamwork (cambia solo): no a git.
 .agents/teamwork_*.json
 .agents/teamwork_*.md
+# Artefactos de los gates de refactor (los escriben dentro de .agents/): no a git.
+.agents/*.txt
 
 # Copia local bloqueada por otro proceso (original en docs/local/): no a git.
 openher-arquitectura.html

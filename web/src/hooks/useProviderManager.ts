@@ -1,12 +1,14 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
 import { api } from "../api"
 import type { ServerConfig, ModelOption, ProviderInfo } from "../types"
+import { useT } from "../i18n-context"
 
 // Manejo de proveedores con los endpoints REALES del server:
 // v1 → GET /provider + PUT/DELETE /auth/:providerID. v2 → /api/integration.
 // Antes esto era un fake: enviaba "/connect prov key" como comando chat que el
 // server ignora (no existe ese comando) y solo marcaba localStorage.
 export function useProviderManager(modelOptions: ModelOption[], config: ServerConfig | null) {
+  const t = useT()
   const [connectedSet, setConnectedSet] = useState<Set<string>>(new Set())
   const [connecting, setConnecting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -56,12 +58,12 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
       setConnecting(null)
       return true
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error desconocido"
+      const msg = err instanceof Error ? err.message : t('error.unknown')
       setError(msg)
       setConnecting(null)
       return false
     }
-  }, [config])
+  }, [config, t])
 
   const removeCredential = useCallback(async (credentialID: string) => {
     if (!config) return
@@ -71,11 +73,11 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
       await api.removeProviderCredential(config, credentialID)
       await refreshConnected()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error desconocido"
+      const msg = err instanceof Error ? err.message : t('error.unknown')
       setError(msg)
     }
     setConnecting(null)
-  }, [config, refreshConnected])
+  }, [config, refreshConnected, t])
 
   const activateCredential = useCallback(async (credentialID: string) => {
     if (!config) return
@@ -85,11 +87,11 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
       await api.activateProviderCredential(config, credentialID)
       await refreshConnected()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error desconocido"
+      const msg = err instanceof Error ? err.message : t('error.unknown')
       setError(msg)
     }
     setConnecting(null)
-  }, [config, refreshConnected])
+  }, [config, refreshConnected, t])
 
   const disconnectProvider = useCallback(async (providerID: string) => {
     if (!config) return
@@ -103,11 +105,11 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
         return next
       })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error desconocido"
+      const msg = err instanceof Error ? err.message : t('error.unknown')
       setError(msg)
     }
     setConnecting(null)
-  }, [config])
+  }, [config, t])
 
   const addCustomProvider = useCallback(async (
     providerID: string,
@@ -123,12 +125,12 @@ export function useProviderManager(modelOptions: ModelOption[], config: ServerCo
       setConnecting(null)
       return true
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error desconocido"
+      const msg = err instanceof Error ? err.message : t('error.unknown')
       setError(msg)
       setConnecting(null)
       return false
     }
-  }, [config])
+  }, [config, t])
 
   return { providers, connecting, error, connectProvider, disconnectProvider, addCustomProvider, removeCredential, activateCredential, refreshConnected }
 }

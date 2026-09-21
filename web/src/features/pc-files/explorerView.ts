@@ -5,6 +5,21 @@ import type { FsEntry } from "../../shell"
 
 export type SortMode = "name" | "size" | "date"
 
+// Carpeta contenedora de una ruta (null si no hay): raíz de unidad,
+// UNC y raíz Unix se resuelven sin agregar separadores de más.
+export function getParentPath(p: string | null): string | null {
+  if (!p) return null
+  const trimmed = p.replace(/[\\/]+$/, "")
+  if (!trimmed) return null
+  if (/^[a-zA-Z]:$/.test(trimmed)) return null
+  const lastSlash = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"))
+  if (lastSlash < 0) return null
+  const parent = trimmed.slice(0, lastSlash)
+  if (!parent) return trimmed.startsWith("/") ? "/" : null
+  if (/^[a-zA-Z]:$/.test(parent)) return `${parent}\\`
+  return parent || null
+}
+
 function cmpName(a: FsEntry, b: FsEntry): number {
   const an = a.name.toLowerCase()
   const bn = b.name.toLowerCase()

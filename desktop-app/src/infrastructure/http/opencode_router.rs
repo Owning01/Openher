@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::infrastructure::http::common::post;
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::state::AppState;
@@ -20,25 +21,22 @@ pub fn handle(
             return Some(handle_global_get());
         }
         if method == "POST" {
-            return Some(match req.json_body() {
-                Ok(b) => {
-                    let config_path = b["configPath"].as_str().or_else(|| b["path"].as_str()).unwrap_or("");
-                    let content = b["content"].as_str().unwrap_or("");
-                    if config_path.is_empty() || content.is_empty() {
-                        ShellResponse::err_json(400, "Ruta o contenido inválido")
-                    } else {
-                        let p = std::path::PathBuf::from(config_path);
-                        if let Some(parent) = p.parent() {
-                            let _ = std::fs::create_dir_all(parent);
-                        }
-                        match std::fs::write(&p, content) {
-                            Ok(_) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
-                            Err(e) => ShellResponse::err_json(500, &format!("Error al escribir archivo: {}", e)),
-                        }
+            return Some(post!(req, b => {
+                let config_path = b["configPath"].as_str().or_else(|| b["path"].as_str()).unwrap_or("");
+                let content = b["content"].as_str().unwrap_or("");
+                if config_path.is_empty() || content.is_empty() {
+                    ShellResponse::err_json(400, "Ruta o contenido inválido")
+                } else {
+                    let p = std::path::PathBuf::from(config_path);
+                    if let Some(parent) = p.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    match std::fs::write(&p, content) {
+                        Ok(_) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                        Err(e) => ShellResponse::err_json(500, &format!("Error al escribir archivo: {}", e)),
                     }
                 }
-                Err(e) => ShellResponse::err_json(400, &e.to_string()),
-            });
+            }));
         }
         return Some(ShellResponse::err_json(405, "method not allowed"));
     }
@@ -47,16 +45,13 @@ pub fn handle(
     let labs_route = path.strip_prefix("/shell/labs")?;
     let resp = match (method, labs_route) {
         ("GET", "") | ("GET", "/") => ShellResponse::ok_json(&crate::plugins::labs_list(&state)),
-        ("POST", "/start") => match req.json_body() {
-            Ok(b) => {
-                let id = b["id"].as_str().unwrap_or("");
-                match crate::plugins::labs_start(&state, id) {
-                    Ok(v) => ShellResponse::ok_json(&v),
-                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
-                }
+        ("POST", "/start") => post!(req, b => {
+            let id = b["id"].as_str().unwrap_or("");
+            match crate::plugins::labs_start(&state, id) {
+                Ok(v) => ShellResponse::ok_json(&v),
+                Err(e) => ShellResponse::err_json(500, &e.to_string()),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        },
+        }),
         // soporte ruta exacta /shell/labs sin strip para compatibilidad
         _ => return None,
     };

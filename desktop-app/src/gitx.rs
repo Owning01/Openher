@@ -380,7 +380,9 @@ fn git_show_text(repo_root: &str, spec: &str) -> Result<TextSource, String> {
     Ok(decode_text(output.stdout))
 }
 
-fn git_stdout_line_opt<I, S>(cwd: &str, args: I) -> Result<Option<String>, String>
+/// Corre git una vez y devuelve su stdout como texto: `Err` si timeout, `None`
+/// si el exit code no fue 0 (mismo criterio que tenían los dos wrappers).
+fn git_stdout<I, S>(cwd: &str, args: I) -> Result<Option<String>, String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<std::ffi::OsStr>,
@@ -392,7 +394,17 @@ where
     if output.exit_code != Some(0) {
         return Ok(None);
     }
-    let stdout = std::str::from_utf8(&output.stdout).unwrap_or("");
+    Ok(Some(std::str::from_utf8(&output.stdout).unwrap_or("").to_string()))
+}
+
+fn git_stdout_line_opt<I, S>(cwd: &str, args: I) -> Result<Option<String>, String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let Some(stdout) = git_stdout(cwd, args)? else {
+        return Ok(None);
+    };
     let line = stdout.lines().next().unwrap_or("").trim();
     if line.is_empty() {
         Ok(None)
@@ -406,14 +418,9 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<std::ffi::OsStr>,
 {
-    let output = run_git(Some(cwd), args, DEFAULT_TIMEOUT_SECS)?;
-    if output.timed_out {
-        return Err(err("git command", "timeout"));
-    }
-    if output.exit_code != Some(0) {
+    let Some(stdout) = git_stdout(cwd, args)? else {
         return Ok(Vec::new());
-    }
-    let stdout = std::str::from_utf8(&output.stdout).unwrap_or("");
+    };
     Ok(stdout
         .lines()
         .map(|l| l.trim_end_matches('\r').to_string())

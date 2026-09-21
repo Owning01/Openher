@@ -113,7 +113,7 @@ Inspirado en hipocampo: construye **KG** (entidades+relaciones) offline con LLM 
 - **Continual:** añade docs sin re-indexar todo (incremental).
 
 ## 3. Aplica a tu proyecto
-- **Reemplaza RAG naive para opencode.db :8765 + IndexedDB merge-only:** indexing offline con PPR, retrieval single-step rápido en thin client.
+- **Reemplaza RAG naive para opencode.db + IndexedDB merge-only:** indexing offline con PPR, retrieval single-step rápido en thin client.
 - **IndexedDB v2 = long-term store:** guarda KG local, no solo texto.
 
 ## 4. Links
@@ -185,8 +185,8 @@ RAFT fine-tunea LM con **oracle docs + distractores + CoT answer** que *cita* fu
 ## 2. Receta
 - Training data: (question, oracle docs, distractor docs, CoT with citations). El modelo debe citar y distinguir.
 
-## 3. Aplica a opencode.db :8765
-- Fine-tunea tu SLM local sobre opencode.db con RAFT: genera Q/A sobre stats con distractores de otras tablas. Así no alucina cuando retrieval falla.
+## 3. Aplica a opencode.db
+- Fine-tunea tu SLM local sobre opencode.db con RAFT: genera Q/A sobre tus datos con distractores de otras tablas. Así no alucina cuando retrieval falla.
 
 ## 4. Links
 - https://arxiv.org/abs/2403.10131

@@ -1,4 +1,5 @@
 import { memo } from "react"
+import { Modal } from "./Modal"
 import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import { formatTime } from "../utils"
@@ -15,8 +16,7 @@ export const ArchivedList = memo(function ArchivedList({ sessions, onRestore, on
   const t = useT()
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content archived-list" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('session.archiveView')}>
+    <Modal onClose={onClose} variant="overlay" className="archived-list" label={t('session.archiveView')}>
         <ModalHeader title={t('settings.sessionArchive')} onClose={onClose} />
         <div className="modal-body">
           {sessions.length === 0 ? (
@@ -42,7 +42,6 @@ export const ArchivedList = memo(function ArchivedList({ sessions, onRestore, on
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 })

@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::infrastructure::http::common::{config_clone, post};
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::state::AppState;
@@ -15,42 +16,36 @@ pub fn handle(
     _q: &dyn Fn(&str) -> String,
 ) -> Option<ShellResponse> {
     if path == "/shell/config" && method == "GET" {
-        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let cfg = config_clone(&state);
         return Some(ShellResponse::ok_json(&serde_json::to_value(cfg).unwrap_or_default()));
     }
     if path == "/shell/config" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(patch) => {
-                let mut cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
-                merge_config(&mut cfg, &patch);
-                crate::state::save_config(&cfg);
-                *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
-                ShellResponse::ok_json(&serde_json::json!({ "ok": true, "config": cfg }))
-            }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        return Some(post!(req, patch => {
+            let mut cfg = config_clone(&state);
+            merge_config(&mut cfg, &patch);
+            crate::state::save_config(&cfg);
+            *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
+            ShellResponse::ok_json(&serde_json::json!({ "ok": true, "config": cfg }))
+        }));
     }
     if path == "/shell/config/export" {
-        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let cfg = config_clone(&state);
         return Some(ShellResponse::ok_json(&serde_json::json!({ "config": cfg })));
     }
     if path == "/shell/config/import" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(body) => {
-                if let Some(cfg_val) = body.get("config") {
-                    if let Ok(cfg) = serde_json::from_value::<crate::state::ShellConfig>(cfg_val.clone()) {
-                        crate::state::save_config(&cfg);
-                        *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
-                        ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
-                    } else {
-                        ShellResponse::err_json(400, "config inválida")
-                    }
+        return Some(post!(req, body => {
+            if let Some(cfg_val) = body.get("config") {
+                if let Ok(cfg) = serde_json::from_value::<crate::state::ShellConfig>(cfg_val.clone()) {
+                    crate::state::save_config(&cfg);
+                    *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
+                    ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
                 } else {
                     ShellResponse::err_json(400, "config inválida")
                 }
+            } else {
+                ShellResponse::err_json(400, "config inválida")
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        }));
     }
 
     if path == "/shell/autostart" && method == "GET" {
@@ -61,41 +56,38 @@ pub fn handle(
         })));
     }
     if path == "/shell/autostart" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(b) => {
-                let enabled = b["enabled"].as_bool().unwrap_or(false);
-                // Toggle opcional del server: { enabled, opencode2?: bool }
-                // Si no viene, no se toca (compat con UI vieja).
-                let op2 = b.get("opencode2").and_then(|v| v.as_bool());
-                if let Err(e) = crate::state::set_autostart(enabled) {
+        return Some(post!(req, b => {
+            let enabled = b["enabled"].as_bool().unwrap_or(false);
+            // Toggle opcional del server: { enabled, opencode2?: bool }
+            // Si no viene, no se toca (compat con UI vieja).
+            let op2 = b.get("opencode2").and_then(|v| v.as_bool());
+            if let Err(e) = crate::state::set_autostart(enabled) {
+                ShellResponse::err_json(500, &e.to_string())
+            } else if let Some(want) = op2 {
+                if let Err(e) = crate::state::set_opencode2_autostart(want) {
                     ShellResponse::err_json(500, &e.to_string())
-                } else if let Some(want) = op2 {
-                    if let Err(e) = crate::state::set_opencode2_autostart(want) {
-                        ShellResponse::err_json(500, &e.to_string())
-                    } else {
-                        let mut cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
-                        cfg.opencode2_enabled = want;
-                        crate::state::save_config(&cfg);
-                        *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg;
-                        if want {
-                            let cfg2 = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
-                            std::thread::spawn(move || {
-                                let _ = crate::state::ensure_opencode2_running(&cfg2);
-                            });
-                        }
-                        ShellResponse::ok_json(&serde_json::json!({ "ok": true, "enabled": enabled, "opencode2": crate::state::opencode2_autostart_enabled() }))
-                    }
                 } else {
+                    let mut cfg = config_clone(&state);
+                    cfg.opencode2_enabled = want;
+                    crate::state::save_config(&cfg);
+                    *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg;
+                    if want {
+                        let cfg2 = config_clone(&state);
+                        std::thread::spawn(move || {
+                            let _ = crate::state::ensure_opencode2_running(&cfg2);
+                        });
+                    }
                     ShellResponse::ok_json(&serde_json::json!({ "ok": true, "enabled": enabled, "opencode2": crate::state::opencode2_autostart_enabled() }))
                 }
+            } else {
+                ShellResponse::ok_json(&serde_json::json!({ "ok": true, "enabled": enabled, "opencode2": crate::state::opencode2_autostart_enabled() }))
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        }));
     }
 
     // Control dedicado del server opencode2 headless (:4098)
     if path == "/shell/opencode2/autostart" && method == "GET" {
-        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let cfg = config_clone(&state);
         return Some(ShellResponse::ok_json(&serde_json::json!({
             "enabled": crate::state::opencode2_autostart_enabled(),
             "opencode2_enabled": cfg.opencode2_enabled,
@@ -104,30 +96,27 @@ pub fn handle(
         })));
     }
     if path == "/shell/opencode2/autostart" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(b) => {
-                let want = b["enabled"].as_bool().unwrap_or(false);
-                match crate::state::set_opencode2_autostart(want) {
-                    Ok(()) => {
-                        let mut cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
-                        cfg.opencode2_enabled = want;
-                        crate::state::save_config(&cfg);
-                        *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
-                        if want {
-                            std::thread::spawn(move || {
-                                let _ = crate::state::ensure_opencode2_running(&cfg);
-                            });
-                        }
-                        ShellResponse::ok_json(&serde_json::json!({ "ok": true, "enabled": want }))
+        return Some(post!(req, b => {
+            let want = b["enabled"].as_bool().unwrap_or(false);
+            match crate::state::set_opencode2_autostart(want) {
+                Ok(()) => {
+                    let mut cfg = config_clone(&state);
+                    cfg.opencode2_enabled = want;
+                    crate::state::save_config(&cfg);
+                    *state.config.write().unwrap_or_else(|e| e.into_inner()) = cfg.clone();
+                    if want {
+                        std::thread::spawn(move || {
+                            let _ = crate::state::ensure_opencode2_running(&cfg);
+                        });
                     }
-                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
+                    ShellResponse::ok_json(&serde_json::json!({ "ok": true, "enabled": want }))
                 }
+                Err(e) => ShellResponse::err_json(500, &e.to_string()),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        }));
     }
     if path == "/shell/opencode2/ensure" && method == "POST" {
-        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let cfg = config_clone(&state);
         let port = if cfg.opencode2_port == 0 { 4098 } else { cfg.opencode2_port };
         let up_before = crate::common::probe_http(port, "/session", std::time::Duration::from_millis(900), &[200, 401])
             || crate::common::probe_http(4098, "/session", std::time::Duration::from_millis(900), &[200, 401]);
@@ -141,7 +130,7 @@ pub fn handle(
         return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "started": true, "port": port })));
     }
     if path == "/shell/opencode2/status" && method == "GET" {
-        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let cfg = config_clone(&state);
         let port = if cfg.opencode2_port == 0 { 4098 } else { cfg.opencode2_port };
         let up = crate::common::probe_http(port, "/session", std::time::Duration::from_millis(900), &[200, 401])
             || crate::common::probe_http(4098, "/session", std::time::Duration::from_millis(900), &[200, 401]);
@@ -157,23 +146,20 @@ pub fn handle(
         return Some(ShellResponse::ok_json(&serde_json::to_value(s).unwrap_or_default()));
     }
     if path == "/shell/session-state" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(b) => {
-                let mut s = state.persisted.write().unwrap_or_else(|e| e.into_inner());
-                if let Some(w) = b["window_w"].as_f64() {
-                    s.window_w = Some(w);
-                }
-                if let Some(h) = b["window_h"].as_f64() {
-                    s.window_h = Some(h);
-                }
-                if let Some(p) = b["last_panels"].as_array() {
-                    s.last_panels = p.clone();
-                }
-                crate::state::save_persisted(&s);
-                ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
+        return Some(post!(req, b => {
+            let mut s = state.persisted.write().unwrap_or_else(|e| e.into_inner());
+            if let Some(w) = b["window_w"].as_f64() {
+                s.window_w = Some(w);
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+            if let Some(h) = b["window_h"].as_f64() {
+                s.window_h = Some(h);
+            }
+            if let Some(p) = b["last_panels"].as_array() {
+                s.last_panels = p.clone();
+            }
+            crate::state::save_persisted(&s);
+            ShellResponse::ok_json(&serde_json::json!({ "ok": true }))
+        }));
     }
 
     None

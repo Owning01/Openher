@@ -190,3 +190,46 @@ describe("useSSEHandler — dialecto v2 (session.text/reasoning/execution)", () 
     expect(deps.applyDelta).toHaveBeenCalledWith("s1", "msg-1", "call-7", "{\"a\":", false, "tool")
   })
 })
+
+describe("useSSEHandler — re-arme de awaiting con deltas en vivo", () => {
+  beforeEach(() => {
+    vi.stubGlobal("requestAnimationFrame", (cb: (t: number) => void) => { cb(0); return 1 })
+    vi.stubGlobal("cancelAnimationFrame", () => {})
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  function delta(sessionID: string): SSEEvent {
+    return {
+      id: `evt-delta-${sessionID}`,
+      type: "session.text.delta",
+      properties: {
+        id: `evt-delta-${sessionID}`, created: Date.now(), type: "session.text.delta",
+        data: { sessionID, assistantMessageID: "msg-1", ordinal: 0, delta: "hola" },
+      },
+    } as unknown as SSEEvent
+  }
+
+  it("un delta de la sesión visible re-arma awaiting tras un settle prematuro", () => {
+    const deps = makeDeps({ awaitingRef: () => false })
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(delta("s1"))
+    expect(deps.applyDelta).toHaveBeenCalledWith("s1", "msg-1", "msg-1:text:0", "hola", false, "text")
+    expect(deps.setAwaitingAssistantReply).toHaveBeenCalledWith(true)
+  })
+
+  it("un delta de otra sesión no re-arma ni pinta", () => {
+    const deps = makeDeps({ awaitingRef: () => false })
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(delta("s2"))
+    expect(deps.applyDelta).not.toHaveBeenCalled()
+    expect(deps.setAwaitingAssistantReply).not.toHaveBeenCalled()
+  })
+
+  it("con awaiting activo no llama de más, solo pinta", () => {
+    const deps = makeDeps({ awaitingRef: () => true })
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(delta("s1"))
+    expect(deps.applyDelta).toHaveBeenCalled()
+    expect(deps.setAwaitingAssistantReply).not.toHaveBeenCalled()
+  })
+})

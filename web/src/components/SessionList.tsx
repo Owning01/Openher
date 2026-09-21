@@ -399,10 +399,11 @@ export const SessionList = memo(function SessionList({
     const parents = list.filter((s) => !s.parentID)
     const childrenByParent = new Map<string, SessionView[]>()
     const orphanChildren: SessionView[] = []
+    const ids = new Set(list.map((s) => s.id))
 
     list.forEach((s) => {
       if (s.parentID) {
-        if (list.some((p) => p.id === s.parentID)) {
+        if (ids.has(s.parentID)) {
           const arr = childrenByParent.get(s.parentID) ?? []
           arr.push(s)
           childrenByParent.set(s.parentID, arr)

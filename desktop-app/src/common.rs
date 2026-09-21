@@ -1,8 +1,10 @@
 //! Helpers compartidos — deduplicación de patrones repetidos en desktop-app.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::Duration;
+
+use bytes::Bytes;
 
 /// Probe HTTP genérico: GET http://127.0.0.1:{port}{path} con timeout.
 /// Retorna true si el status está en `ok_statuses`.
@@ -133,25 +135,14 @@ pub fn mime_for(path: &Path) -> &'static str {
 /// Servir archivo estático con guard de path-traversal y fallback a index.html si es dir.
 /// Retorna (bytes, mime) si existe.
 pub fn serve_file(root: &Path, rel: &str) -> Option<(Vec<u8>, &'static str)> {
-    let rel_clean = rel.trim_start_matches('/');
-    let mut path = root.join(rel_clean);
-    if !path.starts_with(root) {
-        return None;
-    }
-    if path.is_dir() {
-        path = path.join("index.html");
-    }
-    if !path.is_file() {
-        return None;
-    }
+    let (path, mime) = resolve_static(root, rel)?;
     let bytes = std::fs::read(&path).ok()?;
-    let mime = mime_for(&path);
     Some((bytes, mime))
 }
 
-/// Versión mmap zero-copy: usa `memmap2` si el archivo >4KB, sino `read`.
-/// Para `Accept-Encoding: br` el caller debe resolver `path.br` antes.
-pub fn serve_file_mmap(root: &Path, rel: &str) -> Option<(Vec<u8>, &'static str)> {
+/// Resuelve `rel` bajo `root` con guard anti path-traversal y fallback a
+/// `index.html` si es dir. Devuelve la ruta final y su mime.
+fn resolve_static(root: &Path, rel: &str) -> Option<(PathBuf, &'static str)> {
     let rel_clean = rel.trim_start_matches('/');
     let mut path = root.join(rel_clean);
     if !path.starts_with(root) {
@@ -163,40 +154,149 @@ pub fn serve_file_mmap(root: &Path, rel: &str) -> Option<(Vec<u8>, &'static str)
     if !path.is_file() {
         return None;
     }
-    // Intentar mmap para >4KB (evita alloc extra para chicos)
-    if let Ok(meta) = std::fs::metadata(&path) {
+    let mime = mime_for(&path);
+    Some((path, mime))
+}
+
+/// Lee a `Bytes` sin copiar: `mmap` envuelto en `Bytes::from_owner` si el
+/// archivo >4KB, si no `fs::read`. Para `Accept-Encoding: br` el caller debe
+/// resolver `path.br` antes.
+pub fn read_file_bytes(path: &Path) -> Option<Bytes> {
+    if let Ok(meta) = std::fs::metadata(path) {
         if meta.len() > 4096 {
-            if let Ok(file) = std::fs::File::open(&path) {
+            if let Ok(file) = std::fs::File::open(path) {
                 if let Ok(mmap) = unsafe { memmap2::Mmap::map(&file) } {
-                    let mime = mime_for(&path);
-                    // Copia a Vec<u8> para el body owned de la respuesta
-                    // (page cache de mmap hace que el costo sea una sola copia)
-                    return Some((mmap[..].to_vec(), mime));
+                    // Zero-copy: el `Mmap` es el owner del buffer del body.
+                    return Some(Bytes::from_owner(mmap));
                 }
             }
         }
     }
-    let bytes = std::fs::read(&path).ok()?;
-    let mime = mime_for(&path);
-    Some((bytes, mime))
+    Some(Bytes::from(std::fs::read(path).ok()?))
 }
 
-/// Parse JSON con `simd-json` si el payload >1KB, fallback a `serde_json`.
-/// Requiere `&mut [u8]` para simd; si falla, usa serde.
+/// Sirve un estático como `Bytes` (mmap zero-copy para >4KB).
+pub fn serve_file_bytes(root: &Path, rel: &str) -> Option<(Bytes, &'static str)> {
+    let (path, mime) = resolve_static(root, rel)?;
+    Some((read_file_bytes(&path)?, mime))
+}
+
+/// Compat `Vec<u8>` para los callers que mutan el body (preview/embed HTML).
+/// El fast-path del shell usa `serve_file_bytes` para no copiar el `Mmap`.
+pub fn serve_file_mmap(root: &Path, rel: &str) -> Option<(Vec<u8>, &'static str)> {
+    serve_file_bytes(root, rel).map(|(bytes, mime)| (bytes.to_vec(), mime))
+}
+
+/// Parse JSON con `simd-json` en UNA pasada si el payload >1KB, fallback a
+/// `serde_json` sobre los bytes originales si simd falla.
 pub fn parse_json_simd(bytes: &mut [u8]) -> Result<serde_json::Value, String> {
     if bytes.len() > 1024 {
-        // simd-json necesita &mut [u8] porque modifica in-place (escapes)
-        let mut v = bytes.to_vec();
-        match simd_json::to_owned_value(&mut v) {
-            Ok(val) => {
-                // Convertir simd_json::OwnedValue -> serde_json::Value via to_value
-                // simd-json Value es compatible via serde, fallback a transcode
-                let s = serde_json::to_string(&val).map_err(|e| e.to_string())?;
-                serde_json::from_str(&s).map_err(|e| e.to_string())
-            }
-            Err(_) => serde_json::from_slice(bytes).map_err(|e| e.to_string()),
+        // simd-json muta el buffer in-place (unescapes): trabajamos sobre una
+        // copia para poder caer a serde_json con los bytes originales intactos.
+        let mut buf = bytes.to_vec();
+        // Una sola pasada simd_json -> serde_json::Value (antes:
+        // to_owned_value -> to_string -> from_str, dos parses y una copia).
+        if let Ok(v) = simd_json::serde::from_slice::<serde_json::Value>(&mut buf) {
+            return Ok(v);
         }
-    } else {
-        serde_json::from_slice(bytes).map_err(|e| e.to_string())
     }
+    serde_json::from_slice(bytes).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod perf_bench {
+    use super::parse_json_simd;
+    use std::time::{Duration, Instant};
+
+    /// Implementación previa (R1) para comparar: simd -> OwnedValue -> String -> serde.
+    fn old_parse(bytes: &mut [u8]) -> serde_json::Value {
+        if bytes.len() > 1024 {
+            let mut v = bytes.to_vec();
+            match simd_json::to_owned_value(&mut v) {
+                Ok(val) => {
+                    let s = serde_json::to_string(&val).unwrap();
+                    serde_json::from_str(&s).unwrap()
+                }
+                Err(_) => serde_json::from_slice(bytes).unwrap(),
+            }
+        } else {
+            serde_json::from_slice(bytes).unwrap()
+        }
+    }
+
+    /// Variante: simd serde directo (la que quedó en `parse_json_simd`).
+    fn simd_serde(bytes: &mut [u8]) -> serde_json::Value {
+        let mut v = bytes.to_vec();
+        simd_json::serde::from_slice::<serde_json::Value>(&mut v).unwrap()
+    }
+
+    /// Variante: serde_json puro.
+    fn serde_only(bytes: &mut [u8]) -> serde_json::Value {
+        serde_json::from_slice(bytes).unwrap()
+    }
+
+    fn payload(target: usize) -> Vec<u8> {
+        // Items con escapes (`\"`, `\\`, `\u00f1`) para forzar el unescape real.
+        let item = "{\"id\":123456,\"name\":\"a\\\"b\\\\c\\u00f1\"},";
+        let mut s = String::with_capacity(target + 128);
+        s.push_str("{\"items\":[");
+        while s.len() < target {
+            s.push_str(item);
+        }
+        s.push_str("{}]}");
+        s.into_bytes()
+    }
+
+    fn per_iter<F: FnMut()>(iters: u32, mut f: F) -> Duration {
+        let t = Instant::now();
+        for _ in 0..iters {
+            f();
+        }
+        t.elapsed() / iters
+    }
+
+    /// R1: `parse_json_simd` debe producir EXACTAMENTE el mismo `Value` que la
+    /// implementación previa (misma semántica, un solo parse).
+    #[test]
+    fn parse_json_simd_matches_old() {
+        let cases: Vec<Vec<u8>> = vec![
+            br#"{"a":1,"b":"x\"y\\z","c":[true,null,1.5],"d":{"e":-2}}"#.to_vec(),
+            format!(r#"{{"items":[{}0]}}"#, "{\"id\":123456,\"name\":\"a\\\"b\\\\c\\u00f1\\u2603\",\"ok\":true},".repeat(40)).into_bytes(),
+            format!(r#"{{"n":[{}0]}}"#, "-0,9007199254740993,1e10,0.1,".repeat(80)).into_bytes(),
+        ];
+        for mut bytes in cases {
+            let mut original = bytes.clone();
+            let want = old_parse(&mut original);
+            let got = parse_json_simd(&mut bytes).unwrap();
+            assert_eq!(got, want, "divergencia con payload de {} bytes", bytes.len());
+        }
+    }
+
+    #[test]
+    #[ignore = "bench manual: cargo test --release perf_bench -- --ignored --nocapture"]
+    fn bench_parse_simd_16k_16m() {
+        // Rondas intercaladas + minimo por variante: la maquina tiene otros
+        // agentes compilando, el minimo es el estimador menos contaminado.
+        for target in [16 * 1024usize, 16 * 1024 * 1024] {
+            let base = payload(target);
+            let (iters, rounds) = if target > 1024 * 1024 { (3, 6) } else { (100, 8) };
+            let mut a = Duration::MAX;
+            let mut c = Duration::MAX;
+            let mut d = Duration::MAX;
+            let mut e = Duration::MAX;
+            for _ in 0..rounds {
+                a = a.min(per_iter(iters, || { let mut b = base.clone(); std::hint::black_box(old_parse(&mut b)); }));
+                c = c.min(per_iter(iters, || { let mut b = base.clone(); std::hint::black_box(simd_serde(&mut b)); }));
+                d = d.min(per_iter(iters, || { let mut b = base.clone(); std::hint::black_box(serde_only(&mut b)); }));
+                e = e.min(per_iter(iters, || { let mut b = base.clone(); std::hint::black_box(parse_json_simd(&mut b).unwrap()); }));
+            }
+            println!(
+                "payload={}B iters={} rounds={} A_old(OwnedValue+String+from_str)={:?} C_simdserde={:?} D_serdejson={:?} E_actual(parse_json_simd)={:?} A/E={:.2}x D/E={:.2}x",
+                base.len(), iters, rounds, a, c, d, e,
+                a.as_secs_f64() / e.as_secs_f64(),
+                d.as_secs_f64() / e.as_secs_f64()
+            );
+        }
+    }
+
 }

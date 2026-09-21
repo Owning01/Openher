@@ -3,6 +3,7 @@ import { ChevronRightIcon, ChevronDownIcon } from "../../Icons"
 import { VSCodeFileIcon } from "../../components/VSCodeFileIcon"
 import { shell, type FsEntry } from "../../shell"
 import { FileRow } from "./FileRow"
+import { InlineRename } from "./InlineRename"
 import { joinDragPaths } from "./multiSelect"
 import type { GitFileStatus } from "./useGitStatus"
 
@@ -163,18 +164,12 @@ export const TreeFolder = memo(function TreeFolder({
           <VSCodeFileIcon name={entry.name} isDir={true} isOpen={expanded} size={15} />
         </span>
         {isRenaming ? (
-          <input
-            className="pcf-inline-input"
+          <InlineRename
+            entry={entry}
             value={renamingValue ?? ""}
-            autoFocus
-            onChange={(e) => onRenamingChange?.(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { e.preventDefault(); onRenameCommit?.(entry) }
-              else if (e.key === "Escape") { e.preventDefault(); onRenameCancel?.() }
-            }}
-            onBlur={() => onRenameCommit?.(entry)}
-            onClick={(e) => e.stopPropagation()}
-            onFocus={(e) => e.currentTarget.select()}
+            onChange={onRenamingChange}
+            onCommit={onRenameCommit}
+            onCancel={onRenameCancel}
           />
         ) : (
           <span

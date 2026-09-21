@@ -73,4 +73,74 @@ assert.equal(en('todo.title'), 'Todo Items')
   assert.deepEqual(missing, [], `claves i18n usadas pero ausentes en en: ${missing.join(', ')}`)
 }
 
+// Q3 (F9): red de i18n ampliada. No purga claves: mide y reporta.
+// - llamadas con traductor t()/tr()/translate() y plantillas `prefijo.${x}`
+// - paridad es/en: toda clave de en debe existir en es (y no al revés)
+// - reporte de claves sin uso (huérfanas reales)
+// - it/zh-TW están incompletos: se reportan beta con el faltante medido
+{
+  const root = join(dirname(fileURLToPath(import.meta.url)))
+  const dictFiles = new Set(['en.ts', 'es.ts', 'it.ts', 'zh.ts'])
+  const calledKeys = new Set() // t('clave') / tr('clave') / translate('clave')
+  const templatePrefixes = new Set() // t(`prefijo.${x}`)
+  const anyLiteral = new Set() // 'clave' en cualquier lugar (uso data-driven: arrays, refs)
+  const walkKeys = (dir, inI18n) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry)
+      if (statSync(full).isDirectory()) { walkKeys(full, inI18n || entry === 'i18n'); continue }
+      if (!/\.(ts|tsx)$/.test(entry)) continue
+      if (inI18n && dictFiles.has(entry)) continue
+      const src = readFileSync(full, 'utf8')
+      for (const m of src.matchAll(/(?<![\w$.])(?:t|tr|translate)\(\s*['"]([A-Za-z0-9_.-]+)['"]/g)) calledKeys.add(m[1])
+      for (const m of src.matchAll(/(?<![\w$.])(?:t|tr|translate)\(\s*`([^`]*?)\$\{/g)) {
+        if (m[1]) templatePrefixes.add(m[1])
+      }
+      // El union `TranslationKey` de i18n.ts lista TODAS las claves: no es uso.
+      if (entry === 'i18n.ts') continue
+      for (const m of src.matchAll(/['"]([A-Za-z][A-Za-z0-9_.-]*)['"]/g)) anyLiteral.add(m[1])
+    }
+  }
+  walkKeys(root, false)
+
+  const enKeys = Object.keys(getTranslations('en'))
+  const enSet = new Set(enKeys)
+  const esKeys = Object.keys(getTranslations('es'))
+  const esSet = new Set(esKeys)
+
+  // Toda llamada al traductor (incluye tr/translate, que el scan viejo no veía) debe existir en en y en es.
+  const calledMissingEn = [...calledKeys].filter((k) => !enSet.has(k)).sort()
+  assert.deepEqual(calledMissingEn, [], `claves i18n llamadas pero ausentes en en: ${calledMissingEn.join(', ')}`)
+  const calledMissingEs = [...calledKeys].filter((k) => enSet.has(k) && !esSet.has(k)).sort()
+  assert.deepEqual(calledMissingEs, [], `claves i18n llamadas sin traducción es: ${calledMissingEs.join(', ')}`)
+
+  // Cada plantilla t(`prefijo.${x}`) debe tener familia real en en.
+  const emptyFamilies = [...templatePrefixes].filter((p) => !enKeys.some((k) => k.startsWith(p))).sort()
+  assert.deepEqual(emptyFamilies, [], `plantillas i18n sin familia en en: ${emptyFamilies.join(', ')}`)
+
+  // Paridad es/en completa.
+  const missingEs = enKeys.filter((k) => !esSet.has(k)).sort()
+  assert.deepEqual(missingEs, [], `es sin claves de en (${missingEs.length}): ${missingEs.slice(0, 20).join(', ')}`)
+  const extraEs = esKeys.filter((k) => !enSet.has(k)).sort()
+  assert.deepEqual(extraEs, [], `es con claves ausentes en en: ${extraEs.join(', ')}`)
+
+  // Reporte de huérfanas (sin purgar): no llamada, no literal data-driven, no familia dinámica.
+  const isDynamic = (k) => [...templatePrefixes].some((p) => k.startsWith(p))
+  const unused = enKeys.filter((k) => !calledKeys.has(k) && !anyLiteral.has(k) && !isDynamic(k)).sort()
+  const ns = new Map()
+  for (const k of unused) ns.set(k.split('.')[0], (ns.get(k.split('.')[0]) ?? 0) + 1)
+  const nsReport = [...ns.entries()].sort((a, b) => b[1] - a[1]).map(([n, c]) => `${n}:${c}`).join(' ')
+  console.log(`[i18n] en=${enKeys.length} es=${esKeys.length} (paridad es/en OK)`)
+  console.log(`[i18n] familias dinamicas (${templatePrefixes.size}): ${[...templatePrefixes].sort().join(' ')}`)
+  console.log(`[i18n] claves sin uso: ${unused.length}${nsReport ? ` -> ${nsReport}` : ''}`)
+
+  // it/zh-TW incompletos: beta con faltante medido, sin fingir paridad.
+  for (const [code, table] of [['it', getTranslations('it')], ['zh-TW', getTranslations('zh-TW')]]) {
+    const count = Object.keys(table).length
+    assert.ok(count > 0, `${code} no debe quedar vacío`)
+    const extra = Object.keys(table).filter((k) => !enSet.has(k))
+    assert.deepEqual(extra, [], `${code} tiene claves que no existen en en: ${extra.join(', ')}`)
+    console.log(`[i18n] ${code}: ${count}/${enKeys.length} (beta, faltan ${enKeys.length - count})`)
+  }
+}
+
 console.log('i18n tests passed')

@@ -1,13 +1,15 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback, useDeferredValue } from "react"
 import { createPortal } from "react-dom"
-import { PencilIcon, ArrowLeftIcon, UndoIcon, RedoIcon, CompressIcon, FolderIcon, SettingsIcon, SearchIcon, TerminalIcon, HistoryIcon, GlobeIcon, MenuDotsIcon, BrainIcon, ForkIcon, CloseIcon, ShareIcon, PaintIcon, EyeIcon, NoteIcon, CopyIcon, ClockIcon } from "../Icons"
+import { CopyIcon, HistoryIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { MessageList } from "./MessageList"
 import { FilePathProvider } from "./FilePathButton"
 import { Composer } from "./Composer"
 import { PromptPresetSheet } from "./PromptPresetSheet"
 export { ThinkingLevels } from "./ThinkingLevels"
-import { InlineRename } from "./InlineRename"
+import { ChatHeader } from "./ChatHeader"
+import { MessageSearchBar } from "./MessageSearchBar"
+import { TodoPanel } from "./TodoPanel"
 import { SubagentFooter } from "./SubagentFooter"
 import { ContextMenu } from "./ContextMenu"
 import { DiffViewer } from "./DiffViewer"
@@ -20,20 +22,17 @@ import { PromptHistoryPanel, usePromptHistoryLayout } from "./PromptHistoryPanel
 import { ChatNotesPanel } from "./ChatNotesPanel"
 import { PROMPT_HISTORY_OPEN_EVENT, extractUserPrompts } from "../utils/promptHistory"
 import { SelectionBar } from "./SelectionBar"
-import { DebateChip } from "../features/debate/DebateChip"
-import { GoChip } from "./GoChip"
 import { ExportMarkdownDialog } from "./ExportMarkdownDialog"
 import type { VisualSelection } from "../hooks/useVisualSelection"
 import { setQuestionFloatingMode } from "../utils/questionStore"
+import { useSelectionCopy } from "../hooks/useSelectionCopy"
+import { usePendingQuestions } from "../hooks/usePendingQuestions"
+import { useContextDisplay } from "../hooks/useContextDisplay"
 
-import { useOutsideClick } from "../hooks/useOutsideClick"
 import { killTerminalPty } from "../utils/terminalStore"
 import { groupTurnDiffs } from "../utils/rendered"
-import { api } from "../api"
-import { subagentBackground, isForegroundRunningSubagent } from "../utils/subagentBackground"
-import { formatCompact, formatCost } from "../utils"
 import type { SessionView, RenderedMessage, AgentOption, ModelOption, DataMode, CommandInfo,
-  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, ChatSettings, TokenUsage } from "../types"
+  ServerConfig, FeatureFlags, ProjectDashboard, DiffFile, FileDiff, Question, PermissionRequest, ChatSettings } from "../types"
 type TodoItem = any
 
 export type ChatViewProps = {
@@ -175,7 +174,6 @@ export const ChatView = memo(function ChatView({
   const [messageQuery, setMessageQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
   const [searchPos, setSearchPos] = useState(0)
-  const [showOverflow, setShowOverflow] = useState(false)
   const [showPrompts, setShowPrompts] = useState(false)
   const [showChatCustomizer, setShowChatCustomizer] = useState(false)
   const [chatTermOpen, setChatTermOpen] = useState(false)
@@ -185,17 +183,6 @@ export const ChatView = memo(function ChatView({
   // El historial es por sesión: al cambiar se cierra; /history y /timeline
   // (más el botón del header) lo abren vía evento (patrón plugin:insert-text).
   useEffect(() => { setShowHistory(false) }, [selectedSession?.id])
-  // El buscador y el salto a prompt también son por sesión: sin reset, la
-  // query vieja centra (con smooth) una coincidencia al azar del chat nuevo
-  // y el jumpTarget stale expande la ventana sin motivo.
-  useEffect(() => {
-    setMessageQuery("")
-    setSearchPos(0)
-    setShowSearch(false)
-    setJumpTarget(null)
-    setContextMenu(null)
-    setSelectionCopy(null)
-  }, [selectedSession?.id])
   useEffect(() => {
     const open = () => setShowHistory(true)
     window.addEventListener(PROMPT_HISTORY_OPEN_EVENT, open)
@@ -212,15 +199,14 @@ export const ChatView = memo(function ChatView({
   const [showNotes, setShowNotes] = useState(false)
   const historyLayout = usePromptHistoryLayout()
   const [exportBusy, setExportBusy] = useState(false)
-  const [pendingCount, setPendingCount] = useState(0)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageID: string } | null>(null)
   // Estable: evita que cada render del padre cree un nuevo function ref
   // y anule el memo de todas las MessageBubble.
   const handleContextMenu = useCallback((x: number, y: number, messageID: string) => {
     setContextMenu({ x, y, messageID })
   }, [])
-  const [selectionCopy, setSelectionCopy] = useState<{ x: number; y: number; text: string } | null>(null)
   const messagesWrapRef = useRef<HTMLDivElement | null>(null)
+  const { selectionCopy, setSelectionCopy } = useSelectionCopy(messagesWrapRef)
   // Mantener último modelo visible para evitar flicker cuando recarga
   const prevModelRef = useRef(activeModelOption)
   useEffect(() => { if (activeModelOption) prevModelRef.current = activeModelOption }, [activeModelOption])
@@ -232,53 +218,18 @@ export const ChatView = memo(function ChatView({
   }, [flags.questionAuto])
   const displayModelOption = activeModelOption ?? prevModelRef.current
 
-  // Copiar selección: aparece solo cuando hay texto seleccionado dentro del chat;
-  // cualquier scroll lo oculta. Throttled + RAF para no bloquear typing.
+  // El buscador y el salto a prompt también son por sesión: sin reset, la
+  // query vieja centra (con smooth) una coincidencia al azar del chat nuevo
+  // y el jumpTarget stale expande la ventana sin motivo.
   useEffect(() => {
-    let raf: number | null = null
-    let lastText = ""
-    const update = () => {
-      if (raf !== null) return
-      raf = requestAnimationFrame(() => {
-        raf = null
-        const sel = window.getSelection()
-        const wrap = messagesWrapRef.current
-        if (!sel || sel.isCollapsed || !wrap || !sel.anchorNode || !wrap.contains(sel.anchorNode)) {
-          if (lastText !== "") { lastText = ""; setSelectionCopy(null) }
-          return
-        }
-        const text = sel.toString().trim()
-        if (!text) {
-          if (lastText !== "") { lastText = ""; setSelectionCopy(null) }
-          return
-        }
-        if (text === lastText) return
-        const rect = sel.getRangeAt(0).getBoundingClientRect()
-        if (rect.width === 0 && rect.height === 0) {
-          if (lastText !== "") { lastText = ""; setSelectionCopy(null) }
-          return
-        }
-        lastText = text
-        const vw = window.innerWidth
-        const btnW = 140
-        const x = Math.min(Math.max(rect.left + rect.width / 2 - btnW / 2, 8), vw - btnW - 8)
-        const y = rect.top - 42
-        setSelectionCopy({ x, y, text })
-      })
-    }
-    const hide = () => {
-      if (raf !== null) { cancelAnimationFrame(raf); raf = null }
-      if (lastText !== "") { lastText = ""; setSelectionCopy(null) }
-    }
-    document.addEventListener("selectionchange", update)
-    document.addEventListener("scroll", hide, true)
-    return () => {
-      if (raf !== null) cancelAnimationFrame(raf)
-      document.removeEventListener("selectionchange", update)
-      document.removeEventListener("scroll", hide, true)
-    }
-  }, [])
-  const overflowRef = useRef<HTMLDivElement | null>(null)
+    setMessageQuery("")
+    setSearchPos(0)
+    setShowSearch(false)
+    setJumpTarget(null)
+    setContextMenu(null)
+    setSelectionCopy(null)
+  }, [selectedSession?.id, setSelectionCopy])
+
   const promptEntries = useMemo(() => extractUserPrompts(messages, selectedSession?.id), [messages, selectedSession?.id])
   // Salto a un prompt: publica el id objetivo (con nonce para repetir clics
   // sobre el mismo) y MessageList expande la ventana visible hasta incluirlo,
@@ -299,63 +250,20 @@ export const ChatView = memo(function ChatView({
       : sessions.find((s) => s.parentID === parent)
     if (subagentSession) onOpenSession(subagentSession.id, subagentSession.directory)
   }, [sessions, selectedSession?.id, onOpenSession])
+  // Volver al padre: abre la sesión padre en esta misma vista. Antes reusaba
+  // onBackToSessions (volver a la lista), que en el panel desktop es un noop
+  // y en móvil sacaba a la lista en vez de al padre.
+  const handleGoToParent = useCallback(() => {
+    const parentID = selectedSession?.parentID
+    if (!parentID) return
+    const parent = sessions.find((s) => s.id === parentID)
+    if (parent) onOpenSession(parent.id, parent.directory)
+    else onBackToSessions()
+  }, [sessions, selectedSession?.parentID, onOpenSession, onBackToSessions])
 
-  // Subagentes en background aún vivos (sesión hija activa en el server). El
-  // chip del header evita perderlos de vista con scroll o al cambiar de chat.
-  const backgroundSubagents = useMemo(() => {
-    const out: Array<{ id: string; childSessionID: string; title: string }> = []
-    for (const m of messages) {
-      for (const tp of m.toolParts ?? []) {
-        const info = subagentBackground(tp)
-        if (!info.isBackground || !info.childSessionID || !busySessionIds?.has(info.childSessionID)) continue
-        const input = tp.state?.input as { description?: string } | undefined
-        const meta = tp.state?.metadata as { description?: string } | undefined
-        out.push({
-          id: tp.id,
-          childSessionID: info.childSessionID,
-          title: input?.description ?? meta?.description ?? t('toolpart.subagent'),
-        })
-      }
-    }
-    return out
-  }, [messages, busySessionIds, t])
-
-  // Subagentes que corren en primer plano (bloqueando el turno). El server
-  // puede desacoplarlos a background (Ctrl+B en la TUI): el botón del header
-  // dispara experimental.session.background y luego el SSE marca
-  // metadata.background en los parts.
-  const foregroundSubagents = useMemo(() => {
-    let count = 0
-    for (const m of messages) {
-      for (const tp of m.toolParts ?? []) {
-        if (isForegroundRunningSubagent(tp)) count++
-      }
-    }
-    return count
-  }, [messages])
-  const [promotingBg, setPromotingBg] = useState(false)
-  const [bgActionSupported, setBgActionSupported] = useState(true)
-  const promoteToBackground = useCallback(async () => {
-    if (!config || !selectedSession || promotingBg) return
-    setPromotingBg(true)
-    try {
-      const ok = await api.promoteSessionBackground(config, selectedSession.id, selectedSession.directory)
-      // false = el server no tiene la feature (o no había nada que promover).
-      if (ok === false) setBgActionSupported(false)
-    } catch {
-      // Endpoint experimental ausente (server viejo) o red: no insistir.
-      setBgActionSupported(false)
-    } finally {
-      setPromotingBg(false)
-    }
-  }, [config, selectedSession, promotingBg])
-
-  useOutsideClick(overflowRef, () => setShowOverflow(false), showOverflow)
   // El badge de preguntas pendientes usa el poll de App.tsx (pendingQuestions
-  // llega por prop) — sin intervalo duplicado aquí.
-  useEffect(() => {
-    setPendingCount(pendingQuestions?.length ?? 0)
-  }, [pendingQuestions])
+  // llega por prop): derivado directo, sin intervalo duplicado aquí.
+  const pendingCount = usePendingQuestions(pendingQuestions)
 
   // Buscador de mensajes: navegación entre coincidencias (no filtra la lista).
   const deferredQuery = useDeferredValue(messageQuery)
@@ -389,262 +297,58 @@ export const ChatView = memo(function ChatView({
     return effectiveRevertID ? { messageID: effectiveRevertID } : undefined
   }, [effectiveRevertID])
 
-  const contextDisplay = useMemo(() => {
-    // Buscar tokens del último mensaje con datos o usar los tokens acumulados de la sesión
-    let lastMsgTokens: RenderedMessage["tokens"] | TokenUsage | undefined
-
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i]
-      if (m.tokens && ((m.tokens.input ?? 0) + (m.tokens.output ?? 0) + (m.tokens.reasoning ?? 0) > 0)) {
-        if (!lastMsgTokens) lastMsgTokens = m.tokens
-      }
-    }
-
-    if (!lastMsgTokens && selectedSession?.tokens) {
-      lastMsgTokens = selectedSession.tokens
-    }
-
-    let total = 0
-    if (lastMsgTokens) {
-      total = (lastMsgTokens.input ?? 0) + (lastMsgTokens.output ?? 0) +
-        (lastMsgTokens.reasoning ?? 0) + (lastMsgTokens.cache?.read ?? 0) + (lastMsgTokens.cache?.write ?? 0)
-    }
-
-    if (total <= 0) {
-      // Estimar tokens acumulados de los mensajes si la tarea está en curso
-      let sumChars = 0
-      for (const m of messages) {
-        sumChars += m.text ? m.text.length : 0
-      }
-      if (sumChars > 0) {
-        total = Math.round(sumChars / 4)
-      }
-    }
-
-    const cost = selectedSession?.cost ?? 0
-    if (total <= 0 && cost <= 0) return null
-
-    const limit = activeModelOption?.contextLimit
-    const pct = limit && limit > 0 && total > 0 ? Math.round((total / limit) * 100) : null
-    let label = total > 0 ? (formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")) : ""
-    if (cost > 0) label = label ? `${label} · ${formatCost(cost)}` : (label ? `${label} · $0.00` : "")
-    return { total, pct, limit, cost, label }
-  }, [messages, activeModelOption?.contextLimit, selectedSession?.tokens, selectedSession?.cost])
+  const contextDisplay = useContextDisplay(messages, activeModelOption, selectedSession)
 
   return (
     <main className="panel detail fade-in">
-      <div className="header-row detail-header">
-        <h2>
-          {selectedSession ? (
-            <div className="detail-title-row">
-              <button className="btn-icon btn-ghost back-btn" onClick={onBackToSessions} aria-label={t('detail.backToSessions')} title={t('detail.backToSessions')}>
-                <ArrowLeftIcon size={20} />
-              </button>
-              {renamingSessionID === selectedSession.id && (
-                <InlineRename value={renameValue} original={selectedSession.title}
-                  onChange={onRenameChange}
-                  onConfirm={() => onRenameConfirm(selectedSession.id, renameValue, selectedSession.directory)}
-                  onCancel={onRenameCancel}
-                  placeholder={t('session.renamePlaceholder')} />
-              )}
-            </div>
-          ) : (
-            t('detail.selectSession')
-          )}
-        </h2>
-        {selectedSession && (
-          <div className="detail-header-actions">
-            {selectedSession && <DebateChip originSessionID={selectedSession.id} />}
-            <GoChip />
-            {foregroundSubagents > 0 && bgActionSupported && selectedSession && (
-              <button
-                type="button"
-                className="header-bg-pill action"
-                disabled={promotingBg}
-                onClick={promoteToBackground}
-                title={t('chat.moveToBackgroundHint')}
-              >
-                <ClockIcon size={12} />
-                <span>{t('chat.moveToBackground')}</span>
-              </button>
-            )}
-            {backgroundSubagents.length > 0 && (
-              <button
-                type="button"
-                className="header-bg-pill"
-                title={backgroundSubagents.map((s) => s.title).join("\n")}
-                onClick={() => handleViewSubagents(backgroundSubagents[0]!.childSessionID)}
-              >
-                <ClockIcon size={12} />
-                <span>{t('chat.backgroundActive', { count: backgroundSubagents.length })}</span>
-              </button>
-            )}
-            {pendingCount > 0 && (
-              <button
-                type="button"
-                className="pending-badge"
-                title={t('session.pendingCount', { count: pendingCount })}
-                onClick={onReopenQuestions}
-                disabled={!onReopenQuestions}
-              >
-                {pendingCount}
-              </button>
-            )}
-            <span style={{ display: "none" }} aria-hidden="true">{t('detail.changeModel')}</span>
-            {diffFiles && diffFiles.length > 0 && onOpenADEDiff && (
-              <button
-                type="button"
-                className="btn-secondary compact header-diff-pill"
-                onClick={() => onOpenADEDiff()}
-                title="Abrir panel de diffs"
-              >
-                <span className="diff-pill-dot">●</span>
-                <span>Diffs ({diffFiles.length})</span>
-              </button>
-            )}
-            <div className="overflow-wrap header-overflow" ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
-              {chatSettings && onChatSettingChange && (
-                <button className="btn-icon compact chat-customize-btn"
-                  onClick={(e) => { e.stopPropagation(); setShowChatCustomizer(true) }}
-                  title={t('detail.customizeChat')}
-                  aria-label={t('detail.customizeChat')}>
-                  <PaintIcon size={14} />
-                </button>
-              )}
-              {selectedSession && (
-                <button className={`btn-icon compact chat-term-btn${chatTermOpen ? " active" : ""}`}
-                  onClick={(e) => { e.stopPropagation(); setChatTermOpen((v) => !v) }}
-                  title={t('session.terminal')}
-                  aria-label={t('session.terminal')}
-                  aria-pressed={chatTermOpen}>
-                  <TerminalIcon size={14} />
-                </button>
-              )}
-              {selectedSession && (
-                <button className={`btn-icon compact chat-history-btn${showHistory ? " active" : ""}`}
-                  onClick={(e) => { e.stopPropagation(); setShowHistory((v) => !v) }}
-                  title={t('session.promptHistory')}
-                  aria-label={t('session.promptHistory')}
-                  aria-pressed={showHistory}>
-                  <HistoryIcon size={14} />
-                </button>
-              )}
-              {selectedSession && (
-                <button className={`btn-icon compact chat-notes-btn${showNotes ? " active" : ""}`}
-                  onClick={(e) => { e.stopPropagation(); setShowNotes((v) => !v) }}
-                  title={t('session.notes')}
-                  aria-label={t('session.notes')}
-                  aria-pressed={showNotes}
-                  aria-expanded={showNotes}>
-                  <NoteIcon size={14} />
-                </button>
-              )}
-              <button className="btn-icon compact"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setShowOverflow((v) => !v)
-                }}
-                title={t('session.more')}
-                aria-expanded={showOverflow}>
-                <MenuDotsIcon size={14} />
-              </button>
-              {showOverflow && (
-                <div
-                  className="overflow-dropdown fade-in"
-                  style={{
-                    position: "absolute",
-                    top: "calc(100% + 6px)",
-                    right: 0,
-                    left: "auto",
-                    zIndex: 99999,
-                    display: "flex",
-                    flexDirection: "column",
-                    width: 170,
-                    background: "var(--surface-strong, #1a1a20)",
-                    border: "1px solid var(--border-strong, #444)",
-                    borderRadius: "var(--radius-md, 8px)",
-                    boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
-                    padding: 4,
-                    gap: 2
-                  }}>
-                  {renamingSessionID !== selectedSession.id && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onStartRename(selectedSession) }}>
-                      <PencilIcon size={14} /> {t('session.rename')}
-                    </button>
-                  )}
-                  {onOpenSettings && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenSettings() }}>
-                      <SettingsIcon size={14} /> {t('nav.settings')}
-                    </button>
-                  )}
-                  <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowSearch((v) => !v) }}>
-                    <SearchIcon size={14} />
-                    {t('session.searchMessages')}
-                  </button>
-                  <button className="overflow-item" disabled={isWorking} onClick={() => { setShowOverflow(false); onUndo?.() }}>
-                    <UndoIcon size={14} /> {t('session.undo')}
-                  </button>
-                  {selectedSession?.revert && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onRedo?.() }}>
-                      <RedoIcon size={14} /> {t('session.redo')}
-                    </button>
-                  )}
-                  <button className="overflow-item" disabled={isWorking} onClick={() => { setShowOverflow(false); onCompact?.() }}>
-                    <CompressIcon size={14} /> {t('session.compact')}
-                  </button>
-                  {onExportMarkdownTo && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowExport(true) }}>
-                      <ShareIcon size={14} /> {t('session.exportMd')}
-                    </button>
-                  )}
-                  {flags.fileBrowser && onOpenFileBrowser && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenFileBrowser() }}>
-                      <FolderIcon size={14} /> {t('session.browseFiles')}
-                    </button>
-                  )}
-                  <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenOpenCodeHub?.() }}>
-                    <BrainIcon size={14} />
-                    {t('session.opencodeHub')}
-                  </button>
-                  <button className="overflow-item" onClick={() => { setShowOverflow(false); onToggleReadingMode() }}>
-                    <EyeIcon size={14} />
-                    {readingMode ? t('detail.readingModeOff') : t('detail.readingModeOn')}
-                  </button>
-                  {onOpenTerminal && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenTerminal() }}>
-                      <TerminalIcon size={14} />
-                      {t('session.terminal')}
-                    </button>
-                  )}
-                  {onOpenRemoteDesktop && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenRemoteDesktop() }}>
-                      <GlobeIcon size={14} />
-                      {t('session.remoteDesktop')}
-                    </button>
-                  )}
-                  {onOpenMCPBrowser && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onOpenMCPBrowser() }}>
-                      <GlobeIcon size={14} />
-                      {t('mcp.title')}
-                    </button>
-                  )}
-                  {onInsertPrompt && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); setShowPrompts(true) }}>
-                      {t('chat.prompts')}
-                    </button>
-                  )}
-                  {onForkSession && (
-                    <button className="overflow-item" onClick={() => { setShowOverflow(false); onForkSession() }}>
-                      <ForkIcon size={14} />
-                      {t('session.fork')}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      <span style={{ display: "none" }} aria-hidden="true">{t('detail.changeModel')}</span>
+
+      <ChatHeader
+        selectedSession={selectedSession}
+        messages={messages}
+        busySessionIds={busySessionIds}
+        sessions={sessions}
+        config={config}
+        onViewSubagents={handleViewSubagents}
+        renamingSessionID={renamingSessionID}
+        renameValue={renameValue}
+        onRenameChange={onRenameChange}
+        onRenameConfirm={onRenameConfirm}
+        onRenameCancel={onRenameCancel}
+        onBackToSessions={onBackToSessions}
+        pendingCount={pendingCount}
+        onReopenQuestions={onReopenQuestions}
+        diffFiles={diffFiles}
+        onOpenADEDiff={onOpenADEDiff}
+        canCustomizeChat={!!(chatSettings && onChatSettingChange)}
+        onOpenChatCustomizer={() => setShowChatCustomizer(true)}
+        chatTermOpen={chatTermOpen}
+        onToggleChatTerm={() => setChatTermOpen((v) => !v)}
+        showHistory={showHistory}
+        onToggleHistory={() => setShowHistory((v) => !v)}
+        showNotes={showNotes}
+        onToggleNotes={() => setShowNotes((v) => !v)}
+        isWorking={isWorking}
+        onUndo={onUndo}
+        onRedo={onRedo}
+        onCompact={onCompact}
+        onExportMarkdownTo={onExportMarkdownTo}
+        onOpenExport={() => setShowExport(true)}
+        onToggleSearch={() => setShowSearch((v) => !v)}
+        flags={flags}
+        onOpenFileBrowser={onOpenFileBrowser}
+        onOpenOpenCodeHub={onOpenOpenCodeHub}
+        readingMode={readingMode}
+        onToggleReadingMode={onToggleReadingMode}
+        onOpenTerminal={onOpenTerminal}
+        onOpenRemoteDesktop={onOpenRemoteDesktop}
+        onOpenMCPBrowser={onOpenMCPBrowser}
+        onInsertPrompt={onInsertPrompt}
+        onOpenPrompts={() => setShowPrompts(true)}
+        onForkSession={onForkSession}
+        onStartRename={onStartRename}
+        onOpenSettings={onOpenSettings}
+      />
 
       {selectedSession?.revert && (
         <div className="revert-dock">
@@ -654,33 +358,15 @@ export const ChatView = memo(function ChatView({
       )}
 
       {showSearch && (
-        <div className="message-search-bar">
-          <input
-            type="search"
-            value={messageQuery}
-            onChange={(e) => { setMessageQuery(e.target.value); setSearchPos(0) }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault()
-                gotoMatch(e.shiftKey ? -1 : 1)
-              }
-            }}
-            placeholder={t('sessions.searchPlaceholder')}
-          />
-          {messageQuery && (
-            <>
-              <span className="message-search-count">
-                {searchMatches.length > 0 ? `${searchIndex + 1}/${searchMatches.length}` : "0/0"}
-              </span>
-              <button className="btn-icon btn-ghost compact" onClick={() => gotoMatch(-1)} aria-label="Anterior" title="Anterior (Shift+Enter)">
-                ↑
-              </button>
-              <button className="btn-icon btn-ghost compact" onClick={() => gotoMatch(1)} aria-label="Siguiente" title="Siguiente (Enter)">
-                ↓
-              </button>
-            </>
-          )}
-        </div>
+        <MessageSearchBar
+          query={messageQuery}
+          onQueryChange={(value) => { setMessageQuery(value); setSearchPos(0) }}
+          matchCount={searchMatches.length}
+          index={searchIndex}
+          onPrev={() => gotoMatch(-1)}
+          onNext={() => gotoMatch(1)}
+          placeholder={t('sessions.searchPlaceholder')}
+        />
       )}
 
       <div className="chat-main-row">
@@ -750,7 +436,7 @@ export const ChatView = memo(function ChatView({
       )}
 
       {selectedSession?.parentID && (
-        <SubagentFooter session={selectedSession} onGoBack={onBackToSessions} />
+        <SubagentFooter session={selectedSession} onGoBack={handleGoToParent} />
       )}
 
       {flags.inlineDiff && selectedSession && diffFiles.length > 0 && (
@@ -797,25 +483,7 @@ export const ChatView = memo(function ChatView({
         </button>
       )}
 
-      {todos.length > 0 && (
-        <div className={`todo-panel${todosExpanded ? " open" : ""}`}>
-          <div className="todo-panel-header">
-            <span className="todo-panel-title">{t('todo.title')}</span>
-            <button className="btn-icon btn-secondary compact" onClick={onTodosToggle} aria-label="Cerrar">
-              <CloseIcon size={12} />
-            </button>
-          </div>
-          <div className="todo-panel-body">
-            {todos.map((todo) => (
-              <div key={todo.id} className={`todo-item ${todo.status}`}>
-                <span className={`todo-priority priority-${todo.priority}`} />
-                <span className="todo-text">{todo.content}</span>
-                <span className={`todo-status-badge ${todo.status}`}>{todo.status}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <TodoPanel todos={todos} expanded={todosExpanded} onToggle={onTodosToggle} />
 
       {visualSelection && onClearVisualSelection && (
         <div style={{ padding: "0 12px" }}>

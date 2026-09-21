@@ -1,4 +1,5 @@
 pub mod io;
+pub mod common;
 pub mod scm_router;
 pub mod external_router;
 pub mod fs_router;
@@ -7,7 +8,7 @@ pub mod config_router;
 pub mod kanban_router;
 pub mod pty_router;
 pub mod browser_router;
-pub mod stats_router;
+pub mod design_router;
 pub mod preview_router;
 pub mod opencode_router;
 pub mod doc_router;

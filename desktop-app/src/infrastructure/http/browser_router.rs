@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use crate::infrastructure::http::common::post;
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::state::AppState;
@@ -18,73 +19,61 @@ pub fn handle(
     let route = path.strip_prefix("/shell/browser")?;
     // /shell/browser/pick tiene GET y POST — diferenciar por método
     let resp = match (method, route) {
-        ("POST", "/open") => match req.json_body() {
-            Ok(v) => {
-                let view = v["view"].as_str().unwrap_or("");
-                let url = v["url"].as_str().unwrap_or("about:blank");
-                let has_bounds = v.get("bounds").is_some() && v["bounds"].is_object();
-                let bx = v["bounds"]["x"].as_f64().unwrap_or(0.0);
-                let by = v["bounds"]["y"].as_f64().unwrap_or(0.0);
-                let bw = v["bounds"]["w"].as_f64().unwrap_or(800.0);
-                let bh = v["bounds"]["h"].as_f64().unwrap_or(600.0);
-                let bounds = wry::Rect {
-                    position: wry::dpi::LogicalPosition::new(bx, by).into(),
-                    size: wry::dpi::LogicalSize::new(bw, bh).into(),
-                };
-                let is_default_bounds = !has_bounds && bx == 0.0 && by == 0.0 && bw == 800.0 && bh == 600.0;
-                match state.browser.open(view, url, bounds) {
-                    Ok(()) => {
-                        if is_default_bounds {
-                            let _ = state.browser.set_visible(view, false);
-                        }
-                        ShellResponse::ok_json(&serde_json::json!({ "ok": true, "hidden_default": is_default_bounds }))
+        ("POST", "/open") => post!(req, v => {
+            let view = v["view"].as_str().unwrap_or("");
+            let url = v["url"].as_str().unwrap_or("about:blank");
+            let has_bounds = v.get("bounds").is_some() && v["bounds"].is_object();
+            let bx = v["bounds"]["x"].as_f64().unwrap_or(0.0);
+            let by = v["bounds"]["y"].as_f64().unwrap_or(0.0);
+            let bw = v["bounds"]["w"].as_f64().unwrap_or(800.0);
+            let bh = v["bounds"]["h"].as_f64().unwrap_or(600.0);
+            let bounds = wry::Rect {
+                position: wry::dpi::LogicalPosition::new(bx, by).into(),
+                size: wry::dpi::LogicalSize::new(bw, bh).into(),
+            };
+            let is_default_bounds = !has_bounds && bx == 0.0 && by == 0.0 && bw == 800.0 && bh == 600.0;
+            match state.browser.open(view, url, bounds) {
+                Ok(()) => {
+                    if is_default_bounds {
+                        let _ = state.browser.set_visible(view, false);
                     }
-                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
+                    ShellResponse::ok_json(&serde_json::json!({ "ok": true, "hidden_default": is_default_bounds }))
                 }
+                Err(e) => ShellResponse::err_json(500, &e.to_string()),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        },
-        ("POST", "/bounds") => match req.json_body() {
-            Ok(v) => {
-                let view = v["view"].as_str().unwrap_or("");
-                let bx = v["x"].as_f64().unwrap_or(0.0);
-                let by = v["y"].as_f64().unwrap_or(0.0);
-                let bw = v["w"].as_f64().unwrap_or(800.0);
-                let bh = v["h"].as_f64().unwrap_or(600.0);
-                let bounds = wry::Rect {
-                    position: wry::dpi::LogicalPosition::new(bx, by).into(),
-                    size: wry::dpi::LogicalSize::new(bw, bh).into(),
-                };
-                match state.browser.set_bounds(view, bounds) {
-                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
-                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
-                }
+        }),
+        ("POST", "/bounds") => post!(req, v => {
+            let view = v["view"].as_str().unwrap_or("");
+            let bx = v["x"].as_f64().unwrap_or(0.0);
+            let by = v["y"].as_f64().unwrap_or(0.0);
+            let bw = v["w"].as_f64().unwrap_or(800.0);
+            let bh = v["h"].as_f64().unwrap_or(600.0);
+            let bounds = wry::Rect {
+                position: wry::dpi::LogicalPosition::new(bx, by).into(),
+                size: wry::dpi::LogicalSize::new(bw, bh).into(),
+            };
+            match state.browser.set_bounds(view, bounds) {
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(500, &e.to_string()),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        },
-        ("POST", "/visibility") => match req.json_body() {
-            Ok(v) => {
-                let view = v["view"].as_str().unwrap_or("");
-                let visible = v["visible"].as_bool().unwrap_or(true);
-                match state.browser.set_visible(view, visible) {
-                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
-                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
-                }
+        }),
+        ("POST", "/visibility") => post!(req, v => {
+            let view = v["view"].as_str().unwrap_or("");
+            let visible = v["visible"].as_bool().unwrap_or(true);
+            match state.browser.set_visible(view, visible) {
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(500, &e.to_string()),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        },
-        ("POST", "/navigate") => match req.json_body() {
-            Ok(v) => {
-                let view = v["view"].as_str().unwrap_or("");
-                let url = v["url"].as_str().unwrap_or("");
-                let action = v["action"].as_str();
-                match state.browser.navigate(view, url, action) {
-                    Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
-                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
-                }
+        }),
+        ("POST", "/navigate") => post!(req, v => {
+            let view = v["view"].as_str().unwrap_or("");
+            let url = v["url"].as_str().unwrap_or("");
+            let action = v["action"].as_str();
+            match state.browser.navigate(view, url, action) {
+                Ok(()) => ShellResponse::ok_json(&serde_json::json!({ "ok": true })),
+                Err(e) => ShellResponse::err_json(500, &e.to_string()),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        },
+        }),
         // POST /close drena UNA vista ({"view": bid}) o todas (sin body).
         // El frontend cierra la vista nativa al podar el bid huérfano.
         ("POST", "/close") => {

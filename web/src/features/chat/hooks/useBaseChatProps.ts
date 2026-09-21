@@ -1,110 +1,65 @@
 import { useMemo } from "react"
 import type { ChatViewProps } from "../../../components/ChatView"
-import type { SessionView, ServerConfig, ConnectionState, ModelOption, FileDiff } from "../../../types"
 import { isSessionActive } from "../../../utils"
+import { loadDesktopConfig } from "../../../desktop"
+import type { ConnectionRuntime } from "../../../app/runtime/useConnectionRuntime"
+import type { ChatRuntime, ChatActionsRuntime } from "../../../app/runtime/useChatRuntime"
+import type { WorkspaceRuntime } from "../../../app/runtime/useWorkspaceRuntime"
 
+/**
+ * Arma las props de `ChatView` a partir de los slices del controlador
+ * (`conn`, `chat`, `ws`, `act`). Antes enumeraba ~100 props una por una contra
+ * `useAppController`; ahora consume los slices directamente y el memo se parte
+ * en tres bloques (sesion/header, runtime/acciones, settings/vs) para que un
+ * cambio en un dominio no invalide los otros dos.
+ */
 export type UseBaseChatPropsParams = {
-  selectedSession: SessionView | null
-  composer: string
-  handleComposerChange: (val: string) => void
-  localRevertID: string | null
-  renderedMessages: any[]
-  todos: any[]
-  todosExpanded: boolean
-  setTodosExpanded: React.Dispatch<React.SetStateAction<boolean>>
-  isSending: boolean
-  isWorking?: boolean
-  awaitingAssistantReply: boolean
-  loadingSessionID: string | null
-  selectedID: string | null
-  messageScrollSignature: string
-  view: any
-  dataMode: any
-  renamingSessionID: string | null
-  renameValue: string
-  commands: any[]
-  activeAgent: any
-  activeAgentID: string
-  activeModelOption: any
-  activeModelVariants: any[]
-  selectedVariant: string | null
-  changeVariant: (variant: string | null) => void
-  getModelForSession: (sessionID?: string | null) => any
-  modelOptions: ModelOption[]
-  changeModel: (key: string, variant?: string | null, sessionID?: string) => void
-  filteredVariantGroups: any
-  primaryAgentOptions: any[]
-  agentOptions: any[]
-  changeAgent: (id: string, dir?: string) => void
-  projectName: string | null
-  startRename: (s: SessionView) => void
-  setRenameValue: (val: string) => void
-  renameSession: (...args: any[]) => Promise<any>
-  cancelRename: () => void
-  handleSend: (imgs?: any, opts?: any, text?: string) => Promise<any>
-  handleAbort: () => Promise<void>
-  goBack: () => void
-  setActiveDetailSheet: (sheet: any) => void
-  recentSessions: SessionView[]
-  sessions: SessionView[]
-  handleOpenSession: (id: string, dir: string) => Promise<void>
-  readingMode: boolean
-  setReadingMode: React.Dispatch<React.SetStateAction<boolean>>
-  handleExportChat: () => void
-  getExportDefaultPath: () => string | null
-  exportMarkdownTo: (path: string) => Promise<boolean>
-  handleSnapshot: () => void
-  handleOpenFile: (file: string) => void
-  navigate: (view: any) => void
-  setShowThemePicker: (show: boolean) => void
-  config: ServerConfig
-  connectionState: ConnectionState
-  queueAction: (action: any) => void
-  shellExecute: (cmd: string, sid?: string, dir?: string) => any
-  flags: any
-  toggleFlag: (key: any) => void
-  setFlag: (key: any, val: boolean) => void
-  diffFiles: FileDiff[]
-  handleOpenADEDiff: (diffs?: FileDiff[], file?: string) => void
-  projectDashboard: any
-  streamState: any
-  compacting: boolean
-  pendingQuestions: any[]
-  permissionRequest: any
-  handleQuestionReply: (reqId: string, answers: string[][]) => Promise<void>
-  handleQuestionReject: (reqId: string) => Promise<void>
-  handlePermissionApprove: (reqId: string) => Promise<void>
-  handlePermissionReject: (reqId: string) => Promise<void>
-  handleDismissQuestion: (requestID?: string) => void
-  handleReopenQuestions?: () => void
-  handleDismissPermission: () => void
-  handleRevertToMessage: (id: string) => Promise<void>
-  handleEditMessage: (id: string, text: string) => Promise<void>
-  handleUndo: () => void
-  handleRedo: () => void
-  handleCompact: () => Promise<void>
-  handleCreateSession: (dir?: string) => Promise<void>
-  handleOpenNewSession: (dir?: string) => void
-  fb: any
-  setShowTerminal?: (show: boolean) => void
-  setShowMCPBrowser: (show: boolean) => void
-  setShowOpenCodeHub: (show: boolean) => void
-  setDesktopCfg: (cfg: any) => void
-  loadDesktopConfig: () => any
-  setShowRemoteDesktop: (show: boolean) => void
-  chatSettings: any
-  handleRegenerate: () => Promise<void>
-  handleInsertPrompt: (text: string) => void
-  handleSendPrompt: (text: string) => Promise<void>
-  setChatSetting: (key: any, val: any) => void
-  resetChatSettings: () => void
-  vs: any
-  outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
+  conn: ConnectionRuntime
+  chat: ChatRuntime
+  ws: WorkspaceRuntime
+  act: ChatActionsRuntime
+  isWorking: boolean
 }
 
-export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps {
+export function useBaseChatProps({
+  conn,
+  chat,
+  ws,
+  act,
+  isWorking,
+}: UseBaseChatPropsParams): ChatViewProps {
   const {
     selectedSession,
+    loadingSessionID,
+    selectedID,
+    view,
+    renamingSessionID,
+    renameValue,
+    setRenameValue,
+    projectName,
+    startRename,
+    renameSession,
+    cancelRename,
+    goBack,
+    recentSessions,
+    sessions,
+    handleOpenSession,
+    readingMode,
+    setReadingMode,
+    handleOpenFile,
+    navigate,
+    setShowThemePicker,
+    handleCreateSession,
+    handleOpenNewSession,
+    fb,
+    setShowMCPBrowser,
+    setShowOpenCodeHub,
+    setDesktopCfg,
+    setShowRemoteDesktop,
+    shellExecute,
+  } = ws
+
+  const {
     composer,
     handleComposerChange,
     localRevertID,
@@ -113,21 +68,23 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     todosExpanded,
     setTodosExpanded,
     isSending,
-    isWorking,
     awaitingAssistantReply,
-    loadingSessionID,
-    selectedID,
     messageScrollSignature,
-    view,
-    dataMode,
-    renamingSessionID,
-    renameValue,
     commands,
+    setActiveDetailSheet,
+    diffFiles,
+    projectDashboard,
+    compacting,
+    chatSettings,
+    setChatSetting,
+    resetChatSettings,
+    vs,
+  } = chat
+
+  const {
+    dataMode,
     activeAgent,
     activeAgentID,
-    activeModelOption,
-    activeModelVariants,
-    selectedVariant,
     changeVariant,
     getModelForSession,
     modelOptions,
@@ -136,39 +93,35 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     primaryAgentOptions,
     agentOptions,
     changeAgent,
-    projectName,
-    startRename,
-    setRenameValue,
-    renameSession,
-    cancelRename,
-    handleSend,
-    handleAbort,
-    goBack,
-    setActiveDetailSheet,
-    recentSessions,
-    sessions,
-    handleOpenSession,
-    readingMode,
-    setReadingMode,
+    config,
+    connectionState,
+    queueAction,
+    flags,
+    toggleFlag,
+    setFlag,
+  } = conn
+
+  const {
+    activeModelOption,
+    activeModelVariants,
+    selectedVariant,
+    streamState,
     handleExportChat,
     getExportDefaultPath,
     exportMarkdownTo,
     handleSnapshot,
-    handleOpenFile,
-    navigate,
-    setShowThemePicker,
-    config,
-    connectionState,
-    queueAction,
-    shellExecute,
-    flags,
-    toggleFlag,
-    setFlag,
-    diffFiles,
+    handleSend,
+    handleRegenerate,
+    handleInsertPrompt,
+    handleSendPrompt,
+    handleAbort,
+    handleRevertToMessage,
+    handleEditMessage,
+    handleUndo,
+    handleRedo,
+    handleCompact,
+    outboxActions,
     handleOpenADEDiff,
-    projectDashboard,
-    streamState,
-    compacting,
     pendingQuestions,
     permissionRequest,
     handleQuestionReply,
@@ -176,31 +129,9 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     handlePermissionApprove,
     handlePermissionReject,
     handleDismissQuestion,
-    handleReopenQuestions,
+    clearDismissedQuestions,
     handleDismissPermission,
-    handleRevertToMessage,
-    handleEditMessage,
-    handleUndo,
-    handleRedo,
-    handleCompact,
-    handleCreateSession,
-    handleOpenNewSession,
-    fb,
-    setShowTerminal,
-    setShowMCPBrowser,
-    setShowOpenCodeHub,
-    setDesktopCfg,
-    loadDesktopConfig,
-    setShowRemoteDesktop,
-    chatSettings,
-    handleRegenerate,
-    handleInsertPrompt,
-    handleSendPrompt,
-    setChatSetting,
-    resetChatSettings,
-    vs,
-    outboxActions,
-  } = params
+  } = act
 
   // El caller ya calcula isWorking = awaiting || sesión busy en el server;
   // isSending cubre la ventana del POST. Antes se ignoraba el param y el chat
@@ -217,7 +148,8 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
     [sessions]
   )
 
-  return useMemo<ChatViewProps>(
+  // Bloque 1: identidad de la sesión, header, modelo/agentes y rename.
+  const sessionProps = useMemo(
     () => ({
       session: selectedSession,
       selectedSession,
@@ -251,16 +183,58 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       variantGroups: filteredVariantGroups,
       primaryAgentOptions,
       allAgentOptions: agentOptions,
-      onChangeAgent: (id) => changeAgent(id, selectedSession?.directory),
+      onChangeAgent: (id: string) => changeAgent(id, selectedSession?.directory),
       projectName: projectName ?? null,
       onStartRename: startRename,
       onRenameChange: setRenameValue,
-      onRenameConfirm: (id) =>
+      onRenameConfirm: (id: string) =>
         renameSession(id, renameValue, selectedSession?.directory ?? "").then(() => true),
       onRenameCancel: cancelRename,
-      onSend: (imgs, opts, text) => handleSend(imgs, opts, text),
+    }),
+    [
+      selectedSession,
+      composer,
+      handleComposerChange,
+      localRevertID,
+      renderedMessages,
+      todos,
+      todosExpanded,
+      working,
+      loadingSessionID,
+      selectedID,
+      messageScrollSignature,
+      view,
+      dataMode,
+      renamingSessionID,
+      renameValue,
+      commands,
+      activeAgent,
+      activeAgentID,
+      activeModelOption,
+      activeModelVariants,
+      selectedVariant,
+      changeVariant,
+      getModelForSession,
+      modelOptions,
+      changeModel,
+      filteredVariantGroups,
+      primaryAgentOptions,
+      agentOptions,
+      changeAgent,
+      projectName,
+      startRename,
+      setRenameValue,
+      renameSession,
+      cancelRename,
+    ]
+  )
+
+  // Bloque 2: acciones de sesión, layout, shell, flags, sidecar y preguntas.
+  const runtimeProps = useMemo(
+    () => ({
+      onSend: (imgs?: any[], opts?: any, text?: string) => handleSend(imgs, opts, text),
       onAbort: handleAbort,
-      onTodosToggle: () => setTodosExpanded((v) => !v),
+      onTodosToggle: () => setTodosExpanded((v: boolean) => !v),
       onBackToSessions: goBack,
       onSheetOpen: setActiveDetailSheet,
       recentSessions,
@@ -268,17 +242,17 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       busySessionIds,
       onOpenSession: handleOpenSession,
       readingMode,
-      onToggleReadingMode: () => setReadingMode((v) => !v),
+      onToggleReadingMode: () => setReadingMode((v: boolean) => !v),
       onExportChat: handleExportChat,
       exportDefaultPath: getExportDefaultPath(),
       onExportMarkdownTo: exportMarkdownTo,
       onSnapshot: handleSnapshot,
-      onEditFile: (file) => handleOpenFile(file),
+      onEditFile: (file: string) => handleOpenFile(file),
       onOpenSettings: () => navigate("settings"),
       onThemeCommand: () => setShowThemePicker(true),
       config,
       agents: agentOptions,
-      onShellSend: (cmd) => {
+      onShellSend: (cmd: string) => {
         if (selectedSession) {
           if (connectionState === "offline") {
             queueAction({
@@ -307,7 +281,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       onPermissionApprove: handlePermissionApprove,
       onPermissionReject: handlePermissionReject,
       onDismissQuestion: handleDismissQuestion,
-      onReopenQuestions: handleReopenQuestions,
+      onReopenQuestions: clearDismissedQuestions,
       onDismissPermission: handleDismissPermission,
       onRevertToMessage: handleRevertToMessage,
       onEditMessage: handleEditMessage,
@@ -315,62 +289,19 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       onRedo: handleRedo,
       onCompact: handleCompact,
       onForkSession: () => selectedSession && handleCreateSession(selectedSession.directory),
-      onOpenNewSession: (directory?: string) => handleOpenNewSession(directory ?? selectedSession?.directory),
+      onOpenNewSession: handleOpenNewSession,
       onOpenFileBrowser: () => selectedSession && fb.open(),
       fileBrowserPath: fb.currentPath,
-      onOpenTerminal: () => { try { window.dispatchEvent(new CustomEvent("opencode:new-terminal")) } catch {}; setShowTerminal?.(true) },
+      onOpenTerminal: () => { try { window.dispatchEvent(new CustomEvent("opencode:new-terminal")) } catch {} },
       onOpenMCPBrowser: () => setShowMCPBrowser(true),
       onOpenOpenCodeHub: () => setShowOpenCodeHub(true),
       onOpenRemoteDesktop: () => {
         setDesktopCfg(loadDesktopConfig())
         setShowRemoteDesktop(true)
       },
-      showTodoButton: chatSettings.showTodoButton,
-      charLimit: chatSettings.composerCharLimit,
-      compactTools: chatSettings.compactTools,
-      minimalistMode: chatSettings.minimalistMode,
-      thinkingDefault: chatSettings.thinkingDefault,
-      onRegenerate: handleRegenerate,
-      onInsertPrompt: handleInsertPrompt,
-      onSendPrompt: handleSendPrompt,
-      chatSettings,
-      onChatSettingChange: setChatSetting,
-      onResetChatSettings: resetChatSettings,
-      visualSelection: vs.selection,
-      onClearVisualSelection: vs.clear,
-      onFocusVisualFile: (path: string) => handleOpenFile(path),
-      outboxActions,
     }),
     [
       selectedSession,
-      localRevertID,
-      renderedMessages,
-      todos,
-      todosExpanded,
-      isSending,
-      isWorking,
-      awaitingAssistantReply,
-      loadingSessionID,
-      selectedID,
-      messageScrollSignature,
-      view,
-      dataMode,
-      renamingSessionID,
-      renameValue,
-      commands,
-      activeAgent,
-      activeAgentID,
-      activeModelOption,
-      activeModelVariants,
-      selectedVariant,
-      changeVariant,
-      primaryAgentOptions,
-      changeAgent,
-      projectName,
-      startRename,
-      setRenameValue,
-      renameSession,
-      cancelRename,
       handleSend,
       handleAbort,
       setTodosExpanded,
@@ -409,7 +340,7 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       handlePermissionApprove,
       handlePermissionReject,
       handleDismissQuestion,
-      handleReopenQuestions,
+      clearDismissedQuestions,
       handleDismissPermission,
       handleRevertToMessage,
       handleEditMessage,
@@ -419,27 +350,48 @@ export function useBaseChatProps(params: UseBaseChatPropsParams): ChatViewProps 
       handleCreateSession,
       handleOpenNewSession,
       fb,
-      setShowTerminal,
       setShowMCPBrowser,
       setShowOpenCodeHub,
+      setDesktopCfg,
       setShowRemoteDesktop,
+    ]
+  )
+
+  // Bloque 3: ajustes de chat, acciones de prompt y selección visual.
+  const settingsProps = useMemo(
+    () => ({
+      showTodoButton: chatSettings.showTodoButton,
+      charLimit: chatSettings.composerCharLimit,
+      compactTools: chatSettings.compactTools,
+      minimalistMode: chatSettings.minimalistMode,
+      thinkingDefault: chatSettings.thinkingDefault,
+      onRegenerate: handleRegenerate,
+      onInsertPrompt: handleInsertPrompt,
+      onSendPrompt: handleSendPrompt,
       chatSettings,
-      setChatSetting,
-      resetChatSettings,
+      onChatSettingChange: setChatSetting,
+      onResetChatSettings: resetChatSettings,
+      visualSelection: vs.selection,
+      onClearVisualSelection: vs.clear,
+      onFocusVisualFile: (path: string) => handleOpenFile(path),
+      outboxActions,
+    }),
+    [
+      chatSettings,
       handleRegenerate,
       handleInsertPrompt,
       handleSendPrompt,
+      setChatSetting,
+      resetChatSettings,
       vs.selection,
       vs.clear,
-      getModelForSession,
-      modelOptions,
-      changeModel,
-      filteredVariantGroups,
-      composer,
-      handleComposerChange,
-      setDesktopCfg,
-      loadDesktopConfig,
+      handleOpenFile,
       outboxActions,
     ]
+  )
+
+  return useMemo<ChatViewProps>(
+    () => ({ ...sessionProps, ...runtimeProps, ...settingsProps }),
+    [sessionProps, runtimeProps, settingsProps]
   )
 }

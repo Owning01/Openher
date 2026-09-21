@@ -1,5 +1,6 @@
 import { memo } from "react"
 import { createPortal } from "react-dom"
+import { Modal } from "./Modal"
 import { ModalHeader } from "./ModalHeader"
 import { ChatCustomizer } from "./ChatCustomizer"
 import { useT } from "../i18n-context"
@@ -17,14 +18,12 @@ type Props = {
 export const ChatCustomizerModal = memo(function ChatCustomizerModal({ settings, onSettingChange, onReset, onClose }: Props) {
   const t = useT()
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content chat-customizer-modal" onClick={(e) => e.stopPropagation()}>
+    <Modal onClose={onClose} variant="overlay" className="chat-customizer-modal">
         <ModalHeader title={t('detail.customizeChat')} onClose={onClose} />
         <div className="chat-customizer-scroll">
           <ChatCustomizer settings={settings} onSettingChange={onSettingChange} onReset={onReset} />
         </div>
-      </div>
-    </div>,
+    </Modal>,
     document.body
   )
 })

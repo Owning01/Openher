@@ -4,6 +4,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core"
 import { Directory, Filesystem } from "@capacitor/filesystem"
 import { shell, remoteShellBase, type AppVersionInfo } from "../shell"
 import { blobToBase64 } from "../utils"
+import { useT } from "../i18n-context"
 
 // Plugin nativo del proyecto (android/.../AppInstallerPlugin.java): abre el
 // instalador del sistema con la APK descargada. En web no existe.
@@ -54,6 +55,7 @@ export function supportsAppUpdate(): boolean {
  *   (el shell Rust descarga, reemplaza el exe + web-dist y relanza solo).
  */
 export function useAppUpdate() {
+  const t = useT()
   const [status, setStatus] = useState<AppUpdateStatus>("idle")
   const [info, setInfo] = useState<AppVersionInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -112,7 +114,7 @@ export function useAppUpdate() {
       const base = remoteShellBase()
       if (!base || !info.desktop) {
         setStatus("error")
-        setError("No hay shell remoto disponible para actualizar")
+        setError(t('error.noRemoteShell'))
         return
       }
       setStatus("downloading")
@@ -128,7 +130,7 @@ export function useAppUpdate() {
           if (!st) return // la app ya se está reiniciando
           if (st.state === "error") {
             setStatus("error")
-            setError(st.error ?? "No se pudo aplicar la actualización")
+            setError(st.error ?? t('error.updateApplyFailed'))
             return
           }
           if (st.state === "ready") return
@@ -143,7 +145,7 @@ export function useAppUpdate() {
 
     if (!AppInstaller) {
       setStatus("error")
-      setError("Instalador no disponible en este dispositivo")
+      setError(t('error.installerUnavailable'))
       return
     }
     setStatus("downloading")
@@ -161,7 +163,7 @@ export function useAppUpdate() {
       setStatus("error")
       setError(e instanceof Error ? e.message : String(e))
     }
-  }, [info])
+  }, [info, t])
 
   useEffect(() => {
     aliveRef.current = true

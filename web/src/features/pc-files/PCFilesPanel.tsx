@@ -25,11 +25,8 @@ import {
   SplitIcon,
   EyeIcon,
   PencilIcon,
-  ArrowLeftIcon,
   CutIcon,
   SortIcon,
-  UndoIcon,
-  RedoIcon,
   ArchiveIcon,
   AttachmentIcon,
   CopyIcon,
@@ -41,31 +38,21 @@ import { useIsDesktop } from "../../hooks/useIsDesktop"
 import { useLocalStorage } from "../../hooks/useLocalStorage"
 import { calcMenuPos, calcMenuPosForAnchor, type MenuPos } from "../../utils/menuPos"
 import { blobToBase64 } from "../../utils"
-import { FileRow } from "./FileRow"
 import { OpenWithDialog } from "./OpenWithDialog"
-import { TreeFolder } from "./TreeFolder"
 import { CodeSearchResults } from "./CodeSearchResults"
 import { humanizeFsError, canDownloadAfterError, looksLikeBinary } from "./fileErrors"
 import { HlCodeHtml, highlightToHtml } from "../../components/HighlightedCode"
-import { useGitStatus } from "./useGitStatus"
 import { HtmlPreview } from "./HtmlPreview"
-import { usePaneState } from "./usePaneState"
+import { usePaneState, loadExplorerRecent } from "./usePaneState"
 import { useRowSelection, parseDragPaths } from "./multiSelect"
-import { sortFsEntries, splitCrumbs, pushHistory, type SortMode } from "./explorerView"
+import { getParentPath, type SortMode } from "./explorerView"
+import { usePaneNav } from "./usePaneNav"
+import { ExplorerPane, type ExplorerPaneRows } from "./ExplorerPane"
+import { isExecScript } from "../../shared/lib/fileKind"
 
-const EXPLORER_RECENT_KEY = "opencode.explorer.recentDirs"
 // Duración de la animación de eliminado (slide-out rojo) antes del borrado
 // real. Debe coincidir con el keyframe pcf-delete-out en pc-files.css.
 const DELETE_ANIM_MS = 280
-function loadExplorerRecent(): string[] {
-  try {
-    const raw = localStorage.getItem(EXPLORER_RECENT_KEY)
-    const arr = raw ? JSON.parse(raw) : []
-    return Array.isArray(arr) ? arr.filter((s: unknown) => typeof s === "string" && s).slice(0, 20) : []
-  } catch {
-    return []
-  }
-}
 
 // ArrayBuffer → base64 por chunks (evita desbordar la pila con apply).
 function arrayBufferToBase64(buf: ArrayBuffer): string {
@@ -78,24 +65,13 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(s)
 }
 
-function getParentPath(p: string | null): string | null {
-  if (!p) return null
-  const trimmed = p.replace(/[\\/]+$/, "")
-  if (!trimmed) return null
-  if (/^[a-zA-Z]:$/.test(trimmed)) return null
-  const lastSlash = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"))
-  if (lastSlash < 0) return null
-  const parent = trimmed.slice(0, lastSlash)
-  if (!parent) return trimmed.startsWith("/") ? "/" : null
-  if (/^[a-zA-Z]:$/.test(parent)) return `${parent}\\`
-  return parent || null
-}
-
 // Estado del visor de lectura: texto (código/archivo) o error legible con
 // acción de descarga opcional (binarios, permisos, etc.).
 type ViewerState =
   | { kind: "text"; path: string; line: number; content: string }
   | { kind: "error"; entry: FsEntry; message: string; canDownload: boolean }
+
+type PendingDelete = { pane: "first" | "second"; paths: string[]; permanent: boolean }
 
 // Líneas de código con los colores del editor: un solo highlight del archivo
 // completo (mismo HighlightedCode del chat, sin duplicar lógica) repartido
@@ -221,13 +197,27 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   // en táctil el tap entra directo a la carpeta.
   const isDesktop = useIsDesktop()
   const touchNav = !isDesktop
-  const [cwd, setCwd] = useState<string | null>(null)
-  const [dirs, setDirs] = useState<FsEntry[]>([])
-  const [files, setFiles] = useState<FsEntry[]>([])
+
+  // Avisos flotantes por encima del contenido (toast): nada se renderiza
+  // dentro del panel. showNotice = info/success, showError = error.
+  const showNotice = useCallback((msg: string) => {
+    toast(msg, "info")
+  }, [toast])
+
+  const showError = useCallback((msg: string) => {
+    toast(msg, "error")
+  }, [toast])
+
+  // Estado de cada panel: cwd/dirs/files/loading + recientes + git status.
+  // El panel primario reutiliza el mismo hook que el secundario (antes lo
+  // reimplementaba a mano).
+  const first = usePaneState(null, { onError: showError })
+  const second = usePaneState(null, { onError: showError })
+  const { getFileGitStatus, getFolderGitStatus } = first
+
   const [favorites, setFavorites] = useState<string[]>([])
   const [drives, setDrives] = useState<string[]>([])
   const [showDrives, setShowDrives] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
   const [searchMode, setSearchMode] = useState<"files" | "code">("files")
@@ -241,7 +231,6 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const projectMenuRef = useRef<HTMLDivElement | null>(null)
   const projectMenuElRef = useRef<HTMLDivElement | null>(null)
   const [projectMenuPos, setProjectMenuPos] = useState<MenuPos | null>(null)
-  const [explorerRecent, setExplorerRecent] = useState<string[]>(() => loadExplorerRecent())
 
   // El dropdown vive en un portal (fixed): se cierra con click fuera del
   // anchor Y del menú, Escape, resize o scroll externo (el interno no cierra).
@@ -298,7 +287,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       h: window.innerHeight,
     })
     setProjectMenuPos((prev) => (prev && prev.left === real.left ? prev : real))
-  }, [showProjectMenu, explorerRecent.length])
+  }, [showProjectMenu, first.recent.length])
 
   const searchRef = useRef<HTMLInputElement | null>(null)
   const uploadFirstRef = useRef<HTMLInputElement | null>(null)
@@ -333,42 +322,35 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const [sortMode, setSortMode] = useState<SortMode>("name")
   const [sortDir, setSortDir] = useState<1 | -1>(1)
 
-  // Historial atrás/adelante por panel (se alimenta solo en el efecto de cwd).
-  const [histFirst, setHistFirst] = useState<string[]>([])
-  const [hIdxFirst, setHIdxFirst] = useState(-1)
-  const [histSecond, setHistSecond] = useState<string[]>([])
-  const [hIdxSecond, setHIdxSecond] = useState(-1)
+  // Confirmación inline (en flujo, sobre el árbol del panel afectado).
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
+  // Filas en animación de eliminado (slide-out rojo) antes del borrado real.
+  const [deletingPaths, setDeletingPaths] = useState<string[]>([])
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null)
 
-  const { refreshGit, getFileGitStatus, getFolderGitStatus } = useGitStatus(cwd)
+  const [codeViewer, setCodeViewer] = useState<ViewerState | null>(null)
+  // El visor recorta al mismo límite en todas las aperturas (el server
+  // también trunca, pero a 64KB: el aviso debe reflejar lo que se muestra).
+  const VIEWER_MAX_CHARS = 30000
+  // Tamaño de texto del visor móvil, persistido entre sesiones (clamp 11-20).
+  const [viewerFontSize, setViewerFontSize] = useLocalStorage<number>("opencode.explorer.viewerFontSize", 13)
+  const codeFontSize = Number.isFinite(viewerFontSize)
+    ? Math.min(20, Math.max(11, viewerFontSize))
+    : 13
+  const [htmlPreview, setHtmlPreview] = useState<{ path: string } | null>(null)
+  const [showSecondPane, setShowSecondPane] = useState(false)
+  const [activePane, setActivePane] = useState<"first" | "second">("first")
+  const [contextMenuPane, setContextMenuPane] = useState<"first" | "second">("first")
+
+  // Navegación/vista por panel (historial, crumbs, filas filtradas/ordenadas).
+  const navFirst = usePaneNav(first.cwd, first.dirs, first.files, first.load, { query, sortMode, sortDir })
+  const navSecond = usePaneNav(second.cwd, second.dirs, second.files, second.load, { query, sortMode, sortDir })
 
   useEffect(() => {
     if (creatingType && createInputRef.current) {
       createInputRef.current.focus()
     }
   }, [creatingType])
-
-  // Avisos flotantes por encima del contenido (toast): nada se renderiza
-  // dentro del panel. showNotice = info/success, showError = error.
-  const showNotice = useCallback((msg: string) => {
-    toast(msg, "info")
-  }, [toast])
-
-  const showError = useCallback((msg: string) => {
-    toast(msg, "error")
-  }, [toast])
-
-  const isExecScript = (p?: string) => {
-    if (!p) return false
-    const v = p.toLowerCase()
-    return (
-      v.endsWith(".bat") ||
-      v.endsWith(".cmd") ||
-      v.endsWith(".vbs") ||
-      v.endsWith(".ps1") ||
-      v.endsWith(".exe") ||
-      v.endsWith(".sh")
-    )
-  }
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, entry: FsEntry | null, isDir: boolean) => {
@@ -403,7 +385,6 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     },
     [handleContextMenu, selSecond],
   )
-  void handleContextMenuSecond
 
   useEffect(() => {
     if (!contextMenu) return
@@ -424,7 +405,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   }, [contextMenu])
 
   const copyRelativePath = (path: string) => {
-    const base = contextMenuPane === "second" ? secondPane.cwd : cwd
+    const base = contextMenuPane === "second" ? second.cwd : first.cwd
     const rel = base && path.startsWith(base) ? path.slice(base.length).replace(/^[/\\]+/, "") : path
     navigator.clipboard.writeText(rel)
     setContextMenu(null)
@@ -452,8 +433,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     const sources = cutting ? cutPaths : copiedPaths
     if (sources.length === 0) return
     setContextMenu(null)
-    const targetCwd = usePane === "second" ? secondPane.cwd : cwd
-    const targetLoad = usePane === "second" ? secondPane.load : load
+    const targetCwd = usePane === "second" ? second.cwd : first.cwd
+    const targetLoad = usePane === "second" ? second.load : first.load
     let done = 0
     for (const src of sources) {
       try {
@@ -474,8 +455,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       selFirst.clear()
       selSecond.clear()
       // El origen pudo ser otra carpeta: recargar ambas vistas.
-      if (cwd) load(cwd)
-      if (showSecondPane && secondPane.cwd) secondPane.load(secondPane.cwd)
+      if (first.cwd) first.load(first.cwd)
+      if (showSecondPane && second.cwd) second.load(second.cwd)
     } else {
       targetLoad(destDir === targetCwd ? destDir : targetCwd || destDir)
     }
@@ -511,8 +492,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     setContextMenu(null)
     setCreatingType("file")
     setNewItemName("")
-    const targetLoad = contextMenuPane === "second" ? secondPane.load : load
-    const targetCwd = contextMenuPane === "second" ? secondPane.cwd : cwd
+    const targetLoad = contextMenuPane === "second" ? second.load : first.load
+    const targetCwd = contextMenuPane === "second" ? second.cwd : first.cwd
     if (targetCwd !== dir) targetLoad(dir)
   }
 
@@ -520,48 +501,13 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     setContextMenu(null)
     setCreatingType("folder")
     setNewItemName("")
-    const targetLoad = contextMenuPane === "second" ? secondPane.load : load
-    const targetCwd = contextMenuPane === "second" ? secondPane.cwd : cwd
+    const targetLoad = contextMenuPane === "second" ? second.load : first.load
+    const targetCwd = contextMenuPane === "second" ? second.cwd : first.cwd
     if (targetCwd !== dir) targetLoad(dir)
   }
 
-  // Cada navegación incrementa el contador: si una respuesta vieja llega
-  // después de navegar a otra carpeta, se descarta (no pisa dirs/files/loading).
-  const loadSeqRef = useRef(0)
-
-  const load = useCallback(
-    async (path: string) => {
-      if (!path) return
-      const seq = ++loadSeqRef.current
-      setCwd(path)
-      setLoading(true)
-      try {
-        const r = await shell.fs.list(path)
-        if (seq !== loadSeqRef.current) return
-        setDirs(r.dirs || [])
-        setFiles(r.files || [])
-
-        const cur = loadExplorerRecent().filter((p) => p !== path)
-        cur.unshift(path)
-        try {
-          localStorage.setItem(EXPLORER_RECENT_KEY, JSON.stringify(cur.slice(0, 20)))
-        } catch {}
-        setExplorerRecent(cur.slice(0, 20))
-      } catch (e: any) {
-        if (seq !== loadSeqRef.current) return
-        showError(e?.message || "No se pudo leer el directorio")
-      } finally {
-        if (seq === loadSeqRef.current) {
-          setLoading(false)
-          refreshGit()
-        }
-      }
-    },
-    [refreshGit, showError]
-  )
-
-  const loadRef = useRef(load)
-  useEffect(() => { loadRef.current = load }, [load])
+  const loadRef = useRef(first.load)
+  useEffect(() => { loadRef.current = first.load }, [first.load])
   const didInit = useRef(false)
   useEffect(() => {
     if (didInit.current) return
@@ -604,6 +550,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   }, [initialCwd])
 
   useEffect(() => {
+    const cwd = first.cwd
     if (searchMode !== "code" || !query.trim() || !cwd) {
       setCodeResults(null)
       setCodeSearching(false)
@@ -634,13 +581,13 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [searchMode, query, cwd, showNotice])
+  }, [searchMode, query, first.cwd, showError])
 
   const openChangeFolder = async () => {
     try {
       const picked = await shell.fs.pickFolder()
       const p = (picked as { path?: string | null })?.path
-      if (p) (activePane === "second" ? secondPane.load(p) : load(p))
+      if (p) (activePane === "second" ? second.load(p) : first.load(p))
     } catch {}
   }
 
@@ -708,51 +655,11 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     [downloading, showNotice, showError]
   )
 
-  const [codeViewer, setCodeViewer] = useState<ViewerState | null>(null)
-  // El visor recorta al mismo límite en todas las aperturas (el server
-  // también trunca, pero a 64KB: el aviso debe reflejar lo que se muestra).
-  const VIEWER_MAX_CHARS = 30000
-  // Tamaño de texto del visor móvil, persistido entre sesiones (clamp 11-20).
-  const [viewerFontSize, setViewerFontSize] = useLocalStorage<number>("opencode.explorer.viewerFontSize", 13)
-  const codeFontSize = Number.isFinite(viewerFontSize)
-    ? Math.min(20, Math.max(11, viewerFontSize))
-    : 13
-  const [htmlPreview, setHtmlPreview] = useState<{ path: string } | null>(null)
-  const [showSecondPane, setShowSecondPane] = useState(false)
-  const secondPane = usePaneState(null, { onError: showError })
-  const [activePane, setActivePane] = useState<"first" | "second">("first")
-  const [contextMenuPane, setContextMenuPane] = useState<"first" | "second">("first")
-
   // Al cambiar de carpeta la selección anterior ya no vale.
   const clearSelFirst = selFirst.clear
   const clearSelSecond = selSecond.clear
-  useEffect(() => { clearSelFirst() }, [cwd, clearSelFirst])
-  useEffect(() => { clearSelSecond() }, [secondPane.cwd, clearSelSecond])
-
-  // El historial registra navegaciones reales; recargar la misma carpeta no
-  // duplica (pushHistory) y volver atrás no re-agrega (coincide con el índice).
-  useEffect(() => {
-    if (!cwd) return
-    if (histFirst[hIdxFirst] === cwd) return
-    const r = pushHistory(histFirst, hIdxFirst, cwd)
-    setHistFirst(r.hist)
-    setHIdxFirst(r.idx)
-  }, [cwd, histFirst, hIdxFirst])
-  useEffect(() => {
-    const c = secondPane.cwd
-    if (!c) return
-    if (histSecond[hIdxSecond] === c) return
-    const r = pushHistory(histSecond, hIdxSecond, c)
-    setHistSecond(r.hist)
-    setHIdxSecond(r.idx)
-  }, [secondPane.cwd, histSecond, hIdxSecond])
-
-  // Confirmación inline (en flujo, sobre el árbol del panel afectado) con
-  // Aceptar/Cancelar y borde notorio. Reemplaza al modal de diálogo.
-  type PendingDelete = { pane: "first" | "second"; paths: string[]; permanent: boolean }
-  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
-  // Filas en animación de eliminado (slide-out rojo) antes del borrado real.
-  const [deletingPaths, setDeletingPaths] = useState<string[]>([])
+  useEffect(() => { clearSelFirst() }, [first.cwd, clearSelFirst])
+  useEffect(() => { clearSelSecond() }, [second.cwd, clearSelSecond])
 
   const baseName = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() || p
 
@@ -806,12 +713,12 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     }
     if (cur.pane === "second") {
       selSecond.clear()
-      if (secondPane.cwd) secondPane.load(secondPane.cwd)
+      if (second.cwd) second.load(second.cwd)
     } else {
       selFirst.clear()
-      if (cwd) load(cwd)
+      if (first.cwd) first.load(first.cwd)
     }
-  }, [pendingDelete, showNotice, showError, cwd, load, secondPane, selFirst, selSecond])
+  }, [pendingDelete, showNotice, showError, first, second, selFirst, selSecond])
 
   const cancelExecFile = useCallback(() => setExecConfirm(null), [])
 
@@ -910,8 +817,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     showNotice(done === targets.length
       ? `Duplicados: ${done}`
       : `Duplicados ${done} de ${targets.length}`)
-    if (pane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
-    else if (cwd) load(cwd)
+    if (pane === "second" && second.cwd) second.load(second.cwd)
+    else if (first.cwd) first.load(first.cwd)
   }
 
   const isZipFile = (name: string) => /\.zip$/i.test(name)
@@ -920,7 +827,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     const pane = contextMenuPane
     const targets = targetsOf(pane, entry.path)
     setContextMenu(null)
-    const destDir = (pane === "second" ? secondPane.cwd : cwd) || getParentPath(targets[0]!) || ""
+    const destDir = (pane === "second" ? second.cwd : first.cwd) || getParentPath(targets[0]!) || ""
     if (!destDir) {
       showNotice("Sin carpeta destino")
       return
@@ -935,8 +842,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     } catch {
       showError("Error al comprimir")
     }
-    if (pane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
-    else if (cwd) load(cwd)
+    if (pane === "second" && second.cwd) second.load(second.cwd)
+    else if (first.cwd) first.load(first.cwd)
   }
 
   const handleUnzip = async (entry: FsEntry) => {
@@ -949,8 +856,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     } catch {
       showError("Error al extraer")
     }
-    if (pane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
-    else if (cwd) load(cwd)
+    if (pane === "second" && second.cwd) second.load(second.cwd)
+    else if (first.cwd) first.load(first.cwd)
   }
 
   const handleTerminalHere = async (dir: string) => {
@@ -984,8 +891,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     showNotice(skipped > 0
       ? `Subidos ${done} (${skipped} >12MB omitidos)`
       : `Subidos: ${done}`)
-    if (pane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
-    else if (cwd) load(cwd)
+    if (pane === "second" && second.cwd) second.load(second.cwd)
+    else if (first.cwd) first.load(first.cwd)
   }
 
   const isHtmlFile = (name: string) => /\.html?$/i.test(name)
@@ -999,14 +906,13 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       showNotice(`Renombrado a ${clean}`)
       const pane = renamingPane ?? contextMenuPane
       setRenamingPath(null); setRenamingValue(""); setRenamingPane(null)
-      if (pane === "second" && secondPane.cwd) secondPane.load(secondPane.cwd)
-      else if (cwd) load(cwd)
+      if (pane === "second" && second.cwd) second.load(second.cwd)
+      else if (first.cwd) first.load(first.cwd)
     } catch (e: any) {
       showError(`Error al renombrar: ${e?.message || String(e)}`)
     }
-  }, [renamingValue, cwd, secondPane, contextMenuPane, renamingPane, showNotice, load])
+  }, [renamingValue, first.cwd, first.load, second.cwd, second.load, contextMenuPane, renamingPane, showNotice, showError])
 
-  const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = "move"
@@ -1047,14 +953,14 @@ export const PCFilesPanel = memo(function PCFilesPanel({
         showNotice(srcs.length > 1 ? `Movidos ${srcs.length} elementos a ${destName}` : `Movido a ${destName}`)
         selFirst.clear()
         selSecond.clear()
-        if (cwd && (srcs.some((s) => s.startsWith(cwd)) || destDir === cwd)) load(cwd)
-        if (showSecondPane && secondPane.cwd && (srcs.some((s) => s.startsWith(secondPane.cwd!)) || destDir === secondPane.cwd))
-          secondPane.load(secondPane.cwd)
+        if (first.cwd && (srcs.some((s) => s.startsWith(first.cwd!)) || destDir === first.cwd)) first.load(first.cwd)
+        if (showSecondPane && second.cwd && (srcs.some((s) => s.startsWith(second.cwd!)) || destDir === second.cwd))
+          second.load(second.cwd)
       } catch (err) {
         showError(`Error al mover: ${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [cwd, showSecondPane, secondPane, load, showNotice, selFirst, selSecond],
+    [first, showSecondPane, second, showNotice, showError, selFirst, selSecond],
   )
 
   // Vista previa HTML en ventana del navegador: sirve el directorio del
@@ -1171,69 +1077,6 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     [showNotice, showError]
   )
 
-  const workspaceName = useMemo(() => {
-    if (!cwd) return "WORKSPACE"
-    const cleaned = cwd.replace(/[/\\]+$/, "")
-    const parts = cleaned.split(/[/\\]/)
-    return parts[parts.length - 1] || cleaned
-  }, [cwd])
-
-  const parentPath = useMemo(() => getParentPath(cwd), [cwd])
-  const canGoBack = !!parentPath && !!cwd
-
-  const qLower = query.trim().toLowerCase()
-  const filteredDirs = qLower ? dirs.filter((d) => d.name.toLowerCase().includes(qLower)) : dirs
-  const filteredFiles = qLower ? files.filter((f) => f.name.toLowerCase().includes(qLower)) : files
-
-  const secondWorkspaceName = useMemo(() => {
-    const c = secondPane.cwd
-    if (!c) return "WORKSPACE"
-    const cleaned = c.replace(/[/\\]+$/, "")
-    const parts = cleaned.split(/[/\\]/)
-    return parts[parts.length - 1] || cleaned
-  }, [secondPane.cwd])
-  const secondParentPath = useMemo(() => getParentPath(secondPane.cwd), [secondPane.cwd])
-  const secondCanGoBack = !!secondParentPath && !!secondPane.cwd
-  const filteredSecondDirs = qLower
-    ? secondPane.dirs.filter((d) => d.name.toLowerCase().includes(qLower))
-    : secondPane.dirs
-  const filteredSecondFiles = qLower
-    ? secondPane.files.filter((f) => f.name.toLowerCase().includes(qLower))
-    : secondPane.files
-
-  // Orden aplicado a lo filtrado (carpetas y archivos por separado, como el
-  // Explorador). Lo ordenado es también el orden visible del Shift+rango.
-  const sortedDirs = useMemo(
-    () => sortFsEntries(filteredDirs, sortMode, sortDir),
-    [filteredDirs, sortMode, sortDir],
-  )
-  const sortedFiles = useMemo(
-    () => sortFsEntries(filteredFiles, sortMode, sortDir),
-    [filteredFiles, sortMode, sortDir],
-  )
-  const sortedSecondDirs = useMemo(
-    () => sortFsEntries(filteredSecondDirs, sortMode, sortDir),
-    [filteredSecondDirs, sortMode, sortDir],
-  )
-  const sortedSecondFiles = useMemo(
-    () => sortFsEntries(filteredSecondFiles, sortMode, sortDir),
-    [filteredSecondFiles, sortMode, sortDir],
-  )
-
-  // Orden visible de cada panel (carpetas + archivos): base del Shift+rango.
-  const orderedFirst = useMemo(
-    () => [...sortedDirs, ...sortedFiles].map((e) => e.path),
-    [sortedDirs, sortedFiles],
-  )
-  const orderedSecond = useMemo(
-    () => [...sortedSecondDirs, ...sortedSecondFiles].map((e) => e.path),
-    [sortedSecondDirs, sortedSecondFiles],
-  )
-
-  // Breadcrumbs por panel (memo: split barato pero renderiza cada fila).
-  const crumbsFirst = useMemo(() => splitCrumbs(cwd), [cwd])
-  const crumbsSecond = useMemo(() => splitCrumbs(secondPane.cwd), [secondPane.cwd])
-
   // Botón ordenar: rota nombre↑ → nombre↓ → tamaño↓ → fecha↓.
   const SORT_STEPS: Array<{ mode: SortMode; dir: 1 | -1; label: string }> = [
     { mode: "name", dir: 1, label: "Nombre (A–Z)" },
@@ -1248,33 +1091,17 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     setSortDir(next.dir)
   }, [sortStepIdx])
 
-  const goHistFirst = useCallback((delta: -1 | 1) => {
-    const ni = hIdxFirst + delta
-    if (ni < 0 || ni >= histFirst.length) return
-    const target = histFirst[ni]
-    if (!target) return
-    setHIdxFirst(ni)
-    load(target)
-  }, [hIdxFirst, histFirst, load])
-  const goHistSecond = useCallback((delta: -1 | 1) => {
-    const ni = hIdxSecond + delta
-    if (ni < 0 || ni >= histSecond.length) return
-    const target = histSecond[ni]
-    if (!target) return
-    setHIdxSecond(ni)
-    secondPane.load(target)
-  }, [hIdxSecond, histSecond, secondPane])
   const selFirstPaths = selFirst.selected
   const selSecondPaths = selSecond.selected
 
   const handleRowClickFirst = useCallback((e: React.MouseEvent, entry: FsEntry) => {
     setActivePane("first")
-    selFirst.select(entry.path, orderedFirst, e)
-  }, [selFirst, orderedFirst])
+    selFirst.select(entry.path, navFirst.ordered, e)
+  }, [selFirst, navFirst.ordered])
   const handleRowClickSecond = useCallback((e: React.MouseEvent, entry: FsEntry) => {
     setActivePane("second")
-    selSecond.select(entry.path, orderedSecond, e)
-  }, [selSecond, orderedSecond])
+    selSecond.select(entry.path, navSecond.ordered, e)
+  }, [selSecond, navSecond.ordered])
 
   const dragPayloadFirst = useCallback((path: string) =>
     (selFirstPaths.length > 1 && selFirstPaths.includes(path) ? selFirstPaths : [path]),
@@ -1294,7 +1121,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     if (target && target.closest("input, textarea, [contenteditable='true']")) return
     if (renamingPath) return
     const sel = pane === "second" ? selSecond : selFirst
-    const ordered = pane === "second" ? orderedSecond : orderedFirst
+    const ordered = pane === "second" ? navSecond.ordered : navFirst.ordered
     if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
       e.preventDefault()
       sel.selectAll(ordered)
@@ -1315,7 +1142,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
       }
       if (k === "v") {
         e.preventDefault()
-        const dest = pane === "second" ? secondPane.cwd : cwd
+        const dest = pane === "second" ? second.cwd : first.cwd
         if (dest) void handlePasteItem(dest, pane)
         return
       }
@@ -1329,7 +1156,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
     if (e.key === "Escape") {
       sel.clear()
     }
-  }, [renamingPath, selFirst, selSecond, orderedFirst, orderedSecond, handleDeletePaths, secondPane, cwd])
+  }, [renamingPath, selFirst, selSecond, navFirst.ordered, navSecond.ordered, handleDeletePaths, second, first])
 
   // Cantidad en lote del menú contextual: si la fila clicada está dentro de
   // la selección del panel, Eliminar/Copiar operan sobre toda la selección.
@@ -1337,6 +1164,198 @@ export const PCFilesPanel = memo(function PCFilesPanel({
   const menuBulkN = contextMenu?.entry && menuSel.length > 1 && menuSel.includes(contextMenu.entry.path)
     ? menuSel.length
     : 1
+
+  // Filo de props de fila por panel (mismas para primario y secundario).
+  const rowsFirst: ExplorerPaneRows = {
+    favorites,
+    onFav: fav,
+    downloading,
+    onDownload: handleDownload,
+    onOpenFile: handleOpenFile,
+    onOpenWith: setOpenWithFile,
+    showNotice,
+    getFileGitStatus,
+    getFolderGitStatus,
+    renamingPath,
+    renamingValue,
+    onRenamingChange: setRenamingValue,
+    onRenameCommit: commitRename,
+    onRenameCancel: cancelRename,
+    onStartRename: startRenameFirst,
+    selection: selFirst,
+    onSelect: handleRowClickFirst,
+    getDragPayload: dragPayloadFirst,
+    cutPaths,
+    deletingPaths,
+  }
+  const rowsSecond: ExplorerPaneRows = {
+    ...rowsFirst,
+    onStartRename: startRenameSecond,
+    selection: selSecond,
+    onSelect: handleRowClickSecond,
+    getDragPayload: dragPayloadSecond,
+  }
+
+  const headerActionsFirst = (
+    <>
+      <button
+        type="button"
+        className="pcf-action-btn"
+        title="Nuevo archivo"
+        aria-label="Nuevo archivo"
+        onClick={() => {
+          setRootExpanded(true)
+          setCreatingType("file")
+          setNewItemName("")
+        }}
+      >
+        <NewFileIcon size={14} />
+      </button>
+      <button
+        type="button"
+        className="pcf-action-btn"
+        title="Nueva carpeta"
+        aria-label="Nueva carpeta"
+        onClick={() => {
+          setRootExpanded(true)
+          setCreatingType("folder")
+          setNewItemName("")
+        }}
+      >
+        <NewFolderIcon size={14} />
+      </button>
+      <button
+        type="button"
+        className="pcf-action-btn"
+        title="Recargar"
+        aria-label="Recargar"
+        onClick={() => first.cwd && first.load(first.cwd)}
+      >
+        <RefreshIcon size={13} />
+      </button>
+      <button
+        type="button"
+        className="pcf-action-btn"
+        title="Colapsar carpetas"
+        aria-label="Colapsar carpetas"
+        onClick={() => setCollapseSignal((v) => v + 1)}
+      >
+        <CollapseAllIcon size={14} />
+      </button>
+      <button
+        type="button"
+        className={`pcf-action-btn ${showSecondPane ? "active" : ""}`}
+        title={showSecondPane ? "Cerrar panel dividido" : "Dividir vista (dos carpetas)"}
+        aria-label="Dividir vista"
+        onClick={() => {
+          if (!showSecondPane) {
+            setShowSecondPane(true)
+            if (!second.cwd) {
+              if (first.cwd) second.load(first.cwd)
+              else if (drives[0]) second.load(drives[0])
+            }
+          } else {
+            setShowSecondPane(false)
+          }
+        }}
+      >
+        <SplitIcon size={14} />
+      </button>
+      <button
+        type="button"
+        className="pcf-action-btn"
+        title={`Ordenar: ${SORT_STEPS[sortStepIdx]!.label} (click para cambiar)`}
+        aria-label="Cambiar orden"
+        onClick={cycleSort}
+      >
+        <SortIcon size={14} />
+      </button>
+    </>
+  )
+
+  const headerActionsSecond = (
+    <>
+      <button
+        type="button"
+        className="pcf-action-btn"
+        title="Recargar"
+        aria-label="Recargar"
+        onClick={() => second.cwd && second.load(second.cwd)}
+      >
+        <RefreshIcon size={13} />
+      </button>
+      <button
+        type="button"
+        className="pcf-action-btn"
+        title={`Ordenar: ${SORT_STEPS[sortStepIdx]!.label} (click para cambiar)`}
+        aria-label="Cambiar orden"
+        onClick={cycleSort}
+      >
+        <SortIcon size={14} />
+      </button>
+      <button
+        type="button"
+        className="pcf-action-btn"
+        title="Cerrar panel"
+        aria-label="Cerrar panel"
+        onClick={() => setShowSecondPane(false)}
+      >
+        ×
+      </button>
+    </>
+  )
+
+  const inlineCreateFirst = creatingType ? (
+    <div className="pcf-row pcf-inline-create" onClick={(e) => e.stopPropagation()}>
+      <span className="pcf-chevron" />
+      <span className="pcf-icon-wrap">
+        {creatingType === "folder" ? (
+          <FolderIcon size={14} />
+        ) : (
+          <FileIcon size={14} />
+        )}
+      </span>
+      <input
+        ref={createInputRef}
+        type="text"
+        className="pcf-inline-input"
+        value={newItemName}
+        placeholder={creatingType === "folder" ? "nombre-carpeta" : "nombre-archivo.ext"}
+        onChange={(e) => setNewItemName(e.target.value)}
+        onKeyDown={async (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault()
+            const clean = newItemName.trim().replace(/[/\\]/g, "")
+            if (!clean || !first.cwd) {
+              setCreatingType(null)
+              return
+            }
+            const sep = first.cwd.includes("\\") ? "\\" : "/"
+            const full = `${first.cwd}${first.cwd.endsWith(sep) ? "" : sep}${clean}`
+            setCreatingType(null)
+            try {
+              if (creatingType === "folder") {
+                await shell.fs.mkdir(full)
+                showNotice(`Carpeta creada: ${clean}`)
+              } else {
+                await shell.fs.write(full, "")
+                showNotice(`Archivo creado: ${clean}`)
+              }
+              first.load(first.cwd)
+            } catch {
+              showError(`Error al crear ${creatingType === "folder" ? "carpeta" : "archivo"}`)
+            }
+          } else if (e.key === "Escape") {
+            setCreatingType(null)
+          }
+        }}
+        onBlur={() => {
+          if (!newItemName.trim()) setCreatingType(null)
+        }}
+        autoFocus
+      />
+    </div>
+  ) : null
 
   return (
     <div className="pcf-root">
@@ -1385,12 +1404,12 @@ export const PCFilesPanel = memo(function PCFilesPanel({
               }}
             >
               <div className="pcf-dropdown-title">Proyectos recientes</div>
-              {explorerRecent.length === 0 ? (
+              {first.recent.length === 0 ? (
                 <div className="pcf-dropdown-empty">Sin proyectos recientes</div>
               ) : (
-                explorerRecent.map((p) => {
+                first.recent.map((p) => {
                   const label = p.split(/[/\\]/).filter(Boolean).pop() || p
-                  const isActive = cwd === p
+                  const isActive = first.cwd === p
                   return (
                     <button
                       key={p}
@@ -1399,7 +1418,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                       style={{ fontWeight: isActive ? 600 : 400 }}
                       onClick={() => {
                         setShowProjectMenu(false)
-                        load(p)
+                        first.load(p)
                       }}
                       title={p}
                     >
@@ -1499,8 +1518,8 @@ export const PCFilesPanel = memo(function PCFilesPanel({
             <button
               key={d}
               type="button"
-              className={`pcf-drive${(activePane === "second" ? secondPane.cwd : cwd) === d ? " active" : ""}`}
-              onClick={() => (activePane === "second" ? secondPane.load(d) : load(d))}
+              className={`pcf-drive${(activePane === "second" ? second.cwd : first.cwd) === d ? " active" : ""}`}
+              onClick={() => (activePane === "second" ? second.load(d) : first.load(d))}
             >
               {d}
             </button>
@@ -1514,7 +1533,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
             results={codeResults}
             searching={codeSearching}
             query={query}
-            cwd={cwd}
+            cwd={first.cwd}
             downloading={downloading}
             onDownload={handleDownload}
             onOpenAtLine={handleOpenAtLine}
@@ -1522,550 +1541,64 @@ export const PCFilesPanel = memo(function PCFilesPanel({
         </div>
       ) : (
         <div className="pcf-tree-container" style={showSecondPane ? { display: "flex", gap: 8, alignItems: "stretch" } : undefined}>
-          <div
-            style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}
-            onClick={() => setActivePane("first")}
-          >
-          {/* 2. Sección del proyecto / Workspace: ← volver + ⌄ nombre-proyecto + 5 botones */}
-          <div className="pcf-workspace-header">
-            <button
-              type="button"
-              className="pcf-action-btn pcf-back-btn"
-              title={canGoBack ? `Volver a ${parentPath}` : "No hay carpeta anterior"}
-              aria-label="Volver a la carpeta anterior"
-              disabled={!canGoBack}
-              onClick={() => parentPath && load(parentPath)}
-            >
-              <ArrowLeftIcon size={14} />
-            </button>
-            <div
-              className="pcf-workspace-title"
-              onClick={() => setRootExpanded((v) => !v)}
-              title={cwd ?? ""}
-            >
-              <span className="pcf-chevron">
-                {rootExpanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
-              </span>
-              <span className="pcf-workspace-name">{workspaceName}</span>
-            </div>
-
-            <div className="pcf-workspace-actions">
-              <button
-                type="button"
-                className="pcf-action-btn"
-                title="Nuevo archivo"
-                aria-label="Nuevo archivo"
-                onClick={() => {
-                  setRootExpanded(true)
-                  setCreatingType("file")
-                  setNewItemName("")
-                }}
-              >
-                <NewFileIcon size={14} />
-              </button>
-              <button
-                type="button"
-                className="pcf-action-btn"
-                title="Nueva carpeta"
-                aria-label="Nueva carpeta"
-                onClick={() => {
-                  setRootExpanded(true)
-                  setCreatingType("folder")
-                  setNewItemName("")
-                }}
-              >
-                <NewFolderIcon size={14} />
-              </button>
-              <button
-                type="button"
-                className="pcf-action-btn"
-                title="Recargar"
-                aria-label="Recargar"
-                onClick={() => cwd && load(cwd)}
-              >
-                <RefreshIcon size={13} />
-              </button>
-              <button
-                type="button"
-                className="pcf-action-btn"
-                title="Colapsar carpetas"
-                aria-label="Colapsar carpetas"
-                onClick={() => setCollapseSignal((v) => v + 1)}
-              >
-                <CollapseAllIcon size={14} />
-              </button>
-              <button
-                type="button"
-                className={`pcf-action-btn ${showSecondPane ? "active" : ""}`}
-                title={showSecondPane ? "Cerrar panel dividido" : "Dividir vista (dos carpetas)"}
-                aria-label="Dividir vista"
-                onClick={() => {
-                  if (!showSecondPane) {
-                    setShowSecondPane(true)
-                    if (!secondPane.cwd) {
-                      if (cwd) secondPane.load(cwd)
-                      else if (drives[0]) secondPane.load(drives[0])
-                    }
-                  } else {
-                    setShowSecondPane(false)
-                  }
-                }}
-              >
-                <SplitIcon size={14} />
-              </button>
-              <button
-                type="button"
-                className="pcf-action-btn"
-                title={`Ordenar: ${SORT_STEPS[sortStepIdx]!.label} (click para cambiar)`}
-                aria-label="Cambiar orden"
-                onClick={cycleSort}
-              >
-                <SortIcon size={14} />
-              </button>
-            </div>
-          </div>
-
-          <div className="pcf-crumbs" role="navigation" aria-label="Ruta actual">
-            <button
-              type="button"
-              className="pcf-hist-btn"
-              title="Atrás"
-              aria-label="Atrás en el historial"
-              disabled={hIdxFirst <= 0}
-              onClick={() => goHistFirst(-1)}
-            >
-              <UndoIcon size={12} />
-            </button>
-            <button
-              type="button"
-              className="pcf-hist-btn"
-              title="Adelante"
-              aria-label="Adelante en el historial"
-              disabled={hIdxFirst >= histFirst.length - 1}
-              onClick={() => goHistFirst(1)}
-            >
-              <RedoIcon size={12} />
-            </button>
-            <div className="pcf-crumb-trail">
-              {crumbsFirst.map((c, i) => (
-                <span key={c.path} className="pcf-crumb-item">
-                  {i > 0 && <span className="pcf-crumb-sep">›</span>}
-                  <button
-                    type="button"
-                    className={`pcf-crumb${i === crumbsFirst.length - 1 ? " active" : ""}`}
-                    onClick={() => load(c.path)}
-                    title={c.path}
-                  >
-                    {c.label}
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
-          <input
-            ref={uploadFirstRef}
-            type="file"
-            multiple
-            hidden
-            aria-hidden="true"
-            tabIndex={-1}
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0 && cwd) void uploadFiles("first", cwd, e.target.files)
-              e.target.value = ""
-            }}
+          <ExplorerPane
+            pane={first}
+            nav={navFirst}
+            variant="first"
+            ariaBase="Archivos"
+            crumbsAria="Ruta actual"
+            titleIcon={rootExpanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+            onTitleClick={() => setRootExpanded((v) => !v)}
+            headerActions={headerActionsFirst}
+            onActivate={() => setActivePane("first")}
+            query={query}
+            collapseSignal={collapseSignal}
+            touchNav={touchNav}
+            rows={rowsFirst}
+            onContextMenu={handleContextMenuFirst}
+            onTreeKeyDown={(e) => onTreeKeyDown(e, "first")}
+            onDeletePaths={(paths) => void handleDeletePaths("first", paths)}
+            confirms={renderPaneConfirms("first")}
+            inlineCreate={inlineCreateFirst}
+            showTree={rootExpanded}
+            uploadRef={uploadFirstRef}
+            onUpload={(files) => first.cwd && void uploadFiles("first", first.cwd, files)}
+            dragOverPath={dragOverPath}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDropOnDir={(e, d) => void handleFileDrop(e, d, "first")}
+            onDropOnPane={(e) => { if (first.cwd) void handleFileDrop(e, first.cwd, "first") }}
           />
-
-          {selFirstPaths.length > 1 && (
-            <div className="pcf-selbar" role="status">
-              <span>{selFirstPaths.length} seleccionados</span>
-              <button
-                type="button"
-                className="pcf-selbar-btn pcf-selbar-danger"
-                onClick={() => void handleDeletePaths("first", selFirstPaths)}
-              >
-                Eliminar
-              </button>
-              <button
-                type="button"
-                className="pcf-selbar-btn"
-                onClick={selFirst.clear}
-                aria-label="Limpiar selección"
-                title="Limpiar selección (Esc)"
-              >
-                ×
-              </button>
-            </div>
-          )}
-
-          {rootExpanded && (
-            <div
-              className="pcf-tree"
-              role="tree"
-              aria-label="Archivos"
-              aria-multiselectable="true"
-              onClick={() => selFirst.clear()}
-              onKeyDown={(e) => onTreeKeyDown(e, "first")}
-              onContextMenu={(e) => handleContextMenuFirst(e, null, true)}
-              onDragOver={handleDragOver}
-              onDrop={(e) => cwd && handleFileDrop(e, cwd, "first")}
-            >
-              {renderPaneConfirms("first")}
-              {creatingType && (
-                <div className="pcf-row pcf-inline-create" onClick={(e) => e.stopPropagation()}>
-                  <span className="pcf-chevron" />
-                  <span className="pcf-icon-wrap">
-                    {creatingType === "folder" ? (
-                      <FolderIcon size={14} />
-                    ) : (
-                      <FileIcon size={14} />
-                    )}
-                  </span>
-                  <input
-                    ref={createInputRef}
-                    type="text"
-                    className="pcf-inline-input"
-                    value={newItemName}
-                    placeholder={creatingType === "folder" ? "nombre-carpeta" : "nombre-archivo.ext"}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                    onKeyDown={async (e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        const clean = newItemName.trim().replace(/[/\\]/g, "")
-                        if (!clean || !cwd) {
-                          setCreatingType(null)
-                          return
-                        }
-                        const sep = cwd.includes("\\") ? "\\" : "/"
-                        const full = `${cwd}${cwd.endsWith(sep) ? "" : sep}${clean}`
-                        setCreatingType(null)
-                        try {
-                          if (creatingType === "folder") {
-                            await shell.fs.mkdir(full)
-                            showNotice(`Carpeta creada: ${clean}`)
-                          } else {
-                            await shell.fs.write(full, "")
-                            showNotice(`Archivo creado: ${clean}`)
-                          }
-                          load(cwd)
-                        } catch {
-                          showError(`Error al crear ${creatingType === "folder" ? "carpeta" : "archivo"}`)
-                        }
-                      } else if (e.key === "Escape") {
-                        setCreatingType(null)
-                      }
-                    }}
-                    onBlur={() => {
-                      if (!newItemName.trim()) setCreatingType(null)
-                    }}
-                    autoFocus
-                  />
-                </div>
-              )}
-
-              {loading && <div className="pcf-loading">Cargando…</div>}
-
-              {!loading && (
-                <>
-                  {sortedDirs.map((d) => (
-                    <div
-                      key={d.path}
-                      onDragOver={handleDragOver}
-                      onDragEnter={(e) => handleDragEnter(e, d.path)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleFileDrop(e, d.path, "first")}
-                      className={dragOverPath === d.path ? "pcf-drop-target" : ""}
-                    >
-                      <TreeFolder
-                        entry={d}
-                        depth={0}
-                        touchNav={touchNav}
-                        onEnterDir={load}
-                        query={query}
-                        downloading={downloading}
-                        onDownload={handleDownload}
-                        onOpenFile={handleOpenFile}
-                        onOpenWith={setOpenWithFile}
-                        favorites={favorites}
-                        onFav={fav}
-                        showNotice={showNotice}
-                        getFileGitStatus={getFileGitStatus}
-                        getFolderGitStatus={getFolderGitStatus}
-                        collapseSignal={collapseSignal}
-                        onContextMenu={handleContextMenuFirst}
-                        renamingPath={renamingPath}
-                        renamingValue={renamingValue}
-                        onRenamingChange={setRenamingValue}
-                        onRenameCommit={commitRename}
-                        onRenameCancel={cancelRename}
-                        onStartRename={startRenameFirst}
-                        selectedPaths={selFirstPaths}
-                        onSelect={handleRowClickFirst}
-                        getDragPayload={dragPayloadFirst}
-                        cutPaths={cutPaths}
-                        deletingPaths={deletingPaths}
-                      />
-                    </div>
-                  ))}
-
-                  {sortedDirs.length === 0 && qLower && <div className="pcf-empty">Sin carpetas</div>}
-
-                  <div className="pcf-files">
-                    {sortedFiles.map((f) => (
-                      <FileRow
-                        key={f.path}
-                        file={f}
-                        depth={0}
-                        downloading={downloading}
-                        onDownload={handleDownload}
-                        onOpenFile={handleOpenFile}
-                        onOpenWith={setOpenWithFile}
-                        isFav={favorites.includes(f.path)}
-                        onToggleFav={fav}
-                        showNotice={showNotice}
-                        gitStatus={getFileGitStatus(f.path)}
-                        onContextMenu={handleContextMenuFirst}
-                        renamingPath={renamingPath}
-                        renamingValue={renamingValue}
-                        onRenamingChange={setRenamingValue}
-                        onRenameCommit={commitRename}
-                        onRenameCancel={cancelRename}
-                        onStartRename={startRenameFirst}
-                        selected={selFirstPaths.includes(f.path)}
-                        onSelect={handleRowClickFirst}
-                        getDragPayload={dragPayloadFirst}
-                        cut={cutPaths.includes(f.path)}
-                        deleting={deletingPaths.includes(f.path)}
-                      />
-                    ))}
-                    {sortedFiles.length === 0 && sortedDirs.length === 0 && !qLower && (
-                      <div className="pcf-empty">Vacío</div>
-                    )}
-                    {sortedFiles.length === 0 && qLower && (
-                      <div className="pcf-empty">Sin archivos</div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-          </div>
           {showSecondPane && (
-            <div
-              style={{
-                flex: 1,
-                minWidth: 0,
-                minHeight: 0,
-                display: "flex",
-                flexDirection: "column",
-                borderLeft: "1px solid var(--border)",
-                paddingLeft: 8,
-              }}
-              onClick={() => setActivePane("second")}
-            >
-              <div className="pcf-workspace-header">
-                <button
-                  type="button"
-                  className="pcf-action-btn pcf-back-btn"
-                  title={secondCanGoBack ? `Volver a ${secondParentPath}` : "No hay carpeta anterior"}
-                  aria-label="Volver a la carpeta anterior"
-                  disabled={!secondCanGoBack}
-                  onClick={() => secondParentPath && secondPane.load(secondParentPath)}
-                >
-                  <ArrowLeftIcon size={14} />
-                </button>
-                <div
-                  className="pcf-workspace-title"
-                  onClick={() => secondPane.cwd && secondPane.load(secondPane.cwd)}
-                  title={secondPane.cwd ?? ""}
-                >
-                  <span className="pcf-chevron">
-                    <FolderIcon size={12} />
-                  </span>
-                  <span className="pcf-workspace-name">{secondWorkspaceName}</span>
-                </div>
-                <div className="pcf-workspace-actions">
-                  <button
-                    type="button"
-                    className="pcf-action-btn"
-                    title="Recargar"
-                    aria-label="Recargar"
-                    onClick={() => secondPane.cwd && secondPane.load(secondPane.cwd)}
-                  >
-                    <RefreshIcon size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    className="pcf-action-btn"
-                    title={`Ordenar: ${SORT_STEPS[sortStepIdx]!.label} (click para cambiar)`}
-                    aria-label="Cambiar orden"
-                    onClick={cycleSort}
-                  >
-                    <SortIcon size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className="pcf-action-btn"
-                    title="Cerrar panel"
-                    aria-label="Cerrar panel"
-                    onClick={() => setShowSecondPane(false)}
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-              <div className="pcf-crumbs" role="navigation" aria-label="Ruta actual (2)">
-                <button
-                  type="button"
-                  className="pcf-hist-btn"
-                  title="Atrás"
-                  aria-label="Atrás en el historial"
-                  disabled={hIdxSecond <= 0}
-                  onClick={() => goHistSecond(-1)}
-                >
-                  <UndoIcon size={12} />
-                </button>
-                <button
-                  type="button"
-                  className="pcf-hist-btn"
-                  title="Adelante"
-                  aria-label="Adelante en el historial"
-                  disabled={hIdxSecond >= histSecond.length - 1}
-                  onClick={() => goHistSecond(1)}
-                >
-                  <RedoIcon size={12} />
-                </button>
-                <div className="pcf-crumb-trail">
-                  {crumbsSecond.map((c, i) => (
-                    <span key={c.path} className="pcf-crumb-item">
-                      {i > 0 && <span className="pcf-crumb-sep">›</span>}
-                      <button
-                        type="button"
-                        className={`pcf-crumb${i === crumbsSecond.length - 1 ? " active" : ""}`}
-                        onClick={() => secondPane.load(c.path)}
-                        title={c.path}
-                      >
-                        {c.label}
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <input
-                ref={uploadSecondRef}
-                type="file"
-                multiple
-                hidden
-                aria-hidden="true"
-                tabIndex={-1}
-                onChange={(e) => {
-                  if (e.target.files && e.target.files.length > 0 && secondPane.cwd) void uploadFiles("second", secondPane.cwd, e.target.files)
-                  e.target.value = ""
-                }}
-              />
-              <div className="pcf-tree" role="tree" aria-label="Archivos (2)" aria-multiselectable="true" onClick={() => selSecond.clear()} onKeyDown={(e) => onTreeKeyDown(e, "second")} onContextMenu={(e) => handleContextMenuSecond(e, null, true)} onDragOver={handleDragOver} onDrop={(e) => secondPane.cwd && handleFileDrop(e, secondPane.cwd, "second")}>
-                {renderPaneConfirms("second")}
-                {selSecondPaths.length > 1 && (
-                  <div className="pcf-selbar" role="status">
-                    <span>{selSecondPaths.length} seleccionados</span>
-                    <button
-                      type="button"
-                      className="pcf-selbar-btn pcf-selbar-danger"
-                      onClick={() => void handleDeletePaths("second", selSecondPaths)}
-                    >
-                      Eliminar
-                    </button>
-                    <button
-                      type="button"
-                      className="pcf-selbar-btn"
-                      onClick={selSecond.clear}
-                      aria-label="Limpiar selección"
-                      title="Limpiar selección (Esc)"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                {secondPane.loading && <div className="pcf-loading">Cargando…</div>}
-                {!secondPane.loading && (
-                  <>
-                    {sortedSecondDirs.map((d) => (
-                      <div
-                        key={d.path}
-                        onDragOver={handleDragOver}
-                        onDragEnter={(e) => handleDragEnter(e, d.path)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleFileDrop(e, d.path, "second")}
-                        className={dragOverPath === d.path ? "pcf-drop-target" : ""}
-                      >
-                        <TreeFolder
-                          entry={d}
-                          depth={0}
-                          touchNav={touchNav}
-                          onEnterDir={secondPane.load}
-                          query={query}
-                          downloading={downloading}
-                          onDownload={handleDownload}
-                          onOpenFile={handleOpenFile}
-                          onOpenWith={setOpenWithFile}
-                          favorites={favorites}
-                          onFav={fav}
-                          showNotice={showNotice}
-                          getFileGitStatus={getFileGitStatus}
-                          getFolderGitStatus={getFolderGitStatus}
-                          collapseSignal={collapseSignal}
-                          onContextMenu={handleContextMenuSecond}
-                          renamingPath={renamingPath}
-                          renamingValue={renamingValue}
-                          onRenamingChange={setRenamingValue}
-                          onRenameCommit={commitRename}
-                          onRenameCancel={cancelRename}
-                          onStartRename={startRenameSecond}
-                          selectedPaths={selSecondPaths}
-                          onSelect={handleRowClickSecond}
-                          getDragPayload={dragPayloadSecond}
-                          cutPaths={cutPaths}
-                          deletingPaths={deletingPaths}
-                        />
-                      </div>
-                    ))}
-                    {sortedSecondDirs.length === 0 && qLower && <div className="pcf-empty">Sin carpetas</div>}
-                    <div className="pcf-files">
-                      {sortedSecondFiles.map((f) => (
-                        <FileRow
-                          key={f.path}
-                          file={f}
-                          depth={0}
-                          downloading={downloading}
-                          onDownload={handleDownload}
-                          onOpenFile={handleOpenFile}
-                          onOpenWith={setOpenWithFile}
-                          isFav={favorites.includes(f.path)}
-                          onToggleFav={fav}
-                          showNotice={showNotice}
-                          gitStatus={getFileGitStatus(f.path)}
-                          onContextMenu={handleContextMenuSecond}
-                          renamingPath={renamingPath}
-                          renamingValue={renamingValue}
-                          onRenamingChange={setRenamingValue}
-                          onRenameCommit={commitRename}
-                          onRenameCancel={cancelRename}
-                          onStartRename={startRenameSecond}
-                          selected={selSecondPaths.includes(f.path)}
-                          onSelect={handleRowClickSecond}
-                          getDragPayload={dragPayloadSecond}
-                          cut={cutPaths.includes(f.path)}
-                          deleting={deletingPaths.includes(f.path)}
-                        />
-                      ))}
-                      {sortedSecondFiles.length === 0 && sortedSecondDirs.length === 0 && !qLower && (
-                        <div className="pcf-empty">Vacío</div>
-                      )}
-                      {sortedSecondFiles.length === 0 && qLower && <div className="pcf-empty">Sin archivos</div>}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+            <ExplorerPane
+              pane={second}
+              nav={navSecond}
+              variant="second"
+              ariaBase="Archivos (2)"
+              crumbsAria="Ruta actual (2)"
+              titleIcon={<FolderIcon size={12} />}
+              onTitleClick={() => second.cwd && second.load(second.cwd)}
+              headerActions={headerActionsSecond}
+              onActivate={() => setActivePane("second")}
+              query={query}
+              collapseSignal={collapseSignal}
+              touchNav={touchNav}
+              rows={rowsSecond}
+              onContextMenu={handleContextMenuSecond}
+              onTreeKeyDown={(e) => onTreeKeyDown(e, "second")}
+              onDeletePaths={(paths) => void handleDeletePaths("second", paths)}
+              confirms={renderPaneConfirms("second")}
+              showTree
+              uploadRef={uploadSecondRef}
+              onUpload={(files) => second.cwd && void uploadFiles("second", second.cwd, files)}
+              dragOverPath={dragOverPath}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDropOnDir={(e, d) => void handleFileDrop(e, d, "second")}
+              onDropOnPane={(e) => { if (second.cwd) void handleFileDrop(e, second.cwd, "second") }}
+            />
           )}
         </div>
       )}
@@ -2204,7 +1737,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   className="overflow-item"
                   onClick={() => {
                     if (contextMenu.isDir)
-                      (contextMenuPane === "second" ? secondPane.load : load)(contextMenu.entry!.path)
+                      (contextMenuPane === "second" ? second.load : first.load)(contextMenu.entry!.path)
                     else handleOpenFile(contextMenu.entry!)
                     setContextMenu(null)
                   }}
@@ -2312,7 +1845,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   className="overflow-item"
                   onClick={() =>
                     handleCreateFileHere(
-                      contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : (contextMenuPane === "second" ? secondPane.cwd : cwd) || ""
+                      contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : (contextMenuPane === "second" ? second.cwd : first.cwd) || ""
                     )
                   }
                 >
@@ -2326,7 +1859,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   className="overflow-item"
                   onClick={() =>
                     handleCreateFolderHere(
-                      contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : (contextMenuPane === "second" ? secondPane.cwd : cwd) || ""
+                      contextMenu.entry && contextMenu.isDir ? contextMenu.entry.path : (contextMenuPane === "second" ? second.cwd : first.cwd) || ""
                     )
                   }
                 >
@@ -2467,7 +2000,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                 <button
                   type="button"
                   className="overflow-item"
-                  onClick={() => handleCreateFileHere((activePane === "second" ? secondPane.cwd : cwd) || "")}
+                  onClick={() => handleCreateFileHere((activePane === "second" ? second.cwd : first.cwd) || "")}
                 >
                   <span>
                     <FileIcon size={14} />
@@ -2477,7 +2010,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                 <button
                   type="button"
                   className="overflow-item"
-                  onClick={() => handleCreateFolderHere((activePane === "second" ? secondPane.cwd : cwd) || "")}
+                  onClick={() => handleCreateFolderHere((activePane === "second" ? second.cwd : first.cwd) || "")}
                 >
                   <span>
                     <FolderIcon size={14} />
@@ -2502,7 +2035,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   type="button"
                   className="overflow-item"
                   onClick={() => {
-                    const dir = (contextMenuPane === "second" ? secondPane.cwd : cwd) || ""
+                    const dir = (contextMenuPane === "second" ? second.cwd : first.cwd) || ""
                     if (dir) void handleTerminalHere(dir)
                     else setContextMenu(null)
                   }}
@@ -2513,7 +2046,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   Abrir terminal aquí
                 </button>
                 {onOpenSessionDir && (() => {
-                  const dir = (contextMenuPane === "second" ? secondPane.cwd : cwd) || ""
+                  const dir = (contextMenuPane === "second" ? second.cwd : first.cwd) || ""
                   return dir ? (
                     <button
                       type="button"
@@ -2540,7 +2073,7 @@ export const PCFilesPanel = memo(function PCFilesPanel({
                   handlePasteItem(
                     contextMenu.entry && contextMenu.isDir
                       ? contextMenu.entry.path
-                      : (contextMenuPane === "second" ? secondPane.cwd : cwd) || ""
+                      : (contextMenuPane === "second" ? second.cwd : first.cwd) || ""
                   )
                 }
               >

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { createEmitter, createStore } from "../shared/lib/store"
 
 export type QuestionSettledInfo = {
   status: "answered" | "rejected"
@@ -7,7 +8,7 @@ export type QuestionSettledInfo = {
 }
 
 const settledQuestions = new Map<string, QuestionSettledInfo>()
-const listeners = new Set<(id: string, info: QuestionSettledInfo) => void>()
+const settledEmitter = createEmitter<{ id: string; info: QuestionSettledInfo }>()
 
 export function recordQuestionSettled(
   id: string,
@@ -21,11 +22,7 @@ export function recordQuestionSettled(
     answeredAt: Date.now(),
   }
   settledQuestions.set(id, info)
-  listeners.forEach((fn) => {
-    try {
-      fn(id, info)
-    } catch { /* ignore */ }
-  })
+  settledEmitter.emit({ id, info })
 }
 
 export function isQuestionSettled(id?: string | string[]): boolean {
@@ -53,20 +50,21 @@ export function clearQuestionSettled(id?: string): void {
 }
 
 export function onQuestionSettledChange(listener: (id: string, info: QuestionSettledInfo) => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
+  return settledEmitter.subscribe(({ id, info }) => {
+    try {
+      listener(id, info)
+    } catch { /* ignore */ }
+  })
 }
 
-export function useQuestionSettled(id?: string | (string | undefined | null)[]): QuestionSettledInfo | null {
+export function useQuestionSettled(id?: string | (string | undefined | null)[], enabled = true): QuestionSettledInfo | null {
   const ids = Array.isArray(id) ? id.filter((x): x is string => !!x) : id ? [id] : []
   const idsKey = ids.join("::")
 
   const [info, setInfo] = useState<QuestionSettledInfo | null>(() => getQuestionSettledInfo(ids) ?? null)
 
   useEffect(() => {
-    if (ids.length === 0) {
+    if (!enabled || ids.length === 0) {
       setInfo(null)
       return
     }
@@ -77,7 +75,7 @@ export function useQuestionSettled(id?: string | (string | undefined | null)[]):
         setInfo(settledInfo)
       }
     })
-  }, [idsKey])
+  }, [idsKey, enabled])
 
   return info
 }
@@ -86,33 +84,26 @@ export function useQuestionSettled(id?: string | (string | undefined | null)[]):
 // Cuando questionAuto está ON, el modal de ChatView es la ÚNICA superficie
 // interactiva y ToolPart renderiza un chip compacto (evita duplicados). El
 // default true acompaña al default de feature flags.
-let floatingMode = true
-const floatingListeners = new Set<() => void>()
+const floatingStore = createStore<boolean>(true)
 
 export function setQuestionFloatingMode(enabled: boolean): void {
-  if (floatingMode === enabled) return
-  floatingMode = enabled
-  floatingListeners.forEach((fn) => {
-    try {
-      fn()
-    } catch { /* ignore */ }
-  })
+  if (floatingStore.get() === enabled) return
+  floatingStore.set(enabled)
 }
 
 export function isQuestionFloatingMode(): boolean {
-  return floatingMode
+  return floatingStore.get()
 }
 
-export function useQuestionFloatingMode(): boolean {
-  const [enabled, setEnabled] = useState<boolean>(() => floatingMode)
+// `enabled=false` evita la suscripcion: los ToolPart que no son de pregunta no
+// se re-renderizan cuando cambia questionAuto (el chip/modal solo aplica a
+// preguntas). Los hooks se llaman igual (reglas de hooks), pero sin alta.
+export function useQuestionFloatingMode(enabled = true): boolean {
+  const [value, setValue] = useState<boolean>(() => floatingStore.get())
   useEffect(() => {
-    setEnabled(floatingMode)
-    const listener = () => setEnabled(floatingMode)
-    floatingListeners.add(listener)
-    return () => {
-      floatingListeners.delete(listener)
-    }
-  }, [])
-  return enabled
+    if (!enabled) return
+    setValue(floatingStore.get())
+    return floatingStore.subscribe(() => setValue(floatingStore.get()))
+  }, [enabled])
+  return enabled ? value : false
 }
-

@@ -9,6 +9,7 @@
 
 use std::sync::Arc;
 
+use crate::infrastructure::http::common::config_clone;
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::state::AppState;
@@ -87,7 +88,7 @@ pub fn handle(
     if delivery != "queue" && delivery != "steer" {
         return Some(with_cors(ShellResponse::err_json(400, "delivery: queue|steer")));
     }
-    let cfg = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let cfg = config_clone(&state);
     let port = if cfg.opencode2_port != 0 {
         cfg.opencode2_port
     } else {
@@ -136,9 +137,7 @@ pub fn handle(
                 if code == 401 {
                     continue; // probar siguiente credencial
                 }
-                let mut reader = resp.into_reader();
-                let mut buf = Vec::new();
-                let _ = std::io::Read::read_to_end(&mut reader, &mut buf);
+                let buf = crate::infrastructure::http::common::read_ureq_body(resp);
                 let short: String = String::from_utf8_lossy(&buf).chars().take(200).collect();
                 return Some(with_cors(ShellResponse::err_json(code, &format!("Server {code}: {short}"))));
             }

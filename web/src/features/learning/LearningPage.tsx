@@ -1,6 +1,6 @@
 // LearningPage — entry del plugin. Lazy-loaded. Estilos en styles/learning.css
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { loadProgress, markDone, markVisited, markCategoryDone, resetProgress, lastVisitedLesson, recentLessons } from "./progress"
+import { useProgress, markDone, markVisited, markCategoryDone, resetProgress, lastVisitedLesson, recentLessons } from "./progress"
 import { GraduationCapIcon, PanelLeftIcon, PlayIcon, EyeIcon, EyeOffIcon, HistoryIcon, RefreshIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, SearchIcon } from "../../Icons"
 import { useT } from "../../i18n-context"
 import { LearningSidebar } from "./Sidebar"
@@ -24,7 +24,7 @@ export default function LearningPage() {
   const t = useT()
   const [manifest, setManifest] = useState<LearningManifest | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [progress, setProgress] = useState<LearningProgress>(loadProgress)
+  const progress = useProgress()
   const [selected, setSelected] = useState<LearningLesson | null>(null)
   const [mobilePane, setMobilePane] = useState<MobilePane>("list")
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -75,10 +75,9 @@ export default function LearningPage() {
     setMobilePane("lesson")
     setSidebarOpen(false)
     markVisited(lesson.id)
-    setProgress(loadProgress())
   }, [])
 
-  const handleToggleDone = useCallback((id: string, done: boolean) => setProgress(markDone(id, done)), [])
+  const handleToggleDone = useCallback((id: string, done: boolean) => { markDone(id, done) }, [])
 
   const goPrev = useCallback(() => { if (currentIndex > 0) handleSelect(flatLessons[currentIndex - 1]) }, [currentIndex, flatLessons, handleSelect])
   const goNext = useCallback(() => { if (currentIndex >= 0 && currentIndex < flatLessons.length - 1) handleSelect(flatLessons[currentIndex + 1]) }, [currentIndex, flatLessons, handleSelect])
@@ -221,7 +220,7 @@ export default function LearningPage() {
     if (!cat) return
     const ids = cat.items.map((it) => it.id)
     const allDone = cat.items.every((it) => progress[it.id]?.done)
-    setProgress(markCategoryDone(ids, !allDone))
+    markCategoryDone(ids, !allDone)
   }, [manifest, progress])
 
   const handleReset = useCallback(() => {
@@ -233,7 +232,7 @@ export default function LearningPage() {
     }
     if (resetTimer.current) clearTimeout(resetTimer.current)
     setConfirmReset(false)
-    setProgress(resetProgress())
+    resetProgress()
   }, [confirmReset])
 
   const handleGotoCat = useCallback((categoryId: string) => {

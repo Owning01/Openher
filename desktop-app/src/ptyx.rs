@@ -38,9 +38,13 @@ impl PtyOutput {
         let mut d = self.data.lock().unwrap_or_else(|e| e.into_inner());
         d.extend_from_slice(bytes);
         // Ring buffer: si excede el máximo, recortar la primera mitad.
-        if d.len() > MAX_PTY_BYTES {
-            let drain = d.len() / 2;
-            d.drain(..drain);
+        // `copy_within` + `truncate` en vez de `drain`: misma semántica
+        // (mismo orden de bytes, mismo base_offset) sin el iterador Drain.
+        let len = d.len();
+        if len > MAX_PTY_BYTES {
+            let drain = len / 2;
+            d.copy_within(drain.., 0);
+            d.truncate(len - drain);
             self.base_offset.fetch_add(drain, std::sync::atomic::Ordering::Relaxed);
         }
         drop(d);
@@ -52,7 +56,9 @@ pub struct PtySession {
     pub id: String,
     pub shell: String,
     pub cwd: String,
-    writer: Mutex<Option<Box<dyn Write + Send>>>,
+    /// Arc para que `write()` pueda soltar el lock de `sessions` antes del
+    /// `write_all` (R10: no bloquear el registry durante I/O al pty).
+    writer: Arc<Mutex<Option<Box<dyn Write + Send>>>>,
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     /// Handle del proceso hijo. `Option` + take(): un solo consumidor hace
     /// wait (kill o lector natural) y el otro lo encuentra vacío.
@@ -155,7 +161,7 @@ impl PtyRegistry {
             id: id.clone(),
             shell: shell_exe,
             cwd: cwd.unwrap_or_else(|| std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()),
-            writer: Mutex::new(Some(writer)),
+            writer: Arc::new(Mutex::new(Some(writer))),
             master: Mutex::new(Some(master)),
             child,
             output,
@@ -165,9 +171,14 @@ impl PtyRegistry {
     }
 
     pub fn write(&self, id: &str, data: &[u8]) -> Result<(), String> {
-        let map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
-        let s = map.get(id).ok_or("pty no existe")?;
-        let mut w = s.writer.lock().unwrap_or_else(|e| e.into_inner());
+        // Clonar el handle y SOLTAR el lock de `sessions` antes de `write_all`
+        // (R10): el registry no queda bloqueado por una escritura lenta.
+        let writer = {
+            let map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+            let s = map.get(id).ok_or("pty no existe")?;
+            s.writer.clone()
+        };
+        let mut w = writer.lock().unwrap_or_else(|e| e.into_inner());
         match w.as_mut() {
             Some(w) => w.write_all(data).map_err(|e| e.to_string()),
             None => Err("pty cerrado".into()),
@@ -290,19 +301,39 @@ pub fn default_shell() -> String {
 // (replay desde 0) y recibe frames binarios con el output apenas sale del
 // ConPTY (escritura + flush directo al socket, sin buffers HTTP).
 
+/// R10: tope de conexiones WS simultáneas (cada una es un hilo). Más allá se
+/// cierra el socket sin atender: evita agotar hilos/descriptores.
+const MAX_WS_CONNS: usize = 256;
+/// R10: timeout del handshake HTTP/WS (slow-loris: no dejar el hilo colgado).
+const WS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
 pub fn start_ws_server(registry: Arc<PtyRegistry>, port: u16) -> std::io::Result<()> {
     let listener = std::net::TcpListener::bind(("0.0.0.0", port))?;
+    let conns = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     std::thread::Builder::new()
         .name("pty-ws".into())
         .spawn(move || {
+            use std::sync::atomic::Ordering;
             for stream in listener.incoming() {
                 match stream {
                     Ok(s) => {
+                        if conns.load(Ordering::Relaxed) >= MAX_WS_CONNS {
+                            // Sin cupo: cerrar sin atender (no spawnear hilo).
+                            drop(s);
+                            continue;
+                        }
                         let reg = registry.clone();
-                        std::thread::Builder::new()
+                        conns.fetch_add(1, Ordering::Relaxed);
+                        let conns_done = conns.clone();
+                        let spawned = std::thread::Builder::new()
                             .name("pty-ws-conn".into())
-                            .spawn(move || handle_ws_conn(reg, s))
-                            .ok();
+                            .spawn(move || {
+                                handle_ws_conn(reg, s);
+                                conns_done.fetch_sub(1, Ordering::Relaxed);
+                            });
+                        if spawned.is_err() {
+                            conns.fetch_sub(1, Ordering::Relaxed);
+                        }
                     }
                     Err(_) => std::thread::sleep(Duration::from_millis(30)),
                 }
@@ -321,6 +352,9 @@ fn ws_accept_key(key: &str) -> String {
 }
 
 fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
+    // R10: el handshake no puede colgar el hilo para siempre. Se restaura a
+    // bloqueante (None) una vez completado (ver más abajo).
+    let _ = stream.set_read_timeout(Some(WS_HANDSHAKE_TIMEOUT));
     // Handshake: leer headers hasta CRLFCRLF y responder 101.
     let mut buf = Vec::new();
     let mut tmp = [0u8; 1024];
@@ -380,6 +414,10 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                 // un índice relativo quedaba > len y congelaba el stream.
                 let mut consumed_abs: usize = 0;
                 let mut last_id = String::new();
+                // R10: buffer reutilizado, sin `to_vec()` del delta completo
+                // (hasta 2 MB por ciclo) ni lock retenido durante el write.
+                const CHUNK: usize = 16 * 1024;
+                let mut staging: Vec<u8> = Vec::with_capacity(CHUNK);
                 loop {
                     let out = {
                         let mut p = match conn.pty.lock() { Ok(p) => p, Err(_) => return };
@@ -402,34 +440,40 @@ fn handle_ws_conn(registry: Arc<PtyRegistry>, mut stream: TcpStream) {
                             }
                         }
                     };
-                    let data = match out.data.lock() { Ok(d) => d, Err(_) => return };
-                    let base = out.base_offset.load(std::sync::atomic::Ordering::Relaxed);
-                    if consumed_abs < base {
-                        // Rotación: lo previo ya no existe — arrancar desde lo disponible.
-                        consumed_abs = base;
-                    }
-                    let total = base + data.len();
-                    if consumed_abs < total {
-                        let start = consumed_abs - base;
-                        let delta = data[start..].to_vec();
-                        consumed_abs = total;
-                        drop(data);
-                        // Chunk en frames de 16KB para no congelar el hilo UI del WebView (TUI a 60fps)
-                        const CHUNK: usize = 16 * 1024;
-                        for chunk in delta.chunks(CHUNK) {
-                            if ws_write_locked(&write_sock, 0x2, chunk).is_err() {
-                                return;
+                    // Decidir bajo el lock; copiar UN chunk y soltar el lock
+                    // ANTES de escribir al socket (el reader del pty puede
+                    // seguir appendeando).
+                    let mut has_chunk = false;
+                    {
+                        let data = match out.data.lock() { Ok(d) => d, Err(_) => return };
+                        let base = out.base_offset.load(std::sync::atomic::Ordering::Relaxed);
+                        if consumed_abs < base {
+                            // Rotación: lo previo ya no existe — arrancar desde lo disponible.
+                            consumed_abs = base;
+                        }
+                        let total = base + data.len();
+                        if consumed_abs < total {
+                            let start = consumed_abs - base;
+                            let end = (start + CHUNK).min(data.len());
+                            staging.clear();
+                            staging.extend_from_slice(&data[start..end]);
+                            consumed_abs = base + end;
+                            has_chunk = true;
+                        } else if out.done.load(std::sync::atomic::Ordering::SeqCst) {
+                            return;
+                        } else {
+                            let res = out.cv.wait_timeout(data, Duration::from_millis(1000));
+                            match res {
+                                Ok((g, _)) => drop(g),
+                                Err(_) => return,
                             }
                         }
-                        continue;
                     }
-                    if out.done.load(std::sync::atomic::Ordering::SeqCst) {
-                        return;
-                    }
-                    let res = out.cv.wait_timeout(data, Duration::from_millis(1000));
-                    match res {
-                        Ok((g, _)) => drop(g),
-                        Err(_) => return,
+                    if has_chunk {
+                        // Chunk en frames de 16KB para no congelar el hilo UI del WebView (TUI a 60fps)
+                        if ws_write_locked(&write_sock, 0x2, &staging).is_err() {
+                            return;
+                        }
                     }
                 }
             })
@@ -556,18 +600,23 @@ fn read_exact_or(stream: &mut TcpStream, buf: &mut [u8]) -> std::io::Result<bool
 
 fn ws_write_locked(sock: &Arc<Mutex<TcpStream>>, opcode: u8, payload: &[u8]) -> std::io::Result<()> {
     let mut stream = sock.lock().unwrap_or_else(|e| e.into_inner());
-    let mut header = vec![0x80 | opcode];
+    // R10: header en pila ([u8;10] = 2 + 8 máx), sin Vec por chunk de 16 KB.
+    let mut header = [0u8; 10];
+    header[0] = 0x80 | opcode;
     let len = payload.len();
-    if len < 126 {
-        header.push(len as u8);
+    let hn = if len < 126 {
+        header[1] = len as u8;
+        2
     } else if len <= 0xFFFF {
-        header.push(126);
-        header.extend_from_slice(&(len as u16).to_be_bytes());
+        header[1] = 126;
+        header[2..4].copy_from_slice(&(len as u16).to_be_bytes());
+        4
     } else {
-        header.push(127);
-        header.extend_from_slice(&(len as u64).to_be_bytes());
-    }
-    stream.write_all(&header)?;
+        header[1] = 127;
+        header[2..10].copy_from_slice(&(len as u64).to_be_bytes());
+        10
+    };
+    stream.write_all(&header[..hn])?;
     stream.write_all(payload)?;
     stream.flush()
 }

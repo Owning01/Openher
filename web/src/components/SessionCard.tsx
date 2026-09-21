@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef } from "react"
-import { StarIcon, ChevronIcon, CheckIcon } from "../Icons"
+import { StarIcon, ChevronIcon, CheckIcon, LoadingIcon } from "../Icons"
 import { useT } from "../i18n-context"
-import { formatTimeCompact, formatTime } from "../utils"
+import { formatTimeCompact, formatTime, isSessionActive } from "../utils"
 import { InlineRename } from "./InlineRename"
 import type { SessionView } from "../types"
 
@@ -109,6 +109,10 @@ export const SessionCard = memo(function SessionCard({
     }
   }, [isRenaming, selectMode, onStartRename, session, handleOpen])
 
+  // Subsesión activa (hija trabajando en el server): spinner chiquito y gris
+  // junto al título. Solo hijas: el padre ya tiene sus propios indicadores.
+  const childActive = isChild && isSessionActive(session)
+
   return (
     <article
       ref={cardRef}
@@ -170,6 +174,11 @@ export const SessionCard = memo(function SessionCard({
           ) : (
             <span className="session-title" onClick={isSelected ? handleStartRename : undefined}
               title={isSelected ? t('session.rename') : undefined}>{session.title}</span>
+          )}
+          {childActive && (
+            <span className="session-child-spinner" title={t('panel.busy')} aria-label={t('panel.busy')} role="status">
+              <LoadingIcon size={10} />
+            </span>
           )}
         </div>
         <span className="time-label" title={formatTime(session.updated)}>

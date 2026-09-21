@@ -163,19 +163,6 @@ max-width: 100% !important;
     margin-inline: 0 !important;
     width: 100% !important;
 }
-html[data-desktop="true"] .app-desktop-placeholder {
-flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    color: var(--muted);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-}
 html[data-desktop="true"] .detail-header .back-btn {
 display: none;
 }

@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react"
+import { memo, useCallback, useState, useRef, useEffect } from "react"
 import { FolderIcon, CloseIcon, LoadingIcon, TerminalIcon } from "../Icons"
 import { FileTypeIcon } from "./FileTypeIcon"
 import { useT } from "../i18n-context"
@@ -6,12 +6,7 @@ import type { FileEntry, ServerConfig } from "../types"
 import { api } from "../api"
 import { shell } from "../shell"
 import { Modal } from "./Modal"
-
-const isExecScript = (path?: string) => {
-  if (!path) return false
-  const p = path.toLowerCase()
-  return p.endsWith(".bat") || p.endsWith(".cmd") || p.endsWith(".vbs") || p.endsWith(".ps1") || p.endsWith(".exe") || p.endsWith(".sh")
-}
+import { isExecScript } from "../shared/lib/fileKind"
 
 type FileBrowserProps = {
   currentPath: string
@@ -200,10 +195,17 @@ export const FileBrowser = memo(function FileBrowser({
   const [execConfirm, setExecConfirm] = useState<FileEntry | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [filter, setFilter] = useState("")
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const showNotice = useCallback((msg: string) => {
     setNotice(msg)
-    window.setTimeout(() => setNotice((m) => (m === msg ? null : m)), 2500)
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current)
+    noticeTimer.current = window.setTimeout(() => setNotice((m) => (m === msg ? null : m)), 2500)
+  }, [])
+
+  // El aviso dura 2.5s: limpiar el timer al desmontar.
+  useEffect(() => () => {
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current)
   }, [])
 
   const cancelExecFile = useCallback(() => {

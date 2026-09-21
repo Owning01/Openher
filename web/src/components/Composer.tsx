@@ -1,106 +1,24 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
 import type { CSSProperties } from "react"
 import { createPortal } from "react-dom"
-import { SendIcon, StopCircleIcon, MicIcon, CloseIcon, AttachmentIcon, PencilIcon, BranchIcon } from "../Icons"
+import { SendIcon, StopCircleIcon, MicIcon, AttachmentIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
-import { useOutsideClick } from "../hooks/useOutsideClick"
-import { api } from "../api"
 import type { AgentOption, CommandInfo, ServerConfig, ModelOption, TurnChanges } from "../types"
 import { ImageEditor } from "./ImageEditor"
-import { FileTypeIcon } from "./FileTypeIcon"
-import { DiffStatBadge, toRelativePath } from "./ToolPart"
-import { DiffView } from "./DiffView"
 import { readComposerDraft, writeComposerDraft } from "../utils/composerDraft"
-import { PluginSlot } from "../plugins"
-import { ModelSelectorModal } from "./ModelSelectorModal"
-
-type ImageAttachment = { id: string; base64: string; mime: string; name: string }
-
-const IMAGE_MAX_SIZE = 1600
+import { SlashMenu } from "./composer/SlashMenu"
+import { MentionMenu } from "./composer/MentionMenu"
+import { useMentions } from "./composer/useMentions"
+import { ImageStrip } from "./composer/ImageStrip"
+import { TurnChangesPanel } from "./composer/TurnChangesPanel"
+import { ComposerBar } from "./composer/ComposerBar"
+import { downscaleImage } from "./composer/downscaleImage"
+import { LOCAL_SLASH_COMMANDS, MAX_HISTORY, loadHistory, saveHistory } from "./composer/composerData"
+import type { ImageAttachment, MentionItem } from "./composer/types"
 
 /** Periodo del giro del anillo del composer: IGUAL que el `3.5s` de composer.css. */
 const RING_PERIOD_MS = 3500
-
-/** Downscale de imágenes grandes antes de base64: reduce heap ~4x y tiempo de upload. */
-async function downscaleImage(file: File): Promise<string> {
-  if (!file.type.startsWith("image/")) {
-    return new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.readAsDataURL(file)
-    })
-  }
-  const canOffscreen = typeof OffscreenCanvas !== "undefined" && typeof createImageBitmap !== "undefined"
-  const canCreateBitmap = typeof createImageBitmap !== "undefined"
-  try {
-    const bitmap = canCreateBitmap ? await createImageBitmap(file) : null
-    if (!bitmap) throw new Error("no bitmap")
-    const scale = Math.min(1, IMAGE_MAX_SIZE / Math.max(bitmap.width, bitmap.height))
-    if (scale >= 1) {
-      bitmap.close()
-      return new Promise<string>((resolve) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.readAsDataURL(file)
-      })
-    }
-    const w = Math.round(bitmap.width * scale)
-    const h = Math.round(bitmap.height * scale)
-    let blob: Blob
-    if (canOffscreen) {
-      const canvas = new OffscreenCanvas(w, h)
-      const ctx = canvas.getContext("2d")!
-      ctx.drawImage(bitmap, 0, 0, w, h)
-      bitmap.close()
-      blob = await canvas.convertToBlob({ type: file.type || "image/jpeg", quality: 0.85 })
-    } else {
-      const canvas = document.createElement("canvas")
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext("2d")!
-      ctx.drawImage(bitmap as any, 0, 0, w, h)
-      bitmap.close()
-      blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => b ? resolve(b) : reject(new Error("toBlob failed")), file.type || "image/jpeg", 0.85)
-      })
-    }
-    return new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    // Fallback iOS/Capacitor viejo sin OffscreenCanvas/createImageBitmap
-    return new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.readAsDataURL(file)
-    })
-  }
-}
-
-const HISTORY_BASE_KEY = "opencode.remote.promptHistory"
-const MAX_HISTORY = 50
-
-// Historial POR SESIÓN (igual que el draft): con key global las flechas
-// ↑/↓ mostraban prompts de todas las sesiones mezclados.
-function historyKey(sessionID?: string): string {
-  return sessionID ? `${HISTORY_BASE_KEY}.${sessionID}` : HISTORY_BASE_KEY
-}
-
-function loadHistory(sessionID?: string): string[] {
-  try {
-    const raw = localStorage.getItem(historyKey(sessionID))
-    return raw ? JSON.parse(raw) : []
-  } catch { return [] }
-}
-
-function saveHistory(sessionID: string | undefined, h: string[]) {
-  try { localStorage.setItem(historyKey(sessionID), JSON.stringify(h)) } catch { }
-}
-
-type MentionItem = { id: string; name: string; description?: string; source: "agent" | "file" | "mcp" | "skill" }
 
 type ComposerProps = {
   value: string
@@ -131,23 +49,6 @@ type ComposerProps = {
   sessionID?: string
   turnChanges?: TurnChanges[]
 }
-
-let imgId = 0
-
-const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
-  { name: "help", description: "Show help and available commands", source: "command" },
-  { name: "status", description: "Show current session status", source: "command" },
-  { name: "undo", description: "Undo last message", source: "command" },
-  { name: "redo", description: "Redo last undone message", source: "command" },
-  { name: "compact", description: "Compact/compress conversation history", source: "command" },
-  { name: "summarize", description: "Compact/compress conversation history (alias)", source: "command" },
-  { name: "rename", description: "Rename current session: /rename <title>", source: "command" },
-  { name: "export", description: "Export conversation to Markdown", source: "command" },
-  { name: "themes", description: "List available themes", source: "command" },
-  { name: "history", description: "Show prompt history panel", source: "command" },
-  { name: "timeline", description: "Show prompt timeline panel", source: "command" },
-  { name: "connect", description: "Connect providers (API keys, OpenAI-compatible)", source: "command" },
-]
 
 export const Composer = memo(function Composer({
   value,
@@ -184,33 +85,9 @@ export const Composer = memo(function Composer({
   const [atQuery, setAtQuery] = useState("")
   const [tslEnabled, setTslEnabled] = useState(false)
   const [atIndex, setAtIndex] = useState(0)
-  const [showModelMenu, setShowModelMenu] = useState(false)
-  const modelMenuRef = useRef<HTMLDivElement | null>(null)
-  const modelToggleRef = useRef<HTMLButtonElement | null>(null)
-  // Cambios del turno: vista mínima de archivos +/− por turno (estilo
-  // Copilot/Cursor). Colapsado por defecto, costo cero hasta abrir.
-  const [showTurnChanges, setShowTurnChanges] = useState(false)
-  const [turnIdx, setTurnIdx] = useState(-1)
-  const [openPatch, setOpenPatch] = useState<string | null>(null)
-  const turnWrapRef = useRef<HTMLDivElement | null>(null)
-  const closeTurnChanges = useCallback(() => setShowTurnChanges(false), [])
-  useOutsideClick(turnWrapRef, closeTurnChanges, showTurnChanges)
-  useEffect(() => {
-    if (!showTurnChanges) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowTurnChanges(false) }
-    document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
-  }, [showTurnChanges])
-  const turns = turnChanges ?? []
-  const activeTurnIdx = turns.length === 0 ? -1 : turnIdx < 0 ? turns.length - 1 : Math.min(turnIdx, turns.length - 1)
-  const activeTurn = activeTurnIdx >= 0 ? turns[activeTurnIdx]! : null
-  const latestTurn = turns.length > 0 ? turns[turns.length - 1]! : null
-  const latestTotals = useMemo(() => {
-    let add = 0
-    let del = 0
-    for (const f of latestTurn?.files ?? []) { add += f.additions ?? 0; del += f.deletions ?? 0 }
-    return { add, del, count: latestTurn?.files.length ?? 0 }
-  }, [latestTurn])
+  // Contador de ids de adjuntos: ref local por instancia (antes era un
+  // contador de módulo compartido entre todos los composers).
+  const imgIdRef = useRef(0)
   // Sincronía visual entre sesiones activas: delay negativo alineado al reloj
   // (punto del ciclo de 3.5s a Date.now()) para que todos los anillos de la
   // app compartan fase. Sin esto cada Composer arranca en 0deg al montar o
@@ -340,66 +217,13 @@ export const Composer = memo(function Composer({
   useEffect(() => { if (visibleAgentsRaw.length > 0) prevAgentsRef.current = visibleAgentsRaw }, [visibleAgentsRaw])
   const visibleAgents = visibleAgentsRaw.length > 0 ? visibleAgentsRaw : prevAgentsRef.current
 
-  const [mentionItems, setMentionItems] = useState<MentionItem[]>([])
-  const [mentionLoading, setMentionLoading] = useState(false)
-  // Fallback: si el padre aún no entregó agentes (carga perezosa del server),
-  // el @ los pide directo para que agentes/subagentes siempre aparezcan.
-  const [fallbackAgents, setFallbackAgents] = useState<MentionItem[]>([])
-  useEffect(() => {
-    if (!showAtMenu || visibleAgents.length > 0 || !config) return
-    let cancelled = false
-    api.listAgents(config, directory).then((list) => {
-      if (cancelled) return
-      setFallbackAgents(list.filter((a) => !a.hidden).map((a) => ({
-        id: a.id, name: a.name, description: a.description, source: "agent" as const,
-      })))
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [showAtMenu, visibleAgents.length, config, directory])
-
-  useEffect(() => {
-    if (!showAtMenu) { setMentionItems([]); return }
-
-    const agentItems: MentionItem[] = (visibleAgents.length > 0 ? visibleAgents : fallbackAgents).map((a) => ({
-      id: a.id, name: a.name, description: a.description, source: "agent" as const,
-    }))
-
-    const q = atQuery.toLowerCase()
-    const filteredAgents = !atQuery ? agentItems : agentItems.filter((a) =>
-      a.name.toLowerCase().includes(q) || (a.description?.toLowerCase() ?? "").includes(q))
-
-    setMentionItems(filteredAgents)
-    setMentionLoading(true)
-
-    let cancelled = false
-    const timer = setTimeout(() => {
-      const fileFetch = config ? api.findFiles(config, atQuery, directory, 10).then((files) =>
-        files.map((f) => ({ id: f.path, name: f.path, source: "file" as const, description: f.type }))
-      ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
-
-      const mcpFetch = config ? api.listMCPResources(config, directory).then((resources) =>
-        resources.filter((r) => !atQuery || r.name.toLowerCase().includes(q))
-          .map((r) => ({ id: r.id, name: r.name, description: r.description, source: "mcp" as const }))
-      ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
-
-      // Como el TUI: @ también invoca skills del server (/skill).
-      const skillFetch = config ? api.listSkills(config, directory).then((skills) =>
-        skills.filter((s) => !atQuery || s.name.toLowerCase().includes(q) || (s.description?.toLowerCase() ?? "").includes(q))
-          .map((s) => ({ id: s.id, name: s.name, description: s.description, source: "skill" as const }))
-      ).catch(() => [] as MentionItem[]) : Promise.resolve([] as MentionItem[])
-
-      Promise.all([fileFetch, mcpFetch, skillFetch]).then(([files, mcps, skills]) => {
-        if (cancelled) return
-        setMentionItems([...filteredAgents, ...skills, ...files, ...mcps])
-        setMentionLoading(false)
-      })
-    }, 150)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [showAtMenu, atQuery, config, directory, visibleAgents, fallbackAgents])
+  const { items: mentionItems, loading: mentionLoading } = useMentions({
+    active: showAtMenu,
+    query: atQuery,
+    config,
+    directory,
+    visibleAgents,
+  })
 
   useEffect(() => {
     setAtIndex(0)
@@ -612,10 +436,8 @@ export const Composer = memo(function Composer({
   }, [isListening, localValue, charLimit, stop, showMicNotice, t])
 
   const addImage = useCallback((base64: string, mime: string, name: string) => {
-    setImages((prev) => [...prev, { id: `img-${++imgId}`, base64, mime, name }])
+    setImages((prev) => [...prev, { id: `img-${++imgIdRef.current}`, base64, mime, name }])
   }, [])
-
-
 
   const handleFilePick = useCallback(() => {
     const input = document.createElement("input")
@@ -633,6 +455,8 @@ export const Composer = memo(function Composer({
   const handleRemoveImage = useCallback((id: string) => {
     setImages((prev) => prev.filter((img) => img.id !== id))
   }, [])
+
+  const handleToggleTsl = useCallback(() => setTslEnabled((v) => !v), [])
 
   const handleSendWithImages = useCallback(async () => {
     if (disabled || isSending) return
@@ -676,24 +500,6 @@ export const Composer = memo(function Composer({
     if (!firstWord) return false
     return allSlashCommands.some((c) => c.name.toLowerCase().startsWith(firstWord.toLowerCase()))
   }, [localValue, allSlashCommands])
-
-  const primaryVisibleAgents = useMemo(() => {
-    return primaryAgentOptions.filter((a) => !a.hidden && a.mode !== "subagent")
-  }, [primaryAgentOptions])
-
-  const agentColorIdx = useMemo(() => {
-    const visible = primaryVisibleAgents
-    const idx = visible.findIndex((a) => a.id === activeAgentID)
-    return idx >= 0 ? idx % 7 : 0
-  }, [primaryVisibleAgents, activeAgentID])
-
-  const handleToggleAgent = useCallback(() => {
-    const visible = primaryVisibleAgents
-    if (visible.length < 2) return
-    const curIdx = visible.findIndex((a) => a.id === activeAgentID)
-    const next = visible[(curIdx + 1) % visible.length]
-    onChangeAgent(next.id)
-  }, [primaryVisibleAgents, activeAgentID, onChangeAgent])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     // Enter con comando slash EXACTO (ej "/compact" o "/compact args"):
@@ -831,132 +637,27 @@ export const Composer = memo(function Composer({
   return (
     <div className={`composer${isCommandValid ? " composer-command-mode" : ""}${isShellMode ? " composer-shell-mode" : ""}`} ref={composerRef}>
       {showSlashMenu && slashFiltered.length > 0 && (
-        <div className="slash-menu">
-          {slashFiltered.map((cmd, i) => (
-            <div
-              key={cmd.name}
-              className={`slash-menu-item${i === slashIndex ? " active" : ""}`}
-              onPointerDown={(e) => { e.preventDefault(); selectSlashCommand(cmd) }}
-              onMouseEnter={() => setSlashIndex(i)}
-            >
-              <span className="slash-menu-name">/{cmd.name}</span>
-              {cmd.description && <span className="slash-menu-desc">{cmd.description}</span>}
-              {cmd.source && cmd.source !== "command" && <span className="slash-menu-source">{cmd.source}</span>}
-            </div>
-          ))}
-        </div>
+        <SlashMenu
+          commands={slashFiltered}
+          activeIndex={slashIndex}
+          onSelect={selectSlashCommand}
+          onHover={setSlashIndex}
+        />
       )}
       {showAtMenu && (mentionItems.length > 0 || mentionLoading) && (
-        <div className="slash-menu at-menu">
-          {mentionItems.length === 0 && mentionLoading && <div className="slash-menu-item"><span className="slash-menu-desc">Searching...</span></div>}
-          {mentionItems.map((item, i) => (
-            <div
-              key={item.id}
-              className={`slash-menu-item${i === atIndex ? " active" : ""}`}
-              onPointerDown={(e) => { e.preventDefault(); selectMention(item) }}
-              onMouseEnter={() => setAtIndex(i)}
-            >
-              <span className="slash-menu-name">@{item.name}</span>
-              {item.description && <span className="slash-menu-desc">{item.description}</span>}
-              <span className={`slash-menu-source source-${item.source}`}>{item.source}</span>
-            </div>
-          ))}
-        </div>
+        <MentionMenu
+          items={mentionItems}
+          loading={mentionLoading}
+          activeIndex={atIndex}
+          onSelect={selectMention}
+          onHover={setAtIndex}
+        />
       )}
       {micNotice && <div className="composer-notice" role="alert">{micNotice}</div>}
       {images.length > 0 && (
-        <div className="image-strip">
-          {images.map((img) => {
-            const isImage = img.mime.startsWith("image/")
-            const ext = img.name.split(".").pop()?.toLowerCase() || ""
-            const iconClass = isImage ? "" :
-              ["ts","tsx","js","jsx","rs","go","py","java","c","cpp","h","hpp"].includes(ext) ? "attach-icon-code" :
-              ["md","txt","json","yaml","yml","toml","xml","csv","env","gitignore"].includes(ext) ? "attach-icon-text" :
-              "attach-icon-other"
-            return (
-              <div key={img.id} className="image-preview" title={img.name}>
-                {isImage ? (
-                  <>
-                    <img src={img.base64} alt={img.name} />
-                    <button className="image-preview-edit" onClick={() => setEditingImage(img)}
-                      aria-label={t('image.editorTitle')} title={t('image.editorTitle')}>
-                      <PencilIcon size={13} />
-                    </button>
-                  </>
-                ) : (
-                  <div className={`image-preview-placeholder ${iconClass}`}>
-                    <span>.{ext}</span>
-                  </div>
-                )}
-                <span className="file-info">{img.name}</span>
-                <button className="image-preview-remove" onClick={() => handleRemoveImage(img.id)}
-                  aria-label={t('session.removeImage')}><CloseIcon size={12} /></button>
-              </div>
-            )
-          })}
-        </div>
+        <ImageStrip images={images} onEdit={setEditingImage} onRemove={handleRemoveImage} />
       )}
-      {latestTurn && (
-        <div className="turn-changes-row">
-            <div ref={turnWrapRef} style={{ position: "relative", flexShrink: 0 }}>
-              <button
-                type="button"
-                className="turn-changes-btn"
-                onClick={() => { setTurnIdx(turns.length - 1); setOpenPatch(null); setShowTurnChanges((v) => !v) }}
-                aria-expanded={showTurnChanges}
-                title={t('diff.filesModified', { count: latestTotals.count }) ?? "Archivos cambiados en este turno"}
-              >
-                <BranchIcon size={13} />
-                <span>{latestTotals.count} archivo{latestTotals.count === 1 ? "" : "s"}</span>
-                <span className="turn-add">+{latestTotals.add}</span>
-                <span className="turn-del">−{latestTotals.del}</span>
-              </button>
-              {showTurnChanges && activeTurn && (
-                <div className="turn-changes-panel fade-in" role="dialog" aria-label="Cambios del turno">
-                  <div className="turn-changes-head">
-                    <strong>Cambios del turno</strong>
-                    <span className="turn-add">+{activeTurn.files.reduce((n, f) => n + (f.additions ?? 0), 0)}</span>
-                    <span className="turn-del">−{activeTurn.files.reduce((n, f) => n + (f.deletions ?? 0), 0)}</span>
-                    <span style={{ flex: 1 }} />
-                    <span className="turn-pager">
-                      <button type="button" disabled={activeTurnIdx <= 0} onClick={() => { setTurnIdx(activeTurnIdx - 1); setOpenPatch(null) }} aria-label="Turno anterior">‹</button>
-                      <span>{activeTurnIdx + 1}/{turns.length}</span>
-                      <button type="button" disabled={activeTurnIdx >= turns.length - 1} onClick={() => { setTurnIdx(activeTurnIdx + 1); setOpenPatch(null) }} aria-label="Turno siguiente">›</button>
-                    </span>
-                  </div>
-                  {activeTurn.label && <div className="turn-changes-label" title={activeTurn.label}>{activeTurn.label}</div>}
-                  <div className="turn-changes-files">
-                    {activeTurn.files.map((f) => {
-                      const key = `${activeTurnIdx}:${f.file}`
-                      const isOpen = openPatch === key
-                      return (
-                        <div key={key}>
-                          <button
-                            type="button"
-                            className="turn-file-row"
-                            onClick={() => setOpenPatch((p) => (p === key ? null : key))}
-                            aria-expanded={isOpen}
-                          >
-                            <FileTypeIcon name={f.file || ""} size={14} />
-                            <span className="turn-file-name" title={f.file}>{toRelativePath(f.file || "", directory)}</span>
-                            <DiffStatBadge add={f.additions ?? 0} del={f.deletions ?? 0} />
-                            <span className={`turn-chev${isOpen ? " open" : ""}`}>›</span>
-                          </button>
-                          {isOpen && f.patch && (
-                            <div className="turn-patch">
-                              <DiffView patch={f.patch} />
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <div className="turn-changes-foot">Solo este turno · clic en un archivo para ver el diff</div>
-                </div>
-              )}
-            </div>
-        </div>
-      )}
+      <TurnChangesPanel turns={turnChanges} directory={directory} />
       <div
         className={`composer-input-wrap${supported ? " has-mic" : ""}${isDraggingOver ? " drag-over" : ""}${isWorking ? " is-working" : ""}`}
         onDragEnter={handleDragEnter}
@@ -1057,76 +758,25 @@ export const Composer = memo(function Composer({
           <SendIcon size={18} />
         </button>
       </div>
-      <div className="composer-bar">
-        <div className="composer-bar-left">
-          {activeModelOption && (
-            <div className="composer-model-wrap" ref={modelMenuRef} style={{ position: "relative", flexShrink: 0 }}>
-              <button
-                ref={modelToggleRef}
-                type="button"
-                className="composer-model-pill"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setShowModelMenu((v) => !v)
-                }}
-                aria-expanded={showModelMenu}
-                aria-haspopup="true"
-                title={`${activeModelOption.modelName ?? t('detail.modelLoading')}${activeModelOption.variant ? ` · ${t('detail.modelVariant', { variant: activeModelOption.variant })}` : ""}`}
-              >
-                <span className="composer-model-name">
-                  {activeModelOption.modelName ?? t('detail.modelLoading')}
-                </span>
-              </button>
-              {showModelMenu && (
-                <ModelSelectorModal
-                  isOpen={showModelMenu}
-                  onClose={() => {
-                    setShowModelMenu(false)
-                    modelToggleRef.current?.focus()
-                  }}
-                  activeModelOption={activeModelOption}
-                  activeModelVariants={activeModelVariants ?? []}
-                  selectedVariant={selectedVariant ?? null}
-                  onChangeVariant={(v) => onChangeVariant?.(v, sessionID)}
-                  modelOptions={modelOptions}
-                  onChangeModel={(key, variant) => {
-                    onChangeModel?.(key, variant, sessionID)
-                  }}
-                  variantGroups={variantGroups as any}
-                />
-              )}
-            </div>
-          )}
-          {primaryVisibleAgents.length > 1 && (
-            <button onClick={handleToggleAgent} disabled={disabled}
-              className="agent-toggle"
-              title={`Agente activo: ${primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID} (click para cambiar)`}
-              style={{ color: `var(--agent-${agentColorIdx})`, border: "none", outline: "none", background: "transparent", padding: "0 4px" } as React.CSSProperties}>
-              <span>{primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setTslEnabled((v) => !v)}
-            disabled={disabled}
-            className="composer-tsl-btn"
-            style={{ color: tslEnabled ? "var(--primary)" : undefined }}
-            title={tslEnabled ? "Translate ES→EN (active)" : "Translate ES→EN"}
-            aria-pressed={tslEnabled}
-          >
-            TSL
-          </button>
-          <PluginSlot id="composer.actions" />
-          {contextLabel && <span className="context-usage-label">{contextLabel}</span>}
-        </div>
-        <div className="composer-bar-right">
-          {localValue.length > 0 && (            <span className={`composer-char-count${charLimit > 0 && localValue.length >= charLimit ? " over" : ""}`}
-              title={charLimit > 0 ? `${localValue.length}/${charLimit}` : `${localValue.length} chars`}>
-              {charLimit > 0 ? `${localValue.length}/${charLimit}` : localValue.length}
-            </span>
-          )}
-        </div>
-      </div>
+      <ComposerBar
+        activeModelOption={activeModelOption}
+        activeModelVariants={activeModelVariants}
+        selectedVariant={selectedVariant}
+        onChangeVariant={onChangeVariant}
+        modelOptions={modelOptions}
+        onChangeModel={onChangeModel}
+        variantGroups={variantGroups}
+        sessionID={sessionID}
+        primaryAgentOptions={primaryAgentOptions}
+        activeAgentID={activeAgentID}
+        onChangeAgent={onChangeAgent}
+        disabled={disabled}
+        tslEnabled={tslEnabled}
+        onToggleTsl={handleToggleTsl}
+        contextLabel={contextLabel}
+        valueLength={localValue.length}
+        charLimit={charLimit}
+      />
       {/* Portal a body: dentro de .composer el backdrop-filter crea un
           containing block que atrapa el fixed y el modal quedaba pegado
           abajo oculto en vez de centrado en viewport. */}

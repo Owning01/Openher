@@ -15,14 +15,8 @@ import { MarkdownWithEmbeds } from "./AgentEmbed"
 import { ImageLightbox } from "./ImageLightbox"
 import { ToolIcon, LoadingIcon } from "../Icons"
 import { formatDurationMs, type TurnActivity } from "../utils/turnActivity"
-
-/** Etiqueta corta para un tool (igual criterio que ToolPart.shortToolLabel). */
-function toolShortLabel(tool?: string): string {
-  if (!tool) return ""
-  const m = tool.match(/mcp__([^_]+)__(.+)/)
-  if (m) return `mcp · ${m[1]} · ${m[2]}`
-  return tool
-}
+import { toolSummaryLabel } from "../utils/toolName"
+import { isAssistantMessage, isUserMessage, messageRole, getSubagentResultInfo } from "../utils/messageShape"
 
 /** Extrae el comando + args de un tool part (para el título en vivo). */
 function toolRunningLabel(state?: { input?: unknown; tool?: string }): string {
@@ -35,7 +29,7 @@ function toolRunningLabel(state?: { input?: unknown; tool?: string }): string {
     const full = args && cmd ? `${cmd} ${args}` : String(cmd ?? "")
     if (full.trim()) return full.trim().slice(0, 60)
   }
-  return toolShortLabel(state?.tool)
+  return toolSummaryLabel(state?.tool)
 }
 
 /** Extract base64 image data from a message part (handles both type:image and type:file). */
@@ -172,11 +166,14 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   // nativo). Para estilos/layout se trata como assistant + modificador
   // "compaction": sin esto caía en `.message.compaction` sin CSS y el resumen
   // se veía como tarjeta plana sin estilo.
-  const isCompaction = message.hasCompaction || (message.info as unknown as { role?: string }).role === "compaction"
-  const isAssistant = message.info.role === "assistant" || isCompaction
+  const isCompaction = message.hasCompaction || messageRole(message) === "compaction"
+  const isAssistant = isAssistantMessage(message) || isCompaction
+  // Reporte de subagente inyectado por el server (rol synthetic): tarjeta
+  // propia con rótulo — nunca burbuja de usuario ni volcado con tags crudos.
+  const subagentInfo = useMemo(() => getSubagentResultInfo(message), [message])
   // Mensaje mandado por OTRO agente a esta sesión (viene con metadata.from):
   // globo de otro color + etiqueta "de: <nombre>".
-  const authorFrom = message.info.role === "user" ? messageAuthorFrom(message.info) : null
+  const authorFrom = isUserMessage(message) ? messageAuthorFrom(message.info) : null
   const [compactionOpen, setCompactionOpen] = useState(true)
 
   const duration = useMemo(() => calcDuration(message, prevUserTs), [message, prevUserTs])
@@ -192,14 +189,17 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   // turno (un prompt genera varios mensajes del asistente). El mensaje dueño
   // recibe el agregado; los demás no dibujan caja. Sin agregado (uso suelto del
   // componente) cae en la actividad de este mensaje.
-  const activity: TurnActivity | null = absorbActivity
-    ? null
-    : (turnActivity ?? {
-        thinkingParts: message.thinkingParts ?? [],
-        toolParts: message.toolParts,
-        summaryDiffs: message.summaryDiffs ?? [],
-        working: isWorkingTurn,
-      })
+  const activity: TurnActivity | null = useMemo(
+    () => absorbActivity
+      ? null
+      : (turnActivity ?? {
+          thinkingParts: message.thinkingParts ?? [],
+          toolParts: message.toolParts,
+          summaryDiffs: message.summaryDiffs ?? [],
+          working: isWorkingTurn,
+        }),
+    [absorbActivity, turnActivity, message.thinkingParts, message.toolParts, message.summaryDiffs, isWorkingTurn],
+  )
   const activityWorking = !!activity?.working
   // Se abre sola mientras trabaja, se acopla a una línea al terminar y se
   // reabre con un clic. `thinkingDefault: "expanded"` la deja abierta siempre.
@@ -211,9 +211,9 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const activityRef = useRef<HTMLDivElement | null>(null)
   // Firma del contenido (pensamiento creciendo / tools apareciendo): mientras
   // el turno está en curso, la caja baja sola al último renglón.
-  const activityTick = activity
+  const activityTick = useMemo(() => activity
     ? `${activity.toolParts.length}:${activity.thinkingParts.reduce((n, p) => n + (p.text?.length ?? 0), 0)}:${activity.toolParts.filter((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending").length}`
-    : ""
+    : "", [activity])
   useEffect(() => {
     if (!activityWorking || !activityOpen) return
     const body = activityRef.current?.querySelector(".collapsible-content")
@@ -223,7 +223,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const handleConfirmUndo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     setShowConfirm(false)
-    if (message.info.role === "user" && onRevertToMessage) {
+    if (isUserMessage(message) && onRevertToMessage) {
       onRevertToMessage(message.info.id)
     }
   }, [message.info.role, message.info.id, onRevertToMessage])
@@ -276,11 +276,22 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
     : ""
   const hasSegments = !isCompaction && !message.isToolCatalog && (message.segments?.length ?? 0) > 0
 
+  // Imagenes renderizables del mensaje: getPartImageData decodifica data URLs y
+  // es puro, asi que se calcula una sola vez por cambio de parts (antes se
+  // llamaba 2-3 veces por part en cada render).
+  const imageParts = useMemo(
+    () => message.parts.flatMap((p) => {
+      const src = getPartImageData(p)
+      return src ? [{ id: p.id, src }] : []
+    }),
+    [message.parts],
+  )
+
   // Absorbido por la caja del turno: si no le queda nada propio que mostrar
   // (ni texto, ni error, ni aviso, ni imágenes, ni footer, ni punto de
   // revert), no se monta el <article> vacío — era el hueco fantasma de ~8px +
   // margen entre mensajes.
-  if (absorbActivity && !isRevertPoint && !showConfirm && !lightboxSrc && !outbox && !message.info.error && !message.hasCompaction && !(message.noticeKind && noticeText) && !(message.text?.trim()) && !message.parts.some((p) => !!getPartImageData(p)) && !(isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || duration || tokensPerSecond || message.info.finish === "aborted"))) {
+  if (absorbActivity && !isRevertPoint && !showConfirm && !lightboxSrc && !outbox && !message.info.error && !message.hasCompaction && !(message.noticeKind && noticeText) && !(message.text?.trim()) && imageParts.length === 0 && !(isAssistant && showModelInfo && ((message.turnMode || message.info.mode) || message.info.modelID || duration || tokensPerSecond || message.info.finish === "aborted"))) {
     return null
   }
 
@@ -317,7 +328,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           }, 500)
         }}
       >
-        {message.info.role === "user" && (
+        {isUserMessage(message) && (
           <header>
             <span className="message-title-group">
               {queued && (
@@ -402,7 +413,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
 
           // --- Título tenue para el turno completado ---
           // Nombres reales de los tools (edit, shell, read, …), sin repetir.
-          const toolNames = [...new Set(activity.toolParts.map((tp) => toolShortLabel(tp.tool)).filter(Boolean))]
+          const toolNames = [...new Set(activity.toolParts.map((tp) => toolSummaryLabel(tp.tool)).filter(Boolean))]
           const toolSummary = toolNames.length <= 3
             ? toolNames.join(" · ")
             : `${toolNames.slice(0, 3).join(" · ")} +${toolNames.length - 3}`
@@ -474,6 +485,33 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
               </div>
             )}
           </div>
+        ) : subagentInfo ? (
+          <div className="subagent-result-card">
+            <div className="subagent-result-head">
+              <ToolIcon size={13} />
+              <span className="subagent-result-title">
+                {t('toolpart.subagent')}
+                {subagentInfo.tag.description || subagentInfo.agent ? ` · ${subagentInfo.tag.description || subagentInfo.agent}` : ""}
+              </span>
+              {subagentInfo.tag.state ? (
+                <span className="subagent-result-state">{subagentInfo.tag.state}</span>
+              ) : null}
+              {subagentInfo.childID && onViewSubagents ? (
+                <button
+                  type="button"
+                  className="btn-link subagent-result-open"
+                  onClick={() => onViewSubagents(subagentInfo.childID)}
+                >
+                  {t('toolpart.viewSubagent')}
+                </button>
+              ) : null}
+            </div>
+            {message.text ? (
+              <div className="message-content">
+                <MarkdownWithEmbeds text={message.text} highlight={highlight} />
+              </div>
+            ) : null}
+          </div>
         ) : hasSegments ? (
           <div className="message-segments">
             {/* Solo textos: las herramientas viven en la caja de actividad. */}
@@ -520,16 +558,12 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
 
         <TranslationOriginal messageId={message.info.id} />
 
-        {message.parts.filter((p) => !!getPartImageData(p)).map((p) => {
-          const src = getPartImageData(p)
-          if (!src) return null
-          return (
-            <div key={p.id} className="message-image-wrap">
-              <img src={src} alt="" className="message-image" loading="lazy"
-                onClick={() => setLightboxSrc(src)} />
-            </div>
-          )
-        })}
+        {imageParts.map(({ id, src }) => (
+          <div key={id} className="message-image-wrap">
+            <img src={src} alt="" className="message-image" loading="lazy"
+              onClick={() => setLightboxSrc(src)} />
+          </div>
+        ))}
 
         {showConfirm && (
           <div className="undo-confirm">

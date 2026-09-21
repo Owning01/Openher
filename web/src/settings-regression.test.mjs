@@ -3,15 +3,15 @@ import { readFileSync } from 'node:fs'
 
 const useConfig = readFileSync(new URL('./hooks/useConfig.ts', import.meta.url), 'utf8')
 const settingsPanel = readFileSync(new URL('./components/SettingsPanel.tsx', import.meta.url), 'utf8')
-const i18n = readFileSync(new URL('./i18n.ts', import.meta.url), 'utf8')
+const i18n = ["i18n.ts","i18n/en.ts","i18n/es.ts"].map((f) => readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')).join('\n')
 
-const testConnection = useConfig.match(/const testConnection = useCallback[\s\S]*?}, \[draftConfig\]\)/)
+const testConnection = useConfig.match(/const testConnection = useCallback[\s\S]*?}, \[[^\]]*\]\)/)
 assert.ok(testConnection, 'testConnection function should be present')
 assert.equal(testConnection[0].includes('setView'), false, 'Test Connection must not navigate away from settings')
 assert.equal(testConnection[0].includes('setConfig'), false, 'Test Connection must not save/apply draft settings')
 assert.equal(testConnection[0].includes('localStorage.setItem'), false, 'Test Connection must not persist draft settings')
 
-const saveConfig = useConfig.match(/const saveConfig = useCallback[\s\S]*?}, \[draftConfig\]\)/)
+const saveConfig = useConfig.match(/const saveConfig = useCallback[\s\S]*?}, \[[^\]]*\]\)/)
 assert.ok(saveConfig, 'saveConfig function should be present')
 assert.equal(saveConfig[0].includes('setView'), false, 'Save must leave success notice visible on settings page')
 

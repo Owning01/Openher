@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { CloseIcon, MaximizeIcon, PanelLeftIcon, SearchIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { PromptEntry } from "../utils/promptHistory"
+import { formatTime } from "../utils/format"
 
 // Historial/timeline de prompts: flotante arrastrable + redimensionable, o
 // acoplado a izquierda/derecha (columna que deja sitio al texto del chat).
@@ -69,15 +70,6 @@ function defaultPos(w: number, h: number): { x: number; y: number } {
   return {
     x: Math.max(8, window.innerWidth - w - 24),
     y: clamp(120, 8, Math.max(8, window.innerHeight - h - 24)),
-  }
-}
-
-function formatTime(created: number): string {
-  if (!created) return ""
-  try {
-    return new Date(created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  } catch {
-    return ""
   }
 }
 
@@ -283,7 +275,7 @@ export const PromptHistoryPanel = memo(function PromptHistoryPanel({ prompts, la
           >
             <span className="ph-item-top">
               <span className="ph-item-num">#{p.n}</span>
-              {formatTime(p.created) && <span className="ph-item-time">{formatTime(p.created)}</span>}
+              {formatTime(p.created, "clock") && <span className="ph-item-time">{formatTime(p.created, "clock")}</span>}
             </span>
             <span className="ph-item-preview">{previewOf(p.text)}</span>
           </button>

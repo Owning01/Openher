@@ -1,59 +1,44 @@
-﻿# AGENTS.md â€” OpenHer
+# AGENTS.md — OpenHer
 
-## Estructura
-
-| Carpeta | DescripciÃ³n |
+| Carpeta | Qué es |
 |---|---|
-| `web/` | **Producto central**: React 19.2 + Vite 8 + TS 5.6 + Capacitor 8 + Tailwind CSS. Frontend compartido para APK Android y Desktop. |
-| `desktop-app/` | **IDE Desktop en Rust** (`wry` + `tiny_http` + `hyper/tokio` + `mmap/brotli` + `fswatch` + `simd-json`, **NO Tauri**): sirve `web/dist` en `:4848`, expone `/shell/*` + WS PTY (`:4849`) + proxy stats (`:8765`). |
-| `opencode-stats/` | **Monitor de estadÃ­sticas en Rust** (ediciÃ³n 2024): solo lectura sobre `opencode.db` (`:8765`). Tiene su propio `AGENTS.md`. |
+| `web/` | **Producto central**: React 19.2 + Vite 8 + TS 7.0.2 + Capacitor 8 + Tailwind. Frontend compartido para APK Android y Desktop. |
+| `desktop-app/` | **IDE Desktop en Rust** (`wry` + `hyper/tokio` + `mmap/brotli` + `fswatch` + `simd-json`, **NO Tauri**): sirve `web/dist` en `:4848`, expone `/shell/*` + WS PTY (`:4849`). |
 
----
 ## Comandos
 
-### Build Completo
 ```powershell
-.\build-desktop.ps1
+.\scripts\build-desktop.ps1                     # build completo
+.\scripts\update-app.ps1 -Notes "que cambio"    # bump version+versionCode, build web, deploy web-dist, compila y publica la APK en :4848/openher.apk + openher-version.json; la APK instalada detecta la version nueva al abrir o volver a primer plano y ofrece Actualizar (Android solo confirma)
+pnpm dev; pnpm test; pnpm run test:i18n ; pnpm run test:ui; pnpm run test:settings; pnpm run test:model; pnpm run test:rendered; pnpm run build ; pnpm run check:rules ; python scripts/copy-dist.py   # frontend (web/)
+cargo check; cargo run; cargo build --release   # desktop (desktop-app/)
 ```
 
-### Actualizar la app (web + APK + link corto)
-```powershell
-.\scripts\update-app.ps1 -Notes "que cambio en esta version"
-```
-Sube la version (patch + versionCode), buildea la web, deploya a los `web-dist`, compila la APK y publica en `http://100.77.237.102:4848/openher.apk` + `openher-version.json`. La APK instalada detecta la version nueva sola (al abrir o volver a primer plano) y ofrece Actualizar; Android solo pide confirmar la instalacion.
+## Directivas
 
-### Frontend (`web/`)
-```powershell
-pnpm dev; pnpm test; pnpm run test:i18n ; pnpm run test:ui; pnpm run test:settings; pnpm run test:model; pnpm run build ; python scripts/copy-dist.py
-```
-### Desktop (`desktop-app/`)
-```powershell
-cargo check; cargo run; cargo build --release
-```
+- Skills: `taste-impecable` (estética/UX) y `ponytail` (YAGNI, stdlib antes que deps, diffs mínimos).
+- DRY + singleton en servicios, stores (Zustand) y utilidades compartidas.
+- Cero emojis en la UI: solo SVG formal (Lucide).
 
-## Arquitectura y Directivas
+## Reglas de codificación (ley del repo; el por qué en `CONTRIBUTING.md`)
 
-- **Skills de Frontend**: Usar skill `taste-impecable` (y `frontend-pro`) para direcciÃ³n estÃ©tica, UX y calidad artesanal de frontend.
-- **Evitar DuplicaciÃ³n**: De cÃ³digo; aplicar la skill `ponytail` (YAGNI, stdlib sobre dependencias, diffs mÃ­nimos).
-- **DRY y Estado**: Importante DRY y singleton en servicios, stores (Zustand) y utilidades compartidas.
-- **IconografÃ­a y Texto**: Cero emojis en la UI; solo iconografÃ­a SVG formal (Lucide).
+1. **Un path, un escritor.** Dos agentes nunca editan el mismo archivo a la vez.
+2. **Unificación, no rediseño.** La conducta observable no cambia salvo pedido explícito.
+3. **Prohibido editar un test existente para que pase**; si cae un test, se arregla el código.
+4. **No se afirma nada sin medirlo**: cada número y cada afirmación de un doc se comprueba con un comando.
+5. **Se borra antes de agregar**: stdlib antes que dependencia; una sola implementación por concepto.
+6. **Lista NO TOCAR intacta** (`CONTRIBUTING.md` §2: scroll de `MessageList`, outbox, `ptyx`, seguridad, `atomic_write_json`, `debateStore`, CSS generado, modelo de la grilla). Tocarla se pregunta antes.
+7. **Cero secretos** en archivos, docs, artefactos o mensajes; nunca `git add -A`.
+8. **Nadie commitea por su cuenta**: un commit por fase, cuando el usuario lo apruebe.
+9. **Verificación adversarial antes de aceptar** (challenger + critic): el que hace no es el que aprueba.
+10. **Si algo no se sostiene, se reporta bloqueado**: no se fuerza, no se inventa, no se borra "por las dudas".
+
+Ciclo: leer el **mapa** (`PROJECT_MAP.md`, estado actual) → medir → cambio chico → gate del área (tsc + tests de esos archivos) → tribunal → actualizar mapa (reemplazar) y bitácora (`PROJECT_MEMORY.md`, agregar entrada) → reportar con evidencia. El gate global y el build los corre el verificador, no el que edita.
+
+Presupuestos que **solo pueden bajar** (named exports, `any`, `!important`, CSS muerto, huérfanos, archivos >1.000 líneas): `pnpm run check:rules` (`tasks/rules-budget.json`); si un número sube, el cambio no entra.
 
 ## EQUIPO — otros agentes en esta máquina (vale siempre, sin que nadie te lo pida)
 
-No trabajás solo: hay más agentes en otras sesiones. Hablan con 3 comandos
-cortos (funcionan en cualquier carpeta, sin passwords ni auth):
-
-- **Descubrir y ver qué hacen**: `team-who --actividad --anuncios`
-  (sesiones con id, título, último texto + tablero de anuncios).
-- **Anunciarte** (al empezar y al cambiar de tarea):
-  `team-anuncio "<tu-nombre>" "<tarea>" [trabajando|esperando|listo]`
-  Usá como nombre el título de tu chat o uno corto y único.
-- **Escribirle a otro agente** (le llega a su inbox y en su chat se ve de OTRO
-  COLOR con tu nombre): `team-send <id-sesion> "<tu-nombre>" "<texto>"`
-  (agregá `steer` al final solo si necesitás interrumpirlo; default no interrumpe).
-- **Prohibido** poner keys, passwords o tokens en archivos del equipo o en
-  mensajes. Textos cortos (1-3 líneas); si el otro no responde en 2 intentos,
-  seguí con lo tuyo. Lo urgente para el humano va por tu propio chat.
-  Usá siempre las formas cortas (`team-who`, `team-anuncio`, `team-send`).
-
-
+- Ver quién hay y qué hace: `team-who --actividad --anuncios` (id, título, último texto + anuncios). Anunciate al empezar y al cambiar de tarea: `team-anuncio "<tu-nombre>" "<tarea>" [trabajando|esperando|listo]`.
+- Escribirle a otro: `team-send <id-sesion> "<tu-nombre>" "<texto>"` (agregá `steer` al final solo para interrumpirlo; default no interrumpe). Le llega a su inbox y en su chat se ve de otro color con tu nombre.
+- **Prohibido** keys, passwords o tokens en archivos del equipo o mensajes. Textos de 1-3 líneas; si no responde en 2 intentos, seguí con lo tuyo. Lo urgente para el humano va por tu propio chat.

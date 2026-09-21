@@ -1,3 +1,7 @@
+// Los detectores XML viven en toolName.ts (fuente unica de nombres/alias de
+// tools). Se re-exportan aca para no romper los imports historicos.
+export { detectToolName, isTaskTool, isQuestionTool } from "./toolName"
+
 export const toolMeta: Record<string, { icon: string; label: string }> = {
   bash: { icon: "$", label: "shell" },
   execute: { icon: "⚙", label: "execute" },
@@ -13,17 +17,4 @@ export const toolMeta: Record<string, { icon: string; label: string }> = {
   question: { icon: "?", label: "ask" },
   skill: { icon: "◆", label: "skill" },
   task: { icon: "│", label: "task" },
-}
-
-export function detectToolName(text: string): string | null {
-  const m = text.match(/<invoke\s+name="([^"]+)"/i)
-  return m ? m[1] : null
-}
-
-export function isTaskTool(text: string): boolean {
-  return /<invoke\s+name="task"/i.test(text)
-}
-
-export function isQuestionTool(text: string): boolean {
-  return /<invoke\s+name="question"/i.test(text)
 }

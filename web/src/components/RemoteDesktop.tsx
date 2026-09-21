@@ -131,6 +131,10 @@ export const RemoteDesktop = memo(function RemoteDesktop({ config, dataMode, onC
     }
   }, [])
 
+  // Al desmontar, cancelar un long-press pendiente (podía disparar el click
+  // derecho despues de cerrar el panel).
+  useEffect(() => () => clearLongPress(), [clearLongPress])
+
   // ===== Zoom con ancla + pan acotado =====
   const clampPan = useCallback((p: { x: number; y: number }) => {
     const img = imgRef.current

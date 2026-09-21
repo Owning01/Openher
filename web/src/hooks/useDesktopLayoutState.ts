@@ -7,6 +7,11 @@ import { shell } from "../shell"
 
 export const DESKTOP_STATE_KEY = "opencode.desktop.state.v2"
 
+// Tabs virtuales legacy (__design__ / __reports__ / __screenshots__): ya no hay
+// creadores; su vía viva es `plugin:external:*`. Se podan al cargar el layout.
+const LEGACY_VIRTUAL_TABS = new Set(["__design__", "__reports__", "__screenshots__"])
+const isLegacyVirtualTab = (id: unknown): boolean => typeof id === "string" && LEGACY_VIRTUAL_TABS.has(id)
+
 // Subconjunto de browserTabUrls referenciado por algún stack/sesión.
 // Puro y testeable: los bids huérfanos (pestaña cerrada) se caen solos.
 export function pruneBrowserUrls(
@@ -101,13 +106,15 @@ export function loadDesktopState(fallbackSessionID: string | null): DesktopState
 
       // Migrate old flat sessions to tab stacks
       const tabStacks: Array<Array<string>> = layout.sessions.map((s: any) => {
-        if (Array.isArray(s)) return s.filter((x: any) => typeof x === "string")
-        return typeof s === "string" ? [s] : []
+        const ids = Array.isArray(s) ? s.filter((x: any) => typeof x === "string") : typeof s === "string" ? [s] : []
+        return ids.filter((x: string) => !isLegacyVirtualTab(x))
       })
       const rawTabStacks = raw?.tabStacks
       const finalTabStacks: Array<Array<string>> =
         Array.isArray(rawTabStacks) && rawTabStacks.length === total
-          ? rawTabStacks.map((s: any) => (Array.isArray(s) ? s.filter((x: any) => typeof x === "string") : []))
+          ? rawTabStacks.map((s: any) =>
+              Array.isArray(s) ? s.filter((x: any) => typeof x === "string" && !isLegacyVirtualTab(x)) : []
+            )
           : tabStacks
 
       // Stable panel ids: preserve persisted ids, else generate fresh ones
@@ -157,7 +164,16 @@ export function loadDesktopState(fallbackSessionID: string | null): DesktopState
       const migratedTabStacks = finalTabStacks
       const rawActivity = (raw as any)?.activity as string | undefined
 
-      let migratedSessions = layout.sessions.map((s: any) => (typeof s === "string" ? s : null)) as Array<string | null>
+      // Acepta formato plano (`"s1"`) y anidado (`["__design__", "s1"]`): toma el
+      // primer id vivo; si el panel solo tenía ids legacy queda null (placeholder).
+      const firstAliveSession = (s: any): string | null => {
+        const ids = Array.isArray(s) ? s : typeof s === "string" ? [s] : []
+        for (const id of ids) {
+          if (typeof id === "string" && !isLegacyVirtualTab(id)) return id
+        }
+        return null
+      }
+      let migratedSessions = layout.sessions.map((s: any) => firstAliveSession(s)) as Array<string | null>
       let migratedKinds = [...kinds] as Array<ShellPanelKind | "editor">
       for (let idx = 0; idx < total; idx++) {
         if ((migratedKinds[idx] as any) === "browser") {
@@ -170,6 +186,16 @@ export function loadDesktopState(fallbackSessionID: string | null): DesktopState
           migratedTabStacks[idx] = [...(migratedTabStacks[idx] ?? []), bId]
           migratedKinds[idx] = "session"
           if (!migratedSessions[idx]) migratedSessions[idx] = bId
+        }
+      }
+
+      // D8: un panel apuntado a un tab legacy (formato plano o anidado) cae al
+      // primer tab vivo que quede (o null → placeholder), para no renderizar un
+      // panel en blanco. Se decide sobre `migratedSessions` ya filtrado para no
+      // pisar el bId que la migración de panels `browser` acaba de asignar.
+      for (let idx = 0; idx < total; idx++) {
+        if (migratedSessions[idx] === null) {
+          migratedSessions[idx] = migratedTabStacks[idx]?.[0] ?? null
         }
       }
 

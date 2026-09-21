@@ -560,10 +560,6 @@
   font-weight: 700;
 }
 
-.snippet-menu {
-  max-height: 220px;
-  overflow-y: auto;
-}
 
 /* ===== Color pickers del ChatCustomizer ===== */
 .chat-color-input {
@@ -754,41 +750,9 @@
 }
 
 /* ===== Model Toggle (header del chat y composer bottom) ===== */
-.header-model-toggle {
-  min-height: 26px;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted-strong);
-  font-size: 0.875rem;
-  font-weight: 600;
-  padding: 0.15rem 0.4rem;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
 
-.header-model-toggle:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
 
-.header-model-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 110px;
-}
 
-.header-model-variant {
-  opacity: 0.6;
-  font-weight: 400;
-  font-size: 0.875rem;
-}
 
 /* ===== Antigravity ADE Composer Model Pill ===== */
 .composer-model-wrap {
@@ -1239,16 +1203,6 @@
   position: relative;
 }
 
-.model-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-fullscreen);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--modal-backdrop);
-  backdrop-filter: blur(2px);
-}
 
 
 
@@ -1306,26 +1260,7 @@
   padding: 0;
 }
 
-.image-pick-btn {
-  min-height: 32px;
-  min-width: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-subtle);
-  color: var(--muted-strong);
-  cursor: pointer;
-  padding: 0.2rem 0.35rem;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-}
 
-.image-pick-btn:hover:not(:disabled) {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-.attach-icon-file { color: var(--info); }
 .attach-icon-code { color: var(--accent); }
 .attach-icon-text { color: var(--muted-strong); }
 .attach-icon-other { color: var(--warning); }

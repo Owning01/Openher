@@ -355,10 +355,6 @@
     padding-right: 9rem;
   }
 
-  .server-profile-row,
-  .server-add-btn {
-    min-height: 44px;
-  }
 
   .star-btn,
   .quick-access-star,
@@ -428,13 +424,7 @@
     width: 100%;
   }
 
-  .data-mode-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
 
-  .settings-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 
   .quick-access-list {
     display: flex;

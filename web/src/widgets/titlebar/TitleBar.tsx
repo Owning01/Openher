@@ -87,10 +87,8 @@ function getTabInfo(
     }
   }
   if (sid === "__kanban__") return { icon: <CodeIcon size={13} />, title: "Kanban" }
-  if (sid === "__learning__" || sid === "__reports__") return { icon: <FileIcon size={13} />, title: "Aprendizaje" }
+  if (sid === "__learning__") return { icon: <FileIcon size={13} />, title: "Aprendizaje" }
   if (sid === "__pcFiles__") return { icon: <FileIcon size={13} />, title: "Archivos PC" }
-  if (sid === "__design__" || sid.startsWith("plugin:opendesign")) return { icon: <CodeIcon size={13} />, title: "Open Design" }
-  if (sid === "__screenshots__" || sid.startsWith("plugin:screenshots")) return { icon: <FileIcon size={13} />, title: "Screenshots" }
   if (sid.startsWith("plugin:")) return { icon: <CodeIcon size={13} />, title: sid.replace("plugin:", "") }
 
   const found = sessions?.find((s) => s.id === sid)

@@ -1,31 +1,34 @@
-import { memo, useState, useCallback, useMemo, useEffect } from "react"
-import { TestIcon, LoadingIcon, EyeIcon, EyeOffIcon, PlusIcon, TrashIcon, CheckIcon, RefreshIcon, PowerIcon, CloseIcon } from "../Icons"
+import { memo, useState, useEffect } from "react"
+import { EyeIcon, EyeOffIcon, TrashIcon, CheckIcon, RefreshIcon, PowerIcon, CloseIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { FeatureFlags, ServerConfig, ModelOption, NoticeType, DataMode, ViewType, ProviderInfo,
  ServerProfile, ChatSettings, PromptSnippet, AgentOption } from "../types"
 import type { LanguageCode } from "../i18n"
 import { describeProfile, isPairProfile } from "../hooks/useServers"
-import { ProviderManager } from "./ProviderManager"
-import { GoUsagePanel } from "./GoUsagePanel"
 import { DefaultModelPicker } from "./DefaultModelPicker"
-import { ChatCustomizer } from "./ChatCustomizer"
-import { SnippetManager } from "./SnippetManager"
-import { DataUsageModal } from "./DataUsageModal"
-import { ThinkingLevels } from "./ThinkingLevels"
+import { Modal } from "./Modal"
 import { PairModal } from "./PairModal"
 import { PluginSlot } from "../plugins"
 import { LedSwitch } from "./LedSwitch"
 import { Opencode2Button } from "../features/opencode2/Opencode2Button"
-import { WeatherSettings } from "./WeatherSettings"
 import { ExportCacheButton } from "./ExportCacheButton"
-import { desktopApi, loadDesktopConfig, saveDesktopConfig, canTestDesktop, type DesktopConfig } from "../desktop"
-import { fetchGoUsage, loadGoAccounts, saveGoAccounts, type GoUsage } from "../goUsage"
 import { variantsOf } from "../utils/model-utils"
 import { useIsDesktop } from "../hooks/useIsDesktop"
 import { useAutoOpencode2 } from "../hooks/useAutoOpencode2"
-import { useSidebarPrefs, SIDEBAR_ITEM_IDS } from "../hooks/useSidebarPrefs"
+import { useSidebarPrefs } from "../hooks/useSidebarPrefs"
 import { BuildStamp } from "./BuildStamp"
 import { shell } from "../shell"
+import { CATEGORIES, buildDataModes, type CategoryKey } from "../features/settings/constants"
+import { ConfirmDialog } from "../features/settings/ConfirmDialog"
+import type { BlockedModelsApi } from "../features/settings/types"
+import { useSettingsDraft } from "../features/settings/useSettingsDraft"
+import { useRemoteDesktopConfig } from "../features/settings/useRemoteDesktopConfig"
+import { ModelsSection } from "../features/settings/sections/ModelsSection"
+import { CustomizationsSection } from "../features/settings/sections/CustomizationsSection"
+import { BrowserSection } from "../features/settings/sections/BrowserSection"
+import { AppearanceSection } from "../features/settings/sections/AppearanceSection"
+import { SidebarSection } from "../features/settings/sections/SidebarSection"
+import { FeatureFlagsSection } from "../features/settings/sections/FeatureFlagsSection"
 
 type SettingsPanelProps = {
  draftConfig: ServerConfig
@@ -50,7 +53,7 @@ type SettingsPanelProps = {
  modelKey: (model: { providerID: string; modelID: string; variant?: string }) => string
  selectedVariant: string | null
  activeModelOption: ModelOption | null
- blockedModels: { isBlocked: (key: string) => boolean; toggleBlocked: (key: string) => void; toggleAllForProvider: (providerID: string, block: boolean) => void; providerBlockedCount: (providerID: string) => number; blockedCount: number }
+ blockedModels: BlockedModelsApi
  onOpenThemePicker?: () => void
  onOpenThemeCreator?: () => void
  flags: FeatureFlags
@@ -110,7 +113,6 @@ export const SettingsPanel = memo(function SettingsPanel({
  const isDesktop = useIsDesktop()
  const [showShutdownConfirm, setShowShutdownConfirm] = useState(false)
  const [showRestartConfirm, setShowRestartConfirm] = useState(false)
- const [showDataUsage, setShowDataUsage] = useState(false)
  const [showPairModal, setShowPairModal] = useState(false)
  const { enabled: autoOpencode2, setEnabled: setAutoOpencode2 } = useAutoOpencode2()
  const [autostartEnabled, setAutostartEnabled] = useState(false)
@@ -127,184 +129,29 @@ export const SettingsPanel = memo(function SettingsPanel({
  const { prefs: sidebarPrefs, setPosition: setSidebarPosition, toggleItem: toggleSidebarItem } = useSidebarPrefs()
 
  // ===== Remote desktop (agente en la PC, puerto default 5901) =====
- const [desktopCfg, setDesktopCfg] = useState<DesktopConfig>(() =>
-  loadDesktopConfig() ?? { host: "", port: 5901, username: "opencode", password: "" }
- )
- const [desktopTesting, setDesktopTesting] = useState(false)
- const [desktopNotice, setDesktopNotice] = useState<string | null>(null)
- const [desktopNoticeType, setDesktopNoticeType] = useState<"ok" | "fail">("ok")
- const [showDesktopPass, setShowDesktopPass] = useState(false)
- const [showServerPass, setShowServerPass] = useState(false)
- const [desktopSaved, setDesktopSaved] = useState(false)
+ const remote = useRemoteDesktopConfig()
 
- // ===== OpenCode Go (uso vía API pública, varias cuentas) =====
- const [goKeys, setGoKeys] = useState<string[]>([])
- const [goEditing, setGoEditing] = useState<Record<number, boolean>>({})
- const [goUsageMap, setGoUsageMap] = useState<Record<string, GoUsage | null>>({})
- const [goLoadingMap, setGoLoadingMap] = useState<Record<string, boolean>>({})
- const [goErrorMap, setGoErrorMap] = useState<Record<string, string | null>>({})
+ // ===== Perfil de conexión en borrador, modelos únicos y contraseña =====
+ const { uniqueModels, draftProfile, startDraft, draftField, saveDraft, connectDraft, setDraftName, discardDraft, showServerPass, toggleServerPass, setField } =
+  useSettingsDraft({ draftConfig, onChange, mk, modelOptions, onAddServerProfile, onApplyServerProfile })
 
- const checkGo = useCallback(async (key: string) => {
-  const trimmed = key.trim()
-  if (!trimmed) return
-  const proxy = canTestDesktop(desktopCfg)
-   ? { host: desktopCfg.host, port: desktopCfg.port, username: desktopCfg.username, password: desktopCfg.password }
-   : undefined
-  setGoLoadingMap((m) => ({ ...m, [trimmed]: true }))
-  setGoErrorMap((m) => ({ ...m, [trimmed]: null }))
-  try {
-   const usage = await fetchGoUsage(trimmed, proxy)
-   setGoUsageMap((m) => ({ ...m, [trimmed]: usage }))
-  } catch (e: any) {
-   setGoErrorMap((m) => ({ ...m, [trimmed]: e?.message ?? "Error de red" }))
-  } finally {
-   setGoLoadingMap((m) => ({ ...m, [trimmed]: false }))
-  }
- }, [desktopCfg])
+ const dataModes = buildDataModes(t)
 
- const updateGoKey = useCallback((index: number, val: string) => {
-  setGoKeys((ks) => {
-   const next = [...ks]
-   next[index] = val
-   return next
-  })
- }, [])
-
- const removeGoKey = useCallback((index: number) => {
-  setGoKeys((ks) => ks.filter((_, i) => i !== index))
- }, [])
-
- useEffect(() => {
-  loadGoAccounts().then((accounts) => {
-   setGoKeys(accounts)
-  }).catch(() => {})
- }, [])
-
- useEffect(() => {
-  saveGoAccounts(goKeys).catch(() => {})
- }, [goKeys])
-
- const testDesktop = useCallback(async () => {
-  setDesktopTesting(true)
-  setDesktopNotice(null)
-  setDesktopSaved(false)
-  try {
-   const ok = await desktopApi.health(desktopCfg)
-   if (ok) {
-    setDesktopNotice(t('settings.desktopOk', { os: "Remote Host", v: "1.0" }))
-    setDesktopNoticeType("ok")
-    saveDesktopConfig(desktopCfg)
-    setDesktopSaved(true)
-   } else {
-    setDesktopNotice(t('settings.desktopFail', { err: "no responde" }))
-    setDesktopNoticeType("fail")
-   }
-  } catch (e: any) {
-   setDesktopNotice(t('settings.desktopFail', { err: e?.message || "error de red" }))
-   setDesktopNoticeType("fail")
-  } finally {
-   setDesktopTesting(false)
-  }
- }, [desktopCfg, t])
-
- useEffect(() => {
-  if (!onClose) return
-  const onKey = (e: KeyboardEvent) => {
-   if (e.key === "Escape") onClose()
-  }
-  window.addEventListener("keydown", onKey)
-  return () => window.removeEventListener("keydown", onKey)
- }, [onClose])
-
- const uniqueModels = useMemo(() => {
-  return Array.from(new Map(modelOptions.map((opt) => [mk(opt), opt])).values())
- }, [modelOptions, mk])
-
- const [blockedSearch, setBlockedSearch] = useState("")
- const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
- const [draftProfile, setDraftProfile] = useState<{ name: string; config: ServerConfig } | null>(null)
-
- const startDraft = useCallback(() => {
-  setDraftProfile({ name: "", config: { ...draftConfig } })
- }, [draftConfig])
-
- const draftField = useCallback(<K extends keyof ServerConfig>(key: K, value: ServerConfig[K]) => {
-  setDraftProfile((d) => (d ? { ...d, config: { ...d.config, [key]: value } } : d))
- }, [])
-
- const saveDraft = useCallback(() => {
-  if (!draftProfile) return
-  const profile = onAddServerProfile(draftProfile.name.trim() || t('settings.serverUntitled'), "http", draftProfile.config)
-  if (profile) setDraftProfile(null)
- }, [draftProfile, onAddServerProfile, t])
-
- const connectDraft = useCallback(() => {
-  if (!draftProfile) return
-  const profile = onAddServerProfile(draftProfile.name.trim() || t('settings.serverUntitled'), "http", draftProfile.config)
-  if (profile) {
-   setDraftProfile(null)
-   onApplyServerProfile(profile)
-  }
- }, [draftProfile, onAddServerProfile, onApplyServerProfile, t])
-
- const discardDraft = useCallback(() => setDraftProfile(null), [])
-
- const toggleProvider = useCallback((providerID: string) => {
-  setExpandedProviders((prev) => {
-   const next = new Set(prev)
-   if (next.has(providerID)) next.delete(providerID)
-   else next.add(providerID)
-   return next
-  })
- }, [])
-
- const setField = (field: keyof ServerConfig, value: string | number) => {
-  onChange({ ...draftConfig, [field]: value })
- }
-
- const dataModes = [
-  { value: "full" as const, label: "Full", desc: t('settings.modeFullDesc') },
-  { value: "saver" as const, label: t('settings.modeSaver'), desc: t('settings.modeSaverDesc') },
-  { value: "ultra" as const, label: t('settings.modeUltra'), desc: t('settings.modeUltraDesc') },
-  { value: "miser" as const, label: t('settings.modeMiser'), desc: t('settings.modeMiserDesc') }
- ]
-
- const featureFlags = [
-  { key: "fileBrowser" as const, label: t('settings.fileBrowser'), desc: t('settings.fileBrowserDesc') },
-  { key: "inlineDiff" as const, label: t('settings.inlineDiff'), desc: t('settings.inlineDiffDesc') },
-  { key: "contextMenu" as const, label: t('settings.contextMenu'), desc: t('settings.contextMenuDesc') },
-  { key: "planBreakdown" as const, label: t('settings.planBreakdown'), desc: t('settings.planBreakdownDesc') },
-  { key: "gitOps" as const, label: t('settings.gitOps'), desc: t('settings.gitOpsDesc') },
-  { key: "mcpConfig" as const, label: t('settings.mcpConfig'), desc: t('settings.mcpConfigDesc') },
-  { key: "sessionArchive" as const, label: t('settings.sessionArchive'), desc: t('settings.sessionArchiveDesc') },
-  { key: "streamingFull" as const, label: t('settings.streamingFull'), desc: t('settings.streamingFullDesc') },
-  { key: "offlineCache" as const, label: t('settings.offlineCache'), desc: t('settings.offlineCacheDesc') },
-  { key: "questionAuto" as const, label: t('settings.questionAuto'), desc: t('settings.questionAutoDesc') },
-  { key: "permissionUI" as const, label: t('settings.permissionUI'), desc: t('settings.permissionUIDesc') },
- ]
-
- type CategoryKey = "servers" | "system" | "appearance" | "models" | "chat" | "remote"
  const [activeCategory, setActiveCategory] = useState<CategoryKey>("servers")
- const [settingsSearch, setSettingsSearch] = useState("")
 
- const categories: Array<{ id: CategoryKey; label: string; subtitle: string }> = [
-  { id: "servers", label: "General", subtitle: "Configure agent execution, queued message delivery, and permissions." },
-  { id: "system", label: "Application", subtitle: "Configure application startup, feature flags, sidebar layout, and system tools." },
-  { id: "appearance", label: "Appearance", subtitle: "Customize interface themes, font size, language, and default model selection." },
-  { id: "models", label: "Models", subtitle: "Configure AI providers, primary agents, and API keys." },
-  { id: "chat", label: "Customizations", subtitle: "Fine-tune chat parameters, thinking behavior, system prompts, and snippets." },
-  { id: "remote", label: "Browser", subtitle: "Configure and connect to the remote host desktop agent and browser tools." },
- ]
+ // Variantes del modelo seleccionado para el selector de nivel de pensamiento.
+ // Se derivan aquí (el contenedor es dueño del modelo) y AppearanceSection pinta.
+ const selected = uniqueModels.find((opt) => mk(opt) === selectedModelKey)
+ const thinkingVariants = selectedModelKey && selected ? variantsOf(modelOptions, selected) : []
 
- const currentCategoryInfo = categories.find((c) => c.id === activeCategory) || categories[0]
+ const currentCategoryInfo = CATEGORIES.find((c) => c.id === activeCategory) || CATEGORIES[0]
 
- const isSearching = settingsSearch.trim().length > 0
- const showServers = !isDesktop || isSearching || activeCategory === "servers"
- const showModels = !isDesktop || isSearching || activeCategory === "models"
- const showAppearance = !isDesktop || isSearching || activeCategory === "appearance"
- const showChat = !isDesktop || isSearching || activeCategory === "chat"
- const showRemote = !isDesktop || isSearching || activeCategory === "remote"
- const showSystem = !isDesktop || isSearching || activeCategory === "system"
+ const showServers = !isDesktop || activeCategory === "servers"
+ const showModels = !isDesktop || activeCategory === "models"
+ const showAppearance = !isDesktop || activeCategory === "appearance"
+ const showChat = !isDesktop || activeCategory === "chat"
+ const showRemote = !isDesktop || activeCategory === "remote"
+ const showSystem = !isDesktop || activeCategory === "system"
 
  const panelContent = (
   <section className="panel settings fade-in">
@@ -313,15 +160,12 @@ export const SettingsPanel = memo(function SettingsPanel({
      <nav className="settings-sidebar-nav" aria-label="Categorías de ajustes">
       <p className="settings-sidebar-group-title">Settings</p>
       <div className="settings-sidebar-section">
-       {categories.map((cat) => (
+       {CATEGORIES.map((cat) => (
         <button
          key={cat.id}
          type="button"
-         className={`settings-nav-btn${activeCategory === cat.id && !isSearching ? " active" : ""}`}
-         onClick={() => {
-          setActiveCategory(cat.id)
-          setSettingsSearch("")
-         }}
+         className={`settings-nav-btn${activeCategory === cat.id ? " active" : ""}`}
+         onClick={() => setActiveCategory(cat.id)}
         >
          <span className="settings-nav-label">{cat.label}</span>
         </button>
@@ -399,12 +243,10 @@ export const SettingsPanel = memo(function SettingsPanel({
      <div className="settings-pane-header">
       <div className="settings-pane-title-group">
        <h2 className="settings-pane-title">
-        {isSearching ? t('sessions.searchPlaceholder') : currentCategoryInfo.label}
+        {currentCategoryInfo.label}
        </h2>
        <p className="settings-pane-subtitle">
-        {isSearching
-         ? `${t('settings.draftHint')}`
-         : currentCategoryInfo.subtitle}
+        {currentCategoryInfo.subtitle}
        </p>
       </div>
 
@@ -481,7 +323,7 @@ export const SettingsPanel = memo(function SettingsPanel({
          <span>{t('settings.password')}</span>
          <div className="password-wrapper" style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input name="password" type={showServerPass ? "text" : "password"} value={draftConfig.password} onChange={(e) => setField("password", e.target.value)} placeholder="••••••••" style={{ flex: 1 }} />
-          <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowServerPass((v) => !v)} tabIndex={-1} aria-label={showServerPass ? "Ocultar" : "Mostrar"}>
+          <button type="button" className="btn-icon btn-ghost password-toggle" onClick={toggleServerPass} tabIndex={-1} aria-label={showServerPass ? "Ocultar" : "Mostrar"}>
            {showServerPass ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
           </button>
          </div>
@@ -581,7 +423,7 @@ export const SettingsPanel = memo(function SettingsPanel({
           <label className="form-field">
            <span>{t('settings.serverName')}</span>
            <input name="name" value={draftProfile.name}
-            onChange={(e) => setDraftProfile((d) => (d ? { ...d, name: e.target.value } : d))}
+            onChange={(e) => setDraftName(e.target.value)}
             placeholder={t('settings.serverNamePlaceholder')} />
           </label>
           <label className="form-field">
@@ -600,7 +442,7 @@ export const SettingsPanel = memo(function SettingsPanel({
            <span>{t('settings.password')}</span>
            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input name="password" type={showServerPass ? "text" : "password"} value={draftProfile.config.password} onChange={(e) => draftField("password", e.target.value)} placeholder="••••••••" style={{ flex: 1 }} />
-            <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowServerPass((v) => !v)} tabIndex={-1}>
+            <button type="button" className="btn-icon btn-ghost password-toggle" onClick={toggleServerPass} tabIndex={-1}>
              {showServerPass ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
             </button>
            </div>
@@ -646,107 +488,22 @@ export const SettingsPanel = memo(function SettingsPanel({
      )}
    {/* Preferences / Appearance */}
    {showAppearance && (
-    <>
-     <p className="settings-group-heading">Appearance & Interface</p>
-     <div className="setting-item-row">
-      <div className="setting-item-info">
-       <span className="setting-item-title">{t('settings.language')}</span>
-       <p className="setting-item-desc">Selecciona el idioma principal de la aplicación.</p>
-      </div>
-      <div className="setting-item-control">
-       <select
-        className="ag-select"
-        name="language"
-        value={language}
-        onChange={(e) => onLanguageChange(e.target.value as LanguageCode)}
-       >
-        {languageOptions.map((option) => (
-         <option key={option.code} value={option.code}>{option.label}</option>
-        ))}
-       </select>
-      </div>
-     </div>
-
-     <div className="setting-item-row">
-      <div className="setting-item-info">
-       <span className="setting-item-title">{t('settings.theme')}</span>
-       <p className="setting-item-desc">Modo visual (sistema, claro, oscuro o programado).</p>
-      </div>
-      <div className="setting-item-control">
-       <select
-        className="ag-select"
-        name="theme"
-        value={theme}
-        onChange={(e) => onThemeChange(e.target.value as "system" | "light" | "dark" | "scheduled")}
-       >
-        <option value="system">{t('settings.themeSystem')}</option>
-        <option value="light">{t('settings.themeLight')}</option>
-        <option value="dark">{t('settings.themeDark')}</option>
-        <option value="scheduled">{t('settings.themeScheduled')}</option>
-       </select>
-      </div>
-     </div>
-
-     <WeatherSettings />
-
-     {onOpenThemePicker && (
-      <div className="setting-item-row">
-       <div className="setting-item-info">
-        <span className="setting-item-title">{t('settings.visualTheme')}</span>
-        <p className="setting-item-desc">Explora y activa paletas de temas visuales predefinidos.</p>
-       </div>
-       <div className="setting-item-control">
-        <button type="button" className="ag-btn-open" onClick={onOpenThemePicker}>
-         {t('settings.switchTheme')} (33 temas)
-        </button>
-        {onOpenThemeCreator && (
-         <button type="button" className="ag-btn-open" onClick={onOpenThemeCreator}>
-          {t('session.themeCreator')}
-         </button>
-        )}
-       </div>
-      </div>
-     )}
-
-     <div className="setting-item-row">
-      <div className="setting-item-info">
-       <span className="setting-item-title">{t('settings.defaultModel')}</span>
-       <p className="setting-item-desc">Modelo de lenguaje predeterminado para nuevas conversaciones.</p>
-      </div>
-      <div className="setting-item-control">
-       <select
-        className="ag-select"
-        value={selectedModelKey || ""}
-        onChange={(e) => onChangeModel(e.target.value)}
-       >
-        {uniqueModels.map((opt) => (
-         <option key={mk(opt)} value={mk(opt)}>
-          {opt.modelName || opt.modelID} ({opt.providerName})
-         </option>
-        ))}
-       </select>
-      </div>
-     </div>
-
-     {(() => {
-      if (!selectedModelKey) return null
-      const selected = uniqueModels.find((opt) => mk(opt) === selectedModelKey)
-      if (!selected) return null
-      const vars = variantsOf(modelOptions, selected)
-      if (vars.length <= 1) return null
-      return (
-       <div className="setting-item-row">
-        <div className="setting-item-info">
-         <span className="setting-item-title">Nivel de Pensamiento (Thinking)</span>
-         <p className="setting-item-desc">{selected.modelName || selected.modelID} · {selected.providerName}</p>
-        </div>
-        <div className="setting-item-control">
-         <ThinkingLevels base={selected} variants={vars} activeVariant={selectedVariant} onChange={onChangeModel} hideLabel />
-        </div>
-       </div>
-      )
-     })()}
-    </>
+    <AppearanceSection
+     language={language}
+     onLanguageChange={onLanguageChange}
+     languageOptions={languageOptions}
+     theme={theme}
+     onThemeChange={onThemeChange}
+     onOpenThemePicker={onOpenThemePicker}
+     onOpenThemeCreator={onOpenThemeCreator}
+     uniqueModels={uniqueModels}
+     selectedModelKey={selectedModelKey}
+     onChangeModel={onChangeModel}
+     modelKey={mk}
+     selected={selected}
+     thinkingVariants={thinkingVariants}
+     selectedVariant={selectedVariant}
+    />
    )}
 
    {/* Application Tab */}
@@ -834,63 +591,14 @@ export const SettingsPanel = memo(function SettingsPanel({
       </div>
      </div>
 
-     <p className="settings-group-heading">Navigation & Interface</p>
-     <div className="setting-item-row">
-      <div className="setting-item-info">
-       <span className="setting-item-title">Posición de Barra Lateral</span>
-       <p className="setting-item-desc">Ubicación de la barra de navegación en pantalla.</p>
-      </div>
-      <div className="setting-item-control">
-       <div className="ag-segmented">
-        {(["left", "top", "right"] as const).map((p) => (
-         <button
-          key={p}
-          type="button"
-          className={`ag-segmented-btn${sidebarPrefs.position === p ? " active" : ""}`}
-          onClick={() => setSidebarPosition(p)}
-         >
-          {t(`settings.pos_${p}`)}
-         </button>
-        ))}
-       </div>
-      </div>
-     </div>
+     <SidebarSection
+      position={sidebarPrefs.position}
+      hidden={sidebarPrefs.hidden}
+      onSetPosition={setSidebarPosition}
+      onToggleItem={toggleSidebarItem}
+     />
 
-     {SIDEBAR_ITEM_IDS.map((id) => {
-      const visible = !sidebarPrefs.hidden.includes(id)
-      return (
-       <div key={id} className="setting-item-row">
-        <div className="setting-item-info">
-         <span className="setting-item-title">{t(`settings.sb_${id}`)}</span>
-         <p className="setting-item-desc">Mostrar botón en la barra lateral.</p>
-        </div>
-        <div className="setting-item-control">
-         <LedSwitch
-          label={t(`settings.sb_${id}`)}
-          checked={visible}
-          onChange={() => toggleSidebarItem(id)}
-         />
-        </div>
-       </div>
-      )
-     })}
-
-     <p className="settings-group-heading">Feature Flags (Funciones Experimentales)</p>
-     {featureFlags.map(({ key, label, desc }) => (
-      <div key={key} className="setting-item-row">
-       <div className="setting-item-info">
-        <span className="setting-item-title">{label}</span>
-        <p className="setting-item-desc">{desc}</p>
-       </div>
-       <div className="setting-item-control">
-        <LedSwitch
-         label={label}
-         checked={flags[key]}
-         onChange={() => onToggleFlag(key)}
-        />
-       </div>
-      </div>
-     ))}
+     <FeatureFlagsSection flags={flags} onToggleFlag={onToggleFlag} />
 
      {isDesktop && onOpenOpenCodeHub && (
       <>
@@ -949,249 +657,36 @@ export const SettingsPanel = memo(function SettingsPanel({
 
    {/* Models Tab */}
    {showModels && (
-    <>
-     <p className="settings-group-heading">AI Providers</p>
-     <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-      <ProviderManager
-       providers={providers}
-       connecting={connectingProvider}
-       error={providerError}
-       onConnect={onConnectProvider}
-       onDisconnect={onDisconnectProvider}
-      />
-     </div>
-
-      <p className="settings-group-heading">{t('go.title')}</p>
-      <GoUsagePanel />
-
-     {allPrimaryAgents && allPrimaryAgents.length > 0 && (
-      <>
-       <p className="settings-group-heading">Agentes Principales</p>
-       {allPrimaryAgents.map((agent) => {
-        const isDisabled = !!disabledAgents?.[agent.id]
-        return (
-         <div key={agent.id} className="setting-item-row">
-          <div className="setting-item-info">
-           <span className="setting-item-title">{agent.name || agent.id}</span>
-           <p className="setting-item-desc">{agent.description || `Agente ${agent.id}`}</p>
-          </div>
-          <div className="setting-item-control">
-           <LedSwitch
-            label={agent.name || agent.id}
-            checked={!isDisabled}
-            onChange={() => onToggleAgentEnabled?.(agent.id)}
-           />
-          </div>
-         </div>
-        )
-       })}
-      </>
-     )}
-
-     <p className="settings-group-heading">{t('settings.blockedModels')}</p>
-     <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-      <div className="blocked-search" style={{ marginBottom: 12 }}>
-       <input
-        placeholder={t('settings.blockedModelsSearch')}
-        value={blockedSearch}
-        onChange={(e) => setBlockedSearch(e.target.value)}
-        className="settings-search-input"
-       />
-      </div>
-      {Array.from(new Set(modelOptions.map((o) => o.providerID))).map((providerID) => {
-       const providerModels = modelOptions.filter((o) => o.providerID === providerID)
-       const filtered = blockedSearch
-        ? providerModels.filter((o) => (o.modelName ?? "").toLowerCase().includes(blockedSearch.toLowerCase()))
-        : providerModels
-       if (filtered.length === 0) return null
-       const total = providerModels.length
-       const blockedCount = providerModels.filter((o) => blockedModels.isBlocked(mk(o))).length
-       const allBlocked = blockedCount === total
-       const isExpanded = expandedProviders.has(providerID) || blockedSearch.length > 0
-       return (
-        <div key={providerID} className="blocked-group" style={{ marginBottom: 8 }}>
-         <div className="blocked-group-header" onClick={() => toggleProvider(providerID)} role="button" tabIndex={0}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProvider(providerID) } }}>
-          <span className="blocked-chevron">{isExpanded ? "▼" : "▶"}</span>
-          <strong>{providerID}</strong>
-          <small className="subtle">{t('settings.blockedCount', { blocked: blockedCount, total })}</small>
-          <button type="button" className="btn-link" onClick={(e) => { e.stopPropagation(); blockedModels.toggleAllForProvider(providerID, !allBlocked) }}>
-           {allBlocked ? t('settings.blockedShowAll') : t('settings.blockedHideAll')}
-          </button>
-         </div>
-         {isExpanded && (
-          <div className="blocked-items">
-           {filtered.map((opt) => {
-            const key = mk(opt)
-            const blocked = blockedModels.isBlocked(key)
-            return (
-             <label key={key} className={`blocked-item${blocked ? " blocked" : ""}`} data-label={`${opt.modelName} ${opt.providerName}`}>
-              <span className="blocked-item-name">{opt.modelName}</span>
-              {opt.variant && <small className="blocked-item-variant">{opt.variant}</small>}
-              <LedSwitch
-               label={opt.modelName}
-               checked={!blocked}
-               onChange={() => blockedModels.toggleBlocked(key)}
-              />
-             </label>
-            )
-           })}
-          </div>
-         )}
-        </div>
-       )
-      })}
-     </div>
-
-     <p className="settings-group-heading">{t('settings.goTitle')}</p>
-     {goKeys.map((key, i) => {
-      const trimmed = key.trim()
-      const usage = trimmed ? goUsageMap[trimmed] : null
-      const loading = trimmed ? goLoadingMap[trimmed] : false
-      const error = trimmed ? goErrorMap[trimmed] : null
-      return (
-       <div key={i} className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-         <span className="setting-item-title">{t('settings.goAccount')} {i + 1}</span>
-         <div style={{ display: "flex", gap: 6 }}>
-          <button type="button" className="ag-btn-open" onClick={() => void checkGo(key)} disabled={loading || !trimmed}>
-           {loading ? <LoadingIcon size={14} /> : "Verificar"}
-          </button>
-          <button type="button" className="btn-icon btn-ghost" onClick={() => removeGoKey(i)}>
-           <TrashIcon size={14} />
-          </button>
-         </div>
-        </div>
-        <input
-         type="password"
-         value={goEditing[i] ? key : (key ? "••••••••" : "")}
-         onChange={(e) => updateGoKey(i, e.target.value)}
-         onFocus={() => setGoEditing((m) => ({ ...m, [i]: true }))}
-         onBlur={() => setGoEditing((m) => ({ ...m, [i]: false }))}
-         placeholder={t('settings.goApiKeyPlaceholder')}
-         className="settings-search-input"
-         style={{ marginTop: 8 }}
-        />
-        {error && <p className="desktop-settings-notice fail" style={{ marginTop: 6 }}>{error}</p>}
-        {usage && (
-         <div className="go-usage" style={{ marginTop: 8 }}>
-          {(["rolling", "weekly", "monthly"] as const).map((k) => {
-           const period = usage[k]
-           if (!period) return null
-           const pct = Math.min(100, Math.max(0, period.percent))
-           const tone = pct >= 80 ? "danger" : pct >= 50 ? "warning" : "ok"
-           return (
-            <div key={k} className="go-period">
-             <div className="go-period-head">
-              <span className="go-period-label">{t(`settings.goPeriod_${k}`)}</span>
-              <span className="go-period-pct">{period.percent}%</span>
-             </div>
-             <div className="go-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={t(`settings.goPeriod_${k}`)}>
-              <div className={`go-bar-fill ${tone}`} style={{ width: `${pct}%` }} />
-             </div>
-            </div>
-           )
-          })}
-         </div>
-        )}
-       </div>
-      )
-     })}
-     <div style={{ marginTop: 8 }}>
-      <button type="button" className="ag-btn-open" onClick={() => setGoKeys((ks) => [...ks, ""])}>
-       <span style={{ display: "inline-flex", marginRight: 6 }}><PlusIcon size={14} /></span>
-       {t('settings.goAddAccount')}
-      </button>
-     </div>
-    </>
+    <ModelsSection
+     providers={providers}
+     connectingProvider={connectingProvider}
+     providerError={providerError}
+     onConnectProvider={onConnectProvider}
+     onDisconnectProvider={onDisconnectProvider}
+     allPrimaryAgents={allPrimaryAgents}
+     disabledAgents={disabledAgents}
+     onToggleAgentEnabled={onToggleAgentEnabled}
+     modelOptions={modelOptions}
+     modelKey={mk}
+     blockedModels={blockedModels}
+     desktopCfg={remote.desktopCfg}
+    />
    )}
 
    {/* Customizations Tab */}
    {showChat && (
-    <>
-     <p className="settings-group-heading">{t('settings.chatCustomization')}</p>
-     <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-      <ChatCustomizer
-       settings={chatSettings}
-       onSettingChange={onChatSettingChange}
-       onReset={onResetChatSettings}
-      />
-     </div>
-
-     <p className="settings-group-heading">{t('settings.snippets')}</p>
-     <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-      <SnippetManager snippets={snippets} onAdd={onAddSnippet} onRemove={onRemoveSnippet} />
-     </div>
-    </>
+    <CustomizationsSection
+     chatSettings={chatSettings}
+     onChatSettingChange={onChatSettingChange}
+     onResetChatSettings={onResetChatSettings}
+     snippets={snippets}
+     onAddSnippet={onAddSnippet}
+     onRemoveSnippet={onRemoveSnippet}
+    />
    )}
 
    {/* Browser / Remote Desktop Tab */}
-   {showRemote && (
-    <>
-     <p className="settings-group-heading">{t('settings.desktopTitle')}</p>
-     <div className="setting-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-      <p className="setting-item-desc" style={{ marginBottom: 12 }}>{t('settings.desktopHint')}</p>
-      <div className="desktop-settings-grid">
-       <label className="field-label">
-        {t('settings.host')}
-        <input
-         type="text"
-         value={desktopCfg.host}
-         onChange={(e) => setDesktopCfg((c) => ({ ...c, host: e.target.value }))}
-         placeholder="100.101.102.103"
-         className="settings-search-input"
-        />
-       </label>
-       <label className="field-label">
-        {t('settings.port')}
-        <input
-         type="number"
-         value={desktopCfg.port}
-         onChange={(e) => setDesktopCfg((c) => ({ ...c, port: Number(e.target.value) || 0 }))}
-         placeholder="5901"
-         className="settings-search-input"
-        />
-       </label>
-       <label className="field-label">
-        {t('settings.username')}
-        <input
-         type="text"
-         value={desktopCfg.username}
-         onChange={(e) => setDesktopCfg((c) => ({ ...c, username: e.target.value }))}
-         className="settings-search-input"
-        />
-       </label>
-       <label className="field-label">
-        {t('settings.password')}
-        <div className="password-wrapper">
-         <input
-          type={showDesktopPass ? "text" : "password"}
-          value={desktopCfg.password}
-          onChange={(e) => setDesktopCfg((c) => ({ ...c, password: e.target.value }))}
-          className="settings-search-input"
-         />
-         <button type="button" className="btn-icon btn-ghost password-toggle" onClick={() => setShowDesktopPass((v) => !v)} tabIndex={-1}>
-          {showDesktopPass ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-         </button>
-        </div>
-       </label>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
-       <button
-        type="button"
-        className="ag-btn-open"
-        onClick={testDesktop}
-        disabled={desktopTesting || !canTestDesktop(desktopCfg)}
-       >
-        {desktopTesting ? <LoadingIcon size={14} /> : <span style={{ display: "inline-flex", marginRight: 6 }}><TestIcon size={14} /></span>}
-        {t('settings.desktopTest')}
-       </button>
-       {desktopSaved && <span className="desktop-saved-hint">{t('settings.desktopSaved')}</span>}
-      </div>
-      {desktopNotice && <p className={`desktop-settings-notice ${desktopNoticeType}`} style={{ marginTop: 8 }}>{desktopNotice}</p>}
-     </div>
-    </>
-   )}
+   {showRemote && <BrowserSection remote={remote} />}
 
    {/* Slots de plugins (secciones adicionales) */}
    <PluginSlot id="settings.section" />
@@ -1199,46 +694,27 @@ export const SettingsPanel = memo(function SettingsPanel({
    </div>
 
    {showShutdownConfirm && (
-    <div className="modal-backdrop" onClick={() => setShowShutdownConfirm(false)}>
-     <div className="modal-card fade-in" role="dialog" aria-modal="true"
-      onClick={(e) => e.stopPropagation()}>
-      <h2>{t('extras.shutdownConfirmTitle')}</h2>
-      <p>{t('extras.shutdownConfirmBody')}</p>
-      <div className="modal-actions">
-       <button className="btn-secondary" onClick={() => setShowShutdownConfirm(false)}>
-        {t('extras.shutdownCancel')}
-       </button>
-       <button className="btn-danger" onClick={() => { setShowShutdownConfirm(false); onShutdownHost() }}>
-        <PowerIcon size={16} />
-        {t('extras.shutdownConfirm')}
-       </button>
-      </div>
-     </div>
-    </div>
+    <ConfirmDialog
+     title={t('extras.shutdownConfirmTitle')}
+     body={t('extras.shutdownConfirmBody')}
+     cancelText={t('extras.shutdownCancel')}
+     confirmText={t('extras.shutdownConfirm')}
+     confirmIcon={<PowerIcon size={16} />}
+     onCancel={() => setShowShutdownConfirm(false)}
+     onConfirm={() => { setShowShutdownConfirm(false); onShutdownHost() }}
+    />
    )}
 
    {showRestartConfirm && (
-    <div className="modal-backdrop" onClick={() => setShowRestartConfirm(false)}>
-     <div className="modal-card fade-in" role="dialog" aria-modal="true"
-      onClick={(e) => e.stopPropagation()}>
-      <h2>{t('extras.restartConfirmTitle')}</h2>
-      <p>{t('extras.restartConfirmBody')}</p>
-      <div className="modal-actions">
-       <button className="btn-secondary" onClick={() => setShowRestartConfirm(false)}>
-        {t('extras.restartCancel')}
-       </button>
-       <button className="btn-danger" onClick={() => { setShowRestartConfirm(false); onRestartHost() }}>
-        <RefreshIcon size={16} />
-        {t('extras.restartConfirm')}
-       </button>
-      </div>
-     </div>
-    </div>
-   )}
-
-   {showDataUsage && (
-    <DataUsageModal
-     onClose={() => setShowDataUsage(false)} />
+    <ConfirmDialog
+     title={t('extras.restartConfirmTitle')}
+     body={t('extras.restartConfirmBody')}
+     cancelText={t('extras.restartCancel')}
+     confirmText={t('extras.restartConfirm')}
+     confirmIcon={<RefreshIcon size={16} />}
+     onCancel={() => setShowRestartConfirm(false)}
+     onConfirm={() => { setShowRestartConfirm(false); onRestartHost() }}
+    />
    )}
 
    {showPairModal && (
@@ -1254,13 +730,11 @@ export const SettingsPanel = memo(function SettingsPanel({
 
  if (onClose) {
   return (
-   <div className="modal-overlay" onClick={onClose}>
-    <div className="modal-content settings-modal-window" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('nav.settings') || "Configuración"}>
-     <div className="settings-modal-body">
-      {panelContent}
-     </div>
+   <Modal onClose={onClose} variant="overlay" className="settings-modal-window" label={t('nav.settings') || "Configuración"}>
+    <div className="settings-modal-body">
+     {panelContent}
     </div>
-   </div>
+   </Modal>
   )
  }
 
@@ -1268,4 +742,3 @@ export const SettingsPanel = memo(function SettingsPanel({
 })
 
 export default SettingsPanel
-

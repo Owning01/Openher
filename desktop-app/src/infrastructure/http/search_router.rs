@@ -1,9 +1,9 @@
 //! Router /shell/search — búsqueda DDG lite con cache 6h.
 //! Extraído desde api.rs: DuckDuckGo lite, TTL 6h, parse top3, fallback html.
 
-use std::io::Read;
 use std::sync::Arc;
 
+use crate::infrastructure::http::common::{read_ureq_body, strip_html, url_decode, url_encode};
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::state::AppState;
@@ -64,11 +64,7 @@ pub fn handle(
         .redirects(3)
         .build();
     let body = match client.get(&ddg_url).set("User-Agent", "Mozilla/5.0").call() {
-        Ok(resp) => {
-            let mut buf = Vec::new();
-            resp.into_reader().read_to_end(&mut buf).unwrap_or_default();
-            String::from_utf8_lossy(&buf).to_string()
-        }
+        Ok(resp) => String::from_utf8_lossy(&read_ureq_body(resp)).to_string(),
         Err(_) => {
             // fallback: html.duckduckgo.com
             let fallback = format!(
@@ -82,11 +78,7 @@ pub fn handle(
                 .set("User-Agent", "Mozilla/5.0")
                 .call()
             {
-                Ok(resp) => {
-                    let mut buf = Vec::new();
-                    resp.into_reader().read_to_end(&mut buf).unwrap_or_default();
-                    String::from_utf8_lossy(&buf).to_string()
-                }
+                Ok(resp) => String::from_utf8_lossy(&read_ureq_body(resp)).to_string(),
                 Err(e) => {
                     return Some(ShellResponse::err_json(502, &format!("search fetch failed: {e}")));
                 }
@@ -184,62 +176,3 @@ pub fn handle(
     Some(ShellResponse::ok_json(&out))
 }
 
-fn url_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() * 3);
-    for b in s.as_bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(*b as char),
-            b' ' => out.push_str("%20"),
-            _ => out.push_str(&format!("%{b:02X}")),
-        }
-    }
-    out
-}
-
-fn strip_html(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut inside = false;
-    for ch in s.chars() {
-        match ch {
-            '<' => inside = true,
-            '>' => inside = false,
-            _ if !inside => out.push(ch),
-            _ => {}
-        }
-    }
-    out.replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#x27;", "'")
-        .replace("&#39;", "'")
-}
-
-fn url_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'%' if i + 2 < bytes.len() => {
-                let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
-                if let Ok(v) = u8::from_str_radix(hex, 16) {
-                    out.push(v);
-                    i += 3;
-                    continue;
-                }
-                out.push(bytes[i]);
-                i += 1;
-            }
-            b'+' => {
-                out.push(b' ');
-                i += 1;
-            }
-            b => {
-                out.push(b);
-                i += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&out).to_string()
-}

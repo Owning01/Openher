@@ -3,7 +3,8 @@ import ReactMarkdown, { defaultUrlTransform } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Capacitor } from "@capacitor/core"
 import { lowlight } from "../utils/highlight"
-import { cleanInlineCodePath, localFsPathFromImageSrc, pathFromOpenherHref } from "../shared/lib/filePaths"
+import { cleanInlineCodePath, localFsPathFromImageSrc, pathFromOpenherHref } from "../shared/lib/filePaths.ts"
+import { escapeHtml } from "../shared/lib/escapeHtml"
 import { remarkFilePaths } from "../shared/lib/remarkFilePaths"
 import { FilePathButton } from "./FilePathButton"
 import { MarkdownImage } from "./MarkdownImage"
@@ -98,10 +99,6 @@ function highlightText(text: string, query: string): string {
   }
   if (from < text.length) out.push(escapeHtml(text.slice(from)))
   return out.join("")
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
 // Plugin remark: recorre los nodos `text` y reemplaza el value con HTML

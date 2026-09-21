@@ -137,16 +137,13 @@ export const DesktopPanelRenderer = memo(function DesktopPanelRenderer(props: De
       )
     }
 
-    // Virtual tabs (__kanban__, __learning__, __pcFiles__) — legacy __design__/__reports__/__screenshots__ kept for migration
+    // Virtual tabs (__kanban__, __learning__, __pcFiles__)
     const isVirtual = sid.startsWith("__")
     if (isVirtual) {
       let vComp: React.ReactNode = null
       if (sid === "__kanban__") vComp = <KanbanPanel onClose={onClose} />
       else if (sid === "__learning__") vComp = <LearningPage />
       else if (sid === "__pcFiles__") vComp = <PCFilesPanel onOpenFile={props.onOpenFile} onOpenBrowser={props.onOpenBrowser} />
-      else if (sid === "__design__") vComp = <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><ExternalIframePanel name="opendesign" title="Open Design" url="http://127.0.0.1:3000" /></Suspense>
-      else if (sid === "__reports__") vComp = <LearningPage />
-      else if (sid === "__screenshots__") vComp = <Suspense fallback={PANEL_SUSPENSE_FALLBACK}><ExternalIframePanel name="screenshots" title="Screenshots" url="http://127.0.0.1:3002" /></Suspense>
 
       const isScrollableVirtual = sid === "__pcFiles__" || sid === "__kanban__"
       return (

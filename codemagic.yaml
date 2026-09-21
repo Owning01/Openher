@@ -7,13 +7,13 @@ workflows:
       node: 20
       xcode: 16
     scripts:
-      - cd web
-      - corepack enable && corepack prepare pnpm@10.32.0 --activate
-      - pnpm install --frozen-lockfile
-      - pnpm build
-      - npx cap sync ios
-      - cd ios/App
-      - xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$APPLE_SIGNING_IDENTITY" PROVISIONING_PROFILE_SPECIFIER="$APPLE_PROVISIONING_PROFILE" DEVELOPMENT_TEAM="$APPLE_DEVELOPER_TEAM"
+      # corepack usa el packageManager de web/package.json (pnpm@10.32.0); no hace
+      # falta `corepack prepare` (deprecado y redundante).
+      - corepack enable
+      - cd web && pnpm install --frozen-lockfile
+      - cd web && pnpm build
+      - cd web && npx cap sync ios
+      - cd web/ios/App && xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$APPLE_SIGNING_IDENTITY" PROVISIONING_PROFILE_SPECIFIER="$APPLE_PROVISIONING_PROFILE" DEVELOPMENT_TEAM="$APPLE_DEVELOPER_TEAM"
     artifacts:
       - ~/Library/Developer/Xcode/DerivedData/**/Build/**/*.ipa
     publishing:
@@ -29,13 +29,25 @@ workflows:
       node: 20
       java: 17
     scripts:
-      - cd web
-      - corepack enable && corepack prepare pnpm@10.32.0 --activate
-      - pnpm install --frozen-lockfile
-      - pnpm build
-      - npx cap sync android
-      - cd android
-      - ./gradlew assembleRelease
+      - corepack enable
+      - cd web && pnpm install --frozen-lockfile
+      - cd web && pnpm build
+      - cd web && npx cap sync android
+      - cd web/android && ./gradlew assembleRelease
     artifacts:
       - web/android/app/build/outputs/**/*.apk
       - web/android/app/build/outputs/**/*.aab
+
+  tests:
+    name: Tests (vitest + i18n + ui)
+    max_build_duration: 20
+    instance_type: linux_x2
+    environment:
+      # node 22+: los tests i18n/ui usan --experimental-strip-types.
+      node: 22
+    scripts:
+      - corepack enable
+      - cd web && pnpm install --frozen-lockfile
+      - cd web && pnpm test
+      - cd web && pnpm run test:i18n
+      - cd web && pnpm run test:ui

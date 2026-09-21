@@ -388,4 +388,27 @@ describe("computeRenderedMessages", () => {
     expect(out[0]!.tokens?.input).toBe(10)
     expect(out[0]!.cost).toBe(0.05)
   })
+
+  it("reporte de subagente: el texto renderizado sale sin el envoltorio <subagent>", () => {
+    const msg = makeEnvelope({
+      info: {
+        ...baseInfo("m-sub", "synthetic"),
+        metadata: { source: "subagent", agent: "worker", childID: "ses_child" },
+      },
+      parts: [textPart("p1", `<subagent sessionID="ses_child" state="completed" description="W4E">\n## Informe\n</subagent>`)],
+    })
+    const { out } = computeRenderedMessages([msg], undefined, new Map())
+    expect(out).toHaveLength(1)
+    expect(out[0]!.text).toBe("## Informe")
+    expect(out[0]!.info.role).toBe("synthetic")
+  })
+
+  it("user que menciona <subagent> no se toca", () => {
+    const msg = makeEnvelope({
+      info: baseInfo("m-u", "user"),
+      parts: [textPart("p1", "qué significa <subagent> acá?")],
+    })
+    const { out } = computeRenderedMessages([msg], undefined, new Map())
+    expect(out[0]!.text).toBe("qué significa <subagent> acá?")
+  })
 })

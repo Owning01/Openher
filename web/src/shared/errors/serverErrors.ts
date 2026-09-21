@@ -109,33 +109,8 @@ function parseReadableProviderModelNotFoundError(errorInput: ProviderModelNotFou
   return [body, tail].join("\n")
 }
 
-// Copiado de tui/util/error.ts — formateo genérico para .cause.body
-export function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message || error.name
-  if (error && typeof error === "object" && "message" in error && typeof (error as { message: unknown }).message === "string") {
-    return (error as { message: string }).message
-  }
-  if (
-    error &&
-    typeof error === "object" &&
-    "data" in error &&
-    error.data !== null &&
-    typeof (error as { data: unknown }).data === "object" &&
-    typeof (error as { data: { message?: unknown } }).data.message === "string"
-  ) {
-    return (error as { data: { message: string } }).data.message
-  }
-  try {
-    return JSON.stringify(error)
-  } catch {
-    return String(error)
-  }
-}
-
-const REASON_LIMIT = 1024
-export function truncateReason(reason: string): string {
-  return reason.length > REASON_LIMIT ? `${reason.slice(0, REASON_LIMIT)}…` : reason
-}
+// Formateo genérico de errores unificado en errorShape (re-export por compat).
+export { errorMessage } from "./errorShape"
 
 /** Detecta el fallo de red del SDK: `new ClientError("Transport", { cause })` en dist/promise. */
 export function isTransportError(error: unknown): boolean {

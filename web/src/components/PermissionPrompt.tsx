@@ -1,4 +1,5 @@
 import { memo, useCallback } from "react"
+import { Modal } from "./Modal"
 import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import type { PermissionRequest } from "../types"
@@ -24,8 +25,7 @@ export const PermissionPrompt = memo(function PermissionPrompt({ request, onAppr
   }, [request.requestID, onReject, onDismiss])
 
   return (
-    <div className="modal-overlay" onClick={onDismiss}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('settings.permissionRequest')}>
+    <Modal onClose={onDismiss} variant="overlay" label={t('settings.permissionRequest')}>
         <ModalHeader title={t('settings.permissionRequest')} onClose={onDismiss} />
         <div className="modal-body">
           <p className="permission-detail">{request.permission}</p>
@@ -38,7 +38,6 @@ export const PermissionPrompt = memo(function PermissionPrompt({ request, onAppr
             {t('settings.permissionAllow')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 })

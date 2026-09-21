@@ -22,16 +22,10 @@ impl FavoritesStore {
         }
     }
     fn save(&self) {
-        let _ = std::fs::create_dir_all(crate::state::data_dir());
         if let Ok(p) = self.paths.read() {
-            let path = Self::file();
-            let tmp = path.with_extension("json.tmp");
             let data = serde_json::to_string(&*p).unwrap_or_default();
-            if std::fs::write(&tmp, &data).is_ok() {
-                let _ = std::fs::rename(&tmp, &path);
-            } else {
-                let _ = std::fs::write(&path, &data);
-            }
+            // Misma escritura atómica durable que config/state/kanban.
+            crate::state::atomic_write_json(&Self::file(), &data, "favorites");
         }
     }
 }

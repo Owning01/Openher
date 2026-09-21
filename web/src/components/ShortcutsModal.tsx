@@ -1,4 +1,5 @@
 import { memo, useState, useEffect, useCallback, useRef } from "react"
+import { Modal } from "./Modal"
 import { ModalHeader } from "./ModalHeader"
 import { LedSwitch } from "./LedSwitch"
 import { useT } from "../i18n-context"
@@ -79,14 +80,7 @@ export const ShortcutsModal = memo(function ShortcutsModal({ onClose, desktop: _
   ]
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-content shortcuts-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label={t('shortcuts.title')}
-        style={{ maxWidth: "600px", width: "95%" }}
-      >
+    <Modal onClose={onClose} variant="overlay" className="shortcuts-modal" label={t('shortcuts.title')} style={{ maxWidth: "600px", width: "95%" }}>
         <ModalHeader title={t('shortcuts.title') || "Atajos de teclado"} onClose={onClose} />
         <div className="modal-body" style={{ maxHeight: "70vh", overflowY: "auto", padding: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -213,7 +207,6 @@ export const ShortcutsModal = memo(function ShortcutsModal({ onClose, desktop: _
             )
           })}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 })

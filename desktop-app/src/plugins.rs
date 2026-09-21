@@ -205,7 +205,7 @@ impl PluginRegistry {
     }
 }
 
-/// Labs: apps del ecosistema (server opencode, stats, desktop-agent, plugins).
+/// Labs: apps del ecosistema (server opencode, desktop-agent, plugins).
 pub fn labs_list(state: &crate::state::AppState) -> serde_json::Value {
     let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
     let mut apps = Vec::new();
@@ -214,12 +214,6 @@ pub fn labs_list(state: &crate::state::AppState) -> serde_json::Value {
         "title": "Server OpenHer",
         "kind": "server",
         "configured": !cfg.start_command.trim().is_empty(),
-    }));
-    apps.push(serde_json::json!({
-        "id": "stats",
-        "title": "OpenHer Stats",
-        "kind": "stats",
-        "configured": true,
     }));
     apps.push(serde_json::json!({
         "id": "desktop-agent",
@@ -239,10 +233,6 @@ pub fn labs_list(state: &crate::state::AppState) -> serde_json::Value {
 }
 
 pub fn labs_start(state: &Arc<crate::state::AppState>, id: &str) -> Result<serde_json::Value, String> {
-    if id == "stats" {
-        crate::statsx::ensure(state);
-        return Ok(serde_json::json!({ "started": true, "pid": "thread" }));
-    }
     let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
     let (title, path): (String, String) = match id {
         "server" => ("Server OpenHer".to_string(), cfg.start_command.clone()),

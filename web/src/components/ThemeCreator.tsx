@@ -1,4 +1,5 @@
 import { memo, useState, useCallback } from "react"
+import { Modal } from "./Modal"
 import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 
@@ -79,8 +80,7 @@ export const ThemeCreator = memo(function ThemeCreator({ onClose }: Props) {
   }, [])
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content theme-creator" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('session.themeCreator')}>
+    <Modal onClose={onClose} variant="overlay" className="theme-creator" label={t('session.themeCreator')}>
         <ModalHeader title={t('session.themeCreator')} onClose={onClose} />
         <div className="modal-body">
           <label className="setting-row">
@@ -112,7 +112,6 @@ export const ThemeCreator = memo(function ThemeCreator({ onClose }: Props) {
             <button className="btn-secondary compact" onMouseEnter={applyPreview} onMouseLeave={resetPreview}>{t('themeCreator.preview')}</button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 })

@@ -1,6 +1,6 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { useScheduled } from "../hooks/useScheduled"
-import { RefreshIcon, MonitorIcon, PipIcon, LoadingIcon, CloseIcon, FolderIcon, GlobeIcon, SearchIcon, FileIcon, PaintIcon, KeyboardIcon, MaximizeIcon, ChevronIcon, CheckIcon } from "../Icons"
+import { MaximizeIcon, CloseIcon, FolderIcon, GlobeIcon, LoadingIcon, FileIcon, PaintIcon, SearchIcon } from "../Icons"
 import { useOutsideClick } from "../hooks/useOutsideClick"
 import { shell } from "../shell"
 import { BrowserVisualOverlay, type BrowserPickedElement } from "./BrowserVisualOverlay"
@@ -14,17 +14,20 @@ import {
 import { buildPipScript } from "./browserPipScript"
 import { buildWheelScript } from "./browserWheelScript"
 import { extractUrlFromDataTransfer, setUrlDragData } from "../utils/urlDrag"
-import { parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, BROWSER_STACK_PREFIX, loadBrowserStack, saveBrowserStack, buildFindCountScript, parseFindCount, domainOf, zoomForDomain, withZoomForDomain, BROWSER_ZOOM_MAP_KEY, type PageShortcutAction } from "./browserSync"
+import { parseShortcutEvent, parseZoomLevel, parseFindCount, shouldAdoptExternalUrl, BROWSER_ZOOM_MAP_KEY, domainOf, zoomForDomain, withZoomForDomain, type PageShortcutAction } from "./browserSync"
+import {
+  BROWSER_HOME, BROWSER_MINIMAL_KEY, BROWSER_ZOOM_KEY, DEVICE_WIDTHS, IS_DESKTOP, ZONE_ICONS,
+  type DeviceMode,
+} from "../features/browser/constants"
+import { getFavicon } from "../features/browser/favicon"
+import { getFrameSrc, isProbablyUrl } from "../features/browser/url"
+import { useBrowserTabs } from "../features/browser/useBrowserTabs"
+import { useBookmarks } from "../features/browser/useBookmarks"
+import { useBrowserFind } from "../features/browser/useBrowserFind"
+import { BrowserToolbar } from "../features/browser/BrowserToolbar"
 
-const IS_DESKTOP = typeof window !== "undefined" && !!(window as any).__OPENHER_DESKTOP__
-export const BROWSER_HOME = "https://www.google.com"
-const BROWSER_BOOKMARKS_KEY = "opencode.browser.bookmarks"
-const BROWSER_HISTORY_KEY = "opencode.browser.history"
-const BROWSER_TABS_KEY = "opencode.browser.tabs"
-const BROWSER_ACTIVE_KEY = "opencode.browser.activeTabId"
-
-const ZONE_ICONS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"]
-
+export { BROWSER_HOME }
+export type { BrowserBookmark, BrowserTabItem } from "../features/browser/types"
 
 const STYLE_FIELDS: Array<{ prop: string; label: string; kind: "color" | "number" | "select"; options?: string[]; unit?: string }> = [
   { prop: "color", label: "Texto", kind: "color" },
@@ -35,168 +38,6 @@ const STYLE_FIELDS: Array<{ prop: string; label: string; kind: "color" | "number
   { prop: "padding", label: "Padding", kind: "number", unit: "px" },
   { prop: "border-radius", label: "Radio", kind: "number", unit: "px" },
 ]
-
-function toEmbeddableUrl(url: string): string {
-  try {
-    let raw = url.trim()
-    if (!/^https?:\/\//i.test(raw)) {
-      raw = `https://${raw}`
-    }
-    const u = new URL(raw)
-    const host = u.hostname.toLowerCase()
-
-    if (host.includes("youtube.com") || host.includes("youtu.be")) {
-      if (u.pathname.startsWith("/embed/")) return url
-      const v = u.searchParams.get("v")
-      if (v) return `https://www.youtube-nocookie.com/embed/${v}?autoplay=1`
-      if (host.includes("youtu.be")) {
-        const id = u.pathname.replace(/^\//, "")
-        if (id) return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1`
-      }
-      const q = u.searchParams.get("search_query") || u.searchParams.get("q")
-      if (q) return `https://piped.video/results?search_query=${encodeURIComponent(q)}`
-      if (host.includes("music.youtube.com")) {
-        return "https://piped.video/trending"
-      }
-      return "https://piped.video"
-    }
-
-    // Google se sirve directo (via proxy/sub-WebView) para búsqueda real — no redirigir a DDG
-  } catch {}
-  return url
-}
-
-function getFrameSrc(url: string, forceProxy = false): string {
-  if (!url || url === "about:blank") return "about:blank"
-  if (!forceProxy && /^(http:\/\/)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(url)) {
-    return url
-  }
-  const embed = toEmbeddableUrl(url)
-  if (embed !== url) return embed
-  try {
-    if (typeof window !== "undefined" && window.location.hostname === "127.0.0.1") {
-      return `/shell/proxy?url=${encodeURIComponent(url)}`
-    }
-    if (IS_DESKTOP) return url
-    return `/shell/proxy?url=${encodeURIComponent(url)}`
-  } catch {
-    return url
-  }
-}
-
-function isProbablyUrl(raw: string): boolean {
-  const s = raw.trim()
-  if (!s) return false
-  if (/^\d{2,5}$/.test(s)) return true
-  if (/^https?:\/\//i.test(s)) return true
-  if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(\/.*)?$/i.test(s)) return true
-  if (s.includes(" ")) return false
-  // scheme:// (about:blank, chrome://, etc.)
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) return true
-  // dominio con TLD real: github.com, google.com/search, ejemplo.com:8080
-  if (/^[a-zA-Z0-9.-]+\.[a-z]{2,}($|\/|:|\?|#).*/i.test(s)) return true
-  // host:port numérico (192.168.1.1:3000, myhost:8080)
-  if (/^[a-zA-Z0-9.-]+:\d{2,5}(\/.*)?$/.test(s)) return true
-  return false
-}
-
-export type BrowserBookmark = { url: string; title: string; addedAt: number }
-function loadBookmarks(): BrowserBookmark[] {
-  try {
-    const raw = localStorage.getItem(BROWSER_BOOKMARKS_KEY)
-    const arr = raw ? JSON.parse(raw) : []
-    return Array.isArray(arr) ? arr.filter((x: any) => x && typeof x.url === "string") : []
-  } catch { return [] }
-}
-function saveBookmarks(items: BrowserBookmark[]) {
-  try { localStorage.setItem(BROWSER_BOOKMARKS_KEY, JSON.stringify(items.slice(0, 100))) } catch (e: any) {
-    if (e?.name === "QuotaExceededError" || e?.code === 22) {
-      try { localStorage.setItem(BROWSER_BOOKMARKS_KEY, JSON.stringify(items.slice(0, 20))) } catch {}
-      console.warn("[Browser] bookmarks quota exceeded, trimmed to 20")
-    } else {
-      console.warn("[Browser] saveBookmarks failed", e)
-    }
-  }
-}
-function loadHistory(): string[] {
-  try {
-    const raw = localStorage.getItem(BROWSER_HISTORY_KEY)
-    const arr = raw ? JSON.parse(raw) : []
-    return Array.isArray(arr) ? arr.filter((x: any) => typeof x === "string").slice(0, 80) : []
-  } catch { return [] }
-}
-function pushHistory(url: string) {
-  if (!url || url === "about:blank") return
-  try {
-    const list = loadHistory().filter((u) => u !== url)
-    list.unshift(url)
-    localStorage.setItem(BROWSER_HISTORY_KEY, JSON.stringify(list.slice(0, 80)))
-  } catch {}
-}
-
-type DeviceMode = "responsive" | "mobile" | "tablet" | "desktop"
-
-const DEVICE_WIDTHS: Record<DeviceMode, string | null> = {
-  responsive: null,
-  mobile: "375px",
-  tablet: "768px",
-  desktop: "1280px",
-}
-
-const COMMON_PORTS = [
-  { port: "5173", label: ":5173 (Vite)" },
-  { port: "3000", label: ":3000 (React/Next)" },
-  { port: "8080", label: ":8080 (Http)" },
-  { port: "8000", label: ":8000 (Python/API)" },
-  { port: "4173", label: ":4173 (Preview)" },
-  { port: "8765", label: ":8765 (Stats)" },
-]
-
-export type BrowserTabItem = {
-  id: string
-  url: string
-  title: string
-  history: string[]
-  historyIdx: number
-}
-
-function getFavicon(url: string) {
-  const u = url.toLowerCase()
-  if (u.includes("github.com")) {
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-      </svg>
-    )
-  }
-  if (u.includes("youtube.com") || u.includes("youtu.be")) {
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--danger)">
-        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-      </svg>
-    )
-  }
-  if (u.includes("gemini.google.com") || u.includes("google.")) {
-    return <span style={{ color: "var(--primary)", display: "inline-flex" }}><SearchIcon size={14} /></span>
-  }
-  if (u.includes("localhost") || u.includes("127.0.0.1") || u.includes("0.0.0.0")) {
-    return <MonitorIcon size={14} />
-  }
-  return <GlobeIcon size={14} />
-}
-
-function formatDisplayTitle(url: string): string {
-  try {
-    const parsed = new URL(url)
-    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-      return `localhost${parsed.port ? `:${parsed.port}` : ""}${parsed.pathname !== "/" ? parsed.pathname : ""}`
-    }
-    const path = parsed.pathname.replace(/^\//, "")
-    return path ? `${parsed.hostname}/${path.slice(0, 20)}` : parsed.hostname
-  } catch {
-    return url.replace(/^https?:\/\//, "").slice(0, 25) || "Nueva pestaña"
-  }
-}
 
 export const BrowserPanel = memo(function BrowserPanel({
   initialUrl = BROWSER_HOME,
@@ -239,70 +80,6 @@ export const BrowserPanel = memo(function BrowserPanel({
   inspectTool?: InspectTool
   onToggleInspectTool?: (tool: InspectTool) => void
 }) {
-  const [tabs, setTabs] = useState<BrowserTabItem[]>(() => {
-    const single = (url: string, history?: string[], historyIdx?: number): BrowserTabItem[] => [
-      {
-        id: "tab-1",
-        url,
-        title: formatDisplayTitle(url),
-        history: history ?? [url],
-        historyIdx: historyIdx ?? 0,
-      },
-    ]
-    if (hideTabBar) {
-      // Restaurar pila atrás/adelante si coincide con la URL del layout
-      // (padre = fuente autoritativa; la pila solo suma historial).
-      if (persistKey) {
-        try {
-          const snap = loadBrowserStack(localStorage, BROWSER_STACK_PREFIX + persistKey)
-          if (snap && snap.url === initialUrl && snap.history.includes(initialUrl)) {
-            return single(snap.url, snap.history, snap.historyIdx)
-          }
-        } catch {}
-      }
-      return single(initialUrl)
-    }
-    try {
-      const raw = localStorage.getItem(BROWSER_TABS_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as BrowserTabItem[]
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((t: any) => t && typeof t.url === "string" && typeof t.id === "string")) {
-          return parsed
-        }
-      }
-    } catch {}
-    return [
-      {
-        id: "tab-1",
-        url: initialUrl,
-        title: formatDisplayTitle(initialUrl),
-        history: [initialUrl],
-        historyIdx: 0,
-      },
-    ]
-  })
-  const [activeTabId, setActiveTabId] = useState<string>(() => {
-    if (hideTabBar) return "tab-1"
-    try {
-      const v = localStorage.getItem(BROWSER_ACTIVE_KEY)
-      if (v) return v
-    } catch {}
-    return "tab-1"
-  })
-  const [inputUrl, setInputUrl] = useState(() => {
-    if (hideTabBar) return initialUrl
-    try {
-      const raw = localStorage.getItem(BROWSER_TABS_KEY)
-      const aid = localStorage.getItem(BROWSER_ACTIVE_KEY)
-      if (raw && aid) {
-        const parsed = JSON.parse(raw) as BrowserTabItem[]
-        const found = Array.isArray(parsed) ? parsed.find((t: any) => t.id === aid) : null
-        if (found?.url) return found.url
-      }
-    } catch {}
-    return initialUrl
-  })
-  const [reloadKey, setReloadKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("responsive")
   const [showTuneDropdown, setShowTuneDropdown] = useState(false)
@@ -314,27 +91,16 @@ export const BrowserPanel = memo(function BrowserPanel({
   const [embedEmpty, setEmbedEmpty] = useState(false)
   const [browserFailed, setBrowserFailed] = useState(false)
   const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null)
-  const [findOpen, setFindOpen] = useState(false)
-  const [findQuery, setFindQuery] = useState("")
-  const [findCase, setFindCase] = useState(false)
-  const [findTotal, setFindTotal] = useState<number | null>(null)
   const [lastDownload, setLastDownload] = useState<{ url: string; path: string | null; ok: boolean } | null>(null)
   const [profile, setProfile] = useState<{ data_dir: string; webview_dir: string; downloads_dir: string } | null>(null)
-  const [bookmarks, setBookmarks] = useState<BrowserBookmark[]>(() => loadBookmarks())
-  const [showBookmarks, setShowBookmarks] = useState(() => {
-    try { return localStorage.getItem("opencode.browser.showBookmarks") !== "0" } catch { return true }
-  })
   const [zoomLevel, setZoomLevel] = useState<number>(() => {
     try {
-      const v = parseFloat(localStorage.getItem("opencode.browser.zoom") || "1")
+      const v = parseFloat(localStorage.getItem(BROWSER_ZOOM_KEY) || "1")
       return Number.isFinite(v) && v > 0 ? Math.max(0.5, Math.min(2.5, v)) : 1
     } catch { return 1 }
   })
   const zoomRef = useRef(zoomLevel)
   zoomRef.current = zoomLevel
-  const [homeUrl] = useState<string>(() => {
-    try { return localStorage.getItem("opencode.browser.home") || BROWSER_HOME } catch { return BROWSER_HOME }
-  })
   const [projectBanner, setProjectBanner] = useState<{
     directory: string
     entrypoint: string
@@ -345,18 +111,15 @@ export const BrowserPanel = memo(function BrowserPanel({
   // Chrome-like omnibox suggestions
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestIdx, setSuggestIdx] = useState(-1)
-  void suggestions; void setSuggestions; void suggestIdx; void setSuggestIdx
   const [minimal, setMinimal] = useState(() => {
-    try { return localStorage.getItem("opencode.browser.minimal") === "1" } catch { return false }
+    try { return localStorage.getItem(BROWSER_MINIMAL_KEY) === "1" } catch { return false }
   })
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const omniboxRef = useRef<HTMLInputElement | null>(null)
-  const findInputRef = useRef<HTMLInputElement | null>(null)
   const nativeReady = useRef(false)
-  const prevInitialUrlRef = useRef(initialUrl)
   const onUrlChangeRef = useRef(onUrlChange)
   onUrlChangeRef.current = onUrlChange
   // Vista nativa del pool Rust ("" = única legacy): todas las llamadas van
@@ -366,51 +129,53 @@ export const BrowserPanel = memo(function BrowserPanel({
     shell.browser.open(url, bounds, view)
   const bBounds = (b: { x: number; y: number; w: number; h: number }) => shell.browser.setBounds(b, view)
   const bVis = (v: boolean) => shell.browser.setVisibility(v, view)
-  const bNav = (url: string, action?: "back" | "forward" | "reload") => shell.browser.navigate(url, action, view)
+  const bNav = useCallback((url: string, action?: "back" | "forward" | "reload") => shell.browser.navigate(url, action, view), [view])
   const bEval = (code: string) => shell.browser.eval(code, view)
   const bUrl = () => shell.browser.url(view)
-  // Refs vivas para los polls con [] (puente página→host, sync URL)
-  const tabsRef = useRef(tabs)
-  tabsRef.current = tabs
-  const activeTabIdRef = useRef(activeTabId)
-  activeTabIdRef.current = activeTabId
+  // Navegación "silenciosa" que consume el hook de tabs (mismo catch que antes).
+  const navQuiet = useCallback((url: string, action?: "back" | "forward") => { bNav(url, action).catch(() => {}) }, [bNav])
   // Ancho de columna del modo dispositivo (null = responsive completo).
   // El hijo nativo también lo respeta: bounds centrados, no solo el iframe.
   const deviceWidthRef = useRef<number | null>(null)
 
-  // Persistir tabs/sesión como Chrome (solo con tabbar interno visible)
-  useEffect(() => {
-    if (hideTabBar) return
-    try { localStorage.setItem(BROWSER_TABS_KEY, JSON.stringify(tabs.slice(0, 20))) } catch {}
-  }, [tabs, hideTabBar])
-  // hideTabBar (desktop): la URL actual la guarda el padre (browserTabUrls);
-  // aquí solo la pila atrás/adelante bajo la clave del bid.
-  useEffect(() => {
-    if (!hideTabBar || !persistKey) return
-    try {
-      const t = tabs[0]
-      if (!t) return
-      saveBrowserStack(localStorage, BROWSER_STACK_PREFIX + persistKey, {
-        url: t.url,
-        history: t.history,
-        historyIdx: t.historyIdx,
-      })
-    } catch {}
-  }, [tabs, hideTabBar, persistKey])
-  useEffect(() => {
-    if (hideTabBar) return
-    try { localStorage.setItem(BROWSER_ACTIVE_KEY, activeTabId) } catch {}
-  }, [activeTabId, hideTabBar])
+  // Resetea el chrome del host antes de una navegación del omnibox.
+  const resetOnNavigate = useCallback(() => {
+    setLoading(true)
+    setHasError(false)
+    setSuggestions([])
+    setSuggestIdx(-1)
+    setShowHistory(false)
+  }, [])
+
+  const {
+    tabs, activeTabId, setActiveTabId, inputUrl, setInputUrl, reloadKey, bumpReload, homeUrl,
+    tabsRef, activeTabIdRef, activeTab, currentSrc,
+    navigateTab, commitExternalUrl, handleAddTab, handleTabBarDragOver, handleTabBarDrop,
+    closeTabById, handleCloseTab, handleBack, handleForward,
+  } = useBrowserTabs({
+    initialUrl,
+    hideTabBar,
+    persistKey,
+    isDesktop: IS_DESKTOP,
+    nav: navQuiet,
+    onClose,
+    onNavigateStart: resetOnNavigate,
+  })
+
+  const evalInPage = useCallback((code: string) => { bEval(code).catch(() => {}) }, [view])
+
+  const { bookmarks, showBookmarks, setBookmarksVisible, isBookmarked, toggleBookmark } = useBookmarks(currentSrc)
+  const {
+    findOpen, setFindOpen, findQuery, setFindQuery, findCase, setFindCase,
+    findTotal, setFindTotal, findInputRef, applyFind, openFind,
+  } = useBrowserFind({ isDesktop: IS_DESKTOP, currentSrc, iframeRef, evalInPage })
+
+  const isSecure = /^https:/i.test(currentSrc)
 
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   useOutsideClick(dropdownRef, () => setShowTuneDropdown(false), showTuneDropdown)
   const histRef = useRef<HTMLDivElement | null>(null)
   useOutsideClick(histRef, () => { setShowHistory(false); setSuggestions([]); setSuggestIdx(-1) }, showHistory || suggestions.length > 0)
-
-  const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0]
-  const currentSrc = activeTab?.url || "about:blank"
-  const isSecure = /^https:/i.test(currentSrc)
-  const isBookmarked = bookmarks.some((b) => b.url === currentSrc)
 
   useEffect(() => {
     // Solo resincronizar al cambiar de pestaña o al commitear una navegación:
@@ -432,19 +197,8 @@ export const BrowserPanel = memo(function BrowserPanel({
     const w = tw ? Math.min(Math.round(r.width), tw) : Math.round(r.width)
     return { x: Math.round(r.left + (r.width - w) / 2), y: Math.round(r.top), w, h: Math.round(r.height) }
   }, [])
-  // hideTabBar: navegador es un único viewport controlado por el TabBar externo.
-  // Sincronizar solo cuando cambia initialUrl por switch de pestaña externa, no tras navegación interna (navigateTab).
-  useEffect(() => {
-    if (!hideTabBar) return
-    if (!initialUrl) return
-    if (prevInitialUrlRef.current === initialUrl) return
-    prevInitialUrlRef.current = initialUrl
-    setTabs([{ id: "tab-1", url: initialUrl, title: formatDisplayTitle(initialUrl), history: [initialUrl], historyIdx: 0 }])
-    setActiveTabId("tab-1")
-    setInputUrl(initialUrl)
-  }, [initialUrl, hideTabBar])
 
-  useEffect(() => { try { localStorage.setItem("opencode.browser.minimal", minimal ? "1" : "0") } catch {} }, [minimal])
+  useEffect(() => { try { localStorage.setItem(BROWSER_MINIMAL_KEY, minimal ? "1" : "0") } catch {} }, [minimal])
 
   // El sub-WebView nativo no propaga focus al DOM del host. Marcamos el panel
   // activo para que los shortcuts del navegador tengan prioridad sobre OpenHer.
@@ -481,7 +235,7 @@ export const BrowserPanel = memo(function BrowserPanel({
           // inline apply to avoid stale closure
           const v = next
           try {
-            localStorage.setItem("opencode.browser.zoom", String(v))
+            localStorage.setItem(BROWSER_ZOOM_KEY, String(v))
             const d = domainOf(tabsRef.current.find((t) => t.id === activeTabIdRef.current)?.url ?? "")
             if (d) {
               let map: Record<string, number> = {}
@@ -546,25 +300,6 @@ export const BrowserPanel = memo(function BrowserPanel({
     }, 180)
     return () => clearTimeout(t)
   }, [inputUrl])
-
-  const normalizeUrl = (raw: string): string => {
-    let u = raw.trim()
-    if (!u) return homeUrl
-    if (/^\d{2,5}$/.test(u)) {
-      return `http://localhost:${u}`
-    }
-    // Omnibox tipo Chrome: sin puntos/espacios → búsqueda en Google
-    if (!isProbablyUrl(u)) {
-      return `https://www.google.com/search?q=${encodeURIComponent(u)}`
-    }
-    if (!/^https?:\/\//i.test(u)) {
-      if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(\/.*)?$/i.test(u)) {
-        return `http://${u}`
-      }
-      return `https://${u}`
-    }
-    return u
-  }
 
   // --- Native Sub-WebView (desktop only) — singleton guard + HiDPI + observabilidad
   useEffect(() => {
@@ -793,17 +528,6 @@ export const BrowserPanel = memo(function BrowserPanel({
     return () => { stopped = true; window.clearInterval(id) }
   }, [isActive, dispatchShortcut])
 
-  // Adopta navegaciones internas (links, redirects, SPA) al tab + omnibox.
-  const commitExternalUrl = useCallback((u: string) => {
-    pushHistory(u)
-    const id = activeTabIdRef.current
-    setTabs((prev) => prev.map((t) => {
-      if (t.id !== id) return t
-      const nextHist = t.history.slice(-49)
-      if (nextHist[nextHist.length - 1] !== u) nextHist.push(u)
-      return { ...t, url: u, title: formatDisplayTitle(u), history: nextHist, historyIdx: nextHist.length - 1 }
-    }))
-  }, [])
   // Reloj central (Plan 3). Los guards (browserFailed, nativeReady) quedan
   // dentro del fn; el scheduler aporta pausa en hidden + anti-solapamiento.
   useScheduled(`browser-url:${isActive}:${browserFailed}`, 2000, async () => {
@@ -924,7 +648,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             const v = parseZoomLevel(p)
             if (v !== null) {
               setZoomLevel(v)
-              try { localStorage.setItem("opencode.browser.zoom", String(v)) } catch {}
+              try { localStorage.setItem(BROWSER_ZOOM_KEY, String(v)) } catch {}
             }
           }
         }
@@ -1009,41 +733,6 @@ export const BrowserPanel = memo(function BrowserPanel({
     prevAnnIds.current = ids
   }, [annotations])
 
-  // Visibility: hide when component is not active (e.g. tab switch)
-  // The parent handles this via the `active` prop — but for now we
-  // keep it simple: the native view is always visible while mounted.
-
-  const navigateTab = useCallback((newUrl: string) => {
-    const norm = normalizeUrl(newUrl)
-    setInputUrl(norm)
-    setLoading(true)
-    setHasError(false)
-    setSuggestions([])
-    setSuggestIdx(-1)
-    setShowHistory(false)
-    pushHistory(norm)
-
-    setTabs((prev) =>
-      prev.map((t) => {
-        if (t.id !== activeTabId) return t
-        const nextHist = t.history.slice(0, t.historyIdx + 1)
-        nextHist.push(norm)
-        return {
-          ...t,
-          url: norm,
-          title: formatDisplayTitle(norm),
-          history: nextHist,
-          historyIdx: nextHist.length - 1,
-        }
-      })
-    )
-    if (IS_DESKTOP) {
-      bNav(norm).catch(() => {})
-    } else {
-      setReloadKey((k) => k + 1)
-    }
-  }, [activeTabId, homeUrl])
-
   const handleOpenProjectFolder = useCallback(async () => {
     try {
       const res = await shell.fs.pickFolder()
@@ -1071,108 +760,6 @@ export const BrowserPanel = memo(function BrowserPanel({
     }
   }, [navigateTab, inspectMode, onToggleInspectTool])
 
-  const handleAddTab = useCallback((eOrUrl?: string | React.MouseEvent) => {
-    const url = typeof eOrUrl === 'string' ? eOrUrl : undefined
-    const newId = `tab-${Date.now().toString(36)}`
-    const defaultUrl = url || homeUrl
-    const newTab: BrowserTabItem = {
-      id: newId,
-      url: defaultUrl,
-      title: formatDisplayTitle(defaultUrl),
-      history: [defaultUrl],
-      historyIdx: 0,
-    }
-    setTabs((prev) => [...prev, newTab])
-    setActiveTabId(newId)
-  }, [homeUrl])
-
-
-
-  // Drop de URLs sobre la tabbar (Chrome -> app): vive aquí y no inline en
-  // el JSX — el handler de una sola línea rompía el parseo TSX (TS2657 en
-  // cascada). Lógica idéntica a la versión inline original.
-  const handleTabBarDragOver = useCallback((e: React.DragEvent) => {
-    const url = extractUrlFromDataTransfer(e.dataTransfer)
-    if (url || e.dataTransfer.types.includes("application/x-opencode-browser-tab") || e.dataTransfer.types.includes("text/uri-list")) {
-      e.preventDefault()
-      e.dataTransfer.dropEffect = "copy"
-    }
-  }, [])
-
-  const handleTabBarDrop = useCallback((e: React.DragEvent) => {
-    const url = extractUrlFromDataTransfer(e.dataTransfer)
-    if (!url) return
-    e.preventDefault()
-    e.stopPropagation()
-    const bar = e.currentTarget as HTMLElement
-    const tabsEls = Array.from(bar.querySelectorAll(".browser-tab"))
-    let at = tabsEls.length
-    for (let k = 0; k < tabsEls.length; k++) {
-      const r = (tabsEls[k] as HTMLElement).getBoundingClientRect()
-      if (e.clientX < r.left + r.width / 2) { at = k; break }
-    }
-    const newId = `tab-${Date.now().toString(36)}`
-    const title = formatDisplayTitle(url)
-    const nt = { id: newId, url, title, history: [url], historyIdx: 0 }
-    setTabs((prev) => {
-      const n = [...prev]
-      n.splice(Math.min(at, n.length), 0, nt as any)
-      return n
-    })
-    setActiveTabId(newId)
-    setInputUrl(url)
-    pushHistory(url)
-  }, [])
-
-  const closeTabById = (id: string) => {
-    if (tabs.length === 1) {
-      if (onClose) onClose()
-      return
-    }
-    const idx = tabs.findIndex((t) => t.id === id)
-    const nextTabs = tabs.filter((t) => t.id !== id)
-    setTabs(nextTabs)
-    if (activeTabId === id) {
-      const nextActive = nextTabs[Math.max(0, idx - 1)]
-      if (nextActive) setActiveTabId(nextActive.id)
-    }
-  }
-
-  const handleCloseTab = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
-    closeTabById(id)
-  }
-
-  const handleBack = () => {
-    if (!activeTab || activeTab.historyIdx <= 0) return
-    const prevIdx = activeTab.historyIdx - 1
-    const prevUrl = activeTab.history[prevIdx]
-    setTabs((prev) =>
-      prev.map((t) => (t.id === activeTabId ? { ...t, url: prevUrl, historyIdx: prevIdx, title: formatDisplayTitle(prevUrl) } : t))
-    )
-    setInputUrl(prevUrl)
-    if (IS_DESKTOP) {
-      bNav(prevUrl, "back").catch(() => {})
-    } else {
-      setReloadKey((k) => k + 1)
-    }
-  }
-
-  const handleForward = () => {
-    if (!activeTab || activeTab.historyIdx >= activeTab.history.length - 1) return
-    const nextIdx = activeTab.historyIdx + 1
-    const nextUrl = activeTab.history[nextIdx]
-    setTabs((prev) =>
-      prev.map((t) => (t.id === activeTabId ? { ...t, url: nextUrl, historyIdx: nextIdx, title: formatDisplayTitle(nextUrl) } : t))
-    )
-    setInputUrl(nextUrl)
-    if (IS_DESKTOP) {
-      bNav(nextUrl, "forward").catch(() => {})
-    } else {
-      setReloadKey((k) => k + 1)
-    }
-  }
-
   const handleReload = () => {
     setLoading(true)
     setHasError(false)
@@ -1188,13 +775,13 @@ export const BrowserPanel = memo(function BrowserPanel({
           nativeReady.current = true
           setBrowserFailed(false)
         }).catch(() => {
-          setReloadKey((k) => k + 1)
+          bumpReload()
         })
       } else {
-        setReloadKey((k) => k + 1)
+        bumpReload()
       }
     } else {
-      setReloadKey((k) => k + 1)
+      bumpReload()
     }
   }
 
@@ -1242,46 +829,6 @@ export const BrowserPanel = memo(function BrowserPanel({
   }
   const handleCopyUrl = async () => {
     try { await navigator.clipboard.writeText(currentSrc) } catch {}
-  }
-  const applyFind = useCallback((q: string, cs: boolean) => {
-    if (!q) return
-    setFindTotal(null)
-    const code = cs
-      ? `window.find(${JSON.stringify(q)}, false, false, true, false, false, false)`
-      : `window.find(${JSON.stringify(q)}, false, false, false, false, false, false)`
-    if (IS_DESKTOP) {
-      bEval(code).catch(() => {})
-      // Contador aparte: /eval no retorna valores, vuelve por IPC (find-count).
-      bEval(buildFindCountScript(q, cs)).catch(() => {})
-    } else {
-      try {
-        const w = iframeRef.current?.contentWindow as any
-        if (w?.find) w.find(q, false, false, !cs, false, false, false)
-        const doc = iframeRef.current?.contentDocument as any
-        const txt: string = doc?.body?.innerText ?? ""
-        if (txt && q) {
-          const hay = cs ? txt : txt.toLowerCase()
-          const needle = cs ? q : q.toLowerCase()
-          let n = 0
-          let i = -1
-          while ((i = hay.indexOf(needle, i + 1)) >= 0 && n < 9999) n++
-          setFindTotal(n)
-        } else {
-          setFindTotal(0)
-        }
-      } catch {
-        setFindTotal(null)
-      }
-    }
-  }, [])
-  const toggleBookmark = () => {
-    const title = formatDisplayTitle(currentSrc)
-    setBookmarks((prev) => {
-      const exists = prev.some((b) => b.url === currentSrc)
-      const next = exists ? prev.filter((b) => b.url !== currentSrc) : [{ url: currentSrc, title, addedAt: Date.now() }, ...prev].slice(0, 100)
-      saveBookmarks(next)
-      return next
-    })
   }
   // Zoom único: si la página tiene el forwarder (Ctrl+rueda), se usa su setter
   // (aplica + reporta nivel); si no, CSS directo (también válido por allowlist).
@@ -1343,8 +890,7 @@ export const BrowserPanel = memo(function BrowserPanel({
         e.preventDefault(); e.stopPropagation(); omniboxRef.current?.focus(); omniboxRef.current?.select(); return
       }
       if (modifier && key === "f") {
-        e.preventDefault(); e.stopPropagation(); setFindOpen(true)
-        requestAnimationFrame(() => findInputRef.current?.focus()); return
+        e.preventDefault(); e.stopPropagation(); openFind(); return
       }
       if (modifier && key === "t") {
         if (hideTabBar) return
@@ -1379,9 +925,6 @@ export const BrowserPanel = memo(function BrowserPanel({
     return () => window.removeEventListener("keydown", onKeyDown, true)
   }, [activeTab, zoomLevel, handleBack, handleForward])
 
-  // Al cambiar de página el contador anterior ya no vale.
-  useEffect(() => { setFindTotal(null) }, [currentSrc])
-
   const targetWidth = DEVICE_WIDTHS[deviceMode]
   deviceWidthRef.current = targetWidth ? parseInt(targetWidth, 10) || null : null
   // Acciones vivas para el puente página→host (el poll usa el ref, no deps)
@@ -1389,7 +932,7 @@ export const BrowserPanel = memo(function BrowserPanel({
   actionsRef.current = {
     reload: handleReload,
     focusUrl: () => { omniboxRef.current?.focus(); omniboxRef.current?.select() },
-    find: () => { setFindOpen(true); requestAnimationFrame(() => findInputRef.current?.focus()) },
+    find: openFind,
     newTab: () => { if (!hideTabBar) handleAddTab() },
     closeTab: () => { if (!hideTabBar && activeTab) closeTabById(activeTab.id) },
     bookmark: toggleBookmark,
@@ -1416,11 +959,11 @@ export const BrowserPanel = memo(function BrowserPanel({
       {!minimal && !hideTabBar && (
       <div className="browser-tabbar" onDragOver={handleTabBarDragOver} onDrop={handleTabBarDrop}>
         {tabs.map((tab) => {
-          const isActive = tab.id === activeTabId
+          const isActiveTab = tab.id === activeTabId
           return (
             <div
               key={tab.id}
-              className={`browser-tab${isActive ? " active" : ""}`}
+              className={`browser-tab${isActiveTab ? " active" : ""}`}
               onClick={() => setActiveTabId(tab.id)}
               title={tab.url}
               draggable
@@ -1458,318 +1001,64 @@ export const BrowserPanel = memo(function BrowserPanel({
       </div>
       )}
 
-      {/* 2. Navigation Toolbar — full chrome-like browser */}
+      {/* 2+3. Navigation Toolbar + Address Bar */}
       {!minimal && (
-      <div className="browser-toolbar">
-        <div className="browser-nav-actions">
-          <button
-            type="button"
-            className="browser-nav-btn"
-            onClick={handleBack}
-            disabled={!activeTab || activeTab.historyIdx <= 0}
-            title="Atrás"
-            aria-label="Atrás"
-          >
-            <span style={{ transform: "rotate(90deg)", display: "inline-flex" }}><ChevronIcon size={14} /></span>
-          </button>
-          <button
-            type="button"
-            className="browser-nav-btn"
-            onClick={handleForward}
-            disabled={!activeTab || activeTab.historyIdx >= activeTab.history.length - 1}
-            title="Adelante"
-            aria-label="Adelante"
-          >
-            <span style={{ transform: "rotate(-90deg)", display: "inline-flex" }}><ChevronIcon size={14} /></span>
-          </button>
-          <button
-            type="button"
-            className="browser-nav-btn"
-            onClick={handleReload}
-            title="Recargar página"
-            aria-label="Recargar"
-          >
-            <RefreshIcon size={14} />
-          </button>
-          <button type="button" className="browser-nav-btn" onClick={handleHome} title="Inicio (Google)" aria-label="Inicio">
-            <GlobeIcon size={14} />
-          </button>
-          <button
-            type="button"
-            className="browser-open-project-btn"
-            onClick={handleOpenProjectFolder}
-            title="Abrir carpeta de proyecto para diseñar y auto-servir en OpenDesign"
-            aria-label="Abrir proyecto para diseño"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "5px",
-              padding: "3px 8px",
-              background: "var(--primary-soft)",
-              border: "1px solid var(--primary-soft)",
-              borderRadius: "6px",
-              color: "var(--primary)",
-              fontSize: "12px",
-              fontWeight: 500,
-              cursor: "pointer",
-              marginLeft: "4px",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <FolderIcon size={13} />
-            <span>Abrir Proyecto Web</span>
-          </button>
-        </div>
-
-        {/* 3. Address Bar — omnibox chrome-like con search, candado, fav, tabs */}
-        <div className="browser-omnibox" ref={dropdownRef} style={{ flex: 1 }}>
-          <button
-            type="button"
-            className={`browser-tune-btn${showTuneDropdown ? " active" : ""}`}
-            onClick={() => setShowTuneDropdown((v) => !v)}
-            title="Configuración de puertos y resolución"
-            aria-label="Configuración"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
-
-          <span className={isSecure ? "browser-addr-lock" : "browser-addr-warn"} title={isSecure ? "Conexión segura (HTTPS)" : "No seguro (HTTP)"} style={{ display: "inline-flex", flexShrink: 0, color: isSecure ? "var(--success)" : "var(--warning)" }}>
-            {isSecure ? <CheckIcon size={12} /> : <CloseIcon size={12} />}
-          </span>
-          <div style={{ position: "relative", flex: 1, minWidth: 0, display: "flex", alignItems: "center" }}>
-            <input
-              type="text"
-              className="browser-omnibox-input"
-              ref={omniboxRef}
-              value={inputUrl}
-              onChange={(e) => { setInputUrl(e.target.value); if (e.target.value.trim().length >= 1) setShowHistory(true) }}
-              onFocus={() => { if (inputUrl.trim() === "" || inputUrl === homeUrl) setShowHistory(true); else if (loadHistory().length > 0) setShowHistory(true) }}
-              onKeyDown={handleKeyDown}
-              placeholder="Buscá en Google o escribí una URL"
-            />
-            {inputUrl && (
-              <button type="button" onClick={() => setInputUrl("")} title="Borrar" aria-label="Borrar" style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: "0 4px", display: "inline-flex" }}><CloseIcon size={10} /></button>
-            )}
-            {(showHistory || suggestions.length > 0) && (
-              <div ref={histRef} className="browser-suggest-dropdown">
-                {(() => {
-                  const q = inputUrl.trim().toLowerCase()
-                  const hist = loadHistory()
-                  const filtered = q ? hist.filter((u) => u.toLowerCase().includes(q)).slice(0, 6) : hist.slice(0, 6)
-                  const inFiltered = new Set(filtered)
-                  // Favoritos primero (funcionan sin red, a diferencia de Suggest).
-                  const markFiltered = (q
-                    ? bookmarks.filter((b) => b.url.toLowerCase().includes(q) || (b.title ?? "").toLowerCase().includes(q))
-                    : bookmarks
-                  ).filter((b) => !inFiltered.has(b.url)).slice(0, 4)
-                  const qTrim = inputUrl.trim()
-                  const showSearch = qTrim && !isProbablyUrl(qTrim)
-                  return (
-                    <>
-                      {showSearch && qTrim && (
-                        <button type="button" className="browser-suggest-item" style={{ fontWeight: 600 }} onClick={() => { setShowHistory(false); setSuggestions([]); navigateTab(`https://www.google.com/search?q=${encodeURIComponent(qTrim)}`) }}>
-                          <SearchIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Buscar "{qTrim}" en Google</span>
-                        </button>
-                      )}
-                      {markFiltered.map((b) => (
-                        <button key={b.url} type="button" className="browser-suggest-item" onClick={() => { setShowHistory(false); setSuggestions([]); navigateTab(b.url) }}>
-                          <span style={{ fontSize: 13, color: "var(--warning)" }}>*</span> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.title || b.url}</span>
-                        </button>
-                      ))}
-                      {suggestions.map((s, idx) => (
-                        <button key={s} type="button" className={`browser-suggest-item${idx === suggestIdx ? " active" : ""}`} style={idx === suggestIdx ? { background: "var(--primary-soft)", color: "var(--primary)" } : undefined} onClick={() => { setShowHistory(false); setSuggestions([]); setSuggestIdx(-1); navigateTab(`https://www.google.com/search?q=${encodeURIComponent(s)}`) }}>
-                          <SearchIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</span>
-                        </button>
-                      ))}
-                      {filtered.map((u) => (
-                        <button key={u} type="button" className="browser-suggest-item" onClick={() => { setShowHistory(false); setSuggestions([]); navigateTab(u) }}>
-                          <GlobeIcon size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u}</span>
-                        </button>
-                      ))}
-                      {filtered.length === 0 && markFiltered.length === 0 && suggestions.length === 0 && !showSearch && (
-                        <div style={{ padding: "8px 10px", color: "var(--muted)", fontSize: 12 }}>Sin historial. Escribí para buscar en Google.</div>
-                      )}
-                    </>
-                  )
-                })()}
-              </div>
-            )}
-          </div>
-
-          {loading && <LoadingIcon size={14} className="browser-loading-spinner" />}
-
-          {/* Config Dropdown */}
-          {showTuneDropdown && (
-            <div className="browser-tune-dropdown">
-              <div className="browser-tune-section">
-                <div className="browser-tune-section-title">Puertos locales rápidos</div>
-                <div className="browser-ports-grid">
-                  {COMMON_PORTS.map((p) => {
-                    const isActive = activeTab?.url.includes(`:${p.port}`)
-                    return (
-                      <button
-                        key={p.port}
-                        type="button"
-                        className={`browser-port-btn${isActive ? " active" : ""}`}
-                        onClick={() => {
-                          navigateTab(`http://localhost:${p.port}`)
-                          setShowTuneDropdown(false)
-                        }}
-                      >
-                        {p.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="browser-tune-section">
-                <div className="browser-tune-section-title">Modo de dispositivo</div>
-                <div className="browser-device-grid">
-                  <button
-                    type="button"
-                    className={`browser-device-btn${deviceMode === "responsive" ? " active" : ""}`}
-                    onClick={() => { setDeviceMode("responsive"); setShowTuneDropdown(false) }}
-                  >
-                    <GlobeIcon size={12} /> 100%
-                  </button>
-                  <button
-                    type="button"
-                    className={`browser-device-btn${deviceMode === "mobile" ? " active" : ""}`}
-                    onClick={() => { setDeviceMode("mobile"); setShowTuneDropdown(false) }}
-                  >
-                    <MonitorIcon size={12} /> 375px
-                  </button>
-                  <button
-                    type="button"
-                    className={`browser-device-btn${deviceMode === "tablet" ? " active" : ""}`}
-                    onClick={() => { setDeviceMode("tablet"); setShowTuneDropdown(false) }}
-                  >
-                    <MonitorIcon size={12} /> 768px
-                  </button>
-                  <button
-                    type="button"
-                    className={`browser-device-btn${deviceMode === "desktop" ? " active" : ""}`}
-                    onClick={() => { setDeviceMode("desktop"); setShowTuneDropdown(false) }}
-                  >
-                    <MonitorIcon size={12} /> 1280px
-                  </button>
-                </div>
-              </div>
-              <div className="browser-tune-section browser-shortcuts">
-                <div className="browser-tune-section-title"><KeyboardIcon size={13} /> Atajos del navegador</div>
-                <div className="browser-shortcuts-list">
-                  <span><kbd>Ctrl</kbd><kbd>L</kbd><em>Ir a la URL</em></span>
-                  <span><kbd>Ctrl</kbd><kbd>F</kbd><em>Buscar en la página</em></span>
-                  <span><kbd>Alt</kbd><kbd>←</kbd><em>Volver</em></span>
-                  <span><kbd>Ctrl</kbd><kbd>T</kbd><em>Nueva pestaña</em></span>
-                  <span><kbd>Ctrl</kbd><kbd>W</kbd><em>Cerrar pestaña</em></span>
-                  <span><kbd>Ctrl</kbd><kbd>D</kbd><em>Guardar favorito</em></span>
-                  <span><kbd>Ctrl</kbd><kbd>0</kbd><em>Restablecer zoom</em></span>
-                </div>
-              </div>
-              {profile && (
-                <div className="browser-tune-section">
-                  <div className="browser-tune-section-title">Perfil de datos (este exe)</div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", overflowWrap: "anywhere" }}>
-                    <div title={profile.data_dir}>Datos: {profile.data_dir}</div>
-                    <div title={profile.downloads_dir}>Descargas: {profile.downloads_dir}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="browser-port-btn"
-                    style={{ marginTop: 6 }}
-                    onClick={() => { try { void navigator.clipboard.writeText(profile.downloads_dir) } catch {} }}
-                  >
-                    Copiar ruta de descargas
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="browser-omnibox-actions">
-            <button type="button" className={`browser-tune-btn${isBookmarked ? " browser-star-on" : ""}`} onClick={toggleBookmark} title={isBookmarked ? "Quitar favorito" : "Agregar a favoritos"} aria-label="Favorito">
-              <span style={{ fontSize: 14 }}>{isBookmarked ? "*" : "☆"}</span>
-            </button>
-            <button type="button" className="browser-tune-btn browser-utility-secondary" onClick={handleCopyUrl} title="Copiar URL" aria-label="Copiar URL">
-              <span style={{ fontSize: 12 }}>⧉</span>
-            </button>
-            <div className="browser-zoom-group browser-utility-secondary" title="Zoom de página">
-              <button type="button" className="browser-tune-btn" onClick={() => applyZoom(zoomLevel - 0.1)} aria-label="Alejar">−</button>
-              <span style={{ fontSize: 11, minWidth: 34, textAlign: "center" }}>{Math.round(zoomLevel * 100)}%</span>
-              <button type="button" className="browser-tune-btn" onClick={() => applyZoom(zoomLevel + 0.1)} aria-label="Acercar">+</button>
-              <button type="button" className="browser-tune-btn" onClick={() => applyZoom(1)} aria-label="100%">↺</button>
-            </div>
-            <button type="button" className={`browser-tune-btn${findOpen ? " active" : ""}`} onClick={() => setFindOpen((v) => !v)} title="Buscar en la página (Ctrl+F)" aria-label="Buscar">
-              <SearchIcon size={13} />
-            </button>
-            <button type="button" className="browser-tune-btn" onClick={handlePip} title="Picture-in-Picture: clic en un video (en vivo) o en una región de la página" aria-label="Picture-in-Picture">
-              <PipIcon size={14} />
-            </button>
-            {onToggleInspect && (
-              <button
-                type="button"
-                className={`browser-tune-btn${inspectMode && inspectTool === "picker" ? " active" : ""}`}
-                onClick={() => onToggleInspectTool ? onToggleInspectTool("picker") : onToggleInspect()}
-                title={inspectMode && inspectTool === "picker" ? "Salir selección (Esc)" : "Seleccionar elemento: clic (◈)"}
-                aria-label="Seleccionar elemento"
-                style={inspectMode && inspectTool === "picker" ? { color: "var(--primary)", background: "var(--primary-soft)" } : undefined}
-              >
-                <span style={{ fontSize: 14, lineHeight: 1 }}>◈</span>
-              </button>
-            )}
-            {onToggleInspectTool && (
-              <button
-                type="button"
-                className={`browser-tune-btn${inspectMode && inspectTool === "pod" ? " active" : ""}`}
-                onClick={() => onToggleInspectTool("pod")}
-                title={inspectMode && inspectTool === "pod" ? "Salir selección (Esc)" : "Marcar área: arrastrá un trazo (⬚)"}
-                aria-label="Marcar área"
-                style={inspectMode && inspectTool === "pod" ? { color: "var(--warning)", background: "var(--warning-soft)" } : undefined}
-              >
-                <span style={{ fontSize: 13, lineHeight: 1 }}>⬚</span>
-              </button>
-            )}
-            {visualSelection && onClearVisual && (
-              <button
-                type="button"
-                className="browser-tune-btn"
-                onClick={onClearVisual}
-                title="Quitar zona seleccionada"
-                aria-label="Quitar zona"
-              >
-                ×
-              </button>
-            )}
-            <button type="button" className="browser-tune-btn browser-utility-secondary" onClick={() => setMinimal((v) => !v)} title={minimal ? "Mostrar barra" : "Modo minimalista (F11)"} aria-label="Minimal">Expand</button>
-            <button
-              type="button"
-              className="browser-tune-btn browser-utility-secondary"
-              onClick={handleOpenExternal}
-              title="Abrir en navegador externo (Chrome/Edge)"
-              aria-label="Abrir en navegador externo"
-            >
-              <MonitorIcon size={14} />
-            </button>
-          </div>
-        </div>
-
-        {onClose && (
-          <button
-            type="button"
-            className="browser-nav-btn"
-            onClick={onClose}
-            title="Cerrar panel de navegador"
-            aria-label="Cerrar"
-          >
-            <CloseIcon size={14} />
-          </button>
-        )}
-      </div>
+        <BrowserToolbar
+          activeTab={activeTab}
+          nav={{
+            back: handleBack,
+            forward: handleForward,
+            reload: handleReload,
+            home: handleHome,
+            openProject: handleOpenProjectFolder,
+          }}
+          omnibox={{
+            value: inputUrl,
+            setValue: setInputUrl,
+            onKeyDown: handleKeyDown,
+            homeUrl,
+            isSecure,
+            inputRef: omniboxRef,
+          }}
+          history={{
+            containerRef: histRef,
+            show: showHistory,
+            setShow: setShowHistory,
+            bookmarks,
+            suggestions,
+            suggestIdx,
+            navigate: navigateTab,
+            clearSuggestions: () => { setSuggestions([]); setSuggestIdx(-1) },
+          }}
+          tune={{
+            open: showTuneDropdown,
+            toggle: () => setShowTuneDropdown((v) => !v),
+            close: () => setShowTuneDropdown(false),
+            dropdownRef,
+            deviceMode,
+            setDeviceMode: (m) => { setDeviceMode(m); setShowTuneDropdown(false) },
+            profile,
+          }}
+          zoom={{ level: zoomLevel, apply: applyZoom }}
+          find={{ open: findOpen, toggle: () => setFindOpen((v) => !v) }}
+          inspect={{
+            mode: inspectMode,
+            tool: inspectTool,
+            onToggle: onToggleInspect,
+            onToggleTool: onToggleInspectTool,
+            visualSelection,
+            onClearVisual,
+          }}
+          loading={loading}
+          isBookmarked={isBookmarked}
+          toggleBookmark={toggleBookmark}
+          copyUrl={handleCopyUrl}
+          pip={handlePip}
+          minimal={minimal}
+          toggleMinimal={() => setMinimal((v) => !v)}
+          openExternal={handleOpenExternal}
+          onClose={onClose}
+        />
       )}
       {findOpen && (
         <div className="browser-findbar">
@@ -1808,11 +1097,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             type="button"
             className="browser-nav-btn"
             style={{ marginLeft: "auto" }}
-            onClick={() => {
-              const v = !showBookmarks
-              setShowBookmarks(v)
-              try { localStorage.setItem("opencode.browser.showBookmarks", v ? "1" : "0") } catch {}
-            }}
+            onClick={() => setBookmarksVisible(!showBookmarks)}
             title="Ocultar barra de favoritos"
             aria-label="Ocultar favoritos"
           >
@@ -1839,7 +1124,7 @@ export const BrowserPanel = memo(function BrowserPanel({
             <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
               <span>Vistas:</span>
               {projectBanner.htmlFiles.map((file) => {
-                const isActive = activeTab?.url.endsWith(file)
+                const isActiveFile = activeTab?.url.endsWith(file)
                 return (
                   <button
                     key={file}
@@ -1851,8 +1136,8 @@ export const BrowserPanel = memo(function BrowserPanel({
                       }
                     }}
                     style={{
-                      background: isActive ? "var(--primary)" : "var(--surface-strong)",
-                      color: isActive ? "#fff" : "var(--text)",
+                      background: isActiveFile ? "var(--primary)" : "var(--surface-strong)",
+                      color: isActiveFile ? "#fff" : "var(--text)",
                       border: "none",
                       borderRadius: "4px",
                       padding: "2px 6px",

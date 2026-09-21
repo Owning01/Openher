@@ -8,7 +8,7 @@ import { ContextMenu, type ContextAction } from "./ContextMenu"
 import { OpenWithDialog } from "../features/pc-files/OpenWithDialog"
 import { useToast } from "./Toasts"
 import { shell, type FsEntry } from "../shell"
-import { basenameFsPath, extColor, isAbsoluteFsPath, resolveFsPath, splitFsPath } from "../shared/lib/filePaths"
+import { basenameFsPath, extColor, isAbsoluteFsPath, resolveFsPath, splitFsPath } from "../shared/lib/filePaths.ts"
 import { CodeIcon, CopyIcon, FolderIcon, MonitorIcon, PlayIcon } from "../Icons"
 
 export type FilePathActions = {

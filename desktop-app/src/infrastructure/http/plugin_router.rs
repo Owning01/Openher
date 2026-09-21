@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use crate::infrastructure::http::common::post;
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::state::AppState;
@@ -29,30 +30,24 @@ pub fn handle(
         return Some(ShellResponse::ok_json(&serde_json::json!({ "ok": true, "plugins": scanned })));
     }
     if path == "/shell/plugins/toggle" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(b) => {
-                let name = b["name"].as_str().unwrap_or("");
-                let enabled = b["enabled"].as_bool().unwrap_or(true);
-                let updated = state.plugins.toggle(name, enabled);
-                ShellResponse::ok_json(&serde_json::json!({ "ok": updated }))
-            }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        return Some(post!(req, b => {
+            let name = b["name"].as_str().unwrap_or("");
+            let enabled = b["enabled"].as_bool().unwrap_or(true);
+            let updated = state.plugins.toggle(name, enabled);
+            ShellResponse::ok_json(&serde_json::json!({ "ok": updated }))
+        }));
     }
     if path == "/shell/plugins/running" {
         return Some(ShellResponse::ok_json(&state.plugins.running()));
     }
     if path == "/shell/plugins/run" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(b) => {
-                let name = b["name"].as_str().unwrap_or("");
-                match state.plugins.run_command(name) {
-                    Ok(v) => ShellResponse::ok_json(&v),
-                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
-                }
+        return Some(post!(req, b => {
+            let name = b["name"].as_str().unwrap_or("");
+            match state.plugins.run_command(name) {
+                Ok(v) => ShellResponse::ok_json(&v),
+                Err(e) => ShellResponse::err_json(500, &e.to_string()),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        }));
     }
     if let Some(rest) = path.strip_prefix("/shell/plugin/") {
         if let Some((name, rel)) = rest.split_once('/') {

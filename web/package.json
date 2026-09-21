@@ -8,7 +8,7 @@
     "dev": "vite --host",
     "build": "node scripts/gen-desktop-css.mjs && tsc -b && vite build",
     "css:desktop": "node scripts/gen-desktop-css.mjs",
-    "build:desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File ../build-desktop.ps1",
+    "build:desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/build-desktop.ps1",
     "test:i18n": "node --experimental-strip-types src/i18n.test.mjs",
     "preview": "vite preview --host",
     "cap:sync": "npx cap sync",
@@ -23,16 +23,16 @@
     "check:contrast": "node --experimental-strip-types src/theme-contrast.mjs",
     "benchmark": "node benchmarks/runner.mjs",
     "benchmark:report": "node benchmarks/runner.mjs > benchmarks/report.txt",
-    "learning:manifest": "node scripts/generate-learning-manifest.mjs"
+    "learning:manifest": "node scripts/generate-learning-manifest.mjs",
+    "check:rules": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/check-rules.ps1",
+    "check:rules:update": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/check-rules.ps1 -Update"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "7.0.1",
     "@capacitor/android": "^8.5.0",
     "@capacitor/app": "8.1.1",
-    "@capacitor/camera": "8.2.2",
     "@capacitor/cli": "8.5.0",
     "@capacitor/core": "8.5.0",
-    "@capacitor/dialog": "8.0.1",
     "@capacitor/filesystem": "8.1.2",
     "@capacitor/ios": "8.5.0",
     "@capacitor/local-notifications": "8.3.0",
@@ -77,7 +77,6 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-llm-mock-server": "0.1.1-rc.2",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.1",

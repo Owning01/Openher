@@ -21,19 +21,10 @@ import {
 import { shell, type GitStatusSnapshot } from "../shell"
 import { HistoryPane } from "./scm/HistoryPane"
 import { useSourceControlPanel, type SourceControlFileEntry } from "./scm/useSourceControlPanel"
+import { basenameFsPath, dirnameFsPath } from "../shared/lib/filePaths.ts"
 
 type Props = { cwd?: string; availableDirs?: string[]; onSelectDir?: (dir: string) => void }
 
-function basename(path: string): string {
- const parts = path.split(/[\\/]/).filter(Boolean)
- return parts.length > 0 ? parts[parts.length - 1] : path
-}
-function dirname(path: string): string {
- const normalized = path.replace(/\\/g, "/")
- const idx = normalized.lastIndexOf("/")
- if (idx <= 0) return ""
- return normalized.slice(0, idx)
-}
 function statusAccent(code: string): string {
  switch (code) {
   case "A": return "scm-accent-a"
@@ -89,6 +80,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
  const scrollRef = useRef<HTMLDivElement | null>(null)
  const containerRef = useRef<HTMLDivElement | null>(null)
  const fbTimer = useRef<number | null>(null)
+ const spinTimer = useRef<number | null>(null)
  const [feedback, setFeedback] = useState<{ tone: "ok" | "err"; msg: string } | null>(null)
 
  useEffect(() => { if (cwd) setActiveCwd(cwd) }, [cwd])
@@ -97,6 +89,14 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
   setFeedback({ tone, msg })
   if (fbTimer.current) window.clearTimeout(fbTimer.current)
   fbTimer.current = window.setTimeout(() => setFeedback(null), 4000)
+ }, [])
+
+ // Timers de feedback (4s) y spinner de refresh (450ms): limpiar al desmontar.
+ useEffect(() => () => {
+  if (fbTimer.current) window.clearTimeout(fbTimer.current)
+  if (spinTimer.current) window.clearTimeout(spinTimer.current)
+  fbTimer.current = null
+  spinTimer.current = null
  }, [])
 
  const refresh = useCallback(async (silent = false) => {
@@ -127,7 +127,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
 
  const handleRefresh = useCallback(() => {
   setSpinning(true)
-  void refresh().finally(() => window.setTimeout(() => setSpinning(false), 450))
+  void refresh().finally(() => {
+   if (spinTimer.current) window.clearTimeout(spinTimer.current)
+   spinTimer.current = window.setTimeout(() => setSpinning(false), 450)
+  })
  }, [refresh])
 
  const openDiff = useCallback(async (path: string, mode: "+" | "-", originalPath: string | null) => {
@@ -137,10 +140,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
    // Prefer diff-content path for richer view, fallback to diff
    if (originalPath !== undefined) {
     const r = await shell.git.diff(repoRoot, path, staged)
-    setDiffView({ title: `${basename(path)} (${staged ? "staged" : "unstaged"})`, text: r.diffText || "—" })
+    setDiffView({ title: `${basenameFsPath(path)} (${staged ? "staged" : "unstaged"})`, text: r.diffText || "—" })
    } else {
     const r = await shell.git.diff(repoRoot, path, staged)
-    setDiffView({ title: `${basename(path)} (${staged ? "staged" : "unstaged"})`, text: r.diffText || "—" })
+    setDiffView({ title: `${basenameFsPath(path)} (${staged ? "staged" : "unstaged"})`, text: r.diffText || "—" })
    }
   } catch { /* noop */ }
  }, [repoRoot])
@@ -275,10 +278,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
     {/* Selector siempre visible incluso sin git */}
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px", background: "var(--surface-subtle)", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
-      <span style={{ fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={cf}>{cf.split(/[\\/]/).pop() || cf}</span>
+      <span style={{ fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={cf}>{basenameFsPath(cf)}</span>
       {availableDirs.length > 1 && (
        <select value={activeCwd} onChange={(e) => handleSwitchDir(e.target.value)} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12, padding: "1px 4px", maxWidth: 120 }}>
-        {availableDirs.map((d) => (<option key={d} value={d}>{d.split(/[\\/]/).pop()}</option>))}
+        {availableDirs.map((d) => (<option key={d} value={d}>{basenameFsPath(d)}</option>))}
        </select>
       )}
      </div>
@@ -301,10 +304,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({ cwd, availa
    {/* Selector repositorio */}
    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px", background: "var(--surface-subtle)", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
-     <span style={{ fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={repoRoot || currentFolder}>{(repoRoot || currentFolder).split(/[\\/]/).pop()}</span>
+     <span style={{ fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={repoRoot || currentFolder}>{basenameFsPath(repoRoot || currentFolder)}</span>
      {availableDirs.length > 1 && (
       <select value={activeCwd} onChange={(e) => handleSwitchDir(e.target.value)} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, fontSize: 12, padding: "1px 4px", maxWidth: 120 }}>
-       {availableDirs.map((d) => (<option key={d} value={d}>{d.split(/[\\/]/).pop()}</option>))}
+       {availableDirs.map((d) => (<option key={d} value={d}>{basenameFsPath(d)}</option>))}
       </select>
      )}
     </div>
@@ -460,8 +463,8 @@ const EntryRow = memo(function EntryRow({ entry, focused, selected, actionBusy, 
  onOpenDiff: () => void
  onDiscard: () => void
 }) {
- const fileName = basename(entry.path)
- const pathLabel = entry.originalPath ? `${entry.originalPath} → ${dirname(entry.path) || ""}` : dirname(entry.path)
+ const fileName = basenameFsPath(entry.path)
+ const pathLabel = entry.originalPath ? `${entry.originalPath} → ${dirnameFsPath(entry.path) || ""}` : dirnameFsPath(entry.path)
  const showDiscard = entry.unstaged
  const isStageBusy = actionBusy === `stage:${entry.path}` || actionBusy === `unstage:${entry.path}`
  const isDiscardBusy = actionBusy === `discard:${entry.path}`
@@ -540,7 +543,7 @@ function BranchDropdown({ repoRoot, repoLabel, displayRepoRoot, onRefresh }: { r
   <div className="scm-branch-wrap" ref={ref}>
    <button type="button" className="scm-branch-btn" onClick={() => setOpen(!open)} title={displayRepoRoot ?? repoLabel} aria-expanded={open}>
     <FolderIcon size={12} />
-    {displayRepoRoot ? (<><span className="scm-trunc scm-w22">{basename(displayRepoRoot)}</span><span className="scm-muted">/</span></>) : null}
+    {displayRepoRoot ? (<><span className="scm-trunc scm-w22">{basenameFsPath(displayRepoRoot)}</span><span className="scm-muted">/</span></>) : null}
     <span className="scm-trunc">{repoLabel}</span>
     <ChevronIcon size={10} />
    </button>

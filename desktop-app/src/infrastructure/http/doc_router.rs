@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::infrastructure::http::common::post;
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::state::AppState;
@@ -20,18 +21,15 @@ pub fn handle(
         return Some(ShellResponse::err_json(400, "el motor de conversión de documentos pesados ha sido desacoplado"));
     }
     if path == "/shell/doc/save" && method == "POST" {
-        return Some(match req.json_body() {
-            Ok(b) => {
-                let path_str = b["path"].as_str().unwrap_or("");
-                let md_content = b["content"].as_str().unwrap_or("");
-                let p = Path::new(path_str);
-                match std::fs::write(p, md_content.as_bytes()) {
-                    Ok(_) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": path_str })),
-                    Err(e) => ShellResponse::err_json(500, &e.to_string()),
-                }
+        return Some(post!(req, b => {
+            let path_str = b["path"].as_str().unwrap_or("");
+            let md_content = b["content"].as_str().unwrap_or("");
+            let p = Path::new(path_str);
+            match std::fs::write(p, md_content.as_bytes()) {
+                Ok(_) => ShellResponse::ok_json(&serde_json::json!({ "ok": true, "path": path_str })),
+                Err(e) => ShellResponse::err_json(500, &e.to_string()),
             }
-            Err(e) => ShellResponse::err_json(400, &e.to_string()),
-        });
+        }));
     }
     if path.starts_with("/shell/doc") {
         return Some(ShellResponse::err_json(404, "ruta doc desconocida"));

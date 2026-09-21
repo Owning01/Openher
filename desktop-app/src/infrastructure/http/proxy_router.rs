@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::sync::Arc;
 
+use crate::infrastructure::http::common::read_ureq_body;
 use crate::infrastructure::http::io::{ShellRequest, ShellResponse};
 
 use crate::state::AppState;
@@ -228,9 +229,7 @@ pub fn handle(
             // Capturar Set-Cookie antes de consumir body
             let set_cookies: Vec<String> = resp.all("set-cookie").into_iter().map(|s| s.to_string()).collect();
             store_set_cookies(&host_key, set_cookies.iter().map(|s| s.as_str()).collect());
-            let mut reader = resp.into_reader();
-            let mut body_bytes = Vec::new();
-            let _ = std::io::Read::read_to_end(&mut reader, &mut body_bytes);
+            let body_bytes = read_ureq_body(resp);
             let is_html = ct.to_ascii_lowercase().contains("html")
                 || ct.to_ascii_lowercase().contains("text/")
                     && body_bytes.len() < 10 * 1024 * 1024
@@ -263,9 +262,7 @@ pub fn handle(
                 .to_string();
             let set_cookies: Vec<String> = resp.all("set-cookie").into_iter().map(|s| s.to_string()).collect();
             store_set_cookies(&host_key, set_cookies.iter().map(|s| s.as_str()).collect());
-            let mut reader = resp.into_reader();
-            let mut body_bytes = Vec::new();
-            let _ = std::io::Read::read_to_end(&mut reader, &mut body_bytes);
+            let body_bytes = read_ureq_body(resp);
             let is_html = ct.contains("html");
             let body_str = if is_html {
                 String::from_utf8_lossy(&body_bytes).to_string()

@@ -4,6 +4,8 @@ import { api } from "../api"
 import { modelKey, sameModel, modelFromKey, groupModels, variantsOf, resolveModelOption } from "../utils/model-utils"
 import { STORAGE_KEYS } from "../constants"
 import { useLocalStorage } from "./useLocalStorage"
+import { withTimeout } from "../shared/lib/async"
+import { useT } from "../i18n-context"
 
 export type { VariantGroup } from "../utils/model-utils"
 
@@ -29,6 +31,7 @@ function filterPrimary(agents: AgentOption[]): AgentOption[] {
 }
 
 export function useAI(config: ServerConfig) {
+  const t = useT()
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([])
   const [agentLoadError, setAgentLoadError] = useState<string | null>(null)
   const [selectedAgentID, setSelectedAgentID] = useState<string>(() => localStorage.getItem(STORAGE_KEYS.AGENT) || "")
@@ -180,15 +183,14 @@ export function useAI(config: ServerConfig) {
 
   const loadAgents = useCallback(async (directory?: string, attempt = 0) => {
     if (!config.host || config.port <= 0) return
-    const timeout = <T>(p: Promise<T>, ms = 6000) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Agent list timeout")), ms))]) as Promise<T>
     try {
-      const list = await timeout(api.listAgents(config, directory))
+      const list = await withTimeout(api.listAgents(config, directory), 6000, t('error.agentListTimeout'))
       if (list.length === 0 && attempt < 1) {
         await new Promise((r) => setTimeout(r, 600))
         return loadAgents(directory, attempt + 1)
       }
       setAgentOptions(list)
-      setAgentLoadError(list.length === 0 ? "Sin agentes — reintentando" : null)
+      setAgentLoadError(list.length === 0 ? t('error.noAgents') : null)
       const saved = localStorage.getItem(STORAGE_KEYS.AGENT) || localStorage.getItem(agentStorageKey(directory)) || ""
       const primary = filterPrimary(list)
       const next = primary.find((agent) => agent.id === saved) ?? primary[0]
@@ -206,7 +208,7 @@ export function useAI(config: ServerConfig) {
       }
       setAgentLoadError((err as Error).message)
     }
-  }, [config])
+  }, [config, t])
 
   const loadModels = useCallback(async (directory?: string, attempt = 0) => {
     if (!config.host || config.port <= 0) return
@@ -215,15 +217,14 @@ export function useAI(config: ServerConfig) {
     // primer fetch caía antes de que :4098 respondiera y quedaba vacío.
     const MAX_RETRIES = 5
     // timeout 8s para no colgar UI si opencode está lento (antes 12s + reintentos = 20s bloqueado)
-    const timeout = <T>(p: Promise<T>, ms = 8000) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Model list timeout - OpenHer lento")), ms))]) as Promise<T>
     try {
-      const list = await timeout(api.listModels(config, directory))
+      const list = await withTimeout(api.listModels(config, directory), 8000, t('error.modelListTimeout'))
       if (list.length === 0 && attempt < MAX_RETRIES) {
         await new Promise((r) => setTimeout(r, 1200))
         return loadModels(directory, attempt + 1)
       }
       setModelOptions(list)
-      setModelLoadError(list.length === 0 ? "Sin modelos - verifica proveedores en OpenHer" : null)
+      setModelLoadError(list.length === 0 ? t('error.noModels') : null)
       const saved = selectedModelKey ? modelFromKey(selectedModelKey) : null
       if (saved && list.some((option) => sameModel(option, saved))) {
         if (selectedVariant && !list.some((option) => sameModel(option, saved) && option.variant === selectedVariant)) {
@@ -249,7 +250,7 @@ export function useAI(config: ServerConfig) {
       }
       setModelLoadError((err as Error).message)
     }
-  }, [config, selectedModelKey, selectedVariant])
+  }, [config, selectedModelKey, selectedVariant, t])
 
   const changeModel = useCallback((nextKey: string, variant?: string | null, sessionID?: string | null) => {
     const v = variant !== undefined ? (variant ?? null) : null

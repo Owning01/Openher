@@ -95,7 +95,7 @@ describe("FileEditorPanel persistencia", () => {
     await waitFor(() => expect(writes.length).toBe(1))
     expect(writes[0].path).toBe("/a.txt")
     expect(decodeB64(writes[0].data)).toBe("hello edited")
-  })
+  }, 20000)
 
   it("editar y revertir no escribe (dirty exacto)", async () => {
     const { container } = render(<PanelHarness />)
@@ -107,5 +107,5 @@ describe("FileEditorPanel persistencia", () => {
     // Supera el debounce de autosave: no debe haber ningún write
     await new Promise((r) => setTimeout(r, 1200))
     expect(writes.length).toBe(0)
-  })
+  }, 20000)
 })

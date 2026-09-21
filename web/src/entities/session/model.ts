@@ -79,3 +79,6 @@ export type CachedSession = {
   agent?: string
   model?: ModelSelection
 }
+
+// Las funciones runtime (toSessionView, mergeSessionPoll) viven en ./sessionsPlan.ts:
+// este modulo debe quedar type-only (lo pinea entities/barrel.test.ts).

@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs'
 import { cssBundle } from './css-bundle.mjs'
 
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
-const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+const api = ["api.ts","api/health.ts","api/sessions.ts","api/messages.ts","api/prompt.ts","api/providers.ts","api/config.ts","api/fs.ts","api/mcp.ts","api/questions.ts","api/permissions.ts","api/versionDispatch.ts","api/index.ts","shared/api/client.ts","shared/api/version.ts","shared/api/mappers.ts","shared/api/opencodeClient.ts"].map((f) => readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')).map((s) => s.replace(/const ([A-Za-z_$][\w$]*) = (async )?\(/g, '$1(')).join('\n')
 const useAI = readFileSync(new URL('./hooks/useAI.ts', import.meta.url), 'utf8')
-const useMessages = readFileSync(new URL('./hooks/useMessages.ts', import.meta.url), 'utf8')
-const useSessions = readFileSync(new URL('./hooks/useSessions.ts', import.meta.url), 'utf8')
-const i18n = readFileSync(new URL('./i18n.ts', import.meta.url), 'utf8')
+const useMessages = ["hooks/useMessages.ts","hooks/useMessageSend.ts","hooks/useStreamPatch.ts","stores/outboxStore.ts","stores/translationOriginals.ts","utils/messageShape.ts","utils/parseCommand.ts"].map((f) => readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')).join('\n')
+const useSessions = ["hooks/useSessions.ts","entities/session/sessionsPlan.ts","entities/session/model.ts"].map((f) => readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')).join('\n')
+const i18n = ["i18n.ts","i18n/en.ts","i18n/es.ts"].map((f) => readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')).join('\n')
 const styles = cssBundle()
 const sheet = readFileSync(new URL('./components/BottomSheet.tsx', import.meta.url), 'utf8')
 const helpPage = readFileSync(new URL('./components/HelpPage.tsx', import.meta.url), 'utf8')
@@ -26,7 +26,7 @@ assert.ok(app.includes('MODEL_STORAGE_KEY') || useAI.includes('MODEL_STORAGE_KEY
 assert.ok(app.includes('AGENT_STORAGE_KEY') || useAI.includes('AGENT_STORAGE_KEY'), 'selected plan/build agent should persist locally')
 assert.ok(useAI.includes('agent.mode === "primary" || agent.mode === "all"'), 'agent picker should expose primary agents such as build and plan')
 assert.ok(useAI.includes('activeAgent?.id ?? primaryAgentOptions'), 'agent selection should fallback through primary options then build')
-const composer = readFileSync(new URL('./components/Composer.tsx', import.meta.url), 'utf8')
+const composer = ["components/Composer.tsx","components/composer/ComposerBar.tsx","components/composer/composerData.ts","components/composer/downscaleImage.ts","components/composer/ImageStrip.tsx","components/composer/MentionMenu.tsx","components/composer/SlashMenu.tsx","components/composer/TurnChangesPanel.tsx","components/composer/types.ts","components/composer/useMentions.ts"].map((f) => readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')).join('\n')
 assert.ok(composer.includes('onChangeAgent(item.id)') || composer.includes('onChangeAgent(next.id)'), 'AI sheet should render an agent selector')
 assert.ok(useMessages.includes('api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID)') ||
   useMessages.includes('api.sendPrompt(config, selectedSession.id, text, selectedSession.directory'), 'chat prompts should use selected agent')

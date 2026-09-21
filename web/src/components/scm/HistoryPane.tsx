@@ -8,6 +8,7 @@ import { shell, type GitCommitFileChange, type GitLogEntry } from "../../shell"
 import { EMPTY_GRAPH_STATE, layoutGraph, type GraphRow, type GraphState } from "./graph"
 import { GraphRail, MAX_VISIBLE_LANES, railWidth } from "./GraphRail"
 import { commitWebUrl, parseRemoteWebUrl, type RemoteWebInfo } from "./remoteWebUrl"
+import { dirnameFsPath } from "../../shared/lib/filePaths.ts"
 
 const ROW_HEIGHT = 32
 const TABLE_HEADER_HEIGHT = 24
@@ -56,7 +57,6 @@ function highlight(text: string, query: string) {
   if (idx === -1) return text
   return (<>{text.slice(0, idx)}<mark className="scm-mark">{text.slice(idx, idx + query.length)}</mark>{text.slice(idx + query.length)}</>)
 }
-function dirname(path: string): string { const n = path.replace(/\\/g,"/"); const i = n.lastIndexOf("/"); if (i<=0) return ""; return n.slice(0,i) }
 
 export const HistoryPane = memo(function HistoryPane({ repoRoot, onOpenPatch }: { repoRoot: string; onOpenPatch: (title: string, text: string) => void }) {
   const t = useT()
@@ -343,7 +343,7 @@ function CommitFiles({ commit, filesEntry, onOpenFile, onRetry, onFullPatch }: {
               {file.isBinary ? <span className="scm-muted">binary</span> : (<><span style={{ color:"#34d399" }}>+{file.added}</span><span style={{ color:"#fb7185" }}>−{file.removed}</span></>)}
             </span>
             <span style={{ fontSize:9.5, fontWeight:700, width:16, textAlign:"center", color: file.status==="A"?"#34d399":file.status==="D"?"#fb7185":file.status==="M"?"#fbbf24":"var(--muted)" }}>{file.status.toUpperCase()}</span>
-            <span className="scm-muted" style={{ fontSize:10.5 }}>{dirname(file.path)}</span>
+            <span className="scm-muted" style={{ fontSize:10.5 }}>{dirnameFsPath(file.path)}</span>
           </button>
         ))}
         <button type="button" onClick={()=>void onFullPatch(commit)} className="scm-file-chip scm-full-patch">View full patch</button>

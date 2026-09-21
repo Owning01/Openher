@@ -1,10 +1,44 @@
-import { useState, useCallback, useMemo, useRef, useEffect, useSyncExternalStore } from "react"
-import type { ServerConfig, DataMode, MessageEnvelope, ModelSelection, RenderedMessage, SessionView } from "../types"
+import { useState, useCallback, useMemo, useRef, useEffect } from "react"
+import type { ServerConfig, DataMode, MessageEnvelope, RenderedMessage } from "../types"
 import { api } from "../api"
-import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage, buildNoticeMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "../utils/parseCommand"
+import { rehydrateImages, collectLocalImages, type LocalImageEntry } from "../utils/parseCommand"
 import { computeRenderedMessages } from "../utils/rendered"
 import { isImagePart, countImageParts } from "../utils"
 import { formatServerError } from "../shared/errors/serverErrors"
+import { messageText } from "../utils/messageShape"
+import {
+  useSharedOutbox,
+  enqueueSharedOutbox,
+  removeSharedOutbox,
+  buildOutboxMessage,
+  type OutboxItem,
+} from "../stores/outboxStore"
+import { useStreamPatch } from "./useStreamPatch"
+import { useMessageSend } from "./useMessageSend"
+
+// Onda 3 / B2: useMessages quedó como compositor delgado. Las piezas viven en
+//   - stores/outboxStore.ts        (cola compartida + claim/hold)
+//   - stores/translationOriginals.ts (original pre-traducción)
+//   - hooks/useStreamPatch.ts      (batching rAF + applyDelta/applyPart)
+//   - hooks/useMessageSend.ts      (updateSend / slash commands)
+// La conducta observable es la misma; la API pública se re-exporta abajo para
+// no tocar a los consumidores (useAppController, SessionChatPanel,
+// useChatActions, MessageBubble y los tests).
+export {
+  getTranslationOriginal,
+  setTranslationOriginal,
+} from "../stores/translationOriginals"
+export {
+  enqueueSharedOutbox,
+  removeSharedOutbox,
+  claimSharedOutbox,
+  releaseSharedOutbox,
+  holdSharedOutbox,
+  resumeSharedOutbox,
+  isSharedOutboxHeld,
+  type OutboxItem,
+  type OutboxActions,
+} from "../stores/outboxStore"
 
 const toolPartTypes = new Set(["tool_use", "tool_result", "tool", "execution", "terminal", "code_execution", "tool_call"])
 
@@ -16,33 +50,6 @@ const shellToolNames = new Set(["bash", "execute", "terminal", "shell", "pwsh", 
 
 const COMPOSER_STORAGE_KEY = "opencode.remote.composer"
 
-// Translation originals: maps message ID → original (pre-translation) text.
-// Populated when TSL is active and a message is sent.
-// CAP FIFO: map module-level vivo toda la sesión — sin tope, crece eterno.
-const TRANSLATION_ORIGINALS_CAP = 200
-const translationOriginals = new Map<string, string>()
-export function getTranslationOriginal(id: string): string | undefined {
-  return translationOriginals.get(id)
-}
-export function setTranslationOriginal(id: string, text: string) {
-  if (!translationOriginals.has(id) && translationOriginals.size >= TRANSLATION_ORIGINALS_CAP) {
-    const oldest = translationOriginals.keys().next().value
-    if (oldest !== undefined) translationOriginals.delete(oldest)
-  }
-  translationOriginals.set(id, text)
-}
-
-function extractText(msg: MessageEnvelope): string {
-  const blocks: string[] = []
-  for (const part of msg.parts) {
-    if (!part.text) continue
-    if (part.type === "text" || part.type === "compaction") {
-      blocks.push(part.text)
-    }
-  }
-  return blocks.join("\n\n").trim()
-}
-
 function stripNonEssential(msg: MessageEnvelope, dataMode?: DataMode): MessageEnvelope {
   if (dataMode === "full" || dataMode === "saver") return msg
   const keep = (p: MessageEnvelope["parts"][number]) =>
@@ -52,112 +59,13 @@ function stripNonEssential(msg: MessageEnvelope, dataMode?: DataMode): MessageEn
   return filtered.length === msg.parts.length ? msg : { ...msg, parts: filtered }
 }
 
-// Cola visible de salida: mensajes enviados mientras el agente está ocupado.
-// Aparecen en el chat como usuario pendiente (sin enviar) con acciones
-// eliminar / editar / enviar-ahora. Por sesión; se filtran al renderizar.
-//
-// La cola pertenece a la SESIÓN, no a la instancia del hook: cada panel del
-// desktop y la vista detalle/móvil tienen su propio useMessages, y con un
-// useState por instancia el mensaje encolado quedaba huérfano al cambiar de
-// pestaña (invisible en su sesión pero auto-enviándose igual) o se perdía al
-// desmontar. El store de módulo lo comparte todo; `claimSharedOutbox`
-// evita que el flush del panel y el global envíen el mismo item dos veces.
-export type OutboxItem = {
-  id: string
-  sessionID: string
-  text: string
-  images?: Array<{ base64: string; mime: string; name?: string }>
-  createdAt: number
-}
-
-type OutboxListener = () => void
-let sharedOutbox: OutboxItem[] = []
-const sharedOutboxListeners = new Set<OutboxListener>()
-const sharedOutboxSending = new Set<string>()
-function emitSharedOutbox() {
-  for (const l of [...sharedOutboxListeners]) {
-    try { l() } catch { /* un listener roto no tumba a los demás */ }
-  }
-}
-function subscribeSharedOutbox(fn: OutboxListener): () => void {
-  sharedOutboxListeners.add(fn)
-  return () => { sharedOutboxListeners.delete(fn) }
-}
-function getSharedOutbox(): OutboxItem[] {
-  return sharedOutbox
-}
-export function enqueueSharedOutbox(sessionID: string, text: string, images?: OutboxItem["images"]): OutboxItem {
-  const item: OutboxItem = {
-    id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    sessionID,
-    text,
-    images: images && images.length > 0 ? images : undefined,
-    createdAt: Date.now(),
-  }
-  sharedOutbox = [...sharedOutbox, item]
-  emitSharedOutbox()
-  return item
-}
-export function removeSharedOutbox(id: string): void {
-  sharedOutboxSending.delete(id)
-  if (sharedOutbox.some((o) => o.id === id)) {
-    sharedOutbox = sharedOutbox.filter((o) => o.id !== id)
-    emitSharedOutbox()
-  }
-}
-/** Reserva un item para enviarlo; false si otro flush/botón ya lo tomó. */
-export function claimSharedOutbox(id: string): boolean {
-  if (sharedOutboxSending.has(id)) return false
-  if (!sharedOutbox.some((o) => o.id === id)) return false
-  sharedOutboxSending.add(id)
-  return true
-}
-export function releaseSharedOutbox(id: string): void {
-  sharedOutboxSending.delete(id)
-}
-
-// Hold del auto-flush: tras un Stop explícito NO se auto-envían los pendientes
-// (el usuario cortó a propósito; si no, el abort parecía "no hacer nada"
-// porque el flush arrancaba otro turno al instante). Se reanuda al mandar algo
-// manualmente o al tocar "Enviar ahora".
-const sharedOutboxHold = new Set<string>()
-export function holdSharedOutbox(sessionID: string): void {
-  sharedOutboxHold.add(sessionID)
-}
-export function resumeSharedOutbox(sessionID: string): void {
-  sharedOutboxHold.delete(sessionID)
-}
-export function isSharedOutboxHeld(sessionID: string): boolean {
-  return sharedOutboxHold.has(sessionID)
-}
-
-export type OutboxActions = {
-  onDelete: () => void
-  onEdit: () => void
-  onSendNow: () => void
-}
-
-function buildOutboxMessage(item: OutboxItem): MessageEnvelope {
-  const parts: MessageEnvelope["parts"] = item.text
-    ? [{ id: `${item.id}-part`, type: "text", text: item.text }]
-    : []
-  let n = 0
-  for (const img of item.images ?? []) {
-    parts.push({ id: `${item.id}-img-${n++}`, type: "image", data: img.base64, mimeType: img.mime })
-  }
-  return {
-    info: { id: item.id, role: "user", sessionID: item.sessionID, time: { created: item.createdAt } },
-    parts,
-  }
-}
-
 const INITIAL_PAGE_LIMIT = 35
 
 export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKey = COMPOSER_STORAGE_KEY) {
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<MessageEnvelope[]>([])
-  // Cola compartida por sesión entre todas las instancias (ver store de módulo arriba).
-  const outbox = useSyncExternalStore(subscribeSharedOutbox, getSharedOutbox, getSharedOutbox)
+  // Cola compartida por sesión entre todas las instancias (ver stores/outboxStore).
+  const outbox = useSharedOutbox()
   const [messageLimit, setMessageLimit] = useState(INITIAL_PAGE_LIMIT)
   const enqueueOutbox = useCallback((sessionID: string, text: string, images?: OutboxItem["images"]) => {
     return enqueueSharedOutbox(sessionID, text, images)
@@ -217,74 +125,22 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
   // los deltas solo invalidan el mensaje tocado; el resto reusa su objeto y
   // las bubbles memoizadas no re-renderizan.
   const renderedCacheRef = useRef<Map<string, { src: MessageEnvelope; rendered: RenderedMessage; diffs?: import("../types").FileDiff[]; turnMode?: string; dataMode?: DataMode }>>(new Map())
+  // Sincroniza los ids optimistas en un ref para poder consultarlos desde
+  // callbacks asíncronos (confirmación del envío). Los TEXTOS de los optimistas
+  // pendientes permiten reconocer el echo del user message en el SSE (que llega
+  // con role "assistant") — matchea cualquier envío en vuelo, no solo el último.
+  const optimisticIDsRef = useRef<Set<string>>(new Set())
+  const optimisticTextsRef = useRef<Set<string>>(new Set())
+  const localImagesRef = useRef<LocalImageEntry[]>([])
 
-  // ---- Batch de deltas SSE por frame ----
-  // Cada `message.part.delta` llega por separado y hoy disparaba un
-  // setMessages (y un re-render de la lista) por delta. El server puede
-  // emitir decenas de deltas/segundo; se encolan y se aplican con UN solo
-  // setMessages por requestAnimationFrame (máx. 60 renders/s, agrupando el
-  // trabajo). Al desmontar se drena lo pendiente de forma síncrona para no
-  // perder el último tramo del stream.
-  const messageBatchRef = useRef<Array<{ sid: string | null; patch: (prev: MessageEnvelope[]) => MessageEnvelope[] }>>([])
-  const batchFrameRef = useRef<number | null>(null)
-  const batchMountedRef = useRef(true)
-
-  const flushMessageBatch = useCallback(() => {
-    batchFrameRef.current = null
-    if (messageBatchRef.current.length === 0) return
-    const batch = messageBatchRef.current
-    messageBatchRef.current = []
-    setMessages((prev) => {
-      const loaded = loadedSessionIDRef.current
-      // Patch encolado para una sesión distinta a la cargada = raza de switch:
-      // llegó tarde y ya fue purgada por loadSelected. Descartarlo, nunca
-      // re-inyectarlo (era la ventana que mostraba el chat del otro).
-      return batch.reduce((acc, entry) => entry.sid && loaded && entry.sid !== loaded ? acc : entry.patch(acc), prev)
-    })
-  }, [])
-
-  const queueMessageUpdate = useCallback((patch: (prev: MessageEnvelope[]) => MessageEnvelope[], sid: string | null = null, immediate = false) => {
-    // Minimizado/oculto: rAF congelado + Virtuoso sin layout. Acumular sin
-    // pintar; al volver se drena en un solo frame antes de re-anclar.
-    const hidden = typeof document !== "undefined" && document.hidden
-    if (immediate && !hidden) {
-      setMessages((prev) => {
-        const loaded = loadedSessionIDRef.current
-        if (sid && loaded && sid !== loaded) return prev
-        return patch(prev)
-      })
-      return
-    }
-    messageBatchRef.current.push({ sid, patch })
-    if (!hidden && batchFrameRef.current === null && batchMountedRef.current) {
-      batchFrameRef.current = requestAnimationFrame(flushMessageBatch)
-    }
-  }, [flushMessageBatch])
-
-  useEffect(() => {
-    batchMountedRef.current = true
-    const onVis = () => {
-      if (!document.hidden && messageBatchRef.current.length > 0 && batchFrameRef.current === null) {
-        batchFrameRef.current = requestAnimationFrame(flushMessageBatch)
-      }
-    }
-    document.addEventListener("visibilitychange", onVis)
-    return () => {
-      document.removeEventListener("visibilitychange", onVis)
-      batchMountedRef.current = false
-      if (batchFrameRef.current !== null) cancelAnimationFrame(batchFrameRef.current)
-      batchFrameRef.current = null
-      // Drenar pendientes síncronamente: el desmontaje no pierde el stream.
-      if (messageBatchRef.current.length > 0) {
-        const batch = messageBatchRef.current
-        messageBatchRef.current = []
-        setMessages((prev) => {
-          const loaded = loadedSessionIDRef.current
-          return batch.reduce((acc, entry) => entry.sid && loaded && entry.sid !== loaded ? acc : entry.patch(acc), prev)
-        })
-      }
-    }
-  }, [])
+  // Batch de deltas SSE por frame + applyDelta/applyPart (hooks/useStreamPatch).
+  const { applyDelta, applyPart } = useStreamPatch({
+    setMessages,
+    loadedSessionIDRef,
+    optimisticTextsRef,
+    setOptimisticUserMessages,
+    subagentAnchorRef,
+  })
 
   const renderedMessages: RenderedMessage[] = useMemo(() => {
     // Aísla la conversación: mensajes de OTRAS sesiones (races de transición,
@@ -537,7 +393,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       //    partes de imagen coincidente.
       const confirmedTextCounts = new Map<string, number>()
       for (const m of confirmedUsers) {
-        const t = extractText(m).trim()
+        const t = messageText(m).trim()
         if (!t) continue
         confirmedTextCounts.set(t, (confirmedTextCounts.get(t) ?? 0) + 1)
       }
@@ -553,7 +409,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       const removeIDs = new Set<string>(confirmedIDs)
       for (const m of current) {
         if (m.info.sessionID !== sessionID || confirmedIDs.has(m.info.id)) continue
-        const t = extractText(m).trim()
+        const t = messageText(m).trim()
         const optImgCount = m.parts.filter((p) => isImagePart(p)).length
         if (t && optImgCount === 0) {
           const cnt = confirmedTextCounts.get(t) ?? 0
@@ -607,16 +463,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     setOptimisticUserMessages((current) => current.filter((m) => m.info.id !== id))
   }, [])
 
-  // Sincroniza los ids optimistas en un ref para poder consultarlos desde
-  // callbacks asíncronos (confirmación del envío). Los TEXTOS de los optimistas
-  // pendientes permiten reconocer el echo del user message en el SSE (que llega
-  // con role "assistant") — matchea cualquier envío en vuelo, no solo el último.
-  const optimisticIDsRef = useRef<Set<string>>(new Set())
-  const optimisticTextsRef = useRef<Set<string>>(new Set())
-  const localImagesRef = useRef<LocalImageEntry[]>([])
   useEffect(() => {
     optimisticIDsRef.current = new Set(optimisticUserMessages.map((m) => m.info.id))
-    optimisticTextsRef.current = new Set(optimisticUserMessages.map(extractText).map((t) => t.trim()).filter(Boolean))
+    optimisticTextsRef.current = new Set(optimisticUserMessages.map(messageText).map((t) => t.trim()).filter(Boolean))
     // Bytes locales de imágenes para rehidratar el eco del server (que puede
     // podar los dataURL): se reconstruye del estado — si el optimista sigue
     // pendiente, sus bytes siguen disponibles para el próximo fetch.
@@ -659,7 +508,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       }
 
       const targetID = targetMessage.info.id
-      const text = extractText(targetMessage) || ""
+      const text = messageText(targetMessage) || ""
       if (restoreComposer && text) setComposer(text)
 
       // Actualización optimista inmediata
@@ -774,340 +623,25 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     }
   }, [config, loadSelected, setCompacting, setAwaitingAssistantReply])
 
-  const applyDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace = false, partType = "text") => {
-    // Guard contra races: nunca aplicar deltas de una sesión distinta a la cargada.
-    if (loadedSessionIDRef.current !== sessionID) return
-    queueMessageUpdate((prev) => {
-      const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === messageID)
-      if (!existing) {
-        // El SSE etiqueta todo como "assistant"; si el texto coincide con un
-        // optimista pendiente es el user message confirmado: con role
-        // "user" el bubble conserva su borde/fondo.
-        const isUserText = partType === "text" && replace && optimisticTextsRef.current.size > 0
-          ? optimisticTextsRef.current.has(text.trim())
-          : false
-        if (isUserText) {
-          setOptimisticUserMessages((current) => {
-            const idx = current.findIndex((opt) => opt.info.sessionID === sessionID && extractText(opt).trim() === text.trim())
-            if (idx >= 0) {
-              return current.filter((_, i) => i !== idx)
-            }
-            return current
-          })
-        }
-        return [...prev, {
-          info: {
-            id: messageID,
-            role: isUserText ? "user" : "assistant",
-            sessionID,
-            time: { created: Date.now() },
-          },
-          parts: [{ id: partID, type: partType, text }]
-        }]
-      }
-      let changed = false
-      const next = prev.map((m) => {
-        if (m.info.sessionID !== sessionID || m.info.id !== messageID) return m
-        const nextParts = m.parts.map((p) => {
-          if (p.id !== partID) return p
-          // Nunca demotar un part ya tipado (reasoning/tool) a texto por un
-          // delta sin tipo resuelto.
-          const keepType = partType === "text" && p.type !== "text" ? p.type : partType
-          if (replace) {
-            if (p.text === text) return p
-            changed = true
-            return { ...p, text, type: keepType }
-          }
-          // Sin dedupe por suffix: deltas reales pueden repetir sufijos y se cortaba el stream
-          changed = true
-          return { ...p, text: (p.text ?? "") + text, type: keepType }
-        })
-        if (!nextParts.some((p) => p.id === partID)) {
-          changed = true
-          return { ...m, parts: [...nextParts, { id: partID, type: partType, text }] }
-        }
-        return { ...m, parts: nextParts }
-      })
-      return changed ? next : prev
-    }, sessionID, partType === "text" && replace)
-  }, [queueMessageUpdate])
-
-  // Materializa un part emitido por `message.part.updated`: crea el mensaje/part
-  // con el tipo correcto antes de que lleguen los deltas.
-  const applyPart = useCallback((sessionID: string, messageID: string, part: { id: string; type?: string; text?: string; tool?: string; callID?: string; state?: unknown; time?: { start?: number; end?: number } }) => {
-    if (!part.id) return
-    const visible = loadedSessionIDRef.current
-    if (visible && visible !== sessionID) {
-      // Tool part de una sesión distinta a la visible (subagente en background):
-      // SOLO se acepta si existe un ancla previa que apunte al chat visible.
-      // El fallback anterior ("sessionID = visible; messageID = ''") adivinaba
-      // el último assistant del chat abierto e INYECTABA contenido de otro chat.
-      const isTaskPart = part.tool === "task" || part.tool === "subagent" ||
-        (part.state && typeof part.state === "object" && (Boolean((part.state as any).input?.subagent_type) || Boolean((part.state as any).metadata?.subagent)))
-      if (!isTaskPart) return
-      const anchor = subagentAnchorRef.current.get(part.id)
-      if (!anchor || anchor.sessionID !== visible) return
-      sessionID = anchor.sessionID
-      messageID = anchor.messageID
-    }
-    queueMessageUpdate((prev) => {
-      let targetMessageID = messageID
-      if (!targetMessageID) {
-        const anchorMsg = prev.filter((m) => m.info.sessionID === sessionID && m.info.role === "assistant").pop()
-        targetMessageID = anchorMsg?.info.id ?? ""
-        if (targetMessageID) subagentAnchorRef.current.set(part.id, { sessionID, messageID: targetMessageID })
-        else return prev
-      }
-      const existing = prev.find((m) => m.info.sessionID === sessionID && m.info.id === targetMessageID)
-      if (!existing) {
-        const isUserText = part.type === "text" && part.text && optimisticTextsRef.current.size > 0
-          ? optimisticTextsRef.current.has(part.text.trim())
-          : false
-        return [...prev, {
-          info: { id: targetMessageID, role: isUserText ? "user" : "assistant", sessionID, time: { created: Date.now() } },
-          parts: [{ id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}), ...(part.time ? { time: part.time } : {}) }]
-        }]
-      }
-      let changed = false
-      const next = prev.map((m) => {
-        if (m.info.sessionID !== sessionID || m.info.id !== targetMessageID) return m
-        const hasPart = m.parts.some((p) => p.id === part.id)
-        if (!hasPart) {
-          changed = true
-          return { ...m, parts: [...m.parts, { id: part.id, type: part.type ?? "text", text: part.text ?? "", ...(part.tool ? { tool: part.tool } : {}), ...(part.callID ? { callID: part.callID } : {}), ...(part.state ? { state: part.state } : {}), ...(part.time ? { time: part.time } : {}) }] }
-        }
-        const nextParts = m.parts.map((p) => {
-          if (p.id !== part.id) return p
-          const incoming = part.text ?? ""          // Los tool parts (task/subagent) suelen llegar SIN texto: solo traen
-          // state.status (running→completed) y tool. Mergear siempre esos campos.
-          // Compare shallow por campo (evita JSON.stringify en el hot path).
-          const newState = part.state && typeof part.state === "object" ? part.state : undefined
-          const prevState = p.state && typeof p.state === "object" ? p.state : undefined
-          const stateChanged = newState !== undefined
-            ? newState !== prevState &&
-              ((newState as { status?: string }).status ?? "") !== ((prevState as { status?: string }).status ?? "")
-            : false
-          const toolChanged = part.tool !== undefined && part.tool !== p.tool
-          // El time (start/end) también cambia sin tocar texto: p.ej. el
-          // reasoning final llega con time.end aunque el texto ya esté completo.
-          const timeChanged = part.time !== undefined && p.time !== undefined
-            ? part.time.start !== p.time.start || part.time.end !== p.time.end
-            : part.time !== undefined && p.time === undefined
-          if (!incoming && p.text && !stateChanged && !toolChanged && !timeChanged) return p
-          if (p.text === incoming && (part.type ?? p.type) === p.type && !stateChanged && !toolChanged && !timeChanged) return p
-          changed = true
-          return {
-            ...p,
-            text: incoming || p.text,
-            ...(part.type ? { type: part.type } : {}),
-            ...(part.tool ? { tool: part.tool } : {}),
-            ...(part.callID ? { callID: part.callID } : {}),
-            ...(newState !== undefined ? { state: newState } : {}),
-            ...(part.time ? { time: part.time } : {}),
-          }
-        })
-        return { ...m, parts: nextParts }
-      })
-      return changed ? next : prev
-    }, sessionID)
-  }, [queueMessageUpdate])
-
-  const updateSend = useCallback(async (
-    selectedSession: SessionView,
-    activeModel: ModelSelection | undefined,
-    activeAgentID: string,
-    commands: { name: string }[],
-    onRefreshSessions: () => Promise<void>,
-    onLoadSelected: () => Promise<void>,
-    onSetCommands: (cmds: { name: string }[]) => void,
-    onSetRuntimeError: (err: string | null) => void,
-    images?: Array<{ base64: string; mime: string }>,
-    textOverride?: string,
-    onSetRevertID?: (id: string | null) => void,
-    translatedFrom?: string,
-  ) => {
-    const text = (textOverride ?? composer).trim()
-    if ((!text || !selectedSession) && (!images || images.length === 0)) return false
-    try {
-
-    const optimisticMessage = buildOptimisticMessage(selectedSession, text, images)
-    // Store original text for "ver original" if this was translated
-    if (translatedFrom) {
-      setTranslationOriginal(optimisticMessage.info.id, translatedFrom)
-    }
-
-    const doSend = async (
-      sendFn: () => Promise<unknown>,
-      then: () => Promise<void>
-    ): Promise<boolean> => {
-      // Guard anti doble-envío: SOLO bloquea la fase de HTTP POST, no la
-      // confirmación posterior. Antes estaba en el body de updateSend y se
-      // pisaba con los returns tempranos de slash commands (help/status/etc),
-      // quedando permanentemente en true y bloqueando TODOS los envíos
-      // posteriores.
-      if (isSendingRef.current) return false
-      isSendingRef.current = true
-      setIsSending(true)
-      let ok = false
-      try {
-        setComposer("")
-        setOptimisticUserMessages((current) => [...current, optimisticMessage])
-        // Sync refs inmediato: evita race donde el while loop no ve el optimistic (effect aún no corrió)
-        optimisticIDsRef.current = new Set([...optimisticIDsRef.current, optimisticMessage.info.id])
-        const t = extractText(optimisticMessage).trim()
-        if (t) optimisticTextsRef.current = new Set([...optimisticTextsRef.current, t])
-        awaitingBaselineIDRef.current = lastSigRef.current.assistantLastID
-        completionShouldPlayRef.current = true
-        setAwaitingAssistantReply(true)
-        onSetRuntimeError(null)
-
-        try {
-          await sendFn()
-          ok = true
-        } catch (err) {
-          // Send fallido (red o server): remover el optimistic de inmediato,
-          // restaurar el texto original (no el traducido) y mostrar el error.
-          // El Composer conserva las imágenes porque recibe `false` como retorno.
-          completionShouldPlayRef.current = false
-          setAwaitingAssistantReply(false)
-          removeOptimistic(optimisticMessage.info.id)
-          const restoreText = translatedFrom || text
-          setComposer((current) => current || restoreText)
-          onSetRuntimeError(formatServerError(err))
-        }
-      } finally {
-        isSendingRef.current = false
-        setIsSending(false)
-      }
-
-      if (ok) {
-        // TUI-like: 1 fetch inmediato; el SSE echo ya borra el optimista sin poll
-        try {
-          await then().catch(() => undefined)
-        } catch {
-          // nunca tratar una falla de confirmación como falla de envío
-        }
-      }
-
-      try {
-        await onRefreshSessions()
-      } catch {
-        // ignore
-      }
-      return ok
-    }
-
-    const parsed = parseCommand(text)
-    if (parsed?.type === "help") {
-      setComposer("")
-      return "help"
-    }
-    if (parsed?.type === "status") {
-      setComposer("")
-      setOptimisticUserMessages((current) => [...current, optimisticMessage, buildStatusMessage(selectedSession)])
-      return
-    }
-    if (parsed?.type === "undo") {
-      setComposer("")
-      await undoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, onRefreshSessions, onLoadSelected, undefined, onSetRevertID, false)
-      return
-    }
-    if (parsed?.type === "redo") {
-      setComposer("")
-      await redoMessage(selectedSession.id, selectedSession.directory, selectedSession.revert, onRefreshSessions, onLoadSelected, undefined, onSetRevertID)
-      return
-    }
-    if (parsed?.type === "compact") {
-      setComposer("")
-      if (activeModel) {
-        completionShouldPlayRef.current = true
-        await compactSession(selectedSession.id, selectedSession.directory, activeModel.providerID, activeModel.modelID, onRefreshSessions, onLoadSelected)
-      } else {
-        onSetRuntimeError("Select a model first to use /compact")
-      }
-      return
-    }
-    if (parsed?.type === "themes") {
-      setComposer("")
-      return "themes"
-    }
-    if (parsed?.type === "history") {
-      setComposer("")
-      return "history"
-    }
-    if (parsed?.type === "timeline") {
-      setComposer("")
-      return "timeline"
-    }
-    if (parsed?.type === "newSession") {
-      setComposer("")
-      return "newSession"
-    }
-    if (parsed?.type === "connect") {
-      setComposer("")
-      // /connect <providerID> <apiKey> → setea la credencial directo.
-      // /connect (sin args) → abre el sheet de proveedores.
-      const m = parsed.text.trim().match(/^(\S+)\s+(\S+)/)
-      if (m) {
-        try {
-          await api.setProviderAuth(config, m[1], m[2], selectedSession.directory)
-          return true
-        } catch (err) {
-          onSetRuntimeError(formatServerError(err))
-          return false
-        }
-      }
-      return "connect"
-    }
-    if (parsed?.type === "rename") {
-      setComposer("")
-      const title = parsed.title.trim()
-      if (!title) {
-        setOptimisticUserMessages((current) => [...current, optimisticMessage, buildNoticeMessage(selectedSession, "Usage: /rename <new title>")])
-        return
-      }
-      try {
-        await api.renameSession(config, selectedSession.id, title, selectedSession.directory)
-        try {
-          await onRefreshSessions()
-        } catch {
-          // ignore
-        }
-        setOptimisticUserMessages((current) => [...current, optimisticMessage, buildNoticeMessage(selectedSession, `Session renamed to "${title}"`)])
-      } catch (err) {
-        onSetRuntimeError(formatServerError(err))
-      }
-      return
-    }
-    if (parsed?.type === "export") {
-      setComposer("")
-      return "export"
-    }
-    if (parsed?.type === "command") {
-      const { isKnown } = await resolveCommand(config, parsed.command, commands, onSetCommands)
-      if (!isKnown) {
-        return doSend(
-          () => api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID),
-          () => onLoadSelected()
-        )
-      }
-      return doSend(
-        () => api.sendCommand(config, selectedSession.id, parsed.command, parsed.args, selectedSession.directory, activeModel, activeAgentID),
-        () => onLoadSelected()
-      )
-    }
-
-    return doSend(
-      () => api.sendPrompt(config, selectedSession.id, text, selectedSession.directory, activeModel, activeAgentID, images),
-      () => onLoadSelected()
-    )
-    } finally {
-      // BUG 1+6: isSendingRef siempre se resetea, incluso si el slash
-      // command hace return temprano. Antes esto faltaba y el ref quedaba
-      // pegado en true bloqueando TODOS los envíos posteriores.
-      isSendingRef.current = false
-    }
-  }, [composer, config, assistantResponseSignature, removeOptimistic, undoMessage, redoMessage, compactSession])
+  const updateSend = useMessageSend({
+    config,
+    composer,
+    assistantResponseSignature,
+    removeOptimistic,
+    undoMessage,
+    redoMessage,
+    compactSession,
+    setComposer,
+    setOptimisticUserMessages,
+    setIsSending,
+    isSendingRef,
+    optimisticIDsRef,
+    optimisticTextsRef,
+    awaitingBaselineIDRef,
+    completionShouldPlayRef,
+    setAwaitingAssistantReply,
+    lastSigRef,
+  })
 
   return {
     messages, setMessages, optimisticUserMessages,

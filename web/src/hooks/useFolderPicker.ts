@@ -3,6 +3,7 @@ import type { ServerConfig, FileEntry } from "../types"
 import { api } from "../api"
 import { STORAGE_KEYS } from "../constants"
 import { useLocalStorage } from "./useLocalStorage"
+import { errorStatus } from "../shared/errors/errorShape"
 
 const CURSOR_STORAGE_KEY = STORAGE_KEYS.CURSOR
 
@@ -40,12 +41,6 @@ export function partsToDir(parts: string[]): string {
     return tail.length > 0 ? `${head}\\${tail.join("\\")}` : `${head}\\`
   }
   return `/${parts.join("/")}`
-}
-
-// Status HTTP del error envuelto por el cliente (sin status = fallo de red).
-function httpStatus(err: unknown): number | undefined {
-  const cause = (err as { cause?: { status?: unknown } } | undefined)?.cause
-  return typeof cause?.status === "number" ? cause.status : undefined
 }
 
 // Resuelve ".." y "." contra el path absoluto (el server rechaza ".." con 500).
@@ -160,7 +155,7 @@ export function useFolderPicker(config: ServerConfig) {
           // El dir guardado ya no existe (el server responde 4xx/5xx al listarlo):
           // limpiarlo evita reintentos y abre el picker en el home. Un fallo de
           // red (sin status) conserva la preferencia.
-          if (httpStatus(failure) !== undefined) setNewSessionDirectory("")
+          if (errorStatus(failure) !== undefined) setNewSessionDirectory("")
         }
       }
       const info = await api.loadPath(config)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { desktopApi, readMJPEGStream, type DesktopConfig, type DesktopInfo, type StreamParams } from "../desktop"
+import { useT } from "../i18n-context"
 
 export type DesktopStatus = "idle" | "connecting" | "streaming" | "error"
 
@@ -12,6 +13,7 @@ function sleep(ms: number) {
 // El error se mantiene visible hasta que llegue el primer frame (no se
 // "esconde" en el loop de reintento) — la vista muestra Fallo + Reintentar.
 export function useRemoteDesktop(config: DesktopConfig | null, params: StreamParams, enabled: boolean) {
+  const t = useT()
   const [status, setStatus] = useState<DesktopStatus>("idle")
   const [error, setError] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -89,13 +91,13 @@ export function useRemoteDesktop(config: DesktopConfig | null, params: StreamPar
           })
           if (cancelled) return
           // EOF sin abort: el server cerró — reconectar.
-          throw new Error("stream closed")
+          throw new Error(t('error.streamClosed'))
         } catch (err) {
           if (cancelled) return
           if ((err as Error)?.name === "AbortError") return
           // El error queda visible; el loop sigue reintentando en segundo plano.
           if (statusRef.current !== "error") setStatus("error")
-          setError((err as Error)?.message ?? "connection failed")
+          setError((err as Error)?.message ?? t('error.connectionFailed'))
           await sleep(2500)
           if (cancelled) return
           setStatus("connecting")
@@ -116,7 +118,7 @@ export function useRemoteDesktop(config: DesktopConfig | null, params: StreamPar
         imageUrlRef.current = null
       }
     }
-  }, [config, enabled, params.mode, params.hwnd, params.monitor, params.w, params.q, params.fps, resetCounters, retryNonce])
+  }, [config, enabled, params.mode, params.hwnd, params.monitor, params.w, params.q, params.fps, resetCounters, retryNonce, t])
 
   const refreshInfo = useCallback(async () => {
     if (!config) return null

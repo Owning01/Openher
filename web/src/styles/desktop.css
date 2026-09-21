@@ -1232,20 +1232,12 @@
   flex-shrink: 0;
 }
 
-.prompt-shell {
-  color: #58a6ff;
-  font-weight: 800;
-}
 
 .prompt-path {
   color: #3fb950;
   font-weight: 700;
 }
 
-.prompt-symbol {
-  color: #d2a8ff;
-  font-weight: 900;
-}
 
 .terminal-prompt-line {
   display: flex;
@@ -1392,10 +1384,6 @@
   .shell-row { font-size: 0.9rem; padding: 4px 8px; }
   .shell-tree-title { font-size: 0.875rem; }
   .shell-path { font-size: 0.875rem; }
-  .shell-preview-body { font-size: 0.84rem; }
-  .shell-preview-name { font-size: 0.875rem; }
-  .shell-drive { font-size: 0.875rem; }
-  .shell-size { font-size: 0.74rem; }
   .shell-docs-content { font-size: 0.92rem; }
   .shell-docs-head input { font-size: 0.84rem; }
 

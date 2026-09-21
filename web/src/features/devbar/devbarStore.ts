@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react"
+import { createStore, useStore } from "../../shared/lib/store"
 
 const KEY = "openher.devbar.enabled"
 
@@ -10,39 +10,22 @@ function readInitial(): boolean {
   }
 }
 
-let enabled = readInitial()
-const listeners = new Set<() => void>()
-
-function emit(): void {
-  for (const l of listeners) l()
-}
-
-function subscribe(fn: () => void): () => void {
-  listeners.add(fn)
-  return () => {
-    listeners.delete(fn)
-  }
-}
-
-function getSnapshot(): boolean {
-  return enabled
-}
+const store = createStore<boolean>(readInitial())
 
 export function setDevbarEnabled(v: boolean): void {
-  if (enabled === v) return
-  enabled = v
+  if (store.get() === v) return
   try {
     localStorage.setItem(KEY, v ? "1" : "0")
   } catch {
     // almacenamiento no disponible: el toggle solo vive en memoria
   }
-  emit()
+  store.set(v)
 }
 
 export function toggleDevbar(): void {
-  setDevbarEnabled(!enabled)
+  setDevbarEnabled(!store.get())
 }
 
 export function useDevbarEnabled(): boolean {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useStore(store)
 }

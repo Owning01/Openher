@@ -5,8 +5,8 @@ import { RefreshIcon, TrashIcon, CheckIcon } from "../../Icons"
 
 type Props = { name: string; title: string; url: string; isWidget?: boolean }
 
-// Dedupe de POST /start entre instancias simultáneas (__design__ legacy +
-// plugin:external:*) y remontajes StrictMode: un solo spawn por plugin.
+// Dedupe de POST /start entre instancias simultáneas (plugin:external:*)
+// y remontajes StrictMode: un solo spawn por plugin.
 // El backend además tiene guard `starting` 20s + gracia de boot 25s.
 const startInflight = new Map<string, Promise<any>>()
 const startIssuedAt = new Map<string, number>()

@@ -1,14 +1,13 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback } from "react"
 import { Capacitor } from "@capacitor/core"
 import { Filesystem, Directory } from "@capacitor/filesystem"
 import { Share } from "@capacitor/share"
 import { api } from "../../../api"
 import type { SessionView, ServerConfig, ConnectionState, ModelOption } from "../../../types"
-import { formatSelectionForPrompt } from "../../../hooks/useVisualSelection"
-import { keepMessagesBefore, keepMessagesThrough } from "../domain/message-order"
-import { claimSharedOutbox, holdSharedOutbox, resumeSharedOutbox } from "../../../hooks/useMessages"
-import { isSessionActive } from "../../../utils"
+import { holdSharedOutbox, resumeSharedOutbox } from "../../../hooks/useMessages"
+import { keepMessagesThrough } from "../domain/message-order"
 import { openPromptHistory } from "../../../utils/promptHistory"
+import { useSessionChatFlow } from "./useSessionChatController"
 
 export type UseChatActionsParams = {
   selectedSession: SessionView | null
@@ -55,6 +54,12 @@ export type UseChatActionsParams = {
   dismissSessionQuestions?: (sessionID?: string) => void
 }
 
+/**
+ * C3: el movil ya no reimplementa send/stop/revert/edit/undo/redo/compact ni
+ * outboxActions. Delega en `useSessionChatFlow` (el UNICO flujo, compartido con
+ * `useSessionChatController` del desktop) y solo agrega lo propio del movil:
+ * export, snapshot, regenerate, prompts y el ruteo de comandos locales.
+ */
 export function useChatActions(params: UseChatActionsParams) {
   const {
     selectedSession,
@@ -94,7 +99,7 @@ export function useChatActions(params: UseChatActionsParams) {
     undoMessage,
     redoMessage,
     compactSession,
-    setCompacting,
+    setCompacting: _setCompacting,
     dismissSessionQuestions,
   } = params
 
@@ -201,179 +206,79 @@ export function useChatActions(params: UseChatActionsParams) {
     } catch {}
   }, [selectedSession, renderedMessages, setRuntimeError])
 
-  const handleSend = useCallback(
-    async (
-      images?: Array<{ base64: string; mime: string }>,
-      options?: { translate?: boolean },
-      text?: string,
-      force?: boolean
-    ) => {
-      if (!selectedSession) return
-      // Un envío manual reanuda el auto-flush (p. ej. después de un Stop).
-      if (!force) resumeSharedOutbox(selectedSession.id)
-      if (awaitingAssistantReply || isSessionActive(selectedSession)) {
-        if (!force) {
-          // Ocupado: a la cola visible en vez de rechazar.
-          const composerText = text ?? composerRef.current
-          if (!composerText.trim() && (!images || images.length === 0)) return false
-          enqueueOutbox(selectedSession.id, composerText, images)
-          setComposer("")
-          composerRef.current = ""
-          if (vs.hasSelection) {
-            vs.clear()
-            vs.clearAnnotations()
-          }
-          return true
-        }
-      }
-      const composerText = text ?? composerRef.current
-      if (connectionState === "offline") {
-        const queuedText = vs.hasSelection && vs.promptContext
-          ? formatSelectionForPrompt(composerText, vs.promptContext)
-          : composerText
-        queueAction({
-          type: "prompt",
-          sessionID: selectedSession.id,
-          directory: selectedSession.directory,
-          payload: queuedText,
-          model: activeModel ? { providerID: activeModel.providerID, modelID: activeModel.modelID, variant: activeModel.variant } : undefined,
-          agentID: activeAgentID || undefined,
-          images,
-          options,
-        })
-        setComposer("")
-        // Limpiar selección visual incluso en offline para evitar contexto stale
-        if (vs.hasSelection) {
-          vs.clear()
-          vs.clearAnnotations()
-        }
-        setRuntimeError("Prompt queued - will send when connection is restored")
-        return
-      }
-      let textToSend = composerText
-      let originalText: string | null = null
-      if (options?.translate && composerText.trim()) {
-        try {
-          const { translateToEnglish } = await import("../../../utils/translate")
-          const translated = await translateToEnglish(composerText)
-          if (translated !== composerText) {
-            originalText = composerText
-            textToSend = translated
-            setComposer(translated)
-          }
-        } catch (err) {
-          setRuntimeError(`Translation failed: ${(err as Error).message}`)
-          return false
-        }
-      }
-      const hadVisualSelection = vs.hasSelection && !!vs.promptContext
-      if (hadVisualSelection) {
-        textToSend = formatSelectionForPrompt(textToSend, vs.promptContext)
-      }
-      stopGenerationRef.current = false
-      const revertMsgId = localRevertID ?? selectedSession?.revert?.messageID
-      let prevMessagesSnapshot: any[] | null = null
-      if (revertMsgId) {
-        // Snapshot para rollback si el envío falla
-        // Nota: necesitamos capturar el array actual de mensajes; como setMessages es async,
-        // guardamos referencia al snapshot previo via closure de renderedMessages no es suficiente.
-        // El rollback se hará via loadSelected si falla, pero mantenemos snapshot para UI inmediata.
-        prevMessagesSnapshot = null // se restaurará via loadSelected en caso de fallo
-        const sid = selectedSession.id
-        setMessages((prev: any[]) => {
-          prevMessagesSnapshot = prev
-          return keepMessagesBefore(prev, sid, revertMsgId)
-        })
-      }
-      setLocalRevertID(null)
-      setSessions((prev) =>
-        prev.map((s) => (s.id === selectedSession.id ? { ...s, status: "busy" } : s))
-      )
-      const result = await send(
-        selectedSession,
-        activeModel,
-        activeAgentID,
-        commands,
-        () => refreshSessions(),
-        () => loadSelected(selectedSession.id, selectedSession.directory).then(() => undefined),
-        setCommands,
-        setRuntimeError,
-        images,
-        textToSend,
-        setLocalRevertID,
-        originalText ?? undefined
-      )
-      if (result === false) {
-        // Rollback de pruning y restaurar composer original si hubo traducción
-        if (prevMessagesSnapshot) setMessages(prevMessagesSnapshot)
-        else if (revertMsgId) {
-          // Fallback: recargar desde servidor para restaurar vista previa al revert
-          loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
-        }
-        if (originalText) setComposer(originalText)
-        // Reset del busy optimista: sin esto la sesión queda clavada en busy
-        // y todo envío posterior se bloquea con composer.busy
-        setSessions((prev) =>
-          prev.map((s) => (s.id === selectedSession.id ? { ...s, status: "idle" as const } : s))
-        )
-      } else if (typeof result === "string") {
-        // Comando local (help/themes/connect/new/history...): no corrió el
-        // agente, así que el busy optimista de arriba no debe quedar pegado.
-        setSessions((prev) =>
-          prev.map((s) => (s.id === selectedSession.id ? { ...s, status: "idle" as const } : s))
-        )
-      }
-      // Limpiar selección visual siempre para evitar contexto stale duplicado en reintentos
-      if (hadVisualSelection) {
-        vs.clear()
-        vs.clearAnnotations()
-      }
+  // UNICO flujo de chat (compartido con useSessionChatController).
+  const flow = useSessionChatFlow({
+    variant: "mobile",
+    session: selectedSession,
+    config,
+    connectionState,
+    activeModel,
+    activeAgentID,
+    commands,
+    composerRef,
+    setComposer,
+    setRuntimeError,
+    stopGenerationRef,
+    localRevertID,
+    setLocalRevertID,
+    messages: [],
+    setMessages,
+    renderedMessages,
+    outbox: outbox ?? [],
+    enqueueOutbox,
+    removeOutbox,
+    send,
+    abortSession,
+    awaitingAssistantReply,
+    setAwaitingAssistantReply,
+    completionShouldPlayRef,
+    visualHasSelection: Boolean(vs?.hasSelection),
+    visualPromptContext: vs?.promptContext,
+    clearVisualSelection: () => {
+      vs?.clear()
+      vs?.clearAnnotations()
+    },
+    resumeOutbox: resumeSharedOutbox,
+    holdOutbox: () => {
+      if (selectedSession) holdSharedOutbox(selectedSession.id)
+    },
+    queueAction,
+    onCommandResult: (result, directory) => {
       if (result === "help") {
         setHelpPage("commands")
         navigate("help")
-      }
-      if (result === "themes") {
+      } else if (result === "themes") {
         navigate("settings")
         setShowThemePicker(true)
-      }
-      if (result === "connect") setShowConnectSheet(true)
-      if (result === "newSession") onNewSession(selectedSession.directory)
-      if (result === "history" || result === "timeline") openPromptHistory()
-      if (result === "export") handleExportMarkdown()
-      return typeof result === "boolean" ? result : true
+      } else if (result === "connect") setShowConnectSheet(true)
+      else if (result === "newSession") onNewSession(directory)
+      else if (result === "history" || result === "timeline") openPromptHistory()
+      else if (result === "export") handleExportMarkdown()
     },
-    [
-      selectedSession,
-      awaitingAssistantReply,
-      activeModel,
-      activeAgentID,
-      commands,
-      send,
-      refreshSessions,
-      loadSelected,
-      setSessions,
-      connectionState,
-      queueAction,
-      setRuntimeError,
-      setComposer,
-      localRevertID,
-      setMessages,
-      navigate,
-      setHelpPage,
-      setShowThemePicker,
-      setShowConnectSheet,
-      onNewSession,
-      vs.hasSelection,
-      vs.promptContext,
-      vs.clear,
-      enqueueOutbox,
-      stopGenerationRef,
-      setLocalRevertID,
-      handleExportMarkdown,
-      setCommands,
-      composerRef,
-    ]
-  )
+    onAfterAbort: () => {
+      if (selectedSession) return settleSession(selectedSession.id, selectedSession.directory)
+      return undefined
+    },
+    markSessionBusy: (sid) =>
+      setSessions((prev) => prev.map((s) => (s.id === sid ? { ...s, status: "busy" } : s))),
+    markSessionIdle: (sid) =>
+      setSessions((prev) => prev.map((s) => (s.id === sid ? { ...s, status: "idle" as const } : s))),
+    patchSession: (patch) => {
+      if (!selectedSession) return
+      setSessions((prev) =>
+        prev.map((s) => (s.id === selectedSession.id ? { ...s, ...patch } : s))
+      )
+    },
+    refreshSessions: () => refreshSessions(),
+    loadSelected,
+    setCommands,
+    dismissSessionQuestions,
+    undoMessage,
+    redoMessage,
+    compactSession,
+  })
+
+  const handleSend = flow.handleSend
 
   const handleRegenerate = useCallback(async () => {
     if (!selectedSession) return
@@ -482,226 +387,6 @@ export function useChatActions(params: UseChatActionsParams) {
     ]
   )
 
-  // Stop real: guard anti-deltas tardíos + anti doble-clic. Vive en
-  // stopGenerationRef (fondo) y lo apaga el timeout de handleAbort o el
-  // próximo handleSend. `stopping` se conserva por compat de retorno pero YA
-  // NO entra en isWorking: la animación de "respondiendo" debe caer al
-  // confirmar el stop, no 10s después.
-  const [stopping, setStopping] = useState(false)
-
-  const handleAbort = useCallback(async () => {
-    if (!selectedSession) return
-    // Doble clic: el flag se pone sincrónico abajo, el segundo llamado sale acá.
-    if (stopGenerationRef.current) return
-    stopGenerationRef.current = true
-    setStopping(true)
-    setAwaitingAssistantReply(false)
-    completionShouldPlayRef.current = false
-    // Stop explícito: la cola pendiente NO se auto-envía al quedar libre.
-    // Si no, el abort arrancaba otro turno al instante y parecía no parar.
-    holdSharedOutbox(selectedSession.id)
-    // Preguntas del turno abortado: cerrarlas localmente para que el modal no
-    // reaparezca cuando el server las siga reportando como pendientes.
-    dismissSessionQuestions?.(selectedSession.id)
-    setSessions((prev) =>
-      prev.map((s) => (s.id === selectedSession.id ? { ...s, status: "idle" as const } : s))
-    )
-    setMessages((prev) => {
-      return prev.map((m) => {
-        if (
-          m.info.sessionID === selectedSession.id &&
-          m.info.role === "assistant" &&
-          !m.info.time.completed
-        ) {
-          return { ...m, info: { ...m.info, time: { ...m.info.time, completed: Date.now() } } }
-        }
-        return m
-      })
-    })
-    const sid = selectedSession.id
-    const dir = selectedSession.directory
-    try {
-      await abortSession(sid, dir)
-      await settleSession(sid, dir).catch(() => undefined)
-    } catch (e) {
-      // Antes se tragaba en silencio y el server seguía generando ("no para").
-      setRuntimeError(`No se pudo detener la generación: ${(e as Error)?.message ?? String(e)}`)
-    } finally {
-      // El flag se apaga al confirmar idle (efecto abajo); timeout de
-      // seguridad por si el server nunca reporta (antes: 2s fijos que
-      // reabrían el stream a mitad del abort).
-      window.setTimeout(() => {
-        stopGenerationRef.current = false
-        setStopping(false)
-      }, 10000)
-    }
-  }, [
-    selectedSession,
-    abortSession,
-    loadSelected,
-    settleSession,
-    setAwaitingAssistantReply,
-    setSessions,
-    setMessages,
-    setRuntimeError,
-    stopGenerationRef,
-    completionShouldPlayRef,
-    dismissSessionQuestions,
-  ])
-
-  // Sin apagado temprano por idle: handleAbort pone la sesión en idle de
-  // forma optimista, así que limpiar el guard al ver idle lo mataba en el
-  // siguiente render y los deltas tardíos se colaban. El timeout del finally
-  // de handleAbort (10s) y el próximo handleSend son los únicos que lo apagan.
-
-  const handleRevertToMessage = useCallback(
-    async (messageID: string) => {
-      if (!selectedSession) return
-      try {
-        if (awaitingAssistantReply) {
-          await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
-        }
-        const target = renderedMessages.find((m) => m.info.id === messageID)
-        const sid = selectedSession.id
-        setLocalRevertID(messageID)
-        await api.revert(config, sid, messageID, selectedSession.directory)
-        await loadSelected(sid, selectedSession.directory).catch(() => {})
-        await refreshSessions().catch(() => {})
-        if (target?.text) setComposer(target.text)
-      } catch (err) {
-        setLocalRevertID(null)
-        setRuntimeError((err as Error).message)
-        await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
-      }
-    },
-    [
-      selectedSession,
-      config,
-      awaitingAssistantReply,
-      loadSelected,
-      renderedMessages,
-      refreshSessions,
-      setLocalRevertID,
-      setComposer,
-      setRuntimeError,
-    ]
-  )
-
-  const handleEditMessage = useCallback(
-    async (messageID: string, text: string) => {
-      if (!selectedSession) return
-      try {
-        if (awaitingAssistantReply) {
-          await api.abort(config, selectedSession.id, selectedSession.directory).catch(() => {})
-        }
-        const sid = selectedSession.id
-        setLocalRevertID(messageID)
-        await api.revert(config, sid, messageID, selectedSession.directory)
-        await loadSelected(sid, selectedSession.directory).catch(() => {})
-        await refreshSessions().catch(() => {})
-        setComposer(text)
-      } catch (err) {
-        setLocalRevertID(null)
-        setRuntimeError((err as Error).message)
-        await loadSelected(selectedSession.id, selectedSession.directory).catch(() => {})
-      }
-    },
-    [
-      selectedSession,
-      config,
-      awaitingAssistantReply,
-      loadSelected,
-      refreshSessions,
-      setLocalRevertID,
-      setComposer,
-      setRuntimeError,
-    ]
-  )
-
-  const handleUndo = useCallback(() => {
-    if (!selectedSession) return
-    const patchSession = (patch: Record<string, unknown>) => {
-      setSessions((prev) =>
-        prev.map((s) => (s.id === selectedSession.id ? { ...s, ...patch } : s))
-      )
-    }
-    undoMessage(
-      selectedSession.id,
-      selectedSession.directory,
-      selectedSession.revert,
-      refreshSessions,
-      () => loadSelected(selectedSession.id, selectedSession.directory),
-      patchSession,
-      setLocalRevertID
-    )
-  }, [selectedSession, undoMessage, refreshSessions, loadSelected, setSessions, setLocalRevertID])
-
-  const handleRedo = useCallback(() => {
-    if (!selectedSession) return
-    const patchSession = (patch: Record<string, unknown>) => {
-      setSessions((prev) =>
-        prev.map((s) => (s.id === selectedSession.id ? { ...s, ...patch } : s))
-      )
-    }
-    redoMessage(
-      selectedSession.id,
-      selectedSession.directory,
-      selectedSession.revert,
-      refreshSessions,
-      () => loadSelected(selectedSession.id, selectedSession.directory),
-      patchSession,
-      setLocalRevertID
-    )
-  }, [selectedSession, redoMessage, refreshSessions, loadSelected, setSessions, setLocalRevertID])
-
-  const handleCompact = useCallback(async () => {
-    if (!selectedSession || !activeModel) return
-    completionShouldPlayRef.current = true
-    await compactSession(
-      selectedSession.id,
-      selectedSession.directory,
-      activeModel.providerID,
-      activeModel.modelID,
-      refreshSessions,
-      () => loadSelected(selectedSession.id, selectedSession.directory)
-    )
-  }, [
-    selectedSession,
-    activeModel,
-    compactSession,
-    refreshSessions,
-    loadSelected,
-    setCompacting,
-    setAwaitingAssistantReply,
-    completionShouldPlayRef,
-  ])
-
-  // Acciones de la cola visible por id de mensaje pendiente.
-  const outboxActions = useMemo(() => {
-    const map: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }> = {}
-    for (const o of outbox ?? []) {
-      if (!selectedSession || o.sessionID !== selectedSession.id) continue
-      map[o.id] = {
-        onDelete: () => removeOutbox(o.id),
-        onEdit: () => {
-          setComposer(o.text)
-          composerRef.current = o.text
-          removeOutbox(o.id)
-        },
-        onSendNow: () => {
-          if (!claimSharedOutbox(o.id)) return
-          removeOutbox(o.id)
-          // Acción explícita del usuario: reanuda el auto-flush (si estaba en hold por Stop).
-          resumeSharedOutbox(o.sessionID)
-          void handleSend(o.images, undefined, o.text, true).then((res) => {
-            if (res === false) enqueueOutbox(o.sessionID, o.text, o.images)
-          })
-        },
-      }
-    }
-    return map
-  }, [outbox, selectedSession, removeOutbox, setComposer, composerRef, handleSend, enqueueOutbox])
-
   return {
     buildMarkdown,
     handleExportChat,
@@ -710,16 +395,16 @@ export function useChatActions(params: UseChatActionsParams) {
     handleExportMarkdown,
     handleSnapshot,
     handleSend,
-    outboxActions,
+    outboxActions: flow.outboxActions,
     handleRegenerate,
     handleInsertPrompt,
     handleSendPrompt,
-    handleAbort,
-    stopping,
-    handleRevertToMessage,
-    handleEditMessage,
-    handleUndo,
-    handleRedo,
-    handleCompact,
+    handleAbort: flow.handleAbort,
+    stopping: flow.stopping,
+    handleRevertToMessage: flow.handleRevertToMessage,
+    handleEditMessage: flow.handleEditMessage,
+    handleUndo: flow.handleUndo,
+    handleRedo: flow.handleRedo,
+    handleCompact: flow.handleCompact,
   }
 }

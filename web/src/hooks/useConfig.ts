@@ -7,6 +7,8 @@ import { STORAGE_KEYS } from "../constants"
 import { invalidateShellBase } from "../shell"
 import { encrypt, decrypt, isCiphertext } from "../utils/crypto"
 import { discoverServer, isLoopbackHost } from "../utils/serverDiscovery"
+import { withTimeout } from "../shared/lib/async"
+import { useT } from "../i18n-context"
 
 const CONFIG_FILENAME = "openher-config.json"
 
@@ -102,6 +104,7 @@ async function writeConfigToExternal(config: ServerConfig) {
 }
 
 export function useConfig() {
+  const t = useT()
   const [config, setConfig] = useState<ServerConfig>(loadInitialConfig)
   const [draftConfig, setDraftConfig] = useState<ServerConfig>(config)
   const [connectedVersion, setConnectedVersion] = useState("")
@@ -176,7 +179,7 @@ export function useConfig() {
   const canTestDraft = canTestConfig(draftConfig)
   const testAlreadyPassedForDraft = lastTestedConfigKey === draftConfigKey
 
-  const saveConfig = useCallback((t?: (key: string, params?: Record<string, string | number>) => string) => {
+  const saveConfig = useCallback((translate?: (key: string, params?: Record<string, string | number>) => string) => {
     setConfig(draftConfig)
     localStorage.setItem(STORAGE_KEYS.SERVER, JSON.stringify(draftConfig))
     writeConfigToFile(draftConfig)
@@ -184,25 +187,24 @@ export function useConfig() {
     // El puente del shell (/shell/*) se deriva del host del server: al cambiar
     // la conexión hay que invalidar la base resuelta (TTL 30s) para el explorador.
     invalidateShellBase()
+    const tr = translate ?? t
     const tested = lastTestedConfigKey === configKey(draftConfig)
     setSettingsNotice({
       type: "success",
-      text: t
-        ? tested
-          ? t('settings.saved')
-          : `${t('settings.saved')}\n${t('settings.savedNotTested')}`
-        : tested
-          ? "Configuration saved. It will be used for Sessions."
-          : "Configuration saved. It will be used for Sessions.\nTest the connection before using it."
+      text: tested
+        ? tr('settings.saved')
+        : `${tr('settings.saved')}\n${tr('settings.savedNotTested')}`
     })
     setTimeout(() => setSettingsNotice(null), 6000)
     setConnectionState("connecting")
-    setConnectionMessage("Connecting to OpenHer...")
-  }, [draftConfig, lastTestedConfigKey])
+    setConnectionMessage(t('connection.connecting'))
+  }, [draftConfig, lastTestedConfigKey, t])
 
-  const testConnection = useCallback(async (t: (key: string, params?: Record<string, string | number>) => string) => {
+  const testConnection = useCallback(async (translate: (key: string, params?: Record<string, string | number>) => string) => {
+    const tr = translate ?? t
     setTestingConnection(true)
-    setSettingsNotice({ type: "info", text: t('settings.testingConnection') })
+    setSettingsNotice({ type: "info", text: tr('settings.testingConnection') })
+    const timeoutMessage = tr('error.connectionTimeout')
     // Auto-fallback: si 4096 falla y draft es 4096 sin pass, probar 4098 con octavio (opencode2 service real en este equipo)
     const tryConfigs = [draftConfig]
     if (draftConfig.host.trim() === "127.0.0.1" && draftConfig.port === 4096 && !draftConfig.password) {
@@ -216,48 +218,45 @@ export function useConfig() {
     try {
       for (const cfg of tryConfigs) {
         try {
-          const health = await Promise.race([
-            api.health(cfg),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Connection timed out")), 7000))
-          ])
+          const health = await withTimeout(api.health(cfg), 7000, timeoutMessage)
           if (cfg.port !== draftConfig.port || cfg.password !== draftConfig.password) {
             setDraftConfig(cfg)
           }
           setConnectedVersion(health.version)
           setLastTestedConfigKey(configKey(cfg))
-          setSettingsNotice({ type: "success", text: t('settings.testedNotSaved', { version: health.version }) + (cfg.port !== draftConfig.port ? ` (auto → :${cfg.port})` : "") })
+          setSettingsNotice({ type: "success", text: tr('settings.testedNotSaved', { version: health.version }) + (cfg.port !== draftConfig.port ? ` (auto → :${cfg.port})` : "") })
           return
         } catch (err) {
           lastErr = err
           const msg = (err as Error).message
-          const isTimeout = msg === "Connection timed out" || /Failed to fetch|ECONNREFUSED|ERR_CONNECTION_REFUSED/i.test(msg)
+          const isTimeout = msg === timeoutMessage || /Failed to fetch|ECONNREFUSED|ERR_CONNECTION_REFUSED/i.test(msg)
           if (!isTimeout) break
         }
       }
       const err = lastErr as Error
-      const msg = err?.message ?? "Error desconocido"
-      let hint = msg === "Connection timed out"
-        ? "El servidor no respondió en 7s. Probé 4096 y 4098 (OpenHer v2). Verificá que el servidor OpenHer esté corriendo. Para v2 usa 127.0.0.1:4098 usuario opencode pass octavio."
+      const msg = err?.message ?? tr('error.unknown')
+      let hint = msg === timeoutMessage
+        ? tr('settings.timeoutHint')
         : msg.includes("Failed to fetch") || msg.includes("ERR_CONNECTION_REFUSED") || msg.includes("ECONNREFUSED")
-          ? "Conexión rechazada. Probé 4096 y 4098. Iniciá el servidor con: opencode serve --port 4096  o  opencode2 serve --service (usa 4098/octavio)"
+          ? tr('settings.refusedHint')
           : msg.includes("ERR_NAME_NOT_RESOLVED") || msg.includes("ENOTFOUND")
-            ? "No se pudo resolver el host."
+            ? tr('settings.nameNotResolvedHint')
             : msg.includes("401") || msg.includes("403")
-              ? "Auth fallida. Para 4098 usa usuario opencode y pass octavio (ver C:\\Users\\...\\.config\\opencode\\service.json)"
+              ? tr('settings.authFailedHint')
               : null
       const fullMsg = hint ? `${msg}\n\n${hint}` : msg
-      setSettingsNotice({ type: "error", text: t('settings.connectionFailed', { message: fullMsg }) })
+      setSettingsNotice({ type: "error", text: tr('settings.connectionFailed', { message: fullMsg }) })
     } finally {
       setTestingConnection(false)
     }
-  }, [draftConfig])
+  }, [draftConfig, t])
 
   const resetConnection = useCallback(() => {
     setConnectionState("connecting")
-    setConnectionMessage("Connecting to OpenHer...")
+    setConnectionMessage(t('connection.connecting'))
     setConnectedVersion("")
     setLastTestedConfigKey(null)
-  }, [])
+  }, [t])
 
   const changeDataMode = useCallback((mode: DataMode) => {
     setDataMode(mode)

@@ -1,0 +1,13 @@
+﻿{
+    "note":  "Presupuestos que SOLO pueden bajar (ver CONTRIBUTING.md seccion 6). Se recalibran con pnpm run check:rules:update despues de un gate verde.",
+    "measuredAt":  "2026-09-18 11:15 (check:rules:update)",
+    "budget":  {
+                   "asAny":  190,
+                   "colonAny":  194,
+                   "exportDefault":  19,
+                   "important":  265,
+                   "filesOver1000":  6,
+                   "orphanFiles":  1,
+                   "deletableCssRules":  42
+               }
+}

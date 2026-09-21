@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { shell, type FsEntry } from "../../shell"
 import { useGitStatus } from "./useGitStatus"
 
 const EXPLORER_RECENT_KEY = "opencode.explorer.recentDirs"
-function loadExplorerRecent(): string[] {
+
+export function loadExplorerRecent(): string[] {
   try {
     const raw = localStorage.getItem(EXPLORER_RECENT_KEY)
     const arr = raw ? JSON.parse(raw) : []
@@ -21,7 +22,8 @@ export function usePaneState(
   const [dirs, setDirs] = useState<FsEntry[]>([])
   const [files, setFiles] = useState<FsEntry[]>([])
   const [loading, setLoading] = useState(false)
-  const { refreshGit } = useGitStatus(cwd)
+  const [recent, setRecent] = useState<string[]>(() => loadExplorerRecent())
+  const { refreshGit, getFileGitStatus, getFolderGitStatus } = useGitStatus(cwd)
 
   const loadSeqRef = useRef(0)
 
@@ -41,6 +43,7 @@ export function usePaneState(
         try {
           localStorage.setItem(EXPLORER_RECENT_KEY, JSON.stringify(cur.slice(0, 20)))
         } catch {}
+        setRecent(cur.slice(0, 20))
       } catch (e: unknown) {
         if (seq !== loadSeqRef.current) return
         const msg = e instanceof Error ? e.message : String(e)
@@ -55,5 +58,12 @@ export function usePaneState(
     [refreshGit, opts?.onError],
   )
 
-  return { cwd, setCwd, dirs, files, loading, load }
+  // Objeto estable por estado: evita recrear callbacks que dependen de la
+  // identidad completa del pane (rompía memo(FileRow/TreeFolder)).
+  return useMemo(
+    () => ({ cwd, setCwd, dirs, files, loading, load, recent, getFileGitStatus, getFolderGitStatus }),
+    [cwd, setCwd, dirs, files, loading, load, recent, getFileGitStatus, getFolderGitStatus],
+  )
 }
+
+export type PaneState = ReturnType<typeof usePaneState>

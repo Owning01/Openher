@@ -1,5 +1,6 @@
-import { memo, useCallback, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { api } from "../api"
+import { Modal } from "./Modal"
 import { ModalHeader } from "./ModalHeader"
 import { useT } from "../i18n-context"
 import { getApiVersion } from "../shared/api/version"
@@ -82,14 +83,15 @@ export const MCPBrowser = memo(function MCPBrowser({ config, directory, onClose,
     }
   }, [config, directory, loadServers, loadResources, t])
 
-  const list = Array.isArray(resources) ? resources : []
-  const filtered = query.trim()
-    ? list.filter((r) => r.name.toLowerCase().includes(query.toLowerCase()) || (r.id ?? "").toLowerCase().includes(query.toLowerCase()))
-    : list
+  const list = useMemo(() => (Array.isArray(resources) ? resources : []), [resources])
+  const filtered = useMemo(() => {
+    if (!query.trim()) return list
+    const q = query.toLowerCase()
+    return list.filter((r) => r.name.toLowerCase().includes(q) || (r.id ?? "").toLowerCase().includes(q))
+  }, [list, query])
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content mcp-browser" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('mcp.title')}>
+    <Modal onClose={onClose} variant="overlay" className="mcp-browser" label={t('mcp.title')}>
         <ModalHeader title={t('mcp.title')} onClose={onClose} />
         <div className="modal-body">
           <section className="mcp-section">
@@ -170,7 +172,6 @@ export const MCPBrowser = memo(function MCPBrowser({ config, directory, onClose,
             )}
           </section>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 })

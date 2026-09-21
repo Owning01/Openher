@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { useT } from "../i18n-context"
+import { Modal } from "./Modal"
 import { TerminalPanel } from "./shellPanels"
 import type { ShellType, ShellLine } from "../hooks/useShell"
 
@@ -188,23 +189,21 @@ export const TerminalView = memo(function TerminalView({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        ref={floatRef}
-        className="terminal-floating-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label={t("session.terminal")}
-        style={floatPos
-          ? (() => {
-              const p = clampPos(floatPos, 400)
-              return { position: "fixed" as const, margin: 0, left: p.x, top: p.y }
-            })()
-          : undefined}
-      >
-        {terminalContent}
-      </div>
-    </div>
+    <Modal
+      onClose={onClose}
+      variant="overlay"
+      contentClassName="terminal-floating-modal"
+      contentRef={floatRef}
+      label={t("session.terminal")}
+      style={floatPos
+        ? (() => {
+            const p = clampPos(floatPos, 400)
+            return { position: "fixed" as const, margin: 0, left: p.x, top: p.y }
+          })()
+        : undefined}
+    >
+      {terminalContent}
+    </Modal>
   )
 })
 

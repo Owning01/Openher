@@ -8,15 +8,7 @@
   gap: var(--space-4);
 }
 
-.settings-header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
 
-.settings-header h2 {
-  margin: 0;
-}
 
 .settings-test-btn {
   display: inline-flex;
@@ -29,27 +21,7 @@
   font-size: 0.9rem;
 }
 
-.settings-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  position: relative;
-}
 
-.settings-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 16px;
-  right: 16px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border-strong, rgba(128,128,128,0.25)), transparent);
-}
 
 .settings-section-title {
   font-size: 0.875rem;
@@ -67,46 +39,14 @@
   color: var(--primary);
 }
 
-.settings-section-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  width: 100%;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: inherit;
-  font: inherit;
-  flex: 1;
-  min-width: 0;
-}
 
-.settings-chevron {
-  color: var(--muted);
-  font-size: 0.875rem;
-  transition: transform 0.15s ease;
-  flex-shrink: 0;
-}
 
 .settings-chevron.open {
   transform: rotate(180deg);
 }
 
-.settings-section-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-}
 
 /* ===== Saved Servers (multi-machine profiles) ===== */
-.server-profile-list {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-2);
-}
 
 .server-profile.draft {
   border-style: dashed;
@@ -121,9 +61,6 @@
 
 /* Escritorio: los servidores en grilla de 2 columnas (mobile: 1). */
 @media (min-width: 781px) {
-  .server-profile-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 .server-profile {
@@ -152,91 +89,16 @@
   border-color: var(--primary);
 }
 
-.server-profile-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 1;
-  min-width: 0;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  border-radius: var(--radius-sm);
-}
 
-.server-profile-row .settings-chevron {
-  font-size: 0.875rem;
-}
 
-.server-profile-remove {
-  flex-shrink: 0;
-}
 
-.server-use-btn {
-  flex-shrink: 0;
-  min-height: 32px;
-  padding: 0.25rem 0.78rem;
-  font-size: 0.875rem;
-}
 
-.server-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
 
-.server-add-btn {
-  flex-shrink: 0;
-  white-space: nowrap;
-}
 
-.server-current-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.server-current-status code {
-  font-family: var(--font-mono);
-  color: var(--text);
-}
 
-.server-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--success);
-  flex-shrink: 0;
-}
 
-.server-profile-config {
-  flex-basis: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px dashed var(--border);
-  margin-top: var(--space-1);
-}
 
-.server-profile-actions {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
 
 .server-profile-kind {
   font-size: 0.875rem;
@@ -258,14 +120,6 @@
   color: var(--success);
 }
 
-.server-profile-name {
-  font-weight: 700;
-  font-size: 0.88rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
 
 .server-profile-desc {
   color: var(--muted);
@@ -288,30 +142,11 @@
   flex-shrink: 0;
 }
 
-.pair-service-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-  padding: var(--space-2);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-subtle);
-}
 
 .api-version-field {
   margin-bottom: var(--space-3);
 }
 
-.pair-service-label {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.85rem;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .server-profile-kind.pair {
   background: color-mix(in srgb, var(--warning) 20%, transparent);
@@ -446,11 +281,6 @@
   color: var(--text);
 }
 
-.settings-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
 
 .settings-actions .btn-primary,
 .settings-actions .btn-secondary {
@@ -463,21 +293,7 @@
   gap: var(--space-2);
 }
 
-.settings-extras-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
 
-.extras-btn {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: var(--space-3);
-  text-align: left;
-  width: 100%;
-  padding: 0.82rem 0.8rem;
-}
 
 /* Botones de configuración sin borde ni color de fondo */
 .panel.settings .btn-secondary,
@@ -508,67 +324,17 @@
   margin-top: 2px;
 }
 
-.extras-btn span {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-}
 
-.extras-btn strong {
-  font-size: 0.88rem;
-}
 
-.extras-btn small {
-  color: var(--muted);
-  font-size: 0.74rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.settings-footer {
-  display: flex;
-  justify-content: center;  padding-top: var(--space-3);
-  border-top: 1px solid var(--border);
-}
 
-.settings-footer button {
-  min-width: 120px;
-}
 
 /* ===== Data Mode Cards ===== */
-.data-mode-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-3);
-}
 
 @media (max-width: 480px) {
-  .data-mode-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
-.data-mode-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  background: var(--surface-subtle);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
-  text-align: left;
-  font-family: inherit;
-  color: var(--text);
-}
 
-.data-mode-card:hover {
-  border-color: var(--primary);
-  transform: translateY(-1px);
-}
 
 .data-mode-card.active {
   border-color: var(--primary);
@@ -576,15 +342,7 @@
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
-.data-mode-card strong {
-  font-size: 0.92rem;
-}
 
-.data-mode-card small {
-  color: var(--muted);
-  font-size: 0.875rem;
-  line-height: 1.4;
-}
 
 /* ===== Blocked Models ===== */
 .blocked-search {
@@ -687,47 +445,16 @@
   background: var(--surface-subtle);
 }
 
-.go-account {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  margin-top: var(--space-3);
-  background: var(--surface-2, var(--surface));
-}
 
-.go-account-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-2);
-}
 
-.go-account-label {
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
 
-.go-account-row {
-  display: flex;
-  gap: var(--space-2);
-  align-items: stretch;
-}
 
 .go-account-row .password-wrapper {
   flex: 1;
   min-width: 0;
 }
 
-.go-account-btns {
-  display: flex;
-  gap: var(--space-1);
-  align-items: center;
-}
 
-.go-remove {
-  color: var(--danger);
-}
 
 .go-usage {
   display: flex;
@@ -1214,100 +941,21 @@
 .favorite-item-arrows button { font-size: 0.875rem; padding: 0.1rem 0.3rem; line-height: 1; }
 
 /* ===== Theme creator button (monocromo como el resto del chrome) ===== */
-.theme-creator-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 0.55rem 0.75rem;
-  border: 1px solid var(--text);
-  border-radius: var(--radius-md);
-  background: var(--text);
-  color: var(--bg);
-  font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
-}
 
-.theme-creator-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
-}
 
 /* ===== Settings model picker ===== */
-.settings-model-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 240px;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-1);
-  margin-top: var(--space-2);
-}
 
-.settings-model-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0.45rem 0.78rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 0.875rem;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s;
-}
 
-.settings-model-item:hover {
-  background: var(--primary-soft);
-}
 
 .settings-model-item.active {
   background: var(--primary-soft);
   color: var(--primary);
 }
 
-.settings-model-name {
-  font-weight: 600;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.settings-model-provider {
-  color: var(--muted);
-  font-size: 0.875rem;
-  white-space: nowrap;
-}
 
-.settings-model-check {
-  flex-shrink: 0;
-}
 
-.settings-model-empty {
-  padding: 0.5rem 0.78rem;
-}
 
-.settings-model-selected {
-  display: block;
-  padding: 0.3rem 0.78rem;
-  margin-bottom: var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--primary-soft);
-  color: var(--primary);
-  font-size: 0.875rem;
-  font-weight: 600;
-}
 
 
 /* ===== Settings redesign (desktop/mobile) ===== */
@@ -1404,19 +1052,11 @@
     width: 100%;
   }
 
-  .data-mode-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
 
   .switch-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .settings-extras-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-2);
-  }
 
   .blocked-items {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1424,23 +1064,9 @@
   }
 }
 
-.settings-section-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
 
-.settings-section-actions {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
 
 @media (pointer: coarse), (max-width: 780px) {
-  .settings-section-actions .server-add-btn {
-    min-height: 44px;
-  }
 }
 
 /* El panel de Settings volvía transparentes a los btn-primary (texto
@@ -1467,12 +1093,6 @@
 /* ===== OpenCode Go key: oculta y no seleccionable =====
    type=password + user-select none + bloqueo de copia: la key no se puede
    ver ni seleccionar ni copiar desde el input. */
-.go-key-input {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-  letter-spacing: 0.15em;
-}
 
 /* ===== Settings Redesign — exacto a captura Antigravity ===== */
 .settings-split-container {
@@ -1994,24 +1614,9 @@
 }
 
 /* Remove old footer */
-.settings-footer {
-  display: none !important;
-}
 
 /* ===== Desktop overlay (settings/help rendered on top of the live desktop) ===== */
 @media (min-width: 781px) {
-  .settings-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: var(--z-overlay);
-    background: var(--modal-backdrop);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    box-sizing: border-box;
-    overflow: hidden;
-  }
   .settings-overlay > .panel.settings,
   .settings-overlay > .settings-view > .panel.settings {
     width: 90vw;
@@ -2055,7 +1660,6 @@
 @media (max-width: 640px) {
   .setting-item-row { gap: 10px; }
   .settings-mobile-container { padding: 12px; }
-  .server-profile-list { grid-template-columns: 1fr; }
 }
 
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 
 // Selección múltiple estilo Explorador de Windows para el explorer:
 // click = uno solo, Ctrl/Cmd+click = alternar, Shift+click = rango sobre la
@@ -84,7 +84,13 @@ export function useRowSelection() {
     setSelected([...ordered])
   }, [])
 
-  return { selected, clear, select, selectOnly, selectAll }
+  // Objeto estable por selección: las funciones ya son useCallback y la
+  // identidad no cambia en cada render; si no, rompía memo(FileRow/TreeFolder)
+  // al recrear los callbacks que dependen del hook completo.
+  return useMemo(
+    () => ({ selected, clear, select, selectOnly, selectAll }),
+    [selected, clear, select, selectOnly, selectAll],
+  )
 }
 
 export type RowSelection = ReturnType<typeof useRowSelection>

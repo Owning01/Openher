@@ -107,15 +107,11 @@ fn forward(suffix: &str, need_key: bool) -> ShellResponse {
                 .header("Content-Type")
                 .unwrap_or("application/json")
                 .to_string();
-            let mut reader = resp.into_reader();
-            let mut body = Vec::new();
-            let _ = std::io::Read::read_to_end(&mut reader, &mut body);
+            let body = crate::infrastructure::http::common::read_ureq_body(resp);
             with_cors(ShellResponse::data(status, body, &ct))
         }
         Err(ureq::Error::Status(code, resp)) => {
-            let mut reader = resp.into_reader();
-            let mut body = Vec::new();
-            let _ = std::io::Read::read_to_end(&mut reader, &mut body);
+            let body = crate::infrastructure::http::common::read_ureq_body(resp);
             let msg = String::from_utf8_lossy(&body);
             let short: String = msg.chars().take(200).collect();
             with_cors(ShellResponse::err_json(code, &format!("Zen API {code}: {short}")))
