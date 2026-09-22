@@ -2892,6 +2892,14 @@
   min-height: 0;
 }
 
+/* Envío en curso: editar/eliminar/ahora quedan deshabilitados (el item está
+   claimed; sin esto, editar duplicaba y eliminar no cancelaba el vuelo). */
+.outbox-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+
 
 /* ===== Live Tool Status ===== */
 .tool-status-icon {

@@ -8,6 +8,8 @@ import { escapeHtml } from "../shared/lib/escapeHtml"
 import { remarkFilePaths } from "../shared/lib/remarkFilePaths"
 import { FilePathButton } from "./FilePathButton"
 import { MarkdownImage } from "./MarkdownImage"
+import { Flowchart } from "../vendor/bt-flowchart/Flowchart"
+import { parseFlowchartSpec } from "../vendor/bt-flowchart/spec"
 
 // Reemplazo de rehype-highlight: ese paquete embebe lowlight/lib/common
 // (37 lenguajes) de forma inseparable. Este plugin usa solo los registrados.
@@ -151,12 +153,20 @@ function CodeBlock({ children, ...props }: ComponentProps<"pre">) {
   const [copied, setCopied] = useState(false)
   // Extract language from the inner <code> className
   const codeChild = Array.isArray(children) ? children[0] : children
-  const lang = (codeChild?.props?.className?.match(/language-(\w+)/)?.[1]) || ""
+  // \w+ deja el guion suelto: "bt-flowchart" cortaría en "bt". [\w-]+ conserva
+  // el id completo del bloque ```flowchart (bt-flowchart) sin tocar el resto.
+  const lang = (codeChild?.props?.className?.match(/language-([\w-]+)/)?.[1]) || ""
   const text = typeof codeChild?.props?.children === "string"
     ? codeChild.props.children
     : Array.isArray(codeChild?.props?.children)
       ? codeChild.props.children.join("")
       : ""
+
+  // bt-flowchart (BeautifulUI): ```flowchart con JSON {steps,edges} → canvas
+  // en vivo. JSON inválido/incompleto → null y el bloque se ve como código.
+  const flowchartSpec = lang === "flowchart" || lang === "bt-flowchart"
+    ? parseFlowchartSpec(text)
+    : null
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(text).then(() => {
@@ -179,7 +189,14 @@ function CodeBlock({ children, ...props }: ComponentProps<"pre">) {
           <span>{copied ? "Copied!" : "Copy"}</span>
         </button>
       </div>
-      <pre {...props}>{markBlockCode(children)}</pre>
+      {flowchartSpec ? (
+        <Flowchart
+          steps={flowchartSpec.steps}
+          {...(flowchartSpec.edges ? { edges: flowchartSpec.edges } : {})}
+        />
+      ) : (
+        <pre {...props}>{markBlockCode(children)}</pre>
+      )}
     </div>
   )
 }

@@ -1,0 +1,74 @@
+/* styles/flowchart.css — widget bt-flowchart (BeautifulUI, MIT; fork del vendor
+   de anim-lab: src/vendor/bt-flowchart/Flowchart.tsx).
+
+   El fork usa las clases de su design system (bg-surface, shadow-card, ...).
+   Aquí se mapean a los tokens de OpenHer bajo el scope .bt-fc, para que el
+   look siga el tema (light/dark) sin filtrar esos nombres al resto de la app.
+   Especificidad 0,2,0: gana a cualquier utility de Tailwind por si la empareja. */
+
+.bt-fc {
+  --page: var(--surface-subtle);
+  --ink: var(--text);
+  --line-strong: var(--border-strong);
+}
+
+.bt-fc,
+.bt-fc.bg-page,
+.bt-fc .bg-page {
+  background-color: var(--page);
+}
+.bt-fc .bg-surface {
+  background-color: var(--surface);
+}
+.bt-fc .bg-field {
+  background-color: var(--surface-strong);
+}
+.bt-fc .bg-hover {
+  background-color: var(--surface-hover);
+}
+.bt-fc .bg-hover-2 {
+  background-color: var(--accent-soft);
+}
+
+.bt-fc .text-ink {
+  color: var(--ink);
+}
+.bt-fc .text-ink-2 {
+  color: var(--muted-strong);
+}
+.bt-fc .text-ink-3 {
+  color: var(--muted);
+}
+.bt-fc .text-ink-3\/70 {
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+
+.bt-fc.rounded-card,
+.bt-fc .rounded-card {
+  border-radius: 12px;
+}
+.bt-fc.shadow-hairline,
+.bt-fc .shadow-hairline {
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
+.bt-fc .shadow-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 1px var(--border-subtle);
+}
+.bt-fc .shadow-raised {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07), 0 0 0 1px var(--border-subtle);
+}
+.bt-fc .shadow-btn {
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04), 0 0 0 1px var(--border);
+}
+
+/* Menús del fork (chips de condición): el vendor anima `pop-in` global. */
+@keyframes bt-fc-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
