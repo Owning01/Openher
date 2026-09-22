@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef, useState } from "react"
-import { RefreshIcon, PlusIcon, LoadingIcon, SettingsIcon, SearchIcon, CheckIcon, CloseIcon } from "../Icons"
+import { RefreshIcon, PlusIcon, LoadingIcon, SettingsIcon, SearchIcon, CheckIcon, CloseIcon, BranchIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { DataMode } from "../types"
 
@@ -15,6 +15,9 @@ type SessionToolbarProps = {
   searchOpen?: boolean
   selecting?: boolean
   onToggleSelect?: () => void
+  /** Subsesiones acopladas bajo su sesión en las listas de acceso rápido. */
+  coupling?: boolean
+  onToggleCoupling?: () => void
 }
 
 function modeLabel(mode: DataMode, t: (key: string, params?: Record<string, string | number>) => string): string {
@@ -44,6 +47,8 @@ export const SessionToolbar = memo(function SessionToolbar({
   searchOpen,
   selecting = false,
   onToggleSelect,
+  coupling = false,
+  onToggleCoupling,
 }: SessionToolbarProps) {
   const t = useT()
   const [refreshFeedback, setRefreshFeedback] = useState<"ok" | "fail" | null>(null)
@@ -95,6 +100,18 @@ export const SessionToolbar = memo(function SessionToolbar({
             aria-pressed={selecting}
           >
             <CheckboxIcon size={15} />
+          </button>
+        )}
+        {onToggleCoupling && (
+          <button
+            type="button"
+            onClick={onToggleCoupling}
+            className={`btn-icon pcf-hbtn session-couple-toggle${coupling ? " active" : ""}`}
+            title={t("sessions.coupleSubsessionsHint")}
+            aria-label={t("sessions.coupleSubsessions")}
+            aria-pressed={coupling}
+          >
+            <BranchIcon size={15} />
           </button>
         )}
         <span className={`mode-indicator mode-${dataMode}`} title={t("settings.dataModeTitle")}>

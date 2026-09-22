@@ -110,14 +110,14 @@ describe("SessionList proyectos múltiples y subagentes", () => {
     expect(child?.textContent).toBe("Subagente A1")
   })
 
-  it("recientes muestra huérfanos pero no hijos con padre listado", () => {
+  it("recientes muestra solo sesiones principales (ni hijas ni huérfanas)", () => {
     const { container } = renderList()
     const recents = recentTitles(container)
     expect(recents).toContain("Chat principal A")
     expect(recents).toContain("Otro chat A")
-    expect(recents).toContain("Huerfano B")
-    // El hijo vive bajo su padre en la tarjeta del proyecto: duplicarlo en
-    // recientes solo mete ruido.
+    // Pedido explícito: las subsesiones (vivas u huérfanas) viven en la vista
+    // de proyecto, nunca en Recientes.
+    expect(recents).not.toContain("Huerfano B")
     expect(recents).not.toContain("Subagente A1")
   })
 })
@@ -233,5 +233,101 @@ describe("SessionList spinner de subsesión activa", () => {
     const parentCard = container.querySelector(".project-sessions-inline .session-card:not(.is-child-session)")!
     expect(parentCard.querySelector(".session-title")?.textContent).toBe("Chat principal A")
     expect(parentCard.querySelector(".session-child-spinner")).toBeNull()
+  })
+})
+
+describe("SessionList acoplar subsesiones (toggle del toolbar)", () => {
+  const KEY = "openher.coupleSubsessions"
+
+  function toggleButton(container: HTMLElement): HTMLButtonElement {
+    const btn = container.querySelector(".session-couple-toggle")
+    expect(btn).toBeTruthy()
+    return btn as HTMLButtonElement
+  }
+
+  it("arranca desacoplado: la hija no se duplica en recientes", () => {
+    localStorage.removeItem(KEY)
+    const { container } = renderList()
+    expect(toggleButton(container).getAttribute("aria-pressed")).toBe("false")
+    expect(recentTitles(container)).not.toContain("Subagente A1")
+  })
+
+  it("al acoplar, la hija queda bajo su padre SOLO en Favoritos (nunca en Recientes)", () => {
+    localStorage.removeItem(KEY)
+    localStorage.removeItem("opencode.collapsedSections")
+    const { container } = renderList({ favorites: new Set(["p1", "c1"]) })
+    fireEvent.click(toggleButton(container))
+
+    expect(toggleButton(container).getAttribute("aria-pressed")).toBe("true")
+    // Recientes: solo sesiones principales, con el toggle encendido o no.
+    const titles = recentTitles(container)
+    expect(titles).toContain("Chat principal A")
+    expect(titles).not.toContain("Subagente A1")
+
+    // En Favoritos la hija sí se acopla, con su wrap de árbol (línea + sangría).
+    // Favoritos arranca colapsado: abrirlo solo después de medir Recientes
+    // (el acordeón colapsa la otra sección al abrir una).
+    if (!container.querySelector("#quick-favorites")) {
+      fireEvent.click(container.querySelector('[aria-controls="quick-favorites"]')!)
+    }
+    const wrapped = container.querySelector("#quick-favorites .session-child-wrap")
+    expect(wrapped?.querySelector(".quick-access-title")?.textContent).toBe("Subagente A1")
+    // El padre conserva su fila normal (sin sangrar).
+    const parent = Array.from(container.querySelectorAll("#quick-favorites > .quick-access-card"))
+      .find((el) => el.querySelector(".quick-access-title")?.textContent === "Chat principal A")
+    expect(parent).toBeTruthy()
+    localStorage.removeItem(KEY)
+    localStorage.removeItem("opencode.collapsedSections")
+  })
+
+  it("en la vista de proyecto el botón se oculta (ahí no actúa)", () => {
+    localStorage.removeItem(KEY)
+    const { container } = renderList({ selectedProjectDir: dirA })
+    expect(container.querySelector(".session-couple-toggle")).toBeNull()
+  })
+
+  it("el estado queda persistido al recargar la vista", () => {
+    localStorage.setItem(KEY, "1")
+    const { container } = renderList()
+    expect(toggleButton(container).getAttribute("aria-pressed")).toBe("true")
+    // El toggle se restaura, pero Recientes sigue solo con principales.
+    expect(recentTitles(container)).not.toContain("Subagente A1")
+    localStorage.removeItem(KEY)
+  })
+
+  it("al desacoplar vuelve a la conducta histórica y guarda el 0", () => {
+    localStorage.setItem(KEY, "1")
+    const { container } = renderList()
+    fireEvent.click(toggleButton(container))
+    expect(toggleButton(container).getAttribute("aria-pressed")).toBe("false")
+    expect(recentTitles(container)).not.toContain("Subagente A1")
+    expect(localStorage.getItem(KEY)).toBe("0")
+    localStorage.removeItem(KEY)
+  })
+
+  it("favoritos acoplados muestra hija bajo su padre; sin acoplar solo el padre", () => {
+    const favs = new Set(["p1", "c1"])
+    const favTitles = (c: HTMLElement) =>
+      Array.from(c.querySelectorAll("#quick-favorites .quick-access-title")).map((el) => el.textContent ?? "")
+    // Idempotente: la sección puede venir abierta por el estado persistido
+    // de la rama anterior; solo se hace click si el panel no está montado.
+    const ensureFavsOpen = (container: HTMLElement) => {
+      if (container.querySelector("#quick-favorites")) return
+      fireEvent.click(container.querySelector('[aria-controls="quick-favorites"]')!)
+    }
+
+    localStorage.setItem(KEY, "1")
+    localStorage.removeItem("opencode.collapsedSections")
+    const coupled = renderList({ favorites: favs, selectedProjectDir: null })
+    ensureFavsOpen(coupled.container)
+    expect(favTitles(coupled.container)).toEqual(["Chat principal A", "Subagente A1"])
+    cleanup()
+
+    localStorage.removeItem(KEY)
+    localStorage.removeItem("opencode.collapsedSections")
+    const plain = renderList({ favorites: favs, selectedProjectDir: null })
+    ensureFavsOpen(plain.container)
+    expect(favTitles(plain.container)).toEqual(["Chat principal A"])
+    localStorage.removeItem("opencode.collapsedSections")
   })
 })

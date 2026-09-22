@@ -1,4 +1,4 @@
-import { memo, useRef, useState, useCallback, useEffect, useMemo } from "react"
+import { memo, useRef, useState, useCallback, useEffect, useMemo, Fragment, type ReactElement } from "react"
 import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon, ArchiveIcon, TrashIcon, ChatIcon, StarIcon, PencilIcon, CopyIcon, MonitorIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
@@ -8,7 +8,12 @@ import { QuickAccessCard } from "./QuickAccessCard"
 import { ContextMenu } from "./ContextMenu"
 import { shell } from "../shell"
 import { useDialog } from "./DialogProvider"
+import { coupleSessionRows, type SessionRow } from "../utils/sessionTree"
 import type { SessionView, ConnectionState, DataMode } from "../types"
+
+// localStorage propio (no entra en STORAGE_KEYS: su test pinea el set de 19
+// claves y repuntarlo necesita OK explícito del humano).
+const COUPLE_SUBSESSIONS_KEY = "openher.coupleSubsessions"
 
 type SessionListProps = {
   projects: Array<[string, SessionView[]]>
@@ -81,25 +86,83 @@ export const SessionList = memo(function SessionList({
 
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null)
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
-  // Subagentes: solo se ocultan cuando su padre TAMBIÉN está listado (ya se
-  // ven agrupados bajo él en la tarjeta del proyecto). Los huérfanos (padre
-  // borrado o ausente) SÍ se muestran: el `!s.parentID` a secas los borraba
-  // de TODAS las vistas y un proyecto solo-subagentes desaparecía entero.
+  // Subagentes en la vista de proyecto: solo se ocultan cuando su padre TAMBIÉN
+  // está listado (ya se ven agrupados bajo él en la tarjeta del proyecto). Los
+  // huérfanos (padre borrado o ausente) SÍ se muestran ahí: el `!s.parentID` a
+  // secas los borraba de TODAS las vistas y un proyecto solo-subagentes
+  // desaparecía entero.
   const sessionIds = useMemo(() => new Set(sessions.map((s) => s.id)), [sessions])
   const isListedChild = useCallback(
     (s: SessionView) => !!s.parentID && sessionIds.has(s.parentID),
     [sessionIds]
   )
 
-  const recentFiltered = useMemo(
-    () => recentSessions.filter((s) => !isListedChild(s)),
-    [recentSessions, isListedChild]
+  // Pedido explícito: Recientes lista SOLO sesiones principales (sin parentID),
+  // ni hijas con padre vivo ni huérfanas. El orden lo trae recentSessions:
+  // `updated` (fecha de uso) descendente, ya ordenado en useWorkspaceRuntime.
+  const recentMains = useMemo(
+    () => recentSessions.filter((s) => !s.parentID),
+    [recentSessions]
   )
 
   const favoriteSessions = useMemo(
     () => sessions.filter((s) => favorites.has(s.id) && !isListedChild(s)),
     [sessions, favorites, isListedChild]
   )
+
+  // "Acoplar subsesiones": con el toggle activo, las hijas se muestran
+  // debajo de SU sesión en Favoritos. Recientes nunca las lista (solo
+  // sesiones principales, por pedido explícito). Apagado por defecto =
+  // conducta histórica intacta; el estado queda en el almacenamiento local
+  // del WebView.
+  const [coupledSubs, setCoupledSubs] = useState(() => {
+    try {
+      return localStorage.getItem(COUPLE_SUBSESSIONS_KEY) === "1"
+    } catch {
+      return false
+    }
+  })
+  const toggleCoupledSubs = useCallback(() => setCoupledSubs((prev) => !prev), [])
+  useEffect(() => {
+    try {
+      localStorage.setItem(COUPLE_SUBSESSIONS_KEY, coupledSubs ? "1" : "0")
+    } catch {
+      /* storage bloqueado: el estado sigue en memoria */
+    }
+  }, [coupledSubs])
+
+  // El toggle solo actúa sobre el acceso rápido: fuera de ahí (vista de
+  // proyecto o búsqueda activa) el botón se oculta en vez de prometer algo
+  // que no hace.
+  const quickAccessVisible = !selectedProjectDir && !query.trim()
+  const couplingProps = quickAccessVisible
+    ? { coupling: coupledSubs, onToggleCoupling: toggleCoupledSubs }
+    : {}
+
+  // Recientes: solo principales, con el toggle de acople en cualquier estado.
+  const recentRows = useMemo<SessionRow<SessionView>[]>(() =>
+    recentMains.map((session) => ({ session, isChild: false })),
+    [recentMains]
+  )
+
+  const favoriteRows = useMemo<SessionRow<SessionView>[]>(
+    () =>
+      coupledSubs
+        ? coupleSessionRows(sessions.filter((s) => favorites.has(s.id)), sessionIds)
+        : favoriteSessions.map((session) => ({ session, isChild: false })),
+    [coupledSubs, sessions, favorites, favoriteSessions, sessionIds]
+  )
+
+  // La fila hija va dentro del wrap de árbol (línea + sangría) para leerse
+  // acoplada a su padre; la fila normal se queda como está.
+  const wrapQuickRow = (row: SessionRow<SessionView>, card: ReactElement): ReactElement =>
+    row.isChild ? (
+      <div key={row.session.id} className="session-child-wrap" style={{ paddingLeft: "16px" }}>
+        {card}
+      </div>
+    ) : (
+      <Fragment key={row.session.id}>{card}</Fragment>
+    )
 
   // Proyectos: listas completas (padres + hijos). renderSessionCards agrupa
   // los hijos bajo su padre y muestra los huérfanos; el filtro anterior los
@@ -166,7 +229,7 @@ export const SessionList = memo(function SessionList({
     if (favorites.has(renamingSessionID)) {
       setCollapsedSections((prev) => (prev.favorites ? { ...prev, favorites: false } : prev))
     }
-    if (recentSessions.some((s) => s.id === renamingSessionID)) {
+    if (recentMains.some((s) => s.id === renamingSessionID)) {
       setCollapsedSections((prev) => (prev.recent ? { ...prev, recent: false } : prev))
     }
   }, [renamingSessionID, projects, sessions, favorites, recentSessions])
@@ -533,7 +596,8 @@ export const SessionList = memo(function SessionList({
             <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
               onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
               dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen}
-              selecting={selectMode} onToggleSelect={toggleSelectMode} />
+              selecting={selectMode} onToggleSelect={toggleSelectMode}
+              {...couplingProps} />
           </div>
         </div>
         <div className={`toolbar${searchOpen || query.trim() ? " search-open" : ""}`}>
@@ -557,7 +621,8 @@ export const SessionList = memo(function SessionList({
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
         dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen}
-        selecting={selectMode} onToggleSelect={toggleSelectMode} />
+        selecting={selectMode} onToggleSelect={toggleSelectMode}
+        {...couplingProps} />
       <div className={`toolbar${searchOpen || query.trim() ? " search-open" : ""}`}>
         <input name="sessionSearch" placeholder={t('sessions.searchPlaceholder')} value={query}
           onChange={(e) => onQueryChange(e.target.value)} className="search" />
@@ -565,10 +630,10 @@ export const SessionList = memo(function SessionList({
       {notices}
       {selectionBar}
 
-      {!selectedProjectDir && !query.trim() && (favoriteSessions.length > 0 || recentFiltered.length > 0) && (
+      {!selectedProjectDir && !query.trim() && (favoriteRows.length > 0 || recentRows.length > 0) && (
         <div className="quick-access">
           <div className="quick-access-tabs" role="tablist" aria-label="Acceso rápido">
-            {favoriteSessions.length > 0 && (
+            {favoriteRows.length > 0 && (
               <button type="button" className={`quick-access-tab${!collapsedSections.favorites ? " open" : ""}`}
                 onClick={() => toggleSection("favorites")} aria-expanded={!collapsedSections.favorites}
                 aria-controls="quick-favorites" role="tab" title={t('favorites.label')}>
@@ -576,7 +641,7 @@ export const SessionList = memo(function SessionList({
                 <ChevronIcon size={10} className="quick-access-chevron" />
               </button>
             )}
-            {recentFiltered.length > 0 && (
+            {recentRows.length > 0 && (
               <button type="button" className={`quick-access-tab${!collapsedSections.recent ? " open" : ""}`}
                 onClick={() => toggleSection("recent")} aria-expanded={!collapsedSections.recent}
                 aria-controls="quick-recent" role="tab" title={t('sessions.recentLabel')}>
@@ -585,50 +650,50 @@ export const SessionList = memo(function SessionList({
               </button>
             )}
           </div>
-          {favorites.size > 0 && !collapsedSections.favorites && favoriteSessions.length > 0 && (
+          {favorites.size > 0 && !collapsedSections.favorites && favoriteRows.length > 0 && (
             <div className="quick-access-list" id="quick-favorites" role="tabpanel">
-              {favoriteSessions.map((session) => (
-                <QuickAccessCard key={session.id} session={session} isFavorite
+              {favoriteRows.map((row) => wrapQuickRow(row, (
+                <QuickAccessCard session={row.session} isFavorite
                   onOpen={onOpen} onToggleFavorite={onToggleFavorite}
                   onDragStartSession={onDragStartSession}
                   onContextMenu={handleSessionContextMenu}
-                  isRenaming={renamingSessionID === session.id}
+                  isRenaming={renamingSessionID === row.session.id}
                   renameValue={renameValue}
                   onStartRename={onStartRename}
                   onRenameChange={onRenameChange}
                   onRenameConfirm={onRenameConfirm}
                   onRenameCancel={onRenameCancel} />
-              ))}
+              )))}
             </div>
           )}
           {!collapsedSections.recent && (
             <div className="quick-access-list" id="quick-recent" role="tabpanel">
-              {recentFiltered.map((session) => (
-                confirmingDismissId === session.id ? (
-                  <div key={session.id} className="quick-access-card confirming-dismiss" onClick={() => onOpen(session.id, session.directory)} role="button" tabIndex={0}>
+              {recentRows.map((row) => wrapQuickRow(row, (
+                confirmingDismissId === row.session.id ? (
+                  <div className="quick-access-card confirming-dismiss" onClick={() => onOpen(row.session.id, row.session.directory)} role="button" tabIndex={0}>
                     <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
                       <span>{t('sessions.recentDismiss')}</span>
                       <div className="dismiss-confirm-actions">
-                        <button type="button" className="btn-danger compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null); onDismissRecent?.(session.id) }}>{t('common.yes')}</button>
+                        <button type="button" className="btn-danger compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null); onDismissRecent?.(row.session.id) }}>{t('common.yes')}</button>
                         <button type="button" className="btn-secondary compact" onClick={(e) => { e.stopPropagation(); setConfirmingDismissId(null) }}>{t('common.no')}</button>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <QuickAccessCard key={session.id} session={session}
-                    isFavorite={favorites.has(session.id)}
+                  <QuickAccessCard session={row.session}
+                    isFavorite={favorites.has(row.session.id)}
                     onOpen={onOpen} onToggleFavorite={onToggleFavorite}
                     onDismiss={(id) => setConfirmingDismissId(id)}
                     onDragStartSession={onDragStartSession}
                     onContextMenu={handleSessionContextMenu}
-                    isRenaming={renamingSessionID === session.id}
+                    isRenaming={renamingSessionID === row.session.id}
                     renameValue={renameValue}
                     onStartRename={onStartRename}
                     onRenameChange={onRenameChange}
                     onRenameConfirm={onRenameConfirm}
                     onRenameCancel={onRenameCancel} />
                 )
-              ))}
+              )))}
             </div>
           )}
         </div>
