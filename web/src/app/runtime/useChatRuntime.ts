@@ -9,6 +9,9 @@ import { useQuestions } from "../../hooks/useQuestions"
 import { useSSEHandler } from "../../hooks/useSSEHandler"
 import { useSSE } from "../../hooks/useSSE"
 import { useResumeResync } from "../../hooks/useResumeResync"
+import { captureRegionToPng } from "../../utils/screenCapture"
+import { injectImageToComposer } from "../../stores/composerInjectStore"
+import { useAutomationRunner } from "../../hooks/useAutomationRunner"
 import { useAppLifecycle } from "../../features/app-lifecycle/hooks/useAppLifecycle"
 import { useChatActions } from "../../features/chat/hooks/useChatActions"
 import type { HelpPage, FileDiff } from "../../types"
@@ -104,6 +107,8 @@ export function useChatRuntime({ conn }: UseChatRuntimeParams) {
   const initialSessionLoadRef = useRef(true)
 
   const vs = useVisualSelection()
+  // Automatizaciones programadas: prompts recurrentes y comandos de terminal.
+  useAutomationRunner({ config: conn.config })
 
   const {
     settings: chatSettings,
@@ -505,7 +510,25 @@ export function useChatActionsRuntime({ conn, chat, ws }: UseChatActionsRuntimeP
         by: el.by,
         url,
         source: el.source ?? null,
+        computed: el.computed && typeof el.computed === "object" ? el.computed : undefined,
       } as any)
+      // Design Mode: la captura de la zona va al composer (texto + imagen).
+      // Se dispara y se olvida: si el BitBlt falla, la anotación sigue igual.
+      // El rect de la página viene en SUS CSS px (con zoom propio): se pasa a
+      // CSS px de la app antes de pedir la captura.
+      const vr = el?.viewRect
+      const br = el?.boundingRect
+      if (vr && br) {
+        const pageDpr = typeof el?.dpr === "number" && el.dpr > 0 ? el.dpr : 1
+        const appDpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1
+        const scale = pageDpr / appDpr
+        void captureRegionToPng(
+          { x: vr.x + br.x * scale, y: vr.y + br.y * scale, w: br.w * scale, h: br.h * scale },
+          12
+        ).then((shot) => {
+          if (shot) injectImageToComposer(shot)
+        })
+      }
     },
     [chat.vs]
   )
