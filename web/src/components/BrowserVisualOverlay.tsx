@@ -156,7 +156,7 @@ function injectIntoDoc(doc: Document, onPick: (el: BrowserPickedElement) => void
     if (current) current.classList.remove("__opencode-hover")
     current = null
     updateHighlight(null)
-    onPick({ outerHTML, innerText, selector, xpath, tag, boundingRect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height }, url, bx: rect.left + (window.scrollX || 0), by: rect.top + (window.scrollY || 0), source: findSource(target), computed: describeComputed(target) })
+    onPick({ outerHTML, innerText, selector, xpath, tag, boundingRect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height }, url, bx: rect.left + (window.scrollX || 0), by: rect.top + (window.scrollY || 0), source: findSource(target), computed: describeComputed(target), dpr: (doc.defaultView && doc.defaultView.devicePixelRatio) || window.devicePixelRatio || 1 })
   }
 
   const onKey = (e: KeyboardEvent) => {

@@ -167,13 +167,21 @@ pub fn handle(
                     return Some(ShellResponse::err_json(400, "rect invalido"));
                 }
                 let hwnd = crate::state::WINDOW_HWND.load(std::sync::atomic::Ordering::Relaxed);
-                let (cx, cy) = crate::screencap::client_to_screen(
-                    hwnd,
-                    (x * dpr).round() as i32,
-                    (y * dpr).round() as i32,
-                );
-                let sw = (w * dpr).round() as i32;
-                let sh = (h * dpr).round() as i32;
+                // Clamp al área cliente ANTES de pasar a coordenadas de
+                // pantalla: el rect llega con margen (pad) y podía irse de
+                // borde; sin esto el BitBlt fotografiaba otras ventanas.
+                let mut px = (x * dpr).round() as i32;
+                let mut py = (y * dpr).round() as i32;
+                let mut sw = (w * dpr).round() as i32;
+                let mut sh = (h * dpr).round() as i32;
+                let (cw, ch) = crate::screencap::client_size(hwnd);
+                if cw > 0 && ch > 0 {
+                    px = px.clamp(0, cw - 1);
+                    py = py.clamp(0, ch - 1);
+                    sw = sw.clamp(1, cw - px);
+                    sh = sh.clamp(1, ch - py);
+                }
+                let (cx, cy) = crate::screencap::client_to_screen(hwnd, px, py);
                 match crate::screencap::capture_bmp(cx, cy, sw, sh) {
                     Ok(shot) => {
                         use base64::Engine as _;

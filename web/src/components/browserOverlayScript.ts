@@ -154,7 +154,7 @@ export function buildOverlayScript(apiBase: string, initialTool: InspectTool = "
       var snm=snapshot(m);
       ms.push({tmpId:snm.id,tag:(m.tagName||'div').toLowerCase(),selector:buildSelector(m),outerHTML:String(m.outerHTML||'').slice(0,1200),innerText:((m.innerText||'')).slice(0,200),source:src,boundingRect:{x:r.left,y:r.top,w:r.width,h:r.height},computed:describeComputed(m)});
     }
-    post('/shell/browser/pick',{type:'pick',mode:'pod',tmpId:ms[0]?ms[0].tmpId:undefined,members:ms,boundingRect:{x:b.x,y:b.y,w:b.w,h:b.h},bx:b.x+(W.scrollX||0),by:b.y+(W.scrollY||0),url:location.href,source:zoneSource});
+    post('/shell/browser/pick',{type:'pick',mode:'pod',tmpId:ms[0]?ms[0].tmpId:undefined,members:ms,boundingRect:{x:b.x,y:b.y,w:b.w,h:b.h},bx:b.x+(W.scrollX||0),by:b.y+(W.scrollY||0),url:location.href,source:zoneSource,dpr:(W.devicePixelRatio||1)});
   },true);
   W.__oc_addBadge=function(id,label,bx,by,sel){
     if(sel){try{var t=document.querySelector(sel);if(t){var rr=t.getBoundingClientRect();bx=rr.left+(W.scrollX||0);by=rr.top+(W.scrollY||0)}}catch(e){}}

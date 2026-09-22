@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react"
+import { memo, useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react"
 import { CopyIcon, CheckIcon, CloseIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { diffRowLine, formatDiffNotes, type DiffNote } from "../utils/diffAnnotations"
@@ -108,6 +108,29 @@ export function parseUnifiedDiff(patch: string): ParsedDiffRow[] {
   return result
 }
 
+const NOTES_CAP = 50
+
+type StoredNote = DiffNote & { row: number; patchLen?: number; patchHead?: string }
+
+/** Notas guardadas en sessionStorage para ESTE archivo+patch (vacío si no hay).
+ *  Se guardan junto a un sello del patch (largo + cabecera): si el diff cambió,
+ *  las notas viejas no sirven y no deben reengancharse a filas ajenas. */
+function loadDiffNotes(file: string | undefined, patch: string): Array<DiffNote & { row: number }> {
+  if (file === undefined) return []
+  try {
+    const raw = sessionStorage.getItem(`openher.diffNotes.${file}`)
+    if (!raw) return []
+    const arr: unknown = JSON.parse(raw)
+    if (!Array.isArray(arr)) return []
+    return (arr as StoredNote[])
+      .filter((n) => n.patchLen === patch.length && n.patchHead === patch.slice(0, 32))
+      .map((n) => ({ file: n.file, line: n.line, code: n.code, note: n.note, row: n.row }))
+      .slice(0, NOTES_CAP)
+  } catch {
+    return []
+  }
+}
+
 export const DiffView = memo(function DiffView({ patch, autoScroll = false, annotateFile }: { patch: string; autoScroll?: boolean; annotateFile?: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
@@ -115,9 +138,35 @@ export const DiffView = memo(function DiffView({ patch, autoScroll = false, anno
   // Revisión con anotaciones (el "annotate AI diff" de Orca): se comenta una
   // línea y el bloque viaja al composer. Solo aparece si el dueño pasa
   // `annotateFile`; sin eso el visor sigue siendo de solo lectura.
-  const [notes, setNotes] = useState<Array<DiffNote & { row: number }>>([])
+  const [notes, setNotes] = useState<Array<DiffNote & { row: number }>>(() => loadDiffNotes(annotateFile, patch))
   const [editing, setEditing] = useState<{ row: number; line: number } | null>(null)
   const [draft, setDraft] = useState("")
+
+  // El componente se reusa sin remontar cuando cambia el archivo o el patch:
+  // recargar las notas guardadas de ESTE patch; si no hay, arrancar vacío (sin
+  // esto, las notas del diff viejo quedarían apuntando a filas ajenas).
+  useEffect(() => {
+    setNotes(loadDiffNotes(annotateFile, patch))
+    setEditing(null)
+    setDraft("")
+  }, [annotateFile, patch])
+
+  // Zero Data Loss: las anotaciones del usuario se guardan por archivo+patch
+  // en sessionStorage para sobrevivir a recargas; se vacían al enviar.
+  useEffect(() => {
+    if (annotateFile === undefined) return
+    const key = `openher.diffNotes.${annotateFile}`
+    try {
+      if (notes.length === 0) {
+        sessionStorage.removeItem(key)
+        return
+      }
+      const stored = notes.map((n) => ({ ...n, patchLen: patch.length, patchHead: patch.slice(0, 32) }))
+      sessionStorage.setItem(key, JSON.stringify(stored))
+    } catch {
+      // storage bloqueado: las notas viven solo en memoria
+    }
+  }, [notes, annotateFile, patch])
 
   const rows = useMemo(() => parseUnifiedDiff(patch), [patch])
 
@@ -141,7 +190,7 @@ export const DiffView = memo(function DiffView({ patch, autoScroll = false, anno
     setNotes((prev) => [
       ...prev.filter((n) => n.row !== editing.row),
       { row: editing.row, line: editing.line, code: rows[editing.row]?.code, note },
-    ])
+    ].slice(0, NOTES_CAP))
     setEditing(null)
     setDraft("")
   }, [draft, editing, rows])

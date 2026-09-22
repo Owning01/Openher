@@ -5,7 +5,9 @@ import { useState } from "react"
 import { useT } from "../../../i18n-context"
 import { useStore } from "../../../shared/lib/store"
 import { useScheduled } from "../../../hooks/useScheduled"
-import { createRun, removeRun, runProgress, runStore, updateRun } from "../../../stores/runStore"
+import { useOptionalDialog, type DialogOptions, type AlertOptions } from "../../../components/DialogProvider"
+import { shell } from "../../../shell"
+import { createRun, removeRun, runProgress, runStore, updateRun, type Run } from "../../../stores/runStore"
 import { discardTask, dispatchRun, mergeTask, pollRun } from "../../../utils/runDispatch"
 import type { ServerConfig } from "../../../types"
 
@@ -19,12 +21,23 @@ const TASK_NAMES = ["alfa", "beta", "gamma", "delta", "epsilon", "zeta"]
 
 export function RunsSection({ config, repoPath }: Props) {
   const t = useT()
+  // Provider opcional: en prod DialogProvider siempre está (App.tsx); montar
+  // sin él (tests aislados) no debe reventar — cae al diálogo nativo.
+  const dialogs = useOptionalDialog()
+  const confirm = dialogs?.confirm ?? ((o: DialogOptions | string) =>
+    Promise.resolve(window.confirm(typeof o === "string" ? o : o.message)))
+  const alert = dialogs?.alert ?? ((o: AlertOptions | string) => {
+    window.alert(typeof o === "string" ? o : o.message)
+  })
   const runs = useStore(runStore)
   const [name, setName] = useState("")
   const [prompt, setPrompt] = useState("")
   const [repo, setRepo] = useState(repoPath ?? "")
   const [count, setCount] = useState(2)
   const [busy, setBusy] = useState(false)
+  // Guard de vuelo para merge/discard: un doble clic no debe lanzar dos
+  // operaciones concurrentes (la segunda puede pisar "discarded" con "error").
+  const [flightTask, setFlightTask] = useState<string | null>(null)
 
   // El poll solo corre si hay tareas vivas (no gasta requests al pedo).
   const hasActive = runs.some((r) => r.tasks.some((task) => task.state === "running" || task.state === "creating"))
@@ -58,6 +71,49 @@ export function RunsSection({ config, repoPath }: Props) {
     }
   }
 
+  const runTaskAction = async (taskID: string, action: () => Promise<unknown>) => {
+    if (flightTask) return
+    setFlightTask(taskID)
+    try {
+      await action()
+    } finally {
+      setFlightTask(null)
+    }
+  }
+
+  // Borrado con confirmación: si el run tiene worktrees, avisar y (cuando no
+  // hay trabajo propio sin mergear) limpiarlos; si lo hay, se conservan en
+  // disco y el aviso lo dice (no se tira trabajo del agente sin preguntar).
+  const removeFlow = async (run: Run) => {
+    // Worktrees que DEBERÍAN existir en disco: las descartadas ya se borraron
+    // en su momento (contarlas o reintentarlo daría falsas alertas).
+    const toClean = run.tasks.filter((task) => task.worktreePath && task.state !== "discarded")
+    const unmerged = toClean.filter((task) => task.state !== "merged")
+    if (toClean.length > 0) {
+      const ok = await confirm({
+        message: unmerged.length > 0
+          ? t("settings.runRemoveUnmerged", { count: unmerged.length })
+          : t("settings.runRemoveWt", { count: toClean.length }),
+        variant: "danger",
+        confirmText: t("settings.runRemove"),
+      })
+      if (!ok) return
+      if (unmerged.length === 0) {
+        let failed = 0
+        for (const task of toClean) {
+          try {
+            await shell.git.worktreeRemove(run.repoPath, task.worktreePath, true)
+          } catch (e) {
+            // "worktree desconocido" = ya no existe: limpieza cumplida, no es fallo.
+            if (!String(e).includes("desconocido")) failed++
+          }
+        }
+        if (failed > 0) await alert(t("settings.runRemoveWtFail", { count: failed }))
+      }
+    }
+    removeRun(run.id)
+  }
+
   return (
     <>
       <p className="settings-group-heading">{t("settings.sectionRuns")}</p>
@@ -87,7 +143,7 @@ export function RunsSection({ config, repoPath }: Props) {
               <button type="button" className="btn-icon btn-ghost" onClick={() => updateRun(run.id, { gate: run.gate === "open" ? "closed" : "open" })}>
                 {run.gate === "open" ? t("settings.runCloseGate") : t("settings.runOpenGate")}
               </button>
-              <button type="button" className="btn-icon btn-ghost" onClick={() => removeRun(run.id)}>
+              <button type="button" className="btn-icon btn-ghost" onClick={() => void removeFlow(run)}>
                 {t("settings.runRemove")}
               </button>
             </div>
@@ -106,16 +162,16 @@ export function RunsSection({ config, repoPath }: Props) {
                   <button
                     type="button"
                     className="btn-icon btn-ghost"
-                    disabled={run.gate !== "open" || !task.branch || task.state === "merged"}
-                    onClick={() => void mergeTask(run.id, task.id)}
+                    disabled={run.gate !== "open" || !task.branch || task.state === "merged" || flightTask !== null}
+                    onClick={() => void runTaskAction(task.id, () => mergeTask(run.id, task.id))}
                   >
                     {t("settings.runMerge")}
                   </button>
                   <button
                     type="button"
                     className="btn-icon btn-ghost"
-                    disabled={run.gate !== "open" || !task.worktreePath}
-                    onClick={() => void discardTask(run.id, task.id)}
+                    disabled={run.gate !== "open" || !task.worktreePath || flightTask !== null}
+                    onClick={() => void runTaskAction(task.id, () => discardTask(run.id, task.id))}
                   >
                     {t("settings.runDiscard")}
                   </button>

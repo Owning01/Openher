@@ -1614,7 +1614,7 @@ pub fn merge_branch(repo_root: &str, branch: &str) -> Result<GitMergeResult, Str
         return Ok(GitMergeResult { merged: true, conflicts: Vec::new(), detail: String::new() });
     }
     let conflicts = git_stdout_lines(&root_s, ["diff", "--name-only", "--diff-filter=U"]).unwrap_or_default();
-    let detail = format!(
+    let mut detail = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
@@ -1622,7 +1622,22 @@ pub fn merge_branch(repo_root: &str, branch: &str) -> Result<GitMergeResult, Str
     .chars()
     .take(600)
     .collect::<String>();
-    let _ = run_git(Some(&root_s), ["merge", "--abort"], DEFAULT_TIMEOUT_SECS);
+    // Con conflictos el repo quedó en merge a medias: hay que abortar. Un
+    // abort fallido NO se descarta en silencio (EPERM/lock de antivirus en
+    // Windows): se agrega al detail, si no las próximas operaciones git
+    // fallan sin indicar la causa real.
+    // Se intenta SIEMPRE (como antes del fix): si `diff --diff-filter=U`
+    // fallara y no listara conflictos, el repo igual puede quedar a medias. El
+    // aviso solo se agrega con conflictos reales: sin ellos, el fallo
+    // habitual del abort ("no hay merge que abortar") sería falsa alerta.
+    let abort_failed = match run_git(Some(&root_s), ["merge", "--abort"], DEFAULT_TIMEOUT_SECS) {
+        Err(e) => Some(e),
+        Ok(o) if o.exit_code == Some(0) && !o.timed_out => None,
+        Ok(o) => Some(format!("exit {:?}, timed_out={}", o.exit_code, o.timed_out)),
+    };
+    if let (Some(e), true) = (abort_failed, !conflicts.is_empty()) {
+        detail = format!("{detail} | merge --abort fallo ({e}): el repo puede quedar mergeando a medias");
+    }
     Ok(GitMergeResult { merged: false, conflicts, detail })
 }
 

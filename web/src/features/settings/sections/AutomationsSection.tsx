@@ -1,7 +1,7 @@
 // Automatizaciones: prompts recurrentes contra una sesión y comandos de shell
 // en un terminal (con espera de idle). La lista vive en `automationStore`
 // (persistida) y el disparo en `useAutomationRunner`.
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useT } from "../../../i18n-context"
 import { useStore } from "../../../shared/lib/store"
 import { LedSwitch } from "../../../components/LedSwitch"
@@ -26,14 +26,26 @@ export function AutomationsSection() {
   const [intervalMinutes, setIntervalMinutes] = useState(30)
   const [target, setTarget] = useState("")
 
-  // Tabs de terminal abiertos (destino posible de un comando).
-  const terminalTabs = useMemo(() => Array.from(terminalPtyStore.keys()), [automations.length])
+  // Tabs de terminal abiertos (destino posible de un comando). El store es un
+  // Map sin reactividad propia: se refresca cuando terminalStore avisa que las
+  // pestañas cambiaron (alta/baja/transfer), no solo cuando cambia la lista
+  // de automatizaciones.
+  const [tabNonce, setTabNonce] = useState(0)
+  useEffect(() => {
+    const onTabs = () => setTabNonce((n) => n + 1)
+    window.addEventListener("terminal:tabs-updated", onTabs)
+    return () => window.removeEventListener("terminal:tabs-updated", onTabs)
+  }, [])
+  const terminalTabs = useMemo(() => Array.from(terminalPtyStore.keys()), [tabNonce])
   const defaultTarget = kind === "prompt" ? "" : (terminalTabs[0] ?? "")
 
   const add = () => {
     const clean = text.trim()
     if (!clean) return
     const dest = (target || defaultTarget).trim()
+    // Sin destino la automatización jamás correría (isAutomationDue la salta):
+    // no se crea algo que aparenta estar activo y es inerte.
+    if (!dest) return
     addAutomation({
       name: name.trim() || clean.slice(0, 40),
       kind,
@@ -51,7 +63,9 @@ export function AutomationsSection() {
 
   const runNow = (id: string) => {
     // Marca vencida la próxima corrida: el tick (15s) la toma enseguida.
-    updateAutomation(id, { lastRunAt: 0, enabled: true, lastStatus: undefined })
+    // NO toca `enabled`: correr a mano no debe re-armar una apagada (el
+    // botón además queda deshabilitado cuando la automatización está apagada).
+    updateAutomation(id, { lastRunAt: 0, lastStatus: undefined })
   }
 
   return (
@@ -65,7 +79,7 @@ export function AutomationsSection() {
         <div key={a.id} className="setting-item-row">
           <div className="setting-item-info">
             <span className="setting-item-title">
-              {a.name} · {a.kind === "shell" ? t("settings.automationKindShell") : t("settings.automationKindPrompt")} · {automationIntervalLabel(a.intervalMinutes)}
+              {a.name} · {a.kind === "shell" ? t("settings.automationKindShell") : t("settings.automationKindPrompt")} · {automationIntervalLabel(a.intervalMinutes, t)}
             </span>
             <p className="setting-item-desc">
               {a.kind === "shell" ? `${a.command} (${a.terminalTabId})` : a.prompt}
@@ -82,7 +96,13 @@ export function AutomationsSection() {
             </p>
           </div>
           <div className="setting-item-control">
-            <button type="button" className="btn-icon btn-ghost" title={t("settings.automationRunNow")} onClick={() => runNow(a.id)}>
+            <button
+              type="button"
+              className="btn-icon btn-ghost"
+              title={t("settings.automationRunNow")}
+              disabled={!a.enabled}
+              onClick={() => runNow(a.id)}
+            >
               {t("settings.automationRunNow")}
             </button>
             <LedSwitch
@@ -115,7 +135,7 @@ export function AutomationsSection() {
           </select>
           <select value={intervalMinutes} onChange={(e) => setIntervalMinutes(Number(e.target.value))}>
             {AUTOMATION_INTERVALS.map((m) => (
-              <option key={m} value={m}>{automationIntervalLabel(m)}</option>
+              <option key={m} value={m}>{automationIntervalLabel(m, t)}</option>
             ))}
           </select>
           <input
@@ -130,7 +150,12 @@ export function AutomationsSection() {
             placeholder={kind === "shell" ? t("settings.automationCommand") : t("settings.automationPrompt")}
             style={{ minWidth: 220, flex: 1 }}
           />
-          <button type="button" className="btn-icon btn-ghost" onClick={add} disabled={!text.trim()}>
+          <button
+            type="button"
+            className="btn-icon btn-ghost"
+            onClick={add}
+            disabled={!text.trim() || !(target || defaultTarget).trim()}
+          >
             {t("settings.automationAdd")}
           </button>
         </div>

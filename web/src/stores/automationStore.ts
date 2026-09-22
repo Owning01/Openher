@@ -69,13 +69,28 @@ function normalize(raw: unknown): Automation | null {
   }
 }
 
-function load(): Automation[] {
+/** Parsea y normaliza la lista persistida. Una corrida "running" que sobrevivió
+ *  a una recarga quedó huérfana (el proceso murió con ella): sin limpiarla,
+ *  `isAutomationDue` la salta para siempre y la automatización muere en
+ *  silencio — se limpia acá, al hidratar. */
+export function hydrateAutomations(raw: string | null): Automation[] {
+  if (!raw) return []
   try {
-    const raw = localStorage.getItem(AUTOMATION_KEY)
-    if (!raw) return []
     const arr = JSON.parse(raw)
     if (!Array.isArray(arr)) return []
-    return arr.map(normalize).filter((a): a is Automation => a !== null).slice(0, MAX_AUTOMATIONS)
+    return arr
+      .map(normalize)
+      .filter((a): a is Automation => a !== null)
+      .slice(0, MAX_AUTOMATIONS)
+      .map((a) => (a.lastStatus === "running" ? { ...a, lastStatus: undefined } : a))
+  } catch {
+    return []
+  }
+}
+
+function load(): Automation[] {
+  try {
+    return hydrateAutomations(localStorage.getItem(AUTOMATION_KEY))
   } catch {
     return []
   }
@@ -149,10 +164,16 @@ export function nextAutomationRunAt(a: Automation): number | null {
   return (a.lastRunAt ?? 0) + a.intervalMinutes * 60_000
 }
 
-/** "cada 30 min" / "cada 2 h" / "cada 24 h". */
-export function automationIntervalLabel(minutes: number): string {
+type IntervalT = (
+  key: "settings.automationEveryMin" | "settings.automationEveryH",
+  params?: Record<string, string | number>
+) => string
+
+/** "cada 30 min" / "cada 2 h" / "cada 24 h". La UI pasa siempre `t` (keys
+ *  i18n en/en-es); sin traductor cae al literal en español. */
+export function automationIntervalLabel(minutes: number, t?: IntervalT): string {
   const m = clampInterval(minutes)
-  if (m < 60) return `cada ${m} min`
+  if (m < 60) return t ? t("settings.automationEveryMin", { m }) : `cada ${m} min`
   const h = Math.round((m / 60) * 10) / 10
-  return `cada ${h} h`
+  return t ? t("settings.automationEveryH", { h }) : `cada ${h} h`
 }

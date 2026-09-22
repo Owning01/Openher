@@ -8,7 +8,7 @@ import { api } from "../api"
 import { shell } from "../shell"
 import { useScheduled } from "./useScheduled"
 import { useStore } from "../shared/lib/store"
-import { readTerminal, waitForIdle } from "../utils/terminalRead"
+import { isTerminalIdle, readTerminal, waitForIdle, waitForOutput } from "../utils/terminalRead"
 import { terminalPtyStore } from "../utils/terminalStore"
 import { automationStore, isAutomationDue, markAutomationRun, type Automation } from "../stores/automationStore"
 import type { ServerConfig } from "../types"
@@ -25,8 +25,18 @@ async function runPrompt(config: ServerConfig, a: Automation, directory?: string
 async function runShell(a: Automation): Promise<string> {
   const entry = terminalPtyStore.get(a.terminalTabId)
   if (!entry) throw new Error(`terminal ${a.terminalTabId} no está abierto`)
+  // Si el usuario está usando la terminal, esperar a que quede quieta ANTES de
+  // escribir: si no, el comando automatizado se le entremezcla con su entrada.
+  if (!isTerminalIdle(a.terminalTabId, 600)) {
+    await waitForIdle(a.terminalTabId, { idleMs: 600, timeoutMs: 30_000 })
+  }
   await shell.pty.write(entry.ptyId, `${a.command}\r`)
-  await waitForIdle(a.terminalTabId, { idleMs: 800, timeoutMs: 10 * 60_000 })
+  // Esperar la PRIMERA salida del comando: si la terminal estaba idle de antes,
+  // waitForIdle resolvería de entrada (tick a los 50ms) con la salida VIEJA.
+  await waitForOutput(a.terminalTabId, { since: Date.now(), timeoutMs: 30_000 })
+  const res = await waitForIdle(a.terminalTabId, { idleMs: 800, timeoutMs: 10 * 60_000 })
+  // Un timeout no es éxito: el estado "ok" mentiría sobre lo ocurrido.
+  if (res.timedOut) throw new Error("timeout: la terminal no quedó quieta")
   return readTerminal(a.terminalTabId, 1500)
 }
 

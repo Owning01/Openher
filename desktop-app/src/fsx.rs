@@ -250,6 +250,26 @@ fn trash_win(p: &Path) -> Result<(), String> {
 }
 
 /// Crea un .zip en dest_dir con los paths dados usando tar nativo del SO.
+/// Ancestro común (carpeta) de todas las rutas; `None` si no comparten prefijo
+/// (p. ej. unidades distintas) o si alguna relativa no tiene carpeta.
+fn common_ancestor(paths: &[String]) -> Option<PathBuf> {
+    let mut iter = paths.iter().filter_map(|p| {
+        let dir = Path::new(p).parent()?;
+        if dir.as_os_str().is_empty() { None } else { Some(dir.to_path_buf()) }
+    });
+    let mut base = iter.next()?;
+    for dir in iter {
+        let a: Vec<_> = base.components().collect();
+        let b: Vec<_> = dir.components().collect();
+        let mut i = 0;
+        while i < a.len() && i < b.len() && a[i] == b[i] {
+            i += 1;
+        }
+        base = a[..i].iter().collect();
+    }
+    if base.as_os_str().is_empty() { None } else { Some(base) }
+}
+
 pub fn zip_create(paths: &[String], dest_dir: &str, name: &str) -> Result<String, String> {
     if paths.is_empty() {
         return Err("Nada que comprimir".into());
@@ -277,6 +297,12 @@ pub fn zip_create(paths: &[String], dest_dir: &str, name: &str) -> Result<String
         target = candidate;
     }
 
+    // Rutas relativas al ancestro común: tar con rutas absolutas guarda el zip
+    // sin el drive ("Removing leading drive letter from member names") y al
+    // extraer los archivos quedan espejados en Users/..., nunca en la raíz del
+    // destino (era el fallo de zip_roundtrip_keeps_tree_and_content).
+    let base = common_ancestor(paths);
+
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
 
@@ -284,8 +310,18 @@ pub fn zip_create(paths: &[String], dest_dir: &str, name: &str) -> Result<String
     #[cfg(windows)]
     cmd.creation_flags(0x08000000);
     cmd.arg("-a").arg("-c").arg("-f").arg(&target);
+    if let Some(b) = &base {
+        cmd.arg("-C").arg(b);
+    }
     for p in paths {
-        cmd.arg(p);
+        let rel = match &base {
+            Some(b) => Path::new(p)
+                .strip_prefix(b)
+                .map(|s| s.to_path_buf())
+                .unwrap_or_else(|_| PathBuf::from(p)),
+            None => PathBuf::from(p),
+        };
+        cmd.arg(rel);
     }
     let output = cmd.output().map_err(|e| format!("Error creando zip: {e}"))?;
     if !output.status.success() {

@@ -7,12 +7,13 @@
 //! (y ahí queda liviano). Cero dependencias nuevas.
 #![cfg(windows)]
 
-use windows_sys::Win32::Foundation::{HWND, POINT};
+use windows_sys::Win32::Foundation::{HWND, POINT, RECT};
 use windows_sys::Win32::Graphics::Gdi::{
     BitBlt, ClientToScreen, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject,
     GetDC, GetDIBits, ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, CAPTUREBLT,
     DIB_RGB_COLORS, HGDIOBJ, SRCCOPY,
 };
+use windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect;
 
 /// Tope defensivo de la captura (un rect enorme no debe reservar GB).
 const MAX_SIDE: i32 = 4096;
@@ -34,6 +35,22 @@ pub fn client_to_screen(hwnd: isize, x: i32, y: i32) -> (i32, i32) {
         ClientToScreen(hwnd as HWND, &mut p);
     }
     (p.x, p.y)
+}
+
+/// Tamaño del área cliente de `hwnd` en píxeles (0,0 si no hay ventana).
+/// Misma unidad que `client_to_screen`: sirve para clampear el rect de la
+/// captura y que nunca salga de la ventana.
+pub fn client_size(hwnd: isize) -> (i32, i32) {
+    if hwnd == 0 {
+        return (0, 0);
+    }
+    let mut rc: RECT = unsafe { std::mem::zeroed() };
+    let ok = unsafe { GetClientRect(hwnd as HWND, &mut rc) };
+    if ok == 0 {
+        (0, 0)
+    } else {
+        (rc.right - rc.left, rc.bottom - rc.top)
+    }
 }
 
 /// Captura `w`×`h` desde (x,y) en píxeles físicos de pantalla.
@@ -72,6 +89,12 @@ pub fn capture_bmp(x: i32, y: i32, w: i32, h: i32) -> Result<Shot, String> {
     }
 }
 
+/// # Safety
+///
+/// `mem` debe ser un DC compatible válido con `bmp` disponible en él y
+/// dimensiones `w`×`h`; `bmp` debe seguir vivo durante toda la llamada. El
+/// buffer interno se aloja con `stride*h` bytes y `GetDIBits` se pide con
+/// altura positiva (bottom-up) y `DIB_RGB_COLORS`, igual que declara `info`.
 unsafe fn read_bits(mem: windows_sys::Win32::Graphics::Gdi::HDC, bmp: windows_sys::Win32::Graphics::Gdi::HBITMAP, w: i32, h: i32) -> Result<Shot, String> {
     let stride = (w * 3 + 3) / 4 * 4;
     let mut pixels = vec![0u8; (stride * h) as usize];

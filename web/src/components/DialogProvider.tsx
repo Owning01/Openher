@@ -3,7 +3,7 @@ import { createPortal } from "react-dom"
 import { Modal } from "./Modal"
 import { useT } from "../i18n-context"
 
-type DialogOptions = {
+export type DialogOptions = {
   title?: string
   message: string
   confirmText?: string
@@ -11,7 +11,7 @@ type DialogOptions = {
   variant?: "default" | "danger"
 }
 
-type AlertOptions = {
+export type AlertOptions = {
   title?: string
   message: string
   okText?: string
@@ -24,8 +24,14 @@ type DialogContextValue = {
 
 const DialogContext = createContext<DialogContextValue | null>(null)
 
+/** Contexto del diálogo o `null` si no hay provider. Para componentes que
+ *  deben poder montar fuera de `DialogProvider` (p. ej. en tests de aislamiento). */
+export function useOptionalDialog(): DialogContextValue | null {
+  return useContext(DialogContext)
+}
+
 export function useDialog(): DialogContextValue {
-  const ctx = useContext(DialogContext)
+  const ctx = useOptionalDialog()
   if (!ctx) throw new Error("useDialog debe usarse dentro de DialogProvider")
   return ctx
 }

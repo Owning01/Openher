@@ -53,6 +53,7 @@ export function rememberTerminalPty(tabId: string, entry: { ptyId: string; wsPor
       }
     }
   }
+  window.dispatchEvent(new CustomEvent("terminal:tabs-updated", { detail: { tabId } }))
 }
 
 export function killTerminalPty(tabId: string) {
@@ -62,6 +63,7 @@ export function killTerminalPty(tabId: string) {
     terminalPtyStore.delete(tabId)
   }
   resetTerminalBuffer(tabId)
+  window.dispatchEvent(new CustomEvent("terminal:tabs-updated", { detail: { tabId } }))
 }
 
 export function transferTerminalTab(sourcePanelId: string | undefined, tabId: string, destPanelId: string): number {
