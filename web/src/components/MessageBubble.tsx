@@ -59,8 +59,7 @@ function messageIdGt(a: string, b: string): boolean {
   return a > b
 }
 
-function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): string {
-  if (!msg.info.time.completed) return ""
+export function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): string {  if (!msg.info.time.completed) return ""
   const finish = msg.info.finish
   if (!finish || finish === "tool-calls" || finish === "unknown") return ""
   const start = prevUserTs ?? msg.info.time.created
@@ -68,7 +67,7 @@ function calcDuration(msg: RenderedMessage, prevUserTs: number | undefined): str
   return formatDurationMs(dur)
 }
 
-function calcTokensPerSecond(msg: RenderedMessage): string {
+export function calcTokensPerSecond(msg: RenderedMessage): string {
   if (!msg.info.time.completed || !msg.info.time.created) return ""
   const tokens = msg.tokens ?? msg.info.tokens
   let outputTokens = (tokens?.output ?? 0) + (tokens?.reasoning ?? 0)
@@ -78,7 +77,8 @@ function calcTokensPerSecond(msg: RenderedMessage): string {
   if (outputTokens <= 0) return ""
 
   // Duración real de la generación del mensaje del asistente (en ms)
-  const genDurationMs = msg.info.time.completed - msg.info.time.created
+  const streamEnd = msg.info.time.streamed ?? msg.info.time.completed
+  const genDurationMs = streamEnd - msg.info.time.created
   if (genDurationMs < 500) return ""
 
   const tps = (outputTokens / genDurationMs) * 1000

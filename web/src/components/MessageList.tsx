@@ -157,12 +157,18 @@ export const MessageList = memo(function MessageList({
     return map
   }, [messages])
 
-  const prevUserTsMap = useMemo(() => {
-    const map = new Map<string, number>()
+  // v2 no manda parentID en el mensaje del asistente: el inicio del turno es
+  // el mensaje user ANTERIOR POR ORDEN. Con parentID el mapa nunca matcheaba y
+  // el tiempo mostraba `completed - assistant.created` (4.1s) en vez del total
+  // desde tu mensaje (4.5s; en turnos con tools la diferencia es de minutos).
+  const prevUserTsByIndex = useMemo(() => {
+    const out: Array<number | undefined> = []
+    let lastUserTs: number | undefined
     for (const msg of messages) {
-      if (msg.info.role === "user") map.set(msg.info.id, msg.info.time.created)
+      out.push(lastUserTs)
+      if (msg.info.role === "user") lastUserTs = msg.info.time.created
     }
-    return map
+    return out
   }, [messages])
 
   const revertIndex = useMemo(() => {
@@ -527,7 +533,7 @@ export const MessageList = memo(function MessageList({
                     isReverted={revertIndex >= 0 && actualIndex >= revertIndex}
                     onRevertToMessage={onRevertToMessage}
                     agents={agents}
-                    prevUserTs={message.info.parentID ? prevUserTsMap.get(message.info.parentID) : undefined}
+                    prevUserTs={prevUserTsByIndex[actualIndex]}
                     showModelInfo={footerInfoMap.get(message.info.id) ?? false}
                     config={config}
                     directory={directory}

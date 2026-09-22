@@ -24,6 +24,9 @@ export type MessageEnvelope = {
     time: {
       created: number
       completed?: number
+      /** Fin del streaming del texto: antes que `completed` (que cierra el
+       *  turno/step e incluye el tiempo de tools). Base del tok/s real. */
+      streamed?: number
     }
     agent?: string
     parentID?: string

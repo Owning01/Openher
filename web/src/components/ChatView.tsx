@@ -576,10 +576,14 @@ export const ChatView = memo(function ChatView({
       )}
 
       {/* Pregunta flotante (portal a body: siempre fixed, no scrollea con el
+          NOTA: ya NO exige isWorking. Cuando el agente pregunta, el turno queda
+          idle esperando tu respuesta: antes el modal no se mostraba y el chat
+          parecía colgado (había que dar Stop). pendingQuestions ya viene
+          filtrado por dismissed/settled en useQuestions.
           chat). Es la ÚNICA superficie interactiva con questionAuto ON; el
           prompt inline queda como chip. Solo con la sesión trabajando: tras
           Stop/abort no reaparece (además se dismissan al abortar). */}
-      {isWorking && flags.questionAuto && pendingQuestions && pendingQuestions.length > 0 && onQuestionReply && onDismissQuestion && createPortal(
+      {flags.questionAuto && pendingQuestions && pendingQuestions.length > 0 && onQuestionReply && onDismissQuestion && createPortal(
         <AutoQuestionPrompt
           question={pendingQuestions[0]}
           onReply={onQuestionReply}

@@ -120,7 +120,7 @@ export function toSessionV1(raw: V2Session): Session {
 export type V2Message = {
   id: string
   sessionID?: string
-  time?: { created?: number; completed?: number }
+  time?: { created?: number; streamed?: number; completed?: number }
   type?: string
   agent?: string
   parentID?: string
@@ -225,7 +225,7 @@ export function toMessageEnvelopeV1(raw: V2Message): MessageEnvelope {
       id: raw.id,
       role: raw.type ?? "assistant",
       sessionID: raw.sessionID ?? "",
-      time: { created: raw.time?.created ?? 0, completed: raw.time?.completed },
+      time: { created: raw.time?.created ?? 0, completed: raw.time?.completed, streamed: raw.time?.streamed },
       agent: raw.agent,
       parentID: raw.parentID,
       modelID: raw.model?.id,
