@@ -86,11 +86,14 @@ function Sync-WebDist {
   if ($LASTEXITCODE -ge 8) { throw "robocopy fallo hacia $Destination ($LASTEXITCODE)" }
 
   $cutoff = (Get-Date).AddDays(-$MaxAgeDays)
-  $srcLen = $Source.TrimEnd('\').Length
+  # El path relativo se calcula con el largo del DESTINO (antes usaba el del
+  # origen sobre rutas del destino: daba basura y borraba archivos viejos que SI
+  # existen en el origen — se comio themes/, icon.png y manifest.webmanifest).
+  $destLen = (Resolve-Path -LiteralPath $Destination).Path.TrimEnd('\').Length
   Get-ChildItem $Destination -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
     $_.Name -notin $Keep -and $_.LastWriteTime -lt $cutoff
   } | ForEach-Object {
-    $rel = $_.FullName.Substring($srcLen).TrimStart('\')
+    $rel = $_.FullName.Substring($destLen).TrimStart('\')
     if (-not (Test-Path (Join-Path $Source $rel))) {
       Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
     }
