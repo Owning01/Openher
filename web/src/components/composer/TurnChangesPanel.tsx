@@ -40,6 +40,12 @@ export const TurnChangesPanel = memo(function TurnChangesPanel({ turns: turnChan
     for (const f of latestTurn?.files ?? []) { add += f.additions ?? 0; del += f.deletions ?? 0 }
     return { add, del, count: latestTurn?.files.length ?? 0 }
   }, [latestTurn])
+  const activeTotals = useMemo(() => {
+    let add = 0
+    let del = 0
+    for (const f of activeTurn?.files ?? []) { add += f.additions ?? 0; del += f.deletions ?? 0 }
+    return { add, del }
+  }, [activeTurn])
 
   if (!latestTurn) return null
 
@@ -55,15 +61,15 @@ export const TurnChangesPanel = memo(function TurnChangesPanel({ turns: turnChan
         >
           <BranchIcon size={13} />
           <span>{latestTotals.count} archivo{latestTotals.count === 1 ? "" : "s"}</span>
-          <span className="turn-add">+{latestTotals.add}</span>
-          <span className="turn-del">−{latestTotals.del}</span>
+          {latestTotals.add > 0 && <span className="turn-add">+{latestTotals.add}</span>}
+          {latestTotals.del > 0 && <span className="turn-del">−{latestTotals.del}</span>}
         </button>
         {showTurnChanges && activeTurn && (
           <div className="turn-changes-panel fade-in" role="dialog" aria-label="Cambios del turno">
             <div className="turn-changes-head">
               <strong>Cambios del turno</strong>
-              <span className="turn-add">+{activeTurn.files.reduce((n, f) => n + (f.additions ?? 0), 0)}</span>
-              <span className="turn-del">−{activeTurn.files.reduce((n, f) => n + (f.deletions ?? 0), 0)}</span>
+              {activeTotals.add > 0 && <span className="turn-add">+{activeTotals.add}</span>}
+              {activeTotals.del > 0 && <span className="turn-del">−{activeTotals.del}</span>}
               <span style={{ flex: 1 }} />
               <span className="turn-pager">
                 <button type="button" disabled={activeTurnIdx <= 0} onClick={() => { setTurnIdx(activeTurnIdx - 1); setOpenPatch(null) }} aria-label="Turno anterior">‹</button>

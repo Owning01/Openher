@@ -355,6 +355,46 @@
     padding-right: 9rem;
   }
 
+  /* Pedido explícito: el texto usa TODO el ancho de la caja y los 3 botones
+     (stop/send/mic) bajan a su propia fila, pegados (2px). Antes el textarea
+     reservaba hasta 9rem a la derecha y el texto quedaba en un canal angosto.
+     El attach sigue fijo a la izquierda (por eso el padding-left). */
+  .composer-input-wrap {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: flex-end;
+    row-gap: 2px;
+  }
+
+  .composer-input-wrap textarea,
+  .composer-input-wrap.has-mic textarea,
+  .composer-input-wrap.is-working textarea,
+  .composer-input-wrap.is-working.has-mic textarea {
+    flex: 1 1 100%;
+    order: 1;
+    /* El attach vive en la fila de abajo: el texto no le reserva ancho. */
+    padding: 0.5rem 0.9rem 0.35rem;
+  }
+
+  /* El attach baja a la fila de botones (izquierda) y se alinea con ellos. */
+  .composer-img-btn {
+    bottom: 0;
+    left: 0.3rem;
+  }
+
+  /* Fila de abajo, mismo orden visual de antes: stop, send, mic (izq→der). */
+  .composer-mic-btn,
+  .composer-stop-btn,
+  .composer-send-btn {
+    position: static;
+    right: auto;
+    order: 2;
+  }
+
+  .composer-stop-btn { order: 2; }
+  .composer-send-btn { order: 3; }
+  .composer-mic-btn { order: 4; }
+
 
   .star-btn,
   .quick-access-star,
@@ -482,19 +522,16 @@ html[data-desktop="true"] .app-shell { padding: 0; }
   html[data-desktop="true"] .top-nav { display: none !important; }
   html[data-desktop="true"] .app-desktop-content { padding: var(--space-3) !important; gap: var(--space-3) !important; }
 
-  /* El bloque touch (max-width:780) agranda el textarea a 3.4rem por lado y
-     corre los botones: en el desktop el composer conserva su geometría
-     (composer.css) para no dejar el texto en una tira de ~100px. */
-  html[data-desktop="true"] .composer-input-wrap textarea {
-    padding: 0.5rem 2.5rem 0.5rem 2.4rem;
+  /* Con los botones en su propia fila (bloque touch), en desktop-narrow el
+     texto ya usa el ancho completo: solo se mantiene la densidad desktop
+     (attach de 32px y tipografía del tema), sin reservar a la derecha. */
+  html[data-desktop="true"] .composer-input-wrap textarea,
+  html[data-desktop="true"] .composer-input-wrap.has-mic textarea,
+  html[data-desktop="true"] .composer-input-wrap.is-working textarea,
+  html[data-desktop="true"] .composer-input-wrap.is-working.has-mic textarea {
+    padding: 0.5rem 0.9rem 0.35rem 2.4rem;
     font-size: inherit;
   }
-  html[data-desktop="true"] .composer-input-wrap.has-mic textarea { padding-right: 2.5rem; }
-  html[data-desktop="true"] .composer-input-wrap.is-working textarea { padding-left: 2.4rem; padding-right: 2.5rem; }
-  html[data-desktop="true"] .composer-input-wrap.is-working.has-mic textarea { padding-right: 2.5rem; }
-  html[data-desktop="true"] .composer-send-btn.with-mic { right: 2.2rem; }
-  html[data-desktop="true"] .composer-stop-btn { right: 2.2rem; }
-  html[data-desktop="true"] .composer-stop-btn.with-mic { right: 4.1rem; }
 }
 
 @media (max-width: 600px) {

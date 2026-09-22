@@ -250,6 +250,9 @@
 
 .composer-mic-btn {
   right: 0.3rem;
+  /* Mismo color que el envío (pedido explícito): el mic no es "accesorio gris".
+     Al grabar se va a rojo (`.recording` gana por especificidad). */
+  color: var(--primary);
 }
 
 .composer-send-btn {

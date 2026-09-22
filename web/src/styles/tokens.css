@@ -152,7 +152,9 @@
 :root .tool-part,
 :root .diff-view,
 :root .file-diffs,
-:root .inline-diff {
+:root .inline-diff,
+:root .turn-changes-btn,
+:root .turn-changes-panel {
   --success: #16a34a;
   --success-soft: rgba(22, 163, 74, 0.08);
   --danger: #e11d48;
@@ -165,7 +167,9 @@
 :root[data-theme="dark"] .tool-part,
 :root[data-theme="dark"] .diff-view,
 :root[data-theme="dark"] .file-diffs,
-:root[data-theme="dark"] .inline-diff {
+:root[data-theme="dark"] .inline-diff,
+:root[data-theme="dark"] .turn-changes-btn,
+:root[data-theme="dark"] .turn-changes-panel {
   --success: #4ade80;
   --success-soft: rgba(74, 222, 128, 0.1);
   --danger: #fb7185;
