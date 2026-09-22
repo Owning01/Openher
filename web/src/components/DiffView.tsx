@@ -1,5 +1,8 @@
 import { memo, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react"
-import { CopyIcon, CheckIcon } from "../Icons"
+import { CopyIcon, CheckIcon, CloseIcon } from "../Icons"
+import { useT } from "../i18n-context"
+import { diffRowLine, formatDiffNotes, type DiffNote } from "../utils/diffAnnotations"
+import { injectToComposer } from "../stores/composerInjectStore"
 import type { DiffStat } from "../utils/diffStat"
 
 export function sumDiffStat(diffs: Array<{ additions?: number; deletions?: number }>): DiffStat {
@@ -105,9 +108,16 @@ export function parseUnifiedDiff(patch: string): ParsedDiffRow[] {
   return result
 }
 
-export const DiffView = memo(function DiffView({ patch, autoScroll = false }: { patch: string; autoScroll?: boolean }) {
+export const DiffView = memo(function DiffView({ patch, autoScroll = false, annotateFile }: { patch: string; autoScroll?: boolean; annotateFile?: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
+  const t = useT()
+  // Revisión con anotaciones (el "annotate AI diff" de Orca): se comenta una
+  // línea y el bloque viaja al composer. Solo aparece si el dueño pasa
+  // `annotateFile`; sin eso el visor sigue siendo de solo lectura.
+  const [notes, setNotes] = useState<Array<DiffNote & { row: number }>>([])
+  const [editing, setEditing] = useState<{ row: number; line: number } | null>(null)
+  const [draft, setDraft] = useState("")
 
   const rows = useMemo(() => parseUnifiedDiff(patch), [patch])
 
@@ -119,6 +129,29 @@ export const DiffView = memo(function DiffView({ patch, autoScroll = false }: { 
       setTimeout(() => setCopied(false), 1500)
     }).catch(() => {})
   }, [patch])
+
+  const openNote = useCallback((row: number, line: number) => {
+    setEditing({ row, line })
+    setDraft("")
+  }, [])
+
+  const addNote = useCallback(() => {
+    const note = draft.trim()
+    if (!editing || !note) return
+    setNotes((prev) => [
+      ...prev.filter((n) => n.row !== editing.row),
+      { row: editing.row, line: editing.line, code: rows[editing.row]?.code, note },
+    ])
+    setEditing(null)
+    setDraft("")
+  }, [draft, editing, rows])
+
+  const sendNotes = useCallback(() => {
+    const block = formatDiffNotes(notes.map((n) => ({ file: annotateFile, line: n.line, code: n.code, note: n.note })))
+    if (!block) return
+    injectToComposer(block)
+    setNotes([])
+  }, [notes, annotateFile])
 
   // Al abrir un diff expandido, centra el primer cambio (la primera línea +/−
   // en orden del archivo) dentro del contenedor scrollable, sin tocar el scroll del chat.
@@ -180,7 +213,23 @@ export const DiffView = memo(function DiffView({ patch, autoScroll = false }: { 
               </div>
             ) : (
               <>
-                <div className="diff-gutter">
+                <div
+                  className={`diff-gutter${annotateFile !== undefined ? " diff-gutter-note" : ""}`}
+                  {...(annotateFile !== undefined
+                    ? {
+                        role: "button",
+                        tabIndex: 0,
+                        title: t('diff.annotateLine'),
+                        onClick: () => openNote(i, diffRowLine(row)),
+                        onKeyDown: (e: React.KeyboardEvent) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            openNote(i, diffRowLine(row))
+                          }
+                        },
+                      }
+                    : {})}
+                >
                   <span className="diff-num-old">{row.oldLine ?? ""}</span>
                   <span className="diff-num-new">{row.newLine ?? ""}</span>
                   <span className="diff-sign">
@@ -195,6 +244,54 @@ export const DiffView = memo(function DiffView({ patch, autoScroll = false }: { 
           </div>
         ))}
       </div>
+      {annotateFile !== undefined && (
+        <div className="diff-notes">
+          {notes.length > 0 && (
+            <ul className="diff-notes-list">
+              {notes.map((n) => (
+                <li key={n.row} className="diff-note-item">
+                  <span className="diff-note-where">{annotateFile}:{n.line}</span>
+                  <span className="diff-note-text">{n.note}</span>
+                  <button
+                    type="button"
+                    className="btn-icon btn-ghost"
+                    title={t('diff.removeNote')}
+                    aria-label={t('diff.removeNote')}
+                    onClick={() => setNotes((prev) => prev.filter((x) => x.row !== n.row))}
+                  >
+                    <CloseIcon size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {editing ? (
+            <div className="diff-note-editor">
+              <span className="diff-note-where">{annotateFile}:{editing.line}</span>
+              <input
+                className="diff-note-input"
+                autoFocus
+                value={draft}
+                placeholder={t('diff.notePlaceholder')}
+                aria-label={t('diff.notePlaceholder')}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addNote()
+                  else if (e.key === "Escape") setEditing(null)
+                }}
+              />
+              <button type="button" className="btn-secondary compact" onClick={addNote}>{t('diff.addNote')}</button>
+            </div>
+          ) : notes.length === 0 ? (
+            <span className="diff-notes-hint">{t('diff.annotateHint')}</span>
+          ) : null}
+          {notes.length > 0 && (
+            <button type="button" className="btn-primary compact diff-notes-send" onClick={sendNotes}>
+              {t('diff.sendNotes', { count: notes.length })}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 })

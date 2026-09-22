@@ -2132,6 +2132,72 @@
   background-color: rgba(255, 255, 255, 0.025);
 }
 
+/* Revisión con anotaciones: la gutter se vuelve clickeable y las notas viven
+   abajo del código (fuera del scroll), no encima. */
+.diff-gutter-note {
+  cursor: pointer;
+}
+
+.diff-gutter-note:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  opacity: 1;
+}
+
+.diff-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem 0.6rem 0.55rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  background: color-mix(in srgb, var(--surface-subtle) 55%, transparent);
+  font-size: 0.8rem;
+}
+
+.diff-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diff-note-item,
+.diff-note-editor {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.diff-note-where {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted-strong);
+}
+
+.diff-note-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-note-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.diff-notes-hint {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.diff-notes-send {
+  align-self: flex-start;
+}
+
 .diff-gutter {
   display: flex;
   align-items: center;

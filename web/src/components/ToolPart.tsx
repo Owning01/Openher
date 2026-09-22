@@ -803,7 +803,7 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
       {expanded && (fileDiff?.patch || body) ? (
         <div className="tool-part-body">
           {fileDiff?.patch ? (
-            <DiffView patch={fileDiff.patch} />
+            <DiffView patch={fileDiff.patch} annotateFile={diffPath ?? undefined} />
           ) : isError && errorText ? (
             <pre className="tool-part-pre tool-part-error-text">{previewLines(body, 60)}</pre>
           ) : diffPath ? (

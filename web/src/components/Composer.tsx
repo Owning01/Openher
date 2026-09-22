@@ -7,6 +7,8 @@ import { useSpeechRecognition } from "../hooks/useSpeechRecognition"
 import type { AgentOption, CommandInfo, ServerConfig, ModelOption, TurnChanges } from "../types"
 import { ImageEditor } from "./ImageEditor"
 import { readComposerDraft, writeComposerDraft } from "../utils/composerDraft"
+import { useStore } from "../shared/lib/store"
+import { composerInjectStore, composerImageInjectStore, takeComposerInjections, takeComposerImageInjections } from "../stores/composerInjectStore"
 import { SlashMenu } from "./composer/SlashMenu"
 import { MentionMenu } from "./composer/MentionMenu"
 import { useMentions } from "./composer/useMentions"
@@ -138,6 +140,21 @@ export const Composer = memo(function Composer({
   useEffect(() => {
     writeComposerDraft(sessionID, localValue)
   }, [localValue, sessionID])
+
+  // Inyecciones de otras superficies (anotaciones de diff, Design Mode): se
+  // agregan al texto actual y se propagan al padre, igual que un tipeo.
+  const injections = useStore(composerInjectStore)
+  useEffect(() => {
+    if (injections.length === 0) return
+    const block = takeComposerInjections()
+    if (!block) return
+    const current = localValueRef.current
+    const next = current.trim() ? `${current.trimEnd()}\n\n${block}` : block
+    setLocalValue(next)
+    localValueRef.current = next
+    if (textareaRef.current) textareaRef.current.value = next
+    pushNow(next)
+  }, [injections, pushNow])
 
   // Sync SOLO de cambios externos del padre (reset a "", inserción en composer vacío, etc.).
   // NUNCA sobreescribe texto local con versiones intermedias o más cortas del padre.
@@ -343,6 +360,15 @@ export const Composer = memo(function Composer({
   const composerRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [images, setImages] = useState<ImageAttachment[]>([])
+
+  // Capturas (Design Mode) que llegan como imagen adjunta al próximo envío.
+  const imageInjections = useStore(composerImageInjectStore)
+  useEffect(() => {
+    if (imageInjections.length === 0) return
+    const pending = takeComposerImageInjections()
+    if (pending.length === 0) return
+    setImages((prev) => [...prev, ...pending.map((p) => ({ id: p.id, base64: p.base64, mime: p.mime, name: p.name }))])
+  }, [imageInjections])
 
   // Auto-grow: la caja crece mientras se escribe (hasta 120px) y vuelve a su
   // alto mínimo cuando se vacía (al enviar/limpiar). Un solo rAF alcanza

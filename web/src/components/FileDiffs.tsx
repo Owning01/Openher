@@ -66,7 +66,7 @@ export const FileDiffs = memo(function FileDiffs({
                 </button>
                 {fileOpen && d.patch && (
                   <div className="tool-part-body">
-                    <DiffView patch={d.patch} autoScroll />
+                    <DiffView patch={d.patch} autoScroll annotateFile={path} />
                   </div>
                 )}
               </div>
