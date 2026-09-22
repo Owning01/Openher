@@ -6,6 +6,7 @@
                    "colonAny":  194,
                    "exportDefault":  19,
                    "important":  265,
+                   "tsNocheck":  1,
                    "filesOver1000":  6,
                    "orphanFiles":  1,
                    "deletableCssRules":  42

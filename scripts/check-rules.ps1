@@ -32,6 +32,7 @@ $measured = [ordered]@{
   colonAny           = (Count-GitGrep ':\s*any\b' 'web/src' -Pcre -NoTests)
   exportDefault      = (Count-Lines 'export default' 'web/src')
   important          = (Count-GitGrep '!important' 'web/src/styles')
+  tsNocheck          = (Count-Lines '@ts-nocheck' 'web/src')
   filesOver1000      = $big
   orphanFiles        = -1
   deletableCssRules  = -1
