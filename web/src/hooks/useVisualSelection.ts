@@ -12,6 +12,7 @@ export type VisualSelection = {
   boundingRect?: { x: number; y: number; w: number; h: number }
   outerHTML?: string
   selector?: string
+  computed?: Record<string, string>
   timestamp: number
 }
 
@@ -25,6 +26,7 @@ export type VisualMember = {
   innerText?: string
   boundingRect?: { x: number; y: number; w: number; h: number }
   source?: VisualSource
+  computed?: Record<string, string>
 }
 
 export type VisualAnnotation = {
@@ -42,6 +44,7 @@ export type VisualAnnotation = {
   by?: number
   url: string
   source?: VisualSource
+  computed?: Record<string, string>
   comment: string
   styleDraft?: Record<string, string>
   styleBefore?: Record<string, string | null>
@@ -69,7 +72,7 @@ function buildPromptContext(sel: VisualSelection | null): string {
     const header = `<!-- SELECTED ZONE: elemento visual en ${loc}${selPath} — el agente debe concentrarse SOLO aquí -->`
     const rect = sel.boundingRect ? `Posición: x=${Math.round(sel.boundingRect.x)} y=${Math.round(sel.boundingRect.y)} w=${Math.round(sel.boundingRect.w)} h=${Math.round(sel.boundingRect.h)}` : ""
     const html = sel.outerHTML.trim().slice(0, 4000)
-    return `${header}\n${rect ? `${rect}\n` : ""}HTML seleccionado:\n\`\`\`html\n${html}\n\`\`\`${sel.selectedText ? `\nTexto interno: "${sel.selectedText.slice(0, 500)}"` : ""}`
+    return `${header}\n${rect ? `${rect}\n` : ""}HTML seleccionado:\n\`\`\`html\n${html}\n\`\`\`${computedBlock(sel.computed)}${sel.selectedText ? `\nTexto interno: "${sel.selectedText.slice(0, 500)}"` : ""}`
   }
   const lines = sel.lineStart != null && sel.lineEnd != null
     ? `Líneas ${sel.lineStart}-${sel.lineEnd} en \`${sel.filePath}\``
@@ -108,6 +111,10 @@ function formatAnnotationZone(a: VisualAnnotation, idx: number): string {
     }).join("\n")
     const htmls = a.members.slice(0, 6).map((m) => m.outerHTML.trim().slice(0, 800)).join("\n")
     const extra = a.members.length > 6 ? `\n(+${a.members.length - 6} elementos más en la misma área)` : ""
+    const memberStyles = a.members.slice(0, 3).map((m, i) => {
+      const block = computedBlock(m.computed, 12)
+      return block ? `\n${i + 1}. <${m.tag}>${block}` : ""
+    }).join("")
     return [
       `Zona ${icon} (área arrastrada) · \`${loc}\`${note}${styleBlock}`,
       `Elementos dentro del área:\n${list}${extra}`,
@@ -115,7 +122,7 @@ function formatAnnotationZone(a: VisualAnnotation, idx: number): string {
       "```html",
       htmls,
       "```",
-    ].join("\n")
+    ].join("\n") + memberStyles
   }
   const html = a.outerHTML.trim().slice(0, 2500)
   return [
@@ -124,7 +131,7 @@ function formatAnnotationZone(a: VisualAnnotation, idx: number): string {
     "```html",
     html,
     "```",
-  ].join("\n")
+  ].join("\n") + computedBlock(a.computed)
 }
 
 function styleDiffLines(a: VisualAnnotation): string[] {
@@ -133,6 +140,13 @@ function styleDiffLines(a: VisualAnnotation): string[] {
   return Object.entries(a.styleDraft)
     .filter(([k, v]) => v && String(v).trim() !== "" && before[k] !== String(v))
     .map(([k, v]) => `${k}: ${before[k] ?? "(valor inicial)"} → ${v}`)
+}
+
+/** Bloque de estilos computados para el prompt (recortado: el prompt no es un dump). */
+function computedBlock(computed: Record<string, string> | undefined, maxProps = 20): string {
+  const entries = Object.entries(computed ?? {}).slice(0, maxProps)
+  if (entries.length === 0) return ""
+  return `\nEstilos computados (estado real en pantalla — replicar en el código fuente):\n\`\`\`css\n${entries.map(([k, v]) => `${k}: ${v}`).join("\n")}\n\`\`\``
 }
 
 function buildAnnotationsPrompt(annotations: VisualAnnotation[]): string {

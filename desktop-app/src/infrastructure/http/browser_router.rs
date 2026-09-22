@@ -152,6 +152,39 @@ pub fn handle(
             };
             ShellResponse::ok_json(&serde_json::json!({ "picks": drained }))
         }
+        // Design Mode: captura la zona elegida y la devuelve como BMP base64
+        // (el cliente la pasa a PNG con canvas). (x,y,w,h) llegan en CSS px
+        // relativos al área cliente de la ventana; acá se pasan a físicos y a
+        // coordenadas de pantalla para el BitBlt.
+        ("POST", "/screenshot") => match req.json_body() {
+            Ok(v) => {
+                let x = v["x"].as_f64().unwrap_or(0.0);
+                let y = v["y"].as_f64().unwrap_or(0.0);
+                let w = v["w"].as_f64().unwrap_or(0.0);
+                let h = v["h"].as_f64().unwrap_or(0.0);
+                let dpr = v["dpr"].as_f64().unwrap_or(1.0).clamp(1.0, 4.0);
+                if w < 1.0 || h < 1.0 {
+                    return Some(ShellResponse::err_json(400, "rect invalido"));
+                }
+                let hwnd = crate::state::WINDOW_HWND.load(std::sync::atomic::Ordering::Relaxed);
+                let (cx, cy) = crate::screencap::client_to_screen(
+                    hwnd,
+                    (x * dpr).round() as i32,
+                    (y * dpr).round() as i32,
+                );
+                let sw = (w * dpr).round() as i32;
+                let sh = (h * dpr).round() as i32;
+                match crate::screencap::capture_bmp(cx, cy, sw, sh) {
+                    Ok(shot) => {
+                        use base64::Engine as _;
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(&shot.bmp);
+                        ShellResponse::ok_json(&serde_json::json!({ "ok": true, "w": shot.w, "h": shot.h, "bmp": b64 }))
+                    }
+                    Err(e) => ShellResponse::err_json(500, &e),
+                }
+            }
+            Err(_) => ShellResponse::err_json(400, "bad body"),
+        },
         _ => return None,
     };
     Some(resp)

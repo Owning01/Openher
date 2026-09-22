@@ -22,6 +22,7 @@ mod kanban;
 mod memx;
 mod plugins;
 mod ptyx;
+mod screencap;
 mod srvman;
 mod state;
 mod updates;

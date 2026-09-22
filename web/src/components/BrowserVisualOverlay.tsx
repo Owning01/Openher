@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef } from "react"
+import { describeComputed } from "../utils/domStyles"
 
 export type BrowserPickedElement = {
   outerHTML: string
@@ -11,6 +12,11 @@ export type BrowserPickedElement = {
   bx?: number
   by?: number
   source?: { file: string; line: number | null } | null
+  computed?: Record<string, string>
+  /** Rect del viewport nativo (CSS px del área cliente): para la captura. */
+  viewRect?: { x: number; y: number; w: number; h: number }
+  /** devicePixelRatio de la PÁGINA (incluye su zoom): corrige la captura. */
+  dpr?: number
 }
 
 function findSource(el: Element): { file: string; line: number | null } | null {
@@ -150,7 +156,7 @@ function injectIntoDoc(doc: Document, onPick: (el: BrowserPickedElement) => void
     if (current) current.classList.remove("__opencode-hover")
     current = null
     updateHighlight(null)
-    onPick({ outerHTML, innerText, selector, xpath, tag, boundingRect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height }, url, bx: rect.left + (window.scrollX || 0), by: rect.top + (window.scrollY || 0), source: findSource(target) })
+    onPick({ outerHTML, innerText, selector, xpath, tag, boundingRect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height }, url, bx: rect.left + (window.scrollX || 0), by: rect.top + (window.scrollY || 0), source: findSource(target), computed: describeComputed(target) })
   }
 
   const onKey = (e: KeyboardEvent) => {

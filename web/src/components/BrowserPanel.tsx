@@ -641,7 +641,10 @@ export const BrowserPanel = memo(function BrowserPanel({
           } else if (p?.type === "style-snapshot" && p.id) {
             cbRef.current.onAnnotationStyleBefore?.(String(p.id), p.before ?? {})
           } else if (p?.type === "pick") {
-            cbRef.current.onVisualPick?.(p as BrowserPickedElement)
+            // viewRect: posición del viewport nativo en CSS px del área cliente
+            // de la ventana. La usa Design Mode para capturar la zona elegida.
+            const vr = viewportRef.current ? fitBounds(viewportRef.current.getBoundingClientRect()) : null
+            cbRef.current.onVisualPick?.({ ...(p as BrowserPickedElement), viewRect: vr ?? undefined })
           } else if (p?.type === "zoom-level") {
             // Ctrl+rueda aplicado en la página: sincronizar label/estado sin
             // re-evaluar (la página ya aplicó el zoom al instante).

@@ -68,11 +68,28 @@ export function buildOverlayScript(apiBase: string, initialTool: InspectTool = "
     try{el.setAttribute('data-oc-tmp',id)}catch(e){}
     return {id:id,rect:r,el:el};
   }
+  // Design Mode: estilos computados REALES (lo que se ve, con cascada resuelta).
+  // Se filtran valores sin informacion para que el bloque del prompt quede corto.
+  var COMPUTED=['display','position','width','height','padding','margin','gap','flex-direction','justify-content','align-items','grid-template-columns','font-family','font-size','font-weight','line-height','letter-spacing','text-align','text-transform','color','background-color','background-image','border','border-radius','box-shadow','opacity','overflow','z-index','transform'];
+  var COMPUTED_SKIP={'':1,'none':1,'normal':1,'auto':1,'static':1,'visible':1,'rgba(0, 0, 0, 0)':1,'transparent':1};
+  function describeComputed(el){
+    var out={};
+    try{
+      var cs=getComputedStyle(el);
+      for(var i=0;i<COMPUTED.length;i++){
+        var k=COMPUTED[i];
+        var v=String(cs.getPropertyValue(k)||'').trim();
+        if(COMPUTED_SKIP[v])continue;
+        out[k]=v.slice(0,120);
+      }
+    }catch(e){}
+    return out;
+  }
   W.__oc_sendPick=function(target){
     if(!target||!target.tagName)return;
     if(target.closest&&(target.closest('[data-oc-vs]')||target.closest('.__oc_badge')))return;
     var sn=snapshot(target);
-    post('/shell/browser/pick',{type:'pick',mode:'picker',tmpId:sn.id,outerHTML:String(target.outerHTML||'').slice(0,4000),innerText:((target.innerText||target.textContent||'')).slice(0,500),selector:buildSelector(target),xpath:buildXPath(target),tag:(target.tagName||'div').toLowerCase(),boundingRect:{x:sn.rect.left,y:sn.rect.top,w:sn.rect.width,h:sn.rect.height},bx:sn.rect.left+(W.scrollX||0),by:sn.rect.top+(W.scrollY||0),url:location.href,source:findSource(target)});
+    post('/shell/browser/pick',{type:'pick',mode:'picker',tmpId:sn.id,outerHTML:String(target.outerHTML||'').slice(0,4000),innerText:((target.innerText||target.textContent||'')).slice(0,500),selector:buildSelector(target),xpath:buildXPath(target),tag:(target.tagName||'div').toLowerCase(),boundingRect:{x:sn.rect.left,y:sn.rect.top,w:sn.rect.width,h:sn.rect.height},bx:sn.rect.left+(W.scrollX||0),by:sn.rect.top+(W.scrollY||0),url:location.href,source:findSource(target),computed:describeComputed(target),dpr:(W.devicePixelRatio||1)});
   };
   // ---- Pod: trazo libre -> bbox -> elementos enclosed ----
   var drawing=false,pts=[],raf=null;
@@ -135,7 +152,7 @@ export function buildOverlayScript(apiBase: string, initialTool: InspectTool = "
       if(!zoneSource&&src)zoneSource=src;
       var r=m.getBoundingClientRect();
       var snm=snapshot(m);
-      ms.push({tmpId:snm.id,tag:(m.tagName||'div').toLowerCase(),selector:buildSelector(m),outerHTML:String(m.outerHTML||'').slice(0,1200),innerText:((m.innerText||'')).slice(0,200),source:src,boundingRect:{x:r.left,y:r.top,w:r.width,h:r.height}});
+      ms.push({tmpId:snm.id,tag:(m.tagName||'div').toLowerCase(),selector:buildSelector(m),outerHTML:String(m.outerHTML||'').slice(0,1200),innerText:((m.innerText||'')).slice(0,200),source:src,boundingRect:{x:r.left,y:r.top,w:r.width,h:r.height},computed:describeComputed(m)});
     }
     post('/shell/browser/pick',{type:'pick',mode:'pod',tmpId:ms[0]?ms[0].tmpId:undefined,members:ms,boundingRect:{x:b.x,y:b.y,w:b.w,h:b.h},bx:b.x+(W.scrollX||0),by:b.y+(W.scrollY||0),url:location.href,source:zoneSource});
   },true);
