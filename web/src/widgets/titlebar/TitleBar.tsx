@@ -45,6 +45,9 @@ export type TitleBarProps = {
   onRemoveTab?: (panelIdx: number, tabIdx: number) => void
   onAddTerminal?: (panelIdx: number) => void
   onOpenBrowser?: (url: string, panelIdx?: number) => void
+  /** Sidebar derecha (panel Equipo): estado + toggle desde el boton de arriba. */
+  rightSidebarOpen?: boolean
+  onToggleRightSidebar?: () => void
 }
 
 function getTabInfo(
@@ -149,6 +152,8 @@ export const TitleBar = memo(function TitleBar({
   onCloseLeft,
   onCloseAll,
   onDockSession,
+  rightSidebarOpen = false,
+  onToggleRightSidebar,
 }: TitleBarProps) {
   const isDesktop = useIsDesktop()
   const [isMax, setIsMax] = useState(false)
@@ -486,6 +491,24 @@ export const TitleBar = memo(function TitleBar({
             )
           })}
         </div>
+      )}
+
+      {onToggleRightSidebar && (
+        <button
+          type="button"
+          className={`titlebar-team-btn${rightSidebarOpen ? " is-active" : ""}`}
+          onClick={onToggleRightSidebar}
+          onMouseDown={(e) => e.stopPropagation()}
+          title="Chat de agentes"
+          aria-label="Chat de agentes"
+          aria-pressed={rightSidebarOpen}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 9h10" />
+            <path d="M7 13h6" />
+            <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.4A8 8 0 1 1 21 12Z" />
+          </svg>
+        </button>
       )}
 
       <DevbarToggleButton />

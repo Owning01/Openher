@@ -11,6 +11,7 @@ import { BrainIcon } from "../../Icons"
 import { PluginSlot } from "../../plugins"
 import { useT } from "../../i18n-context"
 import { TitleBar } from "../titlebar/TitleBar"
+import { TeamChatPanel } from "../../components/TeamChatPanel"
 
 const SettingsPanel = React.lazy(() => import("../../components/SettingsPanel").then((m) => ({ default: m.SettingsPanel })))
 const StudioView = React.lazy(() => import("../../features/studio/StudioView").then((m) => ({ default: m.StudioView })))
@@ -312,6 +313,8 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
         onCloseLeft={onCloseLeft}
         onCloseAll={onCloseAll}
         onDockSession={onDockSession}
+        rightSidebarOpen={!rightSidebarCollapsed}
+        onToggleRightSidebar={() => setRightSidebarCollapsed((v) => !v)}
       />
       <div
         className="app-shell has-titlebar"
@@ -540,6 +543,7 @@ export const DesktopLayoutView = memo(function DesktopLayoutView(props: DesktopL
               </span>
             </div>
             <div className="desktop-sidebar-body">
+              <TeamChatPanel sessions={sessions} meId={desktopLayout.sessions[activePanel]} />
               <PluginSlot id="sidebar.right" />
             </div>
             <div
