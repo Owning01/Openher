@@ -107,6 +107,24 @@ pub fn handle(
             let sha = body.get("sha").and_then(|v| v.as_str()).unwrap_or("").to_string();
             j!(gitx::show_commit_diff(&q("path"), &sha))
         }
+        // Worktrees por agente (fan-out aislado): crear/borrar/mergear.
+        ("POST", "/worktree/add") => {
+            let body = req.json_body().unwrap_or(serde_json::Value::Null);
+            let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let base = body.get("base").and_then(|v| v.as_str()).map(|s| s.to_string());
+            j!(gitx::worktree_add(&q("path"), &name, base.as_deref()))
+        }
+        ("POST", "/worktree/remove") => {
+            let body = req.json_body().unwrap_or(serde_json::Value::Null);
+            let wt = body.get("worktree").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let force = body.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+            j!(gitx::worktree_remove(&q("path"), &wt, force))
+        }
+        ("POST", "/merge") => {
+            let body = req.json_body().unwrap_or(serde_json::Value::Null);
+            let branch = body.get("branch").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            j!(gitx::merge_branch(&q("path"), &branch))
+        }
         _ => return Some(ShellResponse::err_json(404, "ruta git desconocida")),
     };
     Some(resp)

@@ -1494,6 +1494,138 @@ pub fn checkout_branch(repo_root: &str, branch_name: &str) -> Result<(), String>
     ensure_success(&output, "git checkout falló")
 }
 
+// ===== Worktrees por agente (fan-out aislado) =====
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeAddResult {
+    pub path: String,
+    pub branch: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitMergeResult {
+    pub merged: bool,
+    pub conflicts: Vec<String>,
+    pub detail: String,
+}
+
+/// Slug seguro para nombres de rama/carpeta (sin separadores ni `..`).
+fn slugify(input: &str) -> String {
+    let mut out = String::new();
+    for ch in input.trim().chars() {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+            out.push(ch);
+        } else if ch.is_whitespace() || ch == '/' || ch == '\\' {
+            out.push('-');
+        }
+        if out.len() >= 40 {
+            break;
+        }
+    }
+    out.trim_matches(|c| c == '-' || c == '.').to_string()
+}
+
+fn valid_git_ref(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with('-')
+        && !name.contains("..")
+        && !name.contains(char::is_whitespace)
+        && !name.contains(['~', '^', ':', '?', '*', '[', '\\'])
+}
+
+/// Crea un worktree hermano (`<repo>.worktrees/<slug>`) con rama nueva
+/// `openher/<slug>` desde `base` (HEAD por defecto). Devuelve ruta y rama.
+pub fn worktree_add(repo_root: &str, name: &str, base: Option<&str>) -> Result<GitWorktreeAddResult, String> {
+    let root = canonical_dir(repo_root)?;
+    ensure_git_available()?;
+    let slug = slugify(name);
+    if slug.is_empty() {
+        return Err(err("nombre de worktree inválido", name.to_string()));
+    }
+    let branch = format!("openher/{slug}");
+    let base_ref = base.map(str::trim).filter(|b| !b.is_empty()).unwrap_or("HEAD");
+    if !valid_git_ref(base_ref) {
+        return Err(err("base inválida", base_ref.to_string()));
+    }
+    let parent = root.parent().ok_or_else(|| err("sin carpeta padre", root.display().to_string()))?;
+    let repo_name = root
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .ok_or_else(|| err("nombre de repo inválido", root.display().to_string()))?;
+    let dir = parent.join(format!("{repo_name}.worktrees")).join(&slug);
+    let dir_s = dir.to_string_lossy().into_owned();
+    let root_s = root.to_string_lossy().into_owned();
+    let output = run_git(
+        Some(&root_s),
+        ["worktree", "add", "-b", &branch, &dir_s, base_ref],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git worktree add falló")?;
+    Ok(GitWorktreeAddResult { path: dir_s, branch })
+}
+
+/// Borra un worktree SOLO si `git worktree list` lo reconoce (evita rm -rf de
+/// una ruta arbitraria que llegue por HTTP).
+pub fn worktree_remove(repo_root: &str, path: &str, force: bool) -> Result<(), String> {
+    let root = canonical_dir(repo_root)?;
+    ensure_git_available()?;
+    let root_s = root.to_string_lossy().into_owned();
+    let listed: Vec<String> = git_stdout_lines(&root_s, ["worktree", "list", "--porcelain"])
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|l| l.strip_prefix("worktree ").map(|p| p.trim().to_string()))
+        .collect();
+    let target = std::path::Path::new(path);
+    let target_canon = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
+    let known = listed.iter().any(|p| {
+        let cand = std::fs::canonicalize(p).unwrap_or_else(|_| std::path::PathBuf::from(p));
+        cand == target_canon
+    });
+    if !known {
+        return Err(err("worktree desconocido (no está en git worktree list)", path.to_string()));
+    }
+    let mut args: Vec<&str> = vec!["worktree", "remove"];
+    if force {
+        args.push("--force");
+    }
+    args.push(path);
+    let output = run_git(Some(&root_s), args, DEFAULT_TIMEOUT_SECS)?;
+    ensure_success(&output, "git worktree remove falló")
+}
+
+/// Mergea `branch` en la rama actual. Si hay conflictos: NO deja el repo a
+/// medias (aborta) y devuelve la lista de archivos en conflicto.
+pub fn merge_branch(repo_root: &str, branch: &str) -> Result<GitMergeResult, String> {
+    let root = canonical_dir(repo_root)?;
+    ensure_git_available()?;
+    if !valid_git_ref(branch) {
+        return Err(err("rama inválida", branch.to_string()));
+    }
+    let root_s = root.to_string_lossy().into_owned();
+    let message = format!("merge {branch}");
+    let output = run_git(
+        Some(&root_s),
+        ["merge", "--no-ff", "-m", &message, branch],
+        NETWORK_TIMEOUT_SECS,
+    )?;
+    if output.exit_code == Some(0) && !output.timed_out {
+        return Ok(GitMergeResult { merged: true, conflicts: Vec::new(), detail: String::new() });
+    }
+    let conflicts = git_stdout_lines(&root_s, ["diff", "--name-only", "--diff-filter=U"]).unwrap_or_default();
+    let detail = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+    .chars()
+    .take(600)
+    .collect::<String>();
+    let _ = run_git(Some(&root_s), ["merge", "--abort"], DEFAULT_TIMEOUT_SECS);
+    Ok(GitMergeResult { merged: false, conflicts, detail })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

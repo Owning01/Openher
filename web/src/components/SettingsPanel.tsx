@@ -29,6 +29,8 @@ import { BrowserSection } from "../features/settings/sections/BrowserSection"
 import { AppearanceSection } from "../features/settings/sections/AppearanceSection"
 import { SidebarSection } from "../features/settings/sections/SidebarSection"
 import { FeatureFlagsSection } from "../features/settings/sections/FeatureFlagsSection"
+import { AutomationsSection } from "../features/settings/sections/AutomationsSection"
+import { RunsSection } from "../features/settings/sections/RunsSection"
 
 type SettingsPanelProps = {
  draftConfig: ServerConfig
@@ -599,6 +601,8 @@ export const SettingsPanel = memo(function SettingsPanel({
      />
 
      <FeatureFlagsSection flags={flags} onToggleFlag={onToggleFlag} />
+    <AutomationsSection />
+    <RunsSection config={draftConfig} />
 
      {isDesktop && onOpenOpenCodeHub && (
       <>

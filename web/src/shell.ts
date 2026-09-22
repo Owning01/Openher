@@ -690,6 +690,13 @@ export const shell = {
       get<string | null>(`/shell/git/remote-url?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`),
     branches: (path: string) => get<{ branches: GitBranchEntry[] }>(`/shell/git/branches?path=${encodeURIComponent(path)}`),
     checkout: (path: string, name: string) => post(`/shell/git/checkout?path=` + encodeURIComponent(path), { name }),
+    // Worktrees por agente (fan-out aislado).
+    worktreeAdd: (path: string, name: string, base?: string) =>
+      post<{ path: string; branch: string }>(`/shell/git/worktree/add?path=` + encodeURIComponent(path), { name, base }),
+    worktreeRemove: (path: string, worktree: string, force = false) =>
+      post(`/shell/git/worktree/remove?path=` + encodeURIComponent(path), { worktree, force }),
+    mergeBranch: (path: string, branch: string) =>
+      post<{ merged: boolean; conflicts: string[]; detail: string }>(`/shell/git/merge?path=` + encodeURIComponent(path), { branch }),
   },
   pty: {
     create: (cwd?: string, shellName?: string) => {
