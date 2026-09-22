@@ -411,6 +411,20 @@ export const Composer = memo(function Composer({
     micNoticeTimerRef.current = setTimeout(() => setMicNotice(null), 6000)
   }, [])
 
+  // El plugin nativo rechaza con sus propios textos ("No match", "No speech
+  // input", "RecognitionService busy", "Network error"): cada uno tiene su
+  // aviso. Antes cualquier error no-permiso se mostraba como "no disponible en
+  // este dispositivo", que es falso para un "no te escuché" o un servicio
+  // ocupado (y mandaba a buscar el problema al lugar equivocado).
+  const voiceNotice = useCallback((raw: string) => {
+    const code = raw || ""
+    if (/denied|denegado|permission|not-allowed/i.test(code)) return t('voice.permissionDenied')
+    if (/no match|no speech|didn't understand/i.test(code)) return t('voice.noSpeech')
+    if (/busy/i.test(code)) return t('voice.busy')
+    if (/not available|unavailable/i.test(code)) return t('voice.unavailable')
+    return `${t('voice.error')} (${code})`
+  }, [t])
+
   const handleMicClick = useCallback(() => {
     if (isListening) {
       stop()
@@ -420,19 +434,14 @@ export const Composer = memo(function Composer({
       prefixRef.current = localValueRef.current ?? ""
       start(
         (text) => handleChange(prefixRef.current + (prefixRef.current && text ? " " : "") + text),
-        (code) => showMicNotice(/denied|denegado|permission|not-allowed/i.test(code)
-          ? t('voice.permissionDenied')
-          : t('voice.unavailable')),
+        (code) => showMicNotice(voiceNotice(code)),
       )
         .catch((err: unknown) => {
           stop()
-          const msg = (err as Error)?.message ?? ""
-          showMicNotice(/denied|denegado|permission/i.test(msg)
-            ? t('voice.permissionDenied')
-            : (err as Error)?.message ?? t('voice.unavailable'))
+          showMicNotice(voiceNotice((err as Error)?.message ?? ""))
         })
     }
-  }, [isListening, stop, supported, start, handleChange, showMicNotice, t])
+  }, [isListening, stop, supported, start, handleChange, showMicNotice, t, voiceNotice])
 
   useEffect(() => {
     return () => {

@@ -247,16 +247,28 @@ export function useSpeechRecognition(language?: LanguageCode) {
               speechEndedRef.current = false
               utteranceBaseRef.current = finalBufferRef.current.length
             }
-            CapSpeechRecognition.start({
-              language: getLanguage(language),
-              partialResults: true,
-              popup: false,
-              maxResults: 5,
-            }).catch((e: unknown) => {
-              manuallyStoppedRef.current = true
-              setIsListening(false)
-              onErrorRef.current?.((e as Error)?.message ?? "unavailable")
-            })
+            const startAgain = (attempt: number) => {
+              if (manuallyStoppedRef.current) return
+              CapSpeechRecognition.start({
+                language: getLanguage(language),
+                partialResults: true,
+                popup: false,
+                maxResults: 5,
+              }).catch((e: unknown) => {
+                const msg = (e as Error)?.message ?? "unavailable"
+                // Tras "stopped" el servicio tarda en soltar el reconocedor:
+                // "RecognitionService busy" es transitorio, no un error del
+                // dispositivo. Un reintento antes de rendirse y avisar.
+                if (attempt === 0 && /busy/i.test(msg)) {
+                  restartTimerRef.current = setTimeout(() => startAgain(1), 700)
+                  return
+                }
+                manuallyStoppedRef.current = true
+                setIsListening(false)
+                onErrorRef.current?.(msg)
+              })
+            }
+            startAgain(0)
           }, 400)
         })
         cleanupListenersRef.current = () => {
