@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useMemo, useRef, useEffect } from "react"
-import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon, TrashIcon, SendIcon } from "../Icons"
+import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon, TrashIcon, SendIcon, ChevronDownIcon, ArrowRightIcon } from "../Icons"
 import { formatTime, isImagePart } from "../utils"
 import { getTranslationOriginal } from "../hooks/useMessages"
 import { messageAuthorFrom } from "../entities/message/author"
@@ -133,7 +133,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   onRegenerate?: () => void
   onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
   // Pendiente de la cola visible: el mensaje está en el chat sin enviarse.
-  outbox?: { onDelete: () => void; onEdit: () => void; onSendNow: () => void; disabled?: boolean } | null
+  outbox?: { onDelete: () => void; onEdit: () => void; onSendNow: () => void; disabled?: boolean; canAct?: () => boolean } | null
 }) {
   const t = useT()
   const [showConfirm, setShowConfirm] = useState(false)
@@ -536,13 +536,13 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
 
         {outbox && message.info.role === "user" && (
           <div className="outbox-actions" role="group" aria-label={t('detail.queuedTitle')}>
-            <button type="button" className="btn-secondary compact outbox-btn" disabled={outbox.disabled} onClick={(e) => { e.stopPropagation(); outbox.onDelete() }}>
+            <button type="button" className="btn-secondary compact outbox-btn" disabled={outbox.disabled} onClick={(e) => { e.stopPropagation(); if (outbox.canAct && !outbox.canAct()) return; outbox.onDelete() }}>
               <TrashIcon size={12} /> {t('detail.queuedRemove')}
             </button>
-            <button type="button" className="btn-secondary compact outbox-btn" disabled={outbox.disabled} onClick={(e) => { e.stopPropagation(); outbox.onEdit() }}>
+            <button type="button" className="btn-secondary compact outbox-btn" disabled={outbox.disabled} onClick={(e) => { e.stopPropagation(); if (outbox.canAct && !outbox.canAct()) return; outbox.onEdit() }}>
               <PencilIcon size={12} /> {t('detail.queuedEdit')}
             </button>
-            <button type="button" className="btn-primary compact outbox-btn" disabled={outbox.disabled} onClick={(e) => { e.stopPropagation(); outbox.onSendNow() }}>
+            <button type="button" className="btn-primary compact outbox-btn" disabled={outbox.disabled} onClick={(e) => { e.stopPropagation(); if (outbox.canAct && !outbox.canAct()) return; outbox.onSendNow() }}>
               <SendIcon size={12} /> {t('detail.queuedSend')}
             </button>
           </div>

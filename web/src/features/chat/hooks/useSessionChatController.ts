@@ -426,7 +426,7 @@ export function useSessionChatFlow(deps: SessionChatFlowDeps) {
   // Acciones de la cola visible por id de mensaje pendiente.
   const sendingIDs = useSharedOutboxSending()
   const outboxActions = useMemo(() => {
-    const map: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void; disabled: boolean }> = {}
+    const map: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void; disabled: boolean; canAct: () => boolean }> = {}
     for (const o of outbox ?? []) {
       if (!session || o.sessionID !== session.id) continue
       // En vuelo (claim tomado por el flush): editar/eliminar deshabilitados.
@@ -436,14 +436,15 @@ export function useSessionChatFlow(deps: SessionChatFlowDeps) {
       const inFlight = sendingIDs.includes(o.id) || isSharedOutboxSending(o.id)
       map[o.id] = {
         disabled: inFlight,
+        // Lectura FRESCA al click (no el valor del render): cierra la ventana
+        // de ms entre el claim y el re-render. La protección vive en la UI;
+        // las acciones quedan puras (el claim de onSendNow sigue siendo la
+        // defensa anti-doble real).
+        canAct: () => !isSharedOutboxSending(o.id),
         onDelete: () => {
-          // Re-lectura en el click: el valor del render puede quedar stale si
-          // el claim llegó después del commit (misma race que se cierra).
-          if (inFlight || isSharedOutboxSending(o.id)) return
           removeOutbox(o.id)
         },
         onEdit: () => {
-          if (inFlight || isSharedOutboxSending(o.id)) return
           setComposer(o.text)
           composerRef.current = o.text
           // Las imágenes del item vuelven al composer por el canal de

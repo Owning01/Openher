@@ -30,6 +30,8 @@ export type OutboxActions = {
   onSendNow: () => void
   /** Envío en curso: editar/eliminar están deshabilitados (no se pierde ni duplica). */
   disabled?: boolean
+  /** Chequeo FRESCO al click (el `disabled` del render puede quedar stale ms). */
+  canAct?: () => boolean
 }
 
 // Persistencia: la cola visible debe sobrevivir a reinicio/cierre de la app
