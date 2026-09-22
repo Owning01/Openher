@@ -150,8 +150,16 @@ export function useStreamPatch({
             return { ...p, text, type: keepType }
           }
           // Sin dedupe por suffix: deltas reales pueden repetir sufijos y se cortaba el stream
+          // Traza (solo lectura, no cambia conducta): un chunk IGUAL a lo que ya cierra el
+          // part es la firma del bug de mensajes repetidos (mismo delta aplicado dos veces).
+          // Sale en la consola/devbar con el partID y el tamaño, para decidir el fix con
+          // evidencia en vez de adivinar — un dedupe por contenido podría cortar stream real.
+          const prevText = p.text ?? ""
+          if (text.length >= 60 && prevText.endsWith(text)) {
+            console.error("[chat:dup] delta repetido al cierre del part", { partID, len: text.length, preview: text.slice(0, 80) })
+          }
           changed = true
-          return { ...p, text: (p.text ?? "") + text, type: keepType }
+          return { ...p, text: prevText + text, type: keepType }
         })
         if (!nextParts.some((p) => p.id === partID)) {
           changed = true

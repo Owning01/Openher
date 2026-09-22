@@ -311,6 +311,13 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
             if (remoteIDs.has(p.id)) return false
             const t = (p.text ?? "").trim()
             if (t && (p.type === "text" || p.type === "compaction" || p.type === "reasoning" || p.type === "thinking" || p.type === undefined) && remoteText.includes(t)) return false
+            // Traza (solo lectura, no cambia conducta): part local de texto RETENIDO
+            // cuyo inicio sí aparece en el texto del server. Ese solapamiento sin
+            // contención total es la firma del bug de mensajes repetidos por merge
+            // (server + streameado). Deja el partID para decidir el fix con evidencia.
+            if (t.length >= 60 && remoteText.includes(t.slice(0, 80))) {
+              console.error("[chat:merge] part local retenido con solapamiento", { partID: p.id, len: t.length, preview: t.slice(0, 80) })
+            }
             return true
           })
           const parts = extraLocal.length > 0
