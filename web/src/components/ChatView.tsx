@@ -141,7 +141,7 @@ export type ChatViewProps = {
   onClearVisualSelection?: () => void
   onFocusVisualFile?: (path: string) => void
   // Cola visible: acciones por id de mensaje pendiente (eliminar/editar/enviar).
-  outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }>
+  outboxActions?: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void; disabled?: boolean }>
 }
 
 export const ChatView = memo(function ChatView({

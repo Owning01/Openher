@@ -16,7 +16,8 @@ import type {
   ServerConfig,
   SessionView,
 } from "../../../types"
-import type { OutboxItem } from "../../../stores/outboxStore"
+import { isSharedOutboxSending, useSharedOutboxSending, type OutboxItem } from "../../../stores/outboxStore"
+import { injectImageToComposer } from "../../../stores/composerInjectStore"
 
 // C3 — Un solo flujo de chat.
 //
@@ -423,15 +424,33 @@ export function useSessionChatFlow(deps: SessionChatFlowDeps) {
   }, [session, variant, activeModel, completionShouldPlayRef, compactSession, refreshSessions, loadSelected])
 
   // Acciones de la cola visible por id de mensaje pendiente.
+  const sendingIDs = useSharedOutboxSending()
   const outboxActions = useMemo(() => {
-    const map: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void }> = {}
+    const map: Record<string, { onDelete: () => void; onEdit: () => void; onSendNow: () => void; disabled: boolean }> = {}
     for (const o of outbox ?? []) {
       if (!session || o.sessionID !== session.id) continue
+      // En vuelo (claim tomado por el flush): editar/eliminar deshabilitados.
+      // Sin este guard, "editar" sacaba el item mientras el flush lo enviaba
+      // => mensaje ENVIADO + texto en el composer (duplicado), y "eliminar"
+      // quitaba la burbuja pero el envío llegaba igual (función ignorada).
+      const inFlight = sendingIDs.includes(o.id) || isSharedOutboxSending(o.id)
       map[o.id] = {
-        onDelete: () => removeOutbox(o.id),
+        disabled: inFlight,
+        onDelete: () => {
+          // Re-lectura en el click: el valor del render puede quedar stale si
+          // el claim llegó después del commit (misma race que se cierra).
+          if (inFlight || isSharedOutboxSending(o.id)) return
+          removeOutbox(o.id)
+        },
         onEdit: () => {
+          if (inFlight || isSharedOutboxSending(o.id)) return
           setComposer(o.text)
           composerRef.current = o.text
+          // Las imágenes del item vuelven al composer por el canal de
+          // inyección (antes se descartaban al editar).
+          for (const img of o.images ?? []) {
+            injectImageToComposer({ base64: img.base64, mime: img.mime, name: img.name })
+          }
           removeOutbox(o.id)
         },
         onSendNow: () => {
@@ -441,15 +460,19 @@ export function useSessionChatFlow(deps: SessionChatFlowDeps) {
           removeOutbox(o.id)
           // Accion explicita del usuario: reanuda el auto-flush (si estaba en hold).
           resumeOutbox(o.sessionID)
-          void handleSend(o.images, undefined, o.text, true).then((res) => {
-            // Si no pudo salir (otro envio en curso), vuelve a la cola.
-            if (res === false) enqueueOutbox(o.sessionID, o.text, o.images)
-          })
+          const requeue = () => enqueueOutbox(o.sessionID, o.text, o.images)
+          void handleSend(o.images, undefined, o.text, true)
+            .then((res) => {
+              // Si no pudo salir (otro envio en curso), vuelve a la cola.
+              if (res === false) requeue()
+            })
+            // Un throw no debe perder el item: ya salió de la cola.
+            .catch(requeue)
         },
       }
     }
     return map
-  }, [outbox, session, removeOutbox, setComposer, composerRef, handleSend, enqueueOutbox, resumeOutbox])
+  }, [outbox, session, sendingIDs, removeOutbox, setComposer, composerRef, handleSend, enqueueOutbox, resumeOutbox])
 
   return {
     handleSend,

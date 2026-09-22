@@ -33,10 +33,13 @@ export function useOutboxFlush({ sessionID, outbox, isWorking, removeOutbox, sen
     if (!next || !claimSharedOutbox(next.id)) return
     flushLastTryRef.current = Date.now()
     flushingRef.current = true
-    void Promise.resolve(sendItem(next)).then((res) => {
+    void Promise.resolve().then(() => sendItem(next)).then((res) => {
       if (res !== false) removeOutbox(next.id)
       else releaseSharedOutbox(next.id)
     }).catch(() => releaseSharedOutbox(next.id)).finally(() => {
+      // Red de seguridad: el item nunca debe quedar "en vuelo" para siempre
+      // (botones deshabilitados de por vida) si un removeOutbox no desmarcó.
+      releaseSharedOutbox(next.id)
       flushingRef.current = false
     })
   })

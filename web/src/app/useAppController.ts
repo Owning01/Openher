@@ -285,6 +285,8 @@ export function useAppController({ language, setLanguage }: UseAppControllerPara
       if (res !== false) removeOutbox(next.id)
       else releaseSharedOutbox(next.id)
     }).catch(() => releaseSharedOutbox(next.id)).finally(() => {
+      // Red de seguridad: nunca dejar el item marcado "en vuelo" para siempre.
+      releaseSharedOutbox(next.id)
       outboxFlushingRef.current = false
     })
   })
