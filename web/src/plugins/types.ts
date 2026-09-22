@@ -72,6 +72,20 @@ export type PluginContextStorage = {
   remove: (key: string) => void
 }
 
+/** Lectura de terminales (capability "shell"): texto plano + espera de idle. */
+export type PluginContextTerminal = {
+  read: (tabId: string, maxChars?: number) => string
+  waitIdle: (
+    tabId: string,
+    opts?: { idleMs?: number; timeoutMs?: number }
+  ) => Promise<{ text: string; idleMs: number; timedOut: boolean }>
+  waitOutput: (
+    tabId: string,
+    opts?: { since?: number; timeoutMs?: number }
+  ) => Promise<{ appeared: boolean; text: string }>
+  idleFor: (tabId: string) => number
+}
+
 export type PluginContext = {
   pluginName: string
   config: Record<string, any>
@@ -79,6 +93,7 @@ export type PluginContext = {
   events: PluginContextEvents
   commands: PluginContextCommands
   storage: PluginContextStorage
+  terminal: PluginContextTerminal
   shell: any
   on: (event: string, handler: PluginEventCallback) => PluginDisposer
   effect: (fn: () => PluginDisposer | void) => void

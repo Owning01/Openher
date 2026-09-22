@@ -1,6 +1,7 @@
 import { slotRegistry, tabRegistry } from "./slots"
 import { pluginBus } from "./bus"
 import { shell } from "../shell"
+import { readTerminal, waitForIdle, waitForOutput, terminalIdleFor } from "../utils/terminalRead"
 import type { PluginManifest, PluginContext, PluginDisposer } from "./types"
 
 export function createPluginContext(manifest: PluginManifest, disposers: PluginDisposer[]): PluginContext {
@@ -84,6 +85,27 @@ export function createPluginContext(manifest: PluginManifest, disposers: PluginD
     },
   })
 
+  // Lectura de terminales (misma capability "shell"): texto plano del tab +
+  // espera de idle, para automatizar "mandá el comando y esperá que termine".
+  const rawTerminal = {
+    read: (tabId: string, maxChars?: number) => {
+      if (!caps.has("shell")) deny("shell")
+      return readTerminal(tabId, maxChars)
+    },
+    waitIdle: (tabId: string, opts?: { idleMs?: number; timeoutMs?: number }) => {
+      if (!caps.has("shell")) deny("shell")
+      return waitForIdle(tabId, opts)
+    },
+    waitOutput: (tabId: string, opts?: { since?: number; timeoutMs?: number }) => {
+      if (!caps.has("shell")) deny("shell")
+      return waitForOutput(tabId, opts)
+    },
+    idleFor: (tabId: string) => {
+      if (!caps.has("shell")) deny("shell")
+      return terminalIdleFor(tabId)
+    },
+  }
+
   const baseCtx: PluginContext = {
     pluginName: name,
     config,
@@ -91,6 +113,7 @@ export function createPluginContext(manifest: PluginManifest, disposers: PluginD
     events: rawEvents,
     commands: rawCommands,
     storage: rawStorage,
+    terminal: rawTerminal,
     shell: rawShell,
     on: (event: string, handler: any) => rawEvents.on(event, handler),
     effect: (fn: () => PluginDisposer | void) => {

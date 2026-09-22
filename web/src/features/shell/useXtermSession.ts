@@ -8,6 +8,7 @@ import { WebglAddon } from "@xterm/addon-webgl"
 import { Capacitor } from "@capacitor/core"
 import "@xterm/xterm/css/xterm.css"
 import { b64decode, shell } from "../../shell"
+import { appendTerminalOutput } from "../../utils/terminalRead"
 import {
   terminalPtyStore,
   rememberTerminalPty,
@@ -261,6 +262,8 @@ export function useXtermSession({ cwd, shellName, tabId }: { cwd?: string; shell
       })
     }
     const queueWrite = (data: string | Uint8Array) => {
+      // Espejo en texto plano para `terminalRead` (leer/espejar idle sin tocar ptyx).
+      appendTerminalOutput(tabId, data)
       writeQueue.push(data)
       if (writeQueue.length > MAX_QUEUE) {
         const drop = writeQueue.length - MAX_QUEUE

@@ -1,4 +1,5 @@
 import { shell } from "../shell"
+import { resetTerminalBuffer } from "./terminalRead"
 
 export type TerminalTabInfo = { id: string; title: string; shell: string }
 export type TerminalPersist = { tabs: Array<TerminalTabInfo>; activeId: string; splitId?: string | null }
@@ -40,6 +41,7 @@ export function rememberTerminalPty(tabId: string, entry: { ptyId: string; wsPor
     terminalPtyStore.delete(oldest)
     if (victim) {
       shell.pty.kill(victim.ptyId).catch(() => {})
+      resetTerminalBuffer(oldest)
       // limpiar tab huérfana que referenciaba el pty evictado
       for (const [panelId, persist] of terminalStore.entries()) {
         const has = persist.tabs.some(t => t.id === oldest)
@@ -59,6 +61,7 @@ export function killTerminalPty(tabId: string) {
     shell.pty.kill(entry.ptyId).catch(() => {})
     terminalPtyStore.delete(tabId)
   }
+  resetTerminalBuffer(tabId)
 }
 
 export function transferTerminalTab(sourcePanelId: string | undefined, tabId: string, destPanelId: string): number {
