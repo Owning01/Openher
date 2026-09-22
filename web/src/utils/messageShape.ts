@@ -247,3 +247,26 @@ export function buildUserMessage(params: {
     parts,
   }
 }
+
+/**
+ * ¿El server ya recibió este texto como mensaje user? Eco de entrega para el
+ * catch de `useMessageSend`: en Android el POST del SDK puede fallar en el
+ * cliente (preflight del WebView) DESPUÉS de que el server lo procesó — sin
+ * esta verificación el optimista se borraba y el mensaje "se perdía" de la UI.
+ * Reloj mixto (cliente vs server) → ventana amplia por defecto (10 min).
+ */
+export function findDeliveredEcho(
+  messages: readonly MessageEnvelope[] | undefined | null,
+  text: string,
+  since: number,
+): MessageEnvelope | null {
+  const target = text.trim()
+  if (!target || !messages?.length) return null
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (!isUserMessage(m)) continue
+    if ((m.info.time?.created ?? 0) < since) continue
+    if (messageText(m).trim() === target) return m
+  }
+  return null
+}

@@ -8,7 +8,7 @@ import {
   buildStatusMessage,
   buildNoticeMessage,
 } from "../utils/parseCommand"
-import { messageText } from "../utils/messageShape"
+import { messageText, findDeliveredEcho } from "../utils/messageShape"
 import { formatServerError } from "../shared/errors/serverErrors"
 import { setTranslationOriginal } from "../stores/translationOriginals"
 
@@ -135,15 +135,45 @@ export function useMessageSend(deps: MessageSendDeps) {
           await sendFn()
           ok = true
         } catch (err) {
+          // El POST del SDK puede fallar en el cliente DESPUÉS de que el
+          // server lo recibió (WebView/Android sobre Tailscale: el preflight
+          // falla aunque el GET funcione — ver api/prompt.ts). Antes de borrar
+          // el optimista se verifica el eco en el server: si existe, el turno
+          // arrancó y sólo hay que traer el historial (móvil: "se perdió").
+          let delivered = false
+          try {
+            // La verificación se acota a 5s: con el server caído de verdad,
+            // loadMessages puede sumar decenas de segundos y `isSending`
+            // bloquearía el composer todo ese tiempo (timeout > caída real).
+            const verify = api
+              .loadMessages(config, selectedSession.id, selectedSession.directory, 50)
+              .then((m) => m)
+              .catch(() => null)
+            const raced = await Promise.race([
+              verify,
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
+            ])
+            delivered = findDeliveredEcho(raced, text, Date.now() - 10 * 60 * 1000) !== null
+          } catch {
+            delivered = false
+          }
+          if (delivered) {
+            // El server SÍ lo recibió: se trata como envío exitoso (ok=true)
+            // para que NO restaure composer (Composer rellena con ok=false) ni
+            // el outbox reenvíe (reintenta ante false ⇒ prompt duplicado).
+            // then() hace el loadSelected del eco, igual que en el flujo ok.
+            ok = true
+          } else {
           // Send fallido (red o server): remover el optimistic de inmediato,
           // restaurar el texto original (no el traducido) y mostrar el error.
           // El Composer conserva las imágenes porque recibe `false` como retorno.
-          completionShouldPlayRef.current = false
-          setAwaitingAssistantReply(false)
-          removeOptimistic(optimisticMessage.info.id)
-          const restoreText = translatedFrom || text
-          setComposer((current) => current || restoreText)
-          onSetRuntimeError(formatServerError(err))
+            completionShouldPlayRef.current = false
+            setAwaitingAssistantReply(false)
+            removeOptimistic(optimisticMessage.info.id)
+            const restoreText = translatedFrom || text
+            setComposer((current) => current || restoreText)
+            onSetRuntimeError(formatServerError(err))
+          }
         }
       } finally {
         isSendingRef.current = false

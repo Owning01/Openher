@@ -214,7 +214,12 @@ export const SessionChatPanel = memo(function SessionChatPanel({
       handleSSEEvent(event)
     }, [handleSSEEvent, stopGenerationRef]),
     session.directory,
-    session.id
+    session.id,
+    // Corte del stream sin poll de respaldo en este panel: al reconectar,
+    // recargar el historial de ESTA sesión para tapar el hueco (móvil).
+    useCallback(() => {
+      msgs.loadSelected(session.id, session.directory).catch(() => undefined)
+    }, [msgs, session.id, session.directory])
   )
 
   // Higiene del flag visual: stopping ya no entra en isWorking (ver arriba),

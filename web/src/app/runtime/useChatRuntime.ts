@@ -324,19 +324,30 @@ export function useChatActionsRuntime({ conn, chat, ws }: UseChatActionsRuntimeP
     sseHandler(event)
   }, [sseHandler, chat.stopGenerationRef])
 
+  // Sesión visible para callbacks asíncronos (onReconnected / resume): un
+  // closure de efecto viejo no debe recargar la sesión anterior.
+  const resumeSessionRef = useRef(ws.selectedSession)
+  resumeSessionRef.current = ws.selectedSession
+
   const { streamState, reconnect } = useSSE(
     conn.config,
     sseHandlerGuarded,
     ws.selectedSession?.directory,
-    ws.selectedSession?.id
+    ws.selectedSession?.id,
+    // Tras un corte del stream (watchdog/red) el /event no re-emite lo que
+    // pasó en la ventana ciega: el poll de reconciliación tarda 8-20s
+    // (useAppLifecycle.shouldPull); al recuperar la conexión se recarga ya
+    // (móvil: la lista se quedaba con mensajes viejos hasta el poll).
+    useCallback(() => {
+      const s = resumeSessionRef.current
+      if (s) chat.loadSelected(s.id, s.directory).catch(() => undefined)
+    }, [chat])
   )
 
   // Al volver de segundo plano (Android suspende el WebView), el stream SSE
   // puede quedar medio-abierto: sin error, sin eventos, y el chat se ve
   // "parado" aunque el poll traiga mensajes. Reconectar y reconciliar contra
   // el server (status real de la sesión) al volver a primer plano.
-  const resumeSessionRef = useRef(ws.selectedSession)
-  resumeSessionRef.current = ws.selectedSession
   useResumeResync(() => {
     reconnect()
     ws.refreshSessions(true).catch(() => undefined)

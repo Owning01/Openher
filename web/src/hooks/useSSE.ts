@@ -8,7 +8,7 @@ import { SSE_RECONNECT_BASE_MS, SSE_RECONNECT_MAX_MS, SSE_HEARTBEAT_TIMEOUT_MS, 
 import { computeBackoff } from "../utils"
 import { isTaskToolPart } from "../utils/toolName"
 
-export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void, directory?: string, sessionID?: string | null) {
+export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) => void, directory?: string, sessionID?: string | null, onReconnected?: () => void) {
   const [streamState, setStreamState] = useState<StreamState>("polling")
   // Re-ejecuta el efecto cuando health() resuelve el dialecto del server:
   // si arrancamos antes de la detección (auto → v1 por default), el
@@ -25,6 +25,8 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
   const mountedRef = useRef(true)
   const onEventRef = useRef(onEvent)
   onEventRef.current = onEvent
+  const onReconnectedRef = useRef(onReconnected)
+  onReconnectedRef.current = onReconnected
   const seenEventIDsRef = useRef<Map<string, number>>(new Map())
 
   // El /event del server filtra por instance.directory: sin el directory de la
@@ -95,8 +97,15 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
         throw new Error(`SSE HTTP ${response.status}`)
       }
 
+      // Si esto es una reconexión tras corte (attempt > 0), el historial puede
+      // tener un hueco: el /event no re-emite lo generado mientras estuvo
+      // caído y el poll de reconciliación tarda 8-20s (useAppLifecycle) — se
+      // avisa al consumidor para recargar YA al reconectar (móvil: "mensajes
+      // viejos" durante esa ventana).
+      const wasReconnect = reconnectAttemptRef.current > 0
       reconnectAttemptRef.current = 0
       setStreamState("streaming")
+      if (wasReconnect) onReconnectedRef.current?.()
 
       const reader = response.body.getReader()
       readerRef.current = reader
@@ -184,6 +193,11 @@ export function useSSE(config: ServerConfig | null, onEvent: (event: SSEEvent) =
               break
             }
             recordDataUsage(value.byteLength, "down")
+            // Cualquier byte vivo resetea el watchdog ANTES del parser: los
+            // `: heartbeat` son comentarios (sin type) y no generan frame, así
+            // que sin este touch el stream sano se abortaba a los15s (móvil:
+            // la UI caía a polling lento y "mostraba mensajes viejos").
+            if (value.byteLength > 0) touch()
             emitFrames(parseChunk(decoder.decode(value, { stream: true })))
           } catch (err) {
             if (err instanceof Error && err.name === "AbortError") return
