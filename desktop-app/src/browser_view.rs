@@ -24,11 +24,19 @@ use wry::{MemoryUsageLevel, Rect, WebView, WebViewBuilder, WebViewBuilderExtWind
 /// congela y TODOS los comandos del browser responden 500 por timeout.
 /// Sin flags de seguridad desactivados: el bypass de CORS/X-Frame lo hace el
 /// proxy /shell/proxy del server, no el renderer.
+///
+/// `--js-flags=--max-old-space-size=1024,--expose-gc`: sin tope, el heap de V8
+/// crecía hacia el default de 64-bit (~4 GB) y el proceso del renderer llegó a
+/// **4,9 GB** de working set (medido por CDP). Con el tope V8 colecta antes
+/// (piso vivo medido: 374 MB → 1024 deja ~2,7x de margen).
+/// `--expose-gc` habilita `window.gc()`: el host lo llama al minimizar y suelta
+/// la basura retenida de golpe (medido: WS 980 MB → 444 MB con un GC forzado).
 pub const WEBVIEW_BROWSER_ARGS: &str =
     "--enable-gpu --ignore-gpu-blocklist --enable-accelerated-video-decode \
      --enable-accelerated-2d-canvas --enable-gpu-rasterization --enable-zero-copy \
      --autoplay-policy=no-user-gesture-required \
      --renderer-process-limit=2 \
+     --js-flags=--max-old-space-size=1024,--expose-gc \
      --no-first-run --no-default-browser-check --disable-component-update \
      --disable-hang-monitor \
      --remote-debugging-port=9333 \

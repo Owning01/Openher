@@ -7,7 +7,11 @@ import { openDatabase } from "../utils/db"
 const ENC_PREFIX = "enc:"
 
 // Tope de mensajes cacheados por sesión (los más recientes se conservan).
-const CACHE_MAX_MESSAGES_PER_SESSION = 2000
+// 2000 llenaba la memoria: un registro de 28 MB de JSON pesa ~100 MB como
+// objetos JS, y la app preloquea la caché de CADA sesión abierta (7 pestañas
+// daban ~700 MB de piso medidos por CDP). 300 es coherente con la ventana del
+// server (200 mensajes por fetch).
+export const CACHE_MAX_MESSAGES_PER_SESSION = 300
 
 function isEncoded(val: unknown): boolean {
   return typeof val === "string" && val.startsWith(ENC_PREFIX)

@@ -23,6 +23,7 @@ mod memx;
 mod plugins;
 mod ptyx;
 mod screencap;
+mod speech;
 mod srvman;
 mod state;
 mod updates;
@@ -35,7 +36,7 @@ use std::thread;
 use std::time::Duration;
 
 use state::AppState;
-use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
+use wry::{MemoryUsageLevel, Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows, WebViewExtWindows};
 
 fn split_cmd(cmd: &str) -> Vec<String> {
     let mut res = Vec::new();
@@ -612,9 +613,19 @@ impl ApplicationHandler<AppEvent> for App {
                 self.save_geometry();
                 // Minimizar (—) → a bandeja SOLO si está activado en
                 // configuración; si no, minimize normal a la barra de tareas.
-                if self.minimize_to_tray {
-                    if let Some(window) = &self.window {
-                        if window.is_minimized().unwrap_or(false) {
+                // En AMBOS casos el renderer PRINCIPAL se recorta: nivel Low +
+                // `window.gc()`. Medido por CDP: el nivel Low SOLO no bajó el
+                // working set (360→444 MB, la app seguía asignando); el GC
+                // forzado sí (980 MB → 444 MB). Los sub-WebViews ya bajaban de
+                // nivel; el principal se quedaba entero en la bandeja.
+                if let Some(window) = &self.window {
+                    if window.is_minimized().unwrap_or(false) {
+                        if let Some(wv) = &self.webview {
+                            let _ = wv.set_memory_usage_level(MemoryUsageLevel::Low);
+                            // Requiere `--expose-gc` (browser_view::WEBVIEW_BROWSER_ARGS).
+                            let _ = wv.evaluate_script("window.gc && window.gc()");
+                        }
+                        if self.minimize_to_tray {
                             window.set_visible(false);
                         }
                     }
@@ -655,6 +666,14 @@ impl ApplicationHandler<AppEvent> for App {
                     self.browser_inner.hide_all_views();
                 }
             }
+            // Volver a primer plano: el renderer recupera su nivel normal de
+            // memoria (el Low de minimizado es un recorte, no una pausa; sin
+            // esto el WebView quedaba recortado hasta el próximo Reiniciar).
+            WindowEvent::Focused(true) => {
+                if let Some(wv) = &self.webview {
+                    let _ = wv.set_memory_usage_level(MemoryUsageLevel::Normal);
+                }
+            }
             _ => {}
         }
     }
@@ -687,6 +706,9 @@ impl ApplicationHandler<AppEvent> for App {
                     window.set_minimized(false);
                     window.set_visible(true);
                     window.focus_window();
+                }
+                if let Some(wv) = &self.webview {
+                    let _ = wv.set_memory_usage_level(MemoryUsageLevel::Normal);
                 }
             }
             AppEvent::OpenDir(dir) => {
@@ -1025,6 +1047,7 @@ fn main() {
         kanban: kanban::KanbanStore::load(),
         plugins: plugins::PluginRegistry::new(),
         servers: srvman::ServerManager::new(),
+        speech: speech::SpeechService::new(),
         dist,
         browser: browser_mgr,
         browser_picks: std::sync::Mutex::new(Vec::new()),

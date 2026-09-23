@@ -9,6 +9,7 @@ import { useQuestions } from "../../hooks/useQuestions"
 import { useSSEHandler } from "../../hooks/useSSEHandler"
 import { useSSE } from "../../hooks/useSSE"
 import { useResumeResync } from "../../hooks/useResumeResync"
+import { CACHE_MAX_MESSAGES_PER_SESSION } from "../../hooks/useOfflineCache"
 import { captureRegionToPng } from "../../utils/screenCapture"
 import { injectImageToComposer } from "../../stores/composerInjectStore"
 import { useAutomationRunner } from "../../hooks/useAutomationRunner"
@@ -129,8 +130,16 @@ export function useChatRuntime({ conn }: UseChatRuntimeParams) {
       if (conn.flags.offlineCache) {
         try {
           const cached = await conn.getCachedMessages(id)
-          if (cached && cached.length > 0 && reqId === loadSessionRef.current) {
-            preloadMessages(id, cached)
+          // Tope en MEMORIA: la caché guarda hasta CACHE_MAX_MESSAGES_PER_SESSION
+          // por sesión y preloquearla entera multiplica el heap (~100 MB por
+          // sesión con registros grandes, uno por pestaña abierta: 7 pestañas
+          // daban ~700 MB de piso, medido por CDP). El chat renderiza 40 (hasta
+          // 200) y el server entrega 200 por fetch: con la cola reciente alcanza.
+          const recent = cached && cached.length > CACHE_MAX_MESSAGES_PER_SESSION
+            ? cached.slice(-CACHE_MAX_MESSAGES_PER_SESSION)
+            : cached
+          if (recent && recent.length > 0 && reqId === loadSessionRef.current) {
+            preloadMessages(id, recent)
           }
         } catch {
           /* ignore */
