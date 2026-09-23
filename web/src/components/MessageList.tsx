@@ -5,6 +5,7 @@ import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff 
 import { MessageBubble } from "./MessageBubble"
 import { buildTurnActivity } from "../utils/turnActivity"
 import { GridSpinner } from "./GridSpinner"
+import "../styles/chat-pin.css"
 import { useFollowTail, resolveSessionEntry, anchorScrollToSaved } from "../shared/lib/useFollowTail"
 
 type MessageListProps = {
@@ -126,12 +127,59 @@ export const MessageList = memo(function MessageList({
     return messages.slice(messages.length - visibleCount)
   }, [messages, visibleCount])
 
+  // Agrupación por TURNO para el pin del prompt: `.turn-group` le da al mensaje
+  // del usuario un contenedor propio donde `position: sticky` se pega y se
+  // suelta solo cuando llega el turno siguiente (el swap sale gratis, sin JS).
+  // El grupo es un flex column igual que `.messages`, así los mensajes siguen
+  // siendo flex items (el `align-self: flex-end` del usuario queda intacto) y
+  // los márgenes entre mensajes no cambian.
+  const turnGroups = useMemo(() => {
+    const base = messages.length - visibleMessages.length
+    const groups: Array<{ key: string; rows: Array<{ message: RenderedMessage; actualIndex: number }> }> = []
+    visibleMessages.forEach((message, index) => {
+      if (message.info.role === "user" || groups.length === 0) {
+        groups.push({ key: message.info.id, rows: [] })
+      }
+      groups[groups.length - 1]!.rows.push({ message, actualIndex: base + index })
+    })
+    return groups
+  }, [visibleMessages, messages.length])
+
   // Actividad por TURNO: un prompt genera varios mensajes del asistente; la
   // caja (pensamiento + herramientas + diffs) se agrupa en el primero de ellos.
   const turnActivity = useMemo(() => {
     const visibleIDs = new Set(visibleMessages.map((m) => m.info.id))
     return buildTurnActivity(messages, visibleIDs)
   }, [messages, visibleMessages])
+
+  // Turno EN CURSO: es el único cuya caja "Working" se pega (debajo del prompt).
+  // En los turnos cerrados la caja vuelve al flujo normal.
+  const activeGroupKey = useMemo(() => {
+    for (const group of turnGroups) {
+      for (const row of group.rows) {
+        if (turnActivity.box.get(row.message.info.id)?.working) return group.key
+      }
+    }
+    return null
+  }, [turnGroups, turnActivity])
+
+  // `--pin-h`: alto real del prompt pegado. La caja del turno activo se apoya
+  // exactamente debajo con `top: var(--pin-h)`; el alto del globito depende del
+  // texto, así que se mide (y se re-mide si el texto cambia de alto).
+  const pinGroupRef = useRef<HTMLDivElement | null>(null)
+  useLayoutEffect(() => {
+    const group = pinGroupRef.current
+    if (!group) return
+    const user = group.querySelector<HTMLElement>(":scope > .message.user")
+    if (!user) return
+    const apply = () => {
+      group.style.setProperty("--pin-h", `${Math.round(user.getBoundingClientRect().height)}px`)
+    }
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(user)
+    return () => ro.disconnect()
+  }, [activeGroupKey])
 
   // El footer (modo · modelo · nivel de pensamiento · duración) se muestra solo
   // en el último mensaje assistant COMPLETED, o en un mensaje donde el
@@ -521,41 +569,47 @@ export const MessageList = memo(function MessageList({
                 </button>
               </div>
             )}
-            {visibleMessages.map((message, index) => {
-              const actualIndex = messages.length - visibleMessages.length + index
-              return (
-                <Fragment key={message.info.id}>
-                  {turnActivity.swallowed.has(message.info.id) ? null : <MessageBubble
-                    message={message}
-                    queued={pendingIndex !== undefined && actualIndex > pendingIndex}
-                    outbox={outboxActions?.[message.info.id]}
-                    revert={revert}
-                    isReverted={revertIndex >= 0 && actualIndex >= revertIndex}
-                    onRevertToMessage={onRevertToMessage}
-                    agents={agents}
-                    prevUserTs={prevUserTsByIndex[actualIndex]}
-                    showModelInfo={footerInfoMap.get(message.info.id) ?? false}
-                    config={config}
-                    directory={directory}
-                    onViewSubagents={onViewSubagents}
-                    busySessionIds={busySessionIds}
-                    onContextMenu={onContextMenu}
-                    onEditMessage={onEditMessage}
-                    showTodoButton={showTodoButton}
-                    onToggleTodos={onToggleTodos}
-                    todosOpen={todosOpen}
-                    highlight={highlight}
-                    compactTools={compactTools}
-                    minimalistMode={minimalistMode}
-                    thinkingDefault={thinkingDefault}
-                    turnActivity={turnActivity.box.get(message.info.id) ?? null}
-                    absorbActivity={turnActivity.absorbed.has(message.info.id)}
-                    onRegenerate={onRegenerate}
-                    onOpenADEDiff={onOpenADEDiff}
-                  />}
-                </Fragment>
-              )
-            })}
+            {turnGroups.map((group) => (
+              <div
+                key={group.key}
+                ref={activeGroupKey === group.key ? pinGroupRef : undefined}
+                className={`turn-group${activeGroupKey === group.key ? " turn-group-active" : ""}`}
+                data-turn-group={group.key}
+              >
+                {group.rows.map(({ message, actualIndex }) => (
+                  <Fragment key={message.info.id}>
+                    {turnActivity.swallowed.has(message.info.id) ? null : <MessageBubble
+                      message={message}
+                      queued={pendingIndex !== undefined && actualIndex > pendingIndex}
+                      outbox={outboxActions?.[message.info.id]}
+                      revert={revert}
+                      isReverted={revertIndex >= 0 && actualIndex >= revertIndex}
+                      onRevertToMessage={onRevertToMessage}
+                      agents={agents}
+                      prevUserTs={prevUserTsByIndex[actualIndex]}
+                      showModelInfo={footerInfoMap.get(message.info.id) ?? false}
+                      config={config}
+                      directory={directory}
+                      onViewSubagents={onViewSubagents}
+                      busySessionIds={busySessionIds}
+                      onContextMenu={onContextMenu}
+                      onEditMessage={onEditMessage}
+                      showTodoButton={showTodoButton}
+                      onToggleTodos={onToggleTodos}
+                      todosOpen={todosOpen}
+                      highlight={highlight}
+                      compactTools={compactTools}
+                      minimalistMode={minimalistMode}
+                      thinkingDefault={thinkingDefault}
+                      turnActivity={turnActivity.box.get(message.info.id) ?? null}
+                      absorbActivity={turnActivity.absorbed.has(message.info.id)}
+                      onRegenerate={onRegenerate}
+                      onOpenADEDiff={onOpenADEDiff}
+                    />}
+                  </Fragment>
+                ))}
+              </div>
+            ))}
             {compacting && (
               <article className="message assistant compacting-bubble fade-in" aria-label="Compacting session">
                 <div className="compacting-indicator" aria-hidden="true">
