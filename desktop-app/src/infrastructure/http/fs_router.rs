@@ -97,7 +97,12 @@ pub fn handle(
         }
         ("GET", "/read") => {
             let p = q("path");
-            match fsx::read_file(&p, 65536) {
+            // Límite de LECTURA de los visores/editor (AgentEmbed, FileEditorPanel,
+            // PCFiles y el panel del equipo). No lo consume el modelo, así que no
+            // hay costo de contexto: 64KB cortaba cualquier archivo más grande
+            // (y abría/editaba truncado). 1MB cubre fuentes reales y sigue acotando
+            // la alloc por request. `fsx::read_file` ya responde `truncated`.
+            match fsx::read_file(&p, 1024 * 1024) {
                 Ok(v) => ShellResponse::ok_json(&v),
                 Err(e) => ShellResponse::err_json(404, &e),
             }
