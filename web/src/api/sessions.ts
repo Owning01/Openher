@@ -125,22 +125,34 @@ const createSession = (config: ServerConfig, title?: string, model?: ModelSelect
   )
 
 const renameSession = async (config: ServerConfig, id: string, title: string, directory?: string) => {
-  try {
-    return await pickV2(
-      config,
-      () => request<Session>(config, withDirectory(`/session/${id}`, directory), { method: "PATCH", body: { title } }),
-      () => request<Session>(config, withDirectory(`/session/${id}/rename`, directory), { method: "POST", body: { title } }),
-    )
-  } catch (e) {
-    // El server v2 renombra y contesta 200 con cuerpo VACIO: `request` hace
-    // res.json() y tira "Unexpected end of JSON input", asi que el rename
-    // quedaba con el input abierto y la lista sin refrescar (parecia que no
-    // renombraba). Mismo caso que deleteSession: se tolera el error de parseo.
-    const msg = String((e as Error).message || e)
-    if (msg.includes("Unexpected token") || msg.includes("is not valid JSON") || msg.includes("JSON")) {
-      return undefined as unknown as Session
+  const attempt = async (dir?: string) => {
+    try {
+      return await pickV2(
+        config,
+        () => request<Session>(config, withDirectory(`/session/${id}`, dir), { method: "PATCH", body: { title } }),
+        () => request<Session>(config, withDirectory(`/session/${id}/rename`, dir), { method: "POST", body: { title } }),
+      )
+    } catch (e) {
+      // El server v2 renombra y contesta 200 con cuerpo VACIO: `request` hace
+      // res.json() y tira "Unexpected end of JSON input". El cambio SI se aplico,
+      // asi que se tolera (mismo caso que deleteSession): sin esto el input
+      // quedaba abierto y la lista sin refrescar, y parecia que no renombraba.
+      const msg = String((e as Error).message || e)
+      if (msg.includes("Unexpected token") || msg.includes("is not valid JSON") || msg.includes("JSON")) {
+        return undefined as unknown as Session
+      }
+      throw e
     }
-    throw e
+  }
+  try {
+    return await attempt(directory)
+  } catch (e) {
+    // 404 por mismatch de path: el server busca la sesion con el `directory`
+    // que le mandamos y no la encuentra (medido en la app real:
+    // /session/<id>/rename?directory=G%3A%2Fproyectos -> 404 y el rename moria).
+    // Mismo fallback que deleteSession: reintentar SIN directory.
+    if (!directory) throw e
+    return await attempt(undefined)
   }
 }
 

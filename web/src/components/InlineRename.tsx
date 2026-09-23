@@ -70,6 +70,12 @@ export function InlineRename({ value, original, onChange, onConfirm, onCancel, p
           else if (e.key === "Escape") { e.preventDefault(); cancelOnce() }
           e.stopPropagation()
         }}
+        // `doneRef` protege del doble confirm (blur + Enter), pero el input puede
+        // quedar montado de un rename anterior (misma sesion visible en dos listas,
+        // listas memoizadas): ahi doneRef seguia en true y Enter no hacia NADA
+        // (bug reportado: "cambio el nombre, doy Enter y no pasa nada"). Se
+        // re-arma al enfocar: si el usuario esta escribiendo, Enter confirma.
+        onFocus={() => { doneRef.current = false }}
         onBlur={handleBlur}
         placeholder={placeholder}
         aria-label={ariaLabel ?? placeholder ?? original}

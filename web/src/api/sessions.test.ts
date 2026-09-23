@@ -154,3 +154,25 @@ describe("api.renameSession con respuesta sin JSON", () => {
     await expect(api.renameSession(cfg(), "ses_1", "nuevo titulo")).rejects.toThrow("boom")
   })
 })
+
+// Medido en la app real (consola del usuario): contra un server v2 el rename
+// pega a POST /session/<id>/rename?directory=<dir> y el server contesta 404
+// cuando el directory no coincide (la sesion vive en otro path, p.ej.
+// G:/proyectos). Antes eso dejaba el rename muerto ("doy Enter y no pasa nada");
+// ahora se reintenta SIN directory, igual que deleteSession.
+describe("api.renameSession con 404 por mismatch de directory", () => {
+  it("reintenta sin directory y resuelve", async () => {
+    mockedRequest.mockRejectedValueOnce(new Error("HTTP 404: not found"))
+    mockedRequest.mockResolvedValueOnce({ id: "ses_1", title: "nuevo titulo" })
+    await expect(api.renameSession(cfg(), "ses_1", "nuevo titulo", "G:\\otro")).resolves.toBeTruthy()
+    const paths = mockedRequest.mock.calls.map((c) => String(c[1]))
+    expect(paths[0]).toContain("directory=")
+    expect(paths[1]).not.toContain("directory=")
+  })
+
+  it("si el reintento tambien falla, propaga el error", async () => {
+    mockedRequest.mockRejectedValueOnce(new Error("HTTP 404: not found"))
+    mockedRequest.mockRejectedValueOnce(new Error("HTTP 404: not found"))
+    await expect(api.renameSession(cfg(), "ses_1", "nuevo titulo", "G:\\otro")).rejects.toThrow("404")
+  })
+})
