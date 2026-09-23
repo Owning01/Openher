@@ -4,7 +4,13 @@
    La caja "Working" del turno EN CURSO se apoya justo debajo del prompt
    (--pin-h lo mide MessageList, porque el alto del globito depende del texto).
    El layout no cambia: `.turn-group` es un flex column igual que `.messages`,
-   así los mensajes siguen siendo flex items y los márgenes se conservan. */
+   así los mensajes siguen siendo flex items y los márgenes se conservan.
+
+   El pin es SOLO de escritorio, y escritorio es ancho Y alto
+   (min-width:781px and min-height:500px): en un panel angosto o bajo el prompt
+   pegado se come la pantalla, así que ahí no se pega nada. El wrapper
+   `.turn-group` se crea SIEMPRE (también en móvil), por eso su regla de layout
+   queda fuera del media query: gatearla cambiaría el layout de móvil. */
 
 .turn-group {
   display: flex;
@@ -12,47 +18,49 @@
   min-width: 0;
 }
 
-/* El prompt del turno, pegado arriba. El globito ya tiene fondo opaco, así que
-   tapa el contenido que pasa por debajo; el shadow le da el corte visual. */
-.turn-group > .message.user {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  box-shadow: 0 10px 16px -14px rgba(0, 0, 0, 0.85);
-}
+@media (min-width: 781px) and (min-height: 500px) {
+  /* El prompt del turno, pegado arriba. El globito ya tiene fondo opaco, así que
+     tapa el contenido que pasa por debajo; el shadow le da el corte visual. */
+  .turn-group > .message.user {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    box-shadow: 0 10px 16px -14px rgba(0, 0, 0, 0.85);
+  }
 
-/* El globito del usuario es un TINTE translúcido (--primary-soft al 7%): al
-   quedar pegado, el texto que sube se vería a través. Se compone el mismo tinte
-   sobre el fondo opaco del chat (color + gradiente) para que el pin tape de
-   verdad. Especificidad (0,4,0) para ganarle también a la regla de modo plan. */
-.messages .turn-group > .message.user:not([data-mode="plan"]) {
-  background-color: var(--chat-bg-color, var(--surface));
-  background-image: linear-gradient(
-    var(--chat-user-bubble-bg, var(--primary-soft)),
-    var(--chat-user-bubble-bg, var(--primary-soft))
-  );
-}
+  /* El globito del usuario es un TINTE translúcido (--primary-soft al 7%): al
+     quedar pegado, el texto que sube se vería a través. Se compone el mismo tinte
+     sobre el fondo opaco del chat (color + gradiente) para que el pin tape de
+     verdad. Especificidad (0,4,0) para ganarle también a la regla de modo plan. */
+  .messages .turn-group > .message.user:not([data-mode="plan"]) {
+    background-color: var(--chat-bg-color, var(--surface));
+    background-image: linear-gradient(
+      var(--chat-user-bubble-bg, var(--primary-soft)),
+      var(--chat-user-bubble-bg, var(--primary-soft))
+    );
+  }
 
-:root[data-theme="dark"] .messages .turn-group > .message.user:not([data-mode="plan"]) {
-  background-color: var(--chat-bg-color, #000);
-}
+  :root[data-theme="dark"] .messages .turn-group > .message.user:not([data-mode="plan"]) {
+    background-color: var(--chat-bg-color, #000);
+  }
 
-/* Caja del turno en curso: se apoya exactamente debajo del prompt pegado.
-   Necesita fondo opaco (la caja original es transparente y se vería el texto
-   que sube por detrás). */
-.turn-group-active > .message.assistant .activity-box {
-  position: sticky;
-  top: var(--pin-h, 0px);
-  z-index: 2;
-  background: var(--chat-bg-color, var(--surface));
-}
+  /* Caja del turno en curso: se apoya exactamente debajo del prompt pegado.
+     Necesita fondo opaco (la caja original es transparente y se vería el texto
+     que sube por detrás). */
+  .turn-group-active > .message.assistant .activity-box {
+    position: sticky;
+    top: var(--pin-h, 0px);
+    z-index: 2;
+    background: var(--chat-bg-color, var(--surface));
+  }
 
-:root[data-theme="dark"] .turn-group-active > .message.assistant .activity-box {
-  background: var(--chat-bg-color, #000);
-}
+  :root[data-theme="dark"] .turn-group-active > .message.assistant .activity-box {
+    background: var(--chat-bg-color, #000);
+  }
 
-/* Con la caja pegada, su contenido se acota a la ventana: los 380px fijos se
-   comían la pantalla entera en un panel bajo. */
-.turn-group-active > .message.assistant .activity-box .collapsible-content {
-  max-height: min(380px, 32vh);
+  /* Con la caja pegada, su contenido se acota a la ventana: los 380px fijos se
+     comían la pantalla entera en un panel bajo. */
+  .turn-group-active > .message.assistant .activity-box .collapsible-content {
+    max-height: min(380px, 32vh);
+  }
 }
