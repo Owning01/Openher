@@ -42,6 +42,11 @@ describe("extractUrlFromDataTransfer", () => {
     expect(extractUrlFromDataTransfer(dt({ "text/plain": "__kanban__" }))).toBeNull()
   })
 
+  it("una ruta de Windows NO es una URL (abría un browser basura y rompía la UI)", () => {
+    expect(extractUrlFromDataTransfer(dt({ "text/plain": "G:\\Proyectos\\foo\\bar.txt" }))).toBeNull()
+    expect(extractUrlFromDataTransfer(dt({ "text/plain": "C:/Users/perca/x.md" }))).toBeNull()
+  })
+
   it("sigue extrayendo URLs reales", () => {
     expect(extractUrlFromDataTransfer(dt({ "text/plain": "https://example.com/a" }))).toBe("https://example.com/a")
     expect(extractUrlFromDataTransfer(dt({ "text/uri-list": "https://example.com\r\n" }))).toBe("https://example.com")

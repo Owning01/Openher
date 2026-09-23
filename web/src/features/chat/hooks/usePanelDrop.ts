@@ -69,8 +69,17 @@ export function usePanelDrop({ panelIndex, onOpenFile, onSplitSession, onSwapPan
         return
       }
     }
-    const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
-    if (!raw) return
+    // Solo un payload INTERNO (el que setea el propio app: explorer, tabs,
+    // paneles) puede dividir o cambiar paneles. Un `text/plain` suelto es una
+    // SELECCIÓN DE TEXTO: arrastrarla NO debe splitear nada (con el fallback a
+    // text/plain se abría un panel basura y se rompía la interfaz). Va al
+    // composer, igual que el resto de textos.
+    const raw = e.dataTransfer.getData("application/x-opencode-path")
+    if (!raw) {
+      const text = e.dataTransfer.getData("text/plain")
+      if (text) window.dispatchEvent(new CustomEvent("plugin:insert-text", { detail: text }))
+      return
+    }
     const payload = parseDragPayload(raw)
     if (payload.kind === "panel") {
       if (zone === "center") {

@@ -34,6 +34,11 @@ function cleanUrl(raw: string): string | null {
   if (isInternalPayload(s)) return null
   // Chrome puede mandar  "https://example.com\nTitle" o comentarios "#"
   if (s.startsWith("#")) return null
+  // Ruta de Windows (G:\... / C:/...): el patrón de esquema la aceptaba por la
+  // letra de unidad, así que una SELECCIÓN DE TEXTO con una ruta terminaba
+  // abriendo un browser basura en el grid y rompiendo la interfaz. Una ruta
+  // no es una URL.
+  if (/^[a-zA-Z]:[\\/]/.test(s)) return null
   // Si viene con título en segunda palabra, tomar primer token
   const firstLine = s.split(/\r?\n/)[0]?.trim() ?? ""
   const token = firstLine.split(/\s+/)[0]?.trim() ?? ""

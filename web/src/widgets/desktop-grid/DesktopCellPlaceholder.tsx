@@ -40,8 +40,15 @@ export function DesktopCellPlaceholder(props: DesktopCellPlaceholderProps) {
             return
           }
         }
-        const raw = e.dataTransfer.getData("application/x-opencode-path") || e.dataTransfer.getData("text/plain")
-        if (!raw) return
+        // Solo payloads INTERNOS pueden dockear/cambiar paneles: un
+        // `text/plain` suelto es una SELECCIÓN DE TEXTO, no una pestaña.
+        // Antes el `else` final hacía onDock con cualquier cosa y rompía la UI.
+        const raw = e.dataTransfer.getData("application/x-opencode-path")
+        if (!raw) {
+          const text = e.dataTransfer.getData("text/plain")
+          if (text) window.dispatchEvent(new CustomEvent("plugin:insert-text", { detail: text }))
+          return
+        }
         if (isTerminalTabPayload(raw)) {
           props.onDock(index, "center", raw)
           return
@@ -51,9 +58,10 @@ export function DesktopCellPlaceholder(props: DesktopCellPlaceholderProps) {
           props.onOpenFile(payload.path, index, "center")
         } else if (payload.kind === "panel") {
           if (payload.idx !== index) props.onSwapPanels(payload.idx, index)
-        } else {
+        } else if (payload.kind === "session" || payload.kind === "kind" || payload.kind === "tab") {
           props.onDock(index, "center", raw)
         }
+        // `unknown` (payload interno sin forma conocida): no es una pestaña.
       }}
     >
       <button
