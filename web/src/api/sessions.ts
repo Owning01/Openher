@@ -124,12 +124,25 @@ const createSession = (config: ServerConfig, title?: string, model?: ModelSelect
     },
   )
 
-const renameSession = (config: ServerConfig, id: string, title: string, directory?: string) =>
-  pickV2(
-    config,
-    () => request<Session>(config, withDirectory(`/session/${id}`, directory), { method: "PATCH", body: { title } }),
-    () => request<Session>(config, withDirectory(`/session/${id}/rename`, directory), { method: "POST", body: { title } }),
-  )
+const renameSession = async (config: ServerConfig, id: string, title: string, directory?: string) => {
+  try {
+    return await pickV2(
+      config,
+      () => request<Session>(config, withDirectory(`/session/${id}`, directory), { method: "PATCH", body: { title } }),
+      () => request<Session>(config, withDirectory(`/session/${id}/rename`, directory), { method: "POST", body: { title } }),
+    )
+  } catch (e) {
+    // El server v2 renombra y contesta 200 con cuerpo VACIO: `request` hace
+    // res.json() y tira "Unexpected end of JSON input", asi que el rename
+    // quedaba con el input abierto y la lista sin refrescar (parecia que no
+    // renombraba). Mismo caso que deleteSession: se tolera el error de parseo.
+    const msg = String((e as Error).message || e)
+    if (msg.includes("Unexpected token") || msg.includes("is not valid JSON") || msg.includes("JSON")) {
+      return undefined as unknown as Session
+    }
+    throw e
+  }
+}
 
 const deleteSession = async (config: ServerConfig, id: string, directory?: string) => {
   const attempt = async (dir?: string) => {

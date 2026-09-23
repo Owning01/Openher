@@ -138,3 +138,19 @@ describe("api.listProjects canonicals", () => {
     expect((mockedRequest.mock.calls[1]![2] as { rawPath?: boolean }).rawPath).toBe(true)
   })
 })
+
+// El server v2 renombra y contesta 200 con cuerpo VACIO: `request` hace
+// res.json() y tira "Unexpected end of JSON input". Antes eso dejaba el rename
+// a medias (input abierto, lista sin refrescar y el titulo viejo a la vista);
+// ahora el error de parseo se tolera porque el cambio SI se aplico.
+describe("api.renameSession con respuesta sin JSON", () => {
+  it("tolera el error de parseo (el titulo igual se aplico)", async () => {
+    mockedRequest.mockRejectedValueOnce(new Error("Unexpected end of JSON input"))
+    await expect(api.renameSession(cfg(), "ses_1", "nuevo titulo", "G:\\a")).resolves.toBeUndefined()
+  })
+
+  it("propaga errores que NO son de parseo", async () => {
+    mockedRequest.mockRejectedValueOnce(new Error("HTTP 500: boom"))
+    await expect(api.renameSession(cfg(), "ses_1", "nuevo titulo")).rejects.toThrow("boom")
+  })
+})
