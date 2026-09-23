@@ -868,6 +868,18 @@
     background: var(--surface);
   }
 
+  /* Colapsado, el sidebar mide 1px: sin `overflow: visible` recorta el rail
+     (40px) y el boton de expandir queda invisible e inclickeable, dejando la app
+     atrapada sin forma de volver (medido con click real: lo recibia el header
+     del chat, y el estado persistia entre reinicios). Espejo de
+     `.app-desktop-sidebar--right.collapsed`, con z-index porque el sidebar
+     izquierdo es hermano ANTERIOR del contenido: sin el, el rail queda pintado
+     debajo aunque deje de estar recortado. */
+  .app-desktop-sidebar.collapsed {
+    overflow: visible;
+    z-index: 20;
+  }
+
   .desktop-sidebar-resizer {
     position: absolute;
     top: 0;
@@ -1017,7 +1029,9 @@
     transform: translateX(-50%);
     z-index: var(--z-sticky);
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* NavBar monta2 destinos (mismo motivo que el bloque ≤780: el gear vive en
+       el top-nav) — repeat(3) dejaba la tercera celda vacía en landscape/APK. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-1);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -1120,4 +1134,159 @@
 }
 
 /* Selector de posición en Ajustes */
+
+/* ===== Grupos de pestañas + color por pestaña (TabBar / TitleBar) ===== */
+.tab-group-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding: 0 4px;
+  margin-right: 4px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--group-color) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--group-color) 45%, transparent);
+  position: relative;
+  flex-shrink: 0;
+  user-select: none;
+}
+.tab-group-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0 4px;
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.tab-group-name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-group-chevron {
+  transition: transform 0.15s ease;
+  opacity: 0.7;
+}
+/* Colapsado: el chevron marca plegado (aria-expanded en el botón main). */
+.tab-group-main[aria-expanded="false"] .tab-group-chevron {
+  transform: rotate(-90deg);
+}
+/* El punto de color va primero (estilo Chrome): order en el flex del chip. */
+.tab-group-dot-btn {
+  order: -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+}
+.tab-group-dot-btn:hover {
+  background: color-mix(in srgb, var(--group-color) 25%, transparent);
+}
+.tab-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--group-color);
+  display: inline-block;
+}
+.tab-group-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--muted);
+}
+.tab-group-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--group-color) 25%, transparent);
+  color: var(--text);
+}
+.tab-group-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.tab-group-btn[data-active] {
+  color: var(--group-color);
+}
+/* Picker "+": mismo lenguaje visual que los menús existentes. */
+.tab-group-picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100001;
+  min-width: 210px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 4px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+/* Fila de swatches dentro de los menús contextuales. */
+.tab-color-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+}
+.tab-color-row-label {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.tab-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.tab-swatch:hover {
+  transform: scale(1.15);
+}
+.tab-swatch.is-on {
+  border-color: var(--text);
+}
+.tab-swatch-default {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Color por pestaña (barra inferior; sin color => estilo por defecto intacto). */
+.tab.has-color {
+  position: relative;
+}
+.tab.has-color::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--tab-color);
+}
 
