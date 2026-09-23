@@ -2,6 +2,24 @@ import { useEffect, useState, type RefObject } from "react"
 
 export type SelectionCopy = { x: number; y: number; text: string }
 
+// Un drag nativo sobre una selección de texto del chat no cumple ninguna
+// función: los arrastres reales salen de elementos [draggable] (pestañas, rutas)
+// y el texto soltado lo rutea el panel. Arrastrar texto solo levantaba el
+// fantasma translúcido de Chrome tapando la interfaz. Se bloquea SOLO ese caso,
+// para no tocar los drags internos ni el arrastre dentro del composer.
+export function isNativeTextDrag(opts: {
+  target: EventTarget | null
+  wrap: Node | null
+  insideDraggable: boolean
+  selectionCollapsed: boolean
+}): boolean {
+  const { target, wrap, insideDraggable, selectionCollapsed } = opts
+  if (!wrap || !(target instanceof Node) || !wrap.contains(target)) return false
+  if (insideDraggable) return false
+  if (selectionCollapsed) return false
+  return true
+}
+
 // Copiar selección: aparece solo cuando hay texto seleccionado dentro del chat;
 // cualquier scroll lo oculta. Throttled + RAF para no bloquear typing.
 export function useSelectionCopy(wrapRef: RefObject<HTMLDivElement | null>) {
@@ -43,12 +61,26 @@ export function useSelectionCopy(wrapRef: RefObject<HTMLDivElement | null>) {
       if (raf !== null) { cancelAnimationFrame(raf); raf = null }
       if (lastText !== "") { lastText = ""; setSelectionCopy(null) }
     }
+    const onDragStart = (e: DragEvent) => {
+      const target = e.target as Element | null
+      const sel = window.getSelection()
+      const block = isNativeTextDrag({
+        target,
+        wrap: wrapRef.current,
+        insideDraggable: !!target?.closest?.('[draggable="true"]'),
+        selectionCollapsed: !sel || sel.isCollapsed,
+      })
+      if (block) e.preventDefault()
+    }
     document.addEventListener("selectionchange", update)
     document.addEventListener("scroll", hide, true)
+    // capture: corre antes que cualquier handler de drag de la app.
+    document.addEventListener("dragstart", onDragStart, true)
     return () => {
       if (raf !== null) cancelAnimationFrame(raf)
       document.removeEventListener("selectionchange", update)
       document.removeEventListener("scroll", hide, true)
+      document.removeEventListener("dragstart", onDragStart, true)
     }
   }, [wrapRef])
 
