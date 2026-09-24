@@ -545,4 +545,14 @@ describe("Q2 — divergencias caracterizadas (no cambian en C3)", () => {
     await act(async () => { await d.actions().onSend(undefined, undefined, "cmd") })
     expect(openPromptHistory).toHaveBeenCalled()
   })
+
+  it("caracteriza: /new llega a onOpenNewSession con el directorio de la sesión actual", async () => {
+    const dm = makeDesktopMsgs()
+    dm.send.mockResolvedValue("newSession")
+    const d = desktopDriver({ msgs: dm })
+    await act(async () => { await d.actions().onSend(undefined, undefined, "/new") })
+    // El handler (useWorkspaceRuntime) crea la sesión en ESE directorio y
+    // navega; acá se fija el contrato del medio: llega el directorio actual.
+    expect(d.props.baseProps.onOpenNewSession).toHaveBeenCalledWith(DIR)
+  })
 })

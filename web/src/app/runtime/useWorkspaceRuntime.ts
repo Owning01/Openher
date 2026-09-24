@@ -75,14 +75,10 @@ export function useWorkspaceRuntime({ conn, chat }: UseWorkspaceRuntimeParams) {
     setShowOpenCodeHub,
     showFavoritesManager,
     setShowFavoritesManager,
-    showRemoteDesktop,
-    setShowRemoteDesktop,
     showPluginsModal,
     setShowPluginsModal,
     fileEditorPath,
     setFileEditorPath,
-    desktopCfg,
-    setDesktopCfg,
     desktopDiffData,
     setDesktopDiffData,
   } = useAppModalsState()
@@ -304,11 +300,6 @@ export function useWorkspaceRuntime({ conn, chat }: UseWorkspaceRuntimeParams) {
     [openPluginAsTab, navigate]
   )
 
-  const handleOpenNewSession = useCallback(() => {
-    // Abre en el proyecto actual (si hay sesión); si no, cursor guardado/server.
-    void openNewSessionPicker(selectedSession?.directory)
-  }, [openNewSessionPicker, selectedSession?.directory])
-
   const handleCreateSession = useCallback(
     async (dir?: string) => {
       if (dir) persistDirectory(dir)
@@ -317,8 +308,51 @@ export function useWorkspaceRuntime({ conn, chat }: UseWorkspaceRuntimeParams) {
       if (s) {
         navigate("detail")
       }
+      return s
     },
     [createSession, navigate, setShowNewSessionPicker, persistDirectory]
+  )
+
+  const handleOpenNewSession = useCallback(
+    (directory?: unknown) => {
+      // `/new` dentro del chat llega con el directorio de la sesión actual:
+      // crea la sesión ahí mismo y la abre en el panel activo, sin picker
+      // (pedido del humano). El botón "+" no pasa directorio (o pasa el
+      // MouseEvent del click) y sigue abriendo el picker con el proyecto actual.
+      const dir = typeof directory === "string" ? directory.trim() : ""
+      if (dir) {
+        // La sesión recién creada no tiene mensajes que cachear: alcanza con
+        // abrirla como lo hace un click de la lista (handleOpenSession), sin su
+        // rama de cache offline (que existe para sesiones viejas).
+        void (async () => {
+          const created = await handleCreateSession(dir)
+          if (!created) return
+          navigate("detail")
+          if (conn.isDesktop) {
+            const existing = desktopLayout.sessions.indexOf(created.id)
+            if (existing >= 0) setActivePanel(existing)
+            else openInPanel(activePanel, created.id)
+            return
+          }
+          await openSession(created.id, created.directory ?? dir).catch(() => undefined)
+        })().catch(() => undefined)
+        return
+      }
+      // Abre en el proyecto actual (si hay sesión); si no, cursor guardado/server.
+      void openNewSessionPicker(selectedSession?.directory)
+    },
+    [
+      openNewSessionPicker,
+      selectedSession?.directory,
+      handleCreateSession,
+      conn.isDesktop,
+      desktopLayout.sessions,
+      activePanel,
+      openInPanel,
+      setActivePanel,
+      openSession,
+      navigate,
+    ]
   )
 
   // El Estudio necesita una sesión de agente atada al directorio del proyecto,
@@ -563,13 +597,9 @@ export function useWorkspaceRuntime({ conn, chat }: UseWorkspaceRuntimeParams) {
     showArchivedView,
     showFavoritesManager,
     showOpenCodeHub,
-    showRemoteDesktop,
-    setShowRemoteDesktop,
     showPluginsModal,
     fileEditorPath,
     setFileEditorPath,
-    desktopCfg,
-    setDesktopCfg,
     desktopDiffData,
     setDesktopDiffData,
     readingMode,

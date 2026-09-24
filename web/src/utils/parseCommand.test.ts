@@ -114,7 +114,7 @@ describe("parseCommand", () => {
     expect(parseCommand("/EXPORT")).toEqual({ type: "export" })
   })
 
-  it("parses /new (y alias en español) al selector de carpeta", () => {
+  it("parses /new (y alias en español) a nueva sesión en el proyecto actual", () => {
     expect(parseCommand("/new")).toEqual({ type: "newSession" })
     expect(parseCommand("/NEW")).toEqual({ type: "newSession" })
     expect(parseCommand("/nueva")).toEqual({ type: "newSession" })

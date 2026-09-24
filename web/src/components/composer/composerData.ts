@@ -1,6 +1,7 @@
 import type { CommandInfo } from "../../types"
 
 export const LOCAL_SLASH_COMMANDS: CommandInfo[] = [
+  { name: "new", description: "New session in this project", source: "command" },
   { name: "help", description: "Show help and available commands", source: "command" },
   { name: "status", description: "Show current session status", source: "command" },
   { name: "undo", description: "Undo last message", source: "command" },
