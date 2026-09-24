@@ -53,19 +53,9 @@ export const DesktopSidebar = memo(function DesktopSidebar({
 
   return (
     <aside className={`app-desktop-sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
-      {sidebarCollapsed ? (
-        <div className="desktop-sidebar-rail">
-          <button
-            type="button"
-            className="btn-icon compact"
-            title={t("desktop.expandSidebar")}
-            aria-label={t("desktop.expandSidebar")}
-            onClick={() => setSidebarCollapsed(false)}
-          >
-            »
-          </button>
-        </div>
-      ) : (
+      {/* Colapsado no se dibuja nada (el rail de 40px se sacó a pedido): para
+          re-expandir quedan el ícono activo de la ActivityBar (toggle) y Ctrl+B. */}
+      {!sidebarCollapsed && (
         <>
           {!isFiles && (
             <div className="desktop-sidebar-header">
