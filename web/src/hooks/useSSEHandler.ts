@@ -41,19 +41,28 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
 
   // Coalesce de deltas por frame (copiado de app/server-sdk.tsx FLUSH_FRAME_MS 16): concatena
   // deltas del mismo part para no crear N patches por frame.
-  const coalesceMapRef = useRef<Map<string, { sessionID: string; messageID: string; partID: string; text: string; replace: boolean; partType: string }>>(new Map())
+  const coalesceMapRef = useRef<Map<string, { sessionID: string; messageID: string; partID: string; text: string; replace: boolean; partType: string; seq: number }>>(new Map())
   const coalesceFrameRef = useRef<number | null>(null)
+  // Secuencia monotónica de deltas: el re-arme de abajo solo vale para deltas
+  // POSTERIORES al último cierre de turno de la sesión visible (las ramas de
+  // cierre sellan `settledSeqRef`, apaguen o no `awaiting`). Los que ya estaban
+  // encolados son del turno que acaba de terminar. Sin esto, cuando el cierre
+  // y los últimos deltas llegan en el mismo chunk SSE (habitual), el flush del
+  // frame siguiente re-encendía el Stop para un turno terminado y nada lo
+  // apagaba hasta el cure del poll (15-20 s) → "sigue trabajando".
+  const deltaSeqRef = useRef(0)
+  const settledSeqRef = useRef(0)
   const flushCoalesce = useCallback(() => {
     coalesceFrameRef.current = null
     const toFlush = [...coalesceMapRef.current.values()]
     coalesceMapRef.current.clear()
-    // Re-arme: si llegan deltas en vivo de la sesión visible sin awaiting
-    // (settle prematuro por idle transitorio del server, turno solapado o
-    // turno iniciado en otro cliente), el turno está vivo → el botón Stop
-    // debe mostrarse. Solo deltas de contenido (tokens fluyendo AHORA), nunca
-    // eventos de cierre ni compaction; los checks de idle del poll apagan si
-    // el server ya terminó.
-    if (!deps.awaitingRef() && toFlush.some((v) => v.sessionID === deps.sessionID && v.partType !== "compaction")) {
+    // Re-arme: si llegan deltas en vivo POSTERIORES al cierre de la sesión
+    // visible sin awaiting (turno solapado o turno iniciado en otro cliente),
+    // el turno está vivo → el botón Stop debe mostrarse. Solo deltas de
+    // contenido (tokens fluyendo AHORA), nunca eventos de cierre ni
+    // compaction; los checks de idle del poll apagan si el server ya terminó.
+    if (!deps.awaitingRef() && toFlush.some((v) => v.sessionID === deps.sessionID && v.partType !== "compaction" && v.seq > settledSeqRef.current)) {
+      if (SSE_DIAG) console.info("[SSE:diag] re-arme awaiting por deltas posteriores al cierre")
       deps.setAwaitingAssistantReply(true)
     }
     for (const v of toFlush) deps.applyDelta(v.sessionID, v.messageID, v.partID, v.text, v.replace, v.partType)
@@ -61,8 +70,13 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
   const enqueueDelta = useCallback((sessionID: string, messageID: string, partID: string, text: string, replace: boolean, partType: string) => {
     const key = `${sessionID}:${messageID}:${partID}:${partType}`
     const existing = coalesceMapRef.current.get(key)
-    if (existing && !replace) existing.text += text
-    else coalesceMapRef.current.set(key, { sessionID, messageID, partID, text, replace, partType })
+    if (existing && !replace) {
+      existing.text += text
+      // El entry pasa a tener un delta posterior al cierre: cuenta como vivo.
+      existing.seq = ++deltaSeqRef.current
+    } else {
+      coalesceMapRef.current.set(key, { sessionID, messageID, partID, text, replace, partType, seq: ++deltaSeqRef.current })
+    }
     if (coalesceFrameRef.current === null) coalesceFrameRef.current = requestAnimationFrame(flushCoalesce)
   }, [flushCoalesce])
   useEffect(() => () => {
@@ -81,6 +95,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     }
     if (type === "server.instance.disposed") {
       deps.setRuntimeError("Server instance disposed — reconnect or reload")
+      settledSeqRef.current = deltaSeqRef.current
       deps.setAwaitingAssistantReply(false)
       return
     }
@@ -252,6 +267,10 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       // tardío no debe robar el stop del turno siguiente; el dedupe por id
       // del transporte ya frena duplicados). Sin awaiting igual se reconcilia
       // el historial (turno iniciado desde otro cliente).
+      // El turno terminó para la sesión visible: sellar SIEMPRE (aunque
+      // `awaiting` ya esté en false por un cure externo del poll), así los
+      // deltas encolados antes del cierre no lo re-encienden.
+      settledSeqRef.current = deltaSeqRef.current
       if (deps.awaitingRef()) {
         deps.setAwaitingAssistantReply(false)
         deps.onSettled(sessionID, deps.directory ?? "")
@@ -270,6 +289,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       // botón stop hasta el próximo envío). El fin real lo marcan
       // session.error/idle o message.updated completed.
       if (type === "session.next.retried") return
+      settledSeqRef.current = deltaSeqRef.current
       deps.setAwaitingAssistantReply(false)
       return
     }
@@ -306,14 +326,19 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
               }
             }
           }
-          if (isAssistantMessage(rawMsg) && (rawMsg?.info?.time?.completed || rawMsg?.info?.finish) && deps.awaitingRef()) {
+          if (isAssistantMessage(rawMsg) && (rawMsg?.info?.time?.completed || rawMsg?.info?.finish)) {
             // Solo el assistant NUEVO cierra el turno: un `message.updated` de
             // un assistant viejo (p. ej. el reemitido tras un revert) no debe
             // apagar el spinner ni disparar el settled del turno en curso.
             const baselineID = deps.awaitingBaselineIDRef?.() ?? ""
             if (updatedMessageID && updatedMessageID !== baselineID) {
-              deps.setAwaitingAssistantReply(false)
-              deps.onSettled(sessionID, deps.directory ?? "")
+              // Sella aunque `awaiting` ya esté en false (cure externo): los
+              // deltas encolados antes del cierre no deben re-encender el Stop.
+              settledSeqRef.current = deltaSeqRef.current
+              if (deps.awaitingRef()) {
+                deps.setAwaitingAssistantReply(false)
+                deps.onSettled(sessionID, deps.directory ?? "")
+              }
             }
           }
         }
@@ -330,6 +355,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
         : (rawStatus as { type?: string } | undefined)?.type
       const targetSessionID = sessionID ?? deps.sessionID
       if (targetSessionID && targetSessionID === deps.sessionID && statusType === "idle") {
+        settledSeqRef.current = deltaSeqRef.current
         deps.setAwaitingAssistantReply(false)
         deps.onSettled(targetSessionID, deps.directory ?? "")
       }
@@ -341,6 +367,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       const targetSessionID = sessionID ?? deps.sessionID
       if (targetSessionID && targetSessionID === deps.sessionID) {
+        settledSeqRef.current = deltaSeqRef.current
         deps.setAwaitingAssistantReply(false)
         deps.onSettled(targetSessionID, deps.directory ?? "")
       }
@@ -359,6 +386,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       const plain = (d.message ?? d.text ?? p.message ?? p.text) as string | undefined
       const msg = norm?.message || plain || norm?.name
       if (msg) deps.setRuntimeError(msg)
+      settledSeqRef.current = deltaSeqRef.current
       deps.setAwaitingAssistantReply(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

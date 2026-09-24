@@ -233,3 +233,92 @@ describe("useSSEHandler — re-arme de awaiting con deltas en vivo", () => {
     expect(deps.setAwaitingAssistantReply).not.toHaveBeenCalled()
   })
 })
+
+// El cierre del turno y los últimos deltas suelen venir en el MISMO chunk SSE:
+// el delta queda encolado (rAF pendiente) y el cierre apaga el spinner; al
+// flushar el frame siguiente, el re-arme veía `!awaiting` y volvía a encender
+// el Stop para un turno YA terminado. Nada lo apagaba hasta el cure del poll
+// (15-20 s) → "el chat cree que sigue trabajando".
+describe("useSSEHandler — el cierre no se re-arma con deltas encolados antes", () => {
+  let pending: Array<(t: number) => void> = []
+  beforeEach(() => {
+    pending = []
+    vi.stubGlobal("requestAnimationFrame", (cb: (t: number) => void) => { pending.push(cb); return pending.length })
+    vi.stubGlobal("cancelAnimationFrame", () => {})
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+  const flushFrames = () => { const p = pending; pending = []; for (const cb of p) cb(0) }
+
+  // Modela el ref real: el setter apaga el awaiting que consulta el handler.
+  function observedDeps() {
+    let awaiting = true
+    const deps = makeDeps({
+      awaitingRef: () => awaiting,
+      setAwaitingAssistantReply: vi.fn((v: boolean) => { awaiting = v }),
+    })
+    return deps
+  }
+
+  function texto(sessionID: string): SSEEvent {
+    return {
+      id: `evt-t-${sessionID}`,
+      type: "session.text.delta",
+      properties: { id: `evt-t-${sessionID}`, created: Date.now(), type: "session.text.delta", data: { sessionID, assistantMessageID: "msg-1", ordinal: 0, delta: "hola" } },
+    } as unknown as SSEEvent
+  }
+
+  function cierre(sessionID: string): SSEEvent {
+    return {
+      id: `evt-c-${sessionID}`,
+      type: "session.execution.succeeded",
+      properties: { id: `evt-c-${sessionID}`, created: Date.now(), type: "session.execution.succeeded", data: { sessionID } },
+    } as unknown as SSEEvent
+  }
+
+  it("delta encolado antes del cierre: se pinta pero NO re-arma el Stop", () => {
+    const deps = observedDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(texto("s1"))   // encolado (rAF pendiente)
+    result.current(cierre("s1"))  // mismo chunk: apaga el awaiting
+    expect(deps.setAwaitingAssistantReply).toHaveBeenCalledWith(false)
+    ;(deps.setAwaitingAssistantReply as ReturnType<typeof vi.fn>).mockClear()
+    flushFrames()
+    expect(deps.applyDelta).toHaveBeenCalledWith("s1", "msg-1", "msg-1:text:0", "hola", false, "text")
+    expect(deps.setAwaitingAssistantReply).not.toHaveBeenCalledWith(true)
+  })
+
+  it("delta emitido DESPUÉS del cierre: sí re-arma (turno nuevo)", () => {
+    const deps = observedDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(cierre("s1"))
+    result.current(texto("s1"))
+    flushFrames()
+    expect(deps.setAwaitingAssistantReply).toHaveBeenCalledWith(true)
+  })
+
+  it("con awaiting ya apagado (cure externo), el cierre sella igual: el delta encolado no re-arma", () => {
+    let awaiting = false
+    const deps = makeDeps({
+      awaitingRef: () => awaiting,
+      setAwaitingAssistantReply: vi.fn((v: boolean) => { awaiting = v }),
+    })
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(texto("s1"))   // encolado
+    result.current(cierre("s1"))  // cierra con el flag ya en false
+    ;(deps.setAwaitingAssistantReply as ReturnType<typeof vi.fn>).mockClear()
+    flushFrames()
+    expect(deps.applyDelta).toHaveBeenCalledWith("s1", "msg-1", "msg-1:text:0", "hola", false, "text")
+    expect(deps.setAwaitingAssistantReply).not.toHaveBeenCalledWith(true)
+  })
+
+  it("delta posterior al cierre sobre el mismo part: concatena y re-arma (seq renovado)", () => {
+    const deps = observedDeps()
+    const { result } = renderHook(() => useSSEHandler(deps))
+    result.current(texto("s1"))   // encolado
+    result.current(cierre("s1"))  // sella
+    result.current(texto("s1"))   // mismo part: concatena y renueva seq
+    flushFrames()
+    expect(deps.applyDelta).toHaveBeenCalledWith("s1", "msg-1", "msg-1:text:0", "holahola", false, "text")
+    expect(deps.setAwaitingAssistantReply).toHaveBeenCalledWith(true)
+  })
+})
