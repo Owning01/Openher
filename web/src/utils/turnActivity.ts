@@ -2,7 +2,10 @@
 // mensajes del asistente (uno por tramo de herramientas). Sin agrupar, cada
 // mensaje dibujaba su propia caja y el chat se llenaba de líneas suéltas.
 // Acá se junta pensamiento + herramientas + diffs de todo el turno en una sola
-// caja, que va en el primer mensaje del turno (arriba del texto final).
+// caja, que va en el primer mensaje del turno (arriba del texto final):
+// [mensaje user] [caja Working] [mensajes del turno…]. El dueño es el PRIMER
+// mensaje visible del turno para que la caja no salte de burbuja en burbuja
+// mientras el turno crece (pedido del humano).
 import type { RenderedMessage, ThinkingPart, RenderedToolPart, FileDiff } from "../types"
 import { isShellResultMessage } from "./messageShape"
 
@@ -54,23 +57,25 @@ export function buildTurnActivity(
     }
     // Respuesta final = último texto del turno; todo lo anterior es intermedio
     // (mensajes que acompañan tools: "Voy a revisar X", etc.).
+    // Dueño de la caja: el PRIMER mensaje visible del turno (el que sigue al
+    // prompt del usuario). Estructura pedida: [user][caja][mensajes…]; además
+    // la caja queda estable (no salta de burbuja en burbuja mientras el turno
+    // crece). Los resultados de shell se acoplan a la caja pero no la poseen:
+    // la caja no debe vivir adentro de una tarjeta de resultado.
+    let owner: RenderedMessage | undefined
+    for (const m of current) if (visibleIDs.has(m.info.id) && !isShellResultMessage(m)) { owner = m; break }
+    if (!owner) for (const m of current) if (visibleIDs.has(m.info.id)) { owner = m; break }
+    if (!owner) return
     const withText = current.filter((m) => (m.text ?? "").trim().length > 0)
     const finalText = withText[withText.length - 1]
+    // El texto del DUEÑO no entra a la caja ni se traga: la caja se monta EN su
+    // burbuja y si el mensaje desapareciera por `swallowed` la caja se iría con
+    // él (la caja dejaría de existir al cerrar el turno). Queda visible en su
+    // lugar natural, debajo de la caja.
     const intermediateTexts = withText
-      .filter((m) => m !== finalText)
+      .filter((m) => m !== finalText && m.info.id !== owner.info.id)
       .map((m) => ({ id: m.info.id, text: m.text }))
     if (thinkingParts.length === 0 && toolParts.length === 0 && summaryDiffs.length === 0 && intermediateTexts.length === 0) return
-    // Dueño de la caja: el ÚLTIMO mensaje visible del turno. Va pegado a la
-    // respuesta final (y mientras trabaja queda a la vista, abajo, junto a lo
-    // que se está ejecutando). Si el turno quedó cortado por el recorte de la
-    // ventana se usa el último visible igual: nunca queda actividad huérfana.
-    let owner: RenderedMessage | undefined
-    // Los resultados de shell se acoplan a la caja pero no la poseen: si la
-    // poseyeran, la caja se iría al fondo del turno, debajo de la respuesta
-    // final (que también queda absorbida cuando hay caja).
-    for (const m of current) if (visibleIDs.has(m.info.id) && !isShellResultMessage(m)) owner = m
-    if (!owner) for (const m of current) if (visibleIDs.has(m.info.id)) owner = m
-    if (!owner) return
     // El cierre lo decide el último mensaje del ASISTENTE: los avisos
     // sintéticos (resultado de shell) no traen `time.completed`/`finish` y
     // dejarían la caja "en curso" para siempre.
@@ -86,7 +91,7 @@ export function buildTurnActivity(
     for (const m of current) {
       if (m.info.id !== owner.info.id) absorbed.add(m.info.id)
     }
-    if (!working) for (const m of withText) if (m !== finalText) swallowed.add(m.info.id)
+    if (!working) for (const m of withText) if (m !== finalText && m.info.id !== owner.info.id) swallowed.add(m.info.id)
   }
 
   for (const m of messages) {

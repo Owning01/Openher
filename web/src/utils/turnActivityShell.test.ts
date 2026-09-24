@@ -39,13 +39,14 @@ describe("buildTurnActivity con resultados de shell", () => {
     ]
     const { box, absorbed, swallowed } = buildTurnActivity(messages, new Set(["u1", "a1", "a2", "s1"]))
     expect(box.size).toBe(1)
-    // La caja sigue pegada a la respuesta final, no al shell (que llega después).
-    const activity = box.get("a2")!
+    // La caja va al PRIMER mensaje del turno (debajo del prompt), no al shell
+    // (que llega después) ni a la respuesta final.
+    const activity = box.get("a1")!
     expect(activity.toolParts.map((t) => t.tool)).toEqual(["read", "shell"])
     expect(activity.working).toBe(false)
     // El shell queda absorbido por la caja; la respuesta final se sigue viendo.
     expect(absorbed.has("s1")).toBe(true)
-    expect(absorbed.has("a2")).toBe(false)
+    expect(absorbed.has("a2")).toBe(true)
     expect(swallowed.has("a2")).toBe(false)
     expect(swallowed.has("s1")).toBe(false)
   })

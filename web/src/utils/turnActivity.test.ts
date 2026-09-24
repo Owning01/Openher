@@ -27,14 +27,14 @@ describe("buildTurnActivity", () => {
     ]
     const { box, absorbed } = buildTurnActivity(messages, new Set(["u1", "a1", "a2", "a3"]))
     expect(box.size).toBe(1)
-    const activity = box.get("a3")!
+    const activity = box.get("a1")!
     expect(activity.toolParts.map((t) => t.tool)).toEqual(["read", "edit"])
     expect(activity.thinkingParts).toHaveLength(1)
     expect(activity.working).toBe(false)
     // Los demás mensajes del turno no dibujan caja propia.
-    expect(absorbed.has("a1")).toBe(true)
+    expect(absorbed.has("a1")).toBe(false)
     expect(absorbed.has("a2")).toBe(true)
-    expect(absorbed.has("a3")).toBe(false)
+    expect(absorbed.has("a3")).toBe(true)
   })
 
   it("separa turnos por mensaje del usuario", () => {
@@ -55,17 +55,27 @@ describe("buildTurnActivity", () => {
     open.info.time.completed = undefined
     open.info.finish = undefined
     const { box } = buildTurnActivity([msg("u1", "user"), msg("a1", "assistant", { toolParts: [tool("c1", "read")] }), open], new Set(["u1", "a1", "a2"]))
-    expect(box.get("a2")!.working).toBe(true)
+    expect(box.get("a1")!.working).toBe(true)
   })
 
-  it("elige el último mensaje visible del turno como dueño de la caja", () => {
+  it("elige el primer mensaje visible del turno como dueño (debajo del prompt)", () => {
     const messages = [
       msg("a1", "assistant", { toolParts: [tool("c1", "read")] }),
       msg("a2", "assistant", { toolParts: [tool("c2", "edit")] }),
     ]
-    // a2 quedó fuera de la ventana visible: la caja cae en a1.
-    const { box } = buildTurnActivity(messages, new Set(["a1"]))
-    expect([...box.keys()]).toEqual(["a1"])
+    // Con los dos visibles manda el primero: [user][caja][mensajes…].
+    expect([...buildTurnActivity(messages, new Set(["a1", "a2"])).box.keys()]).toEqual(["a1"])
+    // a1 quedó fuera de la ventana visible: la caja cae en el más viejo visible.
+    expect([...buildTurnActivity(messages, new Set(["a2"])).box.keys()]).toEqual(["a2"])
+  })
+
+  it("la caja no cambia de dueño cuando el turno crece (sin saltos)", () => {
+    const base = [msg("u1", "user"), msg("a1", "assistant", { toolParts: [tool("c1", "read")] })]
+    const first = buildTurnActivity(base, new Set(["u1", "a1"]))
+    const grownMessages = [...base, msg("a2", "assistant", { toolParts: [tool("c2", "edit")] }), msg("a3", "assistant", { text: "listo" })]
+    const grown = buildTurnActivity(grownMessages, new Set(["u1", "a1", "a2", "a3"]))
+    expect([...first.box.keys()]).toEqual(["a1"])
+    expect([...grown.box.keys()]).toEqual(["a1"])
   })
 
   it("no inventa caja sin actividad", () => {

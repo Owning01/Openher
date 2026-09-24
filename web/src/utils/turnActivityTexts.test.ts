@@ -29,28 +29,38 @@ function user(id: string): RenderedMessage {
 }
 
 describe("buildTurnActivity: textos intermedios", () => {
-  it("mientras trabaja no se traga ningún texto (siguen visibles en el chat)", () => {
+  it("el texto del dueño queda en su burbuja: no se traga ni se duplica en la caja", () => {
     const msgs = [user("u1"), msg("a1", "Voy a revisar el archivo", { tool: true }), msg("a2", "Encontré esto")]
     const { swallowed, box } = buildTurnActivity(msgs, new Set(["u1", "a1", "a2"]))
     expect(swallowed.size).toBe(0)
-    const act = box.get("a2")!
+    const act = box.get("a1")!
     expect(act.working).toBe(true)
-    expect(act.intermediateTexts.map((t) => t.id)).toEqual(["a1"])
+    // El texto del dueño vive en su burbuja; la caja lleva la actividad.
+    expect(act.intermediateTexts).toEqual([])
+    expect(act.toolParts).toHaveLength(1)
   })
 
-  it("al cerrar el turno, el intermedio se traga y queda dentro de la caja", () => {
-    const msgs = [user("u1"), msg("a1", "Voy a revisar el archivo", { tool: true, closed: true }), msg("a2", "Encontré esto", { closed: true })]
-    const { swallowed, box } = buildTurnActivity(msgs, new Set(["u1", "a1", "a2"]))
-    expect([...swallowed]).toEqual(["a1"])
-    expect(box.get("a2")!.intermediateTexts).toEqual([{ id: "a1", text: "Voy a revisar el archivo" }])
+  it("al cerrar el turno, los intermedios (no el del dueño) van a la caja", () => {
+    const msgs = [user("u1"), msg("a1", "dueño", { tool: true, closed: true }), msg("a2", "medio", { closed: true }), msg("a3", "final", { closed: true })]
+    const { swallowed, box } = buildTurnActivity(msgs, new Set(["u1", "a1", "a2", "a3"]))
+    expect([...swallowed]).toEqual(["a2"])
+    expect(box.get("a1")!.intermediateTexts).toEqual([{ id: "a2", text: "medio" }])
   })
 
   it("la respuesta final del turno nunca se traga", () => {
-    const msgs = [user("u1"), msg("a1", "intermedio", { closed: true }), msg("a2", "final", { closed: true })]
+    const msgs = [user("u1"), msg("a1", "dueño", { tool: true, closed: true }), msg("a2", "final", { closed: true })]
     const { swallowed, box } = buildTurnActivity(msgs, new Set(["u1", "a1", "a2"]))
     expect(swallowed.has("a2")).toBe(false)
-    expect(swallowed.has("a1")).toBe(true)
-    // Turno sin tools ni pensamiento: igual nace caja porque hay textos que agrupar.
-    expect(box.get("a2")!.intermediateTexts).toHaveLength(1)
+    expect(box.get("a1")).toBeTruthy()
+  })
+
+  // Invariante que faltaba: el dueño NUNCA puede caer en `swallowed` porque
+  // MessageList no monta los mensajes tragados y la caja se iría con la burbuja
+  // (el turno cerrado perdía la caja entera).
+  it("el dueño de la caja nunca cae en swallowed", () => {
+    const msgs = [user("u1"), msg("a1", "Voy a revisar el archivo", { tool: true, closed: true }), msg("a2", "listo", { closed: true })]
+    const { box, swallowed } = buildTurnActivity(msgs, new Set(["u1", "a1", "a2"]))
+    expect(box.size).toBe(1)
+    for (const id of box.keys()) expect(swallowed.has(id)).toBe(false)
   })
 })
