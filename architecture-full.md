@@ -637,15 +637,16 @@ Dos hooks exportados:
     con nuevo editor.
 - **Tests**: sin tests de estos hooks (cubiertos vía `model.test.ts` para la línea pura).
 
-#### `web/src/widgets/sidebar/DesktopSidebar.tsx` — 120 líneas
+#### `web/src/widgets/sidebar/DesktopSidebar.tsx` — 110 líneas
 - **Props**: `DesktopSidebarProps` = `{activity, sidebarCollapsed, setSidebarCollapsed,
   sessionsView, currentActiveSession, activeSessionDir?, selectedSession, explorerCwd?,
   sessions, setExplorerCwd, startSidebarResize, onOpenFile?, onOpenBrowser?}`.
 - **Estado**: sin `useState`; `isFiles = activity === "explorer" || activity === "pcFiles"`.
 - **UI**:
   - `<aside className="app-desktop-sidebar[ collapsed]">`.
-  - Si colapsada: rail con **`<button title/aria-label={t("desktop.expandSidebar")} = "Expandir barra lateral">»</button>`**
-    → `setSidebarCollapsed(false)`.
+  - Si colapsada: **no renderiza nada** (sin rail). Se re-expande con el ícono activo
+    de la ActivityBar (toggle en `onClick`) o con `toggle_sidebar` = **Ctrl + B**; la
+    clave i18n `desktop.expandSidebar` quedó sin uso.
   - Si expandida y `!isFiles`: header `.desktop-sidebar-header` con título
     (`sessions.title` fallback **"Sesiones"** | `t("scm.title")` = "Control de código" |
     `t("shell.kindConfig")`) + **botón `«` `title/aria-label = "Contraer barra lateral"`**.
@@ -1929,7 +1930,7 @@ SessionChatPanel (props: session, config, dataMode, baseProps, active, ...)
   anti "chat negro". (Trampa conocida: mockear `MessageBubble` a
   `<div data-message-id>` + stubs `scrollIntoView/scrollTo/rAF` en jsdom.)
 
-#### `components/MessageBubble.tsx` — 583 líneas (+ `export default`)
+#### `components/MessageBubble.tsx` — 690 líneas (+ `export default`)
 - **Propósito**: burbuja de un mensaje: cabecera user, caja de actividad del
   turno, cuerpo (aviso/compaction/subagente/segments/texto), error, outbox,
   traducción, imágenes, confirmación de revert, footer del asistente.
@@ -1958,7 +1959,10 @@ SessionChatPanel (props: session, config, dataMode, baseProps, active, ...)
   `noticeKind` (codemode/skills/shell) → tarjeta colapsada.
 - **Caja de actividad**: agrupa `turnActivity` (o la del propio mensaje si
   `absorbActivity`); auto-scroll solo si `activityFollowRef` (usuario al fondo
-  de la caja, margen 24px) y firma `activityTick` (`tools:lenTexto:running`);
+  de la caja, margen 24px) y **no** `activityTouchedRef` (pointer/touch o foco
+  adentro: mientras la usa no se la mueve); firma `activityTick`
+  (`tools:lenPensamiento:lenTextosIntermedios:running` — los textos cuentan
+  porque son lo que más crece);
   título fijo **"Working"**; subtítulo = `LoadingIcon animate-spin` mientras
   `working`. Contenido: `ThinkingBlock` (key=`thinkingDefault`), `ToolPart*`,
   textos intermedios (`MarkdownWithEmbeds`), `FileDiffs`.
@@ -1989,8 +1993,10 @@ SessionChatPanel (props: session, config, dataMode, baseProps, active, ...)
     `.msg-more-dropdown` con `t('chat.copyText')` (deshabilitado sin texto;
     fallback `execCommand` si clipboard falla) y `t('chat.regenerate')`.
   - `compaction-checkpoint` si `!minimalistMode && hasCompaction` (marcador suelto).
-- **Tests**: `MessageBubbleActivityScroll.test.tsx` (74L, no baja si el usuario
-  scrolleó, sigue al fondo, vuelve a seguir); `MessageBubbleImage.test.tsx`
+- **Tests**: `MessageBubbleActivityScroll.test.tsx` (114L, 6 casos: no baja si el
+  usuario scrolleó, sigue al fondo, vuelve a seguir, sigue cuando crecen los
+  textos intermedios, no mueve mientras la toca, y suelta fuera → vuelve a
+  seguir); `MessageBubbleImage.test.tsx`
   (54L, image/dataURL/base64 crudo/file v1/pipeline optimistic→rendered/mapper
   v2); `MessageBubbleWorking.test.tsx` (42L, rótulo "Working" durante y al
   terminar).
@@ -3087,7 +3093,7 @@ SessionChatPanel (props: session, config, dataMode, baseProps, active, ...)
 - **Detalle exhaustivo del transporte y su test → Sección 06**
   (`shared/sse/client.test.ts`, `parser.test.ts`).
 
-#### `hooks/useSSEHandler.ts` — 349 líneas
+#### `hooks/useSSEHandler.ts` — 377 líneas
 - **Export**: `function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void`
   (+ re-export de `MessageEnvelope`).
 - **Contrato**: handler central de eventos de UNA sesión; compartido por la vista
@@ -3096,7 +3102,12 @@ SessionChatPanel (props: session, config, dataMode, baseProps, active, ...)
   `sid:messageID:partID:partType` (concatena texto si no es replace) con flush
   **por rAF**; en el flush, si no hay `awaiting` pero llegaron deltas de la
   sesión visible (settle prematuro, turno solapado, turno de otro cliente) →
-  **re-arma** `setAwaitingAssistantReply(true)` (el botón Stop vuelve).
+  **re-arma** `setAwaitingAssistantReply(true)` (el botón Stop vuelve). El
+  re-arme exige que el delta sea **posterior al último cierre**
+  (`deltaSeqRef`/`settledSeqRef`, sellados en cada rama que apaga el awaiting):
+  los deltas que ya estaban encolados son del turno que acaba de terminar y no
+  lo resucitan (antes, con el cierre y los últimos deltas en el mismo chunk,
+  el Stop quedaba encendido tras el fin hasta el cure del poll, 15-20 s).
 - **`partTypeCacheRef`**: `partID → type` (alimentado solo con parts de la
   sesión visible o sin sessionID), cap 500 (descarta el más viejo); limpio al
   cambiar de sesión.
@@ -3126,11 +3137,14 @@ SessionChatPanel (props: session, config, dataMode, baseProps, active, ...)
   | `session.error` | `normalizeAssistantError(error)` o `message/text` plano → `setRuntimeError` + awaiting off (solo la sesión visible) |
 - **Diagnóstico**: `localStorage["opencode.debug.sse"] === "1"` →
   `console.info("[SSE:diag] …")` por delta de reasoning.
-- **Tests**: `useSSEHandler.test.ts` (209L): cierre de turno (assistant viejo vs
+- **Tests**: `useSSEHandler.test.ts` (290L): cierre de turno (assistant viejo vs
   nuevo, sin awaiting), `session.error` (mensaje real, otra sesión, message
   plano), dialecto v2 (`session.text.delta` en vivo, part estable sin ordinal,
-  deltas ajenos ignorados, reasoning tipado, started/ended, execution.*,
-  re-arme de awaiting) — nombres en 2.10.
+  deltas ajenos ignorados, reasoning tipado, started/ended, execution.*),
+  re-arme de awaiting (7: delta vivo re-arma, ajeno no, con awaiting activo no
+  llama de más, **el cierre no se re-arma con deltas encolados antes**,
+  **sí con deltas posteriores**, **sella aunque el flag ya esté en false**, y
+  **concatena+re-arma si el delta posterior es del mismo part**) — nombres en 2.10.
 
 #### `hooks/usePolling.ts` — 72 líneas
 - **Exports**: `type PollingControl = {pause, resume, fail, succeed}`,
@@ -3410,7 +3424,7 @@ SessionChatPanel (props: session, config, dataMode, baseProps, active, ...)
 - **Tests**: `messageShape.test.ts` (98L), `shellResult.test.ts` (detección,
   parseo de comando con `>`/comillas, strip, info combinada).
 
-#### `utils/turnActivity.ts` — 97 líneas
+#### `utils/turnActivity.ts` — 102 líneas
 - **Exports**: `type TurnActivity {thinkingParts, toolParts, summaryDiffs,
   intermediateTexts, working}`, `formatDurationMs(ms)`, `buildTurnActivity(
   messages, visibleIDs): {box: Map<id, TurnActivity>, absorbed: Set<id>,
@@ -3418,16 +3432,23 @@ SessionChatPanel (props: session, config, dataMode, baseProps, active, ...)
 - **Contrato**: un prompt genera varios mensajes del asistente → la caja
   (pensamiento + herramientas + diffs + textos intermedios) se agrupa en UN
   mensaje; separa turnos en cada `user`; los shells (`isShellResultMessage`)
-  se suman al turno pero **no pueden ser dueños** (si no, la caja se iría al
-  fondo); dueño = **último mensaje visible** del turno (nunca actividad
-  huérfana si la ventana lo recortó); `working` lo decide el último
+  se suman al turno pero **no pueden ser dueños** (la caja no debe vivir adentro
+  de una tarjeta de resultado); dueño = **primer mensaje visible** del turno
+  (estructura `[user][caja][mensajes…]`, la caja no salta de burbuja en burbuja
+  mientras el turno crece; si el recorte de la ventana se lo llevó, el más viejo
+  visible — nunca actividad huérfana); el **texto del dueño** no entra a la caja
+  ni se traga (se monta en su burbuja: si el mensaje cayera en `swallowed`,
+  MessageList no lo montaría y la caja desaparecería al cerrar el turno);
+  `working` lo decide el último
   **assistant** (los avisos sintéticos no traen `completed/finish` y dejarían la
   caja "en curso" para siempre); `absorbed` = mensajes sin caja propia;
-  `swallowed` = textos intermedios que al **cerrar** el turno se mudan adentro
-  de la caja (mientras trabaja siguen visibles); la respuesta final nunca se
-  traga. `formatDurationMs`: `ms | N.Ns | Nm Ns | Nh Nm`.
-- **Tests**: `turnActivity.test.ts` (78L), `turnActivityShell.test.ts` (4
-  casos), `turnActivityTexts.test.ts` (3 casos).
+  `swallowed` = textos intermedios (ajenos al dueño) que al **cerrar** el turno
+  se mudan adentro de la caja (mientras trabaja siguen visibles); la respuesta
+  final nunca se traga. `formatDurationMs`: `ms | N.Ns | Nm Ns | Nh Nm`.
+- **Tests**: `turnActivity.test.ts` (87L, incluye "no cambia de dueño cuando el
+  turno crece"), `turnActivityShell.test.ts` (75L, 4 casos),
+  `turnActivityTexts.test.ts` (59L, 4 casos, incluye el invariante "el dueño
+  nunca cae en swallowed").
 
 #### `utils/chatNotes.ts` — 23 líneas
 - **Exports**: `CHAT_NOTES_MAX = 20_000`, `chatNotesKey(sessionID?)`
@@ -3914,7 +3935,7 @@ navegador **no dispare** el drop (test `ComposerDrop.test.tsx`).
 |---|---|---|
 | `components/SessionChatPanel.parity.test.tsx` | 487 | **Q2 parity**: send encolando/en libre, resume del hold, Stop (hold+abort+awaiting), revert/edit en ambos caminos, undo/redo por borde, enviar-ahora (claim+resume+force), editar pendiente; **divergencias caracterizadas** (desktop poda optimista / móvil solo recarga; móvil marca busy optimista; solo móvil pasa `setLocalRevertID` a send; orden visual/traducción; solo móvil `completionShouldPlayRef` en compact; solo móvil parchea `session.revert`; desktop publica comandos locales vía `openPromptHistory/onOpenNewSession/onOpenConnect`) |
 | `components/MessageListReveal.test.tsx` | 171 | ventana 40, expand+flash, nonce, spinner sobre stale, entrada sin smooth, no anclar sobre spinner, memoria envenenada, stale no envenena, cap duro 1200 ms |
-| `hooks/useSSEHandler.test.ts` | 209 | cierre de turno por baseline, `session.error` (3 casos), dialecto v2 (10 casos), re-arme de awaiting (3 casos) |
+| `hooks/useSSEHandler.test.ts` | 290 | cierre de turno por baseline, `session.error` (3 casos), dialecto v2 (10 casos), re-arme de awaiting (7 casos: sella aunque el flag ya esté en false y no resucita con deltas encolados antes del cierre) |
 | `utils/parseCommand.test.ts` | 367 | todos los slash commands, `resolveCommand`, optimista, `rehydrateImages`, status/notice |
 | `utils/rendered.test.ts` | 378 | pipeline/segments/filtros/caché/invalidaciones/compaction/tokens |
 | `entities/message/model.test.ts` | 344 | modelo + claves de ChatSettings |
@@ -3930,7 +3951,7 @@ navegador **no dispare** el drop (test `ComposerDrop.test.tsx`).
 | `utils/messageShape.test.ts` | 98 | subagente: detección/strip/tag/attrs |
 | `components/Composer*.test.tsx` (5) | 369 | caracterización, drop, historial, anillo, slash Enter |
 | `hooks/useMessages.*.test.ts` (3) | 164 | parts streameados, outbox compartido, aislamiento de sesión |
-| `utils/turnActivity*.test.ts` (3) | ~163 | caja por turno, shells, textos intermedios |
+| `utils/turnActivity*.test.ts` (3) | 221 | caja por turno (dueño = primer visible, no cambia al crecer), shells, textos intermedios (el del dueño no se traga) |
 | `utils/subagentBackground.test.ts` + `components/SubagentBackground.test.tsx` | 149 | background/foreground/activos + chip |
 | `components/ChatHeader.test.tsx` | 91 | botón de subagentes activos |
 | `components/AgentEmbed.test.tsx` | 94 | embeds sandbox/Recargar/Ampliar |
@@ -14556,9 +14577,12 @@ y auto-flush cuando el turno se libera (`features/chat/hooks/useOutboxFlush.ts`;
      type del part**; se alimenta con `message.part.updated` y con los parts tipados de
      `message.updated` (reasoning/thinking).
    - **Coalesce por frame**: `enqueueDelta` concatena deltas del mismo
-     `sessionID:messageID:partID:partType` en `coalesceMapRef` y arma UN
-     `requestAnimationFrame(flushCoalesce)`; al flush, si hay deltas vivos de la sesión
-     visible sin `awaiting`, re-enciende `setAwaitingAssistantReply(true)` (turno vivo).
+     `sessionID:messageID:partID:partType` en `coalesceMapRef` (cada entry lleva un `seq`
+     monotónico) y arma UN `requestAnimationFrame(flushCoalesce)`; al flush, si hay deltas de
+     la sesión visible **posteriores al último cierre** (`seq > settledSeqRef`) sin `awaiting`,
+     re-enciende `setAwaitingAssistantReply(true)` (turno vivo). Los deltas encolados antes del
+     cierre no resucitan el Stop (bug: con el cierre y los últimos deltas en el mismo chunk SSE
+     quedaba "trabajando" hasta el cure del poll, 15-20 s).
    - Ramas por dialecto:
      - v1: `message.part.updated` → `applyPart`; `message.part.delta` → `enqueueDelta`
        (tipo del cache, fallback `p.type/p.partType/"text"`); `message.updated` → re-tipa
