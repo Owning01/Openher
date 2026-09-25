@@ -10,6 +10,7 @@ import {
 } from "../utils/parseCommand"
 import { messageText, findDeliveredEcho } from "../utils/messageShape"
 import { formatServerError } from "../shared/errors/serverErrors"
+import { withTimeout } from "../shared/lib/async"
 import { setTranslationOriginal } from "../stores/translationOriginals"
 
 // Onda 3 / B2: `updateSend` extraído tal cual desde hooks/useMessages.ts.
@@ -145,14 +146,11 @@ export function useMessageSend(deps: MessageSendDeps) {
             // La verificación se acota a 5s: con el server caído de verdad,
             // loadMessages puede sumar decenas de segundos y `isSending`
             // bloquearía el composer todo ese tiempo (timeout > caída real).
-            const verify = api
-              .loadMessages(config, selectedSession.id, selectedSession.directory, 50)
-              .then((m) => m)
-              .catch(() => null)
-            const raced = await Promise.race([
-              verify,
-              new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
-            ])
+            const raced = await withTimeout(
+              api.loadMessages(config, selectedSession.id, selectedSession.directory, 50, false),
+              5_000,
+              "verify-timeout",
+            ).catch(() => null)
             delivered = findDeliveredEcho(raced, text, Date.now() - 10 * 60 * 1000) !== null
           } catch {
             delivered = false

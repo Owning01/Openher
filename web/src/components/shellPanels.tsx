@@ -8,6 +8,7 @@ import { fileIcon, shell, type ShellPanelKind } from "../shell"
 import { VisualSelectOverlay } from "./VisualSelectOverlay"
 const CodeMirrorEditor = lazy(() => import("./CodeMirrorEditor").then((m) => ({ default: m.CodeMirrorEditor })))
 import { toBase64Chunked } from "../utils/editorOps"
+import { withTimeout } from "../shared/lib/async"
 import { ContextMenu } from "./ContextMenu"
 import { LedSwitch } from "./LedSwitch"
 import { Opencode2Button } from "../features/opencode2/Opencode2Button"
@@ -18,7 +19,7 @@ export { killTerminalPty, transferTerminalTab }
 import { useT } from "../i18n-context"
 import { useDialog } from "./DialogProvider"
 import { Markdown } from "./Markdown"
-import { SingleTerminal } from "../features/shell/SingleTerminal"
+const SingleTerminal = lazy(() => import("../features/shell/SingleTerminal").then((m) => ({ default: m.SingleTerminal })))
 import { DesignPanel } from "../features/shell/DesignPanel"
 export { SingleTerminal, DesignPanel }
 
@@ -342,7 +343,9 @@ export const TerminalPanel = memo(function TerminalPanel({
                 <>
                   <div style={{ flex: 1, position: "relative", background: "#0d1117", display: "flex", flexDirection: "column" }}>
                     <div style={{ flex: 1, position: "relative" }}>
-                      <SingleTerminal cwd={cwd} shellName={leftTab.shell} tabId={leftTab.id} />
+                      <Suspense fallback={<div style={{ background: "#0d1117", width: "100%", height: "100%" }} />}>
+                        <SingleTerminal cwd={cwd} shellName={leftTab.shell} tabId={leftTab.id} />
+                      </Suspense>
                     </div>
                     <div style={{ padding: "2px 6px", fontSize: 12, color: "var(--muted)", background: "var(--surface-strong)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
                       <span>{leftTab.title}</span>
@@ -351,7 +354,9 @@ export const TerminalPanel = memo(function TerminalPanel({
                   </div>
                   <div style={{ flex: 1, position: "relative", background: "#0d1117", display: "flex", flexDirection: "column" }}>
                     <div style={{ flex: 1, position: "relative" }}>
-                      <SingleTerminal cwd={cwd} shellName={rightTab.shell} tabId={rightTab.id} />
+                      <Suspense fallback={<div style={{ background: "#0d1117", width: "100%", height: "100%" }} />}>
+                        <SingleTerminal cwd={cwd} shellName={rightTab.shell} tabId={rightTab.id} />
+                      </Suspense>
                     </div>
                     <div style={{ padding: "2px 6px", fontSize: 12, color: "var(--muted)", background: "var(--surface-strong)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
                       <span>{rightTab.title}</span>
@@ -383,7 +388,9 @@ export const TerminalPanel = memo(function TerminalPanel({
                     zIndex: 1,
                   }}
                 >
-                  <SingleTerminal cwd={cwd} shellName={visibleTab.shell} tabId={visibleTab.id} />
+                  <Suspense fallback={<div style={{ background: "#0d1117", width: "100%", height: "100%" }} />}>
+                    <SingleTerminal cwd={cwd} shellName={visibleTab.shell} tabId={visibleTab.id} />
+                  </Suspense>
                 </div>
                 )
               })()}
@@ -646,10 +653,7 @@ export const FileEditorPanel = memo(function FileEditorPanel({
     let lastErr: unknown = null
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        await Promise.race([
-          shell.fs.write(tab, b64),
-          new Promise<never>((_, rej) => window.setTimeout(() => rej(new Error("timeout 15s")), 15000)),
-        ])
+        await withTimeout(shell.fs.write(tab, b64), 15000, "timeout 15s")
         lastErr = null
         break
       } catch (err) {
@@ -958,9 +962,8 @@ export const FileEditorPanel = memo(function FileEditorPanel({
 // ============================================================== Kanban — Premium
 
 
-// KanbanPanel vive en ./KanbanPanel (split P1): import local + re-export
-// para importadores existentes.
-import { KanbanPanel } from "./KanbanPanel"
+// KanbanPanel vive en ./KanbanPanel (split P1): import diferido + re-export
+const KanbanPanel = lazy(() => import("./KanbanPanel").then((m) => ({ default: m.KanbanPanel })))
 export { KanbanPanel }
 
 // ============================================================== Docs
@@ -990,7 +993,7 @@ export const DocsPanel = memo(function DocsPanel() {
     <div className="shell-docs">
       <div className="shell-docs-head">
         <input type="search" placeholder={t('shell.searchDocs')} value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <a className="btn-secondary compact" href="https://opencode.ai/docs" target="_blank" rel="noreferrer">{t('shell.officialDocs')}</a>
+        <a className="btn-secondary compact" href="https://opencode.ai/v2/docs" target="_blank" rel="noreferrer">{t('shell.officialDocs')}</a>
       </div>
       <div className="shell-docs-body">
         <div className="shell-docs-list">
@@ -1188,7 +1191,7 @@ export const ShellPanel = memo(function ShellPanel({ kind, cwd, onOpenSessionDir
     case "explorer":
       return <ExplorerPanel onOpenSessionDir={onOpenSessionDir} initialCwd={cwd} onOpenFile={onOpenFile} />
     case "kanban":
-      return <KanbanPanel />
+      return <Suspense fallback={<div className="panel-loading">Cargando…</div>}><KanbanPanel /></Suspense>
     case "docs":
       return <DocsPanel />
     case "updates":

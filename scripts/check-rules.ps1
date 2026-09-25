@@ -7,12 +7,13 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 $budgetPath = Join-Path $root 'tasks/rules-budget.json'
 
-function Count-GitGrep([string]$pattern, [string]$path, [switch]$Pcre, [switch]$NoTests) {
+function Count-GitGrep([string]$pattern, [string]$path, [switch]$Pcre, [switch]$NoTests, [string[]]$Exclude) {
   $a = @('grep', '--untracked', '-o')
   if ($Pcre) { $a += '-P' }
   $a += @($pattern, '--', $path)
   # Los `any` de mocks en tests no son deuda de produccion: se excluyen de la metrica.
   if ($NoTests) { $a += @(':(exclude)*.test.ts', ':(exclude)*.test.tsx', ':(exclude)*.test.mjs') }
+  if ($Exclude) { $a += @($Exclude | ForEach-Object { ":(exclude)$_" }) }
   $out = & git @a 2>$null
   if ($null -eq $out) { return 0 }
   return @($out).Count
@@ -30,6 +31,11 @@ $big = @(Get-ChildItem web/src -Recurse -Include *.ts, *.tsx |
 $measured = [ordered]@{
   asAny              = (Count-GitGrep 'as any' 'web/src' -NoTests)
   colonAny           = (Count-GitGrep ':\s*any\b' 'web/src' -Pcre -NoTests)
+  # catchVacios: bloques `catch` sin cuerpo en la MISMA linea (patron dominante;
+  # los multilinea no entran). racesSinHelper: Promise.race fuera del helper
+  # compartido withTimeout (shared/lib/async.ts) — usar el helper.
+  catchVacios        = (Count-GitGrep 'catch\s*(\([^)]*\))?\s*\{\s*\}' 'web/src' -Pcre -NoTests)
+  racesSinHelper     = (Count-GitGrep 'Promise\.race' 'web/src' -NoTests -Exclude 'web/src/shared/lib/async.ts')
   exportDefault      = (Count-Lines 'export default' 'web/src')
   important          = (Count-GitGrep '!important' 'web/src/styles')
   tsNocheck          = (Count-Lines '@ts-nocheck' 'web/src')

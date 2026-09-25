@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { CheckIcon, CloseIcon } from "../Icons"
+import { APP_ERROR_EVENT } from "../shared/errors/globalHandlers"
 
 export type ToastKind = "info" | "success" | "error"
 export type ToastItem = { id: number; kind: ToastKind; msg: string }
@@ -39,6 +40,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const pending = timers.current
     return () => { pending.forEach((h) => window.clearTimeout(h)); pending.clear() }
   }, [])
+
+  // Errores globales (unhandledrejection / window.error): aviso visible además
+  // de la consola. El texto técnico se muestra tal cual (es diagnóstico).
+  useEffect(() => {
+    const onAppError = (e: Event) => {
+      const msg = (e as CustomEvent<string>).detail
+      if (msg) toast(msg, "error")
+    }
+    window.addEventListener(APP_ERROR_EVENT, onAppError)
+    return () => window.removeEventListener(APP_ERROR_EVENT, onAppError)
+  }, [toast])
 
   return (
     <ToastCtx.Provider value={{ toast }}>
