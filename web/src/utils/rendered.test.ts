@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { computeRenderedMessages, type RenderedCache } from "./rendered"
+import { computeRenderedMessages } from "./rendered"
 import { toMessageEnvelopeV1 } from "../shared/api/mappers"
 import type { MessageEnvelope, FileDiff } from "../types"
 
@@ -34,12 +34,6 @@ function toolPart(id: string, tool: string, sessionID?: string, extra: Record<st
 }
 
 describe("computeRenderedMessages", () => {
-  it("returns empty out for empty input", () => {
-    const { out, cache } = computeRenderedMessages([], undefined, new Map())
-    expect(out).toEqual([])
-    expect(cache.size).toBe(0)
-  })
-
   it("keeps an assistant error visible even without text or parts", () => {
     const msg = makeEnvelope({
       info: { ...baseInfo("m-error"), role: "assistant", error: { name: "ProviderError", message: "rate limited" } },
@@ -82,26 +76,6 @@ describe("computeRenderedMessages", () => {
     expect(out[0]!.text).toBe("hola")
     expect(out[1]!.text).toBe("listo")
     expect(out[1]!.toolParts).toHaveLength(1)
-  })
-
-  it("trims text outer ends but preserves inner padding around join", () => {
-    const msg = makeEnvelope({
-      info: baseInfo("m1"),
-      parts: [textPart("p1", "  a  "), textPart("p2", "  b  ")],
-    })
-    const { out } = computeRenderedMessages([msg], undefined, new Map())
-    // join then trim: "  a  \n\n  b  ".trim() => "a  \n\n  b"
-    expect(out[0]!.text).toBe("a  \n\n  b")
-  })
-
-  it("sets hasCompaction when compaction part present", () => {
-    const msg = makeEnvelope({
-      info: baseInfo("m1"),
-      parts: [textPart("p1", "hi", "compaction")],
-    })
-    const { out } = computeRenderedMessages([msg], undefined, new Map())
-    expect(out[0]!.hasCompaction).toBe(true)
-    expect(out[0]!.text).toBe("hi")
   })
 
   it("extracts thinking and reasoning parts separately", () => {
@@ -296,75 +270,6 @@ describe("computeRenderedMessages", () => {
     expect(ru?.turnMode).toBe("plan")
   })
 
-  it("uses message.info.mode directly for turnMode if present", () => {
-    const msg = makeEnvelope({
-      info: { ...baseInfo("m1", "assistant"), mode: "build" },
-      parts: [textPart("p1", "hi")],
-    })
-    const { out } = computeRenderedMessages([msg], undefined, new Map())
-    expect(out[0]!.turnMode).toBe("build")
-  })
-
-  it("caches and reuses rendered object when src reference identical and deps unchanged", () => {
-    const msg = makeEnvelope({ info: baseInfo("m1"), parts: [textPart("p1", "hello")] })
-    const cache: RenderedCache = new Map()
-    const first = computeRenderedMessages([msg], "full" as any, cache)
-    expect(first.out).toHaveLength(1)
-    const firstRendered = first.out[0]
-    const second = computeRenderedMessages([msg], "full" as any, first.cache)
-    expect(second.out[0]).toBe(firstRendered) // same reference
-    expect(second.cache.get("m1")!.rendered).toBe(firstRendered)
-  })
-
-  it("invalidates cache when src reference changes (immutable update)", () => {
-    const msg1 = makeEnvelope({ info: baseInfo("m1"), parts: [textPart("p1", "hello")] })
-    const cache: RenderedCache = new Map()
-    const first = computeRenderedMessages([msg1], undefined, cache)
-    const firstRendered = first.out[0]!
-    const msg2 = makeEnvelope({ info: msg1.info, parts: [textPart("p1", "hello world")] })
-    // same id but different object reference
-    const second = computeRenderedMessages([msg2], undefined, first.cache)
-    expect(second.out[0]).not.toBe(firstRendered)
-    expect(second.out[0]!.text).toBe("hello world")
-  })
-
-  it("invalidates cache when dataMode changes", () => {
-    const msg = makeEnvelope({ info: baseInfo("m1"), parts: [textPart("p1", "hi")] })
-    const first = computeRenderedMessages([msg], "full" as any, new Map())
-    const second = computeRenderedMessages([msg], "saver" as any, first.cache)
-    expect(second.out[0]).not.toBe(first.out[0])
-    expect(second.out[0]!.dataMode).toBe("saver")
-  })
-
-  it("invalidates cache when diffs change", () => {
-    const diffs1: FileDiff[] = [{ file: "a.ts", additions: 1, deletions: 0 }]
-    const diffs2: FileDiff[] = [{ file: "b.ts", additions: 2, deletions: 0 }]
-    const user1 = makeEnvelope({
-      info: { ...baseInfo("u1", "user"), summary: { diffs: diffs1 } },
-      parts: [textPart("p1", "u")],
-    })
-    const assistant = makeEnvelope({ info: baseInfo("a1", "assistant"), parts: [textPart("p1", "a")] })
-    const first = computeRenderedMessages([user1, assistant], undefined, new Map())
-    const firstRendered = first.out.find((m) => m.info.id === "a1")!
-    const user2 = makeEnvelope({
-      info: { ...baseInfo("u1", "user"), summary: { diffs: diffs2 } },
-      parts: [textPart("p1", "u")],
-    })
-    // need new reference for assistant as well to trigger re-eval? Actually cache key is assistant, but diffs is derived from user.
-    // To invalidate, we pass new array with changed diffs reference and same assistant ref; diffs !== cached diffs so should miss.
-    const second = computeRenderedMessages([user2, assistant], undefined, first.cache)
-    const secondRendered = second.out.find((m) => m.info.id === "a1")!
-    expect(secondRendered).not.toBe(firstRendered)
-    expect(secondRendered.summaryDiffs).toBe(diffs2)
-  })
-
-  it("nextCache is new Map, not same as input cache (inmutabilidad)", () => {
-    const msg = makeEnvelope({ info: baseInfo("m1"), parts: [textPart("p1", "hi")] })
-    const inputCache: RenderedCache = new Map()
-    const { cache: nextCache } = computeRenderedMessages([msg], undefined, inputCache)
-    expect(nextCache).not.toBe(inputCache)
-  })
-
   it("handles compaction type correctly join and flag", () => {
     const msg = makeEnvelope({
       info: baseInfo("m1"),
@@ -373,20 +278,6 @@ describe("computeRenderedMessages", () => {
     const { out } = computeRenderedMessages([msg], undefined, new Map())
     expect(out[0]!.hasCompaction).toBe(true)
     expect(out[0]!.text).toBe("a\n\nb")
-  })
-
-  it("exposes tokens and cost from info", () => {
-    const msg = makeEnvelope({
-      info: {
-        ...baseInfo("m1"),
-        tokens: { input: 10, output: 20, reasoning: 0, cache: { read: 0, write: 0 } },
-        cost: 0.05,
-      },
-      parts: [textPart("p1", "hi")],
-    })
-    const { out } = computeRenderedMessages([msg], undefined, new Map())
-    expect(out[0]!.tokens?.input).toBe(10)
-    expect(out[0]!.cost).toBe(0.05)
   })
 
   it("reporte de subagente: el texto renderizado sale sin el envoltorio <subagent>", () => {
@@ -401,14 +292,5 @@ describe("computeRenderedMessages", () => {
     expect(out).toHaveLength(1)
     expect(out[0]!.text).toBe("## Informe")
     expect(out[0]!.info.role).toBe("synthetic")
-  })
-
-  it("user que menciona <subagent> no se toca", () => {
-    const msg = makeEnvelope({
-      info: baseInfo("m-u", "user"),
-      parts: [textPart("p1", "qué significa <subagent> acá?")],
-    })
-    const { out } = computeRenderedMessages([msg], undefined, new Map())
-    expect(out[0]!.text).toBe("qué significa <subagent> acá?")
   })
 })

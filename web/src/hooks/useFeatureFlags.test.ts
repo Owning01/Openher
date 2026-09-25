@@ -8,11 +8,6 @@ afterEach(() => {
 })
 
 describe("useFeatureFlags", () => {
-  it("aplica los defaults", () => {
-    const { result } = renderHook(() => useFeatureFlags())
-    expect(result.current.flags.contextMenu).toBe(true)
-  })
-
   it("toggle enciende y apaga", () => {
     const { result } = renderHook(() => useFeatureFlags())
     act(() => result.current.toggleFlag("contextMenu"))

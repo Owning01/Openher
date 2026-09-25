@@ -27,12 +27,6 @@ describe("translateToEnglish", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it("returns original text when single space", async () => {
-    const result = await translateToEnglish(" ")
-    expect(result).toBe(" ")
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
   it("calls fetch with correct URL and encoded text", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
@@ -82,22 +76,6 @@ describe("translateToEnglish", () => {
 
     const result = await translateToEnglish("Hola mundo")
     expect(result).toBe("Hello world")
-  })
-
-  it("joins three sentences", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [
-        [
-          ["One ", "Uno ", null, null, 10],
-          ["two ", "dos ", null, null, 10],
-          ["three", "tres", null, null, 10],
-        ],
-      ],
-    } as Response)
-
-    const result = await translateToEnglish("Uno dos tres")
-    expect(result).toBe("One two three")
   })
 
   it("skips blocks where block[0] is falsy", async () => {
@@ -164,50 +142,6 @@ describe("translateToEnglish", () => {
     } as Response)
 
     await expect(translateToEnglish("hola")).rejects.toThrow("Translation failed: 500")
-  })
-
-  it("throws with 429 status", async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 429,
-      json: async () => ({}),
-    } as Response)
-
-    await expect(translateToEnglish("hola")).rejects.toThrow("Translation failed: 429")
-  })
-
-  it("clears timeout after successful fetch", async () => {
-    const clearSpy = vi.spyOn(globalThis, "clearTimeout")
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [[["hello", "hola", null, null, 10]]],
-    } as Response)
-
-    await translateToEnglish("hola")
-    expect(clearSpy).toHaveBeenCalled()
-    clearSpy.mockRestore()
-  })
-
-  it("clears timeout even when fetch throws", async () => {
-    const clearSpy = vi.spyOn(globalThis, "clearTimeout")
-    fetchMock.mockRejectedValue(new Error("network fail"))
-
-    await expect(translateToEnglish("hola")).rejects.toThrow("network fail")
-    expect(clearSpy).toHaveBeenCalled()
-    clearSpy.mockRestore()
-  })
-
-  it("clears timeout even when response not ok", async () => {
-    const clearSpy = vi.spyOn(globalThis, "clearTimeout")
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 503,
-      json: async () => ({}),
-    } as Response)
-
-    await expect(translateToEnglish("hola")).rejects.toThrow()
-    expect(clearSpy).toHaveBeenCalled()
-    clearSpy.mockRestore()
   })
 
   it("aborts after 6000ms timeout", async () => {

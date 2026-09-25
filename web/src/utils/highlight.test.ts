@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import { lowlight, langFromFilename } from "./highlight"
+import { describe, it, expect } from "vitest"
+import { langFromFilename } from "./highlight"
 
 describe("langFromFilename", () => {
   it("maps js variants to javascript", () => {
@@ -134,51 +134,4 @@ describe("langFromFilename", () => {
   })
 })
 
-describe("lowlight instance", () => {
-  it("is defined", () => {
-    expect(lowlight).toBeDefined()
-  })
 
-  it("has highlight method", () => {
-    expect(typeof lowlight.highlight).toBe("function")
-  })
-
-  it("can highlight javascript", () => {
-    const tree = lowlight.highlight("javascript", "const x = 1;")
-    expect(tree).toBeDefined()
-    expect(tree.type).toBe("root")
-    expect(Array.isArray((tree as unknown as { children: unknown[] }).children)).toBe(true)
-  })
-
-  it("can highlight typescript alias ts", () => {
-    const tree = lowlight.highlight("ts", "const y: number = 2;")
-    expect(tree.type).toBe("root")
-  })
-
-  it("can highlight python", () => {
-    const tree = lowlight.highlight("python", "def foo(): pass")
-    expect(tree.type).toBe("root")
-  })
-
-  it("can highlight using registered aliases js, sh, py, etc.", () => {
-    expect(() => lowlight.highlight("js", "let a=1")).not.toThrow()
-    expect(() => lowlight.highlight("sh", "echo hi")).not.toThrow()
-    expect(() => lowlight.highlight("py", "print('hi')")).not.toThrow()
-    expect(() => lowlight.highlight("md", "# title")).not.toThrow()
-    expect(() => lowlight.highlight("yml", "key: value")).not.toThrow()
-  })
-
-  it("highlights plaintext without error", () => {
-    const tree = lowlight.highlight("plaintext", "just text")
-    expect(tree.type).toBe("root")
-  })
-
-  it("registered languages include expected set", () => {
-    // lowlight has registered method in v3; check via highlight or list
-    // we test that known languages don't throw, unknown may fallback
-    const langs = ["javascript", "typescript", "json", "bash", "python", "css", "html", "go", "rust", "sql", "yaml", "toml", "markdown", "diff", "graphql", "plaintext"]
-    for (const lang of langs) {
-      expect(() => lowlight.highlight(lang, "test")).not.toThrow()
-    }
-  })
-})

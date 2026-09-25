@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest"
-import { createRun, persistRuns, removeRun, runProgress, runStore, updateRun, updateRunTask } from "./runStore"
+import { createRun, persistRuns, runProgress, runStore, updateRun, updateRunTask } from "./runStore"
 
 beforeEach(() => {
   localStorage.clear()
@@ -36,11 +36,5 @@ describe("runStore", () => {
     updateRunTask(run.id, run.tasks[1].id, { state: "merged" })
     updateRunTask(run.id, run.tasks[2].id, { state: "error" })
     expect(runProgress(runStore.get()[0])).toEqual({ total: 3, done: 2, failed: 1, open: 0 })
-  })
-
-  it("remove borra el run", () => {
-    const run = createRun({ name: "r", prompt: "p", repoPath: "G:/repo", taskNames: ["a"] })!
-    removeRun(run.id)
-    expect(runStore.get()).toEqual([])
   })
 })

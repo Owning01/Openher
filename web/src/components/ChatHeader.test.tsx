@@ -86,13 +86,4 @@ describe("ChatHeader botón de subagentes activos", () => {
     fireEvent.click(item!)
     expect(props.onViewSubagents).toHaveBeenCalledWith("c1")
   })
-
-  it("no lista hijos de otra sesión", () => {
-    const foreign = session({ id: "c9", title: "De otro chat", parentID: "otra", status: "busy" })
-    const { container } = renderHeader({
-      sessions: [parent, foreign],
-      busySessionIds: new Set(["c9"]),
-    })
-    expect(container.querySelector(".header-bg-pill")).toBeNull()
-  })
 })

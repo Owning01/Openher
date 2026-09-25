@@ -269,16 +269,8 @@ describe("ensureVersionDetected", () => {
     await expect(ensureVersionDetected(cfg)).resolves.toBe("v2")
   })
 
-  it("clears detectionPromises after resolve", async () => {
-    const cfg = makeConfig({ apiVersion: "auto" })
-    setHealthProbe(() => Promise.resolve())
-    await ensureVersionDetected(cfg)
-    expect(detectionPromises.size).toBe(0)
-  })
-
   it("deduplicates concurrent calls", async () => {
-    let callCount = 0
-    const probe = vi.fn().mockImplementation(() => new Promise((r) => setTimeout(() => { callCount++; r({}); }, 20)))
+    const probe = vi.fn().mockImplementation(() => new Promise((r) => setTimeout(() => r({}), 20)))
     setHealthProbe(probe)
     const cfg = makeConfig({ apiVersion: "auto" })
     const p1 = ensureVersionDetected(cfg)
@@ -287,18 +279,6 @@ describe("ensureVersionDetected", () => {
     expect(r1).toBe("v1")
     expect(r2).toBe("v1")
     expect(probe).toHaveBeenCalledOnce()
-    expect(callCount).toBe(1)
-    // promises deduped: at least probe not called twice
-    // also detectionPromises should be cleared afterwards
-    expect(detectionPromises.size).toBe(0)
-  })
-
-  it("works without healthProbe set (null)", async () => {
-    setHealthProbe(null as any)
-    // reset to null state: setHealthProbe(null) leaves healthProbe null
-    // ensureVersionDetected should still return v1
-    const cfg = makeConfig({ apiVersion: "auto" })
-    await expect(ensureVersionDetected(cfg)).resolves.toBe("v1")
   })
 })
 

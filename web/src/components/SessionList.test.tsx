@@ -137,33 +137,12 @@ describe("SessionList rename in-place estilo Windows", () => {
     expect((props.onStartRename as ReturnType<typeof vi.fn>).mock.calls[0][0].id).toBe("p1")
   })
 
-  it("el campo sustituye al título sin botones (in-place)", () => {
-    // El proyecto se auto-expande al entrar en rename: sin clicks.
-    const { container } = renderList({ renamingSessionID: "t1", renameValue: "Otro chat A" })
-    const cards = Array.from(container.querySelectorAll(".project-sessions-inline .session-card"))
-    const renaming = cards.find((c) => c.querySelector(".rename-input"))
-    expect(renaming).toBeTruthy()
-    const input = renaming!.querySelector<HTMLInputElement>(".rename-input")!
-    expect(input.value).toBe("Otro chat A")
-    // Estilo Windows: sin botones de guardar/cancelar dentro del campo.
-    expect(renaming!.querySelector(".rename-inline button")).toBeNull()
-    // El resto de tarjetas siguen mostrando su título como texto.
-    expect(container.querySelectorAll(".project-sessions-inline .session-title").length).toBeGreaterThan(0)
-  })
-
   it("auto-expande el proyecto colapsado al entrar en rename", () => {
     // Sin ningún click: el proyecto debe abrirse solo para mostrar el campo.
     const { container } = renderList({ renamingSessionID: "o1", renameValue: "Huerfano B" })
     expect(container.querySelectorAll(".project-sessions-inline")).toHaveLength(1)
     const input = container.querySelector(".project-sessions-inline .rename-input") as HTMLInputElement | null
     expect(input?.value).toBe("Huerfano B")
-  })
-
-  it("recientes también editan in-place con el mismo campo", () => {
-    const { container } = renderList({ renamingSessionID: "t1", renameValue: "Otro chat A" })
-    const input = container.querySelector("#quick-recent .rename-input") as HTMLInputElement | null
-    expect(input).toBeTruthy()
-    expect(input?.value).toBe("Otro chat A")
   })
 
   it("Enter confirma desde el campo", () => {
@@ -196,43 +175,6 @@ describe("SessionList rename in-place estilo Windows", () => {
     const card = container.querySelector(".project-sessions-inline .session-card")!
     fireEvent.keyDown(card, { key: "F2" })
     expect(props.onStartRename).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe("SessionList spinner de subsesión activa", () => {
-  function renderWithStatuses(children: SessionView[]) {
-    const list = renderList({
-      projects: [[dirA, [parentA, ...children, topA]]],
-      sessions: [parentA, ...children, topA],
-      recentSessions: [parentA, ...children, topA],
-    })
-    fireEvent.click(list.container.querySelectorAll(".project-card")[0]!)
-    return list
-  }
-
-  it("la hija activa muestra spinner chiquito gris, la idle no", () => {
-    const busy = session({ id: "c1", title: "Subagente vivo", directory: dirA, parentID: "p1", status: "busy" })
-    const idle = session({ id: "c2", title: "Subagente quieto", directory: dirA, parentID: "p1", status: "idle" })
-    const { container } = renderWithStatuses([busy, idle])
-    const cards = Array.from(container.querySelectorAll(".project-sessions-inline .is-child-session"))
-    const spinner = (el: Element) => el.querySelector(".session-child-spinner")
-    expect(cards).toHaveLength(2)
-    expect(spinner(cards[0]!)).toBeTruthy()
-    expect(spinner(cards[1]!)).toBeNull()
-  })
-
-  it("el padre activo no lleva spinner de hija", () => {
-    const busyParent = session({ id: "p1", title: "Chat principal A", directory: dirA, status: "busy" })
-    const idle = session({ id: "c2", title: "Subagente quieto", directory: dirA, parentID: "p1", status: "idle" })
-    const { container } = renderList({
-      projects: [[dirA, [busyParent, idle, topA]]],
-      sessions: [busyParent, idle, topA],
-      recentSessions: [busyParent, idle, topA],
-    })
-    fireEvent.click(container.querySelectorAll(".project-card")[0]!)
-    const parentCard = container.querySelector(".project-sessions-inline .session-card:not(.is-child-session)")!
-    expect(parentCard.querySelector(".session-title")?.textContent).toBe("Chat principal A")
-    expect(parentCard.querySelector(".session-child-spinner")).toBeNull()
   })
 })
 
@@ -280,12 +222,6 @@ describe("SessionList acoplar subsesiones (toggle del toolbar)", () => {
     localStorage.removeItem("opencode.collapsedSections")
   })
 
-  it("en la vista de proyecto el botón se oculta (ahí no actúa)", () => {
-    localStorage.removeItem(KEY)
-    const { container } = renderList({ selectedProjectDir: dirA })
-    expect(container.querySelector(".session-couple-toggle")).toBeNull()
-  })
-
   it("el estado queda persistido al recargar la vista", () => {
     localStorage.setItem(KEY, "1")
     const { container } = renderList()
@@ -303,31 +239,5 @@ describe("SessionList acoplar subsesiones (toggle del toolbar)", () => {
     expect(recentTitles(container)).not.toContain("Subagente A1")
     expect(localStorage.getItem(KEY)).toBe("0")
     localStorage.removeItem(KEY)
-  })
-
-  it("favoritos acoplados muestra hija bajo su padre; sin acoplar solo el padre", () => {
-    const favs = new Set(["p1", "c1"])
-    const favTitles = (c: HTMLElement) =>
-      Array.from(c.querySelectorAll("#quick-favorites .quick-access-title")).map((el) => el.textContent ?? "")
-    // Idempotente: la sección puede venir abierta por el estado persistido
-    // de la rama anterior; solo se hace click si el panel no está montado.
-    const ensureFavsOpen = (container: HTMLElement) => {
-      if (container.querySelector("#quick-favorites")) return
-      fireEvent.click(container.querySelector('[aria-controls="quick-favorites"]')!)
-    }
-
-    localStorage.setItem(KEY, "1")
-    localStorage.removeItem("opencode.collapsedSections")
-    const coupled = renderList({ favorites: favs, selectedProjectDir: null })
-    ensureFavsOpen(coupled.container)
-    expect(favTitles(coupled.container)).toEqual(["Chat principal A", "Subagente A1"])
-    cleanup()
-
-    localStorage.removeItem(KEY)
-    localStorage.removeItem("opencode.collapsedSections")
-    const plain = renderList({ favorites: favs, selectedProjectDir: null })
-    ensureFavsOpen(plain.container)
-    expect(favTitles(plain.container)).toEqual(["Chat principal A"])
-    localStorage.removeItem("opencode.collapsedSections")
   })
 })

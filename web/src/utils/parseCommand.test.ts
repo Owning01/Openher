@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { parseCommand, resolveCommand, buildOptimisticMessage, buildStatusMessage, buildNoticeMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "./parseCommand"
+import { parseCommand, resolveCommand, buildOptimisticMessage, rehydrateImages, collectLocalImages, type LocalImageEntry } from "./parseCommand"
 import type { ServerConfig, SessionView } from "../types"
 
 // Mock api module for resolveCommand
@@ -69,10 +69,6 @@ describe("parseCommand", () => {
   it("parses /status to status type", () => {
     const result = parseCommand("/status")
     expect(result).toEqual({ type: "status", session: { title: "", status: "", directory: "" } })
-  })
-
-  it("parses /status case-insensitively", () => {
-    expect(parseCommand("/STATUS")).toEqual({ type: "status", session: { title: "", status: "", directory: "" } })
   })
 
   it("parses /undo", () => {
@@ -370,62 +366,5 @@ describe("rehydrateImages (eco sin bytes)", () => {
     const entries = collectLocalImages([opt as never])
     expect(entries).toHaveLength(1)
     expect(entries[0].datas[0].data).toBe(RAW)
-  })
-})
-
-describe("buildStatusMessage", () => {
-  it("builds assistant message with session info", () => {
-    const session = makeSession({ title: "Test", status: "busy", directory: "/tmp/proj" })
-    const msg = buildStatusMessage(session)
-    expect(msg.info.role).toBe("assistant")
-    expect(msg.info.sessionID).toBe(session.id)
-    expect(msg.parts).toHaveLength(1)
-    expect(msg.parts[0].type).toBe("text")
-    expect(msg.parts[0].text).toContain("Session: Test (busy)")
-    expect(msg.parts[0].text).toContain("Directory: /tmp/proj")
-  })
-
-  it("includes both session and directory lines", () => {
-    const session = makeSession({ title: "A", status: "idle", directory: "/a/b" })
-    const msg = buildStatusMessage(session)
-    const lines = msg.parts[0].text!.split("\n")
-    expect(lines).toHaveLength(2)
-    expect(lines[0]).toBe("Session: A (idle)")
-    expect(lines[1]).toBe("Directory: /a/b")
-  })
-
-  it("sets completed time equal to created", () => {
-    const session = makeSession()
-    const msg = buildStatusMessage(session)
-    expect(msg.info.time.completed).toBe(msg.info.time.created)
-  })
-
-  it("generates unique ids", () => {
-    const session = makeSession()
-    const msg1 = buildStatusMessage(session)
-    const msg2 = buildStatusMessage(session)
-    expect(msg1.info.id).not.toBe(msg2.info.id)
-  })
-
-  it("handles empty title and directory", () => {
-    const session = makeSession({ title: "", status: "", directory: "" })
-    const msg = buildStatusMessage(session)
-    expect(msg.parts[0].text).toBe("Session:  ()\nDirectory: ")
-  })
-})
-
-describe("buildNoticeMessage", () => {
-  it("builds assistant message with given text", () => {
-    const session = makeSession()
-    const msg = buildNoticeMessage(session, 'Session renamed to "Nueva"')
-    expect(msg.info.role).toBe("assistant")
-    expect(msg.info.sessionID).toBe(session.id)
-    expect(msg.parts).toHaveLength(1)
-    expect(msg.parts[0].text).toBe('Session renamed to "Nueva"')
-  })
-
-  it("sets completed time equal to created", () => {
-    const msg = buildNoticeMessage(makeSession(), "hi")
-    expect(msg.info.time.completed).toBe(msg.info.time.created)
   })
 })

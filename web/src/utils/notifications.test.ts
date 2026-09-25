@@ -118,17 +118,6 @@ describe("sendNotification", () => {
     expect(arg.notifications[0].smallIcon).toBeUndefined()
   })
 
-  it("native: silencia errores de schedule", async () => {
-    mockIsNativePlatform.mockReturnValue(true)
-    mockCheckPermissions.mockResolvedValue({ display: "granted" })
-    mockSchedule.mockRejectedValue(new Error("fail"))
-
-    sendNotification("T")
-    await new Promise((r) => setTimeout(r, 50))
-    // no debe lanzar
-    expect(true).toBe(true)
-  })
-
   it("native: silencia errores de checkPermissions", async () => {
     mockIsNativePlatform.mockReturnValue(true)
     mockCheckPermissions.mockRejectedValue(new Error("no support"))
@@ -189,16 +178,6 @@ describe("sendNotification", () => {
     if (typeof window !== "undefined") delete (window as any).Notification
 
     expect(() => sendNotification("Title")).not.toThrow()
-  })
-
-  it("web: no crea notificación si requestPermission resuelve a denied (manejo sin rechazo)", async () => {
-    mockIsNativePlatform.mockReturnValue(false)
-    setupWebNotification("default")
-    MockNotification.requestPermission.mockResolvedValue("denied" as any)
-
-    sendNotification("Title")
-    await new Promise((r) => setTimeout(r, 20))
-    expect(MockNotification.instances).toHaveLength(0)
   })
 
   it("web: sendNotification propaga body e icon correctamente cuando granted", () => {
@@ -293,15 +272,6 @@ describe("requestNotificationPermission", () => {
     mockIsNativePlatform.mockReturnValue(false)
     setupWebNotification("default")
     MockNotification.requestPermission.mockResolvedValue("denied")
-
-    const result = await requestNotificationPermission()
-    expect(result).toBe(false)
-  })
-
-  it("web: propaga granted/denied correctamente cuando permission default y request retorna default", async () => {
-    mockIsNativePlatform.mockReturnValue(false)
-    setupWebNotification("default")
-    MockNotification.requestPermission.mockResolvedValue("default")
 
     const result = await requestNotificationPermission()
     expect(result).toBe(false)

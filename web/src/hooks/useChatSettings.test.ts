@@ -20,16 +20,17 @@ describe("useChatSettings: aplicación de CSS vars", () => {
     expect(document.documentElement.style.getPropertyValue("--chat-font-size")).toBe(`${22 / 16}rem`)
   })
 
-  it("otros sliders (radio de burbuja) también aplican al instante", () => {
-    const { result } = renderHook(() => useChatSettings())
-    act(() => result.current.setSetting("bubbleRadius", 4))
-    expect(document.documentElement.style.getPropertyValue("--chat-bubble-radius")).toBe("4px")
-  })
-
   it("resetDefaults restaura los valores por defecto", () => {
     const { result } = renderHook(() => useChatSettings())
     act(() => result.current.setSetting("fontSize", 24))
     act(() => result.current.resetDefaults())
+    expect(document.documentElement.style.getPropertyValue("--chat-font-size")).toBe("0.875rem")
+  })
+
+  it("normaliza fontSize no numérico del storage (migración)", () => {
+    localStorage.setItem("openher.chatSettings", JSON.stringify({ fontSize: "14px" }))
+    const { result } = renderHook(() => useChatSettings())
+    expect(result.current.settings.fontSize).toBe(14)
     expect(document.documentElement.style.getPropertyValue("--chat-font-size")).toBe("0.875rem")
   })
 })

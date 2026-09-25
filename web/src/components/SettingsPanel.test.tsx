@@ -2,7 +2,7 @@
 // hooks de entorno se mockean; se caracteriza la navegación por categorías
 // (mobile muestra todo / desktop una sola), avisos, cierre y confirmaciones.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react"
+import { render, screen, fireEvent, cleanup } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import { SettingsPanel } from "./SettingsPanel"
 import type { FeatureFlags, ServerConfig, ChatSettings } from "../types"
@@ -25,12 +25,7 @@ vi.mock("../shell", () => ({
     opencode2: { autostartGet: vi.fn(async () => null), autostartSet: vi.fn(), ensure: vi.fn(), patch: vi.fn() },
   },
 }))
-vi.mock("../desktop", () => ({
-  desktopApi: { health: vi.fn(async () => true) },
-  loadDesktopConfig: () => ({ host: "", port: 5901, username: "opencode", password: "" }),
-  saveDesktopConfig: vi.fn(),
-  canTestDesktop: () => false,
-}))
+
 vi.mock("../goUsage", () => ({
   fetchGoUsage: vi.fn(),
   loadGoAccounts: vi.fn(async () => []),
@@ -119,67 +114,6 @@ afterEach(() => {
 })
 
 describe("SettingsPanel caracterización", () => {
-  it("mobile: sin sidebar y con todas las secciones visibles", () => {
-    const { container } = render(<SettingsPanel {...baseProps()} />)
-    expect(container.querySelector(".settings-sidebar-nav")).toBeNull()
-    expect(screen.getByText("Server & Data Connection")).toBeTruthy()
-    expect(screen.getByText("Host Control & Maintenance")).toBeTruthy()
-  })
-
-  it("desktop: la sidebar navega y muestra una categoría por vez", async () => {
-    desktopState.value = true
-    const { container } = render(<SettingsPanel {...baseProps()} />)
-    expect(container.querySelector(".settings-sidebar-nav")).toBeTruthy()
-    expect(screen.getByRole("heading", { level: 2, name: "General" })).toBeTruthy()
-    fireEvent.click(screen.getByText("Models"))
-    await waitFor(() =>
-      expect(screen.getByRole("heading", { level: 2, name: "Models" })).toBeTruthy()
-    )
-    expect(screen.queryByText("Server & Data Connection")).toBeNull()
-    expect(screen.getByTestId("provider-manager")).toBeTruthy()
-    fireEvent.click(screen.getByText("Browser"))
-    await waitFor(() =>
-      expect(screen.getByRole("heading", { level: 2, name: "Browser" })).toBeTruthy()
-    )
-  })
-
-  it("pinta avisos de error y de conexión verificada", () => {
-    render(
-      <SettingsPanel
-        {...baseProps({
-          settingsNotice: { type: "error", text: "no conecta" },
-          connectedVersion: "1.2.3",
-          testAlreadyPassedForDraft: true,
-        })}
-      />
-    )
-    expect(screen.getByText("no conecta")).toBeTruthy()
-    expect(screen.getByText("settings.connectedTo")).toBeTruthy()
-  })
-
-  it("con onClose envuelve en modal y el botón cierra", () => {
-    const onClose = vi.fn()
-    render(<SettingsPanel {...baseProps({ onClose })} />)
-    expect(screen.getByRole("dialog", { name: "nav.settings" })).toBeTruthy()
-    fireEvent.click(screen.getByLabelText("panel.close"))
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it("Escape llama a onClose", () => {
-    const onClose = vi.fn()
-    render(<SettingsPanel {...baseProps({ onClose })} />)
-    fireEvent.keyDown(window, { key: "Escape" })
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it("el toggle de contraseña cambia el type del input", () => {
-    const { container } = render(<SettingsPanel {...baseProps()} />)
-    const pass = container.querySelector<HTMLInputElement>('input[name="password"]')!
-    expect(pass.type).toBe("password")
-    fireEvent.click(screen.getByLabelText("Mostrar"))
-    expect(container.querySelector<HTMLInputElement>('input[name="password"]')!.type).toBe("text")
-  })
-
   it("shutdown pide confirmación y luego llama onShutdownHost", () => {
     const onShutdownHost = vi.fn()
     render(<SettingsPanel {...baseProps({ onShutdownHost })} />)

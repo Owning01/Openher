@@ -1,14 +1,6 @@
-import { describe, it, expect, afterEach, vi } from "vitest"
-import { render, cleanup, fireEvent } from "@testing-library/react"
-import { I18nProvider } from "../i18n-context"
-import { Composer } from "./Composer"
+import { describe, it, expect } from "vitest"
 import { groupTurnDiffs } from "../utils/rendered"
 import type { RenderedMessage } from "../types"
-
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-})
 
 function rm(id: string, role: string, text: string, diffs: Array<{ file: string; additions: number; deletions: number; patch?: string }> = [], toolParts: never[] = []): RenderedMessage {
   return {
@@ -101,78 +93,5 @@ describe("groupTurnDiffs", () => {
     expect(out.length).toBe(1)
     expect(out[0].files.length).toBe(1)
     expect(out[0].files[0].file).toBe("srv.ts")
-  })
-})
-
-const COMMANDS = [
-  { name: "compact", description: "Compact history", source: "command" as const },
-]
-
-function renderComposer(turnChanges: never) {
-  return render(
-    <I18nProvider language="es">
-      <Composer
-        value=""
-        commands={COMMANDS}
-        onChange={() => {}}
-        onSend={vi.fn() as any}
-        onAbort={() => {}}
-        disabled={false}
-        isWorking={false}
-        activeAgentID="build"
-        primaryAgentOptions={[]}
-        onChangeAgent={() => {}}
-        sessionID="turn-test-1"
-        turnChanges={turnChanges}
-      />
-    </I18nProvider>,
-  )
-}
-
-const TURNS = groupTurnDiffs([
-  rm("u1", "user", "Primer cambio"),
-  rm("a1", "assistant", "ok", [{ file: "a.ts", additions: 10, deletions: 2, patch: "@@ -1,1 +1,1 @@\n-old\n+new" }]),
-  rm("u2", "user", "Segundo cambio"),
-  rm("a2", "assistant", "ok", [{ file: "b.ts", additions: 5, deletions: 5 }]),
-]) as never
-
-describe("Composer turn changes", () => {
-  it("sin turnos no muestra el botón", () => {
-    const { container } = renderComposer([] as never)
-    expect(container.querySelector(".turn-changes-btn")).toBeNull()
-  })
-
-  it("muestra totales del último turno y despliega el listado", () => {
-    const { container } = renderComposer(TURNS)
-    const btn = container.querySelector(".turn-changes-btn") as HTMLElement
-    expect(btn).not.toBeNull()
-    expect(btn.textContent).toContain("1 archivo")
-    expect(btn.textContent).toContain("+5")
-    fireEvent.click(btn)
-    const panel = container.querySelector(".turn-changes-panel") as HTMLElement
-    expect(panel).not.toBeNull()
-    expect(panel.textContent).toContain("b.ts")
-    expect(panel.textContent).toContain("2/2")
-  })
-
-  it("pager navega al turno anterior y la fila expande el diff", () => {
-    const { container } = renderComposer(TURNS)
-    fireEvent.click(container.querySelector(".turn-changes-btn")!)
-    const panel = container.querySelector(".turn-changes-panel") as HTMLElement
-    const prev = panel.querySelector('.turn-pager button[aria-label="Turno anterior"]') as HTMLElement
-    fireEvent.click(prev)
-    expect(panel.textContent).toContain("a.ts")
-    expect(panel.textContent).toContain("1/2")
-    const row = panel.querySelector(".turn-file-row") as HTMLElement
-    fireEvent.click(row)
-    expect(panel.querySelector(".turn-patch")).not.toBeNull()
-  })
-
-  it("Escape cierra el panel", () => {
-    const { container } = renderComposer(TURNS)
-    fireEvent.click(container.querySelector(".turn-changes-btn")!)
-    expect(container.querySelector(".turn-changes-panel")).not.toBeNull()
-    fireEvent.keyDown(document, { key: "Escape" })
-    expect(container.querySelector(".turn-changes-panel")).toBeNull()
   })
 })

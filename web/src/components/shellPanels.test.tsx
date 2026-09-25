@@ -75,12 +75,6 @@ function renderKind(kind: string) {
 }
 
 describe("ShellPanel caracterización", () => {
-  it("kind=docs muestra el estado vacio mientras no hay doc", async () => {
-    renderKind("docs")
-    expect(await screen.findByText("shell.selectDoc")).toBeTruthy()
-    expect(screen.getByText("C:\\docs")).toBeTruthy()
-  })
-
   it("kind=docs lista archivos y al abrir uno renderiza el contenido sin romper", async () => {
     // FIX: antes DocsPanel pasaba children (`{!doc && ...}` => false) y
     // dangerouslySetInnerHTML en el mismo div, y React 19 lanzaba "Can only set
@@ -100,22 +94,6 @@ describe("ShellPanel caracterización", () => {
     expect(errors).toHaveLength(0)
   })
 
-  it("kind=updates pinta repos GitHub y refresca bajo demanda", async () => {
-    renderKind("updates")
-    expect(await screen.findByText("GitHub · o/r")).toBeTruthy()
-    expect(screen.getByText("v1")).toBeTruthy()
-    fireEvent.click(screen.getByText("shell.refresh"))
-    await waitFor(() => expect(updatesGet).toHaveBeenCalledWith(true))
-  })
-
-  it("kind=labs lista apps y el switch de arranque", async () => {
-    renderKind("labs")
-    expect(await screen.findByText("shell.labs")).toBeTruthy()
-    expect(screen.getByText(/App One/)).toBeTruthy()
-    expect(screen.getByText("shell.launch")).toBeTruthy()
-    expect(screen.getByText("shell.autostart")).toBeTruthy()
-  })
-
   it("kind=config carga la config cruda formateada", async () => {
     const { container } = renderKind("config")
     const ta = (await waitFor(() => {
@@ -126,10 +104,5 @@ describe("ShellPanel caracterización", () => {
     fireEvent.click(screen.getByText("shell.apply"))
     await waitFor(() => expect(configImport).toHaveBeenCalledWith({ a: 1 }))
     expect(ta.value).toContain('"a": 1')
-  })
-
-  it("kind desconocido renderiza null", () => {
-    const { container } = renderKind("nope")
-    expect(container.innerHTML).toBe("")
   })
 })

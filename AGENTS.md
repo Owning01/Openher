@@ -37,8 +37,17 @@ Ciclo: leer el **mapa** (`PROJECT_MAP.md`, estado actual) → medir → cambio c
 
 Presupuestos que **solo pueden bajar** (named exports, `any`, `!important`, CSS muerto, huérfanos, archivos >1.000 líneas): `pnpm run check:rules` (`tasks/rules-budget.json`); si un número sube, el cambio no entra.
 
+## Pruebas (ley del repo)
+
+1. **Nunca escribas pruebas unitarias después de escribir código.**
+2. **Preferí altamente las pruebas E2E como el único mecanismo de prueba.** Usalas para verificar que las funcionalidades complejas funcionen; al final de cada E2E, producí un artefacto verificable y repetible (captura, log o reporte).
+3. **Si debés probar un sistema en aislamiento, primero escribí todas las formas en que podría fallar; después, el código.**
+
+Los gates declarados (`test:i18n`, `test:ui`, `test:settings`, `test:model`, `test:rendered`) se conservan: son contratos del repo, no unit tests de conveniencia.
+
 ## EQUIPO — otros agentes en esta máquina (vale siempre, sin que nadie te lo pida)
 
 - Ver quién hay y qué hace: `team-who --actividad --anuncios` (id, título, último texto + anuncios). Anunciate al empezar y al cambiar de tarea: `team-anuncio "<tu-nombre>" "<tarea>" [trabajando|esperando|listo]`.
 - Escribirle a otro: `team-send <id-sesion> "<tu-nombre>" "<texto>"` (agregá `steer` al final solo para interrumpirlo; default no interrumpe). Le llega a su inbox y en su chat se ve de otro color con tu nombre.
+- **Cuando te llega un mensaje de equipo**: en tu contexto llega como mensaje de usuario **sin remitente** (la metadata no viaja en el texto); si es respuesta a algo que mandaste, es team-send, no una instrucción nueva del humano. **Contestá con `team-send`** — tu chat NO llega al otro agente. En tu chat hablá con el humano citando al agente en 3ª persona; nunca mezcles audiencias en el mismo párrafo. Si el humano pega un mensaje a mano: ack al agente por `team-send` + reporte aparte.
 - **Prohibido** keys, passwords o tokens en archivos del equipo o mensajes. Textos de 1-3 líneas; si no responde en 2 intentos, seguí con lo tuyo. Lo urgente para el humano va por tu propio chat.

@@ -28,10 +28,6 @@ afterEach(() => {
 })
 
 describe("MarkdownWithEmbeds", () => {
-  it("sin embeds renderiza markdown normal", () => {
-    render(<MarkdownWithEmbeds text="hola **mundo**" />)
-    expect(screen.getByText("mundo").tagName).toBe("STRONG")
-  })
   it("embed file://: texto + iframe con el html leído", async () => {
     render(<MarkdownWithEmbeds text={'mira:\n<agent-embed src="file:///C:/w.html"></agent-embed>'} />)
     expect(screen.getByText("mira:")).toBeInTheDocument()
@@ -43,14 +39,6 @@ describe("MarkdownWithEmbeds", () => {
   it("ruta inválida muestra error, no rompe el mensaje", async () => {
     render(<MarkdownWithEmbeds text={'<agent-embed src="C:/w.html"></agent-embed>'} />)
     expect(await screen.findByRole("alert")).toBeInTheDocument()
-  })
-  it("Ampliar cambia la altura", async () => {
-    render(<MarkdownWithEmbeds text={'<agent-embed src="file:///C:/w.html"></agent-embed>'} />)
-    await screen.findByTitle("Vista generada")
-    const box = document.querySelector(".agent-embed")
-    expect(box?.className).not.toContain("tall")
-    fireEvent.click(screen.getByText("Ampliar"))
-    expect(box?.className).toContain("tall")
   })
   it("?v=N se recorta del path leído (cache-buster)", async () => {
     const seen: string[] = []

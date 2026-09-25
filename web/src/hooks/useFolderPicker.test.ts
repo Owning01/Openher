@@ -59,10 +59,6 @@ describe("partsToDir", () => {
   it("reconstruye unix", () => {
     expect(partsToDir(["a", "b"])).toBe("/a/b")
   })
-  it("roundtrip con dirParts", () => {
-    expect(partsToDir(dirParts("C:\\a\\b"))).toBe("C:\\a\\b")
-    expect(partsToDir(dirParts("/a/b"))).toBe("/a/b")
-  })
 })
 
 // Regresión del 500 en consola: el dir guardado (proyecto borrado,

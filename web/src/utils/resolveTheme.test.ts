@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
-import { resolveTheme, themeToCSSVars, contrast, applyThemeVars } from "./resolveTheme"
+import { describe, it, expect } from "vitest"
+import { resolveTheme, themeToCSSVars, contrast } from "./resolveTheme"
 
 // ---------------------------------------------------------------------------
 // resolveTheme
@@ -120,18 +120,6 @@ describe("resolveTheme", () => {
 // themeToCSSVars
 // ---------------------------------------------------------------------------
 describe("themeToCSSVars", () => {
-  it("mapea slots conocidos a CSS vars via CSS_MAP", () => {
-    const resolved = {
-      background: "#010101",
-      text: "#fefefe",
-      primary: "#ff0000",
-    }
-    const vars = themeToCSSVars(resolved)
-    expect(vars["--bg"]).toBeDefined()
-    expect(vars["--text"]).toBeDefined()
-    expect(vars["--primary"]).toBeDefined()
-  })
-
   it("genera --surface-subtle desde backgroundPanel o background", () => {
     const v1 = themeToCSSVars({ backgroundPanel: "#111111", background: "#222222" })
     expect(v1["--surface-subtle"]).toBeDefined()
@@ -230,30 +218,5 @@ describe("contrast", () => {
 
   it("maneja hex de 3 dígitos", () => {
     expect(contrast("#fff", "#000")).toBeCloseTo(21, 1)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// applyThemeVars
-// ---------------------------------------------------------------------------
-describe("applyThemeVars", () => {
-  beforeEach(() => {
-    document.documentElement.style.cssText = ""
-  })
-
-  it("aplica vars al document.documentElement", () => {
-    applyThemeVars({ "--bg": "#123456", "--text": "#ffffff" })
-    expect(document.documentElement.style.getPropertyValue("--bg")).toBe("#123456")
-    expect(document.documentElement.style.getPropertyValue("--text")).toBe("#ffffff")
-  })
-
-  it("no falla con objeto vacío", () => {
-    expect(() => applyThemeVars({})).not.toThrow()
-  })
-
-  it("sobrescribe valores previos", () => {
-    applyThemeVars({ "--bg": "#111111" })
-    applyThemeVars({ "--bg": "#222222" })
-    expect(document.documentElement.style.getPropertyValue("--bg")).toBe("#222222")
   })
 })

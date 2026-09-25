@@ -148,7 +148,6 @@ describe("memoria de scroll (minimizar/restaurar)", () => {
     act(() => result.current.resetSavedPosition())
     // Entrada fresca tras el reset: la memoria quedó en 0.
     expect(resolveSessionEntry("mem-reset-1")).toEqual({ kind: "fresh" })
-    expect(resolveSessionEntry("mem-reset-1")).toEqual({ kind: "fresh" })
   })
 
   it("restaurar al fondo confirma memoria en 0 (anti-stale tras tab/minimizar)", () => {

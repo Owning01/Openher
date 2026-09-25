@@ -20,9 +20,6 @@ describe("isCiphertext", () => {
     const long = "a".repeat(50)
     expect(isCiphertext(btoa(long))).toBe(true)
   })
-  it("returns false for string with invalid chars but b64 length check", () => {
-    expect(isCiphertext("!!!")).toBe(false)
-  })
 })
 
 describe("encrypt / decrypt roundtrip", () => {

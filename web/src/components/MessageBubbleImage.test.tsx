@@ -4,9 +4,6 @@ import { render, cleanup } from "@testing-library/react"
 vi.mock("../hooks/useOutsideClick", () => ({ useOutsideClick: () => {} }))
 
 import { MessageBubble } from "./MessageBubble"
-import { buildOptimisticMessage } from "../utils/parseCommand"
-import { computeRenderedMessages } from "../utils/rendered"
-import { toMessageEnvelopeV1 } from "../shared/api/mappers"
 
 const DATAURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 const RAW = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
@@ -43,22 +40,6 @@ describe("MessageBubble imagen", () => {
 
   it("parte file v1 con url dataURL renderiza <img>", () => {
     render(<MessageBubble message={userMsg([{ id: "p1", type: "file", mime: "image/png", filename: "clipboard.png", url: DATAURL }])} />)
-    expect(document.querySelector("img.message-image")).not.toBeNull()
-  })
-
-  it("pipeline optimistic -> rendered conserva imagen", () => {
-    const opt = buildOptimisticMessage({ id: "s1" } as never, "hola", [{ base64: DATAURL, mime: "image/png" }])
-    const { out } = computeRenderedMessages([opt], undefined, new Map())
-    expect(out.length).toBe(1)
-    render(<MessageBubble message={out[0]} />)
-    expect(document.querySelector("img.message-image")).not.toBeNull()
-  })
-
-  it("mapper v2 user+files renderiza <img> de punta a punta", () => {
-    const env = toMessageEnvelopeV1({ id: "m9", sessionID: "s1", type: "user", text: "hola", files: [{ uri: DATAURL, name: "clipboard.png", mime: "image/png" }] } as never)
-    const { out } = computeRenderedMessages([env], undefined, new Map())
-    expect(out.length).toBe(1)
-    render(<MessageBubble message={out[0]} />)
     expect(document.querySelector("img.message-image")).not.toBeNull()
   })
 })

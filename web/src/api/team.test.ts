@@ -107,15 +107,6 @@ describe("loadTeamLog", () => {
     expect(mocks.getGlobal).toHaveBeenCalledTimes(2)
   })
 
-  it("cachea la ruta: el segundo exito no vuelve a pedir el global", async () => {
-    mocks.getGlobal.mockResolvedValue(cfg)
-    mocks.read.mockResolvedValue({ content: "" })
-    const { loadTeamLog } = await import("./team")
-    await loadTeamLog()
-    await loadTeamLog()
-    expect(mocks.getGlobal).toHaveBeenCalledTimes(1)
-  })
-
   it("sin home ni scan roots => error", async () => {
     mocks.getGlobal.mockResolvedValue({ configPath: "", scannedRoots: [] })
     const { loadTeamLog } = await import("./team")

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { mergeSessionPoll } from "./useSessions"
+import { mergeSessionPoll } from "../entities/session/sessionsPlan"
 import type { SessionView } from "../types"
 
 function view(status: SessionView["status"]): SessionView {

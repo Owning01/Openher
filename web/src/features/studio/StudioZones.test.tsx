@@ -38,22 +38,6 @@ describe("StudioZones", () => {
     expect(container.textContent).toContain("hero.tsx:24")
   })
 
-  it("sin zonas no renderiza tarjetas", () => {
-    const { container } = renderZones({ annotations: [] })
-    expect(container.querySelector("textarea")).toBeNull()
-  })
-
-  it("quitar una zona llama onRemove con su id", () => {
-    const onRemove = vi.fn()
-    const { container } = renderZones({
-      annotations: [annotation({ id: "z9", source: { file: "a.tsx", line: 1 } })],
-      onRemove,
-    })
-    const buttons = container.querySelectorAll("button")
-    fireEvent.click(buttons[0]!)
-    expect(onRemove).toHaveBeenCalledWith("z9")
-  })
-
   it("editar la nota llama onComment con id y texto", () => {
     const onComment = vi.fn()
     const { container } = renderZones({

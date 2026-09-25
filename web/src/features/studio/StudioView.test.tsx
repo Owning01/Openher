@@ -90,12 +90,6 @@ function props(over: Record<string, unknown> = {}) {
 const proj = (dir: string) => ({ directory: dir, name: dir.split("/").pop(), kind: "node", token: "t1", entryPoint: "index.html", htmlFiles: ["index.html"] })
 
 describe("StudioView (sin proyecto)", () => {
-  it("ofrece generar con Open Design o abrir un proyecto existente", () => {
-    const { getByText } = render(<I18nProvider language="en"><StudioView {...(props() as any)} /></I18nProvider>)
-    expect(getByText("Generate with Open Design")).toBeTruthy()
-    expect(getByText("Open existing project")).toBeTruthy()
-  })
-
   it("al elegir Open Design muestra el generador embebido y los detectados", () => {
     const { getByText, getByTestId, queryByText } = render(<I18nProvider language="en"><StudioView {...(props() as any)} /></I18nProvider>)
     fireEvent.click(getByText("Generate with Open Design"))

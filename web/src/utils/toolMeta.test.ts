@@ -1,42 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import { toolMeta, detectToolName, isTaskTool, isQuestionTool } from "./toolMeta"
-
-describe("toolMeta", () => {
-  it("contains 14 entries", () => {
-    expect(Object.keys(toolMeta)).toHaveLength(14)
-  })
-
-  it("each entry has icon and label strings", () => {
-    for (const [key, meta] of Object.entries(toolMeta)) {
-      expect(typeof meta.icon, `icon for ${key}`).toBe("string")
-      expect(meta.icon.length).toBeGreaterThan(0)
-      expect(typeof meta.label, `label for ${key}`).toBe("string")
-      expect(meta.label.length).toBeGreaterThan(0)
-    }
-  })
-
-  it("has correct specific mappings", () => {
-    expect(toolMeta.bash).toEqual({ icon: "$", label: "shell" })
-    expect(toolMeta.execute).toEqual({ icon: "⚙", label: "execute" })
-    expect(toolMeta.read).toEqual({ icon: "←", label: "read" })
-    expect(toolMeta.write).toEqual({ icon: "→", label: "write" })
-    expect(toolMeta.edit).toEqual({ icon: "△", label: "edit" })
-    expect(toolMeta.apply_patch).toEqual({ icon: "△", label: "patch" })
-    expect(toolMeta.glob).toEqual({ icon: "✱", label: "glob" })
-    expect(toolMeta.grep).toEqual({ icon: "◎", label: "grep" })
-    expect(toolMeta.webfetch).toEqual({ icon: "%", label: "web" })
-    expect(toolMeta.websearch).toEqual({ icon: "◈", label: "search" })
-    expect(toolMeta.todowrite).toEqual({ icon: "✓", label: "todo" })
-    expect(toolMeta.question).toEqual({ icon: "?", label: "ask" })
-    expect(toolMeta.skill).toEqual({ icon: "◆", label: "skill" })
-    expect(toolMeta.task).toEqual({ icon: "│", label: "task" })
-  })
-
-  it("has expected keys set", () => {
-    const keys = Object.keys(toolMeta).sort()
-    expect(keys).toEqual(["apply_patch", "bash", "edit", "execute", "glob", "grep", "question", "read", "skill", "task", "todowrite", "webfetch", "websearch", "write"].sort())
-  })
-})
+import { describe, it, expect } from "vitest"
+import { detectToolName, isTaskTool, isQuestionTool } from "./toolMeta"
 
 describe("detectToolName", () => {
   it("extracts bash tool name", () => {

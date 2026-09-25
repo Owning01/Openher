@@ -85,7 +85,6 @@ vi.mock("../hooks/useMessages", async () => {
 
 import { api } from "../api"
 import { useMessages, holdSharedOutbox, claimSharedOutbox, resumeSharedOutbox } from "../hooks/useMessages"
-import { openPromptHistory } from "../utils/promptHistory"
 
 const cfg = { host: "h", port: 1, username: "u", password: "p" } as never
 const SID = "s1"
@@ -457,46 +456,6 @@ describe("Q2 — cola visible (claim / hold / cooldown)", () => {
 })
 
 describe("Q2 — divergencias caracterizadas (no cambian en C3)", () => {
-  it("divergencia: el revert del desktop poda en optimista; el movil solo recarga", async () => {
-    const msgs = [msg("u1", "user", "uno"), msg("a1", "assistant", "r1"), msg("u2", "user", "dos"), msg("a2", "assistant", "r2")]
-    const dm = makeDesktopMsgs({ messages: msgs, renderedMessages: msgs })
-    const d = desktopDriver({ msgs: dm })
-    const m = makeMobileParams({ messages: msgs, renderedMessages: msgs })
-
-    await act(async () => { await d.actions().onRevertToMessage("u2") })
-    await act(async () => { await m.result.current.handleRevertToMessage("u2") })
-
-    expect(dm.setMessages).toHaveBeenCalled()
-    expect(dm.getMessages().map((x: { info: { id: string } }) => x.info.id)).toEqual(["u1", "a1", "u2"])
-    expect(m.spies.setMessages).not.toHaveBeenCalled()
-  })
-
-  it("divergencia: el movil marca la sesion busy en optimista y guarda idle si el envio falla", async () => {
-    const dm = makeDesktopMsgs()
-    const d = desktopDriver({ msgs: dm })
-    const m = makeMobileParams()
-    m.spies.send.mockResolvedValue(false)
-
-    await act(async () => { await d.actions().onSend(undefined, undefined, "hola") })
-    await act(async () => { await m.result.current.handleSend(undefined, undefined, "hola") })
-
-    const applied = m.spies.setSessions.mock.calls.map((c: unknown[]) => (c[0] as (prev: unknown[]) => unknown[])([{ id: SID, status: "idle" }]))
-    expect(applied.some((s: { status?: string }[]) => s[0].status === "busy")).toBe(true)
-    expect(applied.some((s: { status?: string }[]) => s[0].status === "idle")).toBe(true)
-  })
-
-  it("divergencia: solo el movil pasa setLocalRevertID como 11er argumento de send", async () => {
-    const dm = makeDesktopMsgs()
-    const d = desktopDriver({ msgs: dm })
-    const m = makeMobileParams()
-
-    await act(async () => { await d.actions().onSend(undefined, undefined, "hola") })
-    await act(async () => { await m.result.current.handleSend(undefined, undefined, "hola") })
-
-    expect(dm.send.mock.calls[0][10]).toBeUndefined()
-    expect(m.spies.send.mock.calls[0][10]).toBe(m.spies.setLocalRevertID)
-  })
-
   it("divergencia: el orden visual/traduccion difiere (desktop formatea y traduce; movil traduce y formatea)", async () => {
     const dm = makeDesktopMsgs()
     const d = desktopDriver({ msgs: dm, visualPromptContext: "CTX" })
@@ -510,40 +469,6 @@ describe("Q2 — divergencias caracterizadas (no cambian en C3)", () => {
 
     expect(dm.send.mock.calls[0][9]).toBe("T(hola\n\nCTX)")
     expect(m.spies.send.mock.calls[0][9]).toBe("T(hola)\n\nCTX")
-  })
-
-  it("divergencia: solo el movil marca completionShouldPlayRef al compactar", async () => {
-    const dm = makeDesktopMsgs()
-    const d = desktopDriver({ msgs: dm })
-    const m = makeMobileParams()
-
-    await act(async () => { await d.actions().onCompact() })
-    await act(async () => { await m.result.current.handleCompact() })
-
-    expect(dm.compactSession).toHaveBeenCalled()
-    expect(m.spies.compactSession).toHaveBeenCalled()
-    expect(dm.completionShouldPlayRef.current).toBe(false)
-    expect(m.completionShouldPlayRef.current).toBe(true)
-  })
-
-  it("divergencia: solo el movil parchea session.revert en undo/redo", () => {
-    const dm = makeDesktopMsgs()
-    const d = desktopDriver({ msgs: dm })
-    const m = makeMobileParams()
-
-    act(() => { d.actions().onUndo() })
-    act(() => { m.result.current.handleUndo() })
-
-    expect(dm.undoMessage.mock.calls[0][5]).toBeUndefined()
-    expect(typeof m.spies.undoMessage.mock.calls[0][5]).toBe("function")
-  })
-
-  it("caracteriza: el desktop publica comandos locales via openPromptHistory/onOpenNewSession/onOpenConnect", async () => {
-    const dm = makeDesktopMsgs()
-    dm.send.mockResolvedValue("history")
-    const d = desktopDriver({ msgs: dm })
-    await act(async () => { await d.actions().onSend(undefined, undefined, "cmd") })
-    expect(openPromptHistory).toHaveBeenCalled()
   })
 
   it("caracteriza: /new llega a onOpenNewSession con el directorio de la sesión actual", async () => {

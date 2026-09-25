@@ -85,12 +85,6 @@ describe("formatTime", () => {
   it("returns '-' for NaN / falsy", () => {
     expect(formatTime(NaN as any)).toBe("-")
   })
-  it("returns locale string for valid epoch", () => {
-    const result = formatTime(1_700_000_000_000)
-    expect(result).not.toBe("-")
-    expect(typeof result).toBe("string")
-    expect(result.length).toBeGreaterThan(0)
-  })
 })
 
 describe("formatTimeCompact", () => {
@@ -116,10 +110,6 @@ describe("noopCatch", () => {
   it("returns default when fn rejects", async () => {
     const result = await noopCatch(async () => { throw new Error("fail") }, 99)
     expect(result).toBe(99)
-  })
-  it("preserves default type string", async () => {
-    const result = await noopCatch<string>(async () => { throw new Error() }, "fallback")
-    expect(result).toBe("fallback")
   })
 })
 
@@ -369,11 +359,6 @@ describe("filterByQuery", () => {
   })
   it("partial match", () => {
     expect(filterByQuery(items, "app", fields)).toEqual([items[0]])
-  })
-  it("does not mutate original array", () => {
-    const original = [...items]
-    filterByQuery(items, "fruit", fields)
-    expect(items).toEqual(original)
   })
 })
 

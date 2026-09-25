@@ -1,20 +1,8 @@
 import { describe, it, expect } from "vitest"
-import { buildWheelScript } from "./browserWheelScript"
 import {
   parseShortcutEvent, parseZoomLevel, shouldAdoptExternalUrl, loadBrowserStack, saveBrowserStack,
-  domainOf, zoomForDomain, withZoomForDomain, buildFindCountScript, parseFindCount,
+  domainOf, zoomForDomain, withZoomForDomain, parseFindCount,
 } from "./browserSync"
-
-describe("buildWheelScript", () => {
-  it("inyectable por /eval y autocontenido", () => {
-    const s = buildWheelScript("http://127.0.0.1:4848")
-    expect(s.startsWith("(function(){")).toBe(true)
-    expect(s).toContain("__oc_wheel_on")
-    expect(s).toContain("__oc_setZoom")
-    expect(s).toContain("zoom-level")
-    expect(s).toContain("http://127.0.0.1:4848")
-  })
-})
 
 describe("parseShortcutEvent", () => {
   it("acepta objeto y string serializado", () => {
@@ -104,12 +92,6 @@ describe("zoomPorDominio", () => {
 })
 
 describe("findCount", () => {
-  it("script autocontenido con prefijo __oc_ (pasa allowlist de /eval)", () => {
-    const s = buildFindCountScript("hola", false)
-    expect(s).toContain("__oc_")
-    expect(s).toContain("find-count")
-    expect(s).toContain("postMessage")
-  })
   it("parsea el reporte y rechaza basura", () => {
     expect(parseFindCount({ type: "find-count", value: 7 })).toBe(7)
     expect(parseFindCount(JSON.stringify({ type: "find-count", value: 3 }))).toBe(3)

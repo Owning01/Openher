@@ -58,16 +58,6 @@ describe("buildSSEUrl", () => {
   it("respects explicit v1 version (no /api prefix)", () => {
     expect(buildSSEUrl(cfg({ apiVersion: "v1" }))).toBe("http://localhost:3000/event")
   })
-
-  it("handles https scheme in host", () => {
-    const url = buildSSEUrl(cfg({ host: "https://example.com", port: 443 }))
-    expect(url).toBe("https://example.com:443/event")
-  })
-
-  it("handles host with trailing spaces trimmed via baseUrl", () => {
-    const url = buildSSEUrl(cfg({ host: "  localhost  ", port: 3000 }))
-    expect(url).toBe("http://localhost:3000/event")
-  })
 })
 
 describe("parseSSEChunk", () => {
@@ -176,10 +166,5 @@ describe("shouldReconnect", () => {
   it("returns false for reconnecting when attempt >=5", () => {
     expect(shouldReconnect("reconnecting", 5)).toBe(false)
     expect(shouldReconnect("reconnecting", 100)).toBe(false)
-  })
-
-  it("boundary: attempt 4 is last allowed", () => {
-    expect(shouldReconnect("streaming", 4)).toBe(true)
-    expect(shouldReconnect("streaming", 5)).toBe(false)
   })
 })

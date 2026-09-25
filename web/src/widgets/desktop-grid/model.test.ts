@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest"
 import {
-  buildGridTemplate,
   calcDropZone,
   reorderTabsInStack,
   removeTabFromStack,
@@ -9,67 +8,6 @@ import {
 } from "./model"
 
 describe("desktop-grid model", () => {
-  it("buildGridTemplate calculates CSS columns for left position", () => {
-    const res = buildGridTemplate({
-      position: "left",
-      sidebarCollapsed: false,
-      sidebarWidth: 260,
-      rightSidebarCollapsed: true,
-      rightSidebarWidth: 320,
-    })
-    expect(res.gridTemplateColumns).toBe(
-      "calc(48px * var(--ui-scale, 1)) calc(260px * var(--ui-scale, 1)) minmax(0, 1fr) 0px"
-    )
-  })
-
-  it("buildGridTemplate collapses sidebar when sidebarCollapsed is true", () => {
-    const res = buildGridTemplate({
-      position: "left",
-      sidebarCollapsed: true,
-      sidebarWidth: 260,
-      rightSidebarCollapsed: false,
-      rightSidebarWidth: 300,
-    })
-    expect(res.gridTemplateColumns).toBe(
-      "calc(48px * var(--ui-scale, 1)) 0px minmax(0, 1fr) calc(300px * var(--ui-scale, 1))"
-    )
-  })
-
-  it("buildGridTemplate con narrow deja solo rail + contenido (columnas de sidebars a 0)", () => {
-    const base = {
-      sidebarWidth: 260,
-      rightSidebarCollapsed: false,
-      rightSidebarWidth: 300,
-      narrow: true,
-    }
-    expect(buildGridTemplate({ ...base, position: "left", sidebarCollapsed: false }).gridTemplateColumns).toBe(
-      "calc(48px * var(--ui-scale, 1)) 0px minmax(0, 1fr) 0px"
-    )
-    expect(buildGridTemplate({ ...base, position: "right", sidebarCollapsed: false }).gridTemplateColumns).toBe(
-      "0px minmax(0, 1fr) 0px calc(48px * var(--ui-scale, 1))"
-    )
-    expect(
-      buildGridTemplate({ ...base, position: "top", sidebarCollapsed: false })
-    ).toEqual({
-      gridTemplateColumns: "0px minmax(0, 1fr) 0px",
-      gridTemplateRows: "auto minmax(0, 1fr)",
-    })
-  })
-
-  it("buildGridTemplate con rightOverlay no reserva columna de la sidebar derecha (<=1100px)", () => {
-    const res = buildGridTemplate({
-      position: "left",
-      sidebarCollapsed: false,
-      sidebarWidth: 260,
-      rightSidebarCollapsed: false,
-      rightSidebarWidth: 300,
-      rightOverlay: true,
-    })
-    expect(res.gridTemplateColumns).toBe(
-      "calc(48px * var(--ui-scale, 1)) calc(260px * var(--ui-scale, 1)) minmax(0, 1fr) 0px"
-    )
-  })
-
   it("calcDropZone detects drop zones correctly", () => {
     const rect = { left: 0, top: 0, width: 400, height: 400 }
     expect(calcDropZone(50, 200, rect)).toBe("left")

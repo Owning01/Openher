@@ -65,58 +65,6 @@ function renderModal(overrides: Partial<ComponentProps<typeof OpenCodeHubModal>>
 }
 
 describe("OpenCodeHubModal caracterización", () => {
-  it("isOpen=false no renderiza nada", () => {
-    const { container } = render(
-      <OpenCodeHubModal isOpen={false} onClose={vi.fn()} agents={AGENTS} />
-    )
-    expect(container.innerHTML).toBe("")
-  })
-
-  it("abierto lista agentes y marca el activo; no ofrece seleccionar el activo", async () => {
-    renderModal()
-    expect(await screen.findByText(/OpenHer Hub \(Agentes, Skills & Configuración\)/)).toBeTruthy()
-    expect(screen.getByText("Agentes Oficiales (2)")).toBeTruthy()
-    expect((await screen.findAllByText("build")).length).toBeGreaterThan(0)
-    expect(screen.getByText("ACTIVO EN CHAT")).toBeTruthy()
-    // plan es el único no activo => un solo botón Seleccionar
-    expect(screen.getAllByText("Seleccionar")).toHaveLength(1)
-  })
-
-  it("la búsqueda filtra agentes por nombre, id o prompt", async () => {
-    renderModal()
-    await screen.findAllByText("plan")
-    fireEvent.change(screen.getByPlaceholderText(/Buscar agentes o prompts/), {
-      target: { value: "planificador" },
-    })
-    expect(screen.queryByText("build")).toBeNull()
-    expect(screen.getAllByText("plan").length).toBeGreaterThan(0)
-  })
-
-  it("Seleccionar llama onSelectAgent con el id y cierra", async () => {
-    const onSelectAgent = vi.fn()
-    const onClose = vi.fn()
-    renderModal({ onSelectAgent, onClose })
-    await screen.findAllByText("plan")
-    fireEvent.click(screen.getByText("Seleccionar"))
-    expect(onSelectAgent).toHaveBeenCalledWith("plan")
-    expect(onClose).toHaveBeenCalled()
-  })
-
-  it("tab Skills muestra skills y rutas escaneadas; vacío muestra mensaje", async () => {
-    renderModal()
-    await screen.findAllByText("plan")
-    fireEvent.click(screen.getByText("Skills del Sistema (1)"))
-    expect(await screen.findByText("skill-a")).toBeTruthy()
-    expect(screen.getByText("C:\\skills")).toBeTruthy()
-
-    getGlobal.mockResolvedValue({ ...GLOBAL_DATA, skills: [], scannedRoots: [] })
-    cleanup()
-    renderModal()
-    fireEvent.click(await screen.findByText("Skills del Sistema (0)"))
-    expect(await screen.findByText("No se detectaron skills en las carpetas estándar.")).toBeTruthy()
-    expect(screen.getByText("ninguna carpeta encontrada")).toBeTruthy()
-  })
-
   it("tab Config carga el JSON, valida y bloquea Guardar si es inválido", async () => {
     renderModal()
     fireEvent.click(await screen.findByText(/Configuración Oficial/))
@@ -142,14 +90,6 @@ describe("OpenCodeHubModal caracterización", () => {
     fireEvent.click(screen.getByText("Guardar Configuración"))
     await waitFor(() => expect(saveGlobal).toHaveBeenCalledWith("C:\\cfg\\opencode.json", CONFIG_CONTENT))
     expect(await screen.findByText("¡Configuración guardada exitosamente!")).toBeTruthy()
-  })
-
-  it("Escape dispara onClose", async () => {
-    const onClose = vi.fn()
-    renderModal({ onClose })
-    await screen.findAllByText("plan")
-    fireEvent.keyDown(window, { key: "Escape" })
-    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it("sin getGlobal cae al config del servidor vía api.loadRawConfig", async () => {

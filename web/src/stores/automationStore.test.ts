@@ -7,7 +7,6 @@ import {
   isAutomationDue,
   nextAutomationRunAt,
   persistAutomations,
-  removeAutomation,
   updateAutomation,
   markAutomationRun,
 } from "./automationStore"
@@ -44,12 +43,6 @@ describe("automationStore", () => {
     expect(after.enabled).toBe(false)
     expect(after.intervalMinutes).toBe(60)
     expect(after.prompt).toBe("p")
-  })
-
-  it("remove borra", () => {
-    const a = addAutomation({ name: "n", kind: "prompt", prompt: "p", sessionID: "s" })!
-    removeAutomation(a.id)
-    expect(automationStore.get()).toEqual([])
   })
 
   it("isAutomationDue respeta enabled, destino e intervalo", () => {

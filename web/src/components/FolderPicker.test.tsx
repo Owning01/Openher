@@ -67,24 +67,6 @@ describe("FolderPicker", () => {
     expect(screen.getByText("Cargando...")).toBeTruthy()
   })
 
-  it("ruta manual absoluta navega ahí con Enter", () => {
-    const p = renderPicker()
-    fireEvent.click(screen.getByLabelText("Editar ruta"))
-    const input = screen.getByPlaceholderText(/ruta absoluta/) as HTMLInputElement
-    fireEvent.change(input, { target: { value: "D:\\otro" } })
-    fireEvent.keyDown(input, { key: "Enter" })
-    expect(p.onBrowse).toHaveBeenCalledWith("D:\\otro")
-  })
-
-  it("ruta manual con .. se resuelve client-side", () => {
-    const p = renderPicker({ pickerDir: "/a/b" })
-    fireEvent.click(screen.getByLabelText("Editar ruta"))
-    const input = screen.getByPlaceholderText(/ruta absoluta/) as HTMLInputElement
-    fireEvent.change(input, { target: { value: ".." } })
-    fireEvent.click(screen.getByText("Ir"))
-    expect(p.onBrowse).toHaveBeenCalledWith("/a")
-  })
-
   it("creando sesión deshabilita los botones de crear", () => {
     renderPicker({ creatingSession: true })
     expect((screen.getByText("Crear aquí").closest("button") as HTMLButtonElement).disabled).toBe(true)

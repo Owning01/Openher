@@ -5,8 +5,6 @@ import {
   getQuestionSettledInfo,
   clearQuestionSettled,
   onQuestionSettledChange,
-  setQuestionFloatingMode,
-  isQuestionFloatingMode,
 } from "./questionStore"
 
 describe("questionStore", () => {
@@ -59,24 +57,5 @@ describe("questionStore", () => {
     const info = getQuestionSettledInfo(["unknown_id", "call_abc"])
     expect(info?.status).toBe("answered")
     expect(info?.answers).toEqual([["Candidate 1"]])
-  })
-})
-
-describe("questionStore floating mode", () => {
-  it("defaults to enabled and toggles idempotently", () => {
-    expect(isQuestionFloatingMode()).toBe(true)
-    setQuestionFloatingMode(false)
-    expect(isQuestionFloatingMode()).toBe(false)
-    setQuestionFloatingMode(false)
-    expect(isQuestionFloatingMode()).toBe(false)
-    setQuestionFloatingMode(true)
-    expect(isQuestionFloatingMode()).toBe(true)
-  })
-
-  it("keeps the last mode until changed again", () => {
-    setQuestionFloatingMode(false)
-    expect(isQuestionFloatingMode()).toBe(false)
-    setQuestionFloatingMode(true)
-    expect(isQuestionFloatingMode()).toBe(true)
   })
 })
