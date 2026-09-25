@@ -270,3 +270,53 @@ export function findDeliveredEcho(
   }
   return null
 }
+
+/**
+ * Filtra el historial para conservar únicamente los últimos N turnos del usuario
+ * (por defecto 3), incluyendo todos los mensajes intermedios (asistente, herramientas,
+ * diffs, subagentes, etc.) que hayan ocurrido a partir del N-ésimo mensaje de usuario hacia adelante.
+ * Si hay N o menos mensajes de usuario, conserva todo el historial disponible.
+ * Normaliza en orden cronológico (antiguos primero) para garantizar que, si el servidor o la caché
+ * entregan el array en orden descendente (más nuevo primero), se seleccionen los turnos recientes reales.
+ */
+export function sliceLastUserTurns<T extends { info?: { role?: string; time?: { created?: number } } }>(
+  messages: readonly T[] | undefined | null,
+  userTurnsCount = 3,
+): T[] {
+  if (!messages || messages.length === 0) return []
+  if (userTurnsCount <= 0) return [...messages]
+
+  let normalized = [...messages]
+  const hasTimestamps = messages.some((m) => (m?.info?.time?.created ?? 0) > 0)
+  if (hasTimestamps) {
+    let descCount = 0
+    let ascCount = 0
+    for (let i = 1; i < messages.length; i++) {
+      const prev = messages[i - 1]?.info?.time?.created ?? 0
+      const curr = messages[i]?.info?.time?.created ?? 0
+      if (prev > 0 && curr > 0) {
+        if (prev > curr) descCount++
+        else if (curr > prev) ascCount++
+      }
+    }
+    if (descCount > ascCount) {
+      normalized.reverse()
+    }
+    normalized.sort((a, b) => (a?.info?.time?.created || 0) - (b?.info?.time?.created || 0))
+  }
+
+  const userIndices: number[] = []
+  for (let i = 0; i < normalized.length; i++) {
+    if (normalized[i]?.info?.role === "user") {
+      userIndices.push(i)
+    }
+  }
+
+  if (userIndices.length <= userTurnsCount) {
+    return [...normalized]
+  }
+
+  const startIndex = userIndices[userIndices.length - userTurnsCount]
+  return normalized.slice(startIndex)
+}
+

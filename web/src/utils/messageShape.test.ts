@@ -4,6 +4,7 @@ import {
   stripSubagentWrapper,
   parseSubagentTag,
   getSubagentResultInfo,
+  sliceLastUserTurns,
 } from "./messageShape"
 
 const TAG = `<subagent sessionID="ses_abc123" state="completed" description="W4E BrowserPanel">`
@@ -115,3 +116,65 @@ describe("parseSubagentTag / getSubagentResultInfo", () => {
     expect(getSubagentResultInfo(envelope("user", "hola"))).toBeNull()
   })
 })
+
+describe("sliceLastUserTurns", () => {
+  it("tolera arrays vacíos o nulos", () => {
+    expect(sliceLastUserTurns([])).toEqual([])
+    expect(sliceLastUserTurns(null)).toEqual([])
+    expect(sliceLastUserTurns(undefined)).toEqual([])
+  })
+
+  it("conserva todo si hay 3 o menos mensajes de usuario", () => {
+    const list = [
+      { info: { id: "sys", role: "system" } },
+      { info: { id: "u1", role: "user" } },
+      { info: { id: "a1", role: "assistant" } },
+      { info: { id: "u2", role: "user" } },
+      { info: { id: "a2", role: "assistant" } },
+    ]
+    expect(sliceLastUserTurns(list, 3)).toEqual(list)
+  })
+
+  it("recorta exactamente a los últimos 3 turnos de usuario con todo su contenido intermedio", () => {
+    const list = [
+      { info: { id: "u1", role: "user" } },
+      { info: { id: "a1", role: "assistant" } },
+      { info: { id: "u2", role: "user" } },
+      { info: { id: "a2", role: "assistant" } },
+      { info: { id: "t2", role: "tool" } },
+      { info: { id: "u3", role: "user" } }, // <- 3ro desde el final
+      { info: { id: "a3", role: "assistant" } },
+      { info: { id: "u4", role: "user" } }, // <- 2do desde el final
+      { info: { id: "a4", role: "assistant" } },
+      { info: { id: "t4", role: "tool" } },
+      { info: { id: "u5", role: "user" } }, // <- último
+      { info: { id: "a5", role: "assistant" } },
+    ]
+    const res = sliceLastUserTurns(list, 3)
+    expect(res.map((m) => m.info.id)).toEqual(["u3", "a3", "u4", "a4", "t4", "u5", "a5"])
+    expect(res.filter((m) => m.info.role === "user")).toHaveLength(3)
+  })
+
+  it("recorta correctamente cuando la lista viene en orden descendente (más reciente primero)", () => {
+    const desc = [
+      { info: { id: "a5", role: "assistant", time: { created: 510 } } },
+      { info: { id: "u5", role: "user", time: { created: 500 } } },
+      { info: { id: "t4", role: "tool", time: { created: 420 } } },
+      { info: { id: "a4", role: "assistant", time: { created: 410 } } },
+      { info: { id: "u4", role: "user", time: { created: 400 } } },
+      { info: { id: "a3", role: "assistant", time: { created: 310 } } },
+      { info: { id: "u3", role: "user", time: { created: 300 } } },
+      { info: { id: "t2", role: "tool", time: { created: 220 } } },
+      { info: { id: "a2", role: "assistant", time: { created: 210 } } },
+      { info: { id: "u2", role: "user", time: { created: 200 } } },
+      { info: { id: "a1", role: "assistant", time: { created: 110 } } },
+      { info: { id: "u1", role: "user", time: { created: 100 } } },
+    ]
+    const res = sliceLastUserTurns(desc, 3)
+    // Debe devolver los 3 turnos más recientes en orden cronológico (u3, u4, u5)
+    expect(res.map((m) => m.info.id)).toEqual(["u3", "a3", "u4", "a4", "t4", "u5", "a5"])
+    expect(res.filter((m) => m.info.role === "user")).toHaveLength(3)
+  })
+})
+
+

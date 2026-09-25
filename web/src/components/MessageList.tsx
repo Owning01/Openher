@@ -1,12 +1,13 @@
-import { memo, useRef, useEffect, useLayoutEffect, useState, Fragment, useMemo } from "react"
+import { memo, useCallback, useRef, useEffect, useLayoutEffect, useState, Fragment, useMemo } from "react"
 import { ChatIcon, ScrollDownIcon, CompressIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
 import { MessageBubble } from "./MessageBubble"
 import { buildTurnActivity } from "../utils/turnActivity"
-import { GridSpinner } from "./GridSpinner"
+import { ConfirmDialog } from "../features/settings/ConfirmDialog"
 import "../styles/chat-pin.css"
 import { useFollowTail, resolveSessionEntry, anchorScrollToSaved } from "../shared/lib/useFollowTail"
+import { sliceLastUserTurns } from "../utils/messageShape"
 
 type MessageListProps = {
   messages: RenderedMessage[]
@@ -73,10 +74,58 @@ export const MessageList = memo(function MessageList({
   // messages.length (límite del server: 200), así que un salto explícito puede
   // mostrar más sin que el botón "Cargar anteriores" encoja la ventana.
   const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_SIZE)
+  // El botón de editar mensaje pide confirmación: handleEditMessage revierte la
+  // sesión hasta ese mensaje (aborta la respuesta en curso) y carga el texto en
+  // el compositor; un click accidental era destructivo.
+  const [editConfirm, setEditConfirm] = useState<{ messageID: string; text: string } | null>(null)
+  const requestEditMessage = useCallback((messageID: string, text: string) => {
+    setEditConfirm({ messageID, text })
+  }, [])
 
+  const initializedSessionRef = useRef<string | null>(null)
   useEffect(() => {
-    setVisibleCount(INITIAL_PAGE_SIZE)
-  }, [selectedID])
+    if (!selectedID) return
+    if (initializedSessionRef.current !== selectedID && messages.length > 0 && isFresh) {
+      initializedSessionRef.current = selectedID
+      const turnsSlice = sliceLastUserTurns(messages, 3)
+      setVisibleCount(Math.max(INITIAL_PAGE_SIZE, turnsSlice.length))
+    }
+  }, [selectedID, messages, isFresh])
+
+  const prevMessagesCountRef = useRef(messages.length)
+  useEffect(() => {
+    const prevCount = prevMessagesCountRef.current
+    prevMessagesCountRef.current = messages.length
+    if (initializedSessionRef.current === selectedID && messages.length > prevCount) {
+      const added = messages.length - prevCount
+      setVisibleCount((prev) => prev + added)
+    }
+  }, [messages.length, selectedID])
+
+  const expandScrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
+
+  const handleLoadEarlier = useCallback(() => {
+    const el = messagesRef.current
+    if (el) {
+      expandScrollAnchorRef.current = {
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
+      }
+    }
+    setVisibleCount((prev) => Math.min(Math.max(prev, INITIAL_PAGE_SIZE) + INITIAL_PAGE_SIZE, messages.length))
+  }, [messages.length])
+
+  useLayoutEffect(() => {
+    const anchor = expandScrollAnchorRef.current
+    if (!anchor) return
+    expandScrollAnchorRef.current = null
+    const el = messagesRef.current
+    if (!el) return
+    const delta = el.scrollHeight - anchor.scrollHeight
+    if (delta > 0) {
+      el.scrollTop = anchor.scrollTop + delta
+    }
+  }, [visibleCount])
 
   useEffect(() => {
     if (!scrollToMessageID) return
@@ -180,6 +229,41 @@ export const MessageList = memo(function MessageList({
     ro.observe(user)
     return () => ro.disconnect()
   }, [activeGroupKey])
+
+  // Header del mensaje del usuario (fecha/hora + acciones): oculto por defecto,
+  // se revela al CLICKEAR el mensaje y se oculta al clickear afuera. Sin estado
+  // por mensaje: una clase en el elemento, delegada desde el contenedor.
+  useEffect(() => {
+    const root = messagesRef.current
+    if (!root) return
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Element | null
+      const msg = (target?.closest?.(".message.user") as HTMLElement | null) ?? null
+      root.querySelectorAll<HTMLElement>(".message.user.header-shown").forEach((el) => {
+        if (el !== msg) el.classList.remove("header-shown")
+      })
+      if (msg && root.contains(msg)) msg.classList.toggle("header-shown")
+    }
+    root.addEventListener("click", onClick)
+    return () => root.removeEventListener("click", onClick)
+  }, [])
+
+  // Tope de 200px SOLO cuando el prompt esta pegado: el scroller avisa con una
+  // banda fina arriba del area visible (IntersectionObserver, sin tocar el scroll).
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return
+    const root = messagesRef.current
+    if (!root) return
+    const scroller = root.closest<HTMLElement>(".messages") ?? root
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const group = (entry.target as HTMLElement).closest<HTMLElement>(".turn-group")
+        if (group) group.classList.toggle("turn-group-stuck", entry.isIntersecting)
+      }
+    }, { root: scroller, rootMargin: "0px 0px -99% 0px", threshold: 0 })
+    root.querySelectorAll(".turn-group > .message.user").forEach((el) => io.observe(el))
+    return () => io.disconnect()
+  }, [messages])
 
   // El footer (modo · modelo · nivel de pensamiento · duración) se muestra solo
   // en el último mensaje assistant COMPLETED, o en un mensaje donde el
@@ -563,9 +647,9 @@ export const MessageList = memo(function MessageList({
                   type="button"
                   className="btn-secondary compact load-earlier-btn"
                   style={{ fontSize: "0.75rem", padding: "4px 14px", borderRadius: "14px" }}
-                  onClick={() => setVisibleCount((prev) => Math.min(Math.max(prev, INITIAL_PAGE_SIZE) + INITIAL_PAGE_SIZE, messages.length))}
+                  onClick={handleLoadEarlier}
                 >
-                  ↑ Cargar {Math.min(INITIAL_PAGE_SIZE, messages.length - visibleCount)} mensajes anteriores ({messages.length - visibleCount} restantes)
+                  {t('detail.loadEarlier', { count: Math.min(INITIAL_PAGE_SIZE, messages.length - visibleCount), remaining: messages.length - visibleCount })}
                 </button>
               </div>
             )}
@@ -581,7 +665,7 @@ export const MessageList = memo(function MessageList({
                     {turnActivity.swallowed.has(message.info.id) ? null : <MessageBubble
                       message={message}
                       queued={pendingIndex !== undefined && actualIndex > pendingIndex}
-                      outbox={outboxActions?.[message.info.id]}
+                      outbox={outboxActions?.[message.info.id] ? { ...outboxActions[message.info.id], count: Object.keys(outboxActions).length } : null}
                       revert={revert}
                       isReverted={revertIndex >= 0 && actualIndex >= revertIndex}
                       onRevertToMessage={onRevertToMessage}
@@ -593,7 +677,7 @@ export const MessageList = memo(function MessageList({
                       onViewSubagents={onViewSubagents}
                       busySessionIds={busySessionIds}
                       onContextMenu={onContextMenu}
-                      onEditMessage={onEditMessage}
+                      onEditMessage={onEditMessage ? requestEditMessage : undefined}
                       showTodoButton={showTodoButton}
                       onToggleTodos={onToggleTodos}
                       todosOpen={todosOpen}
@@ -611,17 +695,15 @@ export const MessageList = memo(function MessageList({
               </div>
             ))}
             {compacting && (
-              <article className="message assistant compacting-bubble fade-in" aria-label="Compacting session">
+              <article className="message assistant compacting-bubble fade-in" aria-label={t('session.compacting')}>
                 <div className="compacting-indicator" aria-hidden="true">
                   <CompressIcon size={18} />
-                  <span>Compacting session...</span>
+                  <span>{t('session.compacting')}</span>
                 </div>
               </article>
             )}
             {showTypingBubble && !compacting && !hasWorkingActivity && (
-              <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')}>
-                <GridSpinner label={t('detail.waiting')} size={20} />
-              </article>
+              <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')} />
             )}
             <div ref={messagesEndRef} className="messages-end" aria-hidden="true" />
           </>
@@ -632,6 +714,20 @@ export const MessageList = memo(function MessageList({
           aria-label="Scroll to bottom" title="Scroll to bottom">
           <ScrollDownIcon size={16} />
         </button>
+      )}
+      {editConfirm && onEditMessage && (
+        <ConfirmDialog
+          title={t('detail.queuedEdit') || "Editar mensaje"}
+          body={t('detail.editConfirmBody') || "Se revierte la sesión hasta este mensaje y el texto se carga en el compositor."}
+          cancelText={t('common.cancel') || "Cancelar"}
+          confirmText={t('common.confirm') || "Confirmar"}
+          onCancel={() => setEditConfirm(null)}
+          onConfirm={() => {
+            const pending = editConfirm
+            setEditConfirm(null)
+            onEditMessage(pending.messageID, pending.text)
+          }}
+        />
       )}
     </div>
   )

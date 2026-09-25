@@ -165,8 +165,9 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       const pendingOptimistic = optimisticUserMessages.filter((opt) => !existingIds.has(opt.info.id))
       // Outbox: solo la sesión cargada (los de otras sesiones esperan su panel).
       const target = loaded ?? scoped[0]?.info.sessionID
+      const optTexts = new Set(pendingOptimistic.map((m) => messageText(m).trim()).filter(Boolean))
       const pendingOutbox = outbox
-        .filter((o) => o.sessionID === target && !existingIds.has(o.id))
+        .filter((o) => o.sessionID === target && !existingIds.has(o.id) && !optTexts.has((o.text ?? "").trim()))
         .map(buildOutboxMessage)
       merged = [...scoped, ...pendingOptimistic, ...pendingOutbox]
     }
@@ -233,6 +234,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     loadedSessionIDRef.current = null
     setCurrentSessionId(null)
     subagentAnchorRef.current.clear()
+    renderedCacheRef.current.clear()
     setMessageLimit(INITIAL_PAGE_LIMIT)
     setMessages([])
     setOptimisticUserMessages([])
@@ -268,7 +270,8 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
     const msg = dataMode === "full" || dataMode === "saver" ? raw : raw.map((m) => stripNonEssential(m, dataMode))
     // Defensivo: un item null/corrupto del server no debe tumbar el render
     // (msg.map(m => m.info.id) con m undefined = TypeError).
-    const safe = msg.filter((m): m is MessageEnvelope => !!m && !!m.info?.id)
+    const rawSafe = msg.filter((m): m is MessageEnvelope => !!m && !!m.info?.id)
+    const safe = rawSafe
     // Eco sin bytes: reinyectar los dataURL locales en el mensaje confirmado
     // (el server puede podarlos por tamaño). Sin esto la imagen "aparece y se
     // borra": el optimista se elimina por conteo y el eco queda sin src.
@@ -307,17 +310,16 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
             .filter((p) => p.type === "text" || p.type === "compaction" || p.type === "reasoning" || p.type === "thinking" || p.type === undefined)
             .map((p) => p.text ?? "")
             .join("\n\n")
+          const hasRemoteText = remoteText.trim().length > 0
           const extraLocal = m.parts.filter((p) => {
             if (remoteIDs.has(p.id)) return false
+            const isTextType = p.type === "text" || p.type === "compaction" || p.type === "reasoning" || p.type === "thinking" || p.type === undefined
+            // Si el server ya trajo texto para este mensaje, las partes sintetizadas
+            // de texto locales nunca se conservan (evita párrafos duplicados A,A,B,B).
+            // Solo se conservan partes de texto locales si el server aún no trajo texto.
+            if (isTextType && hasRemoteText) return false
             const t = (p.text ?? "").trim()
-            if (t && (p.type === "text" || p.type === "compaction" || p.type === "reasoning" || p.type === "thinking" || p.type === undefined) && remoteText.includes(t)) return false
-            // Traza (solo lectura, no cambia conducta): part local de texto RETENIDO
-            // cuyo inicio sí aparece en el texto del server. Ese solapamiento sin
-            // contención total es la firma del bug de mensajes repetidos por merge
-            // (server + streameado). Deja el partID para decidir el fix con evidencia.
-            if (t.length >= 60 && remoteText.includes(t.slice(0, 80))) {
-              console.error("[chat:merge] part local retenido con solapamiento", { partID: p.id, len: t.length, preview: t.slice(0, 80) })
-            }
+            if (t && isTextType && remoteText.includes(t)) return false
             return true
           })
           const parts = extraLocal.length > 0
@@ -398,9 +400,10 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       //    de desaparecer junto con el primero.
       //    Para mensajes solo-imagen (sin texto), se confirma por cantidad de
       //    partes de imagen coincidente.
+      const normText = (s: string) => s.replace(/\r\n/g, "\n").trim()
       const confirmedTextCounts = new Map<string, number>()
       for (const m of confirmedUsers) {
-        const t = messageText(m).trim()
+        const t = normText(messageText(m))
         if (!t) continue
         confirmedTextCounts.set(t, (confirmedTextCounts.get(t) ?? 0) + 1)
       }
@@ -416,7 +419,7 @@ export function useMessages(config: ServerConfig, dataMode?: DataMode, storageKe
       const removeIDs = new Set<string>(confirmedIDs)
       for (const m of current) {
         if (m.info.sessionID !== sessionID || confirmedIDs.has(m.info.id)) continue
-        const t = messageText(m).trim()
+        const t = normText(messageText(m))
         const optImgCount = m.parts.filter((p) => isImagePart(p)).length
         if (t && optImgCount === 0) {
           const cnt = confirmedTextCounts.get(t) ?? 0
