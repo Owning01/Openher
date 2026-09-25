@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useReducer, useState } from "react"
 import { useT } from "../i18n-context"
 import { shell, type ZenGoKeySource, type ZenGoUsage, type ZenGoWindow } from "../shell"
 import { RefreshIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, EyeOffIcon } from "../Icons"
-import { GO_MODELS_REF, formatReset, usageTone } from "../data/goModels"
+import { GO_MODELS_REF, formatReset, usageTone } from "../features/settings/goModels"
 
 type ZenGoModelLite = { id: string }
 

@@ -20,6 +20,14 @@ cargo check; cargo run; cargo build --release   # desktop (desktop-app/)
 - DRY + singleton en servicios, stores (Zustand) y utilidades compartidas.
 - Cero emojis en la UI: solo SVG formal (Lucide).
 
+## Estructura — dónde va cada cosa
+
+- Dominio → `entities/<dominio>/model.ts`. UI de una feature → `features/<x>/` (hooks propios en `features/<x>/hooks/`).
+- `components/` y `utils/` son **legacy**: para lo nuevo preferí `features/`, `shared/lib` o `shared/api`; en `components/` solo UI compartida por ≥2 features.
+- Helpers genéricos → `shared/lib/`; red → `shared/api/` o `api/<dominio>.ts`; stores → `stores/` (zustand) o `features/<x>/*Store.ts`.
+- Nada nuevo suelto en la raíz de `src/` salvo los barrels documentados (`api.ts`, `types.ts`). No crear carpetas de 1 archivo; `context/` y `data/` se absorben al tocar.
+- Todo IO (fetch/SDK/shell) con deadline vía `withTimeout` (`shared/lib/async.ts`); `catch {}` vacío prohibido en código nuevo (loguear o avisar).
+
 ## Reglas de codificación (ley del repo; el por qué en `CONTRIBUTING.md`)
 
 1. **Un path, un escritor.** Dos agentes nunca editan el mismo archivo a la vez.
