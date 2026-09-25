@@ -62,7 +62,10 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
       onOpen={c.handleOpenSession}
       onStartRename={c.startRename}
       onRenameChange={c.setRenameValue}
-      onRenameConfirm={(id) => c.renameSession(id, c.renameValue, c.selectedSession?.directory ?? "").then(() => true)}
+      /* dir de la CARD (3er arg): selectedSession?.directory era el dir del chat
+         ABIERTO — renombrar otra sesión (cross-directory) fallaba en la API y,
+         como setRenamingSessionID va tras el await, el input quedaba pegado. */
+      onRenameConfirm={(id, title, dir) => c.renameSession(id, title, dir).then(() => true)}
       onRenameCancel={c.cancelRename}
       onDelete={c.setSessionToDelete}
       onToggleFavorite={c.toggleFavorite}
@@ -90,8 +93,9 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
           c.setPickerError((err as Error).message)
         }
       }}
-      onCreateDefaultPicker={() => c.handleCreateSession("")}
+      onCreateDefaultPicker={async () => { await c.handleCreateSession("") }}
       onClosePicker={() => c.setShowNewSessionPicker(false)}
+      onOpenSettings={() => c.handleNavigate("settings")}
     />
   )
 
@@ -366,9 +370,6 @@ function AppInner({ language, setLanguage }: { language: LanguageCode; setLangua
         fb={c.fb}
         isDesktop={c.isDesktop}
         shellExecute={(cmd, sid, dir) => { c.shellExecute(cmd, sid || "", dir) }}
-        showRemoteDesktop={c.showRemoteDesktop}
-        setShowRemoteDesktop={c.setShowRemoteDesktop}
-        desktopCfg={c.desktopCfg}
         dataMode={c.dataMode}
         onNavigateSettings={() => c.handleNavigate("settings")}
         showShortcuts={c.showShortcuts}

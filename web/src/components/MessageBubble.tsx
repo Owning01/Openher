@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useMemo, useRef, useEffect } from "react"
-import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon, TrashIcon, SendIcon, ChevronDownIcon, ArrowRightIcon } from "../Icons"
+import { UndoIcon, MenuDotsIcon, CopyIcon, RefreshIcon, PencilIcon, CompressIcon, TrashIcon, ChevronDownIcon, ArrowRightIcon } from "../Icons"
 import { formatTime, isImagePart } from "../utils"
 import { getTranslationOriginal } from "../hooks/useMessages"
 import { messageAuthorFrom } from "../entities/message/author"
@@ -13,7 +13,7 @@ import { CollapsibleSection } from "./CollapsibleSection"
 import { Markdown } from "./Markdown"
 import { MarkdownWithEmbeds } from "./AgentEmbed"
 import { ImageLightbox } from "./ImageLightbox"
-import { ToolIcon, LoadingIcon } from "../Icons"
+import { ToolIcon, InfoIcon } from "../Icons"
 import { formatDurationMs, type TurnActivity } from "../utils/turnActivity"
 import { isAssistantMessage, isUserMessage, messageRole, getSubagentResultInfo } from "../utils/messageShape"
 
@@ -87,13 +87,14 @@ export function calcTokensPerSecond(msg: RenderedMessage): string {
 }
 
 const TranslationOriginal = memo(function TranslationOriginal({ messageId }: { messageId: string }) {
+  const t = useT()
   const [show, setShow] = useState(false)
   const original = getTranslationOriginal(messageId)
   if (!original) return null
   return (
     <div className="translation-original">
       <button type="button" className="translation-toggle" onClick={() => setShow((v) => !v)}>
-        {show ? "hide original" : "ver original"}
+        {show ? t('detail.hideOriginal') : t('detail.showOriginal')}
       </button>
       {show && (
         <div className="translation-original-text">
@@ -133,7 +134,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   onRegenerate?: () => void
   onOpenADEDiff?: (diffs: FileDiff[], file?: string) => void
   // Pendiente de la cola visible: el mensaje está en el chat sin enviarse.
-  outbox?: { onDelete: () => void; onEdit: () => void; onSendNow: () => void; disabled?: boolean; canAct?: () => boolean } | null
+  outbox?: { onDelete: () => void; onEdit: () => void; onSendNow: () => void; disabled?: boolean; canAct?: () => boolean; count?: number } | null
 }) {
   const t = useT()
   const [showConfirm, setShowConfirm] = useState(false)
@@ -142,6 +143,10 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const moreWrapRef = useRef<HTMLSpanElement | null>(null)
   useOutsideClick(moreWrapRef, () => setMoreOpen(false), moreOpen)
+  const [outboxCollapsed, setOutboxCollapsed] = useState(false)
+  const activeOutbox = (outbox && isUserMessage(message)) ? outbox : null
+  const isOutbox = Boolean(activeOutbox)
+  const outboxCount = activeOutbox?.count ?? 1
 
   // Mensaje revertido: calculado por posición ordinal o fallback por ID
   const isReverted = isRevertedProp ?? (revert ? messageIdGt(message.info.id, revert.messageID) : false)
@@ -198,6 +203,9 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
   // Seguir el fondo de la caja solo si el usuario ya está ahí: antes cada delta
   // la clavaba abajo y no se podía leer un tool anterior con el turno corriendo.
   const activityFollowRef = useRef(true)
+  // El usuario la está tocando/usando (pointer/touch o foco adentro): mientras
+  // dure, no se la mueve aunque esté al fondo (pedido del humano).
+  const activityTouchedRef = useRef(false)
   useEffect(() => {
     const body = activityRef.current?.querySelector(".collapsible-content")
     if (!(body instanceof HTMLElement)) return
@@ -205,19 +213,40 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
       // Margen chico: el auto-scroll deja dist=0, así que seguir sigue solo.
       activityFollowRef.current = body.scrollHeight - body.scrollTop - body.clientHeight <= 24
     }
+    const onDown = () => { activityTouchedRef.current = true }
+    const onUp = () => { activityTouchedRef.current = false }
+    const onFocusIn = () => { activityTouchedRef.current = true }
+    const onFocusOut = () => { activityTouchedRef.current = false }
     onScroll()
     body.addEventListener("scroll", onScroll, { passive: true })
-    return () => body.removeEventListener("scroll", onScroll)
+    body.addEventListener("pointerdown", onDown, { passive: true })
+    // pointerup/pointercancel en window: con mouse, soltar fuera del cuerpo no
+    // emite el evento en el body y el flag quedaría pegado (la caja dejaría de
+    // seguir el resto del turno).
+    window.addEventListener("pointerup", onUp, { passive: true })
+    window.addEventListener("pointercancel", onUp, { passive: true })
+    body.addEventListener("focusin", onFocusIn)
+    body.addEventListener("focusout", onFocusOut)
+    return () => {
+      body.removeEventListener("scroll", onScroll)
+      body.removeEventListener("pointerdown", onDown)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+      body.removeEventListener("focusin", onFocusIn)
+      body.removeEventListener("focusout", onFocusOut)
+    }
   }, [activityOpen])
-  // Firma del contenido (pensamiento creciendo / tools apareciendo): mientras
-  // el turno está en curso, la caja baja sola al último renglón — pero solo si
-  // el usuario no scrolleó hacia arriba (activityFollowRef).
+  // Firma del contenido (pensamiento creciendo / tools apareciendo / textos
+  // intermedios llegando): mientras el turno está en curso, la caja baja sola
+  // al último renglón — pero solo si el usuario no scrolleó hacia arriba
+  // (activityFollowRef) ni la está tocando (activityTouchedRef). Los textos
+  // intermedios cuentan: son el contenido que más crece durante el turno.
   const activityTick = useMemo(() => activity
-    ? `${activity.toolParts.length}:${activity.thinkingParts.reduce((n, p) => n + (p.text?.length ?? 0), 0)}:${activity.toolParts.filter((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending").length}`
+    ? `${activity.toolParts.length}:${activity.thinkingParts.reduce((n, p) => n + (p.text?.length ?? 0), 0)}:${activity.intermediateTexts.reduce((n, t) => n + (t.text?.length ?? 0), 0)}:${activity.toolParts.filter((tp) => !tp.state?.status || tp.state?.status === "running" || tp.state?.status === "pending").length}`
     : "", [activity])
   useEffect(() => {
     if (!activityWorking || !activityOpen) return
-    if (!activityFollowRef.current) return
+    if (!activityFollowRef.current || activityTouchedRef.current) return
     const body = activityRef.current?.querySelector(".collapsible-content")
     if (body instanceof HTMLElement) body.scrollTop = body.scrollHeight
   }, [activityTick, activityWorking, activityOpen])
@@ -306,7 +335,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
         </div>
       )}
       <article
-        className={`message ${isCompaction ? "assistant compaction" : message.info.role} fade-in${isReverted ? " revert-hidden" : ""}${showConfirm ? " confirming-undo" : ""}${authorFrom ? " from-agent" : ""}`}
+        className={`message ${isCompaction ? "assistant compaction" : message.info.role} fade-in${isReverted ? " revert-hidden" : ""}${showConfirm ? " confirming-undo" : ""}${authorFrom ? " from-agent" : ""}${isOutbox ? " outbox-queued" : ""}${message.noticeKind ? " server-notice" : ""}`}
         data-message-id={message.info.id}
         data-mode={message.turnMode || undefined}
         onContextMenu={handleContextMenu}
@@ -330,7 +359,7 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           }, 500)
         }}
       >
-        {isUserMessage(message) && (
+        {isUserMessage(message) && !isOutbox && (
           <header>
             <span className="message-title-group">
               {queued && (
@@ -408,12 +437,10 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
 
           // Título fijo de la caja (pedido explícito): siempre "Working", esté
           // el turno en curso o terminado, sin listar herramientas. Lo que
-          // cambia es el subtítulo: spinner mientras trabaja.
+          // cambia es el subtítulo: sin indicador mientras trabaja (spinners
+          // retirados por pedido; ver LOADING-STATES.md).
           const title = "Working"
-          // En marcha: solo el spinner (el título ya dice qué está haciendo).
-          const subtitle = activity.working
-            ? <span className="thinking-streaming" title={t('detail.working')}><LoadingIcon size={12} className="animate-spin" /></span>
-            : null
+          const subtitle = null
 
           return (
             <div className={`activity-box activity-box-${activity.working ? "working" : "completed"}`} ref={activityRef}>
@@ -442,15 +469,28 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
         {(message.noticeKind && (noticeText || message.text)) ? (
           <div className="tool-catalog-card">
             <CollapsibleSection
-              icon={<ToolIcon size={13} />}
+              icon={<InfoIcon size={13} className="tool-catalog-icon" />}
               title={
-                message.noticeKind === "skills"
-                  ? "Skills · aviso del servidor"
-                  : message.noticeKind === "shell"
-                    ? "Shell · salida del servidor"
-                    : "Code Mode · catálogo de herramientas"
+                message.noticeKind === "skills" ? (
+                  <span className="tool-catalog-title">
+                    <span className="tool-catalog-verb">Skills</span>
+                    <span className="tool-catalog-dot">·</span>
+                    <span className="tool-catalog-target">{t('detail.noticeServer')}</span>
+                  </span>
+                ) : message.noticeKind === "shell" ? (
+                  <span className="tool-catalog-title">
+                    <span className="tool-catalog-verb">Shell</span>
+                    <span className="tool-catalog-dot">·</span>
+                    <span className="tool-catalog-target">{t('detail.outputServer')}</span>
+                  </span>
+                ) : (
+                  <span className="tool-catalog-title">
+                    <span className="tool-catalog-verb">Code Mode</span>
+                    <span className="tool-catalog-dot">·</span>
+                    <span className="tool-catalog-target">{t('detail.toolCatalog')}</span>
+                  </span>
+                )
               }
-              subtitle={`${((noticeText.length || message.text.length) / 1024).toFixed(1)} KB · clic para ver`}
               defaultOpen={false}
             >
               <div className="tool-catalog-body">
@@ -504,6 +544,80 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
               </div>
             ) : null}
           </div>
+        ) : activeOutbox ? (
+          <div className="outbox-card">
+            <button
+              type="button"
+              className="outbox-header"
+              onClick={() => setOutboxCollapsed((c) => !c)}
+              aria-expanded={!outboxCollapsed}
+            >
+              <div className="outbox-header-left">
+                <span className="outbox-title">{t('detail.queuedTitle')}</span>
+                <span className="outbox-count-badge">{outboxCount}</span>
+                <span className="outbox-subtitle">{t('detail.queuedSubtitle')}</span>
+              </div>
+              <span
+                className={`outbox-chevron-btn ${outboxCollapsed ? "is-collapsed" : ""}`}
+                aria-hidden="true"
+              >
+                <ChevronDownIcon size={15} />
+              </span>
+            </button>
+            {!outboxCollapsed && (
+              <div className="outbox-body">
+                <div className="outbox-content">
+                  {message.text && (
+                    <MarkdownWithEmbeds text={message.text} highlight={highlight} />
+                  )}
+                </div>
+                <div className="outbox-actions" role="group" aria-label={t('detail.queuedTitle')}>
+                  <button
+                    type="button"
+                    className="outbox-action-btn outbox-btn"
+                    disabled={activeOutbox.disabled}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (activeOutbox.canAct && !activeOutbox.canAct()) return
+                      activeOutbox.onSendNow()
+                    }}
+                    title={t('detail.queuedSend')}
+                    aria-label={t('detail.queuedSend')}
+                  >
+                    <ArrowRightIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="outbox-action-btn outbox-btn"
+                    disabled={activeOutbox.disabled}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (activeOutbox.canAct && !activeOutbox.canAct()) return
+                      activeOutbox.onEdit()
+                    }}
+                    title={t('detail.queuedEdit')}
+                    aria-label={t('detail.queuedEdit')}
+                  >
+                    <PencilIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="outbox-action-btn outbox-btn delete"
+                    disabled={activeOutbox.disabled}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (activeOutbox.canAct && !activeOutbox.canAct()) return
+                      activeOutbox.onDelete()
+                    }}
+                    title={t('detail.queuedRemove')}
+                    aria-label={t('detail.queuedRemove')}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         ) : hasSegments ? (
           <div className="message-segments">
             {/* Solo textos: las herramientas viven en la caja de actividad. */}
@@ -534,25 +648,18 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           </div>
         )}
 
-        {outbox && message.info.role === "user" && (
-          <div className="outbox-actions" role="group" aria-label={t('detail.queuedTitle')}>
-            <button type="button" className="btn-secondary compact outbox-btn" disabled={outbox.disabled} onClick={(e) => { e.stopPropagation(); if (outbox.canAct && !outbox.canAct()) return; outbox.onDelete() }}>
-              <TrashIcon size={12} /> {t('detail.queuedRemove')}
-            </button>
-            <button type="button" className="btn-secondary compact outbox-btn" disabled={outbox.disabled} onClick={(e) => { e.stopPropagation(); if (outbox.canAct && !outbox.canAct()) return; outbox.onEdit() }}>
-              <PencilIcon size={12} /> {t('detail.queuedEdit')}
-            </button>
-            <button type="button" className="btn-primary compact outbox-btn" disabled={outbox.disabled} onClick={(e) => { e.stopPropagation(); if (outbox.canAct && !outbox.canAct()) return; outbox.onSendNow() }}>
-              <SendIcon size={12} /> {t('detail.queuedSend')}
-            </button>
-          </div>
-        )}
-
         <TranslationOriginal messageId={message.info.id} />
 
         {imageParts.map(({ id, src }) => (
           <div key={id} className="message-image-wrap">
             <img src={src} alt="" className="message-image" loading="lazy"
+              tabIndex={0} title={t('image.expand')}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  setLightboxSrc(src)
+                }
+              }}
               onClick={() => setLightboxSrc(src)} />
           </div>
         ))}
@@ -575,12 +682,12 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             {message.info.modelID && <span className="msg-footer-model"> · {message.info.modelID}</span>}
             {duration && <span className="msg-footer-duration"> · {duration}</span>}
             {tokensPerSecond && (
-              <span className="msg-footer-tps" title="Velocidad de generación de tokens">
+              <span className="msg-footer-tps" title={t('detail.tokensPerSecond')}>
                 {" "}· {tokensPerSecond}
               </span>
             )}
             {message.info.finish === "aborted" && (
-              <span className="msg-footer-interrupted"> · interrupted</span>
+              <span className="msg-footer-interrupted"> · {t('detail.interrupted')}</span>
             )}
             <span className="msg-footer-spacer" />
             <span className="msg-more-wrap" ref={moreWrapRef}>
