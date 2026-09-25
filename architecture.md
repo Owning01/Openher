@@ -1,4 +1,4 @@
-# Architecture — opencode-remote-android
+# Architecture - openher
 
 > **Documento único de arquitectura** — consolidación de los antiguos `MAPA.md` y
 > `project-knowledge.md` (ambos eliminados; este archivo los reemplaza).
@@ -34,7 +34,7 @@ de código IA) de forma remota:
 ### Mapa del monorepo
 
 ```
-opencode-remote-android/                         ← raíz, sin package.json raíz
+openher/                         ← raíz, sin package.json raíz
 ├── web/                ← EL PRODUCTO (un frontend para APK/iPA/desktop)
 │   ├── src/            ← 96 components + 49 hooks + tests (1679 vitest)
 │   ├── android/ · ios/ ← proyectos nativos Capacitor (appId com.gbro.opencode)

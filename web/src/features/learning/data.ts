@@ -31,7 +31,7 @@ export async function loadManifest(): Promise<LearningManifest> {
     // try desktop shell.fs first
     try {
       const candidates = [
-        "G:\\Proyectos\\opencode-remote-android\\data\\reports\\manifest.json",
+        "G:\\Proyectos\\openher\\data\\reports\\manifest.json",
         "G:\\Proyectos\\53plataforma-informes\\public\\reports.json",
       ]
       for (const p of candidates) {
@@ -103,8 +103,8 @@ export async function loadLesson(lesson: LearningLesson): Promise<string> {
   if (lesson.file.startsWith("reports/")) {
     try {
       const candidates = [
-        `G:\\Proyectos\\opencode-remote-android\\data\\reports\\${lesson.file.replace("reports/", "")}`,
-        `G:\\Proyectos\\opencode-remote-android\\public\\${lesson.file}`,
+        `G:\\Proyectos\\openher\\data\\reports\\${lesson.file.replace("reports/", "")}`,
+        `G:\\Proyectos\\openher\\public\\${lesson.file}`,
         `G:\\Proyectos\\53plataforma-informes\\public\\${lesson.file.replace("reports/", "")}`,
       ]
       for (const p of candidates) {
