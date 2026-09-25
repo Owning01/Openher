@@ -143,6 +143,8 @@ question/permission, fetchDiffContent, readFile/writeFile, findFiles, setModelVa
 
 ### 2.4 Tiempo real: SSE + Polling
 
+> Mapa de propiedad del estado (quién escribe qué): `docs/chat-stream-state.md` — mantenerlo al día si cambia `useSSE`/`useSSEHandler`/`useStreamPatch`/`useMessages`.
+
 ```
 opencode serve ──►  /event (v1)  o /api/event (v2)   text/event-stream + Authorization
                                    │

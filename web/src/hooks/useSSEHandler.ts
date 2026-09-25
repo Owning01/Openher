@@ -15,6 +15,11 @@ function asID(v: unknown): string | undefined {
   return typeof v === "string" && v ? v : undefined
 }
 
+/** Payload del evento: v2 lo anida en `data`; v1 lo trae en la raíz de properties. */
+function payloadOf(p: Record<string, unknown>): Record<string, unknown> {
+  return (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+}
+
 type SSEHandlerDeps = {
   sessionID: string | null | undefined
   directory: string | undefined
@@ -103,7 +108,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     // Reemitir eventos hacia el bus de plugins. Precedencia de atribución
     // (debate Fase 2): no pisar el origen del evento con la sesión visible;
     // el fallback a deps.sessionID mantiene heartbeat/status viejos.
-    const _d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+    const _d = payloadOf(p)
     pluginBus.emit(type, {
       ...p,
       sessionID: (p.sessionID as string | undefined) ?? (_d.sessionID as string | undefined) ?? (_d.originSessionID as string | undefined) ?? deps.sessionID,
@@ -176,7 +181,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
         type === "session.next.tool.input.delta") {
       // v2 anida el payload en `data` ({sessionID, assistantMessageID, textID,
       // delta, ...}); v1 lo trae en la raíz de properties. Soportar ambos.
-      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const d = payloadOf(p)
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       if (!sessionID || sessionID !== deps.sessionID) return
       const assistantMessageID = (d.assistantMessageID ?? p.assistantMessageID) as string | undefined
@@ -193,7 +198,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     }
 
     if (type === "session.next.compaction.delta" || type === "session.next.compaction.ended" || type === "session.compaction.ended") {
-      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const d = payloadOf(p)
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       const messageID = (d.messageID ?? p.messageID) as string | undefined
       // session.compaction.ended trae sessionID en data (sin messageID).
@@ -225,7 +230,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       type === "session.reasoning.delta" || type === "session.reasoning.started" || type === "session.reasoning.ended" ||
       type === "session.tool.input.delta"
     ) {
-      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const d = payloadOf(p)
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       if (!sessionID || sessionID !== deps.sessionID) return
       const reasoning = type.startsWith("session.reasoning")
@@ -250,7 +255,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       type === "session.execution.started" || type === "session.execution.succeeded" ||
       type === "session.execution.failed" || type === "session.execution.interrupted"
     ) {
-      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const d = payloadOf(p)
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       if (!sessionID || sessionID !== deps.sessionID) return
       if (type === "session.execution.started") return
@@ -282,7 +287,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
 
     if (type === "session.next.step.failed" || type === "session.next.retried") {
       // v2 anida el payload en `data`; filtrar por sesión si el evento la trae.
-      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const d = payloadOf(p)
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       if (sessionID && sessionID !== deps.sessionID) return
       // `retried` sigue trabajando: nunca apaga (antes dejaba al agente sin
@@ -294,7 +299,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
       return
     }
 
-    if (type === "message.updated" || type === "message.part.updated") {
+    if (type === "message.updated") {
       if (type === "message.updated") {
         const sessionID = p.sessionID as string | undefined
         if (sessionID && sessionID === deps.sessionID) {
@@ -347,7 +352,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     }
 
     if (type === "session.status") {
-      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const d = payloadOf(p)
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       const rawStatus = (d.status ?? p.status) as unknown
       const statusType = typeof rawStatus === "string"
@@ -363,7 +368,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     }
 
     if (type === "session.idle") {
-      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const d = payloadOf(p)
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       const targetSessionID = sessionID ?? deps.sessionID
       if (targetSessionID && targetSessionID === deps.sessionID) {
@@ -377,7 +382,7 @@ export function useSSEHandler(deps: SSEHandlerDeps): (event: SSEEvent) => void {
     if (type === "session.error") {
       // Solo mostrar errores de la sesión visible: un error de otra sesión del
       // mismo directorio no debe aparecer como error de este chat.
-      const d = (p.data && typeof p.data === "object" ? p.data : p) as Record<string, unknown>
+      const d = payloadOf(p)
       const sessionID = (d.sessionID ?? p.sessionID) as string | undefined
       if (sessionID && sessionID !== deps.sessionID) return
       // El server manda { error: { name, data: { message, ref? } } }; además
