@@ -40,12 +40,6 @@ export function subagentBackground(part: PartLike): SubagentBackground {
   }
 }
 
-/** `true` solo si es background Y su sesión hija sigue activa (busy/retry). */
-export function isBackgroundRunning(part: PartLike, busySessionIds?: ReadonlySet<string> | null): boolean {
-  const info = subagentBackground(part)
-  return info.isBackground && !!info.childSessionID && !!busySessionIds?.has(info.childSessionID)
-}
-
 /**
  * Chats activos de subagentes de una sesión: hijos (`parentID`) que siguen
  * vivos. Si hay `busySessionIds` manda ese set (mismo criterio que la TUI);

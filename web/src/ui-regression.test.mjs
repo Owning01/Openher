@@ -186,6 +186,19 @@ assert.ok(!quickAccess.includes('pill ${session.status}'), 'busy/retry should no
 assert.ok(!styles.includes('pixel-spinner') && !styles.includes('.composer-cost') && !styles.includes('.stream-dot'), 'removed spinners and chat cost label should not reappear')
 assert.ok(!styles.includes('image-rendering: pixelated'), 'pixelated image rendering on the spinner should not reappear')
 assert.ok(!msgList.includes('GridSpinner'), 'session loading state should not show a spinner')
+// 25-sep: la tool en curso tampoco lleva spinner propio (se fue con
+// GridSpinner.tsx, ya borrado) — el unico indicador es la caja Working del
+// mensaje. La comprobacion va por import y JSX, no por `includes('GridSpinner')`
+// a secas, porque el comentario que explica la decision nombra el componente.
+const toolPart = readFileSync(new URL('./components/ToolPart.tsx', import.meta.url), 'utf8')
+assert.ok(
+  !/import\s*\{[^}]*\bGridSpinner\b/.test(toolPart) && !/<GridSpinner[\s/>]/.test(toolPart),
+  'a running tool must not render a spinner (the Working box is the only activity indicator)'
+)
+assert.ok(
+  /const statusIcon = isError\b/.test(toolPart),
+  'the tool status icon must be the error mark only (null while the tool runs)'
+)
 // 25-sep (2do cambio): la fila de metadatos vuelve a ser hermana DEBAJO de la caja
 // de texto y los botones (adjuntar / enviar / micro) van DENTRO de la caja. El
 // composer no gasta una línea por fusionar, pero tampoco apila los botones abajo.

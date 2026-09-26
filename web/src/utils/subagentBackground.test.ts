@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { subagentBackground, isBackgroundRunning, isTaskToolPart, isForegroundRunningSubagent, activeSubagentSessions } from "./subagentBackground"
+import { subagentBackground, isTaskToolPart, isForegroundRunningSubagent, activeSubagentSessions } from "./subagentBackground"
 
 // El server marca los subagentes en background con state.metadata.background.
 // El part queda "completed" al delegar; el estado vivo lo da la sesión hija.
@@ -26,27 +26,6 @@ describe("subagentBackground", () => {
     })
     expect(info.childSessionID).toBe("ses_x")
     expect(info.jobID).toBe("ses_x")
-  })
-})
-
-describe("isBackgroundRunning", () => {
-  const bgPart = {
-    state: { metadata: { background: true, sessionId: "ses_child" } },
-  }
-
-  it("false si no es background", () => {
-    const busy = new Set(["ses_child"])
-    expect(isBackgroundRunning({ state: { metadata: { sessionId: "ses_child" } } }, busy)).toBe(false)
-  })
-
-  it("false si la sesión hija no está activa", () => {
-    expect(isBackgroundRunning(bgPart, new Set())).toBe(false)
-    expect(isBackgroundRunning(bgPart, undefined)).toBe(false)
-  })
-
-  it("true solo cuando la sesión hija sigue activa", () => {
-    expect(isBackgroundRunning(bgPart, new Set(["ses_child"]))).toBe(true)
-    expect(isBackgroundRunning(bgPart, new Set(["otra"]))).toBe(false)
   })
 })
 

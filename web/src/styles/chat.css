@@ -2772,11 +2772,6 @@ html[data-desktop="true"] .message.user:not(.outbox-queued) > header {
   border-color: var(--danger-border);
 }
 
-.tool-status-icon.tool-ok-mark {
-  color: var(--success);
-  font-weight: 700;
-}
-
 .tool-status-icon.tool-error-mark {
   color: var(--danger);
   font-weight: 700;
