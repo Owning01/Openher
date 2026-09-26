@@ -1,0 +1,65 @@
+/* Grupos del menú "⋯" del chat (ChatOverflowMenu). Hereda las medidas de
+   .overflow-item de chat.css: acá solo lo específico del accordion. */
+
+/* En pantallas bajas el menú con `tools` desplegado pasa del alto disponible
+   (medido: 744px con las 16 filas a 360×800). Tope + scroll en vez de que se
+   corte la última fila. */
+.overflow-dropdown {
+  max-height: min(560px, calc(100dvh - 96px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.overflow-group-head {
+  font-weight: 600;
+}
+
+.overflow-group-head .overflow-label {
+  flex: 1;
+}
+
+.overflow-group-chevron {
+  display: inline-flex;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.overflow-group-head[aria-expanded="true"] .overflow-group-chevron {
+  transform: rotate(90deg);
+}
+
+/* Los items del grupo se sangran a la DERECHA (25-sep), con la guia del lado
+   derecho: la lista de acciones queda pegada al borde derecho de la fila. */
+.overflow-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-right: 10px;
+  padding-right: 6px;
+  border-right: 2px solid var(--border);
+}
+
+.overflow-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border);
+}
+
+.overflow-tag {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overflow-group-chevron {
+    transition: none;
+  }
+}

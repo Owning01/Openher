@@ -9,12 +9,15 @@ import { useOutsideClick } from "../hooks/useOutsideClick"
 import ToolPart from "./ToolPart"
 import { FileDiffs } from "./FileDiffs"
 import { ThinkingBlock } from "./ThinkingBlock"
+import { ShimmerText } from "./ShimmerText"
 import { CollapsibleSection } from "./CollapsibleSection"
 import { Markdown } from "./Markdown"
 import { MarkdownWithEmbeds } from "./AgentEmbed"
 import { ImageLightbox } from "./ImageLightbox"
 import { ToolIcon, InfoIcon } from "../Icons"
 import { formatDurationMs, type TurnActivity } from "../utils/turnActivity"
+import { splitActivityByComponent, subagentLabel } from "../utils/turnComponents"
+import { subagentBackground } from "../utils/subagentBackground"
 import { isAssistantMessage, isUserMessage, messageRole, getSubagentResultInfo } from "../utils/messageShape"
 
 /** Extract base64 image data from a message part (handles both type:image and type:file). */
@@ -105,7 +108,7 @@ const TranslationOriginal = memo(function TranslationOriginal({ messageId }: { m
   )
 })
 
-export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, busySessionIds, onContextMenu, showTodoButton: _showTodoButton, onToggleTodos: _onToggleTodos, todosOpen: _todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", turnActivity, absorbActivity, onRegenerate, onOpenADEDiff, outbox }: {
+export const MessageBubble = memo(function MessageBubble({ message, queued, revert, isReverted: isRevertedProp, onRevertToMessage, onEditMessage, agents: _agents, prevUserTs, showModelInfo, config, directory, onViewSubagents, busySessionIds: _busySessionIds, onContextMenu, showTodoButton: _showTodoButton, onToggleTodos: _onToggleTodos, todosOpen: _todosOpen,   highlight, compactTools, minimalistMode = false, thinkingDefault = "auto", turnActivity, absorbActivity, onRegenerate, onOpenADEDiff, outbox }: {
   message: RenderedMessage
   queued?: boolean
   revert?: SessionView["revert"]
@@ -175,6 +178,14 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
 
   // Turno en curso (el agente sigue generando) vs terminado.
   const isWorkingTurn = !message.info.time.completed && !message.info.finish
+  // Mensaje de usuario que viene envuelto en <subagent>…</subagent> (contenido
+  // acoplado de un subagente, 25-sep): se muestra en un bloque con alto máximo
+  // y scroll interno, en vez de una burbuja que crece sin límite.
+  const userSubagentBlock = useMemo(() => {
+    if (!isUserMessage(message) || !message.text) return null
+    const m = /^\s*<subagent>([\s\S]*)<\/subagent>\s*$/.exec(message.text)
+    return m ? m[1] : null
+  }, [message])
   // Caja de actividad: agrupa pensamiento + herramientas + diffs de TODO el
   // turno (un prompt genera varios mensajes del asistente). El mensaje dueño
   // recibe el agregado; los demás no dibujan caja. Sin agregado (uso suelto del
@@ -414,19 +425,63 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
             </div>
           ) : null
 
-          const toolsEl = hasTools ? (
-            <div className="tool-parts">
-              {activity.toolParts.map((tp) => (
-                <ToolPart
+          // Actividad POR COMPONENTE (25-sep): cada fila resume lo que hizo un
+          // componente (agente principal o subagente) y al desacoplarla muestra
+          // TODO su detalle. Las tarjetas de subagente no van acá: se pintan
+          // fuera de la caja (abajo), en el chat.
+          const activityParts = hasTools ? splitActivityByComponent(activity.toolParts) : null
+
+          const toolsEl = activityParts && activityParts.components.length > 0 ? (
+            <div className="turn-components">
+              {activityParts.components.map((c) => (
+                <CollapsibleSection
+                  key={c.key}
+                  className="turn-component"
+                  // El principal no lleva etiqueta: la caja ya se titula
+                  // "Working" y una fila que diga "main" no aporta nada. Su fila
+                  // ES el resumen; la de un subagente, su nombre + su resumen.
+                  title={
+                    <span className="turn-component-head">
+                      {c.label ? <span className="turn-component-title">{c.label}</span> : null}
+                      <span className="turn-component-summary">{c.summary}</span>
+                    </span>
+                  }
+                  defaultOpen={false}
+                >
+                  <div className="tool-parts">
+                    {c.parts.map((tp) => (
+                      <ToolPart
+                        key={tp.id}
+                        part={tp}
+                        config={config}
+                        directory={directory}
+                        sessionID={message.info.sessionID}
+                        compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleSection>
+              ))}
+            </div>
+          ) : null
+
+          // Tarjetas de subagente: AFUERA de la caja, en el chat, con el mismo
+          // tamaño que una tool pero en gris y sin icono (pedido 25-sep).
+          const subagentsEl = activityParts && activityParts.subagentParts.length > 0 ? (
+            <div className="subagent-rows">
+              {activityParts.subagentParts.map((tp) => (
+                <button
                   key={tp.id}
-                  part={tp}
-                  config={config}
-                  directory={directory}
-                  sessionID={message.info.sessionID}
-                  onViewSubagents={onViewSubagents}
-                  busySessionIds={busySessionIds}
-                  compact={compactTools || message.dataMode === "ultra" || message.dataMode === "miser"}
-                />
+                  type="button"
+                  className="tool-part subagent-row"
+                  onClick={() => {
+                    const child = subagentBackground(tp).childSessionID
+                    if (child) onViewSubagents?.(child)
+                  }}
+                  title={subagentLabel(tp)}
+                >
+                  <span className="subagent-row-label">{subagentLabel(tp)}</span>
+                </button>
               ))}
             </div>
           ) : null
@@ -436,16 +491,15 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
           ) : null
 
           // Título fijo de la caja (pedido explícito): siempre "Working", esté
-          // el turno en curso o terminado, sin listar herramientas. Lo que
-          // cambia es el subtítulo: sin indicador mientras trabaja (spinners
-          // retirados por pedido; ver LOADING-STATES.md).
-          const title = "Working"
+          // el turno en curso o terminado. Mientras corre, el texto lleva el
+          // shimmer `ldg-text-shimmer-wave` (porte de anim-lab) y sin ícono.
+          const title = activity.working ? <ShimmerText text="Working" /> : "Working"
           const subtitle = null
 
           return (
+            <>
             <div className={`activity-box activity-box-${activity.working ? "working" : "completed"}`} ref={activityRef}>
               <CollapsibleSection
-                icon={activity.working ? <ToolIcon size={14} /> : undefined}
                 title={title}
                 subtitle={subtitle}
                 open={activityOpen}
@@ -462,6 +516,8 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
                 {diffsEl}
               </CollapsibleSection>
             </div>
+            {subagentsEl}
+            </>
           )
         })()
         }
@@ -543,6 +599,11 @@ export const MessageBubble = memo(function MessageBubble({ message, queued, reve
                 <MarkdownWithEmbeds text={message.text} highlight={highlight} />
               </div>
             ) : null}
+          </div>
+        ) : userSubagentBlock !== null ? (
+          /* Contenido de subagente acoplado (25-sep): alto máximo + scroll. */
+          <div className="message-content subagent-attached">
+            <MarkdownWithEmbeds text={userSubagentBlock} highlight={highlight} />
           </div>
         ) : activeOutbox ? (
           <div className="outbox-card">

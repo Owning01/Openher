@@ -1,13 +1,6 @@
 /* styles/chat.css - detail header, messages, markdown, tool parts, diffs, questions, todo
    Extraido de styles.css (2442 lineas) - move puro, cascada preservada. */
 
-.thinking-streaming {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--primary);
-}
-
 .thinking-text {  font-size: 0.8rem;
   line-height: 1.5;
   color: var(--muted);
@@ -48,7 +41,7 @@
 
 @media (pointer: coarse) {
   .detail {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: var(--safe-bottom);
   }
 }
 
@@ -76,42 +69,67 @@
   position: relative;
 }
 
-/* Chip de subagentes en background (header del chat): visible con scroll o
-   cambio de chat, para no perder de vista lo que sigue corriendo aparte. */
+/* Chips de cabecera (subagentes / background / GO): fantasma — sin color de
+   borde ni de fondo; el hover solo remarca el texto. */
 .header-bg-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 3px 8px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--surface-subtle);
+  background: transparent;
   color: var(--muted-strong);
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
 }
 .header-bg-pill:hover {
-  background: var(--surface-hover);
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-.header-bg-pill svg { flex-shrink: 0; }
-.header-bg-pill.action {
-  border-color: var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
-}
-.header-bg-pill.action:hover:not(:disabled) {
-  border-color: var(--primary);
   color: var(--primary);
 }
-.header-bg-pill:disabled {
-  opacity: 0.6;
-  cursor: default;
+.header-bg-pill svg { flex-shrink: 0; }
+
+
+/* "Pasar a background": control fantasma directamente sobre el chat, a la
+   derecha y a la altura de la fila de acciones de la cabecera (Diffs); la
+   indicación de qué hace viene en el hint al pasar el cursor. */
+.chat-bg-row {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 0 var(--space-1) var(--space-1);
+}
+.chat-bg-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+.chat-bg-action:hover:not(:disabled) { color: var(--primary); }
+.chat-bg-action:disabled { opacity: 0.6; cursor: default; }
+
+/* Chip de consumo GO: texto "GO %", sin dot verde ni borde de color —
+   el tono (ok/warn/bad) vive en el panel completo que abre al clickear. */
+.debate-chip.go-chip {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted-strong);
+}
+.debate-chip.go-chip:hover {
+  border-color: transparent;
+  color: var(--primary);
 }
 
 .detail-header h2 {
@@ -125,6 +143,14 @@
   flex: 1;
   max-width: 100%;
   overflow: hidden;
+  text-wrap: pretty;
+}
+
+.detail-session-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .detail-title-row {
@@ -447,6 +473,7 @@
 
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
   padding: var(--space-2) var(--space-1);
   scroll-padding-bottom: var(--space-2);
   overscroll-behavior-y: contain;
@@ -472,6 +499,20 @@
 .messages-end {
   min-height: 1px;
   scroll-margin-bottom: var(--space-2);
+}
+
+/* Cola vacía: el chat queda scrolleable SIEMPRE (también vacío o corto), con
+   el scroll extra POR DEBAJO. La mide MessageList en `--chat-tail` para que
+   al llegar al máximo quede a la vista el último mensaje del usuario (con una
+   cola de una pantalla entera, todo se iba de la vista y quedaba vacío).
+   El default es una fracción: si el JS no llegó a medir, sigue siendo scroll
+   y no pantalla en blanco. flex:none para que el shrink no la colapse. */
+.messages::after {
+  content: "";
+  display: block;
+  flex: 0 0 auto;
+  height: var(--chat-tail, 45%);
+  pointer-events: none;
 }
 
 .message-list-root {
@@ -625,17 +666,25 @@
 .message-image-wrap {
   position: relative;
   display: inline-block;
-  max-width: min(280px, 100%);
+  max-width: min(200px, 100%);
   margin-top: var(--space-2);
 }
 
+/* Miniatura: se expande SOLO al click (ImageLightbox). Altura acotada para
+   capturas largas; el borde siempre visible es la affordance (no hover-only). */
 .message-image {
   display: var(--chat-image-vis, block);
   max-width: 100%;
-  border-radius: var(--radius-sm);
+  max-height: 240px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-md);
   object-fit: contain;
   cursor: zoom-in;
+  background: var(--surface-subtle, rgba(128, 128, 128, 0.06));
+  transition: border-color 0.15s ease;
 }
+.message-image:hover { border-color: var(--border-strong); }
+.message-image:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 
 .message-image-wrap:hover .message-image-edit {
@@ -738,8 +787,14 @@
    delimita es el alto fijo con scroll propio (la señal de "hay más abajo").
    En marcha queda abierta y con acento; al terminar se acopla a una línea. */
 .activity-box {
+  position: relative;
   margin: 0 0 var(--space-2);
+  padding-left: var(--space-2);
 }
+
+/* 25-sep: se fue la barra izquierda de "Working" (era `::before`, 3px de
+   --border-strong). El bloque se lee por su propia tipografía, no por una guia
+   vertical. No volver a dibujarla. */
 
 .activity-box .collapsible-toggle {
   min-height: 0;
@@ -795,7 +850,7 @@
   display: block;
   opacity: 1;
   grid-template-rows: none;
-  max-height: 180px;
+  max-height: 380px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -846,11 +901,12 @@
   padding: 2px 4px 0;
 }
 
-/* Turno en trabajo: acento para señalar que el agente está activo. */
+/* Turno en trabajo: mismo color que las tools (`--muted`, el de
+   `.tool-part-verb`), nada del acento naranja. El texto lleva el shimmer. */
 .activity-box-working .collapsible-toggle,
 .activity-box-working .collapsible-title,
 .activity-box-working .collapsible-icon {
-  color: var(--chat-accent, var(--primary));
+  color: var(--muted);
 }
 
 .activity-box-working .collapsible-title {
@@ -859,6 +915,126 @@
 
 .activity-box-working .collapsible-subtitle {
   opacity: 1;
+}
+
+/* Shimmer de "Working" — PORTE de anim-lab `ldg-text-shimmer-wave`
+   (id en src/catalog/loadingui.ts, fuente Loading UI, MIT). El original anima
+   cada letra con `motion/react`; acá es el MISMO keyframe en CSS puro, con el
+   escalonado por letra en `--shimmer-delay` (ShimmerText.tsx). */
+.shimmer-text {
+  display: inline-block;
+  perspective: 500px;
+}
+
+.shimmer-char {
+  display: inline-block;
+  white-space: pre;
+  transform-style: preserve-3d;
+  color: color-mix(in oklab, currentColor 55%, transparent);
+  animation: shimmer-text-wave 1s ease-in-out infinite;
+  animation-delay: var(--shimmer-delay, 0s);
+}
+
+@keyframes shimmer-text-wave {
+  0%, 100% {
+    color: color-mix(in oklab, currentColor 55%, transparent);
+    transform: translate3d(0, 0, 0) scale(1) rotateY(0deg);
+  }
+  50% {
+    color: currentColor;
+    transform: translate3d(2px, -2px, 10px) scale(1.1) rotateY(10deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-char {
+    animation: none;
+    color: currentColor;
+  }
+}
+
+/* Resumen por componente dentro de la caja "Working" (25-sep): una fila por
+   componente con su conteo; al desacoplarla, todas sus tools. */
+.turn-components {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-1) 0;
+}
+
+.turn-component .collapsible-toggle {
+  min-height: 0;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 1px 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.turn-component-title {
+  font-weight: 600;
+  color: var(--muted-strong);
+}
+
+.turn-component-head {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.turn-component-summary {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.turn-component .collapsible-chevron {
+  margin-left: auto;
+}
+
+/* Tarjetas de subagente: AFUERA de la caja, en el chat, del tamaño de una tool
+   pero en gris y sin icono (25-sep). */
+.subagent-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 var(--space-2);
+}
+
+.subagent-row {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+  opacity: 0.9;
+}
+
+.subagent-row:hover {
+  color: var(--muted-strong);
+  background: var(--surface-hover);
+}
+
+.subagent-row-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+/* Contenido de subagente acoplado en un mensaje de usuario (25-sep): alto
+   máximo de 500px con scroll interno, para que no empuje el chat. */
+.subagent-attached {
+  max-height: 500px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .message-footer .msg-footer-duration,
 .message-footer .msg-footer-model,
@@ -957,7 +1133,8 @@
    (igual que .message.assistant) — la única caja con color es la tarjeta
    interna .subagent-result-card. Antes el article sumaba fondo+borde propios
    y se veía doble marco. */
-.message.synthetic {
+.message.synthetic,
+.message.server-notice {
   background: none;
   border: none;
   box-shadow: none;
@@ -1013,6 +1190,22 @@
   background: var(--chat-user-bubble-bg, var(--primary-soft));
   border-color: var(--chat-accent, var(--primary-border));
   border-radius: var(--chat-bubble-radius, 12px);
+}
+
+/* Tope del globo de user (pedido explícito): 100px siempre - en flujo y
+   también pineado, donde le gana al 200px de chat-pin.css SOLO por
+   especificidad ((0,4,0) este selector contra (0,3,0)
+   `.turn-group-stuck > .message.user`). El orden en la cascada juega en
+   contra: chat.css entra por styles.css y chat-pin.css la importa el
+   componente (MessageList), así que en el bundle de Vite chat-pin cae
+   DESPUÉS. OJO: si chat-pin sube a (0,4,0), el tope de 100px se rompe en
+   silencio hasta que una aserción lo detecte. El contenido largo se lee con
+   scroll interno, no se recorta. El draft encolado
+   (.outbox-queued) queda afuera: esa tarjeta trae su propio colapso y sus
+   acciones quedarían fuera de vista. */
+.messages .message.user:not(.outbox-queued) {
+  max-height: 100px;
+  overflow-y: auto;
 }
 
 /* Modo plan: solo color de texto en el indicador de modo, sin borde de color */
@@ -1192,7 +1385,11 @@
   padding: 0.78rem 0.85rem;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  /* Al inicio de la columna, no al centro: .message trae margin-inline auto,
+     que en flex-column centraba la burbuja, y el stretch la abría al 100%. */
+  align-self: flex-start;
+  margin-inline: 0;
 }
 
 .typing-dots {
@@ -1381,6 +1578,9 @@
   .edit-msg-btn {
     opacity: 0.6;
   }
+  .revert-msg-btn {
+    opacity: 0.6;
+  }
 }
 
 .message small {
@@ -1470,10 +1670,80 @@
   color: var(--md-list-num, var(--info));
 }
 
-.message-content img {
-  max-width: 100%;
-  border-radius: var(--radius-sm);
+/* Foto/markdown en MENSAJES: miniatura que se expande SOLO al click
+   (MarkdownImage → ImageLightbox). Mayor especificidad que .md-image: en el
+   chat las imágenes no ocupan el ancho completo del bubble.
+   :not(.markdown-body) acota el alcance: lecciones y previews de archivos .md
+   sí usan message-content (medido: LessonView y shellPanels = message-content
+   markdown-body) y ahí el ancho completo es el diseño; DebateRoom (también
+   mensajes, sin markdown-body) queda incluido. */
+.message-content:not(.markdown-body) img {
+  max-width: min(200px, 100%);
+  max-height: 240px;
+  border-radius: var(--radius-md);
   margin: var(--space-2) 0;
+  transition: border-color 0.15s ease;
+}
+.message-content:not(.markdown-body) img:hover {
+  /* Paridad con el adjunto (.message-image): misma affordance en las2 rutas. */
+  border-color: var(--border-strong);
+}
+.message-content:not(.markdown-body) img:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* El lightbox markdown vive DENTRO de message-content (sin portal): con
+   (0,2,1) la imagen expandida gana SIEMPRE al cap — hoy ya gana modals.css
+   por orden (medido styles.css:21 chat / :25 modals); esto lo hace a prueba
+   de reordenaciones de imports. Empata a (0,2,1) con el cap de abajo: gana
+   por ir DESPUÉS en este archivo — no mover este bloque encima del cap. */
+.message-content .image-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Draft encolado (outbox): mismo cap que el mensaje ya enviado. */
+.outbox-content img {
+  max-width: min(200px, 100%);
+  max-height: 240px;
+}
+/* Mismo blindaje que la ruta mensaje: el lightbox del draft vive dentro de
+   outbox-content (sin portal) y el cap empataría a (0,1,1) con modals.css. */
+.outbox-content .image-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Desktop: encima del pin había 36px de chrome muerto (medido 1500x950:
+   panel pad-top 16 + detail-header mb 12 + messages pad-top 8 = el
+   stuck.delta 8 que despegaba la burbuja pineada del borde del scroller) y
+   la burbuja user pesaba 110px (pad 16x2 + meta 36 + mb 12). Todo con
+   prefijo html[data-desktop=true]: móvil queda intacto (pin apagado,
+   targets táctiles, tokens de espacio). --chat-message-gap se respeta
+   (customizador) y solo cambia su DEFAULT. */
+html[data-desktop="true"] .panel.detail {
+  padding-top: var(--space-1);
+}
+html[data-desktop="true"] .detail-header {
+  margin-bottom: var(--space-1);
+}
+html[data-desktop="true"] .messages {
+  /* padding-top 0 = el sticky top:0 del pin pega la burbuja AL tope real
+     del scroller (el pad de 8 se colaba por delante: medido stuck.delta 8). */
+  padding-top: 0;
+}
+html[data-desktop="true"] .message {
+  margin-bottom: var(--chat-message-gap, var(--space-2));
+}
+html[data-desktop="true"] .message.user:not(.outbox-queued) {
+  /* :not = el draft encolado (WIP outbox, padding propio 0,2,0) conserva el
+     suyo; sin esto esta regla (0,3,1) le comía 4px horizontales. */
+  padding: var(--space-3);
+}
+html[data-desktop="true"] .message.user:not(.outbox-queued) > header {
+  /* La fila de chip+timestamp separaba 8px del texto. */
+  margin-bottom: var(--space-1);
 }
 
 .code-block-wrap {
@@ -1595,23 +1865,22 @@
   background: var(--surface-subtle);
 }
 
-/* Tablas anchas (4+ columnas, marca `table-wrap-scroll` en Markdown.tsx): se
-   scrollean en horizontal en vez de aplastar las celdas hasta una sílaba por
-   renglón (`width: 100%` + `overflow-wrap: anywhere`). */
+/* Tablas anchas (4+ columnas, marca `table-wrap-scroll` en Markdown.tsx):
+   En desktop (>=781px) se muestran varias columnas con WRAP sin scroll horizontal. */
 .message-content .table-wrap.table-wrap-scroll {
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
+  overflow-x: hidden;
 }
 
 .message-content .table-wrap.table-wrap-scroll table {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 .message-content .table-wrap.table-wrap-scroll th,
 .message-content .table-wrap.table-wrap-scroll td {
-  word-break: normal;
-  overflow-wrap: normal;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 780px) {
@@ -1621,15 +1890,46 @@
     border-radius: 0;
   }
 
-  /* En pantalla angosta las tablas siguen apiladas en tarjetas (mejor que
-     scrollear 6 columnas en 360px): el scroll horizontal es para ventanas
-     anchas. */
+  /* En celulares, solo las tablas con más de 3 columnas (.table-wrap-scroll)
+     tienen scroll horizontal en vez de apilarse. */
   .message-content .table-wrap.table-wrap-scroll {
-    overflow-x: visible;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
   }
 
   .message-content .table-wrap.table-wrap-scroll table {
-    width: 100%;
+    display: table;
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .message-content .table-wrap.table-wrap-scroll thead {
+    display: table-header-group;
+  }
+
+  .message-content .table-wrap.table-wrap-scroll tbody {
+    display: table-row-group;
+  }
+
+  .message-content .table-wrap.table-wrap-scroll tr {
+    display: table-row;
+    border: none;
+    padding: 0;
+    margin-bottom: 0;
+    background: transparent;
+  }
+
+  .message-content .table-wrap.table-wrap-scroll th,
+  .message-content .table-wrap.table-wrap-scroll td {
+    display: table-cell;
+    border: 1px solid var(--border);
+    padding: var(--space-2) var(--space-3);
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
   }
 
   .message-content .table-wrap table,
@@ -1702,8 +2002,8 @@
 
   /* El botón flotante ignoraba el safe-area y tapaba el composer. */
   .scroll-to-bottom {
-    bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
-    right: calc(var(--space-3) + env(safe-area-inset-right, 0px));
+    bottom: calc(var(--space-3) + var(--safe-bottom));
+    right: calc(var(--space-3) + var(--safe-right));
   }
 
   .msg-more-dropdown,
@@ -1835,8 +2135,10 @@
   gap: 4px;
 }
 
+/* Rutas, comandos y targets: color hueso (25-sep). Antes `var(--text)`, que en
+   dark era un blanco muy fuerte y competia con el texto del mensaje. */
 .tool-target-text {
-  color: var(--text);
+  color: var(--text-bone, color-mix(in oklab, var(--text) 62%, var(--surface-strong)));
   font-size: 13px;
   font-weight: 500;
   overflow: hidden;
@@ -1903,14 +2205,75 @@
   max-width: 100%;
 }
 
-/* Aviso de catálogo Code Mode: tarjeta compacta colapsada; al expandir,
-   altura fija con scroll en vez de estirar el chat. */
+/* Aviso de catálogo Code Mode: estilo minimalista monocromático como una tool */
 .tool-catalog-card {
-  margin: 2px 0;
+  margin: 1px 0;
+  background: transparent;
+  border: none;
 }
 
 .tool-catalog-card .collapsible-toggle {
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  height: 24px;
+  min-height: 0;
+  padding: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+
+.tool-catalog-card .collapsible-toggle:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border: none;
+  color: var(--text);
+}
+
+.tool-catalog-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.tool-catalog-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.tool-catalog-verb {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.tool-catalog-dot {
+  color: var(--muted);
+  opacity: 0.5;
+  font-size: 11px;
+}
+
+.tool-catalog-target {
+  color: var(--text);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.tool-catalog-card .collapsible-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 .tool-catalog-body {
@@ -1955,7 +2318,9 @@
   font: inherit;
   background: transparent;
   color: inherit;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .tool-part-pre .hljs-keyword { color: var(--code-keyword); }
@@ -2111,8 +2476,10 @@
   font-family: var(--font-mono);
   font-size: 0.775rem;
   line-height: 1.55;
-  white-space: pre;
-  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
   background: transparent;
   color: var(--code-text);
   max-height: 380px;
@@ -2122,8 +2489,8 @@
 .diff-row {
   display: flex;
   align-items: stretch;
-  min-width: 100%;
-  width: max-content;
+  min-width: 0;
+  width: 100%;
   border-left: 3px solid transparent;
   transition: background-color 0.1s ease;
 }
@@ -2200,14 +2567,16 @@
 
 .diff-gutter {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: 0.05rem;
   flex-shrink: 0;
   user-select: none;
   font-size: 0.7rem;
   color: var(--muted);
   opacity: 0.65;
   border-right: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
-  padding: 0 0.25rem 0 0.15rem;
+  padding-right: 0.25rem;
+  padding-left: 0.15rem;
   background: color-mix(in srgb, var(--code-bg, #0d1117) 70%, var(--surface, #161b22));
 }
 
@@ -2229,9 +2598,12 @@
 
 .diff-code {
   flex: 1 1 auto;
+  min-width: 0;
   padding: 0.05rem 0.75rem 0.05rem 0.5rem;
   color: var(--code-text);
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   tab-size: 2;
 }
 
@@ -2306,15 +2678,24 @@
   background: var(--surface-strong);
 }
 
+.file-diffs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: var(--surface-strong);
+}
+
 .file-diffs-toggle {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 0.3rem 0.5rem;
   border: none;
   min-height: 0;
-  background: var(--surface-strong);
+  background: transparent;
   color: var(--muted);
   font-size: 0.8rem;
   cursor: pointer;
@@ -2414,179 +2795,9 @@
 }
 
 /* ===== Subagent Task Card & Clean Window ===== */
-.subagent-task-card {
-  border: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  margin: var(--space-1) 0;
-  box-shadow: none !important;
-  overflow: visible;
-}
-
-.subagent-task-card.is-expanded {
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.subagent-task-card.working {
-  border: none !important;
-}
-
-.subagent-task-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 0;
-  background: transparent !important;
-  border: none !important;
-  cursor: pointer;
-  user-select: none;
-  gap: 8px;
-}
-
-.subagent-task-header:hover {
-  background: transparent !important;
-}
-
-.subagent-task-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.subagent-task-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 !important;
-  border: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  color: var(--accent, #a371f7) !important;
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  flex-shrink: 0;
-}
-
 /* Chip "background" del subagente que corre aparte (metadata.background). */
-.subagent-task-bg {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 7px !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 999px !important;
-  background: var(--surface-subtle) !important;
-  color: var(--muted-strong) !important;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
 /* Mientras la sesión hija sigue activa, el chip marca el pulso. */
-.subagent-task-card.is-background.working .subagent-task-bg {
-  border-color: var(--accent, var(--primary)) !important;
-  color: var(--accent, var(--primary)) !important;
-}
-.subagent-task-card.is-background .subagent-task-bg svg { flex-shrink: 0; }
 
-.subagent-task-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.subagent-task-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.subagent-task-status {
-  font-size: 0.75rem;
-  color: var(--muted);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.subagent-task-window {
-  max-height: 340px;
-  overflow-y: auto;
-  padding: 4px 0 4px 8px;
-  border: none !important;
-  border-left: 1px solid var(--border-subtle) !important;
-  background: transparent !important;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.subagent-section-block {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-}
-
-.subagent-section-title {
-  font-size: 0.875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-
-
-.subagent-task-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 4px;
-  border-top: none !important;
-}
-
-.subagent-inner-session {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.subagent-inner-bubble {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 2px 0;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-}
-
-.subagent-inner-bubble.user {
-  border: none !important;
-}
-
-.subagent-inner-bubble.assistant {
-  border: none !important;
-}
 
 
 
@@ -2713,7 +2924,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + var(--safe-bottom));
   background: transparent;
   pointer-events: none;
 }
@@ -2846,10 +3057,11 @@
 
 .undo-confirm-yes,
 .undo-confirm-no {
-  padding: 0.2rem 0.78rem;
+  min-height: 38px;
+  padding: 0.4rem 0.85rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
   background: var(--surface);
@@ -2873,29 +3085,164 @@
 }
 
 /* ===== Cola visible (mensaje pendiente sin enviar) ===== */
+.message.outbox-queued {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.outbox-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.outbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border: none;
+  background: transparent;
+  padding: 0;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  user-select: none;
+}
+
+.outbox-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.outbox-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.outbox-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.outbox-subtitle {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outbox-chevron-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: transform 0.2s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.outbox-chevron-btn:hover {
+  color: var(--text);
+}
+
+.outbox-chevron-btn.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+.outbox-body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: var(--space-2);
+}
+
+.outbox-content {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--chat-font-size, 0.95rem);
+  color: var(--text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.outbox-content > *:first-child {
+  margin-top: 0;
+}
+
+.outbox-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.outbox-content p {
+  margin: 0;
+}
+
 .outbox-actions {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-top: 0;
 }
 
-.outbox-btn {
+.outbox-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.78rem;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  font-weight: 600;
-  min-height: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.outbox-action-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.outbox-action-btn.delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger);
 }
 
 /* Envío en curso: editar/eliminar/ahora quedan deshabilitados (el item está
    claimed; sin esto, editar duplicaba y eliminar no cancelaba el vuelo). */
+.outbox-action-btn:disabled,
 .outbox-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: default;
   pointer-events: none;
 }
@@ -3247,23 +3594,9 @@
   animation: subagent-pulse 1.5s ease-in-out infinite;
 }
 
-.subagent-footer-spinner {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: subagent-blink 1s ease-in-out infinite;
-}
-
 @keyframes subagent-pulse {
   0%, 100% { opacity: 0.7; }
   50% { opacity: 1; }
-}
-
-@keyframes subagent-blink {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.2); }
 }
 
 .subagent-footer-tokens,
@@ -3274,26 +3607,6 @@
 
 
 /* ===== Context Usage Label & @-Menu ===== */
-.context-usage-label {
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--muted);
-  white-space: nowrap;
-  flex-shrink: 0;
-  letter-spacing: 0.02em;
-  margin-left: var(--space-1);
-  border-left: 1px solid var(--border);
-  padding-left: var(--space-2);
-}
-
-.context-usage-label.header-context-chip {
-  border-left: none;
-  margin-left: 0;
-  padding-left: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
 
 /* ===== Diff Viewer ===== */
 .diff-viewer {
@@ -3964,20 +4277,25 @@ mark {
 }
 
 /* En pantallas angostas el acople pasa a lámina inferior flotante. */
-@media (max-width: 719px) {
+@media (max-width: 780px) {
+  .prompt-history,
+  .prompt-history.floating,
   .prompt-history.docked-left,
   .prompt-history.docked-right {
     position: fixed;
-    left: 12px;
-    right: 12px;
+    left: 8px;
+    right: 8px;
     top: auto;
-    bottom: 12px;
+    bottom: 72px;
     width: auto;
-    height: 38vh;
+    height: 42vh;
+    max-height: 400px;
     z-index: 200;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
   }
 
+  .prompt-history .ph-edge,
+  .prompt-history.floating .ph-edge,
   .prompt-history.docked-left .ph-edge,
   .prompt-history.docked-right .ph-edge {
     display: none;

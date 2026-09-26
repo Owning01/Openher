@@ -32,7 +32,27 @@ assert.ok(useMessages.includes('api.sendPrompt(config, selectedSession.id, text,
   useMessages.includes('api.sendPrompt(config, selectedSession.id, text, selectedSession.directory'), 'chat prompts should use selected agent')
 assert.ok(useMessages.includes('api.sendCommand(config, selectedSession.id, parsed.command') || useMessages.includes('api.sendCommand(config, selectedSession.id, command'), 'slash commands should use selected agent')
 const chatView = readFileSync(new URL('./components/ChatView.tsx', import.meta.url), 'utf8')
-assert.ok(composer.includes('contextLabel') && composer.includes('context-usage-label'), 'detail UX should expose compact mobile context chips')
+const chatHeaderSource = readFileSync(new URL('./components/ChatHeader.tsx', import.meta.url), 'utf8')
+// El contador de contexto vive SOLO en la fila de metadatos del composer, con el
+// orden `[Build] [modo] modelo 123K (12.3%)` (25-sep: se sacó del header, donde
+// quedaba duplicado). El precio de sesión no se muestra en ningún lado.
+assert.ok(composer.includes('context-usage-label') && composer.includes('contextLabel'), 'the composer metadata row should expose the context counter')
+assert.ok(
+  !chatHeaderSource.includes('chat-context-chip') && !chatHeaderSource.includes('contextLabel'),
+  'the context counter must not live in the chat header (it would be duplicated)'
+)
+assert.ok(!styles.includes('chat-context-chip'), 'the header context chip styles are dead and must not come back')
+{
+  // Orden de la fila: el botón de agente (Build) va antes del modelo.
+  const bar = readFileSync(new URL('./components/composer/ComposerBar.tsx', import.meta.url), 'utf8')
+  assert.ok(bar.indexOf('agent-toggle') > 0 && bar.indexOf('agent-toggle') < bar.indexOf('composer-model-wrap'), 'the agent (Build) button must come before the model in the metadata row')
+}
+assert.ok(
+  /\.composer-model-mode-badge\s*\{[^}]*order:\s*-1/.test(styles),
+  'the mode badge must come first in the metadata row ([modo] modelo contexto)'
+)
+assert.ok(!composer.includes('composer-tsl-btn') && !styles.includes('composer-tsl-btn'), 'the TSL button must not come back to the composer')
+assert.ok(!/contextLabel\s*&&\s*[^;]*\$\{?formatCost/.test(readFileSync(new URL('./hooks/useContextDisplay.ts', import.meta.url), 'utf8')), 'the session price must not come back to the context label')
 assert.ok(app.includes('activeDetailSheet === "ai"') || sheet.includes('activeSheet === "ai"'), 'model picker should open in the bottom sheet')
 assert.ok(sheet.includes("t('detail.modelHint')"), 'model picker should explain when the change applies')
 assert.ok(sheet.includes('isWorking') && !/disabled=\{isWorking\}/.test(sheet), 'model picker should remain usable while a session is running (model swaps allowed)')

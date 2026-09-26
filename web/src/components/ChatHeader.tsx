@@ -1,16 +1,15 @@
-import { memo, useCallback, useMemo, useState } from "react"
+import { memo, useMemo } from "react"
 import { ArrowLeftIcon, PaintIcon, TerminalIcon, HistoryIcon, NoteIcon, ClockIcon,
   PencilIcon, SettingsIcon, SearchIcon, UndoIcon, RedoIcon, CompressIcon, ShareIcon,
-  FolderIcon, BrainIcon, EyeIcon, GlobeIcon, ForkIcon } from "../Icons"
+  FolderIcon, BrainIcon, GlobeIcon, ForkIcon, ZapIcon, ToolIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { InlineRename } from "./InlineRename"
 import { DebateChip } from "../features/debate/DebateChip"
 import { GoChip } from "./GoChip"
 import { ChatOverflowMenu, type ChatOverflowItem } from "./ChatOverflowMenu"
 import { DropdownMenu } from "./DropdownMenu"
-import { api } from "../api"
-import { subagentBackground, isForegroundRunningSubagent, activeSubagentSessions } from "../utils/subagentBackground"
-import type { SessionView, RenderedMessage, ServerConfig, FeatureFlags, DiffFile, FileDiff } from "../types"
+import { subagentBackground, activeSubagentSessions } from "../utils/subagentBackground"
+import type { SessionView, RenderedMessage, FeatureFlags, DiffFile, FileDiff } from "../types"
 
 export type ChatHeaderProps = {
   selectedSession: SessionView | null
@@ -18,7 +17,9 @@ export type ChatHeaderProps = {
   busySessionIds?: ReadonlySet<string>
   /** Todas las sesiones: para listar los hijos activos del seleccionado. */
   sessions?: SessionView[]
-  config?: ServerConfig
+  // El modo lectura se sacó del menú (25-sep): readingMode y
+  // onToggleReadingMode quedan en el tipo porque ChatView los pasa, pero el
+  // header ya no los lee.
   onViewSubagents: (subagentID?: string) => void
   renamingSessionID: string | null
   renameValue: string
@@ -51,25 +52,25 @@ export type ChatHeaderProps = {
   readingMode: boolean
   onToggleReadingMode: () => void
   onOpenTerminal?: () => void
-  onOpenRemoteDesktop?: () => void
   onOpenMCPBrowser?: () => void
   onInsertPrompt?: (text: string) => void
   onOpenPrompts: () => void
   onForkSession?: () => void
   onStartRename: (session: SessionView) => void
   onOpenSettings?: () => void
+  // El contador de contexto NO va en el header (25-sep): queda solo en la fila
+  // de metadatos del composer, `[modo] modelo 123K (12.3%)`. Estaba duplicado.
 }
 
 export const ChatHeader = memo(function ChatHeader({
-  selectedSession, messages, busySessionIds, sessions, config, onViewSubagents,
+  selectedSession, messages, busySessionIds, sessions, onViewSubagents,
   renamingSessionID, renameValue, onRenameChange, onRenameConfirm, onRenameCancel,
   onBackToSessions, pendingCount, onReopenQuestions, diffFiles, onOpenADEDiff,
   canCustomizeChat, onOpenChatCustomizer, chatTermOpen, onToggleChatTerm,
-  showHistory, onToggleHistory, showNotes, onToggleNotes,
+  onToggleHistory, showNotes, onToggleNotes,
   isWorking, onUndo, onRedo, onCompact, onExportMarkdownTo, onOpenExport, onToggleSearch,
-  flags, onOpenFileBrowser, onOpenOpenCodeHub, readingMode, onToggleReadingMode,
-  onOpenTerminal, onOpenRemoteDesktop, onOpenMCPBrowser, onInsertPrompt, onOpenPrompts,
-  onForkSession, onStartRename, onOpenSettings
+  flags, onOpenFileBrowser, onOpenOpenCodeHub,
+  onOpenMCPBrowser, onOpenPrompts, onForkSession, onStartRename, onOpenSettings
 }: ChatHeaderProps) {
   const t = useT()
 
@@ -93,20 +94,6 @@ export const ChatHeader = memo(function ChatHeader({
     return out
   }, [messages, busySessionIds, t])
 
-  // Subagentes que corren en primer plano (bloqueando el turno). El server
-  // puede desacoplarlos a background (Ctrl+B en la TUI): el botón del header
-  // dispara experimental.session.background y luego el SSE marca
-  // metadata.background en los parts.
-  const foregroundSubagents = useMemo(() => {
-    let count = 0
-    for (const m of messages) {
-      for (const tp of m.toolParts ?? []) {
-        if (isForegroundRunningSubagent(tp)) count++
-      }
-    }
-    return count
-  }, [messages])
-
   // Chats activos de subagentes DE ESTA SESIÓN (hijos vivos en el server).
   // Acceso rápido desde la parte superior: despliega la lista y abre el
   // elegido con onViewSubagents. Solo cuando hay al menos uno activo.
@@ -115,59 +102,48 @@ export const ChatHeader = memo(function ChatHeader({
     [sessions, selectedSession?.id, busySessionIds]
   )
 
-  const [promotingBg, setPromotingBg] = useState(false)
-  const [bgActionSupported, setBgActionSupported] = useState(true)
-  const promoteToBackground = useCallback(async () => {
-    if (!config || !selectedSession || promotingBg) return
-    setPromotingBg(true)
-    try {
-      const ok = await api.promoteSessionBackground(config, selectedSession.id, selectedSession.directory)
-      // false = el server no tiene la feature (o no había nada que promover).
-      if (ok === false) setBgActionSupported(false)
-    } catch {
-      // Endpoint experimental ausente (server viejo) o red: no insistir.
-      setBgActionSupported(false)
-    } finally {
-      setPromotingBg(false)
-    }
-  }, [config, selectedSession, promotingBg])
+  // Orden fijo del menú "⋯": grupo `tools` primero (accordion) y el resto en
+  // raíz con Configuración separada. En móvil los botones de `leading` están
+  // ocultos (≤780px), así que el menú es la única entrada a todo: por eso
+  // Terminal y Personalizar chat también están acá, aunque tengan botón.
+  const toolGroups = useMemo(() => [
+    { id: "tools", label: t('chat.toolsMenu'), icon: <ToolIcon size={14} /> },
+  ], [t])
 
   const items: ChatOverflowItem[] = []
   if (selectedSession) {
     if (renamingSessionID !== selectedSession.id) {
-      items.push({ id: "rename", label: t('session.rename'), icon: <PencilIcon size={14} />, onSelect: () => onStartRename(selectedSession) })
+      items.push({ id: "rename", group: "tools", label: t('session.rename'), icon: <PencilIcon size={14} />, onSelect: () => onStartRename(selectedSession) })
     }
-    if (onOpenSettings) {
-      items.push({ id: "settings", label: t('nav.settings'), icon: <SettingsIcon size={14} />, onSelect: onOpenSettings })
-    }
-    items.push({ id: "search", label: t('session.searchMessages'), icon: <SearchIcon size={14} />, onSelect: onToggleSearch })
-    items.push({ id: "undo", label: t('session.undo'), icon: <UndoIcon size={14} />, disabled: isWorking, onSelect: () => onUndo?.() })
+    items.push({ id: "undo", group: "tools", label: t('session.undo'), icon: <UndoIcon size={14} />, disabled: isWorking, onSelect: () => onUndo?.() })
     if (selectedSession.revert) {
-      items.push({ id: "redo", label: t('session.redo'), icon: <RedoIcon size={14} />, onSelect: () => onRedo?.() })
+      items.push({ id: "redo", group: "tools", label: t('session.redo'), icon: <RedoIcon size={14} />, onSelect: () => onRedo?.() })
     }
-    items.push({ id: "compact", label: t('session.compact'), icon: <CompressIcon size={14} />, disabled: isWorking, onSelect: () => onCompact?.() })
+    items.push({ id: "compact", group: "tools", label: t('session.compact'), icon: <CompressIcon size={14} />, disabled: isWorking, onSelect: () => onCompact?.() })
     if (onExportMarkdownTo) {
-      items.push({ id: "export", label: t('session.exportMd'), icon: <ShareIcon size={14} />, onSelect: onOpenExport })
+      items.push({ id: "export", group: "tools", label: t('session.exportMd'), icon: <ShareIcon size={14} />, onSelect: onOpenExport })
     }
+    if (onForkSession) {
+      items.push({ id: "fork", group: "tools", label: t('session.fork'), icon: <ForkIcon size={14} />, onSelect: onForkSession })
+    }
+    items.push({ id: "search", group: "tools", label: t('session.searchMessages'), icon: <SearchIcon size={14} />, onSelect: onToggleSearch })
+    items.push({ id: "prompts", group: "tools", label: t('chat.prompts'), icon: <ZapIcon size={14} />, onSelect: onOpenPrompts })
+    items.push({ id: "history", group: "tools", label: t('session.promptHistory'), icon: <HistoryIcon size={14} />, onSelect: onToggleHistory })
+    // Mismo handler que el botón del header: en móvil ese botón no existe.
+    items.push({ id: "terminal", label: t('session.terminal'), icon: <TerminalIcon size={14} />, onSelect: onToggleChatTerm })
     if (flags.fileBrowser && onOpenFileBrowser) {
       items.push({ id: "browse", label: t('session.browseFiles'), icon: <FolderIcon size={14} />, onSelect: onOpenFileBrowser })
     }
-    items.push({ id: "hub", label: t('session.opencodeHub'), icon: <BrainIcon size={14} />, onSelect: () => onOpenOpenCodeHub?.() })
-    items.push({ id: "reading", label: readingMode ? t('detail.readingModeOff') : t('detail.readingModeOn'), icon: <EyeIcon size={14} />, onSelect: onToggleReadingMode })
-    if (onOpenTerminal) {
-      items.push({ id: "terminal", label: t('session.terminal'), icon: <TerminalIcon size={14} />, onSelect: onOpenTerminal })
-    }
-    if (onOpenRemoteDesktop) {
-      items.push({ id: "remote", label: t('session.remoteDesktop'), icon: <GlobeIcon size={14} />, onSelect: onOpenRemoteDesktop })
-    }
     if (onOpenMCPBrowser) {
-      items.push({ id: "mcp", label: t('mcp.title'), icon: <GlobeIcon size={14} />, onSelect: onOpenMCPBrowser })
+      items.push({ id: "mcp", label: t('mcp.title'), icon: <GlobeIcon size={14} />, tag: t('chat.viewTag'), onSelect: onOpenMCPBrowser })
     }
-    if (onInsertPrompt) {
-      items.push({ id: "prompts", label: t('chat.prompts'), onSelect: onOpenPrompts })
+    items.push({ id: "notes", label: t('session.notes'), icon: <NoteIcon size={14} />, onSelect: onToggleNotes })
+    items.push({ id: "hub", label: t('session.opencodeHub'), icon: <BrainIcon size={14} />, tag: t('chat.viewTag'), onSelect: () => onOpenOpenCodeHub?.() })
+    if (canCustomizeChat) {
+      items.push({ id: "customize", label: t('detail.customizeChat'), icon: <PaintIcon size={14} />, onSelect: onOpenChatCustomizer })
     }
-    if (onForkSession) {
-      items.push({ id: "fork", label: t('session.fork'), icon: <ForkIcon size={14} />, onSelect: onForkSession })
+    if (onOpenSettings) {
+      items.push({ id: "settings", label: t('nav.settings'), icon: <SettingsIcon size={14} />, separatorBefore: true, onSelect: onOpenSettings })
     }
   }
 
@@ -179,12 +155,16 @@ export const ChatHeader = memo(function ChatHeader({
             <button className="btn-icon btn-ghost back-btn" onClick={onBackToSessions} aria-label={t('detail.backToSessions')} title={t('detail.backToSessions')}>
               <ArrowLeftIcon size={20} />
             </button>
-            {renamingSessionID === selectedSession.id && (
+            {renamingSessionID === selectedSession.id ? (
               <InlineRename value={renameValue} original={selectedSession.title}
                 onChange={onRenameChange}
                 onConfirm={() => onRenameConfirm(selectedSession.id, renameValue, selectedSession.directory)}
                 onCancel={onRenameCancel}
                 placeholder={t('session.renamePlaceholder')} />
+            ) : (
+              <span className="detail-session-title" title={selectedSession.title || selectedSession.id}>
+                {selectedSession.title || selectedSession.id.slice(0, 8)}
+              </span>
             )}
           </div>
         ) : (
@@ -229,18 +209,6 @@ export const ChatHeader = memo(function ChatHeader({
               ))}
             </DropdownMenu>
           )}
-          {foregroundSubagents > 0 && bgActionSupported && selectedSession && (
-            <button
-              type="button"
-              className="header-bg-pill action"
-              disabled={promotingBg}
-              onClick={promoteToBackground}
-              title={t('chat.moveToBackgroundHint')}
-            >
-              <ClockIcon size={12} />
-              <span>{t('chat.moveToBackground')}</span>
-            </button>
-          )}
           {backgroundSubagents.length > 0 && (
             <button
               type="button"
@@ -277,6 +245,7 @@ export const ChatHeader = memo(function ChatHeader({
           <ChatOverflowMenu
             title={t('session.more')}
             items={items}
+            groups={toolGroups}
             leading={
               <>
                 {canCustomizeChat && (
@@ -294,15 +263,6 @@ export const ChatHeader = memo(function ChatHeader({
                     aria-label={t('session.terminal')}
                     aria-pressed={chatTermOpen}>
                     <TerminalIcon size={14} />
-                  </button>
-                )}
-                {selectedSession && (
-                  <button className={`btn-icon compact chat-history-btn${showHistory ? " active" : ""}`}
-                    onClick={(e) => { e.stopPropagation(); onToggleHistory() }}
-                    title={t('session.promptHistory')}
-                    aria-label={t('session.promptHistory')}
-                    aria-pressed={showHistory}>
-                    <HistoryIcon size={14} />
                   </button>
                 )}
                 {selectedSession && (

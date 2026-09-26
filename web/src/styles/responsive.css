@@ -3,13 +3,16 @@
 
    BREAKPOINTS DEL APP (no se pueden tokenizar: las media queries no aceptan
    var()):
+     349px — top-nav: 4 destinos + brand no entran → se oculta el toggle de tema
      400px — menús compactos (header-model-menu)
      430px — shell móvil compacto (tipografía, brand)
      480px - grillas a 1 columna (form-grid, data-mode)
-     780px — mobile-first: shell, panel, chat, composer, bottom-nav
-     781px — desktop: sidebar + grid de splits (layout.css) + bottom-nav flotante
+     780px — mobile-first: shell, panel, chat, composer
+     781px — desktop: sidebar + grid de splits (layout.css)
      900px — quick-access con scroll propio (solo pointer: fine)
      1024px — tablet (máx. 781-1024)
+      500px - alto (landscape/pin): chrome bajo, composer compacto movil,
+             pin del prompt solo-escritorio (chat-pin.css)
    El MQ coarse (pointer: coarse) suma targets táctiles sin importar el ancho. */
 
 /* Contenedor de página del shell móvil (SessionsPage/DetailPage): DEBE ser
@@ -53,35 +56,8 @@
     gap: var(--space-2);
   }
 
-  /* Móvil: solo ruedita de configuración + toggle día/noche. Nada más. */
-  .desktop-nav button[data-view="pcFiles"],
-  .desktop-nav button[data-view="learning"] {
-    display: none;
-  }
-
-  /* Bottom-nav real (NavBar variant=bottom): las vistas de altura fija
-     reservan su espacio para que la barra flotante no tape el final. */
-  .learning-view,
-  .pcf-view {
-    height: calc(100dvh - 56px - 76px - env(safe-area-inset-bottom)) !important;
-  }
-  .sessions-main {
-    height: calc(100% - 76px - env(safe-area-inset-bottom)) !important;
-  }
-  .settings-view {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom));
-  }
-  /* Teclado abierto (visualViewport): la barra estorba al composer. */
-  body.kb-open .bottom-nav {
-    display: none;
-  }
-  body.kb-open .learning-view,
-  body.kb-open .pcf-view {
-    height: calc(100dvh - 56px) !important;
-  }
-  body.kb-open .sessions-main {
-    height: 100% !important;
-  }
+  /* Móvil: los destinos de Archivos/Aprendizaje viven en el top-nav (la
+     barra inferior flotante se eliminó): no van más en el bottom. */
 
   /* Explorer en móvil: el visor de código gana altura para leer sin descargar. */
   .pcf-code-viewer {
@@ -125,6 +101,12 @@
     box-shadow: none;
   }
 
+  .detail-header-actions .chat-customize-btn,
+  .detail-header-actions .chat-term-btn,
+  .detail-header-actions .chat-notes-btn {
+    display: none;
+  }
+
   /* En móvil el input (min-width:140px) + botones rebasan el header y el
      overflow:hidden de .detail-title-row clipea los botones de guardar/
      cancelar: el input debe poder encogerse y la fila envolverse. */
@@ -144,55 +126,94 @@
     touch-action: pan-y;
   }
 
+  /* Composer compacto en móvil: medido a 360x800 ocupa 193px (24% de la
+     pantalla) — apretamos lo que NO es target táctil: los botones se quedan
+     en 44px (WCAG 2.5.8) y el textarea en 16px (anti-zoom iOS, base.css);
+     solo paddings/gaps. */
   .composer {
     position: relative;
     bottom: 0;
     margin: 0;
     border: none;
     box-shadow: none;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding: 0.3rem 0.4rem;
+    /* El inset inferior vive en `.composer` (composer.css) para no sumarlo dos
+       veces: aquí ya no se repite. */
+    padding-bottom: max(0.3rem, var(--safe-bottom));
+    gap: 2px;
   }
 
   .load-earlier-btn {
     min-height: 44px;
   }
 
-  .bottom-nav {
-    position: fixed;
-    left: var(--space-3);
-    right: var(--space-3);
-    bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
-    z-index: var(--z-sticky);
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--bottom-nav-bg);
-    box-shadow: var(--shadow-md);
-    padding: 0;
-    backdrop-filter: blur(14px);
+  /* Toolbar de sesiones: una sola fila. El "+" es circular y solo icono, así
+     que el cluster entra completo a 360px sin envolver la acción primaria
+     (medido: 4 iconos de 44 + chip + "+" = ~290px de 339). El wrap queda solo
+     como red de seguridad para pantallas <345px: el "+" baja solo, alineado
+     a la derecha, sin cortar nada. */
+  .session-toolbar-row {
+    gap: 4px;
+    row-gap: 4px;
   }
 
-  .bottom-nav button {
-    min-height: 48px;
-    gap: 0;
-    padding: 0.3rem;
-    font-size: 0;
-    border-radius: 0;
-    background: transparent;
+  .session-toolbar-wrap .session-toolbar-right {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+    row-gap: 4px;
   }
 
-  .bottom-nav button:first-child {
-    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  /* El gear del toolbar duplica el del top-nav (que sí se ve en móvil). */
+  .session-toolbar-row .session-settings-toggle {
+    display: none;
   }
 
-  .bottom-nav button:last-child {
-    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  /* El thumb (5px) queda como píldora flotante sobre la lista en táctil. */
+  .quick-access-list {
+    scrollbar-width: none;
   }
 
-  .bottom-nav button.active {
-    background: transparent;
+  .quick-access-list::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ===== Nativo a ≥781px (tablet / landscape del APK) =====
+   Capacitor fuerza isDesktop=false (no hay sidebar ni rail de escritorio),
+   pero layout.css aplica su grid a ≥781px y oculta el top-nav: el panel caía
+   en la columna del rail (medido 44px de ancho a 915x412) y la app quedaba sin
+   navegación. En nativo se conserva el layout móvil de una columna a cualquier
+   ancho; el desktop (data-desktop="true") nunca entra acá. */
+@media (min-width: 781px) {
+  html[data-desktop="false"] .app-shell {
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 1120px);
+    margin: 0 auto;
+    padding: var(--space-3);
+    padding-bottom: var(--safe-bottom-boundary);
+  }
+
+  html[data-desktop="false"] .app-mobile-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  html[data-desktop="false"] .top-nav {
+    display: flex;
+    padding-top: var(--safe-top-boundary);
+    padding-bottom: var(--space-3);
+  }
+
+  /* El gear del top-nav ya está visible: el del toolbar sería duplicado. */
+  html[data-desktop="false"] .session-toolbar-row .session-settings-toggle {
+    display: none;
   }
 }
 
@@ -230,6 +251,16 @@
 }
 
 
+/* ===== Responsive: max-width 349px =====
+   El top-nav monta 4 destinos (Archivos, Aprendizaje, Ajustes, tema) y a
+   ≤349px no entra junto al brand: el toggle de tema se oculta (sigue en
+   Ajustes > Apariencia). A 360px entra holgado. */
+@media (max-width: 349px) {
+  .top-nav .theme-toggle-nav {
+    display: none;
+  }
+}
+
 /* ===== Responsive: max-width 430px ===== */
 @media (max-width: 430px) {
   h1 {
@@ -264,7 +295,8 @@
   .chat-customizer-modal,
   .shortcuts-modal,
   .archived-list,
-  .remote-connect {
+  .model-selector-modal,
+  .folder-picker {
     width: calc(100vw - 16px) !important;
     max-width: calc(100vw - 16px) !important;
     max-height: calc(100dvh - 16px) !important;
@@ -277,17 +309,11 @@
     padding-top: 4px;
     padding-bottom: var(--space-1);
   }
-  .bottom-nav {
-    bottom: 4px;
-    left: var(--space-2);
-    right: var(--space-2);
-  }
-  .bottom-nav button {
-    min-height: 40px;
-  }
+  /* MobileLayoutView ya pone height:100% por style inline (mismo valor), así
+     que esta regla no tiene con qué competir y no necesita forzarse. */
   .learning-view,
   .pcf-view {
-    height: calc(100dvh - 44px - 52px) !important;
+    height: 100%;
   }
 }
 
@@ -318,82 +344,63 @@
     min-height: 44px;
   }
 
-  /* Botones img/mic del composer: crecen a 44px — el textarea debe dejarles
-     espacio (padding lateral) para no tapar el texto. Con mic hay dos
-     botones de 44px a la derecha (send en 3.35rem); sin mic solo uno. */
+  /* Botones del composer: crecen a 44px (WCAG 2.5.8) y van DENTRO de la caja,
+     igual que en desktop (25-sep). El textarea reserva el hueco con padding. */
   .composer-input-wrap textarea {
-    padding-left: 3.4rem;
-    padding-right: 3.4rem;
     font-size: 16px;
-  }
-
-  .composer-input-wrap.has-mic textarea {
-    padding-right: 6.4rem;
-  }
-
-  /* En táctil el send/stop con mic se desplaza lo que ocupa el mic (44px +
-     gaps): sin esto send y mic se solapan ~14px. Trabajando hay 3 botones
-     a la derecha (mic + send + stop): el stop va un paso más a la izquierda. */
-  .composer-send-btn.with-mic {
-    right: 3.35rem;
-  }
-
-  .composer-stop-btn {
-    right: 3.35rem;
-  }
-
-  .composer-stop-btn.with-mic {
-    right: 6.1rem;
+    padding: 0.45rem 6.2rem 0.45rem 3.1rem;
   }
 
   .composer-input-wrap.is-working textarea {
-    padding-left: 3.4rem;
-    padding-right: 6.2rem;
+    padding-right: 9.2rem;
   }
 
-  .composer-input-wrap.is-working.has-mic textarea {
-    padding-right: 9rem;
-  }
-
-  /* Pedido explícito: el texto usa TODO el ancho de la caja y los 3 botones
-     (stop/send/mic) bajan a su propia fila, pegados (2px). Antes el textarea
-     reservaba hasta 9rem a la derecha y el texto quedaba en un canal angosto.
-     El attach sigue fijo a la izquierda (por eso el padding-left). */
-  .composer-input-wrap {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    align-items: flex-end;
-    row-gap: 2px;
-  }
-
-  .composer-input-wrap textarea,
-  .composer-input-wrap.has-mic textarea,
-  .composer-input-wrap.is-working textarea,
-  .composer-input-wrap.is-working.has-mic textarea {
-    flex: 1 1 100%;
-    order: 1;
-    /* El attach vive en la fila de abajo: el texto no le reserva ancho. */
-    padding: 0.5rem 0.9rem 0.35rem;
-  }
-
-  /* El attach baja a la fila de botones (izquierda) y se alinea con ellos. */
-  .composer-img-btn {
-    bottom: 0;
-    left: 0.3rem;
-  }
-
-  /* Fila de abajo, mismo orden visual de antes: stop, send, mic (izq→der). */
   .composer-mic-btn,
   .composer-stop-btn,
-  .composer-send-btn {
-    position: static;
-    right: auto;
-    order: 2;
+  .composer-send-btn,
+  .composer-stop-btn.with-mic,
+  .composer-send-btn.with-mic {
+    top: 50%;
+    transform: translateY(-50%);
   }
 
-  .composer-stop-btn { order: 2; }
-  .composer-send-btn { order: 3; }
-  .composer-mic-btn { order: 4; }
+  .composer-img-btn {
+    left: 0.25rem;
+  }
+
+  .composer-send-btn {
+    right: 3.35rem;
+  }
+
+  .composer-mic-btn {
+    right: 0.25rem;
+  }
+
+  .composer-stop-btn {
+    right: 6.1rem;
+  }
+
+  /* La caja de texto lleva los botones adentro (25-sep): en mobile YA NO hay
+     fila propia de botones, asi que el wrap no necesita wrap ni ordenes. */
+  .composer-input-wrap textarea {
+    line-height: 1.35;
+  }
+
+  /* La fila de metadatos queda debajo de la caja, en ambos modos. */
+  .composer-bar {
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  /* Pantalla baja (landscape o ventana corta, ≤500px de alto): sin este clamp
+     el composer se come el chat — medido 740x420 pre-fix: composer 193px vs
+     messages 146px. El textarea queda en ~2 líneas con scroll interno. */
+  @media (max-height: 500px) {
+    .composer-input-wrap textarea {
+      max-height: 44px;
+    }
+  }
+
 
 
   .star-btn,
@@ -525,11 +532,8 @@ html[data-desktop="true"] .app-shell { padding: 0; }
   /* Con los botones en su propia fila (bloque touch), en desktop-narrow el
      texto ya usa el ancho completo: solo se mantiene la densidad desktop
      (attach de 32px y tipografía del tema), sin reservar a la derecha. */
-  html[data-desktop="true"] .composer-input-wrap textarea,
-  html[data-desktop="true"] .composer-input-wrap.has-mic textarea,
-  html[data-desktop="true"] .composer-input-wrap.is-working textarea,
-  html[data-desktop="true"] .composer-input-wrap.is-working.has-mic textarea {
-    padding: 0.5rem 0.9rem 0.35rem 2.4rem;
+  html[data-desktop="true"] .composer-input-wrap textarea {
+    padding: 0.5rem 0.9rem 0.35rem 0.9rem;
     font-size: inherit;
   }
 }

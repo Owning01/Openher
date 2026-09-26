@@ -1,5 +1,4 @@
 import { memo, useRef, useCallback, useEffect, useState, useMemo } from "react"
-import type { CSSProperties } from "react"
 import { createPortal } from "react-dom"
 import { SendIcon, StopCircleIcon, MicIcon, AttachmentIcon } from "../Icons"
 import { useT, useLanguage } from "../i18n-context"
@@ -8,6 +7,7 @@ import type { AgentOption, CommandInfo, ServerConfig, ModelOption, TurnChanges }
 import { ImageEditor } from "./ImageEditor"
 import { readComposerDraft, writeComposerDraft } from "../utils/composerDraft"
 import { useStore } from "../shared/lib/store"
+import { bottomTarget, bottomDistance } from "../shared/lib/useFollowTail"
 import { composerInjectStore, composerImageInjectStore, takeComposerInjections, takeComposerImageInjections } from "../stores/composerInjectStore"
 import { SlashMenu } from "./composer/SlashMenu"
 import { MentionMenu } from "./composer/MentionMenu"
@@ -18,9 +18,6 @@ import { ComposerBar } from "./composer/ComposerBar"
 import { downscaleImage } from "./composer/downscaleImage"
 import { LOCAL_SLASH_COMMANDS, MAX_HISTORY, loadHistory, saveHistory } from "./composer/composerData"
 import type { ImageAttachment, MentionItem } from "./composer/types"
-
-/** Periodo del giro del anillo del composer: IGUAL que el `3.5s` de composer.css. */
-const RING_PERIOD_MS = 3500
 
 type ComposerProps = {
   value: string
@@ -36,6 +33,9 @@ type ComposerProps = {
   primaryAgentOptions: AgentOption[]
   allAgentOptions?: AgentOption[]
   onChangeAgent: (id: string) => void
+  // El contador de contexto se movió al header del chat (25-sep): ya no es prop
+  // del Composer. El botón TSL (Translate ES→EN) también se retiró del composer.
+  /** Contador de contexto de la fila del composer ("401.1K (38%)"). */
   contextLabel?: string | null
   config?: ServerConfig
   directory?: string
@@ -66,9 +66,9 @@ export const Composer = memo(function Composer({
   primaryAgentOptions,
   allAgentOptions,
   onChangeAgent,
-  contextLabel,
   config,
   directory,
+  contextLabel,
   onThemeCommand,
   charLimit = 0,
   activeModelOption,
@@ -85,21 +85,10 @@ export const Composer = memo(function Composer({
   const [slashIndex, setSlashIndex] = useState(0)
   const [showAtMenu, setShowAtMenu] = useState(false)
   const [atQuery, setAtQuery] = useState("")
-  const [tslEnabled, setTslEnabled] = useState(false)
   const [atIndex, setAtIndex] = useState(0)
   // Contador de ids de adjuntos: ref local por instancia (antes era un
   // contador de módulo compartido entre todos los composers).
   const imgIdRef = useRef(0)
-  // Sincronía visual entre sesiones activas: delay negativo alineado al reloj
-  // (punto del ciclo de 3.5s a Date.now()) para que todos los anillos de la
-  // app compartan fase. Sin esto cada Composer arranca en 0deg al montar o
-  // al activar isWorking y giran desfasados. Se recalcula al cambiar
-  // isWorking para que una sesión recién activada entre en fase al instante.
-  const ringDelay = useMemo(
-    () => `-${((Date.now() % RING_PERIOD_MS) / 1000).toFixed(3)}s`,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isWorking],
-  )
   const [editingImage, setEditingImage] = useState<ImageAttachment | null>(null)
 
   // En móvil (táctil) Enter = nueva línea; en desktop Enter envía.
@@ -396,9 +385,10 @@ export const Composer = memo(function Composer({
       const wrap = composerRef.current?.closest<HTMLElement>(".app-mobile-content, .session-panel")
       const container = wrap?.querySelector<HTMLElement>(".messages")
       if (!container) return
-      const dist = container.scrollHeight - container.scrollTop - container.clientHeight
-      if (dist > 200) return
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
+      // "Fondo" = fin de los mensajes (no el fin del scroller: hay cola
+      // vacía por debajo); si el usuario lee a mitad, el foco no roba su lugar.
+      if (bottomDistance(container) > 200) return
+      container.scrollTo({ top: bottomTarget(container), behavior: "smooth" })
     }, 400)
   }, [])
 
@@ -422,6 +412,8 @@ export const Composer = memo(function Composer({
     if (/no match|no speech|didn't understand/i.test(code)) return t('voice.noSpeech')
     if (/busy/i.test(code)) return t('voice.busy')
     if (/not available|unavailable/i.test(code)) return t('voice.unavailable')
+    if (/privacy|policy/i.test(code)) return t('voice.privacy')
+    if (/language|not supported/i.test(code)) return t('voice.unavailable')
     return `${t('voice.error')} (${code})`
   }, [t])
 
@@ -491,8 +483,6 @@ export const Composer = memo(function Composer({
     setImages((prev) => prev.filter((img) => img.id !== id))
   }, [])
 
-  const handleToggleTsl = useCallback(() => setTslEnabled((v) => !v), [])
-
   const handleSendWithImages = useCallback(async () => {
     if (disabled || isSending) return
     // Sin bloqueo por isWorking: handleSend encola en el outbox visible
@@ -507,7 +497,6 @@ export const Composer = memo(function Composer({
       showMicNotice(t('composer.limitExceeded') || `Límite ${charLimit} caracteres excedido (${textToSend.length}/${charLimit})`)
       return
     }
-    const opts = tslEnabled ? { translate: true } : undefined
     const imgs = images.length > 0 ? images : undefined
 
     setImages([])
@@ -518,7 +507,7 @@ export const Composer = memo(function Composer({
     lastSyncedRef.current = ""
     pushNow("")
     resizeTextarea()
-    const ok = await onSend(imgs, opts, textToSend)
+    const ok = await onSend(imgs, undefined, textToSend)
     if (ok === false) {
       if (imgs) setImages(imgs)
       setLocalValue(textToSend)
@@ -527,7 +516,7 @@ export const Composer = memo(function Composer({
       if (textareaRef.current) textareaRef.current.value = textToSend
       pushNow(textToSend)
     }
-  }, [onSend, images, resizeTextarea, disabled, isSending, charLimit, tslEnabled, pushNow, showMicNotice, t])
+  }, [onSend, images, resizeTextarea, disabled, isSending, charLimit, pushNow, showMicNotice, t])
 
   const isCommandValid = useMemo(() => {
     if (!localValue.startsWith("/")) return false
@@ -574,6 +563,9 @@ export const Composer = memo(function Composer({
       const h = promptHistoryRef.current
       if (h.length === 0) return
       const idx = historyIndexRef.current
+      const isAtStart = textareaRef.current ? textareaRef.current.selectionStart === 0 && textareaRef.current.selectionEnd === 0 : true
+      if (idx === -1 && !isAtStart) return
+
       if (idx === -1 && !cur) { e.preventDefault(); historyIndexRef.current = 0; handleChange(h[0]) }
       else if (idx === -1 && cur) { e.preventDefault(); setHistoryDraft(cur); historyIndexRef.current = 0; handleChange(h[0]) }
       else if (idx + 1 < h.length) { e.preventDefault(); historyIndexRef.current = idx + 1; handleChange(h[idx + 1]) }
@@ -700,12 +692,6 @@ export const Composer = memo(function Composer({
         onDragLeave={handleDragLeave}
         onDrop={handleComposerDrop}
       >
-        {isWorking && (
-          <div className="composer-ring" aria-hidden="true" style={{ "--ring-delay": ringDelay } as CSSProperties}>
-            <div className="composer-ring-glow" />
-            <div className="composer-ring-band" />
-          </div>
-        )}
         <button onClick={handleFilePick} disabled={disabled}
           className="composer-inline-btn composer-img-btn" title="Attach file"
           tabIndex={-1}>
@@ -793,25 +779,26 @@ export const Composer = memo(function Composer({
           <SendIcon size={18} />
         </button>
       </div>
+      {/* Fila de metadatos DEBAJO de la caja de texto, en ambos modos (25-sep).
+          Orden: [modo] modelo . contexto, con el agente a la derecha. Los botones
+          (adjuntar / enviar / micro) van DENTRO de la caja, absolutos. */}
       <ComposerBar
-        activeModelOption={activeModelOption}
-        activeModelVariants={activeModelVariants}
-        selectedVariant={selectedVariant}
-        onChangeVariant={onChangeVariant}
-        modelOptions={modelOptions}
-        onChangeModel={onChangeModel}
-        variantGroups={variantGroups}
-        sessionID={sessionID}
-        primaryAgentOptions={primaryAgentOptions}
-        activeAgentID={activeAgentID}
-        onChangeAgent={onChangeAgent}
-        disabled={disabled}
-        tslEnabled={tslEnabled}
-        onToggleTsl={handleToggleTsl}
-        contextLabel={contextLabel}
-        valueLength={localValue.length}
-        charLimit={charLimit}
-      />
+          activeModelOption={activeModelOption}
+          activeModelVariants={activeModelVariants}
+          selectedVariant={selectedVariant}
+          onChangeVariant={onChangeVariant}
+          modelOptions={modelOptions}
+          onChangeModel={onChangeModel}
+          variantGroups={variantGroups}
+          sessionID={sessionID}
+          primaryAgentOptions={primaryAgentOptions}
+          activeAgentID={activeAgentID}
+          onChangeAgent={onChangeAgent}
+          disabled={disabled}
+          contextLabel={contextLabel}
+          valueLength={localValue.length}
+          charLimit={charLimit}
+        />
       {/* Portal a body: dentro de .composer el backdrop-filter crea un
           containing block que atrapa el fixed y el modal quedaba pegado
           abajo oculto en vez de centrado en viewport. */}

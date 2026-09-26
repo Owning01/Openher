@@ -1,4 +1,5 @@
 import { memo, useCallback, useRef, useEffect, useLayoutEffect, useState, Fragment, useMemo } from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { ChatIcon, ScrollDownIcon, CompressIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import type { RenderedMessage, SessionView, AgentOption, ServerConfig, FileDiff } from "../types"
@@ -6,7 +7,7 @@ import { MessageBubble } from "./MessageBubble"
 import { buildTurnActivity } from "../utils/turnActivity"
 import { ConfirmDialog } from "../features/settings/ConfirmDialog"
 import "../styles/chat-pin.css"
-import { useFollowTail, resolveSessionEntry, anchorScrollToSaved } from "../shared/lib/useFollowTail"
+import { useFollowTail, resolveSessionEntry, anchorScrollToSaved, bottomTarget, bottomDistance } from "../shared/lib/useFollowTail"
 import { sliceLastUserTurns } from "../utils/messageShape"
 
 type MessageListProps = {
@@ -61,12 +62,16 @@ export const MessageList = memo(function MessageList({
   // clavaba arriba (dist guardada mayor que el contenido cargado).
   const msgsSessionID: string | null = messages.length > 0 ? messages[0]!.info.sessionID : null
   const isFresh = messages.length === 0 || msgsSessionID === selectedID
+  const showSessionLoading =
+    (loadingSessionID !== null && loadingSessionID === selectedID) ||
+    (!isFresh && messages.length > 0)
   const settledRef = useRef(false)
   const touchedRef = useRef(false)
   // Puerta: false hasta asentarse (incluye el tramo stale y el velo).
   const persistGateRef = useRef(false)
+  // ui-regression anchor: scrollTo({ top: bottomTarget(container) — el fondo
+  // es el fin de los mensajes, no el fin del área scrolleable (cola vacía)
   const { isAtBottom, setIsAtBottom, scrollToBottom, isNearBottom, resetSavedPosition } = useFollowTail(messagesRef, { persistKey: selectedID, canPersistRef: persistGateRef })
-  // ui-regression anchor: scrollTo({ top: container.scrollHeight — logic lives in useFollowTail
 
   const INITIAL_PAGE_SIZE = 40
   // Ventana inicial: sesiones enormes (DB de GB) sin virtualización colgaban
@@ -104,6 +109,47 @@ export const MessageList = memo(function MessageList({
 
   const expandScrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
 
+  // Tamaño de la cola vacía (`.messages::after`). El objetivo es concreto: al
+  // llegar al scroll máximo tiene que quedar a la vista el último mensaje del
+  // usuario, arriba. Con una cola de una pantalla entera, todo el contenido se
+  // iba de la vista y el panel quedaba en blanco.
+  //   cola = viewport - padding - (fin de mensajes - top del último usuario)
+  // es decir, exactamente el espacio que hay entre ese mensaje y el borde
+  // inferior. Si la respuesta del asistente es más larga que una pantalla, la
+  // cola se achica (nunca negativa: se ve contenido, no vacío).
+  useLayoutEffect(() => {
+    const el = messagesRef.current
+    if (!el) return
+    const MIN_COLA = 160
+    const update = () => {
+      const end = el.querySelector<HTMLElement>(".messages-end")
+      if (!end) return
+      const base = el.getBoundingClientRect().top - el.scrollTop
+      const yEnd = end.getBoundingClientRect().bottom - base
+      const users = el.querySelectorAll<HTMLElement>(".message.user")
+      const lastUser = users[users.length - 1]
+      // Sin mensaje de usuario (chat vacío o recién creado) el ancla es el
+      // propio inicio del contenido.
+      const anchorTop = lastUser ? lastUser.getBoundingClientRect().top - base : 0
+      const padB = parseFloat(getComputedStyle(el).paddingBottom) || 0
+      const cola = Math.max(MIN_COLA, el.clientHeight - padB - (yEnd - anchorTop))
+      el.style.setProperty("--chat-tail", `${Math.round(cola)}px`)
+    }
+    update()
+    // El contenedor (teclado, rotación, resize) y el último mensaje (crece
+    // durante el streaming) son los dos que cambian la cuenta. Donde no haya
+    // ResizeObserver (jsdom) el listener de resize y las deps bastan.
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null
+    ro?.observe(el)
+    const last = el.querySelector<HTMLElement>(".messages-end")?.previousElementSibling
+    if (last) ro?.observe(last)
+    window.addEventListener("resize", update)
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener("resize", update)
+    }
+  }, [messages.length, visibleCount, view, loadingSessionID, selectedID])
+
   const handleLoadEarlier = useCallback(() => {
     const el = messagesRef.current
     if (el) {
@@ -126,6 +172,28 @@ export const MessageList = memo(function MessageList({
       el.scrollTop = anchor.scrollTop + delta
     }
   }, [visibleCount])
+
+  // Auto-carga al scrollear hacia arriba (OpenCode onHistoryScroll): cuando el
+  // usuario se acerca a menos de 200px del tope, carga la siguiente página de forma fluida.
+  const isAutoLoadingEarlierRef = useRef(false)
+  useEffect(() => {
+    const el = messagesRef.current
+    if (!el) return
+    const onScroll = () => {
+      if (isAutoLoadingEarlierRef.current) return
+      if (!settledRef.current) return
+      if (messages.length <= visibleCount) return
+      if (el.scrollTop < 200) {
+        isAutoLoadingEarlierRef.current = true
+        handleLoadEarlier()
+        setTimeout(() => {
+          isAutoLoadingEarlierRef.current = false
+        }, 150)
+      }
+    }
+    el.addEventListener("scroll", onScroll, { passive: true })
+    return () => el.removeEventListener("scroll", onScroll)
+  }, [messages.length, visibleCount, handleLoadEarlier])
 
   useEffect(() => {
     if (!scrollToMessageID) return
@@ -211,6 +279,47 @@ export const MessageList = memo(function MessageList({
     }
     return null
   }, [turnGroups, turnActivity])
+
+  const rowVirtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
+    count: turnGroups.length,
+    getScrollElement: () => (showSessionLoading ? null : messagesRef.current),
+    estimateSize: () => 140,
+    overscan: 4,
+    getItemKey: (index) => turnGroups[index]?.key ?? index,
+    scrollToFn: () => {},
+  })
+
+  const virtualItems = rowVirtualizer.getVirtualItems()
+  const isVirtualActive =
+    turnGroups.length > 6 &&
+    virtualItems.length > 0 &&
+    (messagesRef.current?.clientHeight ?? 0) > 0
+
+  const visibleTurnIndices = useMemo(() => {
+    if (!isVirtualActive) return null
+    const indices = new Set<number>()
+    for (const item of virtualItems) {
+      indices.add(item.index)
+    }
+    // Siempre mantener el último turno montado (evita saltos en streaming y burbuja de espera)
+    if (turnGroups.length > 0) {
+      indices.add(turnGroups.length - 1)
+    }
+    // Siempre mantener visible el turno activo con herramientas en ejecución
+    if (activeGroupKey) {
+      const activeIdx = turnGroups.findIndex((g) => g.key === activeGroupKey)
+      if (activeIdx >= 0) indices.add(activeIdx)
+    }
+    // Siempre incluir el turno al que apunta una búsqueda o salto de historial
+    const targetMid = revealMessageID || scrollToMessageID
+    if (targetMid) {
+      const targetIdx = turnGroups.findIndex((g) =>
+        g.rows.some((r) => r.message.info.id === targetMid)
+      )
+      if (targetIdx >= 0) indices.add(targetIdx)
+    }
+    return indices
+  }, [isVirtualActive, virtualItems, turnGroups, activeGroupKey, revealMessageID, scrollToMessageID])
 
   // `--pin-h`: alto real del prompt pegado. La caja del turno activo se apoya
   // exactamente debajo con `top: var(--pin-h)`; el alto del globito depende del
@@ -353,13 +462,13 @@ export const MessageList = memo(function MessageList({
       if (el) {
         if (!target || target.mode === "bottom") {
           try {
-            el.scrollTop = el.scrollHeight
+            el.scrollTop = bottomTarget(el)
           } catch {
             /* detached */
           }
         } else if (!anchorScrollToSaved(el, target)) {
           try {
-            el.scrollTop = el.scrollHeight
+            el.scrollTop = bottomTarget(el)
           } catch {
             /* detached */
           }
@@ -394,7 +503,7 @@ export const MessageList = memo(function MessageList({
     const onLateLoad = () => {
       if (settledRef.current && !touchedRef.current && atBottomMirrorRef.current) {
         try {
-          el.scrollTop = el.scrollHeight
+          el.scrollTop = bottomTarget(el)
         } catch {
           /* detached */
         }
@@ -449,16 +558,15 @@ export const MessageList = memo(function MessageList({
       if (!anchorScrollToSaved(el, t2)) {
         // Distancia guardada irrepresentable (memoria vieja): fondo.
         entryTargetRef.current = { mode: "bottom" }
-        el.scrollTop = el.scrollHeight
+        el.scrollTop = bottomTarget(el)
         setIsAtBottom(true)
         resetSavedPosition()
       } else {
-        const d = el.scrollHeight - el.scrollTop - el.clientHeight
-        setIsAtBottom(d <= 2)
+        setIsAtBottom(bottomDistance(el) <= 2)
       }
     } else {
       if (el) {
-        el.scrollTop = el.scrollHeight
+        el.scrollTop = bottomTarget(el)
       }
       setIsAtBottom(true)
       resetSavedPosition()
@@ -481,7 +589,7 @@ export const MessageList = memo(function MessageList({
     const el = messagesRef.current
     if (el && atBottomMirrorRef.current) {
       try {
-        el.scrollTop = el.scrollHeight
+        el.scrollTop = bottomTarget(el)
       } catch {
         /* detached */
       }
@@ -517,7 +625,7 @@ export const MessageList = memo(function MessageList({
       if (el) {
         if (!target || target.mode === "bottom") {
           try {
-            el.scrollTop = el.scrollHeight
+            el.scrollTop = bottomTarget(el)
           } catch {
             /* detached */
           }
@@ -542,7 +650,7 @@ export const MessageList = memo(function MessageList({
           }
           if (!anchorScrollToSaved(el, target)) {
             entryTargetRef.current = { mode: "bottom" }
-            el.scrollTop = el.scrollHeight
+            el.scrollTop = bottomTarget(el)
             resetSavedPosition()
           }
         }
@@ -553,7 +661,7 @@ export const MessageList = memo(function MessageList({
         stable = 0
         lastH = h
       }
-      const dist = el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0
+      const dist = el ? bottomDistance(el) : 0
       frames++
       const cur = entryTargetRef.current
       const onTarget = !cur || cur.mode === "bottom" ? dist <= 2 : true
@@ -612,13 +720,6 @@ export const MessageList = memo(function MessageList({
     }
   }, [messageScrollSignature, isWorking, showTypingBubble, view, isAtBottom, isNearBottom, scrollToBottom, messages.length])
 
-  // Carga visible: spinner de la sesión (loading activo) o datos stale de otra
-  // sesión todavía montados. Antes ese tramo quedaba con el velo (opacity 0)
-  // y se veía "chat vacío en negro" durante segundos al cambiar de chat.
-  const showSessionLoading =
-    (loadingSessionID !== null && loadingSessionID === selectedID) ||
-    (!isFresh && messages.length > 0)
-
   // La caja de actividad en marcha ya trae su propio spinner: la burbuja de
   // "escribiendo" solo aparece cuando todavía no hay caja trabajando (turno
   // recién arrancado sin mensajes). Sin esto había dos spinners a la vez.
@@ -653,47 +754,69 @@ export const MessageList = memo(function MessageList({
                 </button>
               </div>
             )}
-            {turnGroups.map((group) => (
-              <div
-                key={group.key}
-                ref={activeGroupKey === group.key ? pinGroupRef : undefined}
-                className={`turn-group${activeGroupKey === group.key ? " turn-group-active" : ""}`}
-                data-turn-group={group.key}
-              >
-                {group.rows.map(({ message, actualIndex }) => (
-                  <Fragment key={message.info.id}>
-                    {turnActivity.swallowed.has(message.info.id) ? null : <MessageBubble
-                      message={message}
-                      queued={pendingIndex !== undefined && actualIndex > pendingIndex}
-                      outbox={outboxActions?.[message.info.id] ? { ...outboxActions[message.info.id], count: Object.keys(outboxActions).length } : null}
-                      revert={revert}
-                      isReverted={revertIndex >= 0 && actualIndex >= revertIndex}
-                      onRevertToMessage={onRevertToMessage}
-                      agents={agents}
-                      prevUserTs={prevUserTsByIndex[actualIndex]}
-                      showModelInfo={footerInfoMap.get(message.info.id) ?? false}
-                      config={config}
-                      directory={directory}
-                      onViewSubagents={onViewSubagents}
-                      busySessionIds={busySessionIds}
-                      onContextMenu={onContextMenu}
-                      onEditMessage={onEditMessage ? requestEditMessage : undefined}
-                      showTodoButton={showTodoButton}
-                      onToggleTodos={onToggleTodos}
-                      todosOpen={todosOpen}
-                      highlight={highlight}
-                      compactTools={compactTools}
-                      minimalistMode={minimalistMode}
-                      thinkingDefault={thinkingDefault}
-                      turnActivity={turnActivity.box.get(message.info.id) ?? null}
-                      absorbActivity={turnActivity.absorbed.has(message.info.id)}
-                      onRegenerate={onRegenerate}
-                      onOpenADEDiff={onOpenADEDiff}
-                    />}
-                  </Fragment>
-                ))}
-              </div>
-            ))}
+            {turnGroups.map((group, groupIndex) => {
+              const isTurnVisible = !visibleTurnIndices || visibleTurnIndices.has(groupIndex)
+              const measuredSize = rowVirtualizer.measurementsCache[groupIndex]?.size
+
+              return (
+                <div
+                  key={group.key}
+                  data-index={groupIndex}
+                  ref={(el) => {
+                    if (activeGroupKey === group.key) {
+                      pinGroupRef.current = el
+                    } else if (pinGroupRef.current === el) {
+                      pinGroupRef.current = null
+                    }
+                    if (el) rowVirtualizer.measureElement(el)
+                  }}
+                  className={`turn-group${activeGroupKey === group.key ? " turn-group-active" : ""}`}
+                  data-turn-group={group.key}
+                  style={!isTurnVisible && measuredSize ? { minHeight: `${measuredSize}px` } : undefined}
+                >
+                  {isTurnVisible ? (
+                    group.rows.map(({ message, actualIndex }) => (
+                      <Fragment key={message.info.id}>
+                        {turnActivity.swallowed.has(message.info.id) ? null : <MessageBubble
+                          message={message}
+                          queued={pendingIndex !== undefined && actualIndex > pendingIndex}
+                          outbox={outboxActions?.[message.info.id] ? { ...outboxActions[message.info.id], count: Object.keys(outboxActions).length } : null}
+                          revert={revert}
+                          isReverted={revertIndex >= 0 && actualIndex >= revertIndex}
+                          onRevertToMessage={onRevertToMessage}
+                          agents={agents}
+                          prevUserTs={prevUserTsByIndex[actualIndex]}
+                          showModelInfo={footerInfoMap.get(message.info.id) ?? false}
+                          config={config}
+                          directory={directory}
+                          onViewSubagents={onViewSubagents}
+                          busySessionIds={busySessionIds}
+                          onContextMenu={onContextMenu}
+                          onEditMessage={onEditMessage ? requestEditMessage : undefined}
+                          showTodoButton={showTodoButton}
+                          onToggleTodos={onToggleTodos}
+                          todosOpen={todosOpen}
+                          highlight={highlight}
+                          compactTools={compactTools}
+                          minimalistMode={minimalistMode}
+                          thinkingDefault={thinkingDefault}
+                          turnActivity={turnActivity.box.get(message.info.id) ?? null}
+                          absorbActivity={turnActivity.absorbed.has(message.info.id)}
+                          onRegenerate={onRegenerate}
+                          onOpenADEDiff={onOpenADEDiff}
+                        />}
+                      </Fragment>
+                    ))
+                  ) : (
+                    <div
+                      className="turn-virtual-placeholder"
+                      style={{ minHeight: `${measuredSize ?? 120}px` }}
+                      aria-hidden="true"
+                    />
+                  )}
+                </div>
+              )
+            })}
             {compacting && (
               <article className="message assistant compacting-bubble fade-in" aria-label={t('session.compacting')}>
                 <div className="compacting-indicator" aria-hidden="true">
@@ -705,9 +828,11 @@ export const MessageList = memo(function MessageList({
             {showTypingBubble && !compacting && !hasWorkingActivity && (
               <article className="message assistant typing-bubble fade-in" aria-label={t('detail.waiting')} />
             )}
-            <div ref={messagesEndRef} className="messages-end" aria-hidden="true" />
           </>
         )}
+        {/* Sentinela SIEMPRE presente (vacío/carga incluidos): define el
+            fin de los mensajes para el scroll (cola vacía por debajo). */}
+        <div ref={messagesEndRef} className="messages-end" aria-hidden="true" />
       </div>
       {!isAtBottom && messages.length > 0 && (
         <button className="scroll-to-bottom" onClick={() => scrollToBottom("smooth")}

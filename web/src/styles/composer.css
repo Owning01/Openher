@@ -19,6 +19,10 @@
   gap: var(--space-1);
   margin-top: var(--space-3);
   padding: 0.5rem;
+  /* Único dueño del inset inferior: antes lo sumaban `.composer` (responsive.css)
+     y `.composer-bar` (esta misma hoja) y en el celu la barra de navegación
+     dejaba ~45px de vacío bajo el botón Build. */
+  padding-bottom: max(0.5rem, var(--safe-bottom));
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--nav-bg);
@@ -53,7 +57,7 @@
 .composer-input-wrap {
   position: relative;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   border-radius: var(--radius-md);
   border: 1.5px solid transparent;
   transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
@@ -91,9 +95,14 @@
 
 .composer-input-wrap textarea {
   width: 100%;
-  min-height: 42px;
+  flex: 1 1 auto;
+  min-height: 44px;
   max-height: 120px;
-  padding: 0.5rem 2.5rem 0.5rem 2.4rem;
+  /* Los botones van DENTRO de la caja (absolutos, centrados), así que el texto
+     reserva el hueco: 2.6rem a la derecha (enviar + micro, 32px c/u + aire) y
+     2.6rem a la izquierda (adjuntar). Con micro de 44px (táctil) o con el botón
+     de stop trabajando, las variantes de abajo suben ese espacio. */
+  padding: 0.5rem 2.6rem;
   border: none;
   border-radius: var(--radius-md);
   background: var(--surface-subtle);
@@ -106,18 +115,17 @@
   outline: none;
 }
 
+/* Táctil: los botones miden 44px, así que el hueco del texto crece. */
 .composer-input-wrap.has-mic textarea {
-  padding-right: 3.9rem;
+  padding-right: 6.2rem;
 }
 
-/* Trabajando: stop + send visibles a la derecha (el envío encola en el
-   outbox en vez de bloquearse). Se reserva sitio para el segundo botón. */
 .composer-input-wrap.is-working textarea {
-  padding-right: 4.4rem;
+  padding-right: 6.2rem;
 }
 
 .composer-input-wrap.is-working.has-mic textarea {
-  padding-right: 5.8rem;
+  padding-right: 9.2rem;
 }
 
 /* Focus visible propio: el outline global se descarta acá (textarea del
@@ -128,76 +136,14 @@
   border-color: var(--primary);
 }
 
-/* Anillo de envío alrededor de TODA la caja de texto: reemplaza al spinner
-   del chat. Un solo color violeta, giro 360° continuo por transform
-   (sin @property, funciona en todos los motores). Solo visible con
-   .is-working. Dos capas: halo exterior blur + borde nítido. */
-.composer-ring {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-.composer-ring-glow,
-.composer-ring-band {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  overflow: hidden;
-}
-.composer-ring-glow {
-  width: calc(100% + 18px);
-  height: calc(100% + 18px);
-  border-radius: 16px;
-  filter: blur(22px);
-  opacity: 0.55;
-}
-.composer-ring-band {
-  width: calc(100% + 4px);
-  height: calc(100% + 4px);
-  border-radius: 12px;
-  filter: blur(0.5px) brightness(1.25);
-}
-.composer-ring-glow::before,
-.composer-ring-band::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 1200px;
-  height: 1200px;
-  transform: translate(-50%, -50%) rotate(0deg);
-  background-repeat: no-repeat;
-  animation: composer-ring-rotate 3.5s linear infinite;
-  /* Fase compartida por todas las instancias (style="--ring-delay" desde el
-     Composer, alineada al reloj): sesiones activas en varios paneles giran
-     en sincronía en vez de arrancar cada una en 0deg al montar/activar. */
-  animation-delay: var(--ring-delay, 0s);
-  will-change: transform;
-}
-.composer-ring-glow::before {
-  background-image: conic-gradient(#000 0%, #000 70%, #402fb5 82%, #000 92%, #000 100%);
-}
-.composer-ring-band::before {
-  background-image: conic-gradient(#14121c 0%, #14121c 70%, #402fb5 82%, #14121c 92%, #14121c 100%);
-}
-@keyframes composer-ring-rotate {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to { transform: translate(-50%, -50%) rotate(360deg); }
-}
-/* El anillo va detrás (z-index 0): el texto y los botones suben un nivel. */
-.composer-input-wrap.is-working textarea {
-  position: relative;
-  z-index: 1;
-}
-.composer-input-wrap.is-working .composer-inline-btn {
-  z-index: 1;
-}
-
+/* Los tres botones (adjuntar / enviar / micro) van DENTRO de la caja de texto,
+   en ambos modos (25-sep): absolutos y centrados verticalmente contra la caja.
+   El textarea reserva el espacio con padding lateral según cuántos botones hay
+   (ver `.has-mic` / `.is-working`). */
 .composer-inline-btn {
   position: absolute;
-  bottom: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -292,18 +238,28 @@
   animation: mic-pulse 1s ease-in-out infinite;
 }
 
+/* Fila de metadatos: DEBAJO de la caja de texto, en desktop y mobile (25-sep).
+   Orden pedido: [modo] modelo · contexto, y el agente a la derecha. Los
+   botones ya no viven acá (van dentro de la caja), así que no necesita
+   clearance lateral. */
 .composer-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 32px;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 30px;
 }
+
 
 .composer-bar-left {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
+  /* Sin scroll horizontal: lo que no entra se recorta con elipsis en vez de
+     arrancar un scroller invisible (medido: 290px de contenido en 286px de caja
+     cortaban el costo). */
   overflow: hidden;
 }
 
@@ -324,25 +280,47 @@
 }
 
 .agent-toggle {
-  min-height: 26px;
+  min-height: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-1);
-  border: none !important;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: transparent !important;
-  color: var(--text);
-  font-weight: 700;
+  background: var(--surface-strong);
+  color: var(--muted-strong);
+  font-weight: 500;
   font-size: 0.75rem;
-  padding: 0.15rem 0.35rem;
+  padding: 0 8px;
   cursor: pointer;
   white-space: nowrap;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
 .agent-toggle:hover:not(:disabled) {
-  border-color: transparent !important;
-  background: rgba(128, 128, 128, 0.08) !important;
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* Contador de contexto de la fila del composer: "401.1K (38%)". Último recurso
+   de la línea — si no entra (celular angosto) se recorta con elipsis en vez de
+   empujar al agente. Sin precio de sesión (se retiró 25-sep). */
+.context-usage-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  margin-left: var(--space-1);
+  border-left: 1px solid var(--border);
+  padding-left: var(--space-2);
 }
 
 /* ===== Composer: snippets + contador ===== */
@@ -366,32 +344,6 @@
   color: var(--primary);
 }
 
-.composer-tsl-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 26px;
-  min-width: 26px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 700;
-  font-family: var(--font-mono, monospace);
-  letter-spacing: 0.03em;
-  padding: 0.15rem 0.35rem;
-  transition: color 0.15s;
-}
-
-.composer-tsl-btn:hover:not(:disabled) {
-  color: var(--primary);
-}
-
-.composer-tsl-btn[aria-pressed="true"] {
-  color: var(--primary);
-}
 
 /* ===== Composer: cambios del turno (resumen +/− por turno) ===== */
 .turn-changes-row {
@@ -768,6 +720,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  overflow: hidden;
   height: 26px;
   padding: 0 4px;
   border-radius: 0;
@@ -793,32 +747,31 @@
 }
 
 .composer-model-name {
+  /* Se encoge por debajo de 140px cuando la fila no entra (celular) y se
+     recorta con elipsis; el contexto nunca se recorta. */
+  min-width: 0;
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.agent-toggle {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 9999px;
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.25);
-  color: #a5b4fc;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.15s ease;
-  user-select: none;
+/* Orden pedido: [modo] modelo (25-sep). El badge va primero dentro de la
+   píldora, que sigue siendo un solo botón (clic abre el selector de modelo). */
+.composer-model-mode-badge {
+  order: -1;
 }
 
-.agent-toggle:hover {
-  background: rgba(99, 102, 241, 0.2);
-  border-color: rgba(99, 102, 241, 0.4);
+.composer-model-mode-badge {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs, 3px);
+  background: var(--surface-strong);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  text-transform: capitalize;
+  line-height: 1.2;
 }
 
 /* Menú de niveles de pensamiento del toggle del modelo */

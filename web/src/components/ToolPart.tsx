@@ -1,10 +1,9 @@
-import { memo, useMemo, useState, useEffect, type ReactNode } from "react"
+import { memo, useMemo, useState, type ReactNode } from "react"
 import type { ServerConfig, FileDiff } from "../types"
 import { toolMeta } from "../utils/toolMeta"
 import {
   detectToolName,
   isQuestionTool,
-  isTaskToolPart,
   isFileTool,
   isShellTool,
   toolCategory,
@@ -12,20 +11,14 @@ import {
   toolShortLabel,
   toolVerb,
 } from "../utils/toolName"
-import { api } from "../api"
 import { QuestionPrompt } from "./QuestionPrompt"
 import { CollapsibleSection } from "./CollapsibleSection"
-import { GridSpinner } from "./GridSpinner"
 import { DiffView } from "./DiffView"
 import { useT } from "../i18n-context"
-import { CodeIcon, FileIcon, SearchIcon, GlobeIcon, CloseIcon, ToolIcon, ClockIcon } from "../Icons"
-import { Markdown } from "./Markdown"
+import { CodeIcon, FileIcon, SearchIcon, GlobeIcon, CloseIcon, ToolIcon } from "../Icons"
 import { HighlightedCode } from "./HighlightedCode"
-import { ThinkingBlock } from "./ThinkingBlock"
-import { computeRenderedMessages } from "../utils/rendered"
 import { useQuestionSettled, useQuestionFloatingMode } from "../utils/questionStore"
 import { toolPartFileDiff } from "../utils/toolFileDiff"
-import { subagentBackground, isBackgroundRunning } from "../utils/subagentBackground"
 
 export type ToolPartData = {
   id: string
@@ -222,245 +215,6 @@ function formatInput(input: unknown, baseDir?: string): string {
   }
 }
 
-function SubagentTaskCard({
-  part,
-  config,
-  directory,
-  onViewSubagents,
-  isDone,
-  isError,
-  busySessionIds,
-  t,
-}: {
-  part: ToolPartData
-  config?: ServerConfig
-  directory?: string
-  onViewSubagents?: (subagentID?: string) => void
-  isDone: boolean
-  isError: boolean
-  busySessionIds?: ReadonlySet<string>
-  t: (key: any, vars?: any) => string
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const [subMessages, setSubMessages] = useState<any[]>([])
-  const [loadingMessages, setLoadingMessages] = useState(false)
-  const [resolvedSessionId, setResolvedSessionId] = useState<string | null>(null)
-
-  const agentType = ((part.state?.input as { subagent_type?: string } | undefined)?.subagent_type
-    ?? extractParam(part.text ?? "", "subagent_type"))
-    || "General"
-  const description = (part.state?.input as { description?: string } | undefined)?.description
-    ?? extractParam(part.text ?? "", "description")
-  const prompt = (part.state?.input as { prompt?: string } | undefined)?.prompt
-    ?? extractParam(part.text ?? "", "prompt")
-  const rawOutput = (part.state?.output as string | undefined) ?? getResultText(part.text ?? "")
-
-  const title = agentType.charAt(0).toUpperCase() + agentType.slice(1)
-  const subtitle = description || prompt || undefined
-
-  // ¿Corre en background? El part queda "completed" al delegar; el estado vivo
-  // lo da la sesión hija (ver utils/subagentBackground).
-  const bg = subagentBackground(part)
-  const bgRunning = isBackgroundRunning(part, busySessionIds)
-  const showWorking = !isDone || bgRunning
-  const childSessionId = bg.childSessionID ?? resolvedSessionId
-
-  // Carga mensajes de la sesión del subagente al expandir
-  useEffect(() => {
-    if (!expanded || !config) return
-    let cancelled = false
-    setLoadingMessages(true)
-
-    const fetchSubMessages = async () => {
-      // 1. Extraer ID de la sesión hija desde input, metadata, output o texto
-      const input = part.state?.input as Record<string, unknown> | undefined
-      const meta = part.state?.metadata as Record<string, unknown> | undefined
-      const outObj = (typeof part.state?.output === "object" ? part.state.output : null) as Record<string, unknown> | null
-
-      let sId: string | undefined = (input?.sessionId as string)
-        ?? (input?.sessionID as string)
-        ?? (meta?.sessionId as string)
-        ?? (meta?.sessionID as string)
-        ?? (outObj?.sessionId as string)
-        ?? (outObj?.sessionID as string)
-        ?? (outObj?.id as string)
-
-      if (!sId) {
-        const textSource = `${part.text ?? ""} ${typeof part.state?.output === "string" ? part.state.output : ""} ${rawOutput}`
-        const match = textSource.match(/\b(ses_[a-zA-Z0-9_-]+)\b/i) || textSource.match(/session(?:Id|ID)?["':=\s]+([a-zA-Z0-9_-]{6,})/i)
-        if (match && match[1]) sId = match[1]
-      }
-
-      // 2. Si no viene en los datos, buscar en las sesiones hijas del server
-      if (!sId && part.sessionID) {
-        try {
-          const sessions = await api.listSessions(config, directory)
-          const child = sessions.find((s) => s.parentID === part.sessionID)
-          if (child) sId = child.id
-        } catch {}
-      }
-
-      // 3. Fallback a part.sessionID si no hay otra opción
-      if (!sId && part.sessionID) {
-        sId = part.sessionID
-      }
-
-      if (!sId) {
-        if (!cancelled) setLoadingMessages(false)
-        return
-      }
-
-      setResolvedSessionId(sId)
-
-      try {
-        const msgs = await api.loadMessages(config, sId, directory)
-        if (!cancelled) {
-          setSubMessages(Array.isArray(msgs) ? msgs : [])
-        }
-      } catch {}
-      if (!cancelled) setLoadingMessages(false)
-    }
-
-    void fetchSubMessages()
-    return () => { cancelled = true }
-  }, [expanded, config, part, rawOutput, directory])
-
-  // Computa los mensajes renderizados del subagente (reusando computeRenderedMessages)
-  const renderedSubMessages = useMemo(() => {
-    if (!subMessages || subMessages.length === 0) return []
-    return computeRenderedMessages(subMessages, undefined, new Map()).out
-  }, [subMessages])
-
-  return (
-    <div className={`subagent-task-card${expanded ? " is-expanded" : ""}${showWorking ? " working" : ""}${bg.isBackground ? " is-background" : ""}`}>
-      <div
-        className="subagent-task-header"
-        onClick={() => setExpanded((v) => !v)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-      >
-        <div className="subagent-task-left">
-          <span className="subagent-task-badge">
-            <ToolIcon size={12} />
-            {title}
-          </span>
-          {bg.isBackground && (
-            <span
-              className="subagent-task-bg"
-              title={t('toolpart.backgroundHint')}
-            >
-              <ClockIcon size={11} />
-              {t('toolpart.background')}
-            </span>
-          )}
-          <span className="subagent-task-title" title={subtitle || title}>
-            {subtitle || title}
-          </span>
-        </div>
-        <div className="subagent-task-right">
-          <span className="subagent-task-status">
-            {showWorking ? (
-              <><GridSpinner label={title} size={14} /><span style={{ color: "var(--accent)" }}>{bg.isBackground ? t('toolpart.backgroundRunning') : "En progreso..."}</span></>
-            ) : isError ? (
-              <span style={{ color: "var(--danger)" }}> Error</span>
-            ) : (
-              <span style={{ color: "var(--success)" }}> Completado</span>
-            )}
-          </span>
-          <span className="subagent-expand-chevron" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: "12px", color: "var(--muted)" }}>
-            ▼
-          </span>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="subagent-task-window">
-          {prompt && (
-            <div className="subagent-section-block">
-              <div className="subagent-section-title">
-                <span style={{ color: "var(--info)", display: "inline-flex" }}><CodeIcon size={13} /></span>
-                <span>Objetivo / Prompt</span>
-              </div>
-              <div style={{ fontSize: "0.82rem", color: "var(--text)" }}>
-                <Markdown text={prompt} />
-              </div>
-            </div>
-          )}
-
-          {loadingMessages && renderedSubMessages.length === 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--muted)", padding: "8px 0" }}>
-              <GridSpinner label="Cargando detalles" size={14} />
-              <span>Cargando acciones y mensajes del subagente...</span>
-            </div>
-          )}
-
-          {renderedSubMessages.length > 0 && (
-            <div className="subagent-inner-session" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {renderedSubMessages.map((msg) => (
-                <div key={msg.info.id} className={`subagent-inner-bubble ${msg.info.role}`}>
-                  {msg.thinkingParts && msg.thinkingParts.length > 0 && (
-                    <ThinkingBlock parts={msg.thinkingParts} defaultOpen={false} />
-                  )}
-                  {msg.toolParts && msg.toolParts.map((tp) => (
-                    <ToolPart
-                      key={tp.id}
-                      part={tp}
-                      config={config}
-                      directory={directory}
-                      sessionID={resolvedSessionId ?? undefined}
-                      onViewSubagents={onViewSubagents}
-                      busySessionIds={busySessionIds}
-                    />
-                  ))}
-                  {msg.text && (
-                    <div style={{ padding: "4px 0", fontSize: "0.82rem", color: "var(--text)" }}>
-                      <Markdown text={msg.text} />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {renderedSubMessages.length === 0 && !loadingMessages && rawOutput && rawOutput !== prompt && (
-            <div className="subagent-section-block">
-              <div className="subagent-section-title">
-                <span>Resultado</span>
-              </div>
-              <div style={{ fontSize: "0.82rem", color: "var(--text)" }}>
-                <Markdown text={rawOutput} />
-              </div>
-            </div>
-          )}
-
-          {renderedSubMessages.length === 0 && !loadingMessages && (!rawOutput || rawOutput === prompt) && !prompt && (
-            <div style={{ color: "var(--muted)", fontStyle: "italic", fontSize: "0.78rem" }}>
-              Sin mensajes adicionales registrados para este subagente.
-            </div>
-          )}
-
-          {childSessionId && onViewSubagents && (
-            <div className="subagent-task-footer">
-              <button
-                type="button"
-                className="btn-secondary compact"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onViewSubagents(childSessionId)
-                }}
-                title={t('toolpart.viewSubagent') || "Abrir sesión dedicada"}
-              >
-                {t('toolpart.viewSubagent') || "Ver sesión completa →"}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export function DiffStatBadge({ add, del }: { add: number; del: number }) {
   if (add === 0 && del === 0) return null
   return (
@@ -471,13 +225,14 @@ export function DiffStatBadge({ add, del }: { add: number; del: number }) {
   )
 }
 
-export const ToolPart = memo(function ToolPart({ part, config, directory, sessionID, onViewSubagents, busySessionIds, compact: _compact }: {
+// `onViewSubagents` y `busySessionIds` ya no se usan acá: la navegación a la
+// sesión del subagente la hace la fila `.subagent-row` de MessageBubble y el
+// estado vivo se lee en la cabecera (ChatHeader). No volver a pasarlos.
+export const ToolPart = memo(function ToolPart({ part, config, directory, sessionID, compact: _compact }: {
   part: ToolPartData
   config?: ServerConfig
   directory?: string
   sessionID?: string
-  onViewSubagents?: (subagentID?: string) => void
-  busySessionIds?: ReadonlySet<string>
   compact?: boolean
 }) {
   const t = useT()
@@ -567,22 +322,6 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
 
   if (!text && !toolName && !inputText) return null
 
-  // ---- Task (subagent) tool ----
-  if (isTaskToolPart({ tool: toolName ?? undefined, text: text ?? undefined, state: part.state })) {
-    return (
-      <SubagentTaskCard
-        part={part}
-        config={config}
-        directory={directory}
-        onViewSubagents={onViewSubagents}
-        isDone={isDone}
-        isError={isError}
-        busySessionIds={busySessionIds}
-        t={t}
-      />
-    )
-  }
-
   // ---- Question tool (interactive) ----
   // El server actual manda el input como objeto (state.input.questions), no
   // como XML <invoke>/<parameter>. Soportar ambas formas; si no, el part cae
@@ -666,9 +405,11 @@ export const ToolPart = memo(function ToolPart({ part, config, directory, sessio
   const label = toolLabels[part.type] || (toolName ? toolShortLabel(toolName) : "Tool")
 
   const headerIcon = toolSvgIcon(toolName ?? null)
-  const statusIcon = isWorking
-    ? <GridSpinner label={label} size={14} />
-    : isError ? <span className="tool-status-icon tool-error-mark"><CloseIcon size={12} /></span>
+  // Solo el error lleva icono: el spinner de "trabajando" se fue con el
+  // componente (GridSpinner) porque duplicaba el de la caja de actividad del
+  // turno, que es el único que dice que algo está pasando.
+  const statusIcon = isError
+    ? <span className="tool-status-icon tool-error-mark"><CloseIcon size={12} /></span>
     : null
 
   const antigravityInfo = useMemo(() => {

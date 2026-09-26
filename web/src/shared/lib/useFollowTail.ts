@@ -120,6 +120,70 @@ function captureAnchor(root: HTMLElement): { id: string; off: number } | null {
   return null
 }
 
+// Sentinela `.messages-end` cacheada por contenedor: `bottomTarget` corre en el
+// hot path del scroll y `querySelector` es trabajo de DOM en cada evento. Se
+// re-consulta solo si el nodo cacheado dejó de estar en el contenedor (la lista
+// se re-montó / cambió la lista de nodos).
+const endSentinel = new WeakMap<HTMLElement, HTMLElement>()
+function findEndSentinel(root: HTMLElement): HTMLElement | null {
+  const cached = endSentinel.get(root)
+  if (cached) {
+    if (root.contains(cached)) return cached
+    endSentinel.delete(root)
+  }
+  const found = root.querySelector<HTMLElement>(".messages-end")
+  if (found) endSentinel.set(root, found)
+  return found
+}
+
+// Distancia mayor que esto no es una posición creíble: viene del clamp de un
+// viewport colapsado. Un valor así no se cachea (se vuelve a medir en vez de
+// devolverlo viejo) para no escribir una distancia envenenada en la memoria.
+const MAX_TRUSTED_DIST = 20_000
+
+/**
+ * Posición de scroll del FONDO del chat: donde terminan los MENSAJES
+ * (sentinela `.messages-end`), no el fin del área scrolleable. La cola
+ * vacía (`.messages::after`, una pantalla) hace que el scroll total exceda
+ * el contenido: el fondo sigue siendo el último mensaje, así el chat
+ * corto/vacío queda anclado arriba y el scroll extra queda por debajo
+ * ("hasta cierto punto"). Sin sentinela (contenedores de test /sin DOM)
+ * cae al fondo histórico: scrollHeight, que el navegador clampea.
+ */
+export function bottomTarget(root: HTMLElement): number {
+  try {
+    const end = findEndSentinel(root)
+    if (end) {
+      const max = root.scrollHeight - root.clientHeight
+      const y = root.scrollTop + (end.getBoundingClientRect().bottom - root.getBoundingClientRect().bottom)
+      if (Number.isFinite(y)) return Math.max(0, Math.min(y, max))
+    }
+  } catch {
+    /* detached */
+  }
+  return root.scrollHeight
+}
+
+/** Como bottomTarget pero nunca más allá del máximo scrolleable: base de la aritmética de distancia. */
+function bottomPos(root: HTMLElement): number {
+  const max = root.scrollHeight - root.clientHeight
+  const t = bottomTarget(root)
+  return t > max ? max : t
+}
+
+/**
+ * Distancia al fondo: >0 arriba del reposo, 0 en el reposo, <0 si te
+ * metiste en la cola vacía. La cola cuenta como fondo (no hay nada más
+ * nuevo debajo), igual que antes: `dist < threshold` sigue significando
+ * "pegado al final".
+ * Lectura EXACTA (re-mide siempre): la usan los caminos que necesitan el valor
+ * vivo (restore, isNearBottom, tests). El hot path del scroll pasa por
+ * `readDistance`, que amortigua la medición a 100 ms.
+ */
+export function bottomDistance(root: HTMLElement): number {
+  return bottomPos(root) - root.scrollTop
+}
+
 /**
  * Reposiciona el contenedor sobre la posición guardada. Primero por MENSAJE
  * (inmune a que el chat crezca arriba o abajo mientras estábamos fuera, p.
@@ -150,17 +214,16 @@ export function anchorScrollToSaved(
     }
   }
   try {
-    const max = root.scrollHeight - root.clientHeight
     if (saved.dist <= 2) {
-      root.scrollTop = root.scrollHeight
+      root.scrollTop = bottomTarget(root)
       return true
     }
-    const target = max - saved.dist
+    const target = bottomPos(root) - saved.dist
     // La posición guardada queda POR ENCIMA del contenido cargado (memoria
     // vieja de una lista más larga o envenenada): no clavar arriba. Devolver
     // false deja que el llamador decida (entrada → fondo).
     if (target < 0) return false
-    root.scrollTop = Math.min(target, max)
+    root.scrollTop = target
     return true
   } catch {
     return false
@@ -185,13 +248,29 @@ export function useFollowTail(
   const freezeUntilRef = useRef(0)
   const frozenSnapRef = useRef<{ dist: number; ts: number; mid?: string; moff?: number } | null>(null)
   const lastAnchorAtRef = useRef(0)
+  // Última distancia medida + reloj. `bottomDistance` hace querySelector +
+  // dos getBoundingClientRect (layout sincrónico forzado) y `recompute` corre en
+  // CADA evento de scroll: medir a 100 ms igual que `captureAnchor` (mismo
+  // motivo) y no a 500 ms porque al minimizar rápido quedaba stale.
+  const distCacheRef = useRef<{ dist: number; at: number; trusted: boolean }>({ dist: 0, at: 0, trusted: false })
 
   useEffect(() => {
     const root = containerRef.current
     if (!root) return
+    // Amortiguada: re-mide si venció el plazo, si nunca se midió o si la
+    // última distancia no era creíble (clamp de viewport colapsado).
+    const readDistance = (now: number) => {
+      const cache = distCacheRef.current
+      if (cache.trusted && now - cache.at <= 100) return cache.dist
+      const dist = bottomDistance(root)
+      cache.dist = dist
+      cache.at = now
+      cache.trusted = Number.isFinite(dist) && dist <= MAX_TRUSTED_DIST
+      return dist
+    }
     const recompute = () => {
       const now = Date.now()
-      const dist = root.scrollHeight - root.scrollTop - root.clientHeight
+      const dist = readDistance(now)
       // Con viewport colapsado (minimizado/oculto) el clamp a 0 daría una
       // distancia falsa: no contaminar la memoria. Tampoco durante el freeze
       // ni con datos stale / a medio asentar (canPersistRef).
@@ -244,15 +323,14 @@ export function useFollowTail(
     // stale sobrevivía y la próxima entrada (tab/minimizar/chat) restauraba
     // arriba aunque la última vista real fuera el fondo.
     const confirmBottom = (cc: HTMLElement) => {
-      const d = cc.scrollHeight - cc.scrollTop - cc.clientHeight
-      const at = d <= 2
+      const at = bottomDistance(cc) <= 2
       setIsAtBottom(at)
       if (at) resetSavedPosition()
     }
     // Si el layout aún está colapsado (restore temprano con height 0), reintentar
     // hasta 10 frames en vez de fallar silencioso y dejar el scroll arriba.
     const fallbackBottom = (cc: HTMLElement) => {
-      cc.scrollTop = cc.scrollHeight
+      cc.scrollTop = bottomTarget(cc)
       setIsAtBottom(true)
       resetSavedPosition()
     }
@@ -372,21 +450,21 @@ export function useFollowTail(
         // el ledger/timing; con "smooth" (botón del usuario) no se toca.
         if (behavior !== "smooth") {
           try {
-            container.scrollTop = container.scrollHeight
+            container.scrollTop = bottomTarget(container)
           } catch {
             /* contenedor detached: el scrollTo posterior lo intenta igual */
           }
         }
-        container.scrollTo({ top: container.scrollHeight, behavior })
+        container.scrollTo({ top: bottomTarget(container), behavior })
         requestAnimationFrame(() => {
           const c = containerRef.current
-          if (c) c.scrollTo({ top: c.scrollHeight, behavior })
+          if (c) c.scrollTo({ top: bottomTarget(c), behavior })
         })
       } else {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             const c = containerRef.current
-            if (c) c.scrollTo({ top: c.scrollHeight, behavior })
+            if (c) c.scrollTo({ top: bottomTarget(c), behavior })
           })
         })
       }
@@ -398,7 +476,7 @@ export function useFollowTail(
     (extraThreshold = 400) => {
       const c = containerRef.current
       if (!c) return false
-      return c.scrollHeight - c.scrollTop - c.clientHeight < extraThreshold
+      return bottomDistance(c) < extraThreshold
     },
     [containerRef],
   )

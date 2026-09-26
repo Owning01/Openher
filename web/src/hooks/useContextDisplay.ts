@@ -1,9 +1,9 @@
 import { useMemo } from "react"
-import { formatCompact, formatCost } from "../utils"
+import { formatCompact } from "../utils"
 import type { RenderedMessage, ModelOption, SessionView, TokenUsage } from "../types"
 
-// Chips compactos de contexto/costo del composer. El índice `lastMsgTokens`
-// recorre de atrás hacia adelante y corta en el primer mensaje con datos.
+// Contador compacto de contexto (tokens + % del límite) del chat. Vive en el
+// HEADER (no en el composer) y sin precio: el precio de la sesión no se muestra.
 export function useContextDisplay(
   messages: RenderedMessage[],
   activeModelOption: ModelOption | null,
@@ -43,12 +43,13 @@ export function useContextDisplay(
     }
 
     const cost = selectedSession?.cost ?? 0
-    if (total <= 0 && cost <= 0) return null
+    if (total <= 0) return null
 
     const limit = activeModelOption?.contextLimit
     const pct = limit && limit > 0 && total > 0 ? Math.round((total / limit) * 100) : null
-    let label = total > 0 ? (formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")) : ""
-    if (cost > 0) label = label ? `${label} · ${formatCost(cost)}` : (label ? `${label} · $0.00` : "")
+    // Solo tokens: el precio de la sesión ya no se muestra (pedido 25-sep) y el
+    // contador vive en el header del chat, no en el composer.
+    const label = formatCompact(total) + (pct !== null ? ` (${pct}%)` : "")
     return { total, pct, limit, cost, label }
   }, [messages, activeModelOption?.contextLimit, selectedSession?.tokens, selectedSession?.cost])
 }

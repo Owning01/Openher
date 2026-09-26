@@ -17,14 +17,15 @@ type ComposerBarProps = {
   activeAgentID: string
   onChangeAgent: (id: string) => void
   disabled: boolean
-  tslEnabled: boolean
-  onToggleTsl: () => void
+  /** Contador de contexto ("401.1K (38%)"), al final de la fila. */
   contextLabel?: string | null
   valueLength: number
   charLimit: number
 }
 
-/** Barra inferior del composer: modelo, agente activo, TSL, plugins y contador. */
+/** Fila de metadatos del composer (DEBAJO de la caja de texto, en ambos modos):
+    [modo] modelo · contexto, con el agente activo a la derecha. El botón TSL se
+    retiró (25-sep). */
 export const ComposerBar = memo(function ComposerBar({
   activeModelOption,
   activeModelVariants,
@@ -38,8 +39,6 @@ export const ComposerBar = memo(function ComposerBar({
   activeAgentID,
   onChangeAgent,
   disabled,
-  tslEnabled,
-  onToggleTsl,
   contextLabel,
   valueLength,
   charLimit,
@@ -53,10 +52,6 @@ export const ComposerBar = memo(function ComposerBar({
     () => primaryAgentOptions.filter((a) => !a.hidden && a.mode !== "subagent"),
     [primaryAgentOptions],
   )
-  const agentColorIdx = useMemo(() => {
-    const idx = primaryVisibleAgents.findIndex((a) => a.id === activeAgentID)
-    return idx >= 0 ? idx % 7 : 0
-  }, [primaryVisibleAgents, activeAgentID])
   const handleToggleAgent = useCallback(() => {
     const visible = primaryVisibleAgents
     if (visible.length < 2) return
@@ -68,8 +63,23 @@ export const ComposerBar = memo(function ComposerBar({
   return (
     <div className="composer-bar">
       <div className="composer-bar-left">
+        {/* Orden pedido (25-sep): Build (agente) a la IZQUIERDA, antes del
+            modelo, que a su vez muestra [modo] modelo, y después el contexto. */}
+        {primaryVisibleAgents.length > 1 && (
+          <button onClick={handleToggleAgent} disabled={disabled}
+            type="button"
+            className="agent-toggle"
+            title={`Agente activo: ${primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID} (click para cambiar)`}>
+            <span>{primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
+          </button>
+        )}
         {activeModelOption && (
-          <div className="composer-model-wrap" ref={modelMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+          /* shrink 1 + `min-width: 0` (era `flex-shrink: 0`): si la línea no
+             entra, el nombre del modelo se recorta con elipsis y el resto de
+             la fila queda entero. Medido a 360px: el nombre baja a ~33px y el
+             costo se recorta (necesita 131px y dispone de ~102 con TSL + Build
+             + 3 botones en la línea) — ver LOADING-STATES.md. */
+          <div className="composer-model-wrap" ref={modelMenuRef} style={{ position: "relative", flexShrink: 1, minWidth: 0 }}>
             <button
               ref={modelToggleRef}
               type="button"
@@ -85,6 +95,11 @@ export const ComposerBar = memo(function ComposerBar({
               <span className="composer-model-name">
                 {activeModelOption.modelName ?? t('detail.modelLoading')}
               </span>
+              {(selectedVariant ?? activeModelOption.variant) && (
+                <span className="composer-model-mode-badge">
+                  {selectedVariant ?? activeModelOption.variant}
+                </span>
+              )}
             </button>
             {showModelMenu && (
               <ModelSelectorModal
@@ -106,25 +121,6 @@ export const ComposerBar = memo(function ComposerBar({
             )}
           </div>
         )}
-        {primaryVisibleAgents.length > 1 && (
-          <button onClick={handleToggleAgent} disabled={disabled}
-            className="agent-toggle"
-            title={`Agente activo: ${primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID} (click para cambiar)`}
-            style={{ color: `var(--agent-${agentColorIdx})`, border: "none", outline: "none", background: "transparent", padding: "0 4px" } as React.CSSProperties}>
-            <span>{primaryVisibleAgents.find((a) => a.id === activeAgentID)?.name ?? activeAgentID}</span>
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onToggleTsl}
-          disabled={disabled}
-          className="composer-tsl-btn"
-          style={{ color: tslEnabled ? "var(--primary)" : undefined }}
-          title={tslEnabled ? "Translate ES→EN (active)" : "Translate ES→EN"}
-          aria-pressed={tslEnabled}
-        >
-          TSL
-        </button>
         <PluginSlot id="composer.actions" />
         {contextLabel && <span className="context-usage-label">{contextLabel}</span>}
       </div>
