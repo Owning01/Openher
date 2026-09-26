@@ -41,6 +41,7 @@ describe("versionKey", () => {
 describe("resolveApiVersion", () => {
   beforeEach(() => {
     detectedVersionCache.clear()
+    localStorage.clear()
     detectionPromises.clear()
   })
   it("returns forced v1 without cache", () => {
@@ -77,6 +78,7 @@ describe("resolveApiVersion", () => {
 describe("rememberApiVersion", () => {
   beforeEach(() => {
     detectedVersionCache.clear()
+    localStorage.clear()
     versionListeners.clear()
   })
   it("stores version in cache", () => {
@@ -121,6 +123,7 @@ describe("onApiVersionChange", () => {
   beforeEach(() => {
     versionListeners.clear()
     detectedVersionCache.clear()
+    localStorage.clear()
   })
   it("adds listener and returns unsubscribe", () => {
     const fn = vi.fn()
@@ -157,6 +160,7 @@ describe("onApiVersionChange", () => {
 describe("apiPath", () => {
   beforeEach(() => {
     detectedVersionCache.clear()
+    localStorage.clear()
   })
   it("returns /api prefix for v2 forced", () => {
     expect(apiPath(makeConfig({ apiVersion: "v2" }), "/session")).toBe("/api/session")
@@ -204,6 +208,7 @@ describe("unwrapData", () => {
 describe("ensureVersionDetected", () => {
   beforeEach(() => {
     detectedVersionCache.clear()
+    localStorage.clear()
     detectionPromises.clear()
     setHealthProbe(() => Promise.resolve())
   })
@@ -285,6 +290,7 @@ describe("ensureVersionDetected", () => {
 describe("getApiVersion", () => {
   beforeEach(() => {
     detectedVersionCache.clear()
+    localStorage.clear()
     detectionPromises.clear()
     setHealthProbe(() => Promise.resolve())
   })
@@ -299,5 +305,71 @@ describe("getApiVersion", () => {
     const cfg = makeConfig({ apiVersion: "auto" })
     detectedVersionCache.set(versionKey(cfg), "v2")
     await expect(getApiVersion(cfg)).resolves.toBe("v2")
+  })
+})
+
+// Contrato nuevo: la versión detectada se persiste por `host:port` para que la
+// carga siguiente no pague el sondeo (2-3 requests secuenciales) en el camino
+// crítico. Fallas cubiertas: valor viejo (se confirma en background y corrige),
+// server caído (NO baja la versión persistida), storage bloqueado (cae al
+// sondeo de siempre) y TTL (no se confirma en cada carga).
+describe("persistencia de la versión detectada", () => {
+  beforeEach(() => {
+    detectedVersionCache.clear()
+    detectionPromises.clear()
+    versionListeners.clear()
+    localStorage.clear()
+    setHealthProbe(() => Promise.resolve())
+  })
+
+  const persistedKey = (cfg: ServerConfig) => `openher.apiVersion.${versionKey(cfg)}`
+
+  it("la hidrata en la próxima carga sin sondear", async () => {
+    const cfg = makeConfig({ apiVersion: "auto" })
+    rememberApiVersion(cfg, "v2")
+    // Próxima carga: se pierde la memoria (Map), no el disco.
+    detectedVersionCache.clear()
+    const probe = vi.fn()
+    setHealthProbe(probe)
+    expect(resolveApiVersion(cfg)).toBe("v2")
+    await expect(ensureVersionDetected(cfg)).resolves.toBe("v2")
+    expect(probe).not.toHaveBeenCalled()
+  })
+
+  it("con TTL vencido confirma en background y corrige si el server cambió", async () => {
+    const cfg = makeConfig({ apiVersion: "auto" })
+    localStorage.setItem(persistedKey(cfg), JSON.stringify({ v: "v1", at: Date.now() - 2 * 60 * 60_000 }))
+    const probe = vi.fn().mockImplementation(async () => {
+      rememberApiVersion(cfg, "v2")
+    })
+    setHealthProbe(probe)
+    // Responde ya con lo persistido: la confirmación NO está en el camino.
+    await expect(ensureVersionDetected(cfg)).resolves.toBe("v1")
+    await new Promise((r) => setTimeout(r, 0))
+    expect(probe).toHaveBeenCalledOnce()
+    expect(resolveApiVersion(cfg)).toBe("v2")
+  })
+
+  it("si la confirmación falla NO baja la versión persistida", async () => {
+    const cfg = makeConfig({ apiVersion: "auto" })
+    localStorage.setItem(persistedKey(cfg), JSON.stringify({ v: "v2", at: 0 }))
+    setHealthProbe(vi.fn().mockRejectedValue(new Error("server caído")))
+    await expect(ensureVersionDetected(cfg)).resolves.toBe("v2")
+    await new Promise((r) => setTimeout(r, 0))
+    expect(resolveApiVersion(cfg)).toBe("v2")
+  })
+
+  it("storage bloqueado: cae al sondeo de siempre", async () => {
+    const cfg = makeConfig({ apiVersion: "auto" })
+    const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage bloqueado")
+    })
+    const probe = vi.fn().mockImplementation(async () => {
+      rememberApiVersion(cfg, "v2")
+    })
+    setHealthProbe(probe)
+    await expect(ensureVersionDetected(cfg)).resolves.toBe("v2")
+    expect(probe).toHaveBeenCalledOnce()
+    spy.mockRestore()
   })
 })

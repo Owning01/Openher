@@ -1,5 +1,5 @@
 import { memo, useRef, useState, useCallback, useEffect, useMemo, Fragment, type ReactElement } from "react"
-import { LoadingIcon, FolderIcon, PlusIcon, ChevronIcon, ArchiveIcon, TrashIcon, ChatIcon, StarIcon, PencilIcon, CopyIcon, MonitorIcon } from "../Icons"
+import { FolderIcon, PlusIcon, ChevronIcon, ArchiveIcon, TrashIcon, ChatIcon, StarIcon, PencilIcon, CopyIcon, MonitorIcon } from "../Icons"
 import { useT } from "../i18n-context"
 import { SessionCard } from "./SessionCard"
 import { ConnectionNotices } from "./ConnectionNotices"
@@ -8,12 +8,19 @@ import { QuickAccessCard } from "./QuickAccessCard"
 import { ContextMenu } from "./ContextMenu"
 import { shell } from "../shell"
 import { useDialog } from "./DialogProvider"
+import { useIsDesktop } from "../hooks/useIsDesktop"
 import { coupleSessionRows, type SessionRow } from "../utils/sessionTree"
+import { useVirtualWindow } from "../shared/lib/useVirtualWindow"
 import type { SessionView, ConnectionState, DataMode } from "../types"
 
 // localStorage propio (no entra en STORAGE_KEYS: su test pinea el set de 19
 // claves y repuntarlo necesita OK explícito del humano).
 const COUPLE_SUBSESSIONS_KEY = "openher.coupleSubsessions"
+
+// Paso medido entre filas de Recientes (tarjeta de 30px + gap 2px del CSS):
+// en la app viva el scrollHeight de 600 filas fue 19206 = 600 × 32.01. Es el
+// pitch, no el alto de la tarjeta; si cambia el CSS de la lista, medí de nuevo.
+const RECENT_ROW_PITCH = 32
 
 type SessionListProps = {
   projects: Array<[string, SessionView[]]>
@@ -68,6 +75,7 @@ export const SessionList = memo(function SessionList({
   onDismissRecent, onNewSessionHere, onOpenExplorer, onDragStartSession, onDeleteMany, onArchiveMany
 }: SessionListProps) {
   const t = useT()
+  const isDesktop = useIsDesktop()
   void _activeSessions
   const { confirm } = useDialog()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -145,6 +153,11 @@ export const SessionList = memo(function SessionList({
     [recentMains]
   )
 
+  // Recientes es la lista larga (medido: 600 principales de 2000 sesiones, en
+  // un scroller de 220px = ~7 filas visibles): se montan solo las filas de la
+  // ventana + overscan. No es un tope: scrolleando se llega a la última.
+  const recentWindow = useVirtualWindow(recentRows.length, RECENT_ROW_PITCH)
+
   const favoriteRows = useMemo<SessionRow<SessionView>[]>(
     () =>
       coupledSubs
@@ -207,7 +220,11 @@ export const SessionList = memo(function SessionList({
 
   // Rename estilo Windows: el campo in-place vive dentro de la tarjeta, así
   // que al entrar en rename la tarjeta debe estar visible: se expande su
-  // proyecto (y su padre si es un subagente colapsado) y su sección rápida.
+  // proyecto (y su padre si es un subagente colapsado). Las secciones rápidas
+  // NO se auto-abren: toggleSection mantiene los tabs mutuamente excluyentes
+  // y abrirlas acá duplicaba la lista (misma sesión en favoritos Y recientes)
+  // con hasta dos inputs extra; la card rápida solo renombra desde su sección
+  // ya abierta y la del árbol queda cubierta por la expansión del proyecto.
   useEffect(() => {
     if (!renamingSessionID) return
     for (const [dir, list] of projects) {
@@ -226,13 +243,19 @@ export const SessionList = memo(function SessionList({
         return next
       })
     }
-    if (favorites.has(renamingSessionID)) {
-      setCollapsedSections((prev) => (prev.favorites ? { ...prev, favorites: false } : prev))
-    }
-    if (recentMains.some((s) => s.id === renamingSessionID)) {
-      setCollapsedSections((prev) => (prev.recent ? { ...prev, recent: false } : prev))
-    }
-  }, [renamingSessionID, projects, sessions, favorites, recentSessions])
+  }, [renamingSessionID, projects, sessions])
+
+  // Rename en Recientes: si la fila quedó fuera de la ventana hay que llevarla
+  // a la vista ANTES de que el campo in-place se monte; si no, el input nunca
+  // existe y el rename muere en silencio (mismo problema que resolvía la
+  // auto-expansión del proyecto de arriba).
+  useEffect(() => {
+    if (!renamingSessionID) return
+    const index = recentRows.findIndex((row) => row.session.id === renamingSessionID)
+    if (index < 0) return
+    if (index >= recentWindow.startIndex && index < recentWindow.endIndex) return
+    recentWindow.scrollToIndex(index)
+  }, [renamingSessionID, recentRows, recentWindow])
 
   const toggleSelectMode = useCallback(() => {
     setSelectMode((v) => {
@@ -405,14 +428,14 @@ export const SessionList = memo(function SessionList({
             onOpenExplorer(projectContextMenu.dir)
           }
         }] : []),
-        {
+        ...(isDesktop ? [{
           id: "reveal-explorer",
           label: t('project.revealExplorer'),
           icon: <MonitorIcon size={15} />,
           onAction: () => {
             shell.fs.reveal(projectContextMenu.dir).catch(() => {})
           }
-        },
+        }] : []),
         {
           id: "toggle-favorites",
           label: projectContextMenu.sessions.length > 0 && projectContextMenu.sessions.every((s) => favorites.has(s.id))
@@ -615,9 +638,6 @@ export const SessionList = memo(function SessionList({
 
   return (
     <section ref={containerRef} className="panel sessions fade-in home-view">
-      <div className="home-bg" aria-hidden="true">
-        <img src="./img/openher-lockup.png" alt="" className="home-wordmark" />
-      </div>
       <SessionToolbar refreshing={refreshingSessions} creating={creatingSession}
         onRefresh={onRefresh} onNewSession={onNewSession} onOpenSettings={onOpenSettings}
         dataMode={dataMode} onSearchToggle={() => setSearchOpen((v) => !v)} searchOpen={searchOpen}
@@ -667,8 +687,11 @@ export const SessionList = memo(function SessionList({
             </div>
           )}
           {!collapsedSections.recent && (
-            <div className="quick-access-list" id="quick-recent" role="tabpanel">
-              {recentRows.map((row) => wrapQuickRow(row, (
+            <div className="quick-access-list" id="quick-recent" role="tabpanel" ref={recentWindow.containerRef}>
+              {recentWindow.topPad > 0 && (
+                <div style={{ height: recentWindow.topPad, flexShrink: 0 }} aria-hidden="true" />
+              )}
+              {recentRows.slice(recentWindow.startIndex, recentWindow.endIndex).map((row) => wrapQuickRow(row, (
                 confirmingDismissId === row.session.id ? (
                   <div className="quick-access-card confirming-dismiss" onClick={() => onOpen(row.session.id, row.session.directory)} role="button" tabIndex={0}>
                     <div className="dismiss-confirm" onClick={(e) => e.stopPropagation()}>
@@ -694,6 +717,9 @@ export const SessionList = memo(function SessionList({
                     onRenameCancel={onRenameCancel} />
                 )
               )))}
+              {recentWindow.bottomPad > 0 && (
+                <div style={{ height: recentWindow.bottomPad, flexShrink: 0 }} aria-hidden="true" />
+              )}
             </div>
           )}
         </div>
@@ -702,7 +728,6 @@ export const SessionList = memo(function SessionList({
       <div className="session-list">
         {visibleProjects.length === 0 && ['connecting', 'reconnecting'].includes(connectionState) ? (
           <div className="empty-state connection-pending">
-            <LoadingIcon size={40} className="icon-empty-state" />
             <p>{t('sessions.loadingTitle')}</p>
             <p className="subtle">{t('sessions.loadingHint')}</p>
           </div>
